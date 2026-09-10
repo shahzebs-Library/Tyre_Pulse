@@ -53,25 +53,26 @@ describe('service layer - vehicleHistory', () => {
     expect(h.state.last._calls.select).toBe('*')
   })
 
-  it('listAssetActions matches asset_no OR description mention, limit 20', async () => {
+  it('listAssetActions requires exact asset identity and pages all history', async () => {
     await vh.listAssetActions('A1')
     expect(h.state.last._table).toBe('corrective_actions')
-    expect(h.state.last._calls.or).toContain('asset_no.eq.A1,description.ilike.%A1%')
-    expect(h.state.last._calls.limit).toBe(20)
+    expect(h.state.last._calls.eq).toContainEqual(['asset_no', 'A1'])
+    expect(h.state.last._calls.or).toHaveLength(0)
+    expect(h.state.last._calls.range.length).toBeGreaterThan(0)
   })
 
-  it('listAssetRca filters by asset_no, limit 20', async () => {
+  it('listAssetRca filters by asset_no and pages history', async () => {
     await vh.listAssetRca('A1')
     expect(h.state.last._table).toBe('rca_records')
     expect(h.state.last._calls.eq).toContainEqual(['asset_no', 'A1'])
-    expect(h.state.last._calls.limit).toBe(20)
+    expect(h.state.last._calls.range.length).toBeGreaterThan(0)
   })
 
-  it('listAssetInspections filters by asset_no, limit 20', async () => {
+  it('listAssetInspections filters by asset_no and pages history', async () => {
     await vh.listAssetInspections('A1')
     expect(h.state.last._table).toBe('inspections')
     expect(h.state.last._calls.eq).toContainEqual(['asset_no', 'A1'])
-    expect(h.state.last._calls.limit).toBe(20)
+    expect(h.state.last._calls.range.length).toBeGreaterThan(0)
   })
 
   it('listAssetTyreRecords filters by asset_no, newest issue_date first', async () => {

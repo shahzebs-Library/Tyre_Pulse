@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, Fragment } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from 'react'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
@@ -559,6 +559,7 @@ function DetailRow({ k, v }) {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function PredictiveMaintenance() {
+  const loadId = useRef(0)
   const { activeCurrency, activeCountry } = useSettings()
 
   const [records, setRecords]         = useState([])
@@ -582,6 +583,8 @@ export default function PredictiveMaintenance() {
 
   // ── Data loading ─────────────────────────────────────────────────────────────
   const loadData = useCallback(async () => {
+    const request = ++loadId.current
+    setRecords([]); setFleetMaster([]); setFleetMasterAvailable(false)
     setLoading(true)
     setError(null)
     // Null-safe country scoping (mirrors the app-wide applyCountry convention):
@@ -603,6 +606,7 @@ export default function PredictiveMaintenance() {
         .order('issue_date', { ascending: false }))
         .range(from, to))
 
+      if (request !== loadId.current) return
       if (tyreErr) throw tyreErr
       setRecords(tyreData || [])
 
@@ -614,6 +618,7 @@ export default function PredictiveMaintenance() {
           .select('asset_no,site,vehicle_type,expected_km_per_tyre,monthly_tyre_budget,current_km')
           .order('asset_no').order('id')).range(from, to), { max: 20000 })
 
+        if (request !== loadId.current) return
         if (fleetErr) {
           setFleetMaster([])
           setFleetMasterAvailable(false)
@@ -622,17 +627,20 @@ export default function PredictiveMaintenance() {
           setFleetMasterAvailable(true)
         }
       } catch {
+        if (request !== loadId.current) return
         setFleetMaster([])
         setFleetMasterAvailable(false)
       }
     } catch (err) {
+      if (request !== loadId.current) return
       setError(toUserMessage(err, 'Failed to load data'))
     } finally {
-      setLoading(false)
+      if (request === loadId.current) setLoading(false)
     }
   }, [activeCountry])
 
-  useEffect(() => { loadData() }, [loadData])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Invalidate the current request on cleanup.
+  useEffect(() => { loadData(); return () => { loadId.current++ } }, [loadData])
 
   // ── Fleet-level computed constants (canonical lib) ───────────────────────────
   const fleetStats = useMemo(() => computeFleetStats(records), [records])

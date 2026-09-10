@@ -21,7 +21,7 @@
  * org-isolated and country-scoped by RLS. Honest loading / empty / error
  * states, no fabricated data.
  */
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend,
 } from 'chart.js'
@@ -163,6 +163,8 @@ const EMPTY_RECORD = {
 }
 
 export default function PmPrograms() {
+  const loadId = useRef(0)
+  const [dataWarning, setDataWarning] = useState('')
   const { activeCountry, activeCurrency } = useSettings()
 
   // ── Data (null sentinel = not loaded yet) ─────────────────────────────────
@@ -218,34 +220,40 @@ export default function PmPrograms() {
 
   // ── Load ──────────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
-    setRefreshing(true); setError(''); setMissing(false)
+    const request = ++loadId.current
+    setRefreshing(true); setError(''); setMissing(false); setDataWarning('')
+    setDashboard(null); setHistory(null); setCost(null)
     try {
       const [dash, hist, split] = await Promise.all([
         loadPmDashboard({ country: activeCountry }),
-        listPmServiceRecords({ country: activeCountry }).catch(() => []),
-        loadGovernedCostSplit({ country: activeCountry }).catch(() => ({ tyre: 0, maintenance: 0, byMonth: [] })),
+        listPmServiceRecords({ country: activeCountry }),
+        loadGovernedCostSplit({ country: activeCountry }).catch(() => null),
       ])
+      if (request !== loadId.current) return
+      if (!split) setDataWarning('Cost information could not be loaded. Cost totals are unavailable.')
       setDashboard(dash || { plans: [], kmByAsset: {}, hoursByAsset: {} })
       setHistory(Array.isArray(hist) ? hist : [])
-      setCost(split || { tyre: 0, maintenance: 0, byMonth: [] })
+      setCost(split)
       setNowTs(Date.now())
       setUpdatedAt(new Date())
     } catch (err) {
+      if (request !== loadId.current) return
       if (isMissingRelation(err)) {
         setMissing(true)
         setDashboard({ plans: [], kmByAsset: {}, hoursByAsset: {} })
-        setHistory([]); setCost({ tyre: 0, maintenance: 0, byMonth: [] })
+        setHistory([]); setCost(null)
       } else {
         setError(toUserMessage(err, 'Could not load Preventive Maintenance data.'))
         setDashboard({ plans: [], kmByAsset: {}, hoursByAsset: {} })
-        setHistory([]); setCost({ tyre: 0, maintenance: 0, byMonth: [] })
+        setHistory([]); setCost(null)
       }
     } finally {
-      setRefreshing(false)
+      if (request === loadId.current) setRefreshing(false)
     }
   }, [activeCountry])
 
-  useEffect(() => { load() }, [load])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Invalidate the current request on cleanup.
+  useEffect(() => { load(); return () => { loadId.current++ } }, [load])
 
   // Load the spare-parts catalog once per country (best-effort, non-blocking).
   useEffect(() => {
@@ -768,6 +776,7 @@ export default function PmPrograms() {
         </div>
       )}
 
+      {dataWarning && <p role="alert" className="card text-sm text-amber-500">{dataWarning}</p>}
       {recordOk && (
         <div className="card border border-emerald-800/50 flex items-center gap-3 !py-3">
           <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />

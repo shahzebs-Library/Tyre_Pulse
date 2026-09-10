@@ -155,7 +155,6 @@ const ALLOWED = [
   { file: 'src/pages/Accidents.jsx', why: "in('id', ids.slice) - case-track columns fetched in 500s" },
   { file: 'src/lib/api/uploads.js', why: "in('serial_no', serials) - caller batches" },
   { file: 'src/lib/api/combinations.js', why: "in('asset_no', slice) - chunked 100" },
-  { file: 'src/lib/api/pmPrograms.js', why: "in('asset_no', chunk) - caller-chunked km/hours lookup" },
   { file: 'src/lib/api/fleetRenewal.js', why: "in('asset_no', assetNos) from a short plan list" },
 
   // --- Deliberate complete work_orders reads in the service layer. Each is

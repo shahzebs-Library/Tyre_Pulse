@@ -71,6 +71,8 @@ export default function TyreRecords() {
   const { t } = useLanguage()
   const invalidate = useInvalidate()
 
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState('')
   const [records, setRecords]         = useState([])
   const [total, setTotal]             = useState(0)
   const [page, setPage]               = useState(0)
@@ -411,10 +413,25 @@ export default function TyreRecords() {
   async function fetchAll() {
     // The exported set must be the set on screen, so this uses the term the grid
     // is actually filtered by - not whatever is half-typed in the box.
-    const { data } = await tyreRecordsApi.listAllRecords({
+    const { data, error, truncated } = await tyreRecordsApi.listAllRecords({
       search: debouncedSearch, siteFilter, brandFilter, riskFilter, country: activeCountry,
     })
+    if (error) throw error
+    if (truncated) throw new Error("Too many records to export completely. Narrow your filters.")
     return data ?? []
+  }
+
+  async function downloadRecords(kind) {
+    if (exporting) return
+    setExporting(true); setExportError('')
+    try {
+      const rows = await fetchAll()
+      const exporter = await loadExportUtils()
+      const name = 'TyrePulse_Records_' + new Date().toISOString().slice(0, 10)
+      if (kind === 'excel') await exporter.exportToExcel(rows, EXPORT_COLS.map(c => c.key), EXPORT_COLS.map(c => c.header), name, 'Tyre Records')
+      else await exporter.exportToPdf(rows, EXPORT_COLS, 'Tyre Records · ' + rows.length.toLocaleString() + ' records', name)
+    } catch (err) { setExportError(toUserMessage(err, 'Could not download these records. Please retry.')) }
+    finally { setExporting(false) }
   }
 
   // Shared column header style - mirrors the virtual row grid
@@ -426,6 +443,7 @@ export default function TyreRecords() {
 
   return (
     <div className="space-y-5">
+      {exportError && <p role="alert" className="text-red-500">{exportError}</p>}
       <PageHeader
         title={t('records.title')}
         subtitle={t('records.subtitle', { count: total.toLocaleString() })}
@@ -433,13 +451,13 @@ export default function TyreRecords() {
         actions={
           <div className="flex gap-2">
             <button
-              onClick={async () => (await loadExportUtils()).exportToExcel(await fetchAll(), EXPORT_COLS.map(c => c.key), EXPORT_COLS.map(c => c.header), `TyrePulse_Records_${new Date().toISOString().slice(0,10)}`, 'Tyre Records')}
+              disabled={exporting} onClick={() => downloadRecords('excel')}
               className="btn-secondary flex items-center gap-2 text-xs px-3 py-1.5"
             >
               <FileSpreadsheet size={14} className="text-green-400" /> {t('records.actions.excel')}
             </button>
             <button
-              onClick={async () => (await loadExportUtils()).exportToPdf(await fetchAll(), EXPORT_COLS, `Tyre Records · ${total.toLocaleString()} records`, `TyrePulse_Records_${new Date().toISOString().slice(0,10)}`)}
+              disabled={exporting} onClick={() => downloadRecords('pdf')}
               className="btn-secondary flex items-center gap-2 text-xs px-3 py-1.5"
             >
               <FileText size={14} className="text-red-400" /> {t('records.actions.pdf')}

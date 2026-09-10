@@ -3,15 +3,14 @@
  * whole-life record, plus a serial search for the lookup box. The primary
  * source is `tyre_records` (fitment / movement history). Four auxiliary sources
  * enrich the passport, each fetched with an explicit column list, null-safe
- * country scoping, and honest [] degradation when the relation is absent or the
- * query fails (a missing/blocked source never breaks the page):
+ * country scoping, and explicit incomplete-history warnings when an auxiliary source fails:
  *   - tyre_service_events (rotations / repairs / inflation / inspections)
  *   - warranty_claims (warranty and quality claims for this serial)
  *   - tyre_status_marks (return / write-off marks)
  *   - retread_claims (retread vendor claims)
  * The passport assembly lives in `src/lib/tyrePassport.js`.
  */
-import { supabase, applyCountry, fetchAllPages } from './_client'
+import { supabase, applyCountry, fetchAllPages, unwrap } from './_client'
 import { sanitizeSearchTerm } from '../searchFilter'
 
 const COLS =
@@ -31,111 +30,46 @@ const WARRANTY_COLS =
 const RETREAD_COLS =
   'id,claim_no,tyre_serial,asset_no,vendor,reason,claim_date,cost,amount_recovered,status,notes,country,created_at'
 
-/** True when the error means the relation is absent / not migrated / not visible. */
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  const code = String(err?.code || '')
-  return (
-    code === '42P01' ||
-    m.includes('does not exist') ||
-    m.includes('could not find the table') ||
-    m.includes('schema cache') ||
-    m.includes('relation')
-  )
-}
-
 /** All records for a given serial (matched across the three serial columns). */
 export async function getPassportRecords(serial, { country } = {}) {
   const s = sanitizeSearchTerm(String(serial || '').trim())
   if (!s) return []
-  return fetchAllPages((from, to) => {
+  const result = await fetchAllPages((from, to) => {
     const q = supabase.from('tyre_records').select(COLS)
       .or(`serial_no.eq.${s},serial_number.eq.${s},tyre_serial.eq.${s}`)
       .order('fitment_date', { ascending: true, nullsFirst: true })
       .order('id', { ascending: true })
       .range(from, to)
     return applyCountry(q, country)
-  })
+  }, { max: 20000 })
+  if (result.truncated) throw new Error("This tyre history exceeds the display limit.")
+  return unwrap(result) || []
 }
 
-/**
- * Tyre service events for this serial (newest first). []-degrades when the
- * table is absent so the passport still renders.
- */
-export async function getServiceEvents(serial, { country } = {}) {
-  const s = sanitizeSearchTerm(String(serial || '').trim())
-  if (!s) return []
-  try {
-    let q = supabase.from('tyre_service_events').select(SERVICE_EVENT_COLS).eq('tyre_serial', s)
-    q = applyCountry(q, country)
-    const { data, error } = await q
-      .order('event_date', { ascending: false, nullsFirst: false })
-      .order('created_at', { ascending: false })
-      .limit(500)
-    if (error) throw error
-    return data || []
-  } catch (err) {
-    if (isMissingRelation(err)) return []
-    throw err
-  }
+/** Auxiliary histories are paged; failures are identified in the bundle. */
+async function serialHistory(table, columns, column, serial, country, date = 'created_at') {
+  const value = String(serial || '').trim()
+  if (!value) return []
+  const result = await fetchAllPages((from, to) => {
+    let q = applyCountry(supabase.from(table).select(columns).eq(column, value), country)
+    if (table === 'tyre_status_marks') q = q.order('serial').order('mark_type')
+    else q = q.order(date, { ascending: false }).order('id')
+    return q.range(from, to)
+  }, { max: 20000 })
+  if (result.truncated) throw new Error('This history exceeds the display limit.')
+  return unwrap(result) || []
 }
-
-/**
- * Warranty claims for this serial (matched on serial_number). Newest first,
- * []-degrades when absent.
- */
-export async function getWarrantyClaims(serial, { country } = {}) {
-  const s = sanitizeSearchTerm(String(serial || '').trim())
-  if (!s) return []
-  try {
-    let q = supabase.from('warranty_claims').select(WARRANTY_COLS).eq('serial_number', s)
-    q = applyCountry(q, country)
-    const { data, error } = await q.order('created_at', { ascending: false }).limit(200)
-    if (error) throw error
-    return data || []
-  } catch (err) {
-    if (isMissingRelation(err)) return []
-    throw err
-  }
+export function getServiceEvents(serial, { country } = {}) {
+  return serialHistory('tyre_service_events', SERVICE_EVENT_COLS, 'tyre_serial', serial, country, 'event_date')
 }
-
-/**
- * Return / write-off marks for this serial. []-degrades when absent.
- */
-export async function getStatusMarks(serial) {
-  const s = sanitizeSearchTerm(String(serial || '').trim())
-  if (!s) return []
-  try {
-    const { data, error } = await supabase
-      .from('tyre_status_marks')
-      .select('serial,mark_type')
-      .eq('serial', s)
-      .limit(50)
-    if (error) throw error
-    return data || []
-  } catch (err) {
-    if (isMissingRelation(err)) return []
-    throw err
-  }
+export function getWarrantyClaims(serial, { country } = {}) {
+  return serialHistory('warranty_claims', WARRANTY_COLS, 'serial_number', serial, country)
 }
-
-/**
- * Retread vendor claims for this serial (matched on tyre_serial). Newest first,
- * []-degrades when absent.
- */
-export async function getRetreadClaims(serial, { country } = {}) {
-  const s = sanitizeSearchTerm(String(serial || '').trim())
-  if (!s) return []
-  try {
-    let q = supabase.from('retread_claims').select(RETREAD_COLS).eq('tyre_serial', s)
-    q = applyCountry(q, country)
-    const { data, error } = await q.order('created_at', { ascending: false }).limit(200)
-    if (error) throw error
-    return data || []
-  } catch (err) {
-    if (isMissingRelation(err)) return []
-    throw err
-  }
+export function getStatusMarks(serial) {
+  return serialHistory('tyre_status_marks', 'serial,mark_type', 'serial', serial)
+}
+export function getRetreadClaims(serial, { country } = {}) {
+  return serialHistory('retread_claims', RETREAD_COLS, 'tyre_serial', serial, country)
 }
 
 /**
@@ -147,13 +81,20 @@ export async function getRetreadClaims(serial, { country } = {}) {
  */
 export async function getPassportBundle(serial, { country } = {}) {
   const records = await getPassportRecords(serial, { country })
-  const [serviceEvents, warrantyClaims, statusMarks, retreadClaims] = await Promise.all([
-    getServiceEvents(serial, { country }).catch(() => []),
-    getWarrantyClaims(serial, { country }).catch(() => []),
-    getStatusMarks(serial).catch(() => []),
-    getRetreadClaims(serial, { country }).catch(() => []),
-  ])
-  return { records, serviceEvents, warrantyClaims, statusMarks, retreadClaims }
+  const sources = [
+    ['serviceEvents', 'Service and repair history', () => getServiceEvents(serial, { country })],
+    ['warrantyClaims', 'Warranty claims', () => getWarrantyClaims(serial, { country })],
+    ['statusMarks', 'Tyre status marks', () => getStatusMarks(serial)],
+    ['retreadClaims', 'Retread claims', () => getRetreadClaims(serial, { country })],
+  ]
+  const settled = await Promise.allSettled(sources.map(([, , load]) => load()))
+  const bundle = { records, unavailableSources: [] }
+  settled.forEach((result, i) => {
+    const [key, label] = sources[i]
+    bundle[key] = result.status === 'fulfilled' ? result.value : []
+    if (result.status === 'rejected') bundle.unavailableSources.push(label)
+  })
+  return bundle
 }
 
 /**

@@ -198,21 +198,26 @@ export default function TyrePassport() {
   const navigate = useNavigate()
   const { activeCountry, activeCurrency } = useSettings()
   const [bundle, setBundle] = useState(null)
+  const loadId = useRef(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [tab, setTab] = useState('overview')
 
   const load = useCallback(async (sn) => {
-    if (!sn) { setBundle(null); return }
+    const request = ++loadId.current
+    setBundle(null)
+    if (!sn) { setLoading(false); return }
     setLoading(true); setError('')
     try {
-      setBundle(await getPassportBundle(sn, { country: activeCountry }))
+      const result = await getPassportBundle(sn, { country: activeCountry })
+      if (request === loadId.current) setBundle(result)
     } catch (err) {
-      setError(toUserMessage(err, 'Could not load this tyre.')); setBundle({ records: [] })
-    } finally { setLoading(false) }
+      if (request === loadId.current) { setError(toUserMessage(err, 'Could not load this tyre.')); setBundle(null) }
+    } finally { if (request === loadId.current) setLoading(false) }
   }, [activeCountry])
 
-  useEffect(() => { if (serial) load(serial) }, [serial, load])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Invalidate the current request on cleanup.
+  useEffect(() => { load(serial); return () => { loadId.current++ } }, [serial, load])
   useEffect(() => { setTab('overview') }, [serial])
 
   const passport = useMemo(() => {
@@ -346,6 +351,7 @@ export default function TyrePassport() {
         </div>
       )}
 
+      {!!bundle?.unavailableSources?.length && <p role="alert" className="card text-sm text-amber-500">Some history could not be loaded: {bundle.unavailableSources.join(', ')}. This passport is incomplete; refresh to try again.</p>}
       {serial && (
         <>
           <div className="card"><SearchBox country={activeCountry} onPick={(sn) => navigate(`/tyre-passport/${encodeURIComponent(sn)}`)} /></div>

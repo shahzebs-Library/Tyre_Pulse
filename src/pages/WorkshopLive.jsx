@@ -26,6 +26,7 @@ import {
 } from 'lucide-react'
 
 import { supabase } from '../lib/supabase'
+import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import * as workshop from '../lib/api/workshopLive'
 import { loadWorkshopConfig } from '../lib/api/workshopConfig'
@@ -1006,6 +1007,8 @@ function Skeleton() {
 // ── Main page ──────────────────────────────────────────────────────────────
 
 export default function WorkshopLive() {
+  const { activeCountry } = useSettings()
+  const loadId = useRef(0)
   const { profile } = useAuth()
   const [raw, setRaw] = useState(null)
   const [cfg, setCfg] = useState(null)
@@ -1033,15 +1036,16 @@ export default function WorkshopLive() {
 
   // ── Load ─────────────────────────────────────────────────────────────────
   const load = useCallback(async ({ silent = false } = {}) => {
+    const request = ++loadId.current
     if (silent) setRefreshing(true)
     else setLoading(true)
     try {
       const [data, skills, config] = await Promise.all([
-        workshop.loadLiveBoard({}),
+        workshop.loadLiveBoard({ country: activeCountry }),
         workshop.listTechnicianSkills({}).catch(() => ({})),
         loadWorkshopConfig().catch(() => null),
       ])
-      if (!mounted.current) return
+      if (!mounted.current || request !== loadId.current) return
       setRaw(data)
       setSkillsByUser(skills || {})
       if (config) setCfg(config)
@@ -1049,14 +1053,14 @@ export default function WorkshopLive() {
       setNowTs(Date.now())
       setUpdatedAt(new Date())
     } catch (e) {
-      if (!mounted.current) return
+      if (!mounted.current || request !== loadId.current) return
       setError(toUserMessage(e))
     } finally {
-      if (!mounted.current) return
+      if (!mounted.current || request !== loadId.current) return
       setLoading(false)
       setRefreshing(false)
     }
-  }, [])
+  }, [activeCountry])
 
   const scheduleReload = useCallback(() => {
     if (reloadTimer.current) clearTimeout(reloadTimer.current)
@@ -1065,9 +1069,12 @@ export default function WorkshopLive() {
 
   useEffect(() => {
     mounted.current = true
+    setRaw(null); setSiteFilter('All')
     load()
     return () => {
       mounted.current = false
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Invalidate the current request on cleanup.
+      loadId.current++
       if (reloadTimer.current) clearTimeout(reloadTimer.current)
       if (flashTimer.current) clearTimeout(flashTimer.current)
     }

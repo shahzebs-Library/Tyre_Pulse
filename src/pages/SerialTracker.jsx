@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
-import { supabase } from '../lib/supabase'
-import { escapeLike } from '../lib/searchFilter'
+import { findSerialRecords } from '../lib/api/serialTracker'
+import { useSettings } from '../contexts/SettingsContext'
 import { exportToPdf, exportToExcel, reportFileName } from '../lib/exportUtils'
 import { formatCurrencyCompact, formatDate } from '../lib/formatters'
 import { ScanLine, Search, Download, FileText, Upload, AlertTriangle, Trash2, RotateCcw, X } from 'lucide-react'
@@ -70,6 +70,8 @@ function SearchSkeleton() {
 }
 
 export default function SerialTracker() {
+  const { activeCountry } = useSettings()
+  const queryId = useRef(0)
   const { profile, isSuperAdmin, grantedModules } = useAuth()
   // MARKING a scrap and UNDOING one are two different rights, and the server is
   // the one that decides both. Marking is a field observation and reaches the
@@ -113,6 +115,8 @@ export default function SerialTracker() {
   // ── Bulk Lookup state ─────────────────────────────────────────────────────
   const [bulkResults, setBulkResults]   = useState([])
   const [bulkLoading, setBulkLoading]   = useState(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Invalidate the current request on cleanup.
+  useEffect(() => { queryId.current++; setRecords([]); setBulkResults([]); setSearched(false); setLoading(false); setBulkLoading(false); setBulkDone(false); return () => { queryId.current++ } }, [activeCountry])
   const [bulkFileName, setBulkFileName] = useState('')
   const [bulkDragOver, setBulkDragOver] = useState(false)
   const [bulkDone, setBulkDone]         = useState(false)
@@ -195,24 +199,24 @@ export default function SerialTracker() {
     setLoading(true)
     setSearched(false)
     setError(null)
+    const request = ++queryId.current
+    setBulkLoading(false)
     const q = serialInput.trim()
     setScrapMark(null)
     setScrapErr(null)
     try {
-      const { data, error: qErr } = await supabase
-        .from('tyre_records')
-        .select('*')
-        .ilike('serial_no', escapeLike(q))
-        .order('issue_date', { ascending: true })
-      if (qErr) throw qErr
+      const data = await findSerialRecords(q, { country: activeCountry })
+      if (request !== queryId.current) return
       setRecords(data || [])
       if ((data || []).length) {
-        try { setScrapMark(await getScrapMark(q)) } catch { /* scrap flag is best-effort */ }
+        try { const mark = await getScrapMark(q); if (request === queryId.current) setScrapMark(mark) } catch { /* scrap flag is best-effort */ }
       }
     } catch (err) {
+      if (request !== queryId.current) return
       setError(toUserMessage(err, 'Could not search for that serial.'))
       setRecords([])
     } finally {
+      if (request !== queryId.current) return
       setLastQuery(q)
       setSearched(true)
       setLoading(false)
@@ -341,7 +345,8 @@ export default function SerialTracker() {
   }
 
   async function processBulkFile(file) {
-    const XLSX = await import('xlsx')
+    const request = ++queryId.current
+    setLoading(false)
     setBulkFileName(file.name)
     setBulkLoading(true)
     setBulkDone(false)
@@ -351,6 +356,8 @@ export default function SerialTracker() {
     setError(null)
 
     try {
+      const XLSX = await import('xlsx')
+      if (request !== queryId.current) return
       const arrayBuffer = await file.arrayBuffer()
       const wb = XLSX.read(arrayBuffer, { type: 'array' })
       const serials = extractSerialsFromSheet(wb, XLSX)
@@ -369,15 +376,11 @@ export default function SerialTracker() {
       const BATCH_SIZE = 10
 
       for (let i = 0; i < serials.length; i += BATCH_SIZE) {
+        if (request !== queryId.current) return
         const batch = serials.slice(i, i + BATCH_SIZE)
         const batchResults = await Promise.all(
           batch.map(async serial => {
-            const { data, error: qErr } = await supabase
-              .from('tyre_records')
-              .select('serial_no, issue_date, asset_no, status, country, cost:cost_per_tyre')
-              .ilike('serial_no', escapeLike(serial))
-              .order('issue_date', { ascending: true })
-            if (qErr) throw qErr
+            const data = await findSerialRecords(serial, { country: activeCountry, columns: 'serial_no, issue_date, asset_no, status, country, cost:cost_per_tyre' })
             if (!data || data.length === 0) {
               return { serial, first_seen: null, last_asset: null, total_records: 0, cost: 0, country: null, status: 'Not Found' }
             }
@@ -400,11 +403,14 @@ export default function SerialTracker() {
         results.push(...batchResults)
       }
 
+      if (request !== queryId.current) return
       setBulkResults(results)
     } catch (err) {
+      if (request !== queryId.current) return
       setError(toUserMessage(err, 'Could not process that file.'))
       setBulkResults([])
     } finally {
+      if (request !== queryId.current) return
       setBulkLoading(false)
       setBulkDone(true)
     }

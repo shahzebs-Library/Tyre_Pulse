@@ -639,9 +639,9 @@ function MainApp() {
                       <Route path="/ai-cost-monitor"      element={<Safe><FlagRoute flag="ai_tools"><AiCostMonitor /></FlagRoute></Safe>} />
                       <Route path="/ai-administration"    element={<LegacyRedirect to="/console/ai-admin" />} />
                       <Route path="/gate-pass"            element={<Safe><ModuleRoute moduleKey="gate_pass"><GatePass /></ModuleRoute></Safe>} />
-                      <Route path="/serial-tracker"       element={<Safe><RoleRoute allowed={['Admin']} moduleKey="serial_tracker"><SerialTracker /></RoleRoute></Safe>} />
+                      <Route path="/serial-tracker"       element={<Safe><RoleRoute allowed={['Admin']} moduleKey="serial_tracker"><ModuleRoute moduleKey="serial_tracker"><SerialTracker /></ModuleRoute></RoleRoute></Safe>} />
                       <Route path="/work-orders"          element={<Safe><ModuleRoute moduleKey="work_orders"><WorkOrders /></ModuleRoute></Safe>} />
-                      <Route path="/workshop-live"        element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><WorkshopLive /></RoleRoute></Safe>} />
+                      <Route path="/workshop-live"        element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><ModuleRoute moduleKey="workshop_live"><WorkshopLive /></ModuleRoute></RoleRoute></Safe>} />
                       <Route path="/workshop-absence"     element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><WorkshopAbsence /></RoleRoute></Safe>} />
                       <Route path="/workshop-analytics"   element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><WorkshopAnalytics /></RoleRoute></Safe>} />
                       <Route path="/workshop-settings"    element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><WorkshopSettings /></RoleRoute></Safe>} />
@@ -685,7 +685,7 @@ function MainApp() {
                       <Route path="/maintenance-cost-board"  element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><MaintenanceCostBoard /></RoleRoute></Safe>} />
                       <Route path="/expense-report"          element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ExpenseReport /></RoleRoute></Safe>} />
                       <Route path="/expense-trends"          element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ExpenseTrends /></RoleRoute></Safe>} />
-                      <Route path="/cpk-intelligence"        element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><CpkIntelligence /></RoleRoute></Safe>} />
+                      <Route path="/cpk-intelligence"        element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ModuleRoute moduleKey="cpk_intelligence"><CpkIntelligence /></ModuleRoute></RoleRoute></Safe>} />
                       <Route path="/cost-per-m3"             element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><CostPerM3 /></RoleRoute></Safe>} />
                       <Route path="/sco-costs"               element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ScoCosts /></RoleRoute></Safe>} />
                       <Route path="/sany-invoices"           element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><SanyInvoices /></RoleRoute></Safe>} />
@@ -735,8 +735,8 @@ function MainApp() {
                       <Route path="/help"        element={<Safe><HelpCenter /></Safe>} />
                       <Route path="/tyre-age-compliance" element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><TyreAgeCompliance /></RoleRoute></Safe>} />
                       <Route path="/roi-calculator"      element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><RoiCalculator /></RoleRoute></Safe>} />
-                      <Route path="/tyre-passport"         element={<Safe><TyrePassport /></Safe>} />
-                      <Route path="/tyre-passport/:serial" element={<Safe><TyrePassport /></Safe>} />
+                      <Route path="/tyre-passport"         element={<Safe><ModuleRoute moduleKey="tyre_passport"><TyrePassport /></ModuleRoute></Safe>} />
+                      <Route path="/tyre-passport/:serial" element={<Safe><ModuleRoute moduleKey="tyre_passport"><TyrePassport /></ModuleRoute></Safe>} />
                       <Route path="/fitment-validation"    element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><FitmentValidation /></RoleRoute></Safe>} />
                       <Route path="/technician-scorecard"  element={<Safe><RoleRoute allowed={['Admin']}><TechnicianScorecard /></RoleRoute></Safe>} />
                       <Route path="/tco-calculator"        element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><TcoCalculator /></RoleRoute></Safe>} />
@@ -767,7 +767,7 @@ function MainApp() {
                       <Route path="/batteries"             element={<Safe><RoleRoute allowed={['Admin']}><Batteries /></RoleRoute></Safe>} />
                       <Route path="/telematics-devices"    element={<Safe><RoleRoute allowed={['Admin']}><TelematicsDevices /></RoleRoute></Safe>} />
                       <Route path="/fuel-delivery"         element={<Safe><RoleRoute allowed={['Admin']}><FuelDelivery /></RoleRoute></Safe>} />
-                      <Route path="/shifts"                element={<Safe><RoleRoute allowed={['Admin']}><ShiftScheduling /></RoleRoute></Safe>} />
+                      <Route path="/shifts"                element={<Safe><RoleRoute allowed={['Admin']}><ModuleRoute moduleKey="shifts"><ShiftScheduling /></ModuleRoute></RoleRoute></Safe>} />
                       <Route path="/equipment"             element={<Safe><RoleRoute allowed={['Admin']}><Equipment /></RoleRoute></Safe>} />
                       <Route path="/tyre-service-events"   element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><TyreServiceEvents /></RoleRoute></Safe>} />
                       <Route path="/driver-expenses"       element={<Safe><RoleRoute allowed={['Admin']}><DriverExpenses /></RoleRoute></Safe>} />
@@ -783,7 +783,7 @@ function MainApp() {
                       <Route path="/engine-hours"          element={<Safe><RoleRoute allowed={['Admin']}><EngineHours /></RoleRoute></Safe>} />
                       <Route path="/odometer-logs"         element={<Safe><RoleRoute allowed={['Admin']}><OdometerLogs /></RoleRoute></Safe>} />
                       <Route path="/fleet-utilization"     element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><FleetUtilization /></RoleRoute></Safe>} />
-                      <Route path="/pm-programs"           element={<Safe><RoleRoute allowed={['Admin']}><PmPrograms /></RoleRoute></Safe>} />
+                      <Route path="/pm-programs"           element={<Safe><RoleRoute allowed={['Admin']}><ModuleRoute moduleKey="pm_programs"><PmPrograms /></ModuleRoute></RoleRoute></Safe>} />
                       <Route path="/vehicle-washing"       element={<Safe><ModuleRoute moduleKey="vehicle_washing"><VehicleWashing /></ModuleRoute></Safe>} />
                       <Route path="/trips"                 element={<Safe><RoleRoute allowed={['Admin']}><Trips /></RoleRoute></Safe>} />
                       <Route path="/route-optimization"    element={<Safe><RoleRoute allowed={['Admin']}><RouteOptimization /></RoleRoute></Safe>} />
@@ -826,7 +826,7 @@ function MainApp() {
                       <Route path="/holding-company"       element={<Navigate to="/console/organisations" replace />} />
                       <Route path="/org-hierarchy"         element={<Navigate to="/console/organisations" replace />} />
                       <Route path="/scan"        element={<Safe><TyreScan /></Safe>} />
-<Route path="/qr-labels"   element={<Safe><RoleRoute allowed={['Admin']}><QrLabels /></RoleRoute></Safe>} />
+<Route path="/qr-labels"   element={<Safe><RoleRoute allowed={['Admin']}><ModuleRoute moduleKey="qr_labels"><QrLabels /></ModuleRoute></RoleRoute></Safe>} />
                       <Route path="/rfid-registry" element={<Safe><ModuleRoute moduleKey="tyre_records"><RfidRegistry /></ModuleRoute></Safe>} />
                       <Route path="/report-builder"      element={<Safe><RoleRoute allowed={['Admin']}><ReportBuilder /></RoleRoute></Safe>} />
                       <Route path="/dashboard-builder"   element={<Safe><RoleRoute allowed={['Admin']}><DashboardBuilder /></RoleRoute></Safe>} />

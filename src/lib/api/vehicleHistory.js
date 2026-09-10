@@ -12,8 +12,7 @@
  * verbatim from the page (`country !== 'All'`), NOT NULL-inclusive. Explicit
  * column lists where the page used them.
  */
-import { supabase, fetchAllPages } from './_client'
-import { sanitizeSearchTerm } from '../searchFilter'
+import { supabase, fetchAllPages, applyCountry } from './_client'
 
 /**
  * All tyre_records for the fleet, fully paged (200k ceiling), oldest issue_date
@@ -51,41 +50,23 @@ export function getVehicleFleet() {
   )
 }
 
-/**
- * Corrective actions related to an asset (matched by asset_no OR description
- * mention), up to 20.
- */
-export function listAssetActions(assetNo) {
-  return supabase
-    .from('corrective_actions')
-    .select('id,title,status,priority,due_date,site,created_at')
-    .or(`asset_no.eq.${sanitizeSearchTerm(assetNo)},description.ilike.%${sanitizeSearchTerm(assetNo)}%`)
-    .limit(20)
+// Related records are linked by the exact asset number, never a substring in
+// free text (TM1 must not inherit a TM10 action). Preserve active country scope.
+async function assetRows(table, columns, assetNo, { country } = {}, date = 'created_at') {
+  const result = await fetchAllPages((from, to) => applyCountry(supabase.from(table).select(columns)
+    .eq('asset_no', assetNo), country).order(date, { ascending: false }).order('id').range(from, to), { max: 20000 })
+  if (result.truncated) return { data: [], error: new Error('Asset history is too large to load completely. Narrow the country selection.') }
+  return result
 }
-
-/** RCA records for an asset (by asset_no), up to 20. */
-export function listAssetRca(assetNo) {
-  return supabase
-    .from('rca_records')
-    .select('id,asset_no,root_cause,tyre_serial,brand,site,created_at')
-    .eq('asset_no', assetNo)
-    .limit(20)
+export function listAssetActions(assetNo, options) {
+  return assetRows('corrective_actions', 'id,title,status,priority,due_date,site,created_at', assetNo, options)
 }
-
-/** Inspections for an asset (by asset_no), up to 20. */
-export function listAssetInspections(assetNo) {
-  return supabase
-    .from('inspections')
-    .select('id,asset_no,status,site,created_at')
-    .eq('asset_no', assetNo)
-    .limit(20)
+export function listAssetRca(assetNo, options) {
+  return assetRows('rca_records', 'id,asset_no,root_cause,tyre_serial,brand,site,created_at', assetNo, options)
 }
-
-/** Tyre records for an asset (by asset_no), newest issue_date first. */
-export function listAssetTyreRecords(assetNo) {
-  return supabase
-    .from('tyre_records')
-    .select('position,risk_level,brand,serial_no,issue_date')
-    .eq('asset_no', assetNo)
-    .order('issue_date', { ascending: false })
+export function listAssetInspections(assetNo, options) {
+  return assetRows('inspections', 'id,asset_no,status,site,created_at', assetNo, options)
+}
+export function listAssetTyreRecords(assetNo, options) {
+  return assetRows('tyre_records', 'position,risk_level,brand,serial_no,issue_date', assetNo, options, 'issue_date')
 }

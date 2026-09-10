@@ -285,3 +285,18 @@ function distinctField(rows, key) {
   }
   return [...set].sort((a, b) => a.localeCompare(b))
 }
+
+// Fetch current identity only for the selected export vehicles. Existing RLS
+// applies, and callers match organisation/country as well as the asset number.
+export async function washExportFleet(rows) {
+  const assets = [...new Set(rows.map(r => r.asset_no).filter(Boolean))]
+  const fleet = []
+  for (let i = 0; i < assets.length; i += 100) {
+    const result = await fetchAllPages((from, to) => supabase.from('vehicle_fleet')
+      .select('id,organisation_id,country,asset_no,registration_no,region')
+      .in('asset_no', assets.slice(i, i + 100)).order('id').range(from, to))
+    if (result.truncated) throw new Error('Vehicle details could not be loaded completely. Narrow the export filters.')
+    fleet.push(...(unwrap(result) || []))
+  }
+  return fleet
+}

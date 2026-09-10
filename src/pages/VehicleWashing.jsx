@@ -44,6 +44,7 @@ import {
   ListChecks,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import DownloadNotice from '../components/ui/DownloadNotice'
 import PageHeader from '../components/ui/PageHeader'
 import DateField from '../components/ui/DateField'
 import Modal from '../components/ui/Modal'
@@ -53,7 +54,7 @@ import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useReportMeta } from '../hooks/useReportMeta'
 import {
-  listWashRecords, createWashRecord, deleteWashRecord, uploadWashPhoto,
+  listWashRecords, washExportFleet, createWashRecord, deleteWashRecord, uploadWashPhoto,
   correctWashRecord, listWashCorrections, scheduleWash,
   distinctSites, distinctAreas, WASH_TYPES, WASH_STATUSES, WASH_STATUS_CHOICES,
 } from '../lib/api/washRecords'
@@ -63,9 +64,10 @@ import {
   costBasis, formatWashCost, WASH_INTERVAL_DAYS,
 } from '../lib/washAnalytics'
 import { colorAt, categorical, withAlpha } from '../lib/reportColors'
-import { exportToExcel, reportFileName, reportDateLabel } from '../lib/exportUtils'
+import { applyExportPolicy, exportToExcel, reportFileName, reportDateLabel } from '../lib/exportUtils'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 import { resolveStorageUrl } from '../lib/storageRefs'
+import { washVehicleKey } from '../lib/washReportPdf'
 import { safeImageSrc } from '../lib/safeUrl'
 import { toUserMessage } from '../lib/safeError'
 
@@ -174,13 +176,14 @@ const AXIS = {
 
 export default function VehicleWashing() {
   const { activeCountry, activeCurrency } = useSettings()
-  const { profile, isSuperAdmin } = useAuth()
+  const { profile, isSuperAdmin, hasPermission } = useAuth()
   const canWrite = isSuperAdmin === true || WRITE_ROLES.has(profile?.role)
   const canCreate = canWrite || profile?.role === 'Fleet Supervisor'
   const reportMeta = useReportMeta('Vehicle Washing Report')
   const [pdfBusy, setPdfBusy] = useState(false)
   const [pdfStatus, setPdfStatus] = useState('')
   const pdfLock = useRef(false)
+  const dismissDownload = useCallback(() => setPdfStatus(''), [])
 
   const [tab, setTab] = useState('reporting')
   const [rows, setRows] = useState([])
@@ -593,22 +596,35 @@ export default function VehicleWashing() {
     status: r.status || '',
     cost: formatWashCost(r.cost),
   }))
-  const exportExcel = (list, label = 'Vehicle Washing') => {
-    const name = reportFileName(label, reportDateLabel())
-    exportToExcel(exportRowsFrom(list), EXPORT_COLS, EXPORT_HEADERS, name, 'Washes', { title: label, currency: activeCurrency })
+  const exportExcel = async (list, label = 'Vehicle Washing') => {
+    if (pdfLock.current) return
+    pdfLock.current = true; setPdfBusy(true); setPdfStatus('Preparing Excel...')
+    try {
+      if (applyExportPolicy(list).length !== list.length) throw new Error('This selection exceeds the export limit. Narrow the filters.')
+      const name = reportFileName(label, reportDateLabel())
+      await exportToExcel(exportRowsFrom(list), EXPORT_COLS, EXPORT_HEADERS, name, 'Washes', { title: label, currency: activeCurrency })
+      setPdfStatus(`Excel saved: ${list.length} matching wash records.`)
+    } catch (err) { setPdfStatus(toUserMessage(err, 'Could not create the Excel file. Please try again.')) }
+    finally { pdfLock.current = false; setPdfBusy(false) }
   }
-  const exportPdf = async (list, label = 'Vehicle Washing') => {
+  const exportPdf = async (list, label = 'Vehicle Washing', selection = regFilters) => {
     if (pdfLock.current) return
     pdfLock.current = true; setPdfBusy(true); setPdfStatus('Preparing company logo and vehicle report...')
     try {
       const { exportVehicleWashPdf } = await import('../lib/washReportPdf')
-      const result = await exportVehicleWashPdf(list, { ...reportMeta, filename: reportFileName(label, reportDateLabel()),
+      let selected = list
+      if (hasPermission?.('fleet_master')) {
+        const fleet = await washExportFleet(list)
+        const identity = new Map(fleet.map(r => [washVehicleKey(r), r]))
+        selected = list.map(r => ({ ...r, registration_no: identity.get(washVehicleKey(r))?.registration_no, region: identity.get(washVehicleKey(r))?.region }))
+      }
+      const result = await exportVehicleWashPdf(selected, { ...reportMeta, filters: selection, filename: reportFileName(label, reportDateLabel()),
         onProgress: (done, total) => setPdfStatus(`Preparing photos ${done} of ${total}...`) })
-      setPdfStatus(`PDF downloaded: ${result.vehicles} vehicles, ${result.totalPhotos - result.missingPhotos} photos included.${result.missingPhotos ? ` ${result.missingPhotos} photos were unavailable and are marked in the report.` : ''}`)
+      setPdfStatus(`PDF saved: ${result.vehicles} vehicle${result.vehicles === 1 ? '' : 's'}, ${result.totalPhotos - result.missingPhotos} attachments included (content not verified).${result.missingPhotos ? ` ${result.missingPhotos} photos were unavailable and are marked in the report.` : ''}`)
     } catch (err) { setPdfStatus(toUserMessage(err, 'Could not create the PDF. Please try again.')) }
     finally { pdfLock.current = false; setPdfBusy(false) }
   }
-  const exportVehiclePdf = row => exportPdf(regRows.filter(r => r.organisation_id === row.organisation_id && r.country === row.country && r.asset_no === row.asset_no), `Vehicle Washing ${row.asset_no}`)
+  const exportVehiclePdf = row => exportPdf(regRows.filter(r => washVehicleKey(r) === washVehicleKey(row)), `Vehicle Washing ${row.asset_no}`, { ...regFilters, assetNo: row.asset_no })
 
 
   const kpis = [
@@ -665,7 +681,7 @@ export default function VehicleWashing() {
         />
       )}
 
-      {pdfStatus && <p role="status" className="card text-sm">{pdfStatus}</p>}
+      <DownloadNotice message={pdfStatus} busy={pdfBusy} onDismiss={dismissDownload} />
       {/* Tabs */}
       <div className="flex items-center gap-1 border-b border-[var(--input-border)]">
         {TABS.filter((t) => !WRITE_TABS.has(t.id) || canCreate).map((t) => {

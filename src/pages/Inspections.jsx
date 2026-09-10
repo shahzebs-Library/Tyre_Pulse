@@ -79,6 +79,8 @@ import SharedModal from '../components/ui/Modal'
 import { raiseActionsForInspection } from '../lib/api/correctiveActions'
 import { getCompanyLogo, getDiagramBg } from '../lib/api/brandLogo'
 import InspectionViewerDrawer from '../components/inspection/InspectionViewerDrawer'
+import InspectionDiagram from '../components/inspection/InspectionDiagram'
+import { checklistPdfModel } from '../lib/inspectionChecklistPdf'
 
 /**
  * How long a running-life payload may be reused.
@@ -1555,11 +1557,13 @@ export default function Inspections() {
     const vehicleType = data?.vehicle_type || inferVehicleTypeFromAsset(assetNo)
     const fleetInfo = data || (vehicleType ? { asset_no: assetNo.trim(), vehicle_type: vehicleType, site: null } : null)
     if (fleetInfo) {
-      setClFleetInfo(fleetInfo)
-      const vtKey = resolveLayoutKey(vehicleType)
+      const vtKey = resolveLayoutKey(vehicleType, assetNo.trim())
+      // Save the same resolved class used to collect the wheel readings, so
+      // the inspection viewer and PDF cannot select a different layout later.
+      setClFleetInfo({ ...fleetInfo, vehicle_type: isTyrelessEquipment(vehicleType) ? vehicleType : vtKey })
       // Tyreless equipment returns [], so the checklist offers no wheels at all
       // rather than inventing them.
-      const positions = layoutSlotsFor(vehicleType)
+      const positions = layoutSlotsFor(vehicleType, assetNo.trim())
       setClPositions(positions.map(pos => ({ position: pos, label: legacyPositionCode(vtKey, pos), pressure: '', condition: 'Good', treadDepth: '' })))
       if (fleetInfo.site) setClSite(current => current || fleetInfo.site)
     } else {
@@ -1684,8 +1688,8 @@ export default function Inspections() {
     if (!clSaved) return
     const { default: jsPDF } = await import('jspdf')
     const autoTable = await loadAutoTable()
-    const tyreData = clPositions.length > 0 ? clPositions
-      : (clSaved.tyre_conditions || (() => { try { return JSON.parse(clSaved.findings || '[]') } catch { return [] } })())
+    const report = checklistPdfModel(clSaved)
+    const tyreData = report.rows
 
     const doc    = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
     const pw     = doc.internal.pageSize.width
@@ -1711,7 +1715,7 @@ export default function Inspections() {
       ['Vehicle Type',   clFleetInfo?.vehicle_type || clSaved.vehicle_type || 'N/A'],
       ['Site',           clSite || clSaved.site || 'N/A'],
       ['Inspector',      clInspector || clSaved.inspector || 'N/A'],
-      ['Date',           clDate || clSaved.scheduled_date || 'N/A'],
+      ['Date',           report.inspectionDate || 'N/A'],
       ['Tyre Count',     String(tyreData.length)],
       ['Odometer (km)',  clOdometer || clSaved.odometer_km || 'N/A'],
       ['Hour Meter',     clHourMeter || clSaved.hour_meter || 'N/A'],
@@ -1804,17 +1808,17 @@ export default function Inspections() {
       doc.setTextColor(51, 65, 85)
       doc.text([
         `Avg pressure: ${avgPsi != null ? `${one(avgPsi)} PSI` : 'N/A'}`,
-        `Avg tread: ${avgTread != null ? `${one(avgTread)} mm` : 'N/A'}`,
-        `Lowest tread: ${lowTread ? `${lowTread.pos} (${one(lowTread.value)} mm)` : 'N/A'}`,
+        ...(report.includeTread ? [
+          `Avg tread: ${avgTread != null ? `${one(avgTread)} mm` : 'N/A'}`,
+          `Lowest tread: ${lowTread ? `${lowTread.pos} (${one(lowTread.value)} mm)` : 'N/A'}`,
+        ] : []),
       ].join('   |   '), mx + 5, y + 13)
       y += stripH + 5
     }
 
-    // ── Vehicle diagram - capture the SAME diagram rendered in the DOM. In the
-    // saved view the on-screen form diagram is unmounted, so fall back to the
-    // always-mounted offscreen copy so the report is never missing the diagram.
-    const svgEl = diagramRef.current?.querySelector('svg[data-tyre-map]')
-      || checklistPdfDiagramRef.current?.querySelector('svg[data-tyre-map]')
+    // Capture the shared inspection viewer's diagram from the saved record,
+    // including mapped position IDs and both web/mobile pressure fields.
+    const svgEl = checklistPdfDiagramRef.current?.querySelector('svg[data-tyre-map]')
     const diagramBg = (await getDiagramBg().catch(() => '')) || '#000000'
     if (svgEl) {
       try {
@@ -1883,7 +1887,8 @@ export default function Inspections() {
       if (Math.abs(dev) > 0.15) return `Check ${dev > 0 ? '+' : '-'}${Math.round(Math.abs(dev) * 100)}%`
       return 'OK'
     }
-    const tblHead = ['Position', 'Pressure (PSI)', 'Condition', 'Tread Depth (mm)']
+    const tblHead = ['Position', 'Pressure (PSI)', 'Condition']
+    if (report.includeTread) tblHead.push('Tread Depth (mm)')
     if (flagOn) tblHead.push('Pressure vs median')
     const theme = pdfTableTheme(brand.accent)
     autoTable(doc, {
@@ -1896,8 +1901,8 @@ export default function Inspections() {
           row.position || 'N/A',
           row.pressure ? `${row.pressure} PSI` : 'N/A',
           row.condition || 'N/A',
-          row.treadDepth ? `${row.treadDepth} mm` : 'N/A',
         ]
+        if (report.includeTread) cells.push(row.treadDepth != null ? `${row.treadDepth} mm` : 'N/A')
         if (flagOn) cells.push(devLabel(row.pressure))
         return cells
       }),
@@ -1909,7 +1914,7 @@ export default function Inspections() {
           data.cell.styles.cellPadding = { left: 6, right: 2.6, top: 2.6, bottom: 2.6 }
           data.cell.styles.textColor = [8, 12, 28]
         }
-        if (flagOn && data.column.index === 4 && /^Check/.test(String(data.cell.raw))) {
+        if (flagOn && data.column.index === tblHead.length - 1 && /^Check/.test(String(data.cell.raw))) {
           data.cell.styles.fontStyle = 'bold'
           data.cell.styles.textColor = MUTED.Damage
         }
@@ -1917,7 +1922,8 @@ export default function Inspections() {
       didDrawCell(data) {
         theme.didDrawCell?.(data)
         if (data.section !== 'body' || data.column.index !== 2) return
-        const dot = MUTED[String(data.cell.raw)] || MUTED['No data']
+        const band = riskForCondition(data.cell.raw)
+        const dot = MUTED[band === 'good' ? 'Good' : band === 'warning' ? 'Wear' : band === 'critical' ? 'Damage' : 'No data']
         doc.setFillColor(...dot)
         doc.circle(data.cell.x + 3.2, data.cell.y + data.cell.height / 2, 1.1, 'F')
       },
@@ -2031,7 +2037,7 @@ export default function Inspections() {
       doc.setTextColor(107, 114, 128)
       doc.setFont('helvetica', 'normal')
       doc.text(`Inspector: ${clInspector || clSaved.inspector || ''}`, mx, finalY + sigH + 4)
-      doc.text(formatDate(new Date()), mx + sigW - 1, finalY + sigH + 4, { align: 'right' })
+      doc.text(report.inspectionDate ? formatDate(report.inspectionDate) : 'Not recorded', mx + sigW - 1, finalY + sigH + 4, { align: 'right' })
     } else {
       // Blank line fallback
       doc.setDrawColor(156, 163, 175)
@@ -3943,12 +3949,9 @@ export default function Inspections() {
           aria-hidden
           style={{ position: 'fixed', left: -9999, top: 0, width: 360, opacity: 0, pointerEvents: 'none' }}
         >
-          <VehicleTyreDiagram
-            vehicleType={pdfRow.vehicle_type || inferVehicleTypeFromAsset(pdfRow.asset_no) || 'Pickup'}
-            tyreData={pdfRow.tyre_conditions || {}}
-            subLabels={Object.fromEntries(Object.entries(pdfRow.tyre_conditions || {})
-              .filter(([, d]) => d && typeof d === 'object' && Number(d.pressure_psi) > 0)
-              .map(([pos, d]) => [pos, `${Math.round(Number(d.pressure_psi))} PSI`]))}
+          <InspectionDiagram
+            inspection={pdfRow}
+            showReadings={false}
             width={340}
           />
         </div>
@@ -3958,34 +3961,19 @@ export default function Inspections() {
           Report" PDF — always mounted once saved (the on-screen form diagram is
           replaced by the saved-confirmation view), so the report always embeds
           the SAME diagram the operator saw. */}
-      {clSaved && (() => {
-        const posSource = clPositions.length > 0
-          ? clPositions
-          : (Array.isArray(clSaved.tyre_conditions) ? clSaved.tyre_conditions
-            : (() => { try { return JSON.parse(clSaved.findings || '[]') } catch { return [] } })())
-        if (!Array.isArray(posSource) || posSource.length === 0) return null
-        return (
-          <div
-            ref={checklistPdfDiagramRef}
-            aria-hidden
-            style={{ position: 'fixed', left: -9999, top: 0, width: 360, opacity: 0, pointerEvents: 'none' }}
-          >
-            <VehicleTyreDiagram
-              vehicleType={clFleetInfo?.vehicle_type || clSaved.vehicle_type
-                || inferVehicleTypeFromAsset(clAsset || clSaved.asset_no) || 'Pickup'}
-              positions={posSource.map(p => ({
-                position: p.position,
-                risk_level: p.risk_level
-                  || (p.condition === 'Good' ? 'good'
-                    : p.condition === 'Wear' ? 'warning'
-                    : (p.condition === 'Damage' || p.condition === 'Puncture') ? 'critical'
-                    : 'none'),
-              }))}
-              width={340}
-            />
-          </div>
-        )
-      })()}
+      {clSaved && (
+        <div
+          ref={checklistPdfDiagramRef}
+          aria-hidden
+          style={{ position: 'fixed', left: -9999, top: 0, width: 360, opacity: 0, pointerEvents: 'none' }}
+        >
+          <InspectionDiagram
+            inspection={{ ...clSaved, tyre_conditions: clSaved.tyre_conditions ?? clSaved.findings }}
+            showReadings={false}
+            width={340}
+          />
+        </div>
+      )}
     </div>
   )
 }

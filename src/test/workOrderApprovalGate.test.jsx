@@ -1,7 +1,7 @@
 ﻿import { beforeEach, expect, it, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-const h = vi.hoisted(() => ({ get: vi.fn(), request: vi.fn() }))
-vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ profile: { id: 'u', org_id: 'org' } }) }))
+const h = vi.hoisted(() => ({ get: vi.fn(), request: vi.fn(), profile: { id: 'u', org_id: 'org' } }))
+vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ profile: h.profile }) }))
 vi.mock('../contexts/SettingsContext', () => ({ useSettings: () => ({ activeCountry: 'KSA' }) }))
 vi.mock('../contexts/LanguageContext', () => ({ useLanguage: () => ({ language: 'en' }) }))
 vi.mock('../lib/api/workOrderApprovals', () => ({ getWorkOrderApproval: h.get, requestWorkOrderApproval: h.request }))
@@ -9,7 +9,41 @@ vi.mock('../lib/api/approvalDecisions', () => ({ isApprovalReviewUnavailable: er
 vi.mock('../components/workflow/ApprovalReview', () => ({ default: ({ entityType, entityId }) => <p>Review {entityType}:{entityId}</p> }))
 import WorkOrderApprovalGate from '../components/workorders/WorkOrderApprovalGate'
 const data = { mode: 'enforced', can_submit: true, can_execute: false, request_id: null, review: null, work_order: { id: 'wo1' } }
-beforeEach(() => { vi.clearAllMocks(); h.get.mockResolvedValue(data) })
+beforeEach(() => { vi.clearAllMocks(); localStorage.clear(); h.profile = { id: 'u', org_id: 'org' }; h.get.mockResolvedValue(data) })
+it('retains the submitted operation across refresh and closing the work order', async () => {
+  h.request.mockRejectedValueOnce(new Error('lost')).mockResolvedValueOnce({ ...data, can_submit: false, request_id: 'r1', review: { status: 'pending' } })
+  const view = render(<WorkOrderApprovalGate orderId="wo1" />)
+  fireEvent.change(await screen.findByLabelText('Submission reason'), { target: { value: 'Repair safely' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Request approval' }))
+  await screen.findByRole('button', { name: 'Retry the same request' })
+  fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
+  await waitFor(() => expect(h.get).toHaveBeenCalledTimes(2))
+  view.unmount()
+  render(<WorkOrderApprovalGate orderId="wo1" />)
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Retry the same request' })).toBeEnabled())
+  fireEvent.click(screen.getByRole('button', { name: 'Retry the same request' }))
+  await waitFor(() => expect(h.request).toHaveBeenCalledTimes(2))
+  expect(h.request.mock.calls[1]).toEqual(h.request.mock.calls[0])
+})
+it('discards old authority immediately on a site change and rechecks the server', async () => {
+  h.get.mockResolvedValueOnce({ ...data, can_execute: true }).mockRejectedValueOnce({ code: '42501' })
+  const gate = vi.fn()
+  const view = render(<WorkOrderApprovalGate orderId="wo1" onGateChange={gate} />)
+  await waitFor(() => expect(gate).toHaveBeenLastCalledWith({ canExecute: true, lockEdits: false }))
+  h.profile = { ...h.profile, sites: ['new-site'] }
+  view.rerender(<WorkOrderApprovalGate orderId="wo1" onGateChange={gate} />)
+  expect(gate).toHaveBeenLastCalledWith({ canExecute: false })
+  await screen.findByRole('alert')
+})
+it('does not call the server when the retry intent cannot be persisted', async () => {
+  const write = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('Storage full') })
+  render(<WorkOrderApprovalGate orderId="wo1" />)
+  fireEvent.change(await screen.findByLabelText('Submission reason'), { target: { value: 'Repair' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Request approval' }))
+  await screen.findByText(/request could not be saved/)
+  expect(h.request).not.toHaveBeenCalled()
+  write.mockRestore()
+})
 it('fails closed for unknown execution authority instead of treating errors as legacy', async () => {
   h.get.mockRejectedValue({ code: '42501' }); const onGateChange = vi.fn()
   render(<WorkOrderApprovalGate orderId="wo1" onGateChange={onGateChange} legacy={<p>Legacy</p>} />)

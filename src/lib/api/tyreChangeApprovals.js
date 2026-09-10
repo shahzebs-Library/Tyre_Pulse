@@ -3,7 +3,9 @@ import { supabase, unwrap } from './_client'
 export async function getTyreChangeApprovalContext(vehicleId) {
   const data = unwrap(await supabase.rpc('tyre_change_approval_context', { p_vehicle_id: vehicleId }))
   if (!data || !['legacy', 'enforced'].includes(data.mode) || typeof data.can_submit !== 'boolean'
-    || !Array.isArray(data.requests) || data.vehicle?.id !== vehicleId) {
+    || !Array.isArray(data.requests) || data.vehicle?.id !== vehicleId
+    || data.requests.some(row => typeof row?.id !== 'string' || !row.id || typeof row.can_execute !== 'boolean'
+      || row.entity_type !== 'tyre_change' || row.vehicle_id !== vehicleId || !row.payload || !row.source_snapshot)) {
     throw new Error('Tyre change authority could not be verified. Refresh before making changes.')
   }
   return data
@@ -11,7 +13,10 @@ export async function getTyreChangeApprovalContext(vehicleId) {
 
 export async function requestTyreChangeApproval(intent) {
   const data = unwrap(await supabase.rpc('request_tyre_change_approval', intent))
-  if (!data?.id) throw new Error('The server did not confirm the request. Retry the saved request to check its result.')
+  if (!data?.id || data.entity_type !== 'tyre_change' || data.vehicle_id !== intent.p_vehicle_id
+    || data.operation_id !== intent.p_operation_id || data.payload?.action !== intent.p_change?.action) {
+    throw new Error('The server did not confirm the request. Retry the saved request to check its result.')
+  }
   return data
 }
 

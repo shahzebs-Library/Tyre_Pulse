@@ -13,10 +13,13 @@ import OperationalApprovalDetails from './OperationalApprovalDetails'
 
 /** Reuse existing evidence views, bound to the document actually reviewed. */
 export default function ApprovalReview({ entityType, entityId, title, onClose, onActed, legacy = null }) {
-  const { profile } = useAuth()
+  const { profile, modulePerms, grantOverrides, capabilities } = useAuth()
   const { activeCountry } = useSettings()
   const { language } = useLanguage()
   const ar = language === 'ar'
+  const accessKey = JSON.stringify([profile?.id, profile?.org_id, profile?.role, profile?.country,
+    profile?.countries, profile?.site, profile?.sites, profile?.approved, profile?.locked,
+    profile?.is_super_admin, modulePerms, grantOverrides, capabilities])
   const copy = (en, arabic) => ar ? arabic : en
   const actionLabel = action => ({
     approved: copy('Approved', 'معتمد'), rejected: copy('Rejected', 'مرفوض'),
@@ -72,7 +75,7 @@ export default function ApprovalReview({ entityType, entityId, title, onClose, o
     load()
     const requests = generation
     return () => { requests.current += 1 }
-  }, [load, profile?.id, profile?.org_id, profile?.role, activeCountry])
+  }, [load, accessKey, activeCountry])
 
   async function decide(approved, repeat = false, decision = null) {
     if (mutationLock.current) return
@@ -84,7 +87,11 @@ export default function ApprovalReview({ entityType, entityId, title, onClose, o
       const result = await submitApprovalIntent(intent.current)
       if (current !== generation.current) return
       setAccepted(result); setRetry(false)
-      onActed?.({ keepOpen: true, result })
+      try {
+        await onActed?.({ keepOpen: true, result })
+      } catch {
+        if (current === generation.current) setError(copy('The decision was recorded, but the approval list could not refresh. Reopen the list to update it.', 'تم تسجيل القرار، لكن تعذر تحديث قائمة الموافقات. أعد فتح القائمة لتحديثها.'))
+      }
     } catch (err) {
       if (current !== generation.current) return
       setError(toUserMessage(err, 'The decision was not confirmed. Retry or refresh before deciding again.'))
@@ -137,6 +144,8 @@ export default function ApprovalReview({ entityType, entityId, title, onClose, o
 
   if (unavailable && legacy) return legacy
   const stage = review?.stages?.[review.current_stage]
+  const lifecycleStatus = review?.workflow_status || review?.status
+  const pendingStage = ['pending', 'in_review', 'pending_approval', 'pending_area_manager'].includes(lifecycleStatus)
   const needsSignature = review?.mode === 'legacy' || stage?.require_signature !== false
   const canDecide = review?.can_decide === true && !accepted && !retry
   const canReturn = review?.can_return === true && !accepted && !retry
@@ -154,10 +163,10 @@ export default function ApprovalReview({ entityType, entityId, title, onClose, o
               : copy('Existing approval rules apply.', 'تُطبق قواعد الاعتماد الحالية.')}
           </p>
           {review.stages?.length > 0 && <ol aria-label={copy('Approval stages', 'مراحل الاعتماد')} className="space-y-2">
-            {review.stages.map((step, index) => <li key={index} aria-current={!accepted && index === review.current_stage ? 'step' : undefined} className="rounded-lg border border-[var(--hairline)] p-3">
+            {review.stages.map((step, index) => <li key={index} aria-current={!accepted && pendingStage && index === review.current_stage ? 'step' : undefined} className="rounded-lg border border-[var(--hairline)] p-3">
               <span className="font-semibold">{index + 1}. {step.name}</span>
               <span className="ms-2 text-sm text-[var(--text-secondary)]">{step.approver_name || step.approver_role || copy('Assigned reviewer', 'المراجع المعيّن')}</span>
-              {!accepted && index === review.current_stage && <span className="ms-2 text-sm">{copy('Current stage', 'المرحلة الحالية')}</span>}
+              {!accepted && pendingStage && index === review.current_stage && <span className="ms-2 text-sm">{copy('Current stage', 'المرحلة الحالية')}</span>}
             </li>)}
           </ol>}
           {entityType === 'checklist' && <ChecklistAnswers submission={review.document} lang={language} showApproval={review.mode !== 'enforced'} />}
@@ -176,7 +185,9 @@ export default function ApprovalReview({ entityType, entityId, title, onClose, o
               ? copy('Returned for correction. A new review is required after resubmission.', 'تمت الإعادة للتصحيح. تلزم مراجعة جديدة بعد إعادة التقديم.')
               : <>{copy('Decision recorded. Current status:', 'تم تسجيل القرار. الحالة الحالية:')} {statusLabel(accepted.status)}</>}
           </p>}
-          {!review.can_decide && !accepted && <p role="status">{copy('Approval and rejection are unavailable at this stage.', 'الموافقة والرفض غير متاحين في هذه المرحلة.')}</p>}
+          {!review.can_decide && !accepted && <p role="status">{['approved', 'rejected', 'returned'].includes(lifecycleStatus)
+            ? <>{copy('Review completed:', 'اكتملت المراجعة:')} {actionLabel(lifecycleStatus)}</>
+            : copy('Approval and rejection are unavailable at this stage.', 'الموافقة والرفض غير متاحين في هذه المرحلة.')}</p>}
           {!accepted && !retry && (review.can_recover || review.can_reassign || review.can_delegate || review.delegations?.length > 0) && <section className="space-y-3" aria-label={copy('Approval routing actions', 'إجراءات مسار الموافقة')}>
             <div className="flex flex-wrap gap-2">
               {review.can_recover && <button type="button" className="btn-secondary min-h-11" disabled={busy} onClick={() => openRouteAction('recover')}>{copy('Resolve routing exception', 'معالجة استثناء المسار')}</button>}
@@ -201,7 +212,7 @@ export default function ApprovalReview({ entityType, entityId, title, onClose, o
               <textarea value={note} onChange={e => setNote(e.target.value)} maxLength={8000} rows={3} className="mt-1 w-full rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] p-3" />
             </label>
             {canDecide && needsSignature && <SignatureField key={`${entityId}:${review.stage_token}`} label={copy('Approval signature', 'توقيع الاعتماد')} onChange={setSignature} />}
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-3">
               {canReturn && <button type="button" className="btn-secondary min-h-11" disabled={busy || !note.trim()} onClick={() => decide(false, false, 'returned')}>{copy('Return for correction', 'إعادة للتصحيح')}</button>}
               {canDecide && <button type="button" className="btn-secondary min-h-11" disabled={busy || !note.trim()} onClick={() => decide(false)}>{copy('Reject', 'رفض')}</button>}
               {canDecide && <button type="button" className="btn-primary min-h-11" disabled={busy || (needsSignature && !signature)} onClick={() => decide(true)}>{busy ? copy('Saving…', 'جارٍ الحفظ…') : copy('Approve this stage', 'اعتماد هذه المرحلة')}</button>}

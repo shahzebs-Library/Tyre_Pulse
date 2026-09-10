@@ -207,7 +207,7 @@ const RPC_LARGE = new RegExp(`\\.rpc\\(\\s*['"](${LARGE_RPCS.join('|')})['"]`)
 // single-entity while the supplied value is a literal serial. Callers pass a
 // scanned or typed serial straight through, so they escape it first.
 const BOUNDED_EQ = new RegExp(`\\.(eq|ilike)\\(\\s*['"](${BOUNDED_EQ_KEYS.join('|')})['"]`)
-const PAGING = /fetchAllPages\s*\(|fetchAllRows\s*\(|fetchAllRpcPages\s*\(|fetchAllRpcRows\s*\(|pageAll\s*\(/
+const PAGING = /fetchAllPages\s*\(|fetchAllRows\s*\(|fetchAllRpcPages\s*\(|fetchAllRpcRows\s*\(|pageAll\s*\(|completeRows\s*\(/ 
 
 /**
  * The statement that starts at `startLine`, forward-only. Stops at the next

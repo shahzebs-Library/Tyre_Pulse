@@ -1,9 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 const { rpc } = vi.hoisted(() => ({ rpc: vi.fn() }))
 vi.mock('../lib/api/_client', () => ({ supabase: { rpc }, unwrap: result => { if (result.error) throw result.error; return result.data } }))
-import { getTyreChangeApprovalContext, executeApprovedTyreChange, tyreChangePayload } from '../lib/api/tyreChangeApprovals'
+import { getTyreChangeApprovalContext, requestTyreChangeApproval, executeApprovedTyreChange, tyreChangePayload } from '../lib/api/tyreChangeApprovals'
 beforeEach(() => rpc.mockReset())
 describe('tyre execution boundary', () => {
+  it('requires the submitted operation and vehicle to match the request receipt', async () => {
+    const intent = { p_vehicle_id: 'vehicle', p_operation_id: 'operation', p_change: { action: 'remove' } }
+    const row = { id: 'request', entity_type: 'tyre_change', vehicle_id: 'vehicle', operation_id: 'operation', payload: { action: 'remove' } }
+    rpc.mockResolvedValueOnce({ data: { ...row, operation_id: 'other' } }).mockResolvedValueOnce({ data: row })
+    await expect(requestTyreChangeApproval(intent)).rejects.toThrow(/did not confirm/)
+    expect(await requestTyreChangeApproval(intent)).toEqual(row)
+  })
   it('rejects a mismatched vehicle scope', async () => {
     rpc.mockResolvedValue({ data: { mode: 'enforced', can_submit: true, requests: [], vehicle: { id: 'other' } } })
     await expect(getTyreChangeApprovalContext('vehicle')).rejects.toThrow(/authority/)

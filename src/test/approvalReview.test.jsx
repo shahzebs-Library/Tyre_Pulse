@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-const { getReview, submit, makeIntent, reviewPeople, recover, reassign, delegate, revoke } = vi.hoisted(() => ({ getReview: vi.fn(), submit: vi.fn(), makeIntent: vi.fn(), reviewPeople: vi.fn(), recover: vi.fn(), reassign: vi.fn(), delegate: vi.fn(), revoke: vi.fn() }))
+const { getReview, submit, makeIntent, reviewPeople, recover, reassign, delegate, revoke, auth } = vi.hoisted(() => ({ getReview: vi.fn(), submit: vi.fn(), makeIntent: vi.fn(), reviewPeople: vi.fn(), recover: vi.fn(), reassign: vi.fn(), delegate: vi.fn(), revoke: vi.fn(), auth: { sites: ['West'] } }))
 vi.mock('../lib/api/approvalDecisions', () => ({
   delegateApprovalStage: delegate, revokeApprovalDelegation: revoke, listApprovalReviewPeople: reviewPeople, recoverApprovalRoute: recover, reassignApprovalStage: reassign,
   getApprovalReview: getReview, submitApprovalIntent: submit, createApprovalIntent: makeIntent,
   isApprovalReviewUnavailable: e => e?.code === 'PGRST202',
 }))
-vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ profile: { id: 'reviewer', org_id: 'org', role: 'Admin' } }) }))
+vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ profile: { id: 'reviewer', org_id: 'org', role: 'Admin', sites: auth.sites } }) }))
 vi.mock('../contexts/SettingsContext', () => ({ useSettings: () => ({ activeCountry: 'KSA' }) }))
 vi.mock('../contexts/LanguageContext', () => ({ useLanguage: () => ({ language: 'en' }) }))
 vi.mock('../lib/api/checklists', () => ({ signChecklistPhotoUrl: value => Promise.resolve(value) }))
@@ -16,14 +16,44 @@ vi.mock('../components/checklist/SignatureField', () => ({ default: ({ onChange 
 import ApprovalReview from '../components/workflow/ApprovalReview'
 
 const context = { entity_type: 'checklist', entity_id: 'sheet', mode: 'enforced', revision: 4,
-  stage_token: 'request:0', current_stage: 0, can_decide: true, policy: { name: 'Site review', version: 1 },
+  stage_token: 'request:0', current_stage: 0, status: 'pending', can_decide: true, policy: { name: 'Site review', version: 1 },
   stages: [{ name: 'Supervisor', require_signature: true }], history: [], document: { answers: { brakes: 'fault' } },
 }
 const props = { entityType: 'checklist', entityId: 'sheet', onClose: vi.fn(), legacy: <p>Legacy flow</p> }
-beforeEach(() => { vi.clearAllMocks(); getReview.mockResolvedValue(context); makeIntent.mockReturnValue({ p_operation_id: 'operation-1' }) })
+beforeEach(() => { vi.clearAllMocks(); auth.sites = ['West']; getReview.mockResolvedValue(context); makeIntent.mockReturnValue({ p_operation_id: 'operation-1' }) })
 afterEach(cleanup)
 
 describe('shared approval review', () => {
+  it('discards signed evidence when site authority changes without changing the user or role', async () => {
+    const { rerender } = render(<ApprovalReview {...props} />)
+    await screen.findByText('Reviewed: fault')
+    fireEvent.click(screen.getByRole('button', { name: 'Capture signature' }))
+    getReview.mockRejectedValueOnce({ code: '42501', message: 'Approval record unavailable' })
+    auth.sites = ['East']
+    rerender(<ApprovalReview {...props} />)
+    await screen.findByRole('alert')
+    expect(getReview).toHaveBeenCalledTimes(2)
+    expect(screen.queryByText('Reviewed: fault')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Approve this stage' })).not.toBeInTheDocument()
+  })
+  it('shows a returned final result without labeling a current stage or calling it rejected', async () => {
+    getReview.mockResolvedValue({ ...context, status: 'rejected', workflow_status: 'returned', can_decide: false })
+    render(<ApprovalReview {...props} />)
+    expect(await screen.findByText(/Review completed:/)).toHaveTextContent('Returned for correction')
+    expect(screen.queryByText('Current stage')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Approve this stage' })).not.toBeInTheDocument()
+  })
+  it('keeps a confirmed receipt when refreshing its parent list fails', async () => {
+    submit.mockResolvedValue({ status: 'approved', decision: 'approved', ok: true })
+    render(<ApprovalReview {...props} onActed={vi.fn().mockRejectedValue(new Error('List connection failed'))} />)
+    await screen.findByText('Reviewed: fault')
+    fireEvent.click(screen.getByRole('button', { name: 'Capture signature' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Approve this stage' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('The decision was recorded')
+    expect(screen.getByText(/Decision recorded. Current status:/)).toHaveTextContent('approved')
+    expect(screen.queryByRole('button', { name: 'Retry the same decision' })).not.toBeInTheDocument()
+    expect(submit).toHaveBeenCalledTimes(1)
+  })
   it('renders the snapshot and requires its signature before approval', async () => {
     render(<ApprovalReview {...props} />)
     expect(await screen.findByText('Reviewed: fault')).toBeInTheDocument()

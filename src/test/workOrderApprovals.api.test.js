@@ -13,6 +13,10 @@ it('rejects a request review for a different request', async () => {
   await expect(getWorkOrderApproval('wo1')).rejects.toThrow(/did not confirm/)
 })
 it('submits only a source reference, operation ID and reason, never client authority', async () => {
+  rpc.mockResolvedValue({ data: { ...envelope, request_id: 'request1', review: { entity_id: 'request1', entity_type: 'work_order' } } })
   await requestWorkOrderApproval('wo1', 'op1', 'Repair')
   expect(rpc).toHaveBeenCalledWith('request_work_order_approval', { p_work_order_id: 'wo1', p_operation_id: 'op1', p_reason: 'Repair' })
+})
+it('does not confirm a submission when the server returns no request', async () => {
+  await expect(requestWorkOrderApproval('wo1', 'op1', 'Repair')).rejects.toThrow(/did not confirm/)
 })

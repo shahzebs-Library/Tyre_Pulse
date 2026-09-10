@@ -48,3 +48,19 @@ it('does not silently fall back to builtin roles when custom role lookup fails',
 it('keeps Arabic and English policy copy complete', () => {
   expect(Object.keys(approvalPolicyCopy.ar).sort()).toEqual(Object.keys(approvalPolicyCopy.en).sort())
 })
+
+it.each([
+  { mode: 'enforced', status: 'matched', policy: null, candidates: [] },
+  { mode: 'enforced', status: 'matched', policy: { id: 'p', name: 'Broken route', stages: {} }, candidates: [] },
+  { mode: 'enforced', status: 'no_route', policy: null, candidates: [null] },
+])('rejects malformed routing responses rather than displaying a confirmed simulation', async data => {
+  h.rpc.mockResolvedValue({ data, error: null })
+  await expect(simulateApprovalPolicy({ entity_type: 'inspection' })).rejects.toMatchObject({ code: 'invalid_response' })
+})
+
+it('keeps the server-selected priority order for valid routing candidates', async () => {
+  const policy = { id: 'p', name: 'Selected route', stages: [{ name: 'Review' }] }
+  const data = { mode: 'enforced', status: 'matched', policy, candidates: [{ ...policy, rank: 1, specificity: 2, priority: 100 }] }
+  h.rpc.mockResolvedValue({ data, error: null })
+  await expect(simulateApprovalPolicy({ entity_type: 'inspection' })).resolves.toEqual(data)
+})

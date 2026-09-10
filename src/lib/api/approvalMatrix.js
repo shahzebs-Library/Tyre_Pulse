@@ -81,10 +81,15 @@ export async function listApprovalPolicies() {
 
 async function policyRpc(name, args) {
   const data = unwrap(await supabase.rpc(name, args))
+  const routePolicy = policy => policy && typeof policy.id === 'string' && typeof policy.name === 'string'
+    && Array.isArray(policy.stages) && policy.stages.every(stage => stage && typeof stage.name === 'string')
   const valid = name === 'approval_policy_people'
     ? Array.isArray(data)
     : name === 'approval_policy_simulate'
       ? data && ['legacy', 'enforced'].includes(data.mode) && ['matched', 'no_route', 'ambiguous'].includes(data.status) && Array.isArray(data.candidates)
+        && (data.status === 'matched' ? routePolicy(data.policy) : data.policy == null)
+        && data.candidates.every(candidate => routePolicy(candidate) && Number.isInteger(candidate.rank) && candidate.rank >= 1
+          && Number.isInteger(candidate.specificity) && candidate.specificity >= 0 && candidate.specificity <= 4 && Number.isInteger(candidate.priority))
       : data && !Array.isArray(data) && typeof data.id === 'string' && typeof data.updated_at === 'string'
   if (!valid) throw new ServiceError('The server did not confirm the operation.', 'invalid_response')
   return data

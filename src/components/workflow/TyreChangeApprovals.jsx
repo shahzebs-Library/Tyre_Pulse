@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
+import { useSettings } from '../../contexts/SettingsContext'
 import { getTyreChangeApprovalContext, requestTyreChangeApproval, executeApprovedTyreChange, tyreChangePayload } from '../../lib/api/tyreChangeApprovals'
 import { isApprovalReviewUnavailable } from '../../lib/api/approvalDecisions'
 import { toUserMessage } from '../../lib/safeError'
 import ApprovalReview from './ApprovalReview'
 import Modal from '../ui/Modal'
+import OperationalApprovalDetails from './OperationalApprovalDetails'
 
 const copy = {
   en: { title: 'Tyre change approvals', loading: 'Checking tyre change authority…', retry: 'Refresh', request: 'Request tyre change', review: 'Review request', execute: 'Execute approved change', confirm: 'Confirm execution', confirmation: 'This records the approved tyre operation. Verify the vehicle and tyres before continuing.', reason: 'Reason for the change', action: 'Operation', install: 'Install into empty position', replace: 'Replace fitted tyre', remove: 'Remove tyre', move: 'Move / swap tyre', current: 'Current tyre', position: 'Target position', target: 'Target asset number (blank for same vehicle)', serial: 'Replacement serial', brand: 'Brand', km: 'Odometer (km)', cost: 'Tyre cost', date: 'Operation date', save: 'Submit for approval', cancel: 'Close', saved: 'Request submitted. Wait for approval before executing the tyre change.', executed: 'Tyre change executed and confirmed by the server.', empty: 'No tyre change requests for this vehicle.', rule: 'Submit the proposed change, obtain approval, then execute it. Direct changes are locked while this policy is enforced.', pending: 'A saved operation awaits confirmation. Retry it before editing.', retryIntent: 'Retry saved operation', storage: 'The draft could not be saved on this device. Keep this screen open and retry.', draft: 'Draft saved on this device.', required: 'Enter a reason for the change.', choose: 'Choose a tyre', status: 'Status', permission: 'You cannot submit tyre changes for this vehicle.' },
@@ -18,9 +20,11 @@ const rejectedTransaction = error => ['22023', '22004', '23514', '23505', '42501
 function Field({ label, children }) { return <label className="flex flex-col gap-1 text-sm"><span>{label}</span>{children}</label> }
 
 export default function TyreChangeApprovals(props) {
-  const { profile } = useAuth()
+  const { profile, modulePerms, capabilities, grantOverrides } = useAuth()
+  const { activeCountry } = useSettings()
   const scope = `${profile?.org_id || ''}:${profile?.id || ''}:${props.asset?.id || ''}`
-  return <ScopedTyreChangeApprovals key={scope} {...props} scope={scope} />
+  const identity = JSON.stringify([scope, activeCountry, profile?.role, profile?.approved, profile?.locked, profile?.country, profile?.sites, modulePerms, capabilities, grantOverrides])
+  return <ScopedTyreChangeApprovals key={identity} {...props} scope={scope} />
 }
 
 function ScopedTyreChangeApprovals({ asset, tyres = [], positions = [], scope, onModeChange, onExecuted }) {
@@ -30,6 +34,12 @@ function ScopedTyreChangeApprovals({ asset, tyres = [], positions = [], scope, o
   const [saved, setSaved] = useState(() => {
     try {
       const value = JSON.parse(localStorage.getItem(storageKey) || 'null')
+      if (value) {
+        if (!value.form || Object.keys(blank()).some(key => typeof value.form[key] !== 'string')
+          || !value.executions || Array.isArray(value.executions) || typeof value.executions !== 'object'
+          || (value.intent && (value.intent.p_vehicle_id !== asset?.id || typeof value.intent.p_operation_id !== 'string' || typeof value.intent.p_reason !== 'string' || !value.intent.p_change))
+          || Object.entries(value.executions).some(([id, intent]) => intent?.p_request_id !== id || typeof intent.p_operation_id !== 'string')) throw new Error('Invalid saved request')
+      }
       return { form: { ...blank(), ...value?.form }, intent: value?.intent || null, executions: value?.executions || {} }
     } catch { return { form: blank(), intent: null, executions: {}, unreadable: true } }
   })
@@ -48,10 +58,11 @@ function ScopedTyreChangeApprovals({ asset, tyres = [], positions = [], scope, o
   const generation = useRef(0)
   const modeCallback = useRef(onModeChange)
   modeCallback.current = onModeChange
+  useLayoutEffect(() => { modeCallback.current?.('loading') }, [])
   useEffect(() => { alive.current = true; return () => { alive.current = false; generation.current += 1 } }, [])
   const load = useCallback(async () => {
     const sequence = ++generation.current
-    setLoading(true); setError(''); modeCallback.current?.('loading')
+    setLoading(true); setError(''); setContext(null); setOpen(false); setExecution(null); modeCallback.current?.('loading')
     try {
       if (!asset?.id) throw new Error('A registered vehicle is required to verify tyre change authority.')
       const data = await getTyreChangeApprovalContext(asset.id)
@@ -66,6 +77,7 @@ function ScopedTyreChangeApprovals({ asset, tyres = [], positions = [], scope, o
   useEffect(() => { load() }, [load])
 
   function persist(next) {
+    if (saved.unreadable) { setStorageError(true); return false }
     setSaved(next)
     try { localStorage.setItem(storageKey, JSON.stringify(next)); setStorageError(false); setDraftSaved(true); return true }
     catch { setStorageError(true); return false }
@@ -79,7 +91,7 @@ function ScopedTyreChangeApprovals({ asset, tyres = [], positions = [], scope, o
     persist({ ...saved, form })
   }
   async function submit() {
-    if (lock.current) return
+    if (lock.current || loading || !context?.can_submit || saved.unreadable) return
     lock.current = true; setBusy(true); setError(''); setMessage('')
     try {
       if (!saved.form.reason.trim()) throw new Error(c.required)
@@ -93,7 +105,7 @@ function ScopedTyreChangeApprovals({ asset, tyres = [], positions = [], scope, o
     finally { lock.current = false; if (alive.current) setBusy(false) }
   }
   async function execute() {
-    if (lock.current || !execution) return
+    if (lock.current || loading || !context || !execution || saved.unreadable) return
     lock.current = true; setBusy(true); setError(''); setMessage('')
     try {
       const intent = saved.executions[execution.id] || { p_request_id: execution.id, p_operation_id: crypto.randomUUID() }
@@ -129,15 +141,15 @@ function ScopedTyreChangeApprovals({ asset, tyres = [], positions = [], scope, o
     {!loading && context?.requests.length === 0 && <p>{c.empty}</p>}
     <ul className="space-y-2">{context?.requests.map(row => <li key={row.id} className="rounded-lg border border-[var(--border-dim)] p-3 space-y-2">
       <p className="font-medium">{c[row.action] || row.title} · {asset.asset_no}</p>
-      <p className="text-sm">{c.status}: {row.status} · {row.created_at ? new Date(row.created_at).toLocaleString(language === 'ar' ? 'ar' : 'en') : ''}</p>
-      <div className="flex flex-wrap gap-2"><button className={button} disabled={busy} onClick={() => setReview(row.id)}>{c.review}</button>
+      <p className="text-sm">{c.status}: {language === 'ar' ? ({ pending: 'قيد المراجعة', approved: 'معتمد', rejected: 'مرفوض', returned: 'معاد للتصحيح', executed: 'منفذ' }[row.status] || row.status) : row.status} · {row.created_at ? new Date(row.created_at).toLocaleString(language === 'ar' ? 'ar' : 'en') : ''}</p>
+      <div className="flex flex-wrap gap-2"><button className={button} disabled={busy || loading} onClick={() => setReview(row.id)}>{c.review}</button>
         {(row.can_execute || saved.executions[row.id]) && <button className="btn-primary min-h-11" disabled={busy || loading} onClick={() => setExecution(row)}>{saved.executions[row.id] ? c.retryIntent : c.execute}</button>}</div>
     </li>)}</ul>
     {review && <ApprovalReview entityType="tyre_change" entityId={review} title={`${c.title} · ${asset.asset_no}`} onClose={() => setReview(null)} onActed={load} />}
-    <Modal open={open} onClose={() => !busy && setOpen(false)} title={c.request} size="lg" footer={<button className="btn-primary min-h-11" disabled={busy || !context?.can_submit} onClick={submit}>{saved.intent ? c.retryIntent : c.save}</button>}>
+    <Modal open={open} onClose={() => !busy && setOpen(false)} title={c.request} size="lg" footer={<button className="btn-primary min-h-11" disabled={busy || loading || saved.unreadable || !context?.can_submit} onClick={submit}>{saved.intent ? c.retryIntent : c.save}</button>}>
       {error && <p role="alert" className="text-red-400 mb-3">{error}</p>}
       {saved.intent && <p className="mb-3">{c.pending}</p>}
-      <fieldset disabled={busy || !!saved.intent} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <fieldset disabled={busy || saved.unreadable || !!saved.intent} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field label={c.action}><select className={input} value={form.action} onChange={e => change('action', e.target.value)}>{['install','replace','remove','move'].map(action => <option key={action} value={action}>{c[action]}</option>)}</select></Field>
         {form.action !== 'install' && <Field label={c.current}><select className={input} value={form.tyreId} onChange={e => change('tyreId', e.target.value)}><option value="">{c.choose}</option>{tyres.filter(row => !row.removal_date && !/removed|scrap|sold|retired/i.test(row.status || '')).map(row => <option key={row.id} value={row.id}>{row.serial_no || row.serial_number || row.tyre_serial} · {row.tyre_position || row.position}</option>)}</select></Field>}
         {form.action !== 'remove' && <Field label={c.position}><input className={input} list={`positions-${asset.id}`} value={form.position} onChange={e => change('position', e.target.value)} /><datalist id={`positions-${asset.id}`}>{positions.map(p => <option key={p.code} value={p.code} />)}</datalist></Field>}
@@ -148,8 +160,9 @@ function ScopedTyreChangeApprovals({ asset, tyres = [], positions = [], scope, o
         <Field label={c.reason}><textarea className={input} value={form.reason} onChange={e => change('reason', e.target.value)} /></Field>
       </fieldset>{(storageError || draftSaved) && <p className="text-xs mt-3">{storageError ? c.storage : c.draft}</p>}
     </Modal>
-    <Modal open={!!execution} onClose={() => !busy && setExecution(null)} title={c.confirm} footer={<button className="btn-primary min-h-11" disabled={busy} onClick={execute}>{c.confirm}</button>}>
-      <p>{c.confirmation}</p><p className="mt-2">{asset.asset_no} · {c[execution?.action]} · {execution?.id}</p>
+    <Modal open={!!execution} onClose={() => !busy && setExecution(null)} title={c.confirm} size="lg" footer={<button className="btn-primary min-h-11" disabled={busy || loading || saved.unreadable || !context} onClick={execute}>{c.confirm}</button>}>
+      <p>{c.confirmation}</p><p className="mt-2">{asset.asset_no} · {c[execution?.action]}</p>
+      {execution && <OperationalApprovalDetails entityType="tyre_change" document={execution} language={language} />}
       {error && <p role="alert" className="text-red-400 mt-3">{error}</p>}
     </Modal>
   </section>

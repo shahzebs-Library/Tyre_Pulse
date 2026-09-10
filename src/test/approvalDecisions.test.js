@@ -14,6 +14,15 @@ const review = () => ({ entity_type: 'checklist', entity_id: 'sheet-1', mode: 'e
 })
 beforeEach(() => rpc.mockReset())
 describe('authoritative approval contract', () => {
+  it.each(['work_order', 'tyre_change'])('reviews %s by execution request ID, not its underlying asset ID', async entityType => {
+    const request = { ...review(), entity_type: entityType, entity_id: 'request-1',
+      document: { id: 'request-1', work_order_id: 'source-1', vehicle_id: 'source-1', source_snapshot: { id: 'source-1' }, payload: { reason: 'Pre-execution review' } } }
+    rpc.mockResolvedValue({ data: request })
+    const context = await getApprovalReview(entityType, 'request-1')
+    expect(rpc).toHaveBeenCalledWith('approval_review_context', { p_entity_type: entityType, p_entity_id: 'request-1' })
+    expect(createApprovalIntent(context, { approved: true, signature: 'signed' }).p_entity_id).toBe('request-1')
+    await expect(getApprovalReview(entityType, 'source-1')).rejects.toThrow(/valid approval review/)
+  })
   it('uses the server document and its frozen template, not a second row read', async () => {
     rpc.mockResolvedValue({ data: review() })
     const result = await getApprovalReview('checklist', 'sheet-1')
@@ -30,6 +39,9 @@ describe('authoritative approval contract', () => {
   )
   it('does not treat denied access, relation failure or malformed responses as a legacy capability', () => {
     expect(isApprovalReviewUnavailable({ code: 'PGRST202' })).toBe(true)
+    expect(isApprovalReviewUnavailable({ code: '42883', message: 'function public.approval_review_context(text, uuid) does not exist' })).toBe(true)
+    expect(isApprovalReviewUnavailable({ code: '42883', message: 'function approval_private.document(text, uuid) does not exist' })).toBe(false)
+    expect(isApprovalReviewUnavailable({ code: '42883' })).toBe(false)
     expect(isApprovalReviewUnavailable({ code: '42501' })).toBe(false)
     expect(isApprovalReviewUnavailable({ code: '42P01' })).toBe(false)
     expect(isApprovalReviewUnavailable(new Error('bad response'))).toBe(false)

@@ -1,5 +1,25 @@
 [
   {
+    "id": "2026.09.11.1",
+    "date": "2026-09-11",
+    "changes": [
+      {
+        "modules": ["approvals"],
+        "text": {
+          "en": "Approval reviews clear outdated permissions and show completed decisions accurately. Policy publishing checks the reviewed draft, stage deadlines and simulation results.",
+          "ar": "تزيل مراجعات الموافقات الصلاحيات القديمة وتعرض القرارات المكتملة بدقة. يتحقق نشر السياسات من المسودة المراجعة ومهل المراحل ونتائج المحاكاة."
+        }
+      },
+      {
+        "modules": ["work_orders", "tyre_records"],
+        "text": {
+          "en": "Work-order approval requests retain the same retry after a refresh or reopening. Tyre changes recheck access, verify server receipts and show the approved operation before execution.",
+          "ar": "تحتفظ طلبات اعتماد أوامر العمل بنفس محاولة الإرسال بعد التحديث أو إعادة الفتح. تعيد تغييرات الإطارات التحقق من الوصول وتأكيدات الخادم وتعرض العملية المعتمدة قبل التنفيذ."
+        }
+      }
+    ]
+  },
+  {
     "id": "2026.09.10.7",
     "date": "2026-09-10",
     "changes": [

@@ -8,7 +8,12 @@ function requireType(entityType) {
 
 /** Only an absent RPC permits the caller to offer its existing legacy flow. */
 export function isApprovalReviewUnavailable(error) {
-  return ['42883', 'PGRST202'].includes(error?.code || error?.cause?.code)
+  const failure = error?.code ? error : error?.cause
+  if (failure?.code === 'PGRST202') return true
+  // A missing internal SQL dependency also reports 42883. It does not mean
+  // the canonical review RPC is absent or permit a different decision writer.
+  return failure?.code === '42883'
+    && /function\s+(?:public\.)?approval_review_context\s*\(/i.test(failure.message || '')
 }
 
 /** The document and revision come from the same server snapshot. */

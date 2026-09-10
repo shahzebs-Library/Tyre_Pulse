@@ -51,6 +51,7 @@ import NotInUseNotice from '../components/ui/NotInUseNotice'
 import ReferencePicker from '../components/checklist/ReferencePicker'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
+import { useReportMeta } from '../hooks/useReportMeta'
 import {
   listWashRecords, createWashRecord, deleteWashRecord, uploadWashPhoto,
   correctWashRecord, listWashCorrections, scheduleWash,
@@ -62,7 +63,7 @@ import {
   costBasis, formatWashCost, WASH_INTERVAL_DAYS,
 } from '../lib/washAnalytics'
 import { colorAt, categorical, withAlpha } from '../lib/reportColors'
-import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
+import { exportToExcel, reportFileName, reportDateLabel } from '../lib/exportUtils'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 import { resolveStorageUrl } from '../lib/storageRefs'
 import { safeImageSrc } from '../lib/safeUrl'
@@ -176,6 +177,10 @@ export default function VehicleWashing() {
   const { profile, isSuperAdmin } = useAuth()
   const canWrite = isSuperAdmin === true || WRITE_ROLES.has(profile?.role)
   const canCreate = canWrite || profile?.role === 'Fleet Supervisor'
+  const reportMeta = useReportMeta('Vehicle Washing Report')
+  const [pdfBusy, setPdfBusy] = useState(false)
+  const [pdfStatus, setPdfStatus] = useState('')
+  const pdfLock = useRef(false)
 
   const [tab, setTab] = useState('reporting')
   const [rows, setRows] = useState([])
@@ -592,18 +597,19 @@ export default function VehicleWashing() {
     const name = reportFileName(label, reportDateLabel())
     exportToExcel(exportRowsFrom(list), EXPORT_COLS, EXPORT_HEADERS, name, 'Washes', { title: label, currency: activeCurrency })
   }
-  const exportPdf = (list, label = 'Vehicle Washing') => {
-    const name = reportFileName(label, reportDateLabel())
-    exportToPdf(
-      exportRowsFrom(list),
-      EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })),
-      `${label} Report`,
-      name,
-      'landscape',
-      '',
-      { currency: activeCurrency },
-    )
+  const exportPdf = async (list, label = 'Vehicle Washing') => {
+    if (pdfLock.current) return
+    pdfLock.current = true; setPdfBusy(true); setPdfStatus('Preparing company logo and vehicle report...')
+    try {
+      const { exportVehicleWashPdf } = await import('../lib/washReportPdf')
+      const result = await exportVehicleWashPdf(list, { ...reportMeta, filename: reportFileName(label, reportDateLabel()),
+        onProgress: (done, total) => setPdfStatus(`Preparing photos ${done} of ${total}...`) })
+      setPdfStatus(`PDF downloaded: ${result.vehicles} vehicles, ${result.totalPhotos - result.missingPhotos} photos included.${result.missingPhotos ? ` ${result.missingPhotos} photos were unavailable and are marked in the report.` : ''}`)
+    } catch (err) { setPdfStatus(toUserMessage(err, 'Could not create the PDF. Please try again.')) }
+    finally { pdfLock.current = false; setPdfBusy(false) }
   }
+  const exportVehiclePdf = row => exportPdf(regRows.filter(r => r.organisation_id === row.organisation_id && r.country === row.country && r.asset_no === row.asset_no), `Vehicle Washing ${row.asset_no}`)
+
 
   const kpis = [
     { label: 'Washes performed', value: fmtNum(summary.totalWashes), icon: Droplets, hint: 'Completed washes only. Plans are not counted.' },
@@ -659,6 +665,7 @@ export default function VehicleWashing() {
         />
       )}
 
+      {pdfStatus && <p role="status" className="card text-sm">{pdfStatus}</p>}
       {/* Tabs */}
       <div className="flex items-center gap-1 border-b border-[var(--input-border)]">
         {TABS.filter((t) => !WRITE_TABS.has(t.id) || canCreate).map((t) => {
@@ -863,10 +870,10 @@ export default function VehicleWashing() {
               <Filter size={15} /> <span className="text-sm font-medium">Filters</span>
               <span className="text-[11px] text-[var(--text-muted)]">every record, plans included</span>
               <div className="ml-auto flex items-center gap-2">
-                <button onClick={() => exportExcel(regRows, 'Vehicle Washing Log')} disabled={regRows.length === 0} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-50">
+                <button onClick={() => exportExcel(regRows, 'Vehicle Washing Log')} disabled={pdfBusy || regRows.length === 0} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-50">
                   <FileSpreadsheet size={14} /> Excel
                 </button>
-                <button onClick={() => exportPdf(regRows, 'Vehicle Washing Log')} disabled={regRows.length === 0} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-50">
+                <button onClick={() => exportPdf(regRows, 'Vehicle Washing Log')} disabled={pdfBusy || regRows.length === 0} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-50">
                   <FileText size={14} /> PDF
                 </button>
               </div>
@@ -952,6 +959,7 @@ export default function VehicleWashing() {
                       <th className="py-2 pr-3 font-medium">Cost</th>
                       <th className="py-2 pr-3 font-medium text-center">Photos</th>
                       <th className="py-2 pr-3 font-medium">Status</th>
+                      <th className="py-2 font-medium">Vehicle PDF</th>
                       {canWrite && <th className="py-2 font-medium text-right">Actions</th>}
                     </tr>
                   </thead>
@@ -982,6 +990,7 @@ export default function VehicleWashing() {
                         <td className="py-2 pr-3">
                           <span className={`inline-block text-[11px] px-2 py-0.5 rounded-full border ${STATUS_TONE[r.status] || STATUS_TONE.Cancelled}`}>{r.status || 'N/A'}</span>
                         </td>
+                        <td className="py-2 pr-3"><button className="btn-secondary text-xs" disabled={pdfBusy || !r.asset_no} onClick={() => exportVehiclePdf(r)} aria-label={`Download PDF for ${r.asset_no}`}>PDF + photos</button></td>
                         {canWrite && (
                           <td className="py-2 text-right whitespace-nowrap">
                             <button onClick={() => openEdit(r)} className="p-1.5 rounded hover:bg-blue-500/10 text-[var(--text-muted)] hover:text-blue-300" title="Edit or correct">

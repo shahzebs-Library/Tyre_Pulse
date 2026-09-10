@@ -1,5 +1,18 @@
 [
   {
+    "id": "2026.09.10.7",
+    "date": "2026-09-10",
+    "changes": [
+      {
+        "modules": ["inspection_planner"],
+        "text": {
+          "en": "Inspection planning has a searchable work queue, clearer appointment and coverage status, timezone-safe scheduling, bulk appointment previews, and visible validation and save errors.",
+          "ar": "أصبح تخطيط الفحص يتضمن قائمة عمل قابلة للبحث، وحالات أوضح للمواعيد والتغطية، وجدولة صحيحة عبر المناطق الزمنية، ومعاينة للمواعيد الجماعية، ورسائل واضحة للتحقق وأخطاء الحفظ."
+        }
+      }
+    ]
+  },
+  {
     "id": "2026.09.10.6",
     "date": "2026-09-10",
     "changes": [

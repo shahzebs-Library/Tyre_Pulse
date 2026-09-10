@@ -9,6 +9,8 @@ import {
 import { motion, AnimatePresence } from 'framer-motion'
 import * as workflows from '../lib/api/workflows'
 import * as queue from '../lib/api/approvalsQueue'
+import ApprovalReview from '../components/workflow/ApprovalReview'
+import { isGovernedApproval, mergePendingApprovals } from '../lib/approvalInbox'
 import { toUserMessage } from '../lib/safeError'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
@@ -406,6 +408,15 @@ function GenericRow({ item, onOpen, selectable = false, picked = false, onToggle
 // ─── Detail drawer (workflow engine) ─────────────────────────────────────────────
 
 function DetailDrawer({ instance, actionable, onClose, onActed }) {
+  if (isGovernedApproval(instance) && ['inspection', 'checklist', 'work_order', 'tyre_change'].includes(instance.entity_type)
+    && ['pending', 'in_review'].includes(instance.status)) {
+    return <ApprovalReview entityType={instance.entity_type} entityId={String(instance.entity_id)}
+      title={instance.entity_label || instance.definition_name} onClose={onClose} onActed={onActed} />
+  }
+  return <LegacyDetailDrawer instance={instance} actionable={actionable} onClose={onClose} onActed={onActed} />
+}
+
+function LegacyDetailDrawer({ instance, actionable, onClose, onActed }) {
   const [events, setEvents] = useState(null)
   const [trailErr, setTrailErr] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -495,6 +506,13 @@ function DetailDrawer({ instance, actionable, onClose, onActed }) {
 // ─── Simple approval drawer (accident closure / checklist) ───────────────────────
 
 function SimpleApprovalDrawer({ item, canAct, onClose, onActed }) {
+  const legacy = <LegacySimpleApprovalDrawer item={item} canAct={canAct} onClose={onClose} onActed={onActed} />
+  if (!['checklist', 'inspection'].includes(item.source)) return legacy
+  return <ApprovalReview key={`${item.source}:${item.id}`} entityType={item.source} entityId={item.id}
+    title={item.title} onClose={onClose} onActed={onActed} legacy={legacy} />
+}
+
+function LegacySimpleApprovalDrawer({ item, canAct, onClose, onActed }) {
   const meta = SOURCE_META[item.source] || SOURCE_META.workflow
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
@@ -1003,22 +1021,21 @@ export default function Approvals() {
 
   // Merged pending queue: workflow pending + closures + checklists + inspections.
   const mergedPending = useMemo(() => {
-    const wf = (buckets.pending || []).map(i => ({ ...i, source: SOURCE.workflow }))
-    return [...wf, ...closures, ...checklistItems, ...inspectionItems]
+    return mergePendingApprovals(buckets.pending || [], [...closures, ...checklistItems, ...inspectionItems])
   }, [buckets.pending, closures, checklistItems, inspectionItems])
 
   const counts = useMemo(() => ({
-    workflow_pending:  (buckets.pending || []).length,
+    workflow_pending:  mergedPending.filter(i => i.source === SOURCE.workflow).length,
     closures_pending:  closures.length,
-    checklist_pending: checklistItems.length,
-    inspection_pending: inspectionItems.length,
+    checklist_pending: mergedPending.filter(i => i.source === SOURCE.checklist).length,
+    inspection_pending: mergedPending.filter(i => i.source === SOURCE.inspection).length,
     total_pending:     mergedPending.length,
     overdue:           (buckets.overdue || []).length,
     returned:          (buckets.returned || []).length,
     rejected:          (buckets.rejected || []).length,
     recently_approved: (buckets.recently_approved || []).length,
     signoff_gaps:      signoffGaps.length,
-  }), [buckets, closures, checklistItems, inspectionItems, mergedPending, signoffGaps])
+  }), [buckets, closures, mergedPending, signoffGaps])
 
   const metrics = useMemo(() => {
     const m = metricsRaw && typeof metricsRaw === 'object' ? metricsRaw : {}
@@ -1084,7 +1101,7 @@ export default function Approvals() {
   // the requirements the engine exists to enforce. A missed sign-off is a fact to
   // correct rather than a decision to make, so it is not bulk-decidable either.
   const bulkableList = useMemo(
-    () => activeList.filter(i => BULKABLE.includes(i.source)),
+    () => activeList.filter(i => BULKABLE.includes(i.source) && !i.governed),
     [activeList],
   )
   const keyOf = (i) => `${i.source}:${i.id}`
@@ -1433,7 +1450,7 @@ export default function Approvals() {
                     key={`${row.source}-${row.id}`}
                     item={row}
                     onOpen={openRow}
-                    selectable={canActNonWorkflow && BULKABLE.includes(row.source)}
+                    selectable={canActNonWorkflow && BULKABLE.includes(row.source) && !row.governed}
                     picked={picked.has(keyOf(row))}
                     onTogglePick={togglePick}
                   />

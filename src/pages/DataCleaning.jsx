@@ -158,6 +158,7 @@ export default function DataCleaning() {
   const [totalPending, setTotalPending]     = useState(0)
   const [cleanedRecords, setCleanedRecords] = useState([])
   const [loading, setLoading]               = useState(true)
+  const [loadError, setLoadError]           = useState(false)
   const [saving, setSaving]                 = useState(false)
   const [saveCount, setSaveCount]           = useState(0)
   const [filterConf, setFilterConf]         = useState('')
@@ -215,33 +216,38 @@ export default function DataCleaning() {
       dataCleaning.countTyreRecords({ country: activeCountry, cleaned: false }),
       dataCleaning.countTyreRecords({ country: activeCountry, cleaned: true }),
     ])
+    if (p.error || c.error) { setToast({ message: toUserMessage(p.error || c.error), type: 'error' }); return }
     setStats({ pending: p.count ?? 0, cleaned: c.count ?? 0 })
   }, [activeCountry])
 
   const loadSites = useCallback(async () => {
-    const { data } = await dataCleaning.listUncleanedSites({ country: activeCountry })
+    const { data, error } = await dataCleaning.listUncleanedSites({ country: activeCountry })
+    if (error) { setSites([]); setToast({ message: toUserMessage(error), type: 'error' }); return }
     setSites([...new Set((data ?? []).map(r => r.site))].sort())
   }, [activeCountry])
 
   // Paging and both filters drive this read; a slower earlier one would repaint
   // the previous page's records and, worse, reset the selection under them.
   const latestPending = useLatestRequest()
+  const latestCleaned = useLatestRequest()
 
   const loadPending = useCallback(async () => {
     const stale = latestPending.begin()
     setLoading(true)
-    const { data, count } = await dataCleaning.listPendingRecords({
+    setLoadError(false)
+    const { data, count, error } = await dataCleaning.listPendingRecords({
       country: activeCountry,
       site: filterSite || undefined,
       from: page * PAGE_SIZE,
       to: (page + 1) * PAGE_SIZE - 1,
     })
     if (stale()) return
+    if (error) { setLoadError(true); setRawRecords([]); setClassified([]); setSelected(new Set()); setLoading(false); setToast({ message: toUserMessage(error), type: 'error' }); return }
     const records = data ?? []
     setRawRecords(records)
     setTotalPending(count ?? 0)
 
-    let results = batchClassify(records)
+    let results = batchClassify(records).map((result, index) => ({ ...records[index], ...result }))
     if (filterConf) results = results.filter(r => r.confidence === filterConf)
     setClassified(results)
     setSelected(new Set())
@@ -249,19 +255,24 @@ export default function DataCleaning() {
   }, [page, filterConf, filterSite, activeCountry, latestPending])
 
   const loadCleaned = useCallback(async () => {
+    const stale = latestCleaned.begin()
     setLoading(true)
-    const { data } = await dataCleaning.listCleanedRecords()
+    setLoadError(false)
+    const { data, error } = await dataCleaning.listCleanedRecords({ country: activeCountry, site: filterSite || undefined })
+    if (stale()) return
+    if (error) { setLoadError(true); setToast({ message: toUserMessage(error), type: 'error' }); setCleanedRecords([]); setLoading(false); return }
     setCleanedRecords(data ?? [])
     setCleanedSelected(new Set())
     setReclassifyProposed(null)
     setLoading(false)
-  }, [])
+  }, [activeCountry, filterSite, latestCleaned])
 
   // ── Quality Intelligence checks ─────────────────────────────────────────────
   const checkSerialIssues = useCallback(async () => {
     setCheckLoading(p => ({ ...p, serialIssues: true }))
     try {
-      const { data } = await dataCleaning.listSerialRecords({ country: activeCountry })
+      const { data, error } = await dataCleaning.listSerialRecords({ country: activeCountry })
+      if (error) throw error
 
       const issues = (data ?? []).filter(r => {
         const s = r.tyre_serial
@@ -300,7 +311,8 @@ export default function DataCleaning() {
   const checkDuplicateSerials = useCallback(async () => {
     setCheckLoading(p => ({ ...p, duplicateSerial: true }))
     try {
-      const { data } = await dataCleaning.listActiveSerialRecords({ country: activeCountry })
+      const { data, error } = await dataCleaning.listActiveSerialRecords({ country: activeCountry })
+      if (error) throw error
 
       const groups = {}
       ;(data ?? []).forEach(r => {
@@ -383,7 +395,8 @@ export default function DataCleaning() {
     setCheckLoading(p => ({ ...p, missingInspect: true }))
     try {
       // Get all distinct asset_nos from tyre_records
-      const { data: tyreData } = await dataCleaning.listAssetNumbers({ country: activeCountry })
+      const { data: tyreData, error: tyreError } = await dataCleaning.listAssetNumbers({ country: activeCountry })
+      if (tyreError) throw tyreError
       const allAssets = [...new Set((tyreData ?? []).map(r => r.asset_no))]
 
       // Try inspections table - graceful fallback
@@ -391,14 +404,9 @@ export default function DataCleaning() {
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
       const cutoff = thirtyDaysAgo.toISOString().split('T')[0]
 
-      const { data: inspData, error: inspError } = await dataCleaning.listRecentInspections({ cutoff })
+      const { data: inspData, error: inspError } = await dataCleaning.listRecentInspections({ cutoff, country: activeCountry })
 
-      if (inspError) {
-        // inspections table may not exist
-        setMissingInspect({ count: 0, asset_nos: [], notApplicable: true })
-        setCheckLoading(p => ({ ...p, missingInspect: false }))
-        return
-      }
+      if (inspError) throw inspError
 
       const inspectedAssets = new Set((inspData ?? []).map(r => r.asset_no))
       const missing = allAssets.filter(a => !inspectedAssets.has(a))
@@ -412,7 +420,8 @@ export default function DataCleaning() {
   const checkOdometerIssues = useCallback(async () => {
     setCheckLoading(p => ({ ...p, odometer: true }))
     try {
-      const { data } = await dataCleaning.listOdometerRecords({ country: activeCountry })
+      const { data, error } = await dataCleaning.listOdometerRecords({ country: activeCountry })
+      if (error) throw error
 
       const issues = []
 
@@ -459,7 +468,8 @@ export default function DataCleaning() {
   const checkUnrealisticLife = useCallback(async () => {
     setCheckLoading(p => ({ ...p, unrealisticLife: true }))
     try {
-      const { data } = await dataCleaning.listLifeRecords({ country: activeCountry })
+      const { data, error } = await dataCleaning.listLifeRecords({ country: activeCountry })
+      if (error) throw error
 
       const issues = [];
       ;(data ?? []).forEach(r => {
@@ -530,6 +540,7 @@ export default function DataCleaning() {
       unrealisticLife: unrealisticLife,
       missingInspect:  missingInspect,
     }
+    if (Object.values(checks).some(check => check.error || check.notApplicable)) { setQualityScore(null); return }
     const score = computeQualityScore(checks, totalRecords)
     const now = new Date().toISOString()
 
@@ -550,20 +561,14 @@ export default function DataCleaning() {
   }, [serialIssues, duplicateSerial, invalidPressure, missingTread, missingInspect, odometerIssues, unrealisticLife, totalRecords])
 
   // ── Bulk fix handlers ────────────────────────────────────────────────────────
-  async function fixDuplicateSerial(group, newSerial) {
-    if (!newSerial?.trim()) return
+  async function fixDuplicateSerial(group, serials) {
+    const toUpdate = group.records.filter(record => serials[record.id]?.trim() && serials[record.id].trim() !== record.tyre_serial)
+    if (!toUpdate.length || fixingDup) return
     setFixingDup(true)
     try {
-      const ids = group.records.map(r => r.id)
-      // Assign the new serial to all but the first (which keeps original)
-      const toUpdate = ids.slice(1).map((id, i) => ({
-        id,
-        tyre_serial: `${newSerial.trim()}-${String(i + 2).padStart(2, '0')}`,
-      }))
-      for (const rec of toUpdate) {
-        const { error } = await dataCleaning.updateTyreSerial(rec.id, rec.tyre_serial)
-        if (error) throw error
-      }
+      await dataCleaning.correctTyreRecords(toUpdate.map(record => ({
+        id: record.id, patch: { tyre_serial: serials[record.id].trim() }, expected: { tyre_serial: record.tyre_serial },
+      })), { country: activeCountry, action: 'serial' })
       setToast({ message: `Updated ${toUpdate.length} serial(s) successfully`, type: 'success' })
       setDupModal(null)
       await checkDuplicateSerials()
@@ -581,8 +586,8 @@ export default function DataCleaning() {
       if (edits.km_at_fitment !== undefined) updates.km_at_fitment = parseFloat(edits.km_at_fitment)
       if (edits.km_at_removal !== undefined) updates.km_at_removal = parseFloat(edits.km_at_removal)
       if (!Object.keys(updates).length) { setFixingOdom(false); return }
-      const { error } = await dataCleaning.updateTyreOdometer(record.id, updates)
-      if (error) throw error
+      if (Object.values(updates).some(value => !Number.isFinite(value) || value < 0)) throw new Error('Enter valid non-negative odometer values.')
+      await dataCleaning.correctTyreRecords([{ id: record.id, patch: updates, expected: { km_at_fitment: record.km_at_fitment, km_at_removal: record.km_at_removal } }], { country: activeCountry, action: 'odometer' })
       setToast({ message: 'Odometer values updated', type: 'success' })
       setOdomModal(null)
       setOdomEdits({})
@@ -595,8 +600,7 @@ export default function DataCleaning() {
 
   async function markNeedsReview(record) {
     try {
-      const { error } = await dataCleaning.updateTyreRemarks(record.id, `[NEEDS REVIEW] ${record.remarks ?? ''}`.trim())
-      if (error) throw error
+      await dataCleaning.correctTyreRecords([{ id: record.id, patch: { remarks: `[NEEDS REVIEW] ${record.remarks ?? ''}`.trim() }, expected: { remarks: record.remarks ?? null } }], { country: activeCountry, action: 'review' })
       setToast({ message: `Record ${record.id} marked as Needs Review`, type: 'success' })
       await checkUnrealisticLife()
     } catch (e) {
@@ -618,76 +622,61 @@ export default function DataCleaning() {
     setOverrides(prev => ({ ...prev, [id]: { ...(prev[id] ?? {}), [field]: value } }))
   }
 
-  async function approveSelected() {
-    if (selected.size === 0) return
-    setSaving(true)
-    const toSave = [...selected].map(id => {
-      const r = getResult(id)
-      return { id, category: r?.category ?? null, risk_level: r?.risk_level ?? null, remarks_cleaned: r?.remarks_cleaned ?? null, cleaned: true }
-    })
-    const BATCH = 100
-    const logEntries = []
-    for (let i = 0; i < toSave.length; i += BATCH) {
-      const batch = toSave.slice(i, i + BATCH)
-      await dataCleaning.upsertTyreRecords(batch)
-      batch.forEach(saved => {
-        const orig = rawRecords.find(r => r.id === saved.id)
-        if (orig) logEntries.push({ original_text: [orig.description, orig.remarks].filter(Boolean).join(' | '), cleaned_text: saved.remarks_cleaned, category: saved.category, confidence: getResult(saved.id)?.confidence, tyre_record_id: saved.id, cleaned_by_model: 'rule-based-v1' })
-      })
+  async function saveCorrections(changes, action = 'classify') {
+    let confirmed = 0
+    try {
+      for (let i = 0; i < changes.length; i += 200) {
+        const ids = await dataCleaning.correctTyreRecords(changes.slice(i, i + 200), {
+          country: activeCountry, site: filterSite || undefined, action,
+        })
+        confirmed += ids.length
+        setApproveAllProgress({ done: confirmed, total: changes.length })
+      }
+      return confirmed
+    } catch (error) {
+      setToast({ message: `${confirmed} record(s) confirmed. Correction stopped: ${toUserMessage(error, 'Refresh the records before retrying.')}`, type: 'error' })
+      throw error
+    } finally {
+      // Refresh even after a timeout: the server may have committed before the response was lost.
+      setSaveCount(c => c + 1)
     }
-    if (logEntries.length) await dataCleaning.insertCleaningLog(logEntries)
-    setSaveCount(c => c + 1)
-    setOverrides({})
-    setSaving(false)
+  }
+
+  async function approveSelected() {
+    if (selected.size === 0 || saving) return
+    setSaving(true)
+    try {
+      const changes = [...selected].map(id => dataCleaning.classificationChange(rawRecords.find(r => r.id === id), getResult(id)))
+      await saveCorrections(changes)
+      setOverrides({})
+    } catch { /* saveCorrections reports the confirmed count and error. */ }
+    finally { setSaving(false); setApproveAllProgress(null) }
   }
 
   async function approveAll() {
+    if (saving) return
+    setToast(null)
     setShowApproveAllConfirm(false)
     setSaving(true)
-
-    const FETCH_BATCH = 500
-    let offset = 0
-    let allPending = []
-    while (true) {
-      const { data } = await dataCleaning.listPendingForApproveAll({
-        site: filterSite || undefined,
-        from: offset,
-        to: offset + FETCH_BATCH - 1,
-      })
-      if (!data || data.length === 0) break
-      allPending.push(...data)
-      if (data.length < FETCH_BATCH) break
-      offset += FETCH_BATCH
-    }
-
-    setApproveAllProgress({ done: 0, total: allPending.length })
-
-    const SAVE_BATCH = 200
-    const logEntries = []
-    for (let i = 0; i < allPending.length; i += SAVE_BATCH) {
-      const batch = allPending.slice(i, i + SAVE_BATCH)
-      const results = batchClassify(batch)
-      const toSave = results.map(r => ({ id: r.id, category: r.category, risk_level: r.risk_level, remarks_cleaned: r.remarks_cleaned, cleaned: true }))
-      await dataCleaning.upsertTyreRecords(toSave)
-
-      results.forEach(r => {
-        const orig = batch.find(b => b.id === r.id)
-        if (orig) logEntries.push({ original_text: [orig.description, orig.remarks].filter(Boolean).join(' | '), cleaned_text: r.remarks_cleaned, category: r.category, confidence: r.confidence, tyre_record_id: r.id, cleaned_by_model: 'rule-based-v1' })
-      })
-
-      setApproveAllProgress({ done: Math.min(i + SAVE_BATCH, allPending.length), total: allPending.length })
-    }
-
-    if (logEntries.length) {
-      const LOG_BATCH = 500
-      for (let i = 0; i < logEntries.length; i += LOG_BATCH) {
-        await dataCleaning.insertCleaningLog(logEntries.slice(i, i + LOG_BATCH))
+    try {
+      const allPending = []
+      for (let offset = 0; ; offset += 500) {
+        const { data, error } = await dataCleaning.listPendingForApproveAll({
+          country: activeCountry, site: filterSite || undefined, from: offset, to: offset + 499,
+        })
+        if (error) throw error
+        allPending.push(...(data ?? []))
+        if (!data || data.length < 500) break
       }
-    }
-
-    setApproveAllProgress(null)
-    setSaveCount(c => c + 1)
-    setSaving(false)
+      const results = batchClassify(allPending)
+      const originals = new Map(allPending.map(record => [record.id, record]))
+      const changes = results.map(result => dataCleaning.classificationChange(originals.get(result.id), result))
+      setApproveAllProgress({ done: 0, total: changes.length })
+      await saveCorrections(changes)
+    } catch (error) {
+      // Read failures occur before saveCorrections and must not look like an empty sweep.
+      setToast(previous => previous?.type === 'error' ? previous : ({ message: `Approval stopped: ${toUserMessage(error, 'Refresh before retrying.')}`, type: 'error' }))
+    } finally { setSaving(false); setApproveAllProgress(null) }
   }
 
   function runReclassify() {
@@ -702,33 +691,25 @@ export default function DataCleaning() {
   }
 
   async function approveReclassify() {
-    if (!reclassifyProposed) return
+    if (!reclassifyProposed || saving) return
     setSaving(true)
-    const toSave = reclassifyProposed.map(r => ({ id: r.id, category: r.category, risk_level: r.risk_level, remarks_cleaned: r.remarks_cleaned, cleaned: true }))
-    const BATCH = 200
-    for (let i = 0; i < toSave.length; i += BATCH) {
-      await dataCleaning.upsertTyreRecords(toSave.slice(i, i + BATCH))
-    }
-    setReclassifyProposed(null)
-    setCleanedSelected(new Set())
-    setSaveCount(c => c + 1)
-    setSaving(false)
+    try {
+      const changes = reclassifyProposed.map(result => dataCleaning.classificationChange(cleanedRecords.find(r => r.id === result.id), result))
+      await saveCorrections(changes)
+      setReclassifyProposed(null)
+      setCleanedSelected(new Set())
+    } catch { /* saveCorrections reports the confirmed count and error. */ }
+    finally { setSaving(false); setApproveAllProgress(null) }
   }
 
   async function undoClassification(record) {
+    if (saving) return
+    setSaving(true)
     try {
-      const { error: upErr } = await dataCleaning.resetTyreClassification(record.id)
-      if (upErr) throw upErr
-
-      const { error: delErr } = await dataCleaning.deleteCleaningLog(record.id)
-      if (delErr) throw delErr
-
-      await loadCleaned()
-      setSaveCount(c => c + 1)
-      setToast({ message: 'Classification reverted', type: 'success' })
-    } catch (e) {
-      setToast({ message: `Could not revert: ${toUserMessage(e, 'Please try again.')}`, type: 'error' })
-    }
+      await saveCorrections([dataCleaning.classificationChange(record, null, true)], 'undo')
+      setToast({ message: 'Classification reverted; history retained', type: 'success' })
+    } catch { /* saveCorrections reports the confirmed count and error. */ }
+    finally { setSaving(false); setApproveAllProgress(null) }
   }
 
   // ── Derived ─────────────────────────────────────────────────────────────────
@@ -756,10 +737,11 @@ export default function DataCleaning() {
 
   // ── Quality Intelligence tab ─────────────────────────────────────────────────
   const allChecksLoaded = !Object.values(checkLoading).some(Boolean)
+  const qualityIncomplete = [serialIssues, duplicateSerial, invalidPressure, missingTread, missingInspect, odometerIssues, unrealisticLife].some(check => check?.error || check?.notApplicable)
 
   // ── Duplicate modal state ────────────────────────────────────────────────────
-  const [dupNewSerial, setDupNewSerial] = useState('')
-  useEffect(() => { if (dupModal) setDupNewSerial(dupModal.group.serial) }, [dupModal])
+  const [dupNewSerial, setDupNewSerial] = useState({})
+  useEffect(() => { if (dupModal) setDupNewSerial({}) }, [dupModal])
 
   return (
     <div className="space-y-4">
@@ -828,10 +810,10 @@ export default function DataCleaning() {
               {['High', 'Medium', 'Low'].map(c => <option key={c} value={c}>{c}</option>)}
             </select>
             <div className="flex-1" />
-            {stats.pending > 0 && (
+            {totalPending > 0 && !loadError && (
               <button onClick={() => setShowApproveAllConfirm(true)} disabled={saving}
                 className="btn-secondary flex items-center gap-2 text-sm disabled:opacity-40">
-                <CheckCheck size={15} className="text-green-400" /> Approve All {stats.pending.toLocaleString()}
+                <CheckCheck size={15} className="text-green-400" /> Approve All {totalPending.toLocaleString()}
               </button>
             )}
             <span className="text-sm text-[var(--text-muted)]">{selected.size} selected</span>
@@ -857,6 +839,8 @@ export default function DataCleaning() {
 
           {loading ? (
             <div className="text-center py-16 text-[var(--text-muted)]">Classifying records...</div>
+          ) : loadError ? (
+            <p className="text-center py-16 text-red-400">Records could not be loaded. Refresh to retry.</p>
           ) : classified.length === 0 ? (
             <div className="text-center py-16 text-[var(--text-muted)]">
               {totalPending === 0 ? '✅ All records have been classified!' : 'No records match the current filter.'}
@@ -985,7 +969,9 @@ export default function DataCleaning() {
             </div>
           )}
 
-          {loading ? <SkeletonTable rows={8} cols={6} /> : cleanedRecords.length === 0 ? (
+          {loading ? <SkeletonTable rows={8} cols={6} /> : loadError ? (
+            <p className="text-center py-16 text-red-400">Records could not be loaded. Refresh to retry.</p>
+          ) : cleanedRecords.length === 0 ? (
             <div className="text-center py-12 text-[var(--text-muted)]">No cleaned records yet</div>
           ) : (
             <div className="card p-0 overflow-hidden">
@@ -1088,7 +1074,7 @@ export default function DataCleaning() {
                 <div>
                   <h2 className="text-lg font-bold text-[var(--text-primary)]">Overall Data Quality Score</h2>
                   <p className="text-[var(--text-muted)] text-sm">
-                    {qualityScore === null ? 'Computing across 7 quality checks...' :
+                    {qualityIncomplete ? 'Quality checks incomplete. Refresh to retry failed reads.' : qualityScore === null ? 'Computing across 7 quality checks...' :
                       qualityScore >= 85 ? 'Fleet data quality is healthy' :
                       qualityScore >= 70 ? 'Moderate quality issues detected - action recommended' :
                       'Significant data quality problems - immediate attention required'}
@@ -1407,7 +1393,7 @@ export default function DataCleaning() {
           <div className="bg-[var(--surface-1)] border border-[var(--card-border)] rounded-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
             <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-2">Approve All Pending Records</h2>
             <p className="text-[var(--text-muted)] text-sm mb-4">
-              The classifier will run on all <strong className="text-[var(--text-primary)]">{stats.pending.toLocaleString()}</strong> pending records and save the results automatically.
+              The classifier will run on all <strong className="text-[var(--text-primary)]">{totalPending.toLocaleString()}</strong> pending records and save the results automatically.
               {filterSite && ` Only records from "${filterSite}" will be processed.`}
             </p>
             <p className="text-yellow-300 text-sm mb-4">Low-confidence classifications will still be saved, no manual review step.</p>
@@ -1429,33 +1415,24 @@ export default function DataCleaning() {
               This serial appears on <strong className="text-[var(--text-primary)]">{dupModal.group.count}</strong> active records across vehicles: <strong className="text-[var(--text-primary)]">{dupModal.group.asset_nos.join(', ')}</strong>.
             </p>
             <p className="text-xs text-[var(--text-muted)]">
-              The first record keeps the original serial. All subsequent records will be assigned <code className="text-orange-300">{dupNewSerial}-02</code>, <code className="text-orange-300">{dupNewSerial}-03</code>, etc.
+              Enter the verified physical serial only for records that need correction. Blank fields keep the existing value.
             </p>
-            <div>
-              <label className="block text-sm text-[var(--text-muted)] mb-1">Base Serial for Assignments</label>
-              <input
-                className="input w-full"
-                value={dupNewSerial}
-                onChange={e => setDupNewSerial(e.target.value)}
-                placeholder="Enter base serial..."
-              />
-            </div>
             <div className="bg-[var(--input-bg)]/60 rounded-lg p-3 space-y-1">
               {dupModal.group.records.map((r, i) => (
                 <div key={r.id} className="flex items-center gap-3 text-xs">
                   <span className="text-[var(--text-muted)] w-5">{i + 1}.</span>
                   <span className="text-[var(--text-muted)]">{r.asset_no ?? '-'}</span>
                   <span className="text-[var(--text-dim)]">{r.issue_date ?? ''}</span>
-                  <span className="ml-auto font-mono text-orange-300">
-                    {i === 0 ? dupModal.group.serial : `${dupNewSerial}-${String(i + 1).padStart(2, '0')}`}
-                  </span>
+                  <input className="input ml-auto" aria-label={`Verified serial for ${r.asset_no ?? r.id}, record ${i + 1}`}
+                    value={dupNewSerial[r.id] ?? ''} placeholder={r.tyre_serial ?? ''}
+                    onChange={event => setDupNewSerial(previous => ({ ...previous, [r.id]: event.target.value }))} />
                 </div>
               ))}
             </div>
             <div className="flex gap-3">
               <button
                 onClick={() => fixDuplicateSerial(dupModal.group, dupNewSerial)}
-                disabled={fixingDup || !dupNewSerial.trim()}
+                disabled={fixingDup || !Object.values(dupNewSerial).some(value => value.trim())}
                 className="btn-primary flex items-center gap-2 disabled:opacity-40"
               >
                 <Check size={15} /> {fixingDup ? 'Saving...' : 'Apply'}

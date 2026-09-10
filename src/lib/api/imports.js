@@ -582,7 +582,17 @@ export async function commitBatch(batchId, { chunkSize = COMMIT_CHUNK_ROWS, onPr
 export async function verifyBatchLanding(batchId) {
   const { data, error } = await supabase.rpc('import_verify_landing', { p_batch_id: batchId })
   if (error) throw new ServiceError(error.message, error.code, error)
-  return data || {}
+  const counters = ['expected_distinct', 'landed_distinct', 'dangling']
+  if (!data || typeof data !== 'object' || Array.isArray(data) || data.batch_id !== batchId ||
+      data.scope_verified !== true ||
+      !['module', 'target_table', 'status'].every(key => typeof data[key] === 'string' && data[key].trim()) ||
+      !counters.every(key => Number.isSafeInteger(data[key]) && data[key] >= 0) ||
+      data.landed_distinct > data.expected_distinct ||
+      data.dangling !== data.expected_distinct - data.landed_distinct ||
+      typeof data.verified_at !== 'string' || !Number.isFinite(Date.parse(data.verified_at))) {
+    throw new ServiceError('The server did not confirm destination verification. Refresh the batch and retry.', 'IMPORT_VERIFICATION_UNCONFIRMED')
+  }
+  return data
 }
 
 /** Rows enriched per RPC call — smaller than commit chunks because each row

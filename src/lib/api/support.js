@@ -60,25 +60,23 @@ export async function createTicket(values = {}) {
   return unwrap(await supabase.from('support_tickets').insert(payload).select(COLS).single())
 }
 
-/** Patch a ticket (triage: status, response). Stamps resolution timestamps. */
+/** Patch business fields only. Database guards authorize triage and stamp identity. */
 export async function updateTicket(id, patch = {}) {
-  const clean = { ...patch }
-  delete clean.id; delete clean.created_at; delete clean.organisation_id; delete clean.created_by
-  if (clean.status === 'resolved' || clean.status === 'closed') {
-    clean.resolved_at = clean.resolved_at ?? new Date().toISOString()
-  } else if (clean.status === 'open' || clean.status === 'in_progress') {
-    clean.resolved_at = null
+  const clean = {}
+  for (const key of ['subject', 'message', 'category', 'severity', 'admin_response', 'status']) {
+    if (Object.hasOwn(patch, key)) clean[key] = patch[key]
   }
+  if (clean.status !== undefined && !TICKET_STATUSES.includes(clean.status)) throw new Error('Invalid ticket status.')
+  if (clean.category !== undefined && !TICKET_CATEGORIES.includes(clean.category)) throw new Error('Invalid ticket category.')
+  if (clean.severity !== undefined && !TICKET_SEVERITIES.includes(clean.severity)) throw new Error('Invalid ticket severity.')
+  if (!Object.keys(clean).length) throw new Error('No editable ticket fields supplied.')
   return unwrap(await supabase.from('support_tickets').update(clean).eq('id', id).select(COLS).single())
 }
 
 /** Triage helper: attach an admin response and (by default) mark in_progress. */
 export async function respondToTicket(id, response, { status = 'in_progress' } = {}) {
-  const { data: auth } = await supabase.auth.getUser()
   return updateTicket(id, {
     admin_response: String(response || '').slice(0, 8000),
-    responded_by: auth?.user?.id ?? null,
-    responded_at: new Date().toISOString(),
     status,
   })
 }

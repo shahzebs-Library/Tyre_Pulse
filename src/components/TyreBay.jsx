@@ -23,6 +23,7 @@ import {
 import { moveTyre, removeTyre } from '../lib/api/tyreRecords'
 import { formatCurrencyCompact, formatDate } from '../lib/formatters'
 import toUserMessage from '../lib/safeError'
+import TyreChangeApprovals from './workflow/TyreChangeApprovals'
 
 const RISK_BADGE = {
   Critical: 'bg-red-900/50 text-red-300',
@@ -344,6 +345,8 @@ function Meta({ label, value }) {
 
 // ── Main component ──────────────────────────────────────────────────────────────
 export default function TyreBay({ asset, tyres, currency, locked = false, onMoved }) {
+  const [approvalScope, setApprovalScope] = useState(null)
+  const changeLocked = locked || approvalScope?.id !== asset?.id || approvalScope?.mode !== 'legacy'
   const vehicleType = asset?.vehicle_type
   const groups = useMemo(() => groupTyresByPosition(tyres), [tyres])
   const positions = useMemo(() => layoutPositionsFor(vehicleType), [vehicleType])
@@ -387,6 +390,8 @@ export default function TyreBay({ asset, tyres, currency, locked = false, onMove
 
   return (
     <div className="space-y-6">
+      <TyreChangeApprovals asset={asset} tyres={tyres} positions={positions}
+        onModeChange={mode => setApprovalScope({ id: asset?.id, mode })} onExecuted={onMoved} />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Diagram */}
         <div className="card">
@@ -408,7 +413,7 @@ export default function TyreBay({ asset, tyres, currency, locked = false, onMove
           posKey={selectedPos}
           group={selectedPos ? groups[selectedPos] : null}
           currency={currency}
-          locked={locked}
+          locked={changeLocked}
           onMove={setMoveTarget}
           onRemove={setRemoveTarget}
         />
@@ -468,7 +473,7 @@ export default function TyreBay({ asset, tyres, currency, locked = false, onMove
         )}
       </div>
 
-      {moveTarget && (
+      {moveTarget && !changeLocked && (
         <MoveModal
           tyre={moveTarget}
           asset={asset}
@@ -477,7 +482,7 @@ export default function TyreBay({ asset, tyres, currency, locked = false, onMove
           onDone={() => { setMoveTarget(null); onMoved?.() }}
         />
       )}
-      {removeTarget && (
+      {removeTarget && !changeLocked && (
         <RemoveModal
           tyre={removeTarget}
           asset={asset}

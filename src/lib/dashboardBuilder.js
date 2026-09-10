@@ -1,3 +1,5 @@
+import { getConfiguration, saveConfiguration } from './configurationStore'
+
 /**
  * dashboardBuilder — pure logic behind the Dynamic Dashboard Builder
  * (src/pages/DashboardBuilder.jsx, route /dashboard-builder).
@@ -557,8 +559,7 @@ export function parseLayoutsValue(value) {
  * @returns {Promise<DashboardLayout[]>}
  */
 export async function fetchLayouts(supabase) {
-  const { data, error } = await supabase
-    .from('app_settings').select('value').eq('key', DASHBOARD_LAYOUTS_KEY).maybeSingle()
+  const { data, error } = await getConfiguration(supabase, 'app_settings', DASHBOARD_LAYOUTS_KEY)
   if (error) throw new Error('Could not load dashboard layouts.')
   return parseLayoutsValue(data?.value)
 }
@@ -574,10 +575,7 @@ export async function saveLayouts(supabase, layouts) {
     .filter(l => l && typeof l === 'object')
     .slice(0, MAX_LAYOUTS)
     .map(validateLayout)
-  const { error } = await supabase.from('app_settings').upsert(
-    { key: DASHBOARD_LAYOUTS_KEY, value: JSON.stringify(clean) },
-    { onConflict: 'key' },
-  )
+  const { error } = await saveConfiguration(supabase, 'app_settings', { key: DASHBOARD_LAYOUTS_KEY, value: JSON.stringify(clean) })
   if (error) throw new Error('Could not save dashboard layouts.')
   return clean
 }

@@ -1,20 +1,8 @@
 /**
- * Approval matrix - who approves what.
- *
- * Pure: no I/O. The SQL function `resolve_approvers` (V477) mirrors the
- * precedence rule below; change BOTH together.
- *
- * THE RULE: three routing styles coexist and the NARROWEST matching rule wins.
- *   named person  (match_user_id) - "Ahmed's inspections go to Saleh"
- *   site          (match_site)    - "everything at NHC goes to NHC's supervisor"
- *   role          (match_role)    - "any Manager in KSA may sign"
- * A blank match field means "any", so one broad fallback plus a few narrow
- * exceptions covers a whole fleet without needing a row per person.
- *
- * Specificity is simply how many match fields a rule pins down, so a named
- * person (up to 4) always beats a site rule, which beats a bare role rule. This
- * is deliberately a count and not a hand-ranked list: a hand-ranked list has to
- * be re-argued every time a field is added, and quietly disagrees with the SQL.
+ * Legacy matrix matching helpers. The legacy resolver returns every match,
+ * ordered by level, matching-field count and creation time. This does not
+ * select one governed policy or establish execution authority. New policy
+ * administration uses approval_policy_simulate on the server.
  */
 
 /** Things that can require approval. Extend here AND in the V477 CHECK. */
@@ -53,9 +41,9 @@ export function ruleMatches(rule, ctx = {}) {
 }
 
 /**
- * Every matching rule, most specific first, then by level. Mirrors the SQL
+ * Every matching rule, level first, then matching-field count. Mirrors the SQL
  * ORDER BY (level, specificity desc, created_at) so the page preview and the
- * server agree on who would actually be asked to sign.
+ * server agree on the legacy matching preview.
  */
 export function resolveApprovers(rules = [], ctx = {}) {
   return (Array.isArray(rules) ? rules : [])
@@ -67,7 +55,7 @@ export function resolveApprovers(rules = [], ctx = {}) {
       || String(a.created_at || '').localeCompare(String(b.created_at || '')))
 }
 
-/** The single rule that decides the first signature, or null when none matches. */
+/** The first legacy preview row at level one; this does not grant signing authority. */
 export function primaryApprover(rules = [], ctx = {}) {
   return resolveApprovers(rules, ctx).find((r) => (r.level || 1) === 1) || null
 }
@@ -117,9 +105,8 @@ export function validateRule(rule) {
 }
 
 /**
- * Rules that can never fire because an earlier, broader rule already covers
- * everything they match at the same level. Surfacing these is the difference
- * between a matrix an admin trusts and one they quietly stop believing.
+ * Legacy duplicate wildcard diagnostics. The legacy resolver returns all
+ * matching rows, so these are duplicate candidates, not unreachable rules.
  */
 export function shadowedRules(rules = []) {
   const out = []

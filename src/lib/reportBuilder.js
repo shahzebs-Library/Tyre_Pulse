@@ -1,3 +1,5 @@
+import { getConfiguration, saveConfiguration } from './configurationStore'
+
 /**
  * Report Builder — pure, unit-testable logic behind the self-service report
  * composer (src/pages/ReportBuilder.jsx).
@@ -749,8 +751,7 @@ function parseSavedValue(value) {
  * @returns {Promise<Object[]>}
  */
 export async function fetchSavedReports(supabase) {
-  const { data, error } = await supabase
-    .from('app_settings').select('value').eq('key', SAVED_REPORTS_KEY).maybeSingle()
+  const { data, error } = await getConfiguration(supabase, 'app_settings', SAVED_REPORTS_KEY)
   if (error) throw new Error(error.message || 'Could not load saved reports.')
   return parseSavedValue(data?.value)
 }
@@ -762,10 +763,7 @@ export async function fetchSavedReports(supabase) {
  */
 export async function persistSavedReports(supabase, reports) {
   const clean = (Array.isArray(reports) ? reports : []).slice(0, MAX_SAVED_REPORTS)
-  const { error } = await supabase.from('app_settings').upsert(
-    { key: SAVED_REPORTS_KEY, value: JSON.stringify(clean) },
-    { onConflict: 'key' },
-  )
+  const { error } = await saveConfiguration(supabase, 'app_settings', { key: SAVED_REPORTS_KEY, value: JSON.stringify(clean) })
   if (error) throw new Error(error.message || 'Could not save reports.')
   return clean
 }

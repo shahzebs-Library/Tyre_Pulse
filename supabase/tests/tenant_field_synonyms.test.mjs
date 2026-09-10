@@ -1,0 +1,40 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { test } from 'node:test';
+import { PGlite } from '@electric-sql/pglite';
+const migration=await readFile(new URL('../migrations/20260910184442_tenant_field_synonyms.sql',import.meta.url),'utf8');
+const id=n=>`00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
+test('field synonyms: tenant uniqueness, legacy quarantine, trusted identity and role checks',async()=>{
+ const db=new PGlite();
+ try {
+  await db.exec(`CREATE SCHEMA auth;CREATE ROLE authenticated;CREATE ROLE anon;
+   CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql AS $$SELECT nullif(current_setting('test.actor',true),'')::uuid$$;
+   CREATE FUNCTION app_current_org() RETURNS uuid LANGUAGE sql AS $$SELECT nullif(current_setting('test.org',true),'')::uuid$$;
+   CREATE FUNCTION get_my_role() RETURNS text LANGUAGE sql AS $$SELECT current_setting('test.role',true)$$;
+   CREATE FUNCTION app_is_active() RETURNS boolean LANGUAGE sql AS $$SELECT current_setting('test.active',true)='true'$$;
+   CREATE FUNCTION is_super_admin() RETURNS boolean LANGUAGE sql AS $$SELECT false$$;
+   CREATE TABLE field_synonyms(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),custom_name text,maps_to text,table_target text DEFAULT 'tyre_records',created_by uuid,created_at timestamptz DEFAULT now(),CONSTRAINT field_synonyms_unique_name UNIQUE(custom_name,table_target));
+   ALTER TABLE field_synonyms ENABLE ROW LEVEL SECURITY;
+   CREATE POLICY fs_read_all ON field_synonyms FOR SELECT USING(true);
+   CREATE POLICY fs_write_admin ON field_synonyms FOR ALL USING(get_my_role() IN ('admin','manager'));
+   INSERT INTO field_synonyms(custom_name,maps_to) VALUES('Legacy','serial_no');`);
+  await db.exec(migration);
+  await db.exec(`GRANT USAGE ON SCHEMA auth TO authenticated;GRANT SELECT,INSERT,UPDATE,DELETE ON field_synonyms TO authenticated;SET ROLE authenticated;SET test.actor='${id(1)}';SET test.org='${id(10)}';SET test.role='Admin';SET test.active='true';`);
+  const rows=async sql=>(await db.query(sql)).rows;
+  assert.equal((await rows('SELECT * FROM field_synonyms')).length,0);
+  await db.exec(`INSERT INTO field_synonyms(custom_name,maps_to,created_by) VALUES('Serial','serial_no','${id(9)}')`);
+  const own=(await rows('SELECT * FROM field_synonyms'))[0];assert.equal(own.created_by,id(1));assert.equal(own.organisation_id,id(10));
+  await assert.rejects(db.exec("INSERT INTO field_synonyms(custom_name) VALUES('Serial')"),e=>e.code==='23505');
+  await assert.rejects(db.exec(`INSERT INTO field_synonyms(custom_name,organisation_id) VALUES('Other','${id(11)}')`),e=>e.code==='42501');
+  await assert.rejects(db.exec(`UPDATE field_synonyms SET organisation_id='${id(11)}'`),e=>e.code==='42501');
+  await db.exec(`SET test.org='${id(11)}';SET test.role='Manager';`);
+  assert.equal((await rows('SELECT * FROM field_synonyms')).length,0);
+  await db.exec("INSERT INTO field_synonyms(custom_name,maps_to) VALUES('Serial','serial_number')");
+  assert.equal((await rows('SELECT * FROM field_synonyms'))[0].maps_to,'serial_number');
+  await db.exec("SET test.role='User'");assert.equal((await rows('SELECT * FROM field_synonyms')).length,1);
+  await assert.rejects(db.exec("INSERT INTO field_synonyms(custom_name) VALUES('Denied')"),e=>e.code==='42501');
+  assert.equal((await rows("UPDATE field_synonyms SET maps_to='forged' RETURNING id")).length,0);
+  await db.exec("SET test.role='Admin';SET test.active='false'");assert.equal((await rows('SELECT * FROM field_synonyms')).length,0);
+  await db.exec('RESET ROLE');assert.equal((await rows('SELECT * FROM field_synonyms WHERE organisation_id IS NULL')).length,1);
+ } finally {await db.close();}
+});

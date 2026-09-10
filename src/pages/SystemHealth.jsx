@@ -221,7 +221,7 @@ export default function SystemHealth() {
     <div className="space-y-6">
       <PageHeader
         title="System Health"
-        subtitle="Live status of database, storage, edge functions and auth"
+        subtitle="Read access, storage, remote authentication and function preflight checks; business workflows are not exercised"
         icon={Activity}
         onRefresh={refresh}
         refreshing={refreshing}

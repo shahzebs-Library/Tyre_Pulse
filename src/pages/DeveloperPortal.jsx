@@ -312,7 +312,7 @@ export default function DeveloperPortal() {
     <div className="space-y-6">
       <PageHeader
         title="Developer Portal"
-        subtitle="Issue and manage API keys and webhook endpoints for the integrators and external systems that connect to Tyre Pulse. Secrets are never stored — only display prefixes and delivery metadata."
+        subtitle="Register API key references and webhook details. These records do not issue credentials, enforce access or rate limits, or start webhook delivery."
         icon={KeyRound}
         onRefresh={load}
         refreshing={refreshing}
@@ -326,7 +326,7 @@ export default function DeveloperPortal() {
               <FileText size={14} /> PDF
             </button>
             <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5" disabled={notProvisioned}>
-              <Plus size={14} /> {tab === 'keys' ? 'New key' : 'New webhook'}
+              <Plus size={14} /> {tab === 'keys' ? 'Register key reference' : 'Register webhook'}
             </button>
           </div>
         }
@@ -463,7 +463,7 @@ export default function DeveloperPortal() {
                         <td className="px-4 py-2.5">
                           <div className="flex items-center justify-end gap-1">
                             <button onClick={() => openEditKey(r)} className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Edit"><Pencil size={14} /></button>
-                            <button onClick={() => setConfirmDelete({ ...r, _kind: 'key' })} className="p-1.5 rounded hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400" aria-label="Revoke"><Ban size={14} /></button>
+                            <button onClick={() => setConfirmDelete({ ...r, _kind: 'key' })} className="p-1.5 rounded hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400" aria-label="Delete key reference"><Ban size={14} /></button>
                           </div>
                         </td>
                       </tr>
@@ -531,7 +531,7 @@ export default function DeveloperPortal() {
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-[var(--text-primary)] inline-flex items-center gap-2">
                 {tab === 'keys' ? <KeyRound size={18} /> : <Webhook size={18} />}
-                {editing ? (tab === 'keys' ? 'Edit API key' : 'Edit webhook') : (tab === 'keys' ? 'New API key' : 'New webhook')}
+                {editing ? (tab === 'keys' ? 'Edit API key reference' : 'Edit webhook record') : (tab === 'keys' ? 'New API key reference' : 'New webhook record')}
               </h3>
               <button onClick={closeModal} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
             </div>
@@ -621,7 +621,7 @@ export default function DeveloperPortal() {
                   </div>
                   <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer">
                     <input type="checkbox" checked={hookForm.secret_set} onChange={(e) => setHook('secret_set', e.target.checked)} className="accent-indigo-500" />
-                    Signing secret configured
+                    Signing secret recorded as configured
                     <span className="text-[11px] text-[var(--text-muted)]">(the secret value itself is never stored here)</span>
                   </label>
                   <div>
@@ -640,7 +640,7 @@ export default function DeveloperPortal() {
               <div className="flex items-center justify-end gap-2 pt-1">
                 <button type="button" onClick={closeModal} className="btn-secondary text-sm" disabled={saving}>Cancel</button>
                 <button type="submit" className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={saving}>
-                  {saving ? 'Saving…' : editing ? 'Save changes' : (tab === 'keys' ? 'Create key' : 'Create webhook')}
+                  {saving ? 'Saving…' : editing ? 'Save changes' : (tab === 'keys' ? 'Save key reference' : 'Save webhook record')}
                 </button>
               </div>
             </form>
@@ -658,11 +658,11 @@ export default function DeveloperPortal() {
               </div>
               <div>
                 <h3 className="text-[var(--text-primary)] font-semibold">
-                  {confirmDelete._kind === 'key' ? 'Revoke this API key?' : 'Delete this webhook?'}
+                  {confirmDelete._kind === 'key' ? 'Delete this key reference?' : 'Delete this webhook record?'}
                 </h3>
                 <p className="text-sm text-[var(--text-muted)] mt-1">
                   {confirmDelete._kind === 'key'
-                    ? <>{confirmDelete.key_name || 'Key'} · {maskKey(confirmDelete.key_prefix)}. Revoking permanently disables this credential and cannot be undone.</>
+                    ? <>{confirmDelete.key_name || 'Key'} · {maskKey(confirmDelete.key_prefix)}. This removes the saved reference. Revoke the actual credential in the service that issued it.</>
                     : <>{confirmDelete.endpoint_name || 'Endpoint'} · {confirmDelete.url || '—'}. This can’t be undone.</>}
                 </p>
               </div>
@@ -671,7 +671,7 @@ export default function DeveloperPortal() {
               <button onClick={() => setConfirmDelete(null)} className="btn-secondary text-sm" disabled={deleting}>Cancel</button>
               <button onClick={doDelete} className="btn-danger text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={deleting}>
                 {confirmDelete._kind === 'key' ? <Ban size={14} /> : <Trash2 size={14} />}
-                {deleting ? 'Working…' : (confirmDelete._kind === 'key' ? 'Revoke' : 'Delete')}
+                {deleting ? 'Working…' : (confirmDelete._kind === 'key' ? 'Delete reference' : 'Delete record')}
               </button>
             </div>
           </div>

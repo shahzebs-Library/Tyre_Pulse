@@ -18,14 +18,15 @@ export default function ErpConnectionPanel() {
   const isAdmin = ERP_EDITOR_ROLES.has(String(profile?.role || '').trim().toLowerCase())
 
   const [cfg, setCfg] = useState(erp.DEFAULT_ERP)
+  const [loadFailed, setLoadFailed] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState(null)
 
   const load = useCallback(async () => {
-    setLoading(true)
+    setLoading(true); setLoadFailed(false); setMsg(null)
     try { setCfg(await erp.getErpConnection()) }
-    catch { /* keep defaults */ }
+    catch (error) { setLoadFailed(true); setMsg({ type: 'err', text: toUserMessage(error, 'Could not load ERP connection. Retry before saving.') }) }
     finally { setLoading(false) }
   }, [])
   useEffect(() => { load() }, [load])
@@ -36,7 +37,9 @@ export default function ErpConnectionPanel() {
   }))
 
   async function save(e) {
-    e.preventDefault(); setSaving(true); setMsg(null)
+    e.preventDefault()
+    if (loadFailed) return
+    setSaving(true); setMsg(null)
     try { setCfg(await erp.saveErpConnection(cfg)); setMsg({ type: 'ok', text: 'ERP connection saved.' }) }
     catch (err) { setMsg({ type: 'err', text: toUserMessage(err, 'Could not save.') }) }
     finally { setSaving(false) }
@@ -46,12 +49,14 @@ export default function ErpConnectionPanel() {
     <div className="card flex items-center gap-2 text-sm text-[var(--text-muted)]"><Loader2 size={15} className="animate-spin" /> Loading ERP connection…</div>
   )
 
+  if (loadFailed) return <div className="card" role="alert">{msg?.text}<button type="button" className="btn-secondary ml-3" onClick={load}>Retry</button></div>
+
   return (
     <form onSubmit={save} className="card space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2"><PlugZap size={15} className="text-[var(--accent)]" /> ERP connection</h2>
         <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${cfg.enabled ? 'bg-emerald-900/30 text-emerald-400' : 'bg-[var(--input-bg)] text-[var(--text-muted)]'}`}>
-          {cfg.enabled ? 'Enabled' : 'Not connected'}
+          {cfg.enabled ? 'Schedule requested' : 'Schedule disabled'}
         </span>
       </div>
 
@@ -112,7 +117,7 @@ export default function ErpConnectionPanel() {
       </div>
 
       <label className="flex items-center justify-between cursor-pointer">
-        <span className="text-sm text-[var(--text-primary)]">Enable scheduled sync</span>
+        <span className="text-sm text-[var(--text-primary)]">Request scheduled sync</span>
         <button type="button" role="switch" aria-checked={cfg.enabled} disabled={!isAdmin} onClick={() => set('enabled', !cfg.enabled)}
           className={`relative w-11 h-6 rounded-full transition-colors ${cfg.enabled ? 'bg-[var(--accent)]' : 'bg-[var(--input-bg)] border border-[var(--input-border)]'}`}>
           <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${cfg.enabled ? 'translate-x-5' : ''}`} />
@@ -122,9 +127,8 @@ export default function ErpConnectionPanel() {
       {/* Credentials explainer — the honest, secure part */}
       <div className="rounded-lg px-3 py-3 text-xs leading-relaxed bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] space-y-1.5">
         <p className="flex items-center gap-2 font-semibold text-[var(--text-primary)]"><KeyRound size={13} className="text-[var(--accent)]" /> Where does the API key go?</p>
-        <p>Your ERP key/token is <b>never stored here or in the browser</b>. It's set once as a secure server secret. After saving this config, an admin runs:</p>
-        <code className="block font-mono bg-black/30 rounded px-2 py-1.5 text-[11px] text-emerald-300 overflow-x-auto">supabase secrets set {cfg.credential_ref || 'ERP_API_KEY'}=your-key-here</code>
-        <p className="flex items-start gap-1.5 text-[var(--text-muted)]"><Info size={12} className="mt-0.5 shrink-0" /> A scheduled edge function then reads that secret, pulls the selected entities from your ERP, and stages every row into the Data Intake Center for validation before commit, the same controlled pipeline as manual uploads.</p>
+        <p>Your integration administrator configures credentials securely on the server. This form stores the connection and schedule preferences.</p>
+        <p className="flex items-start gap-1.5 text-[var(--text-muted)]"><Info size={12} className="mt-0.5 shrink-0" /> Saving preferences does not confirm that a connector is running. Verify successful sync history and destination records before relying on scheduled imports.</p>
       </div>
 
       {isAdmin ? (

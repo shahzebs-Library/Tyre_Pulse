@@ -103,5 +103,5 @@
       "claude/workshop-job-card-flow": false
     }
   },
-  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- . \":(exclude)mobile\" \":(exclude)*.md\" \":(exclude)MIGRATIONS_*.sql\" \":(exclude)store-assets\" \":(exclude).claude\" \":(exclude).github\" \":(exclude)tyre_pulse_app\" \":(exclude)tyre_pulse_flutter\""
+  "ignoreCommand": "node scripts/vercel-ignore-build.mjs"
 }

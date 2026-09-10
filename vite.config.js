@@ -3,22 +3,24 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { releaseBuild } from './scripts/release-build.mjs'
 import { assertPublicEnv } from './src/lib/publicEnvSecurity.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig(({ mode }) => {
   assertPublicEnv(loadEnv(mode, process.cwd(), 'VITE_'))
+  const release = releaseBuild()
   return {
+  define: { 'import.meta.env.TP_RELEASE': JSON.stringify(release.manifest) },
   plugins: [
     react(),
+    release.plugin,
     VitePWA({
       // 'prompt': a new deploy is DETECTED automatically (PwaUpdatePrompt polls
       // every 15 min + on refocus) but does NOT hijack the page. The new worker
       // WAITS; the "New version available" toast appears so a user finishes their
-      // work first, and PwaUpdatePrompt also applies the waiting update quietly
-      // when the tab goes hidden (so kiosks / TVs still self-heal, nobody is
-      // stranded on a stale build). Previously 'autoUpdate' + skipWaiting force
+      // work first. Hidden tabs never activate a waiting update. Previously 'autoUpdate' + skipWaiting force
       // reloaded the page mid-work and bypassed the toast entirely.
       registerType: 'prompt',
       injectRegister: 'auto',
@@ -87,6 +89,7 @@ export default defineConfig(({ mode }) => {
         prefer_related_applications: false,
       },
       workbox: {
+        importScripts: [release.filename],
         // Allow large bundles — our app code exceeds the 2MB default
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,ttf,eot,json,webmanifest}'],

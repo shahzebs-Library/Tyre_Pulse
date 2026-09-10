@@ -17,5 +17,14 @@
   "installAria": "Install TyrePulse",
   "installBody": "Add to home screen for fast access and offline support.",
   "notNow": "Not now",
-  "iosAria": "Install TyrePulse on iPhone"
+  "iosAria": "Install TyrePulse on iPhone",
+  "whatsNew": "What's new",
+  "viewChanges": "View changes",
+  "updateHistory": "Update history",
+  "installedVersion": "Installed version:",
+  "noRelevantChanges": "No listed changes for your permitted modules in this release.",
+  "notesUnavailable": "Release details are unavailable. You can still update.",
+  "notesLoading": "Loading update details...",
+  "saveBeforeUpdate": "Save your work before updating.",
+  "updateFailed": "The update could not start. Please try again."
 }

@@ -1,0 +1,90 @@
+[
+  {
+    "id": "2026.09.10.4",
+    "date": "2026-09-10",
+    "changes": [
+      {
+        "modules": [],
+        "text": {
+          "en": "See what changed before updating, and find previous releases in Settings > Update history.",
+          "ar": "اطّلع على التغييرات قبل التحديث، واعرض الإصدارات السابقة في الإعدادات > سجل التحديثات."
+        }
+      }
+    ]
+  },
+  {
+    "id": "2026.09.10.3",
+    "date": "2026-09-10",
+    "changes": [
+      {
+        "modules": [
+          "vehicle_washing"
+        ],
+        "text": {
+          "en": "Washing PDFs fit a single wash and three larger photos on one page, with clearer vehicle details.",
+          "ar": "تعرض تقارير الغسيل عملية غسيل واحدة وثلاث صور أكبر في صفحة واحدة، مع تفاصيل أوضح للمركبة."
+        }
+      },
+      {
+        "modules": [
+          "vehicle_washing"
+        ],
+        "text": {
+          "en": "Wash downloads follow the selected filters. Download messages can be closed and disappear automatically.",
+          "ar": "تلتزم تنزيلات الغسيل بالفلاتر المحددة. يمكن إغلاق رسائل التنزيل وتختفي تلقائياً."
+        }
+      }
+    ]
+  },
+  {
+    "id": "2026.09.10.2",
+    "date": "2026-09-10",
+    "changes": [
+      {
+        "modules": [],
+        "text": {
+          "en": "Your home shows permitted modules and avoids loading unrelated dashboard data.",
+          "ar": "تعرض صفحتك الرئيسية الوحدات المسموح بها وتتجنب تحميل بيانات لوحة المعلومات غير المتعلقة بعملك."
+        }
+      },
+      {
+        "modules": [
+          "fleet_master",
+          "inspections",
+          "work_orders",
+          "serial_tracker",
+          "accidents"
+        ],
+        "text": {
+          "en": "Data Monitor navigation, search and page access now follow the permissions saved in Settings.",
+          "ar": "تلتزم قوائم مراقب البيانات والبحث والوصول إلى الصفحات بالصلاحيات المحفوظة في الإعدادات."
+        }
+      }
+    ]
+  },
+  {
+    "id": "2026.09.10.1",
+    "date": "2026-09-10",
+    "changes": [
+      {
+        "modules": [
+          "odometer_logs",
+          "engine_hours"
+        ],
+        "text": {
+          "en": "Update kilometres and engine hours in the same vehicle row. Reading warnings appear when saving.",
+          "ar": "حدّث الكيلومترات وساعات المحرك في صف المركبة نفسه. تظهر تحذيرات القراءات عند الحفظ."
+        }
+      },
+      {
+        "modules": [
+          "vehicle_washing"
+        ],
+        "text": {
+          "en": "Fleet Supervisors can schedule and log vehicle washes. Export vehicle washing PDFs with uploaded photos.",
+          "ar": "يمكن لمشرفي الأسطول جدولة غسيل المركبات وتسجيله وتصدير تقارير PDF تتضمن الصور المرفوعة."
+        }
+      }
+    ]
+  }
+]

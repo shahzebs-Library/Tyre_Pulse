@@ -4,6 +4,7 @@ import * as settingsApi from '../lib/api/settings'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import LanguageSwitcher from '../components/LanguageSwitcher'
+import UpdateHistory from '../components/ReleaseNotes'
 import AppearancePanel from '../components/settings/AppearancePanel'
 import MySignaturePanel from '../components/settings/MySignaturePanel'
 import FeatureFlagsPanel from '../components/settings/FeatureFlagsPanel'
@@ -552,6 +553,8 @@ export default function Settings() {
           icon={Settings2}
         />
 
+        <UpdateHistory />
+
         {/* Profile */}
         <div className="card space-y-4">
           <h2 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2"><User size={16} /> Profile</h2>
@@ -697,6 +700,8 @@ export default function Settings() {
         subtitle="Manage your profile, preferences and alert thresholds"
         icon={Settings2}
       />
+
+      <UpdateHistory />
 
       {/* 3-column grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

@@ -175,6 +175,7 @@ export default function VehicleWashing() {
   const { activeCountry, activeCurrency } = useSettings()
   const { profile, isSuperAdmin } = useAuth()
   const canWrite = isSuperAdmin === true || WRITE_ROLES.has(profile?.role)
+  const canCreate = canWrite || profile?.role === 'Fleet Supervisor'
 
   const [tab, setTab] = useState('reporting')
   const [rows, setRows] = useState([])
@@ -622,7 +623,7 @@ export default function VehicleWashing() {
         onRefresh={load}
         refreshing={refreshing}
         updatedAt={updatedAt}
-        actions={canWrite && (
+        actions={canCreate && (
           <button onClick={() => setTab('log')} className="btn-primary text-sm inline-flex items-center gap-1.5" disabled={missing}>
             <Plus size={14} /> Log a wash
           </button>
@@ -660,7 +661,7 @@ export default function VehicleWashing() {
 
       {/* Tabs */}
       <div className="flex items-center gap-1 border-b border-[var(--input-border)]">
-        {TABS.filter((t) => !WRITE_TABS.has(t.id) || canWrite).map((t) => {
+        {TABS.filter((t) => !WRITE_TABS.has(t.id) || canCreate).map((t) => {
           const on = tab === t.id
           const Icon = t.icon
           return (
@@ -1003,7 +1004,7 @@ export default function VehicleWashing() {
       )}
 
       {/* ─────────────── SCHEDULE ─────────────── */}
-      {tab === 'schedule' && canWrite && (
+      {tab === 'schedule' && canCreate && (
         <div className="space-y-4">
           <div className="card">
             <div className="flex items-center gap-2 mb-1">
@@ -1101,7 +1102,7 @@ export default function VehicleWashing() {
       )}
 
       {/* ─────────────── QUICK LOG ─────────────── */}
-      {tab === 'log' && canWrite && (
+      {tab === 'log' && canCreate && (
         <div className="card max-w-4xl">
           <div className="flex items-center gap-2 mb-4">
             <Droplets size={18} className="text-[var(--text-secondary)]" />

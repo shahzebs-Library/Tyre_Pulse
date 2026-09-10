@@ -9,7 +9,7 @@ import { loadAutoTable } from './pdfEngine'
 // longer prints. They remain in inspectionView for the on-screen record.
 import {
   RISK_LABEL, riskForCondition,
-  normalizeTyreConditions, inspectionStats,
+  normalizeTyreConditions, inspectionStats, inspectionDiagramModel,
 } from './inspectionView'
 // The band judgement is bandFor and nothing else. The register flags a tyre as
 // due with this function, so the report has to use it too or the two would
@@ -415,7 +415,7 @@ function _pageFooter(doc, page, total, company = '', opts = {}) {
   doc.setFontSize(6.8)
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(...P.ghost)
-  const left = opts.footerText || `${company || 'Fleet Operations Report'}  |  Confidential, for internal distribution only`
+  const left = (opts.footerText || `${company || 'Fleet Operations Report'}  |  Confidential, for internal distribution only`).replace(/\bconfidinetial\b/gi, 'Confidential')
   doc.text(left, MX, ph - 5.5)
   doc.text(total ? `Page ${page} of ${total}` : `Page ${page}`, pw - MX, ph - 5.5, { align: 'right' })
 }
@@ -1413,11 +1413,15 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   // Normalize tyre conditions (needed by the summary strip, diagram + tables).
   // Shared with the on-screen viewer so both read a recording identically.
   const normTc = normalizeTyreConditions(row)
+  const diagramCheck = inspectionDiagramModel(row, { isTyreless: isTyrelessEquipment })
 
   // ── Inspection summary strip (right under the info grid) ───────────────────
   // Position counts by condition + recorded-only averages; honest N/A.
-  const insStats = _inspectionStats(normTc)
-  if (insStats.total > 0) {
+  const insStats = _inspectionStats(diagramCheck.renderable
+    ? Object.fromEntries(diagramCheck.readings.map(reading => [reading.slot, reading]))
+    : normTc)
+  if (diagramCheck.renderable) insStats.counts.none += diagramCheck.unrecorded.length
+  if (insStats.total > 0 || diagramCheck.renderable) {
     y = _inspectionSummaryStrip(doc, insStats, y, mx, brand.accent)
   }
 
@@ -1536,6 +1540,17 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
 
   y += diagramH + 8
 
+  if (diagramCheck.renderable && (diagramCheck.unmatched.length || diagramCheck.unrecorded.length)) {
+    const warning = ['Position data requires review.',
+      diagramCheck.unmatched.length ? `Unmapped recorded positions: ${diagramCheck.unmatched.map(p => p.position).join(', ')}.` : '',
+      diagramCheck.unrecorded.length ? `${diagramCheck.unrecorded.length} diagram position(s) have no mapped reading.` : '',
+    ].filter(Boolean).join(' ')
+    doc.setFontSize(8); doc.setTextColor(...P.ink)
+    const lines = doc.splitTextToSize(warning, pw - mx * 2)
+    if (y + lines.length * 4 > ph - FOOTER_SPACE) { doc.addPage(); _pageHeader(doc, 'Vehicle Tyres Inspection Report', '', brand.logoData ? '' : company, insHdr); y = 30 }
+    doc.text(lines, mx, y); y += lines.length * 4 + 5
+  }
+
   // ── Tyres due for change ───────────────────────────────────────────────────
   // Owner ask: drop the full per-position reading list and print only the tyres
   // that are actually DUE. The whole list made the reader find the problem; this
@@ -1606,7 +1621,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
     if (y > ph - 24) { doc.addPage(); _pageHeader(doc, 'Vehicle Tyres Inspection Report', '', brand.logoData ? '' : company, insHdr); y = 30 }
     y = _sectionBar(doc, 'Tyres Due for Change', y, mx, brand.accent) + 4
     doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.ink)
-    doc.text('No tyre on this vehicle is due for change at this inspection.', mx, y + 1)
+    doc.text('No damage or life-limit alert identified in the available data.', mx, y + 1)
     y += 8
   }
 
@@ -1615,6 +1630,9 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   if (lifeRows.length) {
     if (y > ph - 50) { doc.addPage(); _pageHeader(doc, 'Vehicle Tyres Inspection Report', '', brand.logoData ? '' : company, insHdr); y = 30 }
     y = _sectionBar(doc, 'Expected Tyre Life', y, mx, brand.accent) + 4
+    doc.setFontSize(7); doc.setTextColor(...P.ink)
+    doc.text('Latest fleet estimates at export time; meters may differ from the inspection readings above.', mx, y)
+    y += 5
     const n = (v) => (v == null ? 'N/A' : Math.round(v).toLocaleString('en-US'))
     // Expected/Remaining show BOTH dimensions when both targets exist
     // ("60,000 km / 8,000 hrs") - hour-metered plant is judged on hours.
@@ -1779,7 +1797,8 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   }
   const tyremanSig  = await toSigPng(row.inspector_signature)
   const approverSig = await toSigPng(row.approver_signature)
-  const approverName = row.approved_by || row.approver_email || null
+  const approverName = row.approver_name || row.approver_email ||
+    (row.approved_by && !/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(row.approved_by) ? row.approved_by : null)
   const isApproved   = String(row.approval_status || '').toLowerCase() === 'approved'
 
   if (y + 40 > ph - FOOTER_SPACE - 2) { doc.addPage(); _pageHeader(doc, 'Vehicle Tyres Inspection Report', '', brand.logoData ? '' : company, insHdr); y = 30 }
@@ -1821,7 +1840,8 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   }
 
   const safe = (row.title || 'inspection').replace(/[^a-z0-9]/gi, ' ').slice(0, 40)
-  doc.save(`${reportFileName('Inspection', safe)}.pdf`)
+  if (opts.save !== false) doc.save(`${reportFileName('Inspection', safe)}.pdf`)
+  return doc
 }
 
 /**

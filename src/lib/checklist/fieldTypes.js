@@ -310,7 +310,8 @@ export function validateAnswer(field, value, opts = {}) {
 
   if (field.type === 'number') {
     const n = Number(value)
-    if (Number.isNaN(n)) return `${name || 'Value'} must be a number`
+    if (!Number.isFinite(n)) return `${name || 'Value'} must be a number`
+    if (n < 0 && /(?:\bkm\b|odometer|hour.?meter|engine.?hours|kilomet)/i.test(String(field.label || ''))) return `${name || 'Meter reading'} cannot be negative`
     if (field.min != null && n < Number(field.min)) return `${name || 'Value'} must be at least ${field.min}`
     if (field.max != null && n > Number(field.max)) return `${name || 'Value'} must be at most ${field.max}`
   }
@@ -418,4 +419,18 @@ export default {
   evalCondition, isFieldVisible, computeScore,
   REFERENCE_TYPES, isReferenceField, referenceSource, FIELD_LIBRARY, fieldFromLibrary,
   AUTO_VALUES, isAutoField, resolveAutoValue,
+}
+
+/** Contradictory answers are preserved in history and surfaced for review. */
+export function checklistReviewIssues(fields = [], answers = {}) {
+  const faults = fields.filter(f => /^(not ok|not_ok|fail|failed)$/i.test(String(answers[f.id] ?? '').trim()))
+  const fitness = fields.filter(f => /fit for (operation|service|use)/i.test(f.label || '') && /^(yes|true)$/i.test(String(answers[f.id] ?? '')))
+  const issues = []
+  if (faults.length && fitness.length) issues.push('Fitness certification conflicts with unresolved Not OK checks. Review and correct the answers before certifying the vehicle.')
+  for (const f of fields) {
+    if (f.type !== 'number' || !/(?:\bkm\b|odometer|hour.?meter|engine.?hours|kilomet)/i.test(f.label || '')) continue
+    const value = answers[f.id]
+    if (value != null && value !== '' && (!Number.isFinite(Number(value)) || Number(value) < 0)) issues.push((f.label || 'Meter reading') + ': invalid recorded meter value. An audited correction is required.')
+  }
+  return issues
 }

@@ -1032,6 +1032,7 @@ export default function Inspections() {
   // record (signatures included, which the register list no longer carries).
   const [viewId, setViewId] = useState(null)
   const [pdfBusyId, setPdfBusyId] = useState(null)
+  const [pdfError, setPdfError] = useState('')
 
   /**
    * Export one inspection's report.
@@ -1043,14 +1044,14 @@ export default function Inspections() {
   const exportRowPdf = useCallback(async (rowOrId) => {
     const id = typeof rowOrId === 'string' ? rowOrId : rowOrId?.id
     if (!id || pdfBusyId) return
-    setPdfBusyId(id)
+    setPdfBusyId(id); setPdfError('')
     try {
       const full = await inspectionsApi.getInspectionForPage(id)
-      setPdfRow(full || (typeof rowOrId === 'object' ? rowOrId : null))
-    } catch {
-      // Fall back to the list row: a report without the signature block beats
-      // a button that silently does nothing.
-      setPdfRow(typeof rowOrId === 'object' ? rowOrId : null)
+      if (!full) throw new Error('The inspection is no longer available. Refresh the register and retry.')
+      setPdfRow(full)
+    } catch (err) {
+      setPdfError(toUserMessage(err, 'Could not load the full inspection. Retry the download.'))
+      setPdfBusyId(null)
     }
   }, [pdfBusyId])
 
@@ -1098,7 +1099,8 @@ export default function Inspections() {
         const svgEl = pdfDiagramRef.current?.querySelector('svg[data-tyre-map]') || null
         const diagramBg = (await getDiagramBg().catch(() => '')) || '#000000'
         await exportInspectionDetailPdf(pdfRow, { branding: await brandingForPdf(branding), company, photos, lifeRows, svgEl, diagramBg })
-      } finally { if (!cancelled) { setPdfRow(null); setPdfBusyId(null) } }
+      } catch (err) { if (!cancelled) setPdfError(toUserMessage(err, 'Could not create the inspection PDF. Retry the download.')) }
+      finally { if (!cancelled) { setPdfRow(null); setPdfBusyId(null) } }
     }, 80)
     return () => { cancelled = true; clearTimeout(t) }
   }, [pdfRow, branding, company])
@@ -2140,6 +2142,7 @@ export default function Inspections() {
 
   return (
     <div className="space-y-6">
+      {pdfError && <p role="alert" className="card text-red-500">{pdfError}</p>}
       <PageHeader
         title={isTyreMan ? t('inspections.titleTyreMan') : t('inspections.title')}
         subtitle={isTyreMan ? t('inspections.subtitleTyreMan') : t('inspections.subtitle')}

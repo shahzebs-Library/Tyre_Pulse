@@ -29,6 +29,7 @@ import {
   templateFieldsOf, templateFromSubmission,
 } from './checklistView'
 import { gridFields, monthlySummary, cellText, isNotOk, isNotApplicable, needsAttention } from './checklistMonthly'
+import { checklistReviewIssues } from './checklist/fieldTypes'
 import { langMeta, normalizeLang } from './checklist/checklistI18n'
 
 const MX = 12                 // page margin, mm
@@ -335,6 +336,15 @@ export async function renderChecklistPdf({
   const allChecks = []
   for (const s2 of sections) for (const r of s2.rows) if (checkIds.has(r.id)) allChecks.push(r)
 
+  const reviewIssues = checklistReviewIssues(fields, sub.answers || {})
+  if (reviewIssues.length) {
+    sectionBar('Record requires review')
+    doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(...FAULT)
+    for (const issue of reviewIssues) {
+      const lines = doc.splitTextToSize(issue, pw - MX * 2)
+      need(lines.length * 4 + 3); doc.text(lines, MX, y); y += lines.length * 4 + 3
+    }
+  }
   const attention = allChecks.filter((r) => needsAttention(r.value))
   const okCount = allChecks.filter((r) => String(r.value ?? '').trim() && !needsAttention(r.value)
     && !isNotApplicable(r.value)).length
@@ -373,7 +383,7 @@ export async function renderChecklistPdf({
       startY: y,
       head: [['#', 'Check', 'Status', 'Remarks']],
       body,
-      margin: { left: MX, right: MX },
+      margin: { top: 30, bottom: 18, left: MX, right: MX },
       styles: { ...theme.styles, fontSize: 7.5, cellPadding: 1.4, overflow: 'linebreak' },
       columnStyles: {
         0: { cellWidth: 8, halign: 'center' },
@@ -399,7 +409,7 @@ export async function renderChecklistPdf({
     need(10)
     doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...INK)
     doc.text(allChecks.length
-      ? 'Nothing needed attention. Every check on this sheet was recorded OK or not applicable.'
+      ? (blankCount ? 'Some checks were not recorded. This sheet is incomplete.' : 'Nothing needed attention. Every check on this sheet was recorded OK or not applicable.')
       : 'This checklist recorded no inspection lines.', MX, y)
     y += 6
     tally()
@@ -420,7 +430,13 @@ export async function renderChecklistPdf({
     }
   }
 
+  need(items.length ? 72 : 20)
   sectionBar(`Photographs (${items.length})`)
+  if (items.length) {
+    doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(...MUTED)
+    doc.text('Attachments as submitted. Verify the vehicle identity and the check shown in each photo.', MX, y)
+    y += 6
+  }
   if (!items.length) {
     doc.setFontSize(7.5); doc.setFont('helvetica', 'italic'); doc.setTextColor(...MUTED)
     doc.text('No photographs were captured with this checklist.', MX + 2, y + 1)
@@ -476,6 +492,7 @@ export async function renderChecklistPdf({
 
   // ── Sign off: the names, beside the signatures they belong to ─────────────
   if (signoff.length) {
+    need(20)
     sectionBar('Sign off')
     const half = (pw - MX * 2) / 2
     for (let i = 0; i < signoff.length; i += 2) {
@@ -498,6 +515,7 @@ export async function renderChecklistPdf({
 
   // ── Signatures: every one of them ─────────────────────────────────────────
   const sigs = submissionSignatures(sub, { template, lang: language })
+  need(sigs.length ? 47 : 18)
   sectionBar('Signatures')
   if (!sigs.length) {
     doc.setFontSize(7.5); doc.setFont('helvetica', 'italic'); doc.setTextColor(...MUTED)

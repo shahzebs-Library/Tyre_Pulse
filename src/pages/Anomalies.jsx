@@ -12,6 +12,7 @@ import PageHeader from '../components/ui/PageHeader'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import DateField from '../components/ui/DateField'
 import { formatCurrencyCompact } from '../lib/formatters'
+import { currencyForCountry } from '../lib/governedCost'
 import { cn } from '../lib/cn'
 import { toUserMessage } from '../lib/safeError'
 import useLatestRequest from '../lib/useLatestRequest'
@@ -113,6 +114,7 @@ export default function Anomalies() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [partialScan, setPartialScan] = useState(false)
+  const [sourceWarning, setSourceWarning] = useState('')
   const [activeType, setActiveType] = useState('ALL')
   const [view, setView] = useState('anomalies') // 'anomalies' | 'visits'
   const [search, setSearch] = useState('')
@@ -129,7 +131,7 @@ export default function Anomalies() {
 
   const load = useCallback(async () => {
     const stale = latestLoad.begin()
-    setLoading(true); setError(null)
+    setLoading(true); setError(null); setSourceWarning(''); setAnomalies([]); setVisitStats([]); setPartialScan(false)
     try {
       // PAGED. The old `.limit(5000)` returned 1000 rows - the server caps
       // every response at 1000 whatever a limit says - so detection ran over
@@ -170,10 +172,11 @@ export default function Anomalies() {
           if (toDate) wq = wq.lte('opened_at', `${toDate}T23:59:59`)
           return wq
         }
-        const { data: wo, truncated: woTruncated } = await fetchAllPages(buildWo, { max: WORK_ORDER_SCAN_CAP })
+        const { data: wo, error: woError, truncated: woTruncated } = await fetchAllPages(buildWo, { max: WORK_ORDER_SCAN_CAP })
+        if (woError) throw woError
         workOrders = wo || []
         partial = partial || !!woTruncated
-      } catch { /* best-effort */ }
+      } catch { if (!stale()) setSourceWarning('Workshop records could not be loaded. Visit counts and anomaly results are incomplete; retry the scan.') }
 
       const engine = detectAnomalies(rows)
       const dq = detectDataQuality(rows)
@@ -273,12 +276,14 @@ export default function Anomalies() {
         return <span className={cn(v >= 3 ? 'text-rose-400 font-semibold' : 'text-gray-300')}>{v}</span>
       },
     },
+    { id: 'country', header: 'Country', accessorFn: r => r.country || 'Not recorded', size: 100 },
+    { id: 'currency', header: 'Currency', accessorFn: r => currencyForCountry(r.country) || 'Not recorded', size: 80 },
     { id: 'visits_per_month', header: 'Rate /mo', accessorFn: r => r.visits_per_month, size: 90, meta: { align: 'right' } },
     { id: 'last_visit', header: 'Last Visit', accessorFn: r => r.last_visit ?? '-', size: 110 },
     {
       id: 'total_cost', header: 'Total Cost',
       accessorFn: r => r.total_cost || 0,
-      cell: ({ getValue }) => (getValue() > 0 ? formatCurrencyCompact(getValue(), activeCurrency) : '-'),
+      cell: ({ getValue, row }) => (getValue() > 0 ? formatCurrencyCompact(getValue(), currencyForCountry(row.original.country) || activeCurrency) : '-'),
       size: 110, meta: { align: 'right' },
     },
   ], [activeCurrency])
@@ -312,7 +317,7 @@ export default function Anomalies() {
     {
       id: 'cost', header: 'Cost',
       accessorFn: r => (r.cost_per_tyre != null && r.cost_per_tyre !== '' ? Number(r.cost_per_tyre) : null),
-      cell: ({ getValue }) => (getValue() != null ? formatCurrencyCompact(getValue(), activeCurrency) : '-'),
+      cell: ({ getValue, row }) => (getValue() != null ? formatCurrencyCompact(getValue(), currencyForCountry(row.original.country) || activeCurrency) : '-'),
       size: 110,
       meta: {
         align: 'right',
@@ -400,6 +405,7 @@ export default function Anomalies() {
         </div>
       )}
 
+      {sourceWarning && !error && <p role="alert" className="card text-amber-500">{sourceWarning}</p>}
       {partialScan && !error && (
         <div className="flex items-start gap-2 text-amber-300 text-sm bg-amber-400/10 border border-amber-400/20 rounded-xl px-4 py-3">
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -487,7 +493,7 @@ export default function Anomalies() {
             <div className="card py-16 text-center">
               <Activity className="w-10 h-10 mx-auto mb-3 text-gray-700" />
               <p className="text-gray-400 font-medium">
-                {fromDate || toDate ? 'No anomalies detected in this date range' : 'No anomalies detected'}
+                {fromDate || toDate ? 'No anomalies detected in the available records for this date range' : 'No anomalies detected in the available records'}
               </p>
               <p className="text-gray-600 text-sm mt-1">
                 Rule-based checks run automatically over the latest {`5,000`} records. Anomalies appear here when detected.
@@ -563,7 +569,7 @@ function WorkshopVisitsView({ summary, rows, columns, activeCurrency, searching 
         <EnterpriseTable
           columns={columns}
           data={rows}
-          getRowId={r => r.asset_no}
+          getRowId={r => JSON.stringify([r.country || '', r.asset_no])}
           enableGlobalFilter={false}
           enableColumnFilters={false}
           enableSorting

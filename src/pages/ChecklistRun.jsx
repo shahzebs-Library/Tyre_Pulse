@@ -14,7 +14,7 @@ import {
 } from '../lib/checklist/checklistDraft'
 import { useLanguage } from '../contexts/LanguageContext'
 import { getTemplate, createSubmission, uploadChecklistPhoto, listSubmissions } from '../lib/api/checklists'
-import { blankAnswer, validateSubmission, isLayoutField, visibleFields, computeScore, isReferenceField, referenceSource, isAutoField, resolveAutoValue, signatureFields } from '../lib/checklist/fieldTypes'
+import { blankAnswer, validateSubmission, checklistReviewIssues, isLayoutField, visibleFields, computeScore, isReferenceField, referenceSource, isAutoField, resolveAutoValue, signatureFields } from '../lib/checklist/fieldTypes'
 // The marks / auto-fill / close-gate engine. THIS PAGE OWNS NO COPY OF THESE
 // RULES - every one of them is read from the shared module so the screen, the
 // phone and guard_checklist_approval_stages cannot drift apart.
@@ -422,6 +422,8 @@ export default function ChecklistRun() {
       }
       return
     }
+    const reviewIssues = checklistReviewIssues(visibleFields(fields, answers), answers)
+    if (reviewIssues.length) { setSubmitError(reviewIssues.join(' ')); return }
     // The meter pair. Either reading satisfies it and neither may be skipped:
     // 98 of 227 KSA transit mixers carry no odometer at all while every one of
     // them has engine hours. ZERO IS A READING and counts as answered.

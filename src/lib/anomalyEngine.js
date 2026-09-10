@@ -3,6 +3,7 @@
 // Detects: short replacements, same-day bursts, rapid recurrence, cost spikes
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { currencyForCountry } from './governedCost'
 import { mean, stdDev, groupBy } from './analyticsEngine'
 
 export const ANOMALY_TYPES = {
@@ -40,6 +41,10 @@ const ANOMALY_CONFIG = {
  * @returns {Anomaly[]}
  */
 export function detectAnomalies(records, config = {}) {
+  const countries = [...new Set((records || []).map(r => r.country || ''))]
+  if (countries.length > 1) return countries.flatMap(country =>
+    detectAnomalies(records.filter(r => (r.country || '') === country), config)
+      .map(a => ({ ...a, country, id: JSON.stringify([country, a.id]) })))
   const cfg = { ...ANOMALY_CONFIG, ...config }
   const anomalies = []
   const seen = new Set()  // deduplicate same anomaly id
@@ -54,7 +59,7 @@ export function detectAnomalies(records, config = {}) {
   })
 
   // ── Fleet-wide cost stats ────────────────────────────────────────────────
-  const costs = records.map(r => r.cost_per_tyre).filter(v => v > 0)
+  const costs = records.map(r => Number(r.cost_per_tyre)).filter(v => Number.isFinite(v) && v > 0)
   const costMean = mean(costs)
   const costSd   = stdDev(costs)
 
@@ -202,7 +207,7 @@ export function detectAnomalies(records, config = {}) {
           site:       r.site,
           record_ids: [r.id],
           records:    [r],
-          message:    `Unusual cost: SAR ${r.cost_per_tyre.toLocaleString()} for ${r.brand || 'unknown brand'} (fleet avg SAR ${Math.round(costMean).toLocaleString()})`,
+          message:    `Unusual cost: ${currencyForCountry(r.country) || ''} ${Number(r.cost_per_tyre).toLocaleString()} for ${r.brand || 'unknown brand'} (fleet avg ${currencyForCountry(r.country) || ''} ${Math.round(costMean).toLocaleString()})`,
           detail:     `Z-score: ${z.toFixed(2)} - Asset ${r.asset_no || '?'} on ${r.issue_date || '?'}`,
           cost:       r.cost_per_tyre,
           zScore:     z,
@@ -326,6 +331,7 @@ function normaliseVisitRecord(src, kind) {
       brand: src.work_type || 'Work order',
       serial_no: src.tyre_serial || null,
       asset_no: src.asset_no || null,
+      country: src.country || null,
       site: src.site || null,
       risk_level: null,
       cost_per_tyre: Number(src.total_cost) > 0 ? Number(src.total_cost) : null,
@@ -338,6 +344,7 @@ function normaliseVisitRecord(src, kind) {
     brand: src.brand || null,
     serial_no: src.serial_no || null,
     asset_no: src.asset_no || null,
+    country: src.country || null,
     site: src.site || null,
     risk_level: src.risk_level || null,
     cost_per_tyre: Number(src.cost_per_tyre) > 0 ? Number(src.cost_per_tyre) : null,
@@ -356,6 +363,12 @@ function normaliseVisitRecord(src, kind) {
  *     last7, last30, last90, peak90, total_cost, visits:[{date, items:[record]}] }
  */
 export function computeVisitStats(records, opts = {}) {
+  const countries = [...new Set([...(records || []), ...(opts.workOrders || [])].map(r => r.country || ''))]
+  if (countries.length > 1) return countries.flatMap(country =>
+    computeVisitStats((records || []).filter(r => (r.country || '') === country), {
+      ...opts, workOrders: (opts.workOrders || []).filter(r => (r.country || '') === country),
+    }).map(row => ({ ...row, country }))).sort((a, b) => b.total - a.total)
+
   const { workOrders = [], now = new Date() } = opts
   const byAsset = new Map() // asset -> Map(dateStr -> item[])
 
@@ -385,13 +398,10 @@ export function computeVisitStats(records, opts = {}) {
     // Peak visits inside any rolling 90-day window (recency-independent — surfaces
     // frequent flyers even in historical data).
     let peak90 = 0
-    for (let i = 0; i < times.length; i++) {
-      let c = 0
-      for (let j = i; j < times.length; j++) {
-        if (times[j] - times[i] <= 90 * DAY_MS) c++
-        else break
-      }
-      if (c > peak90) peak90 = c
+    let left = 0
+    for (let right = 0; right < times.length; right++) {
+      while (times[right] - times[left] > 90 * DAY_MS) left++
+      peak90 = Math.max(peak90, right - left + 1)
     }
 
     const totalCost = visits.reduce(
@@ -400,6 +410,7 @@ export function computeVisitStats(records, opts = {}) {
 
     out.push({
       asset_no: asset,
+      country: visits[0].items[0]?.country || null,
       site: visits.map(v => v.items.find(i => i.site)?.site).find(Boolean) || null,
       total,
       first_visit: visits[0].date,
@@ -439,10 +450,11 @@ export function detectVisitFrequency(records, config = {}) {
 
     const items = s.visits.flatMap(v => v.items)
     anomalies.push({
-      id: `FV::${s.asset_no}`,
+      id: `FV::${s.country || ''}::${s.asset_no}`,
       type: ANOMALY_TYPES.FREQUENT_VISITS,
       severity,
       asset_no: s.asset_no,
+      country: s.country,
       site: s.site,
       record_ids: items.map(r => r.id),
       records: items,

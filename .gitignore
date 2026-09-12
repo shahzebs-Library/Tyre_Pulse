@@ -59,3 +59,8 @@ pdftxt.mjs
 
 # Skill eval review artifact (regenerate from the workspace)
 mobile-ui-design-review.html
+
+# Employee credentials and local provisioning checkpoints must never ship.
+**/*Credentials*.xlsx
+**/*credentials*.xlsx
+**/.tyrepulse-driver-import-*

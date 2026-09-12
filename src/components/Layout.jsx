@@ -134,7 +134,7 @@ const NAV_GROUPS = [
       { to: '/qr-labels',           label: 'QR Labels', parent: 'Identification',          icon: QrCode, adminOnly: A },
       { to: '/rfid',                label: 'RFID Registry', parent: 'Identification',      icon: Radio, adminOnly: A },
       { to: '/engine-hours',        label: 'Engine Hours', parent: 'Meters',       icon: Gauge, adminOnly: A },
-      { to: '/odometer-logs',       label: 'Odometer Logs', parent: 'Meters',      icon: Activity, adminOnly: A },
+      { to: '/odometer-logs',       label: 'Odometer Logs', parent: 'Meters',      icon: Activity },
       { to: '/fleet-utilization',   label: 'Fleet Utilization', parent: 'Meters',  icon: Gauge, roles: ANALYTICS_ROLES },
       { to: '/vehicle-checkinout',  label: 'Vehicle Check In/Out', parent: 'Movement', icon: ArrowLeftRight, adminOnly: A },
       { to: '/handovers',           label: 'Vehicle Handover', parent: 'Movement',   icon: KeyRound, adminOnly: A },
@@ -427,6 +427,8 @@ function shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedM
   // A context rule may remove an item entirely, but only when it explicitly says
   // to. Default is to keep it and dim it (see the render below).
   if (activeCountry && isModuleHiddenInContext(item.to, activeCountry)) return false
+
+  if (item.to === '/odometer-logs') return typeof hasPermission === 'function' && hasPermission('odometer_logs') === true
 
   const grantKey = NAV_MODULE_KEY[item.to]
   // The GRANT check uses the same key the route guard resolves (NAV_MODULE_KEY,

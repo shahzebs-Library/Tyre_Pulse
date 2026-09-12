@@ -18,6 +18,11 @@ describe('vehicle meter identity and entry', () => {
     expect(rows[0]).toMatchObject({ supportsKm: true, supportsHours: true, engineHours: null })
     expect(rows[1]).toMatchObject({ supportsKm: false, supportsHours: true, km: null })
   })
+  it('uses a newer kilometre log when the fleet summary has not caught up', () => {
+    const row = buildVehicleMeters([vehicle], [{ ...vehicle, id: 'o1', odometer_km: 120000, reading_date: '2026-09-12' }], [])[0]
+    expect(row.km).toBe(120000)
+    expect(validateMeterDraft({ km: '119999', hours: '', date: meterToday('KSA') }, row)).toBe('')
+  })
   it('requires explicit meter choice for unknown assets and disables duplicate identities', () => {
     const unknown = { ...vehicle, vehicle_type: null, current_km: null }
     expect(buildVehicleMeters([unknown], [], [])[0]).toMatchObject({ supportsKm: false, supportsHours: false })
@@ -49,4 +54,14 @@ describe('vehicle meter identity and entry', () => {
     expect(meterSource('Web Manual')).toBe('Web Manual')
     expect(meterSource('ksa_kms_upload')).toBe('Import')
   })
+})
+
+it('allows lower readings to be saved for server-side Admin review', () => {
+  const v = { ...vehicle, km: 245440, engineHours: 20304 }
+  const draft = { km: '246910', hours: '21066', date: meterToday('KSA') }
+  expect(validateMeterDraft(draft, v)).toBe('')
+  expect(validateMeterDraft({ ...draft, km: '999999' }, v)).toBe('')
+  expect(validateMeterDraft({ ...draft, km: '245440', hours: '20304' }, v)).toBe('')
+  expect(validateMeterDraft({ ...draft, km: '245439' }, v)).toBe('')
+  expect(validateMeterDraft({ ...draft, hours: '20303' }, v)).toBe('')
 })

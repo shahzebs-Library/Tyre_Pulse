@@ -160,7 +160,7 @@ const NAV_GROUPS = [
       { to: '/shifts',              label: 'Shift Scheduling',   icon: CalendarClock, adminOnly: A },
       { to: '/speed-limiter',       label: 'Speed Limiter',      icon: Gauge, adminOnly: A },
       { to: '/engine-hours',        label: 'Engine Hours',       icon: Gauge, adminOnly: A },
-      { to: '/odometer-logs',       label: 'Odometer Logs',      icon: Activity, adminOnly: A },
+      { to: '/odometer-logs',       label: 'Odometer Logs',      icon: Activity },
       { to: '/fleet-utilization',   label: 'Fleet Utilization',  icon: Gauge, roles: ANALYTICS_ROLES },
       { to: '/trips',               label: 'Trip History',       icon: MapPin, adminOnly: A },
       { to: '/route-optimization',  label: 'Route Optimization', icon: Navigation, adminOnly: A },
@@ -405,6 +405,8 @@ function shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedM
   // this module's access sees the nav item even if the role rules below would
   // reject it. (Revoke is enforced by hasPermission/route guards; this only
   // opens visibility, so we do not hide here.)
+  if (item.to === '/odometer-logs') return typeof hasPermission === 'function' && hasPermission('odometer_logs') === true
+
   const grantKey = NAV_MODULE_KEY[item.to]
   // The GRANT check uses the same key the route guard resolves (NAV_MODULE_KEY,
   // else the route slug), so a page that has no NAV_MODULE_KEY entry - e.g.

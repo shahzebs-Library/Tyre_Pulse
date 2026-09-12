@@ -15,3 +15,8 @@ it('corrections include the concurrency token and reason but cannot replace sour
   await correctVehicleMeter({ id: 'r', kind: 'hours', updated_at: 'stamp', source: 'Mobile' }, { value: '15', date: '2026-09-10', reason: 'Corrected entry', source: 'Telematics', organisation_id: 'other' })
   expect(rpc).toHaveBeenCalledExactlyOnceWith('correct_vehicle_meter_reading', { p_kind: 'hours', p_id: 'r', p_value: 15, p_reading_date: '2026-09-10', p_reason: 'Corrected entry', p_expected_updated_at: 'stamp' })
 })
+
+it('explains the required permissions without exposing database details', async () => {
+  rpc.mockResolvedValue({ error: { code: '42501', message: 'private details' } })
+  await expect(saveVehicleMeters({ id: 'v' }, { km: '1', hours: '' })).rejects.toThrow('Meter Logs access')
+})

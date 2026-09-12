@@ -388,12 +388,11 @@ function HomeRoute() {
 }
 
 // ── Checklist-only access gate ────────────────────────────────────────────────
-// A Maintenance Supervisor may reach ONLY the checklist routes; any other path
-// bounces back to the checklist home. Combined with the reduced sidebar, the
-// rest of the app is out of reach for this role.
+// Checklist roles stay within checklists unless Meter Logs access is granted.
 function ChecklistOnlyGate({ children }) {
-  const { profile } = useAuth()
+  const { profile, hasPermission } = useAuth()
   const loc = useLocation()
+  if (loc.pathname === '/odometer-logs' && hasPermission?.('odometer_logs') === true) return children
   if (isChecklistOnlyRole(profile?.role) && !isChecklistPathAllowed(loc.pathname)) {
     return <Navigate to="/checklists" replace />
   }
@@ -781,7 +780,7 @@ function MainApp() {
                       <Route path="/fleet-renewal"         element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><FleetRenewal /></RoleRoute></Safe>} />
                       <Route path="/dtc"                   element={<Safe><RoleRoute allowed={['Admin']}><DtcDiagnostics /></RoleRoute></Safe>} />
                       <Route path="/engine-hours"          element={<Safe><RoleRoute allowed={['Admin']}><EngineHours /></RoleRoute></Safe>} />
-                      <Route path="/odometer-logs"         element={<Safe><RoleRoute allowed={['Admin']}><OdometerLogs /></RoleRoute></Safe>} />
+                      <Route path="/odometer-logs"         element={<Safe><ModuleRoute moduleKey="odometer_logs"><OdometerLogs /></ModuleRoute></Safe>} />
                       <Route path="/fleet-utilization"     element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><FleetUtilization /></RoleRoute></Safe>} />
                       <Route path="/pm-programs"           element={<Safe><RoleRoute allowed={['Admin']}><ModuleRoute moduleKey="pm_programs"><PmPrograms /></ModuleRoute></RoleRoute></Safe>} />
                       <Route path="/vehicle-washing"       element={<Safe><ModuleRoute moduleKey="vehicle_washing"><VehicleWashing /></ModuleRoute></Safe>} />

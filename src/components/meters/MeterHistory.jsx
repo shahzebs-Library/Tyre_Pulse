@@ -30,7 +30,7 @@ function Correction({ row, onSaved, onCancel }) {
   return <tr><td colSpan={8} className="p-4 bg-[var(--input-bg)]">
     <form onSubmit={submit} className="space-y-3" aria-label={`Correct ${row.asset_no} reading`}>
       <p className="text-sm font-medium">Correct {row.asset_no}: {Number(row.value).toLocaleString()} {row.kind} on {readingDate(row.reading_date)}</p>
-      <p className="text-xs text-[var(--text-muted)]">Original source is retained. The old value, new value, your identity, and reason are recorded. A lower correction may not lower the fleet’s current meter.</p>
+      <p className="text-xs text-[var(--text-muted)]">Original source is retained. For a flagged reading, saving records your Admin review; keep the reading unchanged to accept it. The old value, new value, your identity, and reason are recorded. A lower correction may not lower the fleet’s current meter.</p>
       <div className="flex flex-wrap gap-3 items-end">
         <label className="text-sm">Corrected reading<input className="input block" aria-label="Corrected reading" type="number" min="0" step="any" value={value} disabled={busy} onChange={e => setValue(e.target.value)} /></label>
         <label className="text-sm">Reading date<input className="input block" aria-label="Corrected reading date" type="date" max={meterToday(row.country)} value={date} disabled={busy} onChange={e => setDate(e.target.value)} /></label>
@@ -48,7 +48,7 @@ function Correction({ row, onSaved, onCancel }) {
   </td></tr>
 }
 
-export default function MeterHistory({ rows, onSaved, resetKey }) {
+export default function MeterHistory({ rows, onSaved, resetKey, canCorrect = false, canReview = false }) {
   const [editing, setEditing] = useState(null)
   const pager = usePagedRows(rows)
   const { setPage } = pager
@@ -56,26 +56,27 @@ export default function MeterHistory({ rows, onSaved, resetKey }) {
   return <div className="card !p-0 overflow-hidden">
     <div className="overflow-x-auto"><table className="w-full text-sm text-start">
       <thead><tr className="border-b border-[var(--input-border)] text-[var(--text-muted)]">{['Vehicle', 'Region / site', 'Reading', 'Reading date', 'Received at', 'Source', 'Last edited', 'Action'].map(h => <th key={h} scope="col" className="px-4 py-3 text-start whitespace-nowrap">{h}</th>)}</tr></thead>
-      <tbody>{pager.pageRows.map(row => <HistoryRow key={`${row.kind}:${row.id}`} row={row} editing={editing} setEditing={setEditing} onSaved={(result, kind) => { onSaved(result, kind); setEditing(null) }} />)}
+      <tbody>{pager.pageRows.map(row => <HistoryRow key={`${row.kind}:${row.id}`} row={row} canCorrect={canCorrect} canReview={canReview} editing={editing} setEditing={setEditing} onSaved={(result, kind) => { onSaved(result, kind); setEditing(null) }} />)}
         {rows.length === 0 && <tr><td colSpan={8} className="p-8 text-center text-[var(--text-muted)]">No readings match these filters.</td></tr>}
       </tbody>
     </table></div><TablePagination {...pager} />
   </div>
 }
-function HistoryRow({ row, editing, setEditing, onSaved }) {
+function HistoryRow({ row, editing, setEditing, onSaved, canCorrect, canReview }) {
   const key = `${row.kind}:${row.id}`
+  const canEdit = row.flagged ? canReview : canCorrect
   const edited = row.updated_at && row.created_at && row.updated_at !== row.created_at
   return <>
     <tr className="border-b border-[var(--input-border)]">
       <td className="px-4 py-3 font-medium">{row.asset_no}<div className="text-xs text-[var(--text-muted)]">{row.registration_no || row.vehicle_type || 'Registration not recorded'}</div></td>
       <td className="px-4 py-3">{row.region || 'Not recorded'}<div className="text-xs text-[var(--text-muted)]">{row.site || 'Site not recorded'}</div></td>
-      <td className="px-4 py-3 whitespace-nowrap font-semibold">{row.value == null ? 'Not recorded' : Number(row.value).toLocaleString()} {row.kind}{row.flagged && <div className="text-xs text-amber-600" title={row.flag_reason}>Flagged for review</div>}</td>
+      <td className="px-4 py-3 whitespace-nowrap font-semibold">{row.value == null ? 'Not recorded' : Number(row.value).toLocaleString()} {row.kind}{row.flagged && <div className="text-xs text-amber-600" title={row.flag_reason}>{row.reviewed ? 'Reviewed by Admin' : 'Awaiting Admin review'}</div>}</td>
       <td className="px-4 py-3 whitespace-nowrap">{readingDate(row.reading_date)}</td>
       <td className="px-4 py-3 whitespace-nowrap text-xs">{receivedDate(row.created_at, row.country)}</td>
       <td className="px-4 py-3">{meterSource(row.source)}</td>
       <td className="px-4 py-3 text-xs">{edited ? receivedDate(row.updated_at, row.country) : 'Not edited'}</td>
-      <td className="px-4 py-3"><button className="btn-secondary text-xs" aria-expanded={editing === key} onClick={() => setEditing(editing === key ? null : key)}>Correct / audit</button></td>
+      <td className="px-4 py-3">{canEdit ? <button className="btn-secondary text-xs" aria-expanded={editing === key} onClick={() => setEditing(editing === key ? null : key)}>{row.flagged ? 'Review / correct' : 'Correct / audit'}</button> : <span className="text-xs text-[var(--text-muted)]">{row.flagged ? 'Admin review only' : 'Correction unavailable'}</span>}</td>
     </tr>
-    {editing === key && <Correction row={row} onSaved={onSaved} onCancel={() => setEditing(null)} />}
+    {canEdit && editing === key && <Correction row={row} onSaved={onSaved} onCancel={() => setEditing(null)} />}
   </>
 }

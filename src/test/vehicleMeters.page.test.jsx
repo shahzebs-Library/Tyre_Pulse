@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 
 const h = vi.hoisted(() => ({ country: 'KSA', load: vi.fn(), save: vi.fn(), correct: vi.fn(), audit: vi.fn() }))
+vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ profile: { id: 'actor', role: 'Admin' } }) }))
 vi.mock('../contexts/SettingsContext', () => ({ useSettings: () => ({ activeCountry: h.country }) }))
 vi.mock('../contexts/LanguageContext', () => ({ useLanguage: () => ({ t: key => key }) }))
 vi.mock('../lib/api/vehicleMeters', () => ({ loadVehicleMeters: h.load, saveVehicleMeters: h.save, correctVehicleMeter: h.correct, meterCorrectionHistory: h.audit }))
@@ -10,14 +11,14 @@ vi.mock('../components/ui/PageHeader', () => ({ default: ({ title, onRefresh }) 
 vi.mock('../lib/exportUtils', () => ({ exportToExcel: vi.fn(), exportToPdf: vi.fn() }))
 import OdometerLogs from '../pages/OdometerLogs'
 const fleet = { id: 'v1', organisation_id: 'org', country: 'KSA', asset_no: 'TM651', fleet_number: '6633 GXA', region: 'Western', site: 'JEDDAH', vehicle_type: 'TR-MIXER', current_km: 111316 }
-const bundle = () => ({ fleet: [fleet], odometer: [], hours: [] })
+const bundle = () => ({ fleet: [fleet], odometer: [], hours: [], permissions: { canSave: true, canCorrect: true } })
 const view = () => <MemoryRouter><OdometerLogs /></MemoryRouter>
 beforeEach(() => { sessionStorage.clear(); h.country = 'KSA'; h.load.mockReset().mockResolvedValue(bundle()); h.save.mockReset(); h.audit.mockReset().mockResolvedValue([]) })
 describe('vehicle row meter workflow', () => {
   it('combines vehicle type and meter applicability, preserves drafts, and clears all filters', async () => {
     h.load.mockResolvedValue({ fleet: [fleet,
       { ...fleet, id: 'g1', asset_no: 'GEN1', vehicle_type: 'GENERATOR', current_km: null },
-      { ...fleet, id: 't1', asset_no: 'TR1', vehicle_type: 'TRAILER' }], odometer: [], hours: [] })
+      { ...fleet, id: 't1', asset_no: 'TR1', vehicle_type: 'TRAILER' }], odometer: [], hours: [], permissions: { canSave: true, canCorrect: true } })
     render(view()); await screen.findByLabelText('TM651 new km')
     fireEvent.change(screen.getByLabelText('TM651 new km'), { target: { value: '111400' } })
     fireEvent.click(screen.getByRole('button', { name: 'Filters', exact: true }))
@@ -42,7 +43,7 @@ describe('vehicle row meter workflow', () => {
   it('filters history by fleet type and reading unit without hiding the other entry field', async () => {
     h.load.mockResolvedValue({ fleet: [fleet],
       odometer: [{ ...fleet, id: 'o1', odometer_km: 111316, reading_date: '2026-09-10' }],
-      hours: [{ ...fleet, id: 'h1', engine_hours: 700, reading_date: '2026-09-10' }] })
+      hours: [{ ...fleet, id: 'h1', engine_hours: 700, reading_date: '2026-09-10' }], permissions: { canSave: true, canCorrect: true } })
     render(view()); await screen.findByLabelText('TM651 new km')
     fireEvent.click(screen.getByRole('button', { name: 'Filters', exact: true }))
     fireEvent.change(screen.getByLabelText('Vehicle type'), { target: { value: 'TR-MIXER' } })
@@ -82,20 +83,16 @@ describe('vehicle row meter workflow', () => {
     await waitFor(() => expect(h.save).toHaveBeenCalledTimes(2))
     expect(h.save.mock.calls[1][1].requestId).toBe(key)
   })
-  it('keeps drafts while filtering and prevents unconfirmed lower readings', async () => {
+  it('saves lower readings without a checkbox and shows Admin review status', async () => {
+    h.save.mockResolvedValue({ vehicle: fleet, odometer: { ...fleet, id: 'low', odometer_km: 100, flagged: true, reviewed: false } })
     render(view()); await screen.findByLabelText('TM651 new km')
     fireEvent.change(screen.getByLabelText('TM651 new km'), { target: { value: '100' } })
-    expect(screen.getByRole('button', { name: 'Save TM651' }).disabled).toBe(false)
+    expect(screen.getByText(/Below the last reading/)).toBeTruthy()
     expect(screen.queryByText(/I checked this lower reading/)).toBeNull()
-    expect(screen.queryByRole('combobox', { name: 'TM651 applicable meters' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Save TM651' }))
-    expect(screen.getByText(/I checked this lower reading/)).toBeTruthy()
-    expect(h.save).not.toHaveBeenCalled()
-    const search = screen.getByRole('textbox', { name: 'Search vehicles and readings' })
-    fireEvent.change(search, { target: { value: 'no-match' } })
-    fireEvent.change(search, { target: { value: 'TM651' } })
-    expect(screen.getByLabelText('TM651 new km').value).toBe('100')
-    expect(h.save).not.toHaveBeenCalled()
+    await screen.findByText(/Flagged for Admin review/)
+    expect(h.save).toHaveBeenCalledTimes(1)
+    expect(screen.getByLabelText('TM651 new km').value).toBe('')
   })
   it('does not leak an old country response or draft into the next country', async () => {
     let finishOld
@@ -106,4 +103,47 @@ describe('vehicle row meter workflow', () => {
     await act(async () => { finishOld(bundle()) })
     expect(screen.queryByLabelText('TM651 new km')).toBeNull()
   })
+})
+
+it('disables entry and historical correction for read-only access', async () => {
+  h.load.mockResolvedValue({ ...bundle(), permissions: { canSave: false, canCorrect: false }, odometer: [{ ...fleet, id: 'o1', odometer_km: 111316 }] })
+  render(view()); await screen.findByLabelText('TM651 new km')
+  expect(screen.getByLabelText('TM651 new km')).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Save TM651' })).toBeDisabled()
+  expect(screen.getByText(/Meter Logs access is required/)).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: 'All readings', exact: true }))
+  expect(screen.queryByRole('button', { name: 'Correct / audit' })).toBeNull()
+  expect(h.save).not.toHaveBeenCalled()
+})
+it('allows people with Meter Logs access to add readings and open corrections', async () => {
+  h.load.mockResolvedValue({ ...bundle(), permissions: { canSave: true, canCorrect: true }, odometer: [{ ...fleet, id: 'o1', odometer_km: 111316 }] })
+  render(view()); await screen.findByLabelText('TM651 new km')
+  expect(screen.getByLabelText('TM651 new km')).not.toBeDisabled()
+  fireEvent.click(screen.getByRole('button', { name: 'All readings', exact: true }))
+  fireEvent.click(screen.getByRole('button', { name: 'Correct / audit' }))
+  expect(screen.getByRole('form', { name: 'Correct TM651 reading' })).toBeTruthy()
+  fireEvent.change(screen.getByLabelText('Corrected reading'), { target: { value: '111317' } })
+  fireEvent.change(screen.getByLabelText('Corrected reading date'), { target: { value: '2026-09-10' } })
+  fireEvent.change(screen.getByLabelText('Correction reason'), { target: { value: 'Checked transcription' } })
+  h.correct.mockResolvedValue({ ...fleet, id: 'o1', odometer_km: 111317 })
+  fireEvent.click(screen.getByRole('button', { name: 'Save correction' }))
+  await waitFor(() => expect(h.correct).toHaveBeenCalledWith(expect.objectContaining({ id: 'o1' }), expect.objectContaining({ value: '111317', reason: 'Checked transcription' })))
+})
+
+it('only Admin can work on flagged readings and finish their review', async () => {
+  const low = { ...fleet, id: 'low', odometer_km: 100, reading_date: '2026-09-10', flagged: true, reviewed: false }
+  h.load.mockResolvedValue({ ...bundle(), odometer: [low], permissions: { canSave: true, canCorrect: true, canReview: false } })
+  const rendered = render(view()); await screen.findByLabelText('TM651 new km')
+  fireEvent.click(screen.getByRole('button', { name: 'All readings', exact: true }))
+  expect(screen.getByText('Awaiting Admin review')).toBeTruthy()
+  expect(screen.queryByRole('button', { name: 'Review / correct' })).toBeNull()
+  rendered.unmount()
+  h.load.mockResolvedValue({ ...bundle(), odometer: [low], permissions: { canSave: true, canCorrect: true, canReview: true } })
+  render(view()); await screen.findByRole('button', { name: 'Admin review', exact: true })
+  fireEvent.click(screen.getByRole('button', { name: 'Admin review', exact: true }))
+  fireEvent.click(screen.getByRole('button', { name: 'Review / correct' }))
+  fireEvent.change(screen.getByLabelText('Correction reason'), { target: { value: 'Verified meter replacement' } })
+  h.correct.mockResolvedValue({ ...low, reviewed: true })
+  fireEvent.click(screen.getByRole('button', { name: 'Save correction' }))
+  await screen.findByText('No readings match these filters.')
 })

@@ -4,9 +4,10 @@ import PageHeader from '../components/ui/PageHeader'
 import { TablePagination, usePagedRows } from '../components/ui/TablePagination'
 import MeterRow from '../components/meters/MeterRow'
 import MeterHistory from '../components/meters/MeterHistory'
+import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { loadVehicleMeters, saveVehicleMeters } from '../lib/api/vehicleMeters'
-import { buildVehicleMeters, meterKey, meterSource, meterToday, validateMeterDraft, receivedDate, newMeterDraft, meterNeedsConfirmation } from '../lib/vehicleMeters'
+import { buildVehicleMeters, meterKey, meterSource, meterToday, validateMeterDraft, receivedDate, newMeterDraft } from '../lib/vehicleMeters'
 import { toUserMessage } from '../lib/safeError'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import '../components/meters/meters.css'
@@ -19,10 +20,15 @@ const distinct = values => [...new Set(values.filter(Boolean))].sort()
 
 export default function OdometerLogs() {
   const { activeCountry } = useSettings()
-  return <MeterWorkspace key={activeCountry} country={activeCountry} />
+  const { profile, capabilities, modulePerms, grantOverrides } = useAuth()
+  const scope = JSON.stringify([activeCountry, profile, capabilities, modulePerms, grantOverrides])
+  return <MeterWorkspace key={scope} country={activeCountry} />
 }
 function MeterWorkspace({ country }) {
   const [data, setData] = useState(EMPTY)
+  const canSave = data.permissions?.canSave === true
+  const canCorrect = data.permissions?.canCorrect === true
+  const canReview = data.permissions?.canReview === true
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [loadedAt, setLoadedAt] = useState(null)
@@ -73,7 +79,7 @@ function MeterWorkspace({ country }) {
     const v = fleetByKey.get(meterKey(r))
     return { ...r, region: v?.region, registration_no: v?.registration_no || v?.fleet_number, vehicleId: v?.id, vehicle_type: v?.vehicle_type, supportsKm: v?.supportsKm, supportsHours: v?.supportsHours }
   }).sort((a, b) => String(b.reading_date || '').localeCompare(a.reading_date || '') || String(b.created_at).localeCompare(String(a.created_at)) || String(b.id).localeCompare(String(a.id))), [data, fleetByKey])
-  const matchesReading = useCallback(r => (!filters.source || meterSource(r.source) === filters.source) && (!filters.from || (r.reading_date && r.reading_date >= filters.from)) && (!filters.to || (r.reading_date && r.reading_date <= filters.to)) && (!filters.flagged || r.flagged), [filters])
+  const matchesReading = useCallback(r => (!filters.source || meterSource(r.source) === filters.source) && (!filters.from || (r.reading_date && r.reading_date >= filters.from)) && (!filters.to || (r.reading_date && r.reading_date <= filters.to)) && (!filters.flagged || (r.flagged && !r.reviewed)), [filters])
   const matchesAsset = useCallback(r => {
     const text = `${r.asset_no || ''} ${r.registration_no || ''} ${r.fleet_number || ''} ${r.vehicle_type || ''} ${r.region || ''} ${r.site || ''} ${r.source || ''} ${r.notes || ''}`.toLowerCase()
     return (!filters.vehicleType || (r.vehicle_type || '__unknown') === filters.vehicleType) && matchesMeterType(r, filters.meterType) && (!filters.region || r.region === filters.region) && (!filters.site || r.site === filters.site) && (!filters.assetId || (r.vehicleId || r.id) === filters.assetId) && filters.search.trim().toLowerCase().split(/\s+/).every(word => text.includes(word))
@@ -95,30 +101,28 @@ function MeterWorkspace({ country }) {
   const sources = useMemo(() => distinct(history.map(r => meterSource(r.source))), [history])
   const analyticsRows = useMemo(() => filteredHistory.filter(r => r.kind === 'km'), [filteredHistory])
   function changeDraft(vehicle, field, value) {
-    if (savingIds.current.has(vehicle.id)) return
+    if (!canSave || savingIds.current.has(vehicle.id)) return
     setDrafts(old => {
       const draft = { ...(old[vehicle.id] || newMeterDraft(vehicle)), [field]: value }
-      if (field !== 'confirmed') { draft.requestId = crypto.randomUUID(); draft.confirmed = false }
+      draft.requestId = crypto.randomUUID()
       return { ...old, [vehicle.id]: draft }
     })
-    if (field !== 'confirmed') setStatuses(old => ({ ...old, [vehicle.id]: null }))
+    setStatuses(old => ({ ...old, [vehicle.id]: null }))
   }
   function applySaved(result) {
     setData(old => ({
+      ...old,
       fleet: result.vehicle ? old.fleet.map(v => v.id === result.vehicle.id ? { ...v, ...result.vehicle } : v) : old.fleet,
       odometer: result.odometer?.id ? [...old.odometer.filter(r => r.id !== result.odometer.id), result.odometer] : old.odometer,
       hours: result.hours?.id ? [...old.hours.filter(r => r.id !== result.hours.id), result.hours] : old.hours,
     }))
   }
   async function save(vehicle) {
-    if (savingIds.current.has(vehicle.id)) return
+    if (!canSave || savingIds.current.has(vehicle.id)) return
     const draft = drafts[vehicle.id]
     if (!draft) return
     const invalid = validateMeterDraft(draft, vehicle)
     if (invalid) { setStatuses(old => ({ ...old, [vehicle.id]: { error: true, message: invalid } })); return }
-    if (meterNeedsConfirmation(draft, vehicle) && !draft.confirmed) {
-      setStatuses(old => ({ ...old, [vehicle.id]: { needsConfirmation: true } })); return
-    }
     savingIds.current.add(vehicle.id)
     generation.current++; setLoading(false)
     setStatuses(old => ({ ...old, [vehicle.id]: { saving: true } }))
@@ -129,7 +133,7 @@ function MeterWorkspace({ country }) {
       const submitted = [result.odometer?.id ? `${Number(result.odometer.odometer_km).toLocaleString()} km` : '', result.hours?.id ? `${Number(result.hours.engine_hours).toLocaleString()} hours` : ''].filter(Boolean).join(' + ')
       const flags = result.odometer?.flagged || result.hours?.flagged
       const unchanged = result.odometer?.id && Number(result.vehicle?.current_km) !== Number(result.odometer.odometer_km)
-      setStatuses(old => ({ ...old, [vehicle.id]: { message: `Saved ${submitted}. ${flags ? 'Flagged for review. ' : ''}${unchanged ? 'Fleet kilometres remain at the higher value.' : ''}` } }))
+      setStatuses(old => ({ ...old, [vehicle.id]: { message: `Saved ${submitted}. ${flags ? 'Flagged for Admin review. ' : ''}${unchanged ? 'Fleet kilometres remain at the higher value.' : ''}` } }))
     } catch (err) { setStatuses(old => ({ ...old, [vehicle.id]: { error: true, message: toUserMessage(err, 'Could not save. Your entries are retained; retry when connected.') } })) }
     finally { savingIds.current.delete(vehicle.id) }
   }
@@ -178,22 +182,24 @@ function MeterWorkspace({ country }) {
         <label>Reading date from<input className="input block" type="date" value={filters.from} max={filters.to || undefined} onChange={e => changeFilter('from', e.target.value)} /></label>
         <label>To<input className="input block" type="date" value={filters.to} min={filters.from || undefined} onChange={e => changeFilter('to', e.target.value)} /></label>
         <button className="btn-secondary" onClick={() => preset(1)}>Today</button><button className="btn-secondary" onClick={() => preset(7)}>Last 7 days</button><button className="btn-secondary" onClick={() => preset('month')}>This month</button>
-        <label className="flex gap-2 items-center px-2 py-2"><input type="checkbox" checked={filters.flagged} onChange={e => changeFilter('flagged', e.target.checked)} /> Flagged only</label>
+        <label className="flex gap-2 items-center px-2 py-2"><input type="checkbox" checked={filters.flagged} onChange={e => changeFilter('flagged', e.target.checked)} /> Awaiting Admin review</label>
       </div>
       <p className="text-xs text-[var(--text-muted)]">Region is the vehicle’s current fleet region. History retains the recorded site. Received times use each record’s country timezone; measurement dates do not imply a recorded time.</p>
       </div>}
       {filters.assetId && <p className="text-sm">History for <strong>{vehicles.find(v => v.id === filters.assetId)?.asset_no}</strong> <button className="underline ms-2" onClick={() => changeFilter('assetId', '')}>Show all vehicles</button></p>}
     </div>
     <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex gap-1 rounded-lg bg-[var(--input-bg)] p-1" role="group" aria-label="Meter views">{[['vehicles', 'Latest per vehicle'], ['history', 'All readings'], ['analytics', 'Analytics']].map(([key, label]) => <button key={key} aria-pressed={tab === key} onClick={() => setTab(key)} className={tab === key ? 'btn-primary' : 'btn-secondary'}>{label}</button>)}</div><span className="text-sm text-[var(--text-muted)]">{filteredVehicles.length} vehicles · {filteredHistory.length} readings</span></div>
+    {!loading && !error && !canSave && <p role="status" className="card text-sm">Meter Logs access is required to add or correct readings for vehicles in your assigned scope.</p>}
     {hasDrafts && <p className="text-xs text-[var(--text-muted)]">Unsaved entries stay while searching or changing views. Save them before leaving this page or switching country.</p>}
+    {canReview && <button className="btn-secondary" onClick={() => { setFilters({ ...EMPTY_FILTERS, flagged: true }); setTab('history') }}>Admin review</button>}
     {notice && <p role="status" className="card text-sm">{notice}</p>}
     {error && <div role="alert" className="card text-red-600 dark:text-red-300">{error} <button className="btn-secondary ms-2" onClick={load}>Retry</button></div>}
     {loading && <p role="status" className="card">Loading vehicle meters…</p>}
     {!loading && !error && tab === 'vehicles' && <div className="card !p-0 overflow-hidden"><div className="overflow-x-auto"><table className="meter-entry-table w-full text-sm">
       <thead><tr className="border-b border-[var(--input-border)] text-[var(--text-muted)]">{[['asset_no', 'Vehicle'], ['region', 'Region / site'], ['km', 'Kilometres'], ['engineHours', 'Engine hours']].map(([key, label]) => <th scope="col" className="px-4 py-3 text-start" key={key} aria-sort={sort.key === key ? sort.asc ? 'ascending' : 'descending' : 'none'}><button onClick={() => setSort(old => ({ key, asc: old.key === key ? !old.asc : true }))}>{label} {sort.key === key ? sort.asc ? '↑' : '↓' : '↕'}</button></th>)}<th scope="col" className="px-4 py-3 text-start">New reading date / note</th><th scope="col" className="px-4 py-3 text-start">Save reading</th></tr></thead>
-      <tbody>{pager.pageRows.map(vehicle => <MeterRow key={vehicle.id} vehicle={vehicle} draft={drafts[vehicle.id]} status={statuses[vehicle.id]} onChange={changeDraft} onSave={save} onHistory={showHistory} />)}{!filteredVehicles.length && <tr><td colSpan={6} className="p-10 text-center text-[var(--text-muted)]">No vehicles match these filters.</td></tr>}</tbody>
+      <tbody>{pager.pageRows.map(vehicle => <MeterRow key={vehicle.id} vehicle={vehicle} canSave={canSave} draft={drafts[vehicle.id]} status={statuses[vehicle.id]} onChange={changeDraft} onSave={save} onHistory={showHistory} />)}{!filteredVehicles.length && <tr><td colSpan={6} className="p-10 text-center text-[var(--text-muted)]">No vehicles match these filters.</td></tr>}</tbody>
     </table></div><TablePagination {...pager} /></div>}
-    {!loading && !error && tab === 'history' && <MeterHistory rows={filteredHistory} onSaved={corrected} resetKey={filters} />}
+    {!loading && !error && tab === 'history' && <MeterHistory canReview={canReview} canCorrect={canCorrect} rows={filteredHistory} onSaved={corrected} resetKey={filters} />}
     {!loading && !error && tab === 'analytics' && <Suspense fallback={<p role="status">Loading analytics…</p>}><MeterAnalytics rows={analyticsRows} /></Suspense>}
   </div>
 }

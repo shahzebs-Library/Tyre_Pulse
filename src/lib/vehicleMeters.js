@@ -1,8 +1,7 @@
-import { JUMP_MIN_KM } from './odometerAnalytics'
 export const meterKey = row => JSON.stringify([row.organisation_id ?? null, row.country ?? null, String(row.asset_no || '').trim().toUpperCase()])
 export const finiteMeter = value => value === '' || value == null || !Number.isFinite(Number(value)) ? null : Number(value)
 export function newMeterDraft(vehicle) {
-  return { km: '', hours: '', date: meterToday(vehicle.country), notes: '', confirmed: false,
+  return { km: '', hours: '', date: meterToday(vehicle.country), notes: '',
     requestId: crypto.randomUUID() }
 }
 export function meterTimezone(country) {
@@ -47,7 +46,8 @@ export function buildVehicleMeters(fleet, odometer, hours) {
   fleet.forEach(v => counts.set(meterKey(v), (counts.get(meterKey(v)) || 0) + 1))
   return fleet.map(vehicle => {
     const key = meterKey(vehicle), kmLog = kmMap.get(key), hoursLog = hourMap.get(key)
-    const km = finiteMeter(vehicle.current_km) ?? finiteMeter(kmLog?.odometer_km)
+    const kmValues = [finiteMeter(vehicle.current_km), finiteMeter(kmLog?.odometer_km)].filter(v => v != null)
+    const km = kmValues.length ? Math.max(...kmValues) : null
     const hourValues = [finiteMeter(hoursLog?.engine_hours), finiteMeter(vehicle.current_engine_hours), finiteMeter(vehicle.current_hours)].filter(v => v != null)
     const engineHours = hourValues.length ? Math.max(...hourValues) : null
     const type = String(vehicle.vehicle_type || '').toUpperCase().replaceAll('_', ' ')
@@ -66,9 +66,4 @@ export function validateMeterDraft(draft, vehicle) {
   if (!draft.date || !/^\d{4}-\d{2}-\d{2}$/.test(draft.date) || draft.date > meterToday(vehicle.country)) return 'Choose a reading date no later than today.'
   if (vehicle.duplicate) return 'This asset has duplicate fleet records. Resolve its identity before saving.'
   return ''
-}
-
-export function meterNeedsConfirmation(draft, vehicle) {
-  return (draft.km !== '' && vehicle.km != null && (Number(draft.km) < vehicle.km || Number(draft.km) - vehicle.km >= JUMP_MIN_KM)) ||
-    (draft.hours !== '' && vehicle.engineHours != null && Number(draft.hours) < vehicle.engineHours)
 }

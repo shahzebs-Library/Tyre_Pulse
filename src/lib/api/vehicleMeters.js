@@ -8,14 +8,16 @@ async function all(table, columns, country) {
   return unwrap(result) || []
 }
 export async function loadVehicleMeters(country) {
-  const [fleet, odometer, hours] = await Promise.all([
+  const [fleet, odometer, hours, permissions] = await Promise.all([
     all('vehicle_fleet', FLEET_COLS, country),
     all('odometer_logs', `${COMMON_COLS},odometer_km`, country),
     all('engine_hours_logs', `${COMMON_COLS},engine_hours`, country),
+    supabase.rpc('vehicle_meter_permissions').then(rpcResult),
   ])
-  return { fleet, odometer, hours }
+  return { fleet, odometer, hours, permissions }
 }
 function rpcResult(result) {
+  if (result.error?.code === '42501') throw new Error('Meter Logs access is required to add or correct readings for vehicles in your assigned scope.')
   if (result.error?.code === '40001') throw new Error('Another reading was saved since you opened this row. Refresh, check the latest value, and try again.')
   return unwrap(result)
 }

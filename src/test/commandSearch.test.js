@@ -109,8 +109,8 @@ describe('visibleCommands', () => {
     expect(visible.some((c) => c.path === '/tyres')).toBe(true)
   })
 
-  it('Inspector sees only the inspection surface', () => {
-    const visible = visibleCommands([...NAV_COMMANDS, ...ACTION_COMMANDS], inspector, allowAll)
+  it('Inspector without Meter Logs access sees only the inspection surface', () => {
+    const visible = visibleCommands([...NAV_COMMANDS, ...ACTION_COMMANDS], inspector, key => key !== 'odometer_logs')
     expect(visible.length).toBeGreaterThan(0)
     expect(visible.every((c) => c.path === '/inspections' || c.path === '/settings')).toBe(true)
   })
@@ -406,4 +406,12 @@ describe('mapRecordRows', () => {
       expect(mapRecordRows(source(id), [])).toEqual([])
     })
   })
+})
+
+it('Meter Logs follows module access for any role', () => {
+  const command = NAV_COMMANDS.find(c => c.path === '/odometer-logs')
+  for (const role of ['Inspector','Driver','Fleet Supervisor','Manager','Custom Meter Clerk']) {
+    expect(isCommandVisible(command, { role }, key => key === 'odometer_logs')).toBe(true)
+    expect(isCommandVisible(command, { role }, () => false)).toBe(false)
+  }
 })

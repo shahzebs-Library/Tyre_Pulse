@@ -141,7 +141,7 @@ export const NAV_COMMANDS = [
   { id: 'shifts', label: 'Shift Scheduling', path: '/shifts', icon: 'CalendarClock', adminOnly: true },
   { id: 'speed-limiter', label: 'Speed Limiter', path: '/speed-limiter', icon: 'Gauge', adminOnly: true },
   { id: 'engine-hours', label: 'Engine Hours', path: '/engine-hours', icon: 'Gauge', adminOnly: true, keywords: ['hour meter', 'hourmeter', 'running hours', 'smr'] },
-  { id: 'odometer-logs', label: 'Odometer Logs', path: '/odometer-logs', icon: 'Activity', adminOnly: true },
+  { id: 'odometer-logs', label: 'Odometer Logs', path: '/odometer-logs', icon: 'Activity', moduleKey: 'odometer_logs' },
   { id: 'fleet-utilization', label: 'Fleet Utilization', path: '/fleet-utilization', icon: 'Gauge', roles: ANALYTICS_ROLES },
   { id: 'trips', label: 'Trip History', path: '/trips', icon: 'MapPin', adminOnly: true },
   { id: 'route-optimization', label: 'Route Optimization', path: '/route-optimization', icon: 'Navigation', adminOnly: true },
@@ -295,6 +295,8 @@ export function isCommandVisible(cmd, profile, hasPermission, grantedModules, is
   if (!role) return false
   const path = cmd.path
   const perm = typeof hasPermission === 'function' ? hasPermission : null
+
+  if (path === '/odometer-logs') return perm ? perm('odometer_logs') === true : false
 
   // Restricted single-purpose roles (same as the sidebar).
   if (role === 'Inspector') return path === '/inspections' || path === '/settings'

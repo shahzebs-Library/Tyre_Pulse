@@ -28,6 +28,7 @@ export const NAV_MODULE_KEY = {
   '/tyre-passport': 'tyre_passport',
   '/qr-labels': 'qr_labels',
   '/serial-tracker': 'serial_tracker',
+  '/odometer-logs': 'odometer_logs',
   '/workshop-live': 'workshop_live',
   '/cpk-intelligence': 'cpk_intelligence',
   '/pm-programs': 'pm_programs',

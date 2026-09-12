@@ -22,6 +22,7 @@
  * is what actually bounds who can read a colleague's sheet.
  */
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
+import { loadChecklistHistoryDates } from '../../../lib/checklistHistoryDates'
 import {
   View, FlatList, ScrollView, StyleSheet, TouchableOpacity, TextInput,
   RefreshControl, Modal, Image,
@@ -128,12 +129,14 @@ export default function ChecklistHistoryScreen() {
   const tRef = useRef(t)
   tRef.current = t
   const templatesRef = useRef<Record<string, ChecklistTemplate | null>>({})
+  const loadSequence = useRef(0)
 
   const textAlign = isRTL ? 'right' : 'left'
   const dateLocale = isRTL ? 'ar-SA' : 'en-GB'
   const userId = profile?.id ?? null
 
   const load = useCallback(async () => {
+    const sequence = ++loadSequence.current
     setError(null)
     setUnknownUser(false)
 
@@ -154,13 +157,16 @@ export default function ChecklistHistoryScreen() {
         country: profile?.country,
         submittedBy: q.submittedBy,
       })
+      if (sequence !== loadSequence.current) return
       setRows(res.rows)
       setTotal(res.total)
       setBounded(res.bounded)
 
       // Names, only where they add something: in "mine" every row is the reader.
       if (q.submittedBy === null) {
-        setNames(await listSubmitterNames(res.rows.map((r) => r.submitted_by)))
+        const submitters = await listSubmitterNames(res.rows.map((r) => r.submitted_by))
+        if (sequence !== loadSequence.current) return
+        setNames(submitters)
       } else {
         setNames({})
       }
@@ -175,17 +181,22 @@ export default function ChecklistHistoryScreen() {
         const fetched = await Promise.all(missing.map(async (id) => {
           try { return [id, await getTemplate(id)] as const } catch { return [id, null] as const }
         }))
+        if (sequence !== loadSequence.current) return
         for (const [id, tpl] of fetched) templatesRef.current[id] = tpl
         setTemplates({ ...templatesRef.current })
       }
+      const datedRows = await loadChecklistHistoryDates(res.rows, templatesRef.current)
+      if (sequence !== loadSequence.current) return
+      setRows(datedRows)
     } catch (e: any) {
+      if (sequence !== loadSequence.current) return
       setError(toUserMessage(e, tRef.current('modules.checklistHistory.loadError')))
     } finally {
-      setLoading(false)
+      if (sequence === loadSequence.current) setLoading(false)
     }
   }, [scope, userId, profile?.country])
 
-  useFocusEffect(useCallback(() => { load() }, [load]))
+  useFocusEffect(useCallback(() => { load(); return () => { loadSequence.current++ } }, [load]))
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true)
@@ -467,9 +478,14 @@ export default function ChecklistHistoryScreen() {
                       </AppText>
                     </View>
                   )}
+                  {!!r.checklist_date && (
+                    <AppText style={[styles.metaText, { textAlign }]}>
+                      {t('modules.checklistHistory.checklistDate')}: {new Date(`${r.checklist_date}T12:00:00`).toLocaleDateString(dateLocale, { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </AppText>
+                  )}
                   <View style={[styles.metaRow, isRTL && styles.rowR]}>
                     <Ionicons name="calendar-outline" size={12} color={c.textMuted} />
-                    <AppText style={styles.metaText}>{when}</AppText>
+                    <AppText style={styles.metaText}>{t('modules.checklistHistory.submittedOn')}: {when}</AppText>
                     {!!who && (
                       <>
                         <AppText style={styles.metaText}>|</AppText>

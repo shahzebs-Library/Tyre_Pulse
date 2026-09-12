@@ -318,6 +318,10 @@
     "cameraPermissionMessage": "حادثے کی تصویر کے لیے کیمرے تک رسائی کی اجازت دیں۔"
   },
   "modules": {
+    "checklistHistory": {
+      "checklistDate": "چیک لسٹ کی تاریخ",
+      "submittedOn": "موصول ہونے کی تاریخ"
+    },
     "common": {
       "add": "شامل کریں",
       "save": "محفوظ کریں",

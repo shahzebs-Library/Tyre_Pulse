@@ -539,7 +539,7 @@ export type ChecklistHistoryRow = Pick<
   | 'submitted_by' | 'submitted_at' | 'score_pct' | 'score_passed' | 'approval_status'
   | 'document_no' | 'approver_name' | 'approved_at' | 'supervisor_name' | 'supervisor_at'
   | 'review_note' | 'locked'
->
+> & { checklist_date?: string | null }
 
 /**
  * How many sheets one read returns. PostgREST caps EVERY response at 1,000 rows

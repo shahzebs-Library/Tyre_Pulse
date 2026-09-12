@@ -5,10 +5,10 @@ const releases = [{ id: 'new', date: '2026-09-10', changes: [{ modules: ['vehicl
 const manifest = { schema: 1, buildId: 'build-b', releases }
 const auth = { profile: { role: 'Fleet Supervisor' }, hasPermission: k => k === 'vehicle_washing', moduleStatus: () => 'live' }
 describe('release notes', () => {
-  it('ships real Arabic translations for each published change', () => {
+  it('ships English-only release notes', () => {
     for (const release of releaseHistory) for (const change of release.changes) {
-      expect(change.text.ar).toMatch(/[\u0600-\u06ff]/)
-      expect(change.text.ar).not.toContain('???')
+      expect(change.text.en.trim()).not.toBe('')
+      expect(change.text).not.toHaveProperty('ar')
     }
   })
   it('limits notes to effective live module access and includes general changes', () => {
@@ -28,6 +28,7 @@ describe('release notes', () => {
   })
   it('rejects malformed payloads', () => {
     expect(validReleaseManifest(manifest)).toBe(true)
+    expect(validReleaseManifest({ ...manifest, releases: releaseHistory })).toBe(true)
     expect(validReleaseManifest({ ...manifest, releases: [{ id: 'broken' }] })).toBe(false)
   })
   it('reads only the requested worker through its message port', async () => {

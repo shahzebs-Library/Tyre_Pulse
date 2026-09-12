@@ -6,14 +6,14 @@ import { installedRelease, visibleReleases } from '../lib/releases'
 
 export function ReleaseNotes({ releases }) {
   const auth = useAuth()
-  const { language, t } = useLanguage()
+  const { t } = useLanguage()
   const visible = visibleReleases(releases, auth)
   if (!visible.length) return <p className="text-xs text-[var(--text-muted)]">{t('pwa.noRelevantChanges')}</p>
-  return <div className="space-y-4">
+  return <div className="space-y-4" lang="en" dir="ltr">
     {visible.map(release => <section key={release.id}>
-      <p className="text-xs font-semibold text-[var(--text-secondary)]"><bdi>{release.id}</bdi> · <time dateTime={release.date}>{new Date(`${release.date}T12:00:00Z`).toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })}</time></p>
+      <p className="text-xs font-semibold text-[var(--text-secondary)]"><bdi>{release.id}</bdi> · <time dateTime={release.date}>{new Date(`${release.date}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })}</time></p>
       <ul className="mt-2 space-y-1 list-disc ps-5 text-sm text-[var(--text-primary)]">
-        {release.changes.map((change, i) => <li key={i}>{change.text[language] || change.text.en}</li>)}
+        {release.changes.map((change, i) => <li key={i}>{change.text.en}</li>)}
       </ul>
     </section>)}
   </div>

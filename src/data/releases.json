@@ -8,8 +8,7 @@
           "odometer_logs"
         ],
         "text": {
-          "en": "Anyone with Meter Logs access can add readings and correct ordinary entries. Lower readings save for Admin review without reducing current fleet meters. Flagged readings require an audited Admin review.",
-          "ar": "يمكن لكل من لديه صلاحية سجلات العدادات إضافة القراءات وتصحيح الإدخالات العادية. تُحفظ القراءات الأقل لمراجعة المسؤول دون خفض عدادات الأسطول الحالية، وتتطلب القراءات المعلّمة مراجعة موثقة من المسؤول."
+          "en": "Anyone with Meter Logs access can add readings and correct ordinary entries. Lower readings save for Admin review without reducing current fleet meters. Flagged readings require an audited Admin review."
         }
       }
     ]
@@ -20,8 +19,7 @@
     "changes": [{
       "modules": ["pm_programs"],
       "text": {
-        "en": "Maintenance plans can verify a fleet vehicle, show matching service templates and applicable meters, and calculate the next due date or reading from the last service and its interval.",
-        "ar": "يمكن لخطط الصيانة التحقق من مركبة الأسطول وعرض نماذج الخدمة والعدادات المناسبة وحساب موعد الصيانة أو قراءة العداد التالية من آخر خدمة وفترتها."
+        "en": "Maintenance plans can verify a fleet vehicle, show matching service templates and applicable meters, and calculate the next due date or reading from the last service and its interval."
       }
     }]
   },
@@ -32,8 +30,7 @@
       {
         "modules": ["approvals", "work_orders", "tyre_records", "settings", "data_cleaning"],
         "text": {
-          "en": "Approval, administration and import workflows now have their required backend services. Access Control capability saves use company settings while retaining existing permission rules and feature flags.",
-          "ar": "أصبحت خدمات الموافقات والإدارة واستيراد البيانات متاحة في الخادم. تُحفظ صلاحيات التحكم في الوصول ضمن إعدادات الشركة مع الحفاظ على قواعد الصلاحيات والميزات الحالية."
+          "en": "Approval, administration and import workflows now have their required backend services. Access Control capability saves use company settings while retaining existing permission rules and feature flags."
         }
       }
     ]
@@ -45,15 +42,13 @@
       {
         "modules": ["checklists"],
         "text": {
-          "en": "Monthly checklist history includes older sheets synced later, using the date recorded on the checklist. The submissions list distinguishes checklist and received dates.",
-          "ar": "يشمل سجل قوائم الفحص الشهري النماذج القديمة التي تمت مزامنتها لاحقاً وفق التاريخ المسجل في القائمة. تعرض قائمة الإرسالات تاريخ الفحص وتاريخ الاستلام بشكل منفصل."
+          "en": "Monthly checklist history includes older sheets synced later, using the date recorded on the checklist. The submissions list distinguishes checklist and received dates."
         }
       },
       {
         "modules": ["inspection_planner"],
         "text": {
-          "en": "Inspection planning now consistently warns when loaded history reaches its limit.",
-          "ar": "يعرض مخطط الفحص تحذيراً واضحاً عند بلوغ حد السجلات المحملة."
+          "en": "Inspection planning now consistently warns when loaded history reaches its limit."
         }
       }
     ]
@@ -65,15 +60,13 @@
       {
         "modules": ["approvals"],
         "text": {
-          "en": "Approval reviews clear outdated permissions and show completed decisions accurately. Policy publishing checks the reviewed draft, stage deadlines and simulation results.",
-          "ar": "تزيل مراجعات الموافقات الصلاحيات القديمة وتعرض القرارات المكتملة بدقة. يتحقق نشر السياسات من المسودة المراجعة ومهل المراحل ونتائج المحاكاة."
+          "en": "Approval reviews clear outdated permissions and show completed decisions accurately. Policy publishing checks the reviewed draft, stage deadlines and simulation results."
         }
       },
       {
         "modules": ["work_orders", "tyre_records"],
         "text": {
-          "en": "Work-order approval requests retain the same retry after a refresh or reopening. Tyre changes recheck access, verify server receipts and show the approved operation before execution.",
-          "ar": "تحتفظ طلبات اعتماد أوامر العمل بنفس محاولة الإرسال بعد التحديث أو إعادة الفتح. تعيد تغييرات الإطارات التحقق من الوصول وتأكيدات الخادم وتعرض العملية المعتمدة قبل التنفيذ."
+          "en": "Work-order approval requests retain the same retry after a refresh or reopening. Tyre changes recheck access, verify server receipts and show the approved operation before execution."
         }
       }
     ]
@@ -85,8 +78,7 @@
       {
         "modules": ["inspection_planner"],
         "text": {
-          "en": "Inspection planning has a searchable work queue, clearer appointment and coverage status, timezone-safe scheduling, bulk appointment previews, and visible validation and save errors.",
-          "ar": "أصبح تخطيط الفحص يتضمن قائمة عمل قابلة للبحث، وحالات أوضح للمواعيد والتغطية، وجدولة صحيحة عبر المناطق الزمنية، ومعاينة للمواعيد الجماعية، ورسائل واضحة للتحقق وأخطاء الحفظ."
+          "en": "Inspection planning has a searchable work queue, clearer appointment and coverage status, timezone-safe scheduling, bulk appointment previews, and visible validation and save errors."
         }
       }
     ]
@@ -101,8 +93,7 @@
           "tyre_records"
         ],
         "text": {
-          "en": "Inspection PDFs distinguish latest fleet estimates from inspection readings, flag unmapped wheel positions, and avoid false short-life tyre alerts.",
-          "ar": "تميز تقارير الفحص بين تقديرات الأسطول الحالية وقراءات الفحص، وتوضح مواضع العجلات غير المطابقة، وتتجنب تنبيهات العمر القصير الخاطئة."
+          "en": "Inspection PDFs distinguish latest fleet estimates from inspection readings, flag unmapped wheel positions, and avoid false short-life tyre alerts."
         }
       },
       {
@@ -111,8 +102,7 @@
           "my_checklists"
         ],
         "text": {
-          "en": "Checklists flag contradictory fitness answers and invalid historical meters. New submissions reject negative meter readings, and signature headings stay with their signatures.",
-          "ar": "توضح قوائم الفحص تناقضات صلاحية التشغيل والقراءات التاريخية غير الصحيحة. ترفض الإدخالات الجديدة قراءات العداد السالبة، وتبقى عناوين التوقيعات مع توقيعاتها."
+          "en": "Checklists flag contradictory fitness answers and invalid historical meters. New submissions reject negative meter readings, and signature headings stay with their signatures."
         }
       },
       {
@@ -120,8 +110,7 @@
           "tyre_records"
         ],
         "text": {
-          "en": "Anomaly scans separate countries and currencies, handle numeric costs correctly, and warn when workshop records are unavailable.",
-          "ar": "تفصل فحوص الحالات غير المعتادة بين الدول والعملات، وتحسب التكاليف الرقمية بشكل صحيح، وتحذر عند تعذر تحميل سجلات الورشة."
+          "en": "Anomaly scans separate countries and currencies, handle numeric costs correctly, and warn when workshop records are unavailable."
         }
       }
     ]
@@ -137,8 +126,7 @@
           "fleet_master"
         ],
         "text": {
-          "en": "Tyre and vehicle histories load more completely, respect the selected country, and report unavailable history.",
-          "ar": "تحميل سجل الإطارات والمركبات بشكل أكمل حسب الدولة المحددة، مع توضيح السجلات غير المتاحة."
+          "en": "Tyre and vehicle histories load more completely, respect the selected country, and report unavailable history."
         }
       },
       {
@@ -149,8 +137,7 @@
           "predictive_maintenance"
         ],
         "text": {
-          "en": "Country changes discard outdated results, and operational pages follow module access settings.",
-          "ar": "تستبعد تغييرات الدولة النتائج القديمة، وتلتزم الصفحات التشغيلية بإعدادات الوصول للوحدات."
+          "en": "Country changes discard outdated results, and operational pages follow module access settings."
         }
       },
       {
@@ -159,8 +146,7 @@
           "shifts"
         ],
         "text": {
-          "en": "Maintenance and shift lists include later records and report loading failures more clearly.",
-          "ar": "تشمل قوائم الصيانة والورديات السجلات اللاحقة وتوضح أخطاء التحميل."
+          "en": "Maintenance and shift lists include later records and report loading failures more clearly."
         }
       },
       {
@@ -168,8 +154,7 @@
           "tyre_records"
         ],
         "text": {
-          "en": "Filtered record downloads show errors for incomplete exports and prevent repeated download clicks.",
-          "ar": "تعرض تنزيلات السجلات المفلترة أخطاء عند عدم اكتمال التصدير وتمنع تكرار النقر أثناء التنزيل."
+          "en": "Filtered record downloads show errors for incomplete exports and prevent repeated download clicks."
         }
       }
     ]
@@ -181,8 +166,7 @@
       {
         "modules": [],
         "text": {
-          "en": "See what changed before updating, and find previous releases in Settings > Update history.",
-          "ar": "اطّلع على التغييرات قبل التحديث، واعرض الإصدارات السابقة في الإعدادات > سجل التحديثات."
+          "en": "See what changed before updating, and find previous releases in Settings > Update history."
         }
       }
     ]
@@ -196,8 +180,7 @@
           "vehicle_washing"
         ],
         "text": {
-          "en": "Washing PDFs fit a single wash and three larger photos on one page, with clearer vehicle details.",
-          "ar": "تعرض تقارير الغسيل عملية غسيل واحدة وثلاث صور أكبر في صفحة واحدة، مع تفاصيل أوضح للمركبة."
+          "en": "Washing PDFs fit a single wash and three larger photos on one page, with clearer vehicle details."
         }
       },
       {
@@ -205,8 +188,7 @@
           "vehicle_washing"
         ],
         "text": {
-          "en": "Wash downloads follow the selected filters. Download messages can be closed and disappear automatically.",
-          "ar": "تلتزم تنزيلات الغسيل بالفلاتر المحددة. يمكن إغلاق رسائل التنزيل وتختفي تلقائياً."
+          "en": "Wash downloads follow the selected filters. Download messages can be closed and disappear automatically."
         }
       }
     ]
@@ -218,8 +200,7 @@
       {
         "modules": [],
         "text": {
-          "en": "Your home shows permitted modules and avoids loading unrelated dashboard data.",
-          "ar": "تعرض صفحتك الرئيسية الوحدات المسموح بها وتتجنب تحميل بيانات لوحة المعلومات غير المتعلقة بعملك."
+          "en": "Your home shows permitted modules and avoids loading unrelated dashboard data."
         }
       },
       {
@@ -231,8 +212,7 @@
           "accidents"
         ],
         "text": {
-          "en": "Data Monitor navigation, search and page access now follow the permissions saved in Settings.",
-          "ar": "تلتزم قوائم مراقب البيانات والبحث والوصول إلى الصفحات بالصلاحيات المحفوظة في الإعدادات."
+          "en": "Data Monitor navigation, search and page access now follow the permissions saved in Settings."
         }
       }
     ]
@@ -247,8 +227,7 @@
           "engine_hours"
         ],
         "text": {
-          "en": "Update kilometres and engine hours in the same vehicle row. Reading warnings appear when saving.",
-          "ar": "حدّث الكيلومترات وساعات المحرك في صف المركبة نفسه. تظهر تحذيرات القراءات عند الحفظ."
+          "en": "Update kilometres and engine hours in the same vehicle row. Reading warnings appear when saving."
         }
       },
       {
@@ -256,8 +235,7 @@
           "vehicle_washing"
         ],
         "text": {
-          "en": "Fleet Supervisors can schedule and log vehicle washes. Export vehicle washing PDFs with uploaded photos.",
-          "ar": "يمكن لمشرفي الأسطول جدولة غسيل المركبات وتسجيله وتصدير تقارير PDF تتضمن الصور المرفوعة."
+          "en": "Fleet Supervisors can schedule and log vehicle washes. Export vehicle washing PDFs with uploaded photos."
         }
       }
     ]

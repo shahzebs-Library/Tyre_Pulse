@@ -7,7 +7,7 @@ export function releaseBuild() {
   for (const release of releases) {
     if (!release.id || ids.has(release.id) || !/^\d{4}-\d{2}-\d{2}$/.test(release.date) || !release.changes?.length) throw new Error('Invalid or duplicate release notes')
     ids.add(release.id)
-    for (const change of release.changes) if (!Array.isArray(change.modules) || !change.text?.en || !change.text?.ar) throw new Error('Release notes require module tags and English/Arabic text')
+    for (const change of release.changes) if (!Array.isArray(change.modules) || !change.text?.en) throw new Error('Release notes require module tags and English text')
   }
   const manifest = { schema: 1, buildId: process.env.VERCEL_GIT_COMMIT_SHA || 'local', releases }
   const json = JSON.stringify(manifest)

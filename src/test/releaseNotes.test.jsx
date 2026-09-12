@@ -13,10 +13,11 @@ it('removes notes immediately when module access is revoked', () => {
   h.grant = false; view.rerender(<ReleaseNotes releases={releases} />)
   expect(screen.queryByText('Washing improved')).toBeNull()
 })
-it('renders Arabic notes', () => {
+it('keeps release notes in English when the app language is Arabic', () => {
   h.language = 'ar'
   render(<ReleaseNotes releases={releases} />)
-  expect(screen.getByText('تحسين الغسيل')).toBeTruthy()
+  expect(screen.getByText('Washing improved')).toBeTruthy()
+  expect(screen.queryByText('تحسين الغسيل')).toBeNull()
 })
 it('opens the history when linked from the update notice', () => {
   const { container } = render(<MemoryRouter initialEntries={['/settings#updates']}><UpdateHistory /></MemoryRouter>)

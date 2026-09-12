@@ -18,7 +18,7 @@ export function changesSince(manifest, installedId) {
   return index < 0 ? manifest.releases.slice(0, 1) : manifest.releases.slice(0, index)
 }
 export function validReleaseManifest(data) {
-  return data?.schema === 1 && typeof data.buildId === 'string' && Array.isArray(data.releases) && data.releases.length > 0 && data.releases.length <= 100 && data.releases.every(r => typeof r.id === 'string' && typeof r.date === 'string' && Array.isArray(r.changes) && r.changes.every(c => Array.isArray(c.modules) && c.modules.every(k => typeof k === 'string') && typeof c.text?.en === 'string' && typeof c.text?.ar === 'string'))
+  return data?.schema === 1 && typeof data.buildId === 'string' && Array.isArray(data.releases) && data.releases.length > 0 && data.releases.length <= 100 && data.releases.every(r => typeof r.id === 'string' && typeof r.date === 'string' && Array.isArray(r.changes) && r.changes.every(c => Array.isArray(c.modules) && c.modules.every(k => typeof k === 'string') && typeof c.text?.en === 'string'))
 }
 // Ask the exact WAITING worker. Fetching /latest.json could describe a newer
 // deploy than the worker about to activate. Timeout preserves the update action.

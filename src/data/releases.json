@@ -1,5 +1,16 @@
 [
   {
+    "id": "2026.09.12.3",
+    "date": "2026-09-12",
+    "changes": [{
+      "modules": ["pm_programs"],
+      "text": {
+        "en": "Maintenance plans can verify a fleet vehicle, show matching service templates and applicable meters, and calculate the next due date or reading from the last service and its interval.",
+        "ar": "يمكن لخطط الصيانة التحقق من مركبة الأسطول وعرض نماذج الخدمة والعدادات المناسبة وحساب موعد الصيانة أو قراءة العداد التالية من آخر خدمة وفترتها."
+      }
+    }]
+  },
+  {
     "id": "2026.09.12.2",
     "date": "2026-09-12",
     "changes": [

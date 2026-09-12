@@ -52,6 +52,8 @@ import {
   PM_STATUS_META, PM_DUE_META, PM_STATUSES,
 } from '../lib/pmPrograms'
 import { templatesFor, applyTemplate } from '../lib/pmTemplates'
+import PmVehicleLookup from '../components/PmVehicleLookup'
+import { pmVehicleProfile, pmNextDueFromService } from '../lib/pmVehicleSetup'
 import {
   costByAsset, costByCategory, monthlyServiceCost, outcomeBreakdown, pmSummary,
 } from '../lib/pmAnalytics'
@@ -201,6 +203,9 @@ export default function PmPrograms() {
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
   const [templateId, setTemplateId] = useState('') // create-mode "start from template" selection
+  const [selectedVehicle, setSelectedVehicle] = useState(null)
+  const vehicleProfile = useMemo(() => pmVehicleProfile(selectedVehicle), [selectedVehicle])
+  useEffect(() => { setSelectedVehicle(null); setModalOpen(false) }, [activeCountry])
 
   // Delete confirmation
   const [confirmDelete, setConfirmDelete] = useState(null)
@@ -456,9 +461,11 @@ export default function PmPrograms() {
 
   // ── Create / edit ───────────────────────────────────────────────────────────
   const openCreate = () => {
+    setSelectedVehicle(null)
     setEditing(null); setForm(EMPTY_FORM); setTaskDraft(''); setFormError(''); setTemplateId(''); setModalOpen(true)
   }
   const openEdit = (p) => {
+    setSelectedVehicle(null)
     setEditing(p); setTemplateId('')
     setForm({
       name: p.name || '',
@@ -494,8 +501,9 @@ export default function PmPrograms() {
   // "Start from a template" (create mode only). Templates are editable starting
   // points drawn from common OEM service practice, NOT live data.
   const availableTemplates = useMemo(
-    () => templatesFor(canonAssetCategory(form.asset_category) || null),
-    [form.asset_category],
+    () => templatesFor(canonAssetCategory(form.asset_category) || null)
+      .filter(t => !vehicleProfile || vehicleProfile.sources.includes(t.meter_source)),
+    [form.asset_category, vehicleProfile],
   )
   const applyTpl = (id) => {
     setTemplateId(id)
@@ -523,12 +531,18 @@ export default function PmPrograms() {
     e?.preventDefault?.()
     setFormError('')
     if (!form.name.trim()) { setFormError('Program name is required.'); return }
+    if (form.asset_no.trim() && (!editing || form.asset_no !== editing.asset_no) && !selectedVehicle) { setFormError('Find and confirm the vehicle before saving its service plan.'); return }
+    if ((form.interval_value !== '' && (!Number.isFinite(Number(form.interval_value)) || Number(form.interval_value) <= 0))
+      || (form.meter_source !== 'none' && (!Number.isFinite(Number(form.meter_interval)) || Number(form.meter_interval) <= 0))) {
+      setFormError('Enter a positive service interval for every enabled schedule.'); return
+    }
     setSaving(true)
     try {
       const meterNone = form.meter_source === 'none'
       const payload = {
         name: form.name,
         asset_no: form.asset_no || null,
+        asset_type: selectedVehicle?.vehicle_type || editing?.asset_type || null,
         asset_category: canonAssetCategory(form.asset_category),
         site: form.site || null,
         assigned_to: form.assigned_to || null,
@@ -550,7 +564,7 @@ export default function PmPrograms() {
         const updated = await updatePmProgram(editing.id, payload)
         setDashboard((d) => ({ ...d, plans: (d?.plans || []).map((r) => (r.id === updated.id ? updated : r)) }))
       } else {
-        const created = await createPmProgram({ ...payload, country: activeCountry !== 'All' ? activeCountry : null })
+        const created = await createPmProgram({ ...payload, country: selectedVehicle?.country || (activeCountry !== 'All' ? activeCountry : null) })
         setDashboard((d) => ({ ...(d || { kmByAsset: {}, hoursByAsset: {} }), plans: [created, ...(d?.plans || [])] }))
       }
       setModalOpen(false)
@@ -559,7 +573,7 @@ export default function PmPrograms() {
     } finally {
       setSaving(false)
     }
-  }, [form, editing, activeCountry])
+  }, [form, editing, activeCountry, selectedVehicle])
 
   const doDelete = useCallback(async () => {
     if (!confirmDelete) return
@@ -1244,6 +1258,19 @@ export default function PmPrograms() {
               <button onClick={() => !saving && setModalOpen(false)} className="p-1.5 rounded-lg hover:bg-[var(--input-bg)] text-[var(--text-muted)]"><X size={18} /></button>
             </div>
             <form onSubmit={submit} className="space-y-5">
+              <PmVehicleLookup key={`${activeCountry}:${editing?.id || 'new'}`} value={form.asset_no} country={activeCountry}
+                onChange={value => { setSelectedVehicle(null); setTemplateId(''); setField('asset_no', value) }}
+                onSelect={vehicle => {
+                  const profile = pmVehicleProfile(vehicle)
+                  setSelectedVehicle(vehicle); setTemplateId('')
+                  setForm(f => ({ ...f, asset_no: vehicle.asset_no, site: vehicle.site || '', asset_category: profile.category || '',
+                    ...(editing?.asset_no === vehicle.asset_no && editing?.country === vehicle.country ? {} :
+                      { meter_source: 'none', meter_interval: '', last_done_meter: '', next_due_meter: '', last_done: '', next_due: '' }) }))
+                }} />
+              {selectedVehicle && <p className="text-sm text-[var(--text-secondary)]">
+                {selectedVehicle.asset_no} · {selectedVehicle.vehicle_type || 'Vehicle type not recorded'} · {[selectedVehicle.make, selectedVehicle.model, selectedVehicle.site, selectedVehicle.country].filter(Boolean).join(' · ')}
+                <span className="block text-xs mt-1">Choose the service below. Confirm its intervals against this vehicle’s service specification; current readings are not the last service reading.</span>
+              </p>}
               {/* Start from a template (create mode only) */}
               {!editing && (
                 <div className="rounded-xl border border-indigo-800/40 bg-indigo-500/5 p-4">
@@ -1252,7 +1279,7 @@ export default function PmPrograms() {
                     <h3 className="text-sm font-semibold text-[var(--text-primary)]">Start from a template</h3>
                   </div>
                   <p className="text-[11px] text-[var(--text-muted)] mb-3">
-                    Editable starting points from common OEM service practice, not live data. Pick one to prefill the plan, then adjust every field before saving.
+                    Suggested service intervals, not a verified specification for this vehicle. Select its service and confirm the intervals before saving. The date or applicable meter limit that is reached first determines when service is due.
                   </p>
                   <div className="flex flex-wrap items-end gap-3">
                     <div className="flex-1 min-w-[240px]">
@@ -1281,12 +1308,8 @@ export default function PmPrograms() {
                   <input className="input w-full" placeholder="e.g. 250 hour generator service" value={form.name} maxLength={200} onChange={(e) => setField('name', e.target.value)} />
                 </div>
                 <div>
-                  <label className="label">Asset number</label>
-                  <input className="input w-full" placeholder="e.g. GEN-014" value={form.asset_no} maxLength={120} onChange={(e) => setField('asset_no', e.target.value)} />
-                </div>
-                <div>
                   <label className="label">Asset category</label>
-                  <select className="input w-full" value={form.asset_category} onChange={(e) => setField('asset_category', e.target.value)}>
+                  <select className="input w-full" value={form.asset_category} disabled={Boolean(vehicleProfile?.category)} onChange={(e) => setField('asset_category', e.target.value)}>
                     <option value="">Select category</option>
                     {ASSET_CATEGORIES.map((c) => <option key={c} value={c}>{ASSET_CATEGORY_LABELS[c]}</option>)}
                   </select>
@@ -1346,7 +1369,7 @@ export default function PmPrograms() {
                   <div>
                     <label className="label">Meter source</label>
                     <select className="input w-full" value={form.meter_source} onChange={(e) => setField('meter_source', e.target.value)}>
-                      {METER_SOURCES.map((m) => <option key={m} value={m}>{METER_SOURCE_LABELS[m]}</option>)}
+                      {METER_SOURCES.filter(m => !vehicleProfile || vehicleProfile.sources.includes(m)).map((m) => <option key={m} value={m}>{METER_SOURCE_LABELS[m]}</option>)}
                     </select>
                   </div>
                   {form.meter_source !== 'none' && (
@@ -1369,6 +1392,11 @@ export default function PmPrograms() {
               </div>
 
               {/* Tasks + cost */}
+              <button type="button" className="btn-secondary text-sm" onClick={() => {
+                const next = pmNextDueFromService(form)
+                if (!Object.keys(next).length) { setFormError('Enter the last service date or reading and its interval to calculate the next due.'); return }
+                setForm(f => ({ ...f, ...next })); setFormError('')
+              }}>Calculate next due from last service</button>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="label">Task checklist</label>

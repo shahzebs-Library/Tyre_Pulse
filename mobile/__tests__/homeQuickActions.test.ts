@@ -145,7 +145,7 @@ describe('a quick-action tile renders its label and nothing else', () => {
 
 // ── 2. Colour means something ────────────────────────────────────────────────
 
-const SIGNAL_TILES = new Set(['accidents', 'reportAccident', 'alerts', 'approvals'])
+const SIGNAL_TILES = new Set(['accidents', 'reportAccident', 'alerts', 'approvals', 'checklistApprovals'])
 
 describe('tile colour is reserved for signal, not decoration', () => {
   it('no tile carries a decorative tint any more', () => {
@@ -266,6 +266,16 @@ describe('every locale key Home asks for exists in BOTH locales', () => {
 // ── 5. Behaviour that must survive a design pass ─────────────────────────────
 
 describe('the design pass changed presentation only', () => {
+  it('offers distinct inspection and checklist approval destinations under the approval permission', () => {
+    const approvals = tiles.filter(t => t.module === 'approvals')
+    expect(approvals.map(t => t.route)).toEqual([
+      '/(app)/inspection/approvals', '/(app)/checklists/approvals',
+    ])
+    expect(new Set(approvals.map(tileId)).size).toBe(2)
+    expect(en.modules.home.qa.approvals.label).toBe('Inspection Approvals')
+    expect(en.modules.home.qa.checklistApprovals.label).toBe('Checklist Approvals')
+  })
+
   it('tiles are still gated by the effective access resolver', () => {
     expect(src).toMatch(/QUICK_ACTIONS\.filter\(a => a\.section === key && canAccess\(a\.module\)\)/)
   })

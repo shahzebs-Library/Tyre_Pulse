@@ -97,7 +97,7 @@ function ChecklistApprovalReviewScreen() {
 
   const textAlign = isRTL ? 'right' : 'left'
   const dateLocale = isRTL ? 'ar-SA' : 'en-GB'
-  const allowed = canApproveChecklists(profile?.role)
+  const allowed = isSuperAdmin || canApproveChecklists(profile?.role)
 
   const load = useCallback(async () => {
     setLoadError(null)

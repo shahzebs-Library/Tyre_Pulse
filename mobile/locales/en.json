@@ -842,7 +842,10 @@
           "label": "Admin Console"
         },
         "approvals": {
-          "label": "Approvals"
+          "label": "Inspection Approvals"
+        },
+        "checklistApprovals": {
+          "label": "Checklist Approvals"
         },
         "pm": {
           "label": "Maintenance Due"

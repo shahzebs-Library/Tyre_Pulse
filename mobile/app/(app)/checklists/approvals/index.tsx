@@ -33,6 +33,7 @@ import { useTheme } from '../../../../contexts/ThemeContext'
 import { Theme, spacing, radius, typography, StatusKind } from '../../../../lib/theme'
 import { Screen, AppText, Badge, EmptyState, ErrorState, Loading, BackButton } from '../../../../components/ui'
 import { canApproveChecklists } from '../../../../lib/permissions'
+import { listMyPolicyApprovals } from '../../../../lib/governedApprovals'
 import { listPendingApprovals, getTemplate, ChecklistSubmission, ChecklistTemplate } from '../../../../lib/checklists'
 import { canDecide, isTwoStage, statusSummary } from '../../../../lib/checklistApproval'
 import { toUserMessage } from '../../../../lib/safeError'
@@ -121,6 +122,7 @@ function ChecklistApprovalsScreen() {
   const router = useRouter()
 
   const [items, setItems] = useState<ChecklistSubmission[]>([])
+  const [policyMine, setPolicyMine] = useState<Set<string>>(new Set())
   const [templates, setTemplates] = useState<Record<string, ChecklistTemplate | null>>({})
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -146,7 +148,8 @@ function ChecklistApprovalsScreen() {
     setError(null)
     setNotEnabled(false)
     try {
-      const rows = await listPendingApprovals(profile?.country)
+      const [rows, assigned] = await Promise.all([listPendingApprovals(profile?.country), listMyPolicyApprovals()])
+      setPolicyMine(new Set(assigned.filter(row => row.entity_type === 'checklist').map(row => row.entity_id)))
       setItems(prev => reconcileById(prev, rows))
 
       // Templates decide the WORDING of a waiting state (a one-stage sheet is
@@ -191,10 +194,10 @@ function ChecklistApprovalsScreen() {
   const mine = useMemo(() => {
     const set = new Set<string>()
     for (const s of items) {
-      if (canDecide(templateFor(s), s, profile?.role, { isSuperAdmin })) set.add(s.id)
+      if (s.approval_policy_required ? policyMine.has(s.id) : canDecide(templateFor(s), s, profile?.role, { isSuperAdmin })) set.add(s.id)
     }
     return set
-  }, [items, templateFor, profile?.role, isSuperAdmin])
+  }, [items, policyMine, templateFor, profile?.role, isSuperAdmin])
 
   const visible = useMemo(
     () => (filter === 'mine' ? items.filter(s => mine.has(s.id)) : items),

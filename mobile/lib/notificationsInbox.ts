@@ -107,6 +107,7 @@ export function notificationRoute(n: Pick<AppNotification, 'type' | 'entity_type
     return '/(app)/profile'
   }
   if (t === 'wash_due') return '/(app)/washing'
+  if (t === 'approval' && (k === 'work_order' || k === 'tyre_change')) return '/(app)/approvals'
 
   // 2. A decision on YOUR OWN submission goes to your own-work history, not the
   //    generic hub; a checklist decision goes to the checklists hub.

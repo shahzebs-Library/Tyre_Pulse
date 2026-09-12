@@ -352,6 +352,8 @@ export async function submitChecklist(input: SubmitInput): Promise<{ id: string;
 // ── Approval (V212) ─────────────────────────────────────────────────────────
 
 export interface ChecklistSubmission {
+  approval_policy_required?: boolean
+  approval_workflow_id?: string | null
   id: string
   template_id: string | null
   template_name: string | null
@@ -393,7 +395,7 @@ export interface ChecklistSubmission {
 const SUBMISSION_COLS =
   'id,template_id,template_name,template_version,title,site,asset_no,status,answers,photos,notes,signatures,signature_data,printed_name,' +
   'submitted_by,submitted_at,score_pct,score_passed,approval_status,document_no,approver_name,' +
-  'approver_signature,approved_at,supervisor_name,supervisor_signature,supervisor_at,review_note,locked'
+  'approver_signature,approved_at,supervisor_name,supervisor_signature,supervisor_at,review_note,locked,approval_policy_required,approval_workflow_id'
 
 /** Submissions awaiting approval (require_approval templates), newest first. */
 export async function listPendingApprovals(country?: string | null): Promise<ChecklistSubmission[]> {

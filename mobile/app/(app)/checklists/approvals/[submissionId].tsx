@@ -31,6 +31,8 @@ import { useAuth } from '../../../../contexts/AuthContext'
 import { useLanguage } from '../../../../contexts/LanguageContext'
 import { useGoBack } from '../../../../hooks/useGoBack'
 import { canApproveChecklists } from '../../../../lib/permissions'
+import { ApprovalReview, getApprovalReview } from '../../../../lib/governedApprovals'
+import GovernedApprovalPanel from '../../../../components/GovernedApprovalPanel'
 import { toUserMessage } from '../../../../lib/safeError'
 import SignatureField from '../../../../components/SignatureField'
 import SignatureView from '../../../../components/SignatureView'
@@ -83,6 +85,8 @@ function ChecklistApprovalReviewScreen() {
   const [template, setTemplate] = useState<ChecklistTemplate | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [policyReview, setPolicyReview] = useState<ApprovalReview | null>(null)
+  const reviewRequest = useRef(0)
 
   const [approverSig, setApproverSig] = useState<string | null>(null)
   const [approverName, setApproverName] = useState(profile?.full_name || profile?.username || '')
@@ -100,22 +104,29 @@ function ChecklistApprovalReviewScreen() {
   const allowed = isSuperAdmin || canApproveChecklists(profile?.role)
 
   const load = useCallback(async () => {
+    const current = ++reviewRequest.current
+    setLoading(true)
     setLoadError(null)
     try {
-      const s = (await getSubmission(submissionId)) as SubmissionRow | null
+      const review = await getApprovalReview('checklist', submissionId)
+      const s = (review.mode === 'enforced' ? review.document : await getSubmission(submissionId)) as SubmissionRow | null
+      if (current !== reviewRequest.current) return
+      setPolicyReview(review.mode === 'enforced' ? review : null)
       if (!s) { setSubmission(null); setLoading(false); return }
       setSubmission(s)
-      if (s.template_id) {
-        try { setTemplate(await getTemplate(s.template_id)) } catch { /* labels degrade to field ids */ }
+      if (review.mode === 'enforced') {
+        setTemplate(review.document.checklist_templates as ChecklistTemplate)
+      } else if (s.template_id) {
+        try { const loadedTemplate = await getTemplate(s.template_id); if (current === reviewRequest.current) setTemplate(loadedTemplate) } catch { /* labels degrade to field ids */ }
       }
     } catch (e: any) {
-      setLoadError(toUserMessage(e, tRef.current('modules.checklistApprovals.loadOneError')))
+      if (current === reviewRequest.current) setLoadError(toUserMessage(e, tRef.current('modules.checklistApprovals.loadOneError')))
     } finally {
-      setLoading(false)
+      if (current === reviewRequest.current) setLoading(false)
     }
-  }, [submissionId])
+  }, [submissionId, profile?.id, profile?.role, profile?.country, profile?.site])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { load(); return () => { reviewRequest.current += 1 } }, [load])
 
   const tplLike = template as unknown as TemplateLike | null
   const twoStage = isTwoStage(template)
@@ -494,7 +505,7 @@ function ChecklistApprovalReviewScreen() {
           )}
 
           {/* Decision */}
-          {!stage ? (
+          {policyReview ? <GovernedApprovalPanel review={policyReview} onRefresh={load} /> : !stage ? (
             <View style={[styles.card, styles.decidedCard]}>
               <Ionicons
                 name={submission.approval_status === 'approved' ? 'checkmark-circle' : 'close-circle'}

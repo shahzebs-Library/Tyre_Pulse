@@ -169,6 +169,11 @@ const FIXTURES: { name: string; type: string | null; entity_type: string | null 
 ]
 
 describe('notificationRoute only returns routes that exist', () => {
+  it('opens the operational approval queue for policy approval requests without redirecting ordinary work updates', () => {
+    expect(notificationRoute({ type: 'approval', entity_type: 'work_order' })).toBe('/(app)/approvals')
+    expect(notificationRoute({ type: 'approval', entity_type: 'tyre_change' })).toBe('/(app)/approvals')
+    expect(notificationRoute({ type: 'work_order_update', entity_type: 'work_order' })).toBe('/(app)/workshop')
+  })
   it.each(FIXTURES)('$name resolves (or is honestly null)', ({ type, entity_type }) => {
     const route = notificationRoute({ type, entity_type })
     if (route === null) return          // "nowhere sensible to go" is allowed

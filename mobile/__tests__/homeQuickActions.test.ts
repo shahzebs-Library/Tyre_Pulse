@@ -145,7 +145,7 @@ describe('a quick-action tile renders its label and nothing else', () => {
 
 // ── 2. Colour means something ────────────────────────────────────────────────
 
-const SIGNAL_TILES = new Set(['accidents', 'reportAccident', 'alerts', 'approvals', 'checklistApprovals'])
+const SIGNAL_TILES = new Set(['accidents', 'reportAccident', 'alerts', 'approvals', 'checklistApprovals', 'operationalApprovals'])
 
 describe('tile colour is reserved for signal, not decoration', () => {
   it('no tile carries a decorative tint any more', () => {
@@ -269,9 +269,9 @@ describe('the design pass changed presentation only', () => {
   it('offers distinct inspection and checklist approval destinations under the approval permission', () => {
     const approvals = tiles.filter(t => t.module === 'approvals')
     expect(approvals.map(t => t.route)).toEqual([
-      '/(app)/inspection/approvals', '/(app)/checklists/approvals',
+      '/(app)/inspection/approvals', '/(app)/checklists/approvals', '/(app)/approvals',
     ])
-    expect(new Set(approvals.map(tileId)).size).toBe(2)
+    expect(new Set(approvals.map(tileId)).size).toBe(3)
     expect(en.modules.home.qa.approvals.label).toBe('Inspection Approvals')
     expect(en.modules.home.qa.checklistApprovals.label).toBe('Checklist Approvals')
   })

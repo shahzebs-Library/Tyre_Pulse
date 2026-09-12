@@ -847,6 +847,9 @@
         "checklistApprovals": {
           "label": "Checklist Approvals"
         },
+        "operationalApprovals": {
+          "label": "Operational Approvals"
+        },
         "pm": {
           "label": "Maintenance Due"
         },

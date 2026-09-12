@@ -847,6 +847,9 @@
         "checklistApprovals": {
           "label": "اعتمادات قوائم الفحص"
         },
+        "operationalApprovals": {
+          "label": "موافقات العمليات"
+        },
         "pm": {
           "label": "الصيانة المستحقة"
         },

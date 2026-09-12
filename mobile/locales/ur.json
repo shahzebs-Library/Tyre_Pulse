@@ -392,7 +392,8 @@
       "primaryAlertsS": "فلیٹ ٹائر خطرات",
       "qa": {
         "approvals": { "label": "معائنوں کی منظوری" },
-        "checklistApprovals": { "label": "چیک لسٹ کی منظوری" }
+        "checklistApprovals": { "label": "چیک لسٹ کی منظوری" },
+        "operationalApprovals": { "label": "عملی درخواستوں کی منظوری" }
       }
     },
     "tasks": {

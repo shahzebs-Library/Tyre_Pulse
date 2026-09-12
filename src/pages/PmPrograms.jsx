@@ -378,7 +378,7 @@ export default function PmPrograms() {
   }), [costMode, activeCurrency])
 
   // ── PM analytics (over loaded plans + the fetched service records) ────────────
-  const records = history
+  const records = useMemo(() => history || [], [history])
   const hasServiceData = records.length > 0
   const pmCatCost = useMemo(() => costByCategory(plans, records), [plans, records])
   const pmMonthlyCost = useMemo(() => monthlyServiceCost(records, { now: nowTs, months: 12 }), [records, nowTs])

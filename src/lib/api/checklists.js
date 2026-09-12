@@ -5,7 +5,8 @@
  * through the Universal Approval Engine (entity_type 'checklist_submission').
  * Explicit column lists, null-safe country scoping — mirrors stock.js / tyres.js.
  */
-import { supabase, unwrap, applyCountry } from './_client'
+import { supabase, unwrap, applyCountry, fetchAllPages } from './_client'
+import { submissionDay } from '../checklistMonthly'
 
 // name_i18n / description_i18n / option_sets carry the template's translations:
 // the checklist is read on the floor by mechanics who read Arabic, Hindi or
@@ -248,28 +249,40 @@ export async function deleteTemplate(id) {
 
 // ── Submissions ─────────────────────────────────────────────────────────────
 
-/** List submissions (newest first), optionally by template/country. */
 /**
- * Submissions for a template.
- *
- * `assetNo`, `from` and `to` bound the read SERVER-side, and on the monthly
- * grid that is not an optimisation - it is the difference between a true report
- * and a false one. Filtering a capped list in the browser means the rows past
- * the cap never arrive, and a day whose submission did not arrive is drawn as a
- * day nobody checked: the report inventing the very gap it exists to find. A
- * month is at most 31 days of submissions, so bounded it cannot reach the cap.
+ * Submission register, newest received first. `from`/`to` filter receipt dates.
+ * Operational month reports use listMonthlySubmissions to include late syncs.
  */
-export async function listSubmissions({ country, templateId, assetNo, from, to, limit = 200 } = {}) {
-  let q = supabase.from('checklist_submissions').select(SUBMISSION_COLS)
-  if (templateId) q = q.eq('template_id', templateId)
-  if (assetNo) q = q.eq('asset_no', assetNo)
-  // created_at is a timestamp, so an inclusive end date has to reach the end of
-  // that day - `lte` on the bare date would silently drop everything submitted
-  // after midnight on the last day of the month.
-  if (from) q = q.gte('created_at', `${String(from).slice(0, 10)}T00:00:00.000Z`)
-  if (to) q = q.lte('created_at', `${String(to).slice(0, 10)}T23:59:59.999Z`)
-  q = applyCountry(q, country)
-  return unwrap(await q.order('created_at', { ascending: false }).limit(limit)) || []
+export async function listSubmissions({ country, templateId, assetNo, from, to, limit } = {}) {
+  const query = () => {
+    let q = supabase.from('checklist_submissions').select(SUBMISSION_COLS)
+    if (templateId) q = q.eq('template_id', templateId)
+    if (assetNo) q = q.eq('asset_no', assetNo)
+    if (from) q = q.gte('created_at', `${String(from).slice(0, 10)}T00:00:00.000Z`)
+    if (to) q = q.lte('created_at', `${String(to).slice(0, 10)}T23:59:59.999Z`)
+    q = applyCountry(q, country)
+    return q.order('created_at', { ascending: false }).order('id')
+  }
+  // Callers requesting the latest single sheet retain their bounded read.
+  if (limit != null) return unwrap(await query().limit(limit)) || []
+  const result = await fetchAllPages((start, end) => query().range(start, end),
+    { pageSize: 500, max: 10000, concurrency: 1 })
+  const rows = unwrap(result) || []
+  if (result.truncated) throw new Error('Checklist history exceeds the display limit. Narrow the filters.')
+  return rows
+}
+
+/** Offline sheets may arrive months after their recorded checklist date. */
+export async function listMonthlySubmissions({ country, templateId, fields, year, month } = {}) {
+  if (!templateId) return []
+  const result = await fetchAllPages((from, to) => applyCountry(
+    supabase.from('checklist_submissions').select(SUBMISSION_COLS)
+      .eq('template_id', templateId)
+      .order('created_at', { ascending: false }).order('id'), country,
+  ).range(from, to), { pageSize: 500, max: 10000, concurrency: 1 })
+  const rows = unwrap(result) || []
+  if (result.truncated) throw new Error('This checklist history is too large to produce a complete month report.')
+  return rows.filter(row => submissionDay(row, fields, { year, month }).day != null)
 }
 
 export async function getSubmission(id) {

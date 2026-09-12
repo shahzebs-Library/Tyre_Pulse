@@ -13,6 +13,26 @@
     ]
   },
   {
+    "id": "2026.09.12.1",
+    "date": "2026-09-12",
+    "changes": [
+      {
+        "modules": ["checklists"],
+        "text": {
+          "en": "Monthly checklist history includes older sheets synced later, using the date recorded on the checklist. The submissions list distinguishes checklist and received dates.",
+          "ar": "يشمل سجل قوائم الفحص الشهري النماذج القديمة التي تمت مزامنتها لاحقاً وفق التاريخ المسجل في القائمة. تعرض قائمة الإرسالات تاريخ الفحص وتاريخ الاستلام بشكل منفصل."
+        }
+      },
+      {
+        "modules": ["inspection_planner"],
+        "text": {
+          "en": "Inspection planning now consistently warns when loaded history reaches its limit.",
+          "ar": "يعرض مخطط الفحص تحذيراً واضحاً عند بلوغ حد السجلات المحملة."
+        }
+      }
+    ]
+  },
+  {
     "id": "2026.09.11.1",
     "date": "2026-09-11",
     "changes": [

@@ -44,7 +44,7 @@ function parseIsoDay(value) {
  * timestamp is only the fallback for a record that carries no date field, and
  * `dateBasis` says which one was used so a reader is never left guessing.
  */
-export function submissionDay(sub, fields, { year, month } = {}) {
+export function submissionDate(sub, fields) {
   const list = Array.isArray(fields) ? fields : []
   const answers = sub?.answers && typeof sub.answers === 'object' ? sub.answers : {}
   let basis = 'submitted'
@@ -53,6 +53,13 @@ export function submissionDay(sub, fields, { year, month } = {}) {
   if (dateField) { parsed = parseIsoDay(answers[dateField.id]); if (parsed) basis = 'sheet_date' }
   if (!parsed) parsed = parseIsoDay(sub?.submitted_at || sub?.created_at)
   if (!parsed) return { day: null, basis: 'unknown' }
+  return { ...parsed, basis }
+}
+
+export function submissionDay(sub, fields, { year, month } = {}) {
+  const parsed = submissionDate(sub, fields)
+  const { basis } = parsed
+  if (parsed.day == null) return parsed
   if (year != null && month != null && (parsed.year !== Number(year) || parsed.month !== Number(month))) {
     return { day: null, basis, outOfMonth: true }
   }

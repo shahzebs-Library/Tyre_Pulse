@@ -13,7 +13,7 @@ import { isValueField } from '../lib/checklist/fieldTypes'
 import { CHECKLIST_LANGS } from '../lib/checklist/checklistI18n'
 import { resolveChecklistIcon, checklistIconComponent } from '../lib/checklist/checklistIcons'
 import { roleTargetLabel } from '../lib/checklist/checklistRoles'
-import { gridFields } from '../lib/checklistMonthly'
+import { gridFields, submissionDate } from '../lib/checklistMonthly'
 import { renderChecklistPdf } from '../lib/checklistPdf'
 import { toUserMessage } from '../lib/safeError'
 import { useTenant } from '../contexts/TenantContext'
@@ -67,6 +67,17 @@ function fmtDate(v) {
   return Number.isNaN(d.getTime()) ? '-' : d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
+function ChecklistDates({ submission, template }) {
+  const date = submissionDate(submission, template?.fields)
+  const sheetDate = date.basis === 'sheet_date'
+    ? `${date.year}-${String(date.month).padStart(2, '0')}-${String(date.day).padStart(2, '0')}`
+    : null
+  return <>
+    {sheetDate && <div className="text-[var(--text-primary)]">Checklist: {fmtDate(`${sheetDate}T12:00:00`)}</div>}
+    <div>Received: {fmtDate(submission.submitted_at || submission.created_at)}</div>
+  </>
+}
+
 const TABS = [
   { key: 'templates', label: 'Templates', icon: Layers },
   { key: 'submissions', label: 'Recent Submissions', icon: Inbox },
@@ -111,7 +122,7 @@ export default function Checklists() {
     try {
       const [tpls, subs] = await Promise.all([
         listTemplates({ status: 'published', country: activeCountry }),
-        listSubmissions({ country: activeCountry }).catch(() => []),
+        listSubmissions({ country: activeCountry }),
       ])
       setTemplates(Array.isArray(tpls) ? tpls : [])
       setSubmissions(Array.isArray(subs) ? subs : [])
@@ -446,7 +457,7 @@ export default function Checklists() {
                   <th className="table-header text-left">Checklist</th>
                   <th className="table-header text-left">Asset / Site</th>
                   <th className="table-header text-left">Status</th>
-                  <th className="table-header text-left">Submitted</th>
+                  <th className="table-header text-left">Checklist / received date</th>
                   <th className="table-header"></th>
                 </tr>
               </thead>
@@ -474,7 +485,7 @@ export default function Checklists() {
                       <span className={`badge text-xs ${statusBadge(s.status)}`}>{prettyStatus(s.status)}</span>
                     </td>
                     <td className="table-cell whitespace-nowrap text-[var(--text-muted)]">
-                      {fmtDate(s.submitted_at || s.created_at)}
+                      <ChecklistDates submission={s} template={templates.find(t => t.id === s.template_id)} />
                     </td>
                     <td className="table-cell text-right whitespace-nowrap">
                       <button

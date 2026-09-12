@@ -31,7 +31,7 @@ export async function fetchAllPages(pageFn, { pageSize = 1000, max = Infinity, c
     const { data, error } = await pageFn(0, pageSize - 1)
     if (error) return { data: all, error, truncated: false }
     if (data?.length) all.push(...data)
-    if (!data || data.length < pageSize) return { data: sliceMax(), error: null, truncated: false }
+    if (!data || data.length < pageSize) return { data: sliceMax(), error: null, truncated: all.length > max }
     if (all.length >= max) return { data: sliceMax(), error: null, truncated: true }
   }
 
@@ -54,7 +54,7 @@ export async function fetchAllPages(pageFn, { pageSize = 1000, max = Infinity, c
     if (all.length >= max) return { data: sliceMax(), error: null, truncated: true }
     nextPage += win
   }
-  return { data: sliceMax(), error: null, truncated: false }
+  return { data: sliceMax(), error: null, truncated: all.length > max }
 }
 
 /**

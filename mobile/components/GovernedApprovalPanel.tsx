@@ -34,7 +34,7 @@ export default function GovernedApprovalPanel({ review, onRefresh, approvalBlock
   const accessKey = JSON.stringify([profile?.id, profile?.role, profile?.country, review.stage_token, review.revision])
   useEffect(() => {
     const current = ++generation.current
-    setReady(false); setPending(null); setNote(''); setSignature(null); setAction(null); setError(''); setRefused(false)
+    setReady(false); setBusy(false); setReceipt(null); setPending(null); setNote(''); setSignature(null); setAction(null); setError(''); setRefused(false)
     readItem(key).then(result => {
       if (current !== generation.current) return
       if (result.status !== 'ok' && result.status !== 'absent') throw new Error('A saved decision could not be read. Retry online before signing again.')

@@ -28,7 +28,7 @@ import {
   submissionSections, submissionSignatures, templateTitle, documentNo,
   templateFieldsOf, templateFromSubmission,
 } from './checklistView'
-import { gridFields, monthlySummary, cellText, isNotOk, isNotApplicable, needsAttention } from './checklistMonthly'
+import { gridFields, monthlySummary, cellText, isNotOk, isNotApplicable, needsAttention, submissionDate } from './checklistMonthly'
 import { checklistReviewIssues } from './checklist/fieldTypes'
 import { langMeta, normalizeLang } from './checklist/checklistI18n'
 
@@ -107,11 +107,10 @@ export function checklistFileName(parts, { lang = 'en' } = {}) {
 }
 
 /** The date a sheet belongs to, as YYYY-MM-DD. Blank when nothing was recorded. */
-function fileDate(v) {
-  if (!v) return ''
-  const d = new Date(v)
-  if (Number.isNaN(d.getTime())) return ''
-  return d.toISOString().slice(0, 10)
+function fileDate(sub, fields) {
+  const { year, month, day } = submissionDate(sub, fields)
+  if (day == null) return ''
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
 
 function fmtDateTime(v) {
@@ -233,7 +232,7 @@ export async function renderChecklistPdf({
   header()
   let y = 30
 
-  const need = (h) => { if (y + h > ph - 18) { doc.addPage(); header(); y = 30 } }
+  const need = (h, bottom = 18) => { if (y + h > ph - bottom) { doc.addPage(); header(); y = 30 } }
 
   const sectionBar = (label) => {
     need(12)
@@ -515,7 +514,9 @@ export async function renderChecklistPdf({
 
   // ── Signatures: every one of them ─────────────────────────────────────────
   const sigs = submissionSignatures(sub, { template, lang: language })
-  need(sigs.length ? 47 : 18)
+  const unsignedOnly = sigs.length > 0 && sigs.every((s) => !s.data)
+  // Compact unsigned entries can use the space up to 4 mm above the footer rule.
+  need(sigs.length ? (unsignedOnly ? 21 : 47) : 18, unsignedOnly ? 14 : 18)
   sectionBar('Signatures')
   if (!sigs.length) {
     doc.setFontSize(7.5); doc.setFont('helvetica', 'italic'); doc.setTextColor(...MUTED)
@@ -525,15 +526,26 @@ export async function renderChecklistPdf({
     const cols = Math.min(3, sigs.length)
     const gap = 6
     const boxW = (pw - MX * 2 - gap * (cols - 1)) / cols
-    const boxH = 34
+    const boxH = unsignedOnly ? 12 : 34
     let col = 0
     let top = y
     for (const s of sigs) {
-      if (col === 0) { need(boxH + 4); top = y }
+      if (col === 0) { need(boxH, unsignedOnly ? 14 : 18); top = y }
       const x = MX + col * (boxW + gap)
       doc.setDrawColor(...LINE); doc.setLineWidth(0.3)
       doc.setFillColor(255, 255, 255)
       doc.rect(x, top, boxW, boxH, 'FD')
+      if (unsignedOnly) {
+        doc.setFontSize(6); doc.setFont('helvetica', 'normal'); doc.setTextColor(...MUTED)
+        doc.text(doc.splitTextToSize(pick(s.label, s.label, state), boxW - 4)[0] || '', x + 2, top + 3.3)
+        doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(...INK)
+        doc.text(doc.splitTextToSize(s.printedName || 'Name not recorded', boxW - 4)[0] || '', x + 2, top + 7)
+        doc.setFontSize(6); doc.setFont('helvetica', 'italic'); doc.setTextColor(...MUTED)
+        doc.text('Not signed', x + 2, top + 10.2)
+        col += 1
+        if (col >= cols) { col = 0; y = top + boxH + gap }
+        continue
+      }
       if (s.data && /^data:image\//i.test(s.data)) {
         try { doc.addImage(s.data, /png/i.test(s.data) ? 'PNG' : 'JPEG', x + 2, top + 2, boxW - 4, 16, undefined, 'FAST') }
         catch { /* a malformed data url just leaves the box empty */ }
@@ -586,7 +598,7 @@ export async function renderChecklistPdf({
   // only added when there is no number to carry it (it is already inside one).
   const docRefName = documentNo(sub)
   const name = filename || checklistFileName(
-    [title, docRefName || sub.asset_no || sub.id, fileDate(sub.submitted_at || sub.created_at)],
+    [title, docRefName || sub.asset_no || sub.id, fileDate(sub, fields)],
     { lang: language },
   )
   if (save) doc.save(`${name}.pdf`)

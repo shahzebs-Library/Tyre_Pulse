@@ -1,5 +1,18 @@
 [
   {
+    "id": "2026.09.12.2",
+    "date": "2026-09-12",
+    "changes": [
+      {
+        "modules": ["approvals", "work_orders", "tyre_records", "settings", "data_cleaning"],
+        "text": {
+          "en": "Approval, administration and import workflows now have their required backend services. Access Control capability saves use company settings while retaining existing permission rules and feature flags.",
+          "ar": "أصبحت خدمات الموافقات والإدارة واستيراد البيانات متاحة في الخادم. تُحفظ صلاحيات التحكم في الوصول ضمن إعدادات الشركة مع الحفاظ على قواعد الصلاحيات والميزات الحالية."
+        }
+      }
+    ]
+  },
+  {
     "id": "2026.09.11.1",
     "date": "2026-09-11",
     "changes": [

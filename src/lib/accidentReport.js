@@ -585,15 +585,37 @@ export const isClosedRow = (r) => isIncidentClosed(r || {})
  * in the table and another in the report.
  */
 export function caseAgeDays(r, now = Date.now()) {
+  const ms = caseAgeMs(r, now)
+  return ms == null ? null : Math.floor(ms / 86400000)
+}
+
+/**
+ * The same open-vs-settled duration as caseAgeDays, in raw milliseconds - the
+ * base every "how long has this case been open" reading (the register's days
+ * column, this function's own caseAgeDays, and the case-header "Open Xd Yh"
+ * chip) derives from, so none of them can ever disagree about start/end.
+ */
+export function caseAgeMs(r, now = Date.now()) {
   if (!r?.incident_date) return null
   const start = new Date(r.incident_date)
   if (isNaN(start)) return null
   if (isCaseSettled(r)) {
     if (!r.release_date) return null
     const rel = new Date(r.release_date)
-    return isNaN(rel) ? null : Math.max(0, Math.floor((rel - start) / 86400000))
+    return isNaN(rel) ? null : Math.max(0, rel - start)
   }
-  return Math.max(0, Math.floor((new Date(now) - start) / 86400000))
+  return Math.max(0, new Date(now) - start)
+}
+
+/** "Open Xd Yh" (or "Xh" under a day) for the case-header chip - null when
+ *  caseAgeMs is null (no incident date, or settled with no release date). */
+export function caseAgeLabel(r, now = Date.now()) {
+  const ms = caseAgeMs(r, now)
+  if (ms == null) return null
+  const totalHours = Math.floor(ms / 3600000)
+  const days = Math.floor(totalHours / 24)
+  const hours = totalHours % 24
+  return days > 0 ? `${days}d ${hours}h` : `${hours}h`
 }
 
 function avgDays(records, filterFn) {

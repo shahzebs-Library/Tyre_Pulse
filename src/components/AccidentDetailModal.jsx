@@ -48,6 +48,7 @@ import CaseCompletionPanel from './accidents/CaseCompletionPanel'
 import CaseWorkstreamsPanel from './accidents/CaseWorkstreamsPanel'
 import CaseTeamDistributionPanel from './accidents/CaseTeamDistributionPanel'
 import CasePortalShare from './accidents/CasePortalShare'
+import CaseSlaHeader from './accidents/CaseSlaHeader'
 import AccidentInsurerRecord from './insurance/AccidentInsurerRecord'
 import { loadCase } from '../lib/api/accidentCase'
 import { updateAccidentForPage } from '../lib/api/accidents'
@@ -614,6 +615,7 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
                 <DelayBadge />
                 {wf.isActive && <span className="badge text-xs bg-purple-900/50 text-purple-300 border border-purple-700/50 flex items-center gap-1"><Lock size={10} /> In approval</span>}
               </div>
+              <CaseSlaHeader acc={acc} workstreams={caseData?.workstreams} />
             </div>
           </div>
           <div className="grid grid-cols-3 gap-4 rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)]/50 px-4 py-3">

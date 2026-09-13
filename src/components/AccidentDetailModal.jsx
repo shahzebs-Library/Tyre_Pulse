@@ -54,6 +54,7 @@ import InsuranceClaimPanel from './accidents/InsuranceClaimPanel'
 import WorkshopAssessmentPanel from './accidents/WorkshopAssessmentPanel'
 import CaseCommunicationsPanel from './accidents/CaseCommunicationsPanel'
 import HandoverPanel from './accidents/HandoverPanel'
+import DamageMapPanel from './accidents/DamageMapPanel'
 import AccidentInsurerRecord from './insurance/AccidentInsurerRecord'
 import { loadCase } from '../lib/api/accidentCase'
 import { updateAccidentForPage } from '../lib/api/accidents'
@@ -154,6 +155,10 @@ const TABS = [
   // Workshop receipt / vehicle handover inspection, signed on the spot.
   // Rendered by HandoverPanel.
   { key: 'handover', label: 'Dispatch & Handover', icon: Truck },
+  // Orthographic multi-view / component-tapping damage marker. Rendered by
+  // DamageMapPanel, writing into the SAME accident_damage_assessments row the
+  // Workshop Assessment tab reads read-only.
+  { key: 'damage_map', label: 'Mark Damage', icon: MapPin },
   { key: 'tracker',  label: 'Tracker', icon: ClipboardList },
   { key: 'repair',   label: 'Repair & Insurance', icon: ShieldAlert },
   { key: 'claim',    label: 'Claim & Recovery', icon: Briefcase },
@@ -543,6 +548,14 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
         {tab === 'handover' && (
           <HandoverPanel
             accidentId={acc.id}
+            elevated={elevated}
+            onChanged={() => { load(); onChanged?.() }}
+          />
+        )}
+        {tab === 'damage_map' && (
+          <DamageMapPanel
+            accidentId={acc.id}
+            vehicleType={acc.vehicle_type}
             elevated={elevated}
             onChanged={() => { load(); onChanged?.() }}
           />

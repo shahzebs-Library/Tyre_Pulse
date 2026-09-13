@@ -17,8 +17,8 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   X, Plus, Trash2, Send, Lock, CheckCircle2, XCircle,
-  ShieldCheck, Hourglass, FileText, Wrench, MessageSquare, Briefcase, History, User, ClipboardList,
-  ArrowLeft, AlertOctagon, ChevronRight, Download, Loader2, ShieldAlert, Clock, Pencil,
+  ShieldCheck, Hourglass, FileText, Wrench, MessageSquare, History, User, ClipboardList,
+  ArrowLeft, AlertOctagon, ChevronRight, Download, Loader2, Clock, Pencil,
   GitBranch, MapPin, Ban, Hash, Users, FileDown, ListChecks, Share2, Scale, FileCheck2, ClipboardCheck, Truck,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
@@ -28,7 +28,7 @@ import { useTenant } from '../contexts/TenantContext'
 import { formatCurrency as _fmtCurrencyBase } from '../lib/formatters'
 import {
   canonSeverity, canonStatus, TERMINAL_STAGES,
-  CLAIM_STATUS_LABELS, CLAIM_STATUS_OPTS, RECOVERY_SOURCE_LABELS, RECOVERY_STATUS_LABELS,
+  CLAIM_STATUS_LABELS, CLAIM_STATUS_OPTS,
   accidentSeverityPill, accidentStatusPill,
   SEVERITIES, toDbSeverity,
 } from '../lib/accidentVocab'
@@ -68,20 +68,9 @@ import { toUserMessage } from '../lib/safeError'
 // (accidentSeverityPill / accidentStatusPill) so this detail page and the
 // register table render identical colours — no per-file badge map here.
 
-const RECOVERY_BADGE = {
-  pending:     'bg-yellow-900/50 text-yellow-300 border border-yellow-700/50',
-  partial:     'bg-blue-900/50 text-blue-300 border border-blue-700/50',
-  recovered:   'bg-green-900/50 text-green-300 border border-green-700/50',
-  written_off: 'bg-red-900/50 text-red-300 border border-red-700/50',
-}
-
-const CLAIM_BADGE = {
-  none:     'bg-gray-800 text-gray-300 border border-gray-600',
-  filed:    'bg-blue-900/50 text-blue-300 border border-blue-700/50',
-  approved: 'bg-green-900/50 text-green-300 border border-green-700/50',
-  rejected: 'bg-red-900/50 text-red-300 border border-red-700/50',
-  settled:  'bg-purple-900/50 text-purple-300 border border-purple-700/50',
-}
+// RECOVERY_BADGE / CLAIM_BADGE were only used by the retired Repair & Insurance
+// / Claim & Recovery tabs (see the "old tabs removed" note near the TABS array
+// below) — deleted along with them rather than kept as dead code.
 
 const PART_STATUSES = ['needed', 'ordered', 'received', 'fitted']
 const PART_LABELS = { needed: 'Needed', ordered: 'Ordered', received: 'Received', fitted: 'Fitted' }
@@ -160,8 +149,18 @@ const TABS = [
   // Workshop Assessment tab reads read-only.
   { key: 'damage_map', label: 'Mark Damage', icon: MapPin },
   { key: 'tracker',  label: 'Tracker', icon: ClipboardList },
-  { key: 'repair',   label: 'Repair & Insurance', icon: ShieldAlert },
-  { key: 'claim',    label: 'Claim & Recovery', icon: Briefcase },
+  // "Repair & Insurance" and "Claim & Recovery" (the pre-existing tabs reading
+  // the original accidents columns: damage_class/fault_status/gcc_liability_
+  // ratio/najm_*/taqdeer_*/workshop_*/insurer/policy_no/claim_*/recovery_*)
+  // were RETIRED here at the user's explicit choice, once every field they
+  // showed became covered by the 4 new tabs above (Responsibility & Payment,
+  // Insurance Claim, Workshop Assessment) - keeping both was showing the same
+  // real-world fact (fault, claim amount, workshop, recovery...) in two
+  // different, non-syncing places. The underlying accidents columns are
+  // UNTOUCHED (no migration, no data change) - only removed from this screen.
+  // The one non-duplicated piece the old Claim & Recovery tab carried -
+  // AccidentInsurerRecord, a read-only comparison against the insurer's OWN
+  // claim register - now lives on the Insurance Claim tab instead.
   { key: 'parts',    label: 'Parts & Repairs', icon: Wrench },
   { key: 'log',      label: 'Case Log', icon: MessageSquare },
   { key: 'activity', label: 'Activity', icon: History },
@@ -530,12 +529,18 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
           />
         )}
         {tab === 'insurance_claim' && (
-          <InsuranceClaimPanel
-            accidentId={acc.id}
-            elevated={elevated}
-            fmtCurrency={fmtCurrency}
-            onChanged={() => { load(); onChanged?.() }}
-          />
+          <div className="space-y-4">
+            <InsuranceClaimPanel
+              accidentId={acc.id}
+              elevated={elevated}
+              fmtCurrency={fmtCurrency}
+              onChanged={() => { load(); onChanged?.() }}
+            />
+            {/* What the insurer has already recorded for this case, from the
+                separate insurer-maintained claim register - read-only, moved
+                here from the now-retired Claim & Recovery tab. */}
+            <AccidentInsurerRecord accident={acc} />
+          </div>
         )}
         {tab === 'assessment' && (
           <WorkshopAssessmentPanel
@@ -561,8 +566,6 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
           />
         )}
         {tab === 'tracker'   && <TrackerTab acc={acc} elevated={elevated} onEditIncident={startEdit} editLocked={editLocked} />}
-        {tab === 'repair'    && <RepairInsuranceTab acc={acc} elevated={elevated} fmtCurrency={fmtCurrency} onEditIncident={startEdit} editLocked={editLocked} />}
-        {tab === 'claim'     && <ClaimTab acc={acc} elevated={elevated} fmtCurrency={fmtCurrency} onEditIncident={startEdit} editLocked={editLocked} />}
         {tab === 'parts'     && <PartsTab acc={acc} parts={parts} partsTotal={partsTotal} elevated={elevated} profile={profile} reload={() => { load(); onChanged?.() }} setErr={setErr} fmtCurrency={fmtCurrency} />}
         {tab === 'log'       && <LogTab acc={acc} remarks={remarks} profile={profile} reload={load} setErr={setErr} />}
         {tab === 'activity'  && <ActivityTab accidentId={acc.id} />}
@@ -1095,107 +1098,11 @@ function TrackerTab({ acc, elevated, onEditIncident, editLocked }) {
   )
 }
 
-// ── Repair & Insurance — Case Management (V219 GCC fields) ─────────────────────
-// Read-only view of damage/fault classification, Najm + Taqdeer report state,
-// GCC liability ratio, repair route, case workflow and workshop financials.
-// Updates happen exclusively through the ONE unified incident form on the
-// Accidents page (Edit Incident) — the former per-tab edit form was removed.
-function RepairInsuranceTab({ acc, elevated, fmtCurrency, onEditIncident, editLocked }) {
-  return (
-    <div className="space-y-4">
-      <div>
-        <p className="text-xs font-semibold text-gray-400 mb-2">Classification & Reports</p>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          <KV label="Damage class" value={acc.damage_class} />
-          <KV label="Fault status" value={acc.fault_status} highlight />
-          <KV label="GCC liability" value={acc.gcc_liability_ratio != null ? `${acc.gcc_liability_ratio}%` : '-'} highlight />
-          <KV label="Najm" value={acc.najm_status} />
-          <KV label="Najm fault" value={acc.najm_fault} />
-          <KV label="Taqdeer" value={acc.taqdeer_status} />
-          <KV label="Taqdeer no" value={acc.taqdeer_no} />
-        </div>
-      </div>
-      <div>
-        <p className="text-xs font-semibold text-gray-400 mb-2">Workflow</p>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          <KV label="Repair type" value={acc.repair_type} />
-          <KV label="Current status" value={acc.current_status} highlight />
-          <KV label="Next step" value={acc.next_step} />
-        </div>
-      </div>
-      <div>
-        <p className="text-xs font-semibold text-gray-400 mb-2">Workshop & Financials</p>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          <KV label="Workshop" value={acc.workshop_name} />
-          <KV label="Workshop location" value={acc.workshop_location} />
-          <KV label="Quotation" value={acc.workshop_quotation != null ? fmtCurrency(acc.workshop_quotation) : '-'} />
-          <KV label="Discount" value={acc.discount_pct != null ? `${acc.discount_pct}%` : '-'} />
-          <KV label="Final amount" value={acc.final_amount != null ? fmtCurrency(acc.final_amount) : '-'} highlight />
-          <KV label="Estimated damage" value={acc.estimated_damage_cost != null ? fmtCurrency(acc.estimated_damage_cost) : '-'} />
-          <KV label="Repair cost" value={acc.repair_cost != null ? fmtCurrency(acc.repair_cost) : '-'} />
-        </div>
-      </div>
-      <div>
-        <p className="text-xs font-semibold text-gray-400 mb-2">Release</p>
-        <div className="grid grid-cols-2 gap-3">
-          <KV label="Expected release" value={acc.expected_release_date} />
-          <KV label="Actual release" value={acc.release_date} highlight />
-        </div>
-      </div>
-      <EditIncidentHint elevated={elevated} onEdit={onEditIncident} locked={editLocked} />
-    </div>
-  )
-}
-
-// Read-only claim & recovery view. Updates happen exclusively through the ONE
-// unified incident form on the Accidents page (Edit Incident) — the former
-// per-tab edit form was removed to eliminate the duplicate update path.
-function ClaimTab({ acc, elevated, fmtCurrency, onEditIncident, editLocked }) {
-  const grossCost = (Number(acc.repair_cost) || 0) + (Number(acc.parts_cost) || 0)
-  const netCost = Math.max(0, grossCost - (Number(acc.recovered_amount) || 0))
-
-  return (
-    <div className="space-y-4">
-      <div className="flex gap-2">
-        <span className={`badge text-xs ${CLAIM_BADGE[acc.claim_status ?? 'none']}`}>{CLAIM_STATUS_LABELS[acc.claim_status ?? 'none']}</span>
-        <span className={`badge text-xs ${RECOVERY_BADGE[acc.recovery_status] ?? 'bg-[var(--input-bg)] text-[var(--text-dim)]'}`}>Recovery: {RECOVERY_STATUS_LABELS[acc.recovery_status] ?? acc.recovery_status ?? 'N/A'}</span>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <KV label="Responsible party" value={acc.responsible_party} />
-        <KV label="Liable party" value={acc.liable_party} />
-        <KV label="Who pays" value={acc.payer} highlight />
-        <KV label="Driver" value={acc.driver_name} />
-        <KV label="Insurer" value={acc.insurer} />
-        <KV label="Policy / Claim no" value={acc.policy_no} />
-        <KV label="Claim amount" value={acc.claim_amount != null ? fmtCurrency(acc.claim_amount) : '-'} />
-        <KV label="Approved" value={acc.claim_approved_amount != null ? fmtCurrency(acc.claim_approved_amount) : '-'} />
-      </div>
-      <div>
-        <p className="text-xs font-semibold text-gray-400 mb-2">Cost Recovery</p>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          <KV label="Deductible" value={acc.deductible != null ? fmtCurrency(acc.deductible) : '-'} />
-          <KV label="Recovered amount" value={acc.recovered_amount != null ? fmtCurrency(acc.recovered_amount) : '-'} highlight />
-          <KV label="Recovery status" value={RECOVERY_STATUS_LABELS[acc.recovery_status] ?? acc.recovery_status} />
-          <KV label="Recovery source" value={RECOVERY_SOURCE_LABELS[acc.recovery_source ?? 'none']} />
-          <KV label="Recovery date" value={acc.recovery_date} />
-          <KV label="Recovery reference" value={acc.recovery_reference} />
-          <KV label="Amount transfer" value={acc.amount_transfer != null ? fmtCurrency(acc.amount_transfer) : '-'} />
-        </div>
-      </div>
-      <div className="grid grid-cols-3 gap-3 rounded-lg border border-gray-700 bg-gray-800/40 p-3">
-        <div><p className="text-[11px] uppercase tracking-wide text-gray-500">Gross cost</p><p className="text-sm font-semibold text-gray-200">{fmtCurrency(grossCost)}</p></div>
-        <div><p className="text-[11px] uppercase tracking-wide text-gray-500">Recovered</p><p className="text-sm font-semibold text-green-400">{fmtCurrency(Number(acc.recovered_amount) || 0)}</p></div>
-        <div><p className="text-[11px] uppercase tracking-wide text-gray-500">Net cost</p><p className="text-sm font-semibold text-orange-400">{fmtCurrency(netCost)}</p></div>
-      </div>
-
-      {/* What the insurer has already recorded for this case. Read only, and a
-          separate record from the claim fields above - neither overwrites the other. */}
-      <AccidentInsurerRecord accident={acc} />
-
-      <EditIncidentHint elevated={elevated} onEdit={onEditIncident} locked={editLocked} />
-    </div>
-  )
-}
+// RepairInsuranceTab and ClaimTab (the former "Repair & Insurance" and
+// "Claim & Recovery" tabs) were RETIRED here - see the note beside the TABS
+// array above for why. Their fields are covered by the Responsibility &
+// Payment / Insurance Claim / Workshop Assessment tabs; AccidentInsurerRecord
+// (the one non-duplicated piece) now renders on the Insurance Claim tab.
 
 function ActivityTab({ accidentId }) {
   const [rows, setRows] = useState(null)

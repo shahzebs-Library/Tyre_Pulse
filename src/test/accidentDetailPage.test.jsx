@@ -21,14 +21,29 @@ const ACC = {
 }
 const PARTS = [{ id: 'p1', part_name: 'Bumper', quantity: 1, unit_cost: 800, total_cost: 800, status: 'fitted' }]
 
+// Chainable on every filter/modifier method used across the case tabs' service
+// layer (including the newer accidentLiability.js / accidentInsuranceClaims.js /
+// accidentDamageAssessment.js / accidentRepairOrders.js / accidentHandover.js /
+// accidentCommunications.js, which all end a read in `.order(...).limit(1)
+// .maybeSingle()` - a shape the older single-`.order()`-terminates form below
+// could not satisfy). `.single()`/`.maybeSingle()` are the two ways a chain
+// resolves; anything else resolves via `b`'s own `.then`, so a caller that
+// awaits the chain directly (a plain list read, or an update().eq() write with
+// no trailing select) still gets `result` exactly as before.
 function makeBuilder(result) {
   const b = {
     select: () => b,
     update: () => b,
+    insert: () => b,
     eq: () => b,
-    order: () => Promise.resolve(result),
+    ilike: () => b,
+    or: () => b,
+    not: () => b,
+    order: () => b,
+    limit: () => b,
+    maybeSingle: () => Promise.resolve(result),
     single: () => Promise.resolve(result),
-    then: (resolve) => resolve(result), // awaitable for update().eq() writes
+    then: (resolve) => resolve(result),
   }
   return b
 }
@@ -72,12 +87,15 @@ describe('AccidentDetailPage (/accidents/:id)', () => {
     expect(screen.getAllByText(/SAR/i).length).toBeGreaterThan(0)
   })
 
-  it('switches to Claim & Parts tabs without crashing', async () => {
+  it('switches to Insurance Claim & Parts tabs without crashing', async () => {
     render(<AccidentDetailPage />)
     await screen.findByRole('button', { name: /Download Case/i })
 
-    fireEvent.click(screen.getByRole('button', { name: /Claim & Recovery/i }))
-    await waitFor(() => expect(screen.getByText(/Cost Recovery/i)).toBeInTheDocument())
+    // "Claim & Recovery" was retired (its fields moved onto this tab, see the
+    // note in AccidentDetailModal.jsx's TABS array) - "Insurance Claim" is its
+    // successor and, like the old tab, formats money via the active currency.
+    fireEvent.click(screen.getByRole('button', { name: /Insurance Claim/i }))
+    await waitFor(() => expect(screen.getByRole('heading', { name: /Insurance claim/i })).toBeInTheDocument())
 
     fireEvent.click(screen.getByRole('button', { name: /Parts & Repairs/i }))
     await waitFor(() => expect(screen.getByText('Bumper')).toBeInTheDocument())
@@ -88,9 +106,9 @@ describe('AccidentDetailPage (/accidents/:id)', () => {
     await screen.findByRole('button', { name: /Download Case/i })
 
     // The record tabs carry no per-tab save form; editing is one shared editor.
-    fireEvent.click(screen.getByRole('button', { name: /Claim & Recovery/i }))
-    await waitFor(() => expect(screen.getByText(/Cost Recovery/i)).toBeInTheDocument())
-    expect(screen.queryByRole('button', { name: /Save Claim & Recovery/i })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /Insurance Claim/i }))
+    await waitFor(() => expect(screen.getByRole('heading', { name: /Insurance claim/i })).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: /Save Insurance Claim/i })).toBeNull()
 
     // Edit Incident opens the editor INSIDE the case; it must NOT navigate away.
     const editBtns = screen.getAllByRole('button', { name: /Edit Incident/i })

@@ -20,6 +20,7 @@ import {
   ShieldCheck, Hourglass, FileText, Wrench, MessageSquare, History, User, ClipboardList,
   ArrowLeft, AlertOctagon, ChevronRight, Download, Loader2, Clock, Pencil,
   GitBranch, MapPin, Ban, Hash, Users, FileDown, ListChecks, Share2, Scale, FileCheck2, ClipboardCheck, Truck,
+  BadgeCheck,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
@@ -54,6 +55,7 @@ import InsuranceClaimPanel from './accidents/InsuranceClaimPanel'
 import WorkshopAssessmentPanel from './accidents/WorkshopAssessmentPanel'
 import HandoverPanel from './accidents/HandoverPanel'
 import DamageMapPanel from './accidents/DamageMapPanel'
+import FleetValidationPanel from './accidents/FleetValidationPanel'
 import AccidentInsurerRecord from './insurance/AccidentInsurerRecord'
 import { loadCase } from '../lib/api/accidentCase'
 import { updateAccidentForPage } from '../lib/api/accidents'
@@ -127,6 +129,11 @@ const TABS = [
   // Interactive "who owns what" control: assign each workstream, set its status,
   // and mark one Not Applicable. Elevated users get the controls; others read-only.
   { key: 'workstreams', label: 'Workstreams', icon: ListChecks },
+  // Incident summary + a derived fleet-readiness checklist (asset on file,
+  // driver/site/date recorded, GPS, photos, an authority report) + the
+  // fleet_validation workstream's own progress control + notify-insurance.
+  // Rendered by FleetValidationPanel.
+  { key: 'fleet_validation', label: 'Fleet Validation', icon: BadgeCheck },
   // Fault determination, GCC liability split and the police/Najm/Taqdeer
   // authority-report checklist. Rendered by LiabilityPaymentPanel.
   { key: 'liability', label: 'Responsibility & Payment', icon: Scale },
@@ -533,6 +540,14 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
             accidentId={acc.id}
             country={acc.country}
             elevated={elevated}
+            onChanged={() => { load(); onChanged?.() }}
+          />
+        )}
+        {tab === 'fleet_validation' && (
+          <FleetValidationPanel
+            accidentId={acc.id}
+            elevated={elevated}
+            acc={acc}
             onChanged={() => { load(); onChanged?.() }}
           />
         )}

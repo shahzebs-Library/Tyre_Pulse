@@ -17,7 +17,7 @@ import { useTenant } from '../contexts/TenantContext'
 import SegmentedControl from '../components/ui/SegmentedControl'
 import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
-import { exportToPdf, exportToExcel, reportFileName, reportDateLabel } from '../lib/exportUtils'
+import { exportToPdf, exportToExcel, exportSheetsToExcel, reportFileName, reportDateLabel } from '../lib/exportUtils'
 import {
   REPORT_TYPES, FREQUENCIES, PERIODS, OUTPUT_FORMATS,
   listSchedules, createSchedule, updateSchedule, deleteSchedule,
@@ -25,6 +25,7 @@ import {
   listSchedulableLayouts, isBuilderType, builderTemplateId,
 } from '../lib/api/scheduledReports'
 import { getTemplate } from '../lib/api/accidentReportTemplates'
+import { tyreManVehicleTypeSummary, tyreManVehicleTypeTable } from '../lib/inspectionCoverage'
 
 // ── Registry-derived lookups (labels come from the service; icons/colours here) ─
 
@@ -961,6 +962,14 @@ export default function ScheduledReports() {
       const base = reportFileName(reportCompany, dataset.title, reportDateLabel())
       const formats = cfg.output_formats?.length ? cfg.output_formats : ['pdf']
 
+      // Inspection Summary carries one more thing than a plain record list:
+      // how many inspections each tyre man completed, on which vehicle type,
+      // over the coverage window (most usefully "Yesterday" for a same-day
+      // "what got done" run) - see src/lib/inspectionCoverage.js.
+      const inspectionTable = cfg.report_type === 'inspection'
+        ? tyreManVehicleTypeTable(tyreManVehicleTypeSummary(rows))
+        : null
+
       if (formats.includes('pdf') && isBuilderType(cfg.report_type)) {
         // Saved Report Builder layout: render the template's exact block design
         // (header/KPIs/charts/insights/tables) over the covered accident rows.
@@ -983,23 +992,50 @@ export default function ScheduledReports() {
           {
             currency: activeCurrency, branding, dateRange: label,
             emptyHint: td('schedreports.gen.emptyHint', 'No records in the selected coverage window. Widen the period or clear the country filter.'),
+            ...(inspectionTable ? {
+              extraTable: {
+                title: td('schedreports.gen.inspectionTableTitle', 'Completed inspections by tyre man and vehicle type'),
+                columns: inspectionTable.columns.map((k, i) => ({ key: k, header: inspectionTable.headers[i] })),
+                rows: inspectionTable.rows,
+              },
+            } : {}),
           },
         )
       }
       if (formats.includes('excel')) {
         // Excel sheet names must avoid : \ / ? * [ ] and stay <= 31 chars.
         const sheetName = dataset.title.replace(/[:\\/?*[\]]/g, '-').slice(0, 28)
-        await exportToExcel(
-          rows, dataset.cols, dataset.headers, base, sheetName,
-          {
-            title: dataset.title, company: reportCompany, dateRange: label, currency: activeCurrency,
-            meta: {
-              'Report type': typeLabel,
-              'Coverage period': label,
-              Scope: activeCountry === 'All' ? td('schedreports.gen.allCountries', 'All countries') : activeCountry,
-            },
+        const excelMeta = {
+          title: dataset.title, company: reportCompany, dateRange: label, currency: activeCurrency,
+          meta: {
+            'Report type': typeLabel,
+            'Coverage period': label,
+            Scope: activeCountry === 'All' ? td('schedreports.gen.allCountries', 'All countries') : activeCountry,
           },
-        )
+        }
+        if (inspectionTable) {
+          // Two tabs: the tyre man / vehicle type completion pivot first (the
+          // "how many done" answer), then the raw record list behind it.
+          await exportSheetsToExcel(
+            [
+              {
+                name: 'Tyre Man Summary',
+                rows: inspectionTable.rows,
+                columns: inspectionTable.columns,
+                headers: inspectionTable.headers,
+                note: 'Completed inspections grouped by tyre man and vehicle type.',
+              },
+              {
+                name: sheetName,
+                rows, columns: dataset.cols, headers: dataset.headers,
+                note: 'Every inspection record in the coverage window.',
+              },
+            ],
+            base, excelMeta,
+          )
+        } else {
+          await exportToExcel(rows, dataset.cols, dataset.headers, base, sheetName, excelMeta)
+        }
       }
 
       setToast({

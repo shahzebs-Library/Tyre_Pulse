@@ -1149,6 +1149,32 @@ export async function exportToPdf(rows, columns, title, filename = 'report', ori
     doc.addPage()
   }
 
+  // ── OPTIONAL EXTRA SUMMARY TABLE (e.g. a pivot the caller already built) ──
+  // A second tabular section rendered on its own page(s), in the same table
+  // theme as the main data table, before the raw record list. Purely additive
+  // - callers that omit opts.extraTable are unaffected. Used by the Inspection
+  // Summary report to show completed inspections grouped by tyre man and
+  // vehicle type (src/lib/inspectionCoverage.js) ahead of the per-record list.
+  if (opts.extraTable && Array.isArray(opts.extraTable.rows) && opts.extraTable.rows.length
+      && Array.isArray(opts.extraTable.columns) && opts.extraTable.columns.length) {
+    const et = opts.extraTable
+    autoTable(doc, {
+      ..._tableTheme(brand.accent),
+      startY: 28,
+      margin: { left: MX, right: MX, top: 28 },
+      head: [et.columns.map(c => c.header)],
+      body: et.rows.map(r => et.columns.map(c => {
+        const v = r[c.key]
+        return v == null || v === '' ? '' : String(v)
+      })),
+      didDrawPage: () => {
+        _pageHeader(doc, title, `${et.title || 'Summary'} | ${nowStr()}`, company, hdrOpts)
+        _pageFooter(doc, doc.internal.getNumberOfPages(), null, company, ftrOpts)
+      },
+    })
+    doc.addPage()
+  }
+
   // ── DATA TABLE (operational detail) ──
   const usableW = orientation === 'landscape' ? 269 : 182
   const colW = columns.map(c => {

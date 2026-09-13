@@ -19,7 +19,7 @@ import {
   X, Plus, Trash2, Send, Lock, CheckCircle2, XCircle,
   ShieldCheck, Hourglass, FileText, Wrench, MessageSquare, Briefcase, History, User, ClipboardList,
   ArrowLeft, AlertOctagon, ChevronRight, Download, Loader2, ShieldAlert, Clock, Pencil,
-  GitBranch, MapPin, Ban, Hash, Users, FileDown, ListChecks, Share2, Scale,
+  GitBranch, MapPin, Ban, Hash, Users, FileDown, ListChecks, Share2, Scale, FileCheck2,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
@@ -50,6 +50,7 @@ import CaseTeamDistributionPanel from './accidents/CaseTeamDistributionPanel'
 import CasePortalShare from './accidents/CasePortalShare'
 import CaseSlaHeader from './accidents/CaseSlaHeader'
 import LiabilityPaymentPanel from './accidents/LiabilityPaymentPanel'
+import InsuranceClaimPanel from './accidents/InsuranceClaimPanel'
 import AccidentInsurerRecord from './insurance/AccidentInsurerRecord'
 import { loadCase } from '../lib/api/accidentCase'
 import { updateAccidentForPage } from '../lib/api/accidents'
@@ -137,6 +138,12 @@ const TABS = [
   // Fault determination, GCC liability split and the police/Najm/Taqdeer
   // authority-report checklist. Rendered by LiabilityPaymentPanel.
   { key: 'liability', label: 'Responsibility & Payment', icon: Scale },
+  // Register/update the insurance claim, record the insurer's decision and
+  // settlement, work the required-document checklist, and track recoveries.
+  // Rendered by InsuranceClaimPanel — distinct from the read-only
+  // AccidentInsurerRecord shown on the "Claim & Recovery" tab below, which
+  // compares against the separate insurer-maintained claim register.
+  { key: 'insurance_claim', label: 'Insurance Claim', icon: FileCheck2 },
   { key: 'tracker',  label: 'Tracker', icon: ClipboardList },
   { key: 'repair',   label: 'Repair & Insurance', icon: ShieldAlert },
   { key: 'claim',    label: 'Claim & Recovery', icon: Briefcase },
@@ -503,6 +510,14 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
           <LiabilityPaymentPanel
             accidentId={acc.id}
             elevated={elevated}
+            onChanged={() => { load(); onChanged?.() }}
+          />
+        )}
+        {tab === 'insurance_claim' && (
+          <InsuranceClaimPanel
+            accidentId={acc.id}
+            elevated={elevated}
+            fmtCurrency={fmtCurrency}
             onChanged={() => { load(); onChanged?.() }}
           />
         )}

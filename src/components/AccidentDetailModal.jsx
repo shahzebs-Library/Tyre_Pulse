@@ -19,7 +19,7 @@ import {
   X, Plus, Trash2, Send, Lock, CheckCircle2, XCircle,
   ShieldCheck, Hourglass, FileText, Wrench, MessageSquare, Briefcase, History, User, ClipboardList,
   ArrowLeft, AlertOctagon, ChevronRight, Download, Loader2, ShieldAlert, Clock, Pencil,
-  GitBranch, MapPin, Ban, Hash, Users, FileDown, ListChecks, Share2, Scale, FileCheck2, ClipboardCheck,
+  GitBranch, MapPin, Ban, Hash, Users, FileDown, ListChecks, Share2, Scale, FileCheck2, ClipboardCheck, Truck,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
@@ -53,6 +53,7 @@ import LiabilityPaymentPanel from './accidents/LiabilityPaymentPanel'
 import InsuranceClaimPanel from './accidents/InsuranceClaimPanel'
 import WorkshopAssessmentPanel from './accidents/WorkshopAssessmentPanel'
 import CaseCommunicationsPanel from './accidents/CaseCommunicationsPanel'
+import HandoverPanel from './accidents/HandoverPanel'
 import AccidentInsurerRecord from './insurance/AccidentInsurerRecord'
 import { loadCase } from '../lib/api/accidentCase'
 import { updateAccidentForPage } from '../lib/api/accidents'
@@ -150,6 +151,9 @@ const TABS = [
   // recommendation, and the repair order that recommendation opens.
   // Rendered by WorkshopAssessmentPanel.
   { key: 'assessment', label: 'Workshop Assessment', icon: ClipboardCheck },
+  // Workshop receipt / vehicle handover inspection, signed on the spot.
+  // Rendered by HandoverPanel.
+  { key: 'handover', label: 'Dispatch & Handover', icon: Truck },
   { key: 'tracker',  label: 'Tracker', icon: ClipboardList },
   { key: 'repair',   label: 'Repair & Insurance', icon: ShieldAlert },
   { key: 'claim',    label: 'Claim & Recovery', icon: Briefcase },
@@ -533,6 +537,13 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
             accidentId={acc.id}
             elevated={elevated}
             fmtCurrency={fmtCurrency}
+            onChanged={() => { load(); onChanged?.() }}
+          />
+        )}
+        {tab === 'handover' && (
+          <HandoverPanel
+            accidentId={acc.id}
+            elevated={elevated}
             onChanged={() => { load(); onChanged?.() }}
           />
         )}

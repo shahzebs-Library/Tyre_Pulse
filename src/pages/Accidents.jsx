@@ -3076,7 +3076,7 @@ export default function Accidents() {
                     <p className="text-[11px] text-[var(--text-muted)] mt-1 truncate">
                       Master: {[
                         assetInfo.vehicle_type,
-                        [assetInfo.make, assetInfo.model].filter(Boolean).join(' '),
+                        [assetInfo.make, assetInfo.model, assetInfo.year].filter(Boolean).join(' '),
                         assetInfo.fleet_number ? `Fleet ${assetInfo.fleet_number}` : '',
                       ].filter(Boolean).join(' | ') || 'N/A'}
                     </p>

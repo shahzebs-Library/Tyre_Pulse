@@ -10,11 +10,15 @@
  * read uses, so a scan never silently substitutes another country's machine
  * for the one actually being reported (V376) — with no country match it
  * returns null rather than a wrong vehicle.
+ *
+ * Selects assets.js's own COLS (not a second, thinner column list) so a
+ * matched vehicle carries the FULL master record the Identify Asset step
+ * displays for confirmation - the same field set assets.js's other readers
+ * use, kept from drifting into its own copy.
  */
 import { supabase, unwrap, applyCountry } from './_client'
+import { COLS as SCAN_COLS } from './assets'
 import { extractScanCode } from '../assetScan'
-
-const SCAN_COLS = 'id,asset_no,fleet_number,make,model,vehicle_type,registration_no,site,country'
 
 async function firstMatch(query) {
   const rows = unwrap(await query) || []

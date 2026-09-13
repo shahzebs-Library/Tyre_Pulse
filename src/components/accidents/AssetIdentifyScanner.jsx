@@ -15,6 +15,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { ScanLine, Camera, Keyboard, Search, CheckCircle2, AlertTriangle, Loader2, X, RefreshCw } from 'lucide-react'
 import { lookupScannedAsset } from '../../lib/api/assetScan'
 import { toUserMessage } from '../../lib/safeError'
+import VehicleMasterCard from './VehicleMasterCard'
 
 function barcodeDetectorSupported() {
   return typeof window !== 'undefined' && 'BarcodeDetector' in window
@@ -133,7 +134,7 @@ export default function AssetIdentifyScanner({ country, onResult, onClose }) {
       style={{ background: 'rgba(0,0,0,0.75)' }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose?.() }}
     >
-      <div className="w-full max-w-md rounded-xl border border-[var(--input-border)] bg-[var(--surface-1,var(--input-bg))] p-4 shadow-2xl">
+      <div className="w-full max-w-md max-h-[85vh] overflow-y-auto rounded-xl border border-[var(--input-border)] bg-[var(--surface-1,var(--input-bg))] p-4 shadow-2xl">
         <div className="flex items-center justify-between mb-3">
           <p className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
             <ScanLine size={16} /> Identify asset
@@ -216,14 +217,13 @@ export default function AssetIdentifyScanner({ country, onResult, onClose }) {
                 {result.asset ? 'Vehicle found' : lookupErr || 'No asset matches that code in the fleet register'}
               </p>
               {result.asset && (
-                <div className="grid grid-cols-2 gap-2 mt-2 text-xs">
-                  <div><p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">Asset no.</p><p className="text-[var(--text-primary)]">{result.asset.asset_no}</p></div>
-                  <div><p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">Type</p><p className="text-[var(--text-primary)]">{result.asset.vehicle_type || 'N/A'}</p></div>
-                  <div><p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">Site</p><p className="text-[var(--text-primary)]">{result.asset.site || 'N/A'}</p></div>
-                  <div><p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">Fleet no.</p><p className="text-[var(--text-primary)]">{result.asset.fleet_number || result.asset.registration_no || 'N/A'}</p></div>
-                </div>
+                <p className="text-xs text-[var(--text-primary)] font-semibold mt-2">{result.asset.asset_no}</p>
               )}
             </div>
+            {/* The full fleet-master record for this vehicle - same field set
+                as the Flutter app's own vehicle detail screen, so the reporter
+                can actually confirm identity before attaching it to the case. */}
+            {result.asset && <VehicleMasterCard asset={result.asset} />}
             <div className="flex gap-2">
               {result.asset && (
                 <button type="button" className="btn-primary text-xs flex-1" onClick={useResult}>Use this asset</button>

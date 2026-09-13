@@ -52,6 +52,7 @@ import CaseSlaHeader from './accidents/CaseSlaHeader'
 import LiabilityPaymentPanel from './accidents/LiabilityPaymentPanel'
 import InsuranceClaimPanel from './accidents/InsuranceClaimPanel'
 import WorkshopAssessmentPanel from './accidents/WorkshopAssessmentPanel'
+import CaseCommunicationsPanel from './accidents/CaseCommunicationsPanel'
 import AccidentInsurerRecord from './insurance/AccidentInsurerRecord'
 import { loadCase } from '../lib/api/accidentCase'
 import { updateAccidentForPage } from '../lib/api/accidents'
@@ -494,6 +495,7 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
             <CopilotCard task="summarize_accident" context={{ accident: acc, remarks, parts }} />
             <OverviewTab acc={acc} fmtCurrency={fmtCurrency} />
             <CaseTimelineSection acc={acc} />
+            <CaseCommunicationsPanel accidentId={acc.id} elevated={elevated} onChanged={() => { load(); onChanged?.() }} />
           </div>
         )}
         {tab === 'teams'     && (

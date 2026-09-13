@@ -240,6 +240,7 @@ const ResetPassword          = lazy(() => import('./pages/ResetPassword'))
 const Accidents              = lazy(() => import('./pages/Accidents'))
 const AccidentCases          = lazy(() => import('./pages/AccidentCases'))
 const AccidentDetail         = lazy(() => import('./components/AccidentDetailModal'))
+const AccidentCaseTimeline   = lazy(() => import('./pages/AccidentCaseTimeline'))
 const ClaimsSummary          = lazy(() => import('./pages/ClaimsSummary'))
 const InsurancePolicies      = lazy(() => import('./pages/InsurancePolicies'))
 const AccidentWorkflowSettings = lazy(() => import('./pages/AccidentWorkflowSettings'))
@@ -620,6 +621,7 @@ function MainApp() {
                       <Route path="/actions"     element={<Safe><ModuleRoute moduleKey="corrective_actions"><CorrectiveActions /></ModuleRoute></Safe>} />
                       <Route path="/accidents"   element={<Safe><FlagRoute flag="accidents_module"><Accidents /></FlagRoute></Safe>} />
                       <Route path="/accidents/:id" element={<Safe><FlagRoute flag="accidents_module"><AccidentDetail /></FlagRoute></Safe>} />
+                      <Route path="/accidents/:id/timeline" element={<Safe><FlagRoute flag="accidents_module"><AccidentCaseTimeline /></FlagRoute></Safe>} />
                       <Route path="/accident-cases" element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><AccidentCases /></RoleRoute></Safe>} />
                       <Route path="/claims-summary" element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><FlagRoute flag="accidents_module"><ClaimsSummary /></FlagRoute></RoleRoute></Safe>} />
                       <Route path="/insurance-policies" element={<Safe><RoleRoute allowed={['Admin']}><InsurancePolicies /></RoleRoute></Safe>} />

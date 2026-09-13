@@ -52,7 +52,6 @@ import CaseSlaHeader from './accidents/CaseSlaHeader'
 import LiabilityPaymentPanel from './accidents/LiabilityPaymentPanel'
 import InsuranceClaimPanel from './accidents/InsuranceClaimPanel'
 import WorkshopAssessmentPanel from './accidents/WorkshopAssessmentPanel'
-import CaseCommunicationsPanel from './accidents/CaseCommunicationsPanel'
 import HandoverPanel from './accidents/HandoverPanel'
 import DamageMapPanel from './accidents/DamageMapPanel'
 import AccidentInsurerRecord from './insurance/AccidentInsurerRecord'
@@ -188,6 +187,7 @@ export default function AccidentDetailPage() {
  * the legacy overlay presentation for the compatibility wrapper below.
  */
 function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'page' }) {
+  const navigate = useNavigate()
   const { profile } = useAuth()
   const { activeCurrency } = useSettings()
   const { branding } = useTenant()
@@ -503,7 +503,22 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
             <CopilotCard task="summarize_accident" context={{ accident: acc, remarks, parts }} />
             <OverviewTab acc={acc} fmtCurrency={fmtCurrency} />
             <CaseTimelineSection acc={acc} />
-            <CaseCommunicationsPanel accidentId={acc.id} elevated={elevated} onChanged={() => { load(); onChanged?.() }} />
+            {/* The full timeline + notification delivery log + participants now live
+                on their own dedicated page (matches the mobile "Case timeline &
+                notifications" screen) - this is a link, not a re-embed, so the same
+                facts are never shown twice on this page. */}
+            <button
+              type="button"
+              onClick={() => navigate(`/accidents/${acc.id}/timeline`)}
+              className="w-full rounded-lg border border-[var(--input-border)] px-3 py-3 flex items-center gap-3 text-left hover:border-[var(--text-muted)]"
+            >
+              <ListChecks size={16} className="text-[var(--text-muted)] shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-[var(--text-primary)]">Case timeline &amp; notifications</p>
+                <p className="text-xs text-[var(--text-muted)]">Full activity log, notification delivery, and participants</p>
+              </div>
+              <ChevronRight size={16} className="text-[var(--text-muted)] shrink-0" />
+            </button>
           </div>
         )}
         {tab === 'teams'     && (

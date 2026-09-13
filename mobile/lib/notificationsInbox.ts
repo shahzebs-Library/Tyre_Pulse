@@ -96,6 +96,7 @@ export async function markAllRead(userId: string): Promise<void> {
 export function notificationRoute(n: Pick<AppNotification, 'type' | 'entity_type'>): string | null {
   const t = String(n.type || '').toLowerCase()
   const k = String(n.entity_type || n.type || '').toLowerCase()
+  if (k === 'driver_workspace' || t === 'driver_workspace') return '/(app)/driver-workspace'
 
   // 1. LOCAL device notifications (lib/notifications.ts). Matched on the EXACT
   //    type and matched FIRST, because their wording overlaps the entity

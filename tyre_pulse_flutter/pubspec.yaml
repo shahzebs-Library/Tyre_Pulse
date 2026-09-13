@@ -67,6 +67,9 @@ dependencies:
   # stay a `CustomPainter` (status colour must keep following
   # `TpPalette.forStatus`, not a fixed hex palette baked into an asset). ---
   flutter_svg: ^2.3.0
+  pdf: ^3.13.0
+  printing: ^5.15.0
+  url_launcher: ^6.3.2
 
   # Packages for later phases (PDF and sharing) are added at
   # the phase that needs them. Spec section 64: do not add a package to

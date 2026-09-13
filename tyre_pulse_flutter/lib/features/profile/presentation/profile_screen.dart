@@ -72,6 +72,7 @@ import 'package:tyre_pulse/core/auth/auth_controller.dart';
 import 'package:tyre_pulse/core/auth/auth_state.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
+import 'package:tyre_pulse/features/driver_workspace/presentation/driver_workspace_panel.dart';
 import 'package:tyre_pulse/features/notifications/presentation/notifications_copy.dart';
 
 /// Stable finders for Profile's responsive visual regions.
@@ -187,6 +188,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: <Widget>[
                             _IdentityHero(profile: profile),
+                            const DriverWorkspaceEntry(),
                             const SizedBox(height: TpSpace.md),
                             _ProfileStatusStrip(
                               profile: profile,

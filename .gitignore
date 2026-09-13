@@ -64,3 +64,6 @@ mobile-ui-design-review.html
 **/*Credentials*.xlsx
 **/*credentials*.xlsx
 **/.tyrepulse-driver-import-*
+
+# Local Supabase CLI state (linked project cache, CLI version pin).
+supabase/.temp/

@@ -72,6 +72,7 @@ function getSeverityConfig(severity) {
  * land on the page holding the record. Null = tap only marks read.
  */
 function notificationLink(n) {
+  if (n.type === 'driver_workspace') return '/driver-workspace'
   if (n.type === 'approval') return '/approvals'
   if (n.type === 'approval_decision') {
     return n.entityType === 'checklist' ? '/checklists' : '/inspections'

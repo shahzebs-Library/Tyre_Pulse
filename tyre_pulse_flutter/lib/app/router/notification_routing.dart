@@ -72,6 +72,9 @@ TpRoute? notificationDestination(TpNotificationTarget target) {
   final String type = target.typeKey;
   final String entity = target.entityKey;
   final String? id = target.id;
+  if (type == 'driver_workspace' || entity == 'driver_workspace') {
+    return const ProfileRoute();
+  }
 
   // 1. LOCAL device notifications, matched on the EXACT type and matched
   //    FIRST. Their wording overlaps the entity buckets below:

@@ -180,6 +180,7 @@ function ProfileScreen() {
   const role = profile?.role
   type Tool = { key: string; label: string; icon: IconName; tint: 'blue' | 'violet' | 'green' | 'amber'; show: boolean; go: () => void }
   const tools: Tool[] = ([
+    { key: 'driverWorkspace', label: language === 'ar' ? 'مساحة عمل السائق' : language === 'ur' ? 'ڈرائیور کا کام' : 'Driver workspace', icon: 'id-card-outline', tint: 'blue', show: true, go: () => router.push('/(app)/driver-workspace') },
     { key: 'team',  label: t('modules.workspace.team'),         icon: 'people-outline',    tint: 'blue',   show: canManageUsers(role) || canAccessAdmin(role), go: () => router.push('/(app)/team') },
     { key: 'users', label: t('modules.workspace.manageUsers'),  icon: 'person-add-outline', tint: 'violet', show: canManageUsers(role), go: () => router.push('/(app)/admin/users') },
     { key: 'admin', label: t('modules.workspace.admin'),        icon: 'shield-outline',    tint: 'violet', show: canAccessAdmin(role), go: () => router.push('/(app)/admin') },

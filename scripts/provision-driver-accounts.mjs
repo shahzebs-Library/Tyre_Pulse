@@ -43,6 +43,7 @@ export async function main(argv) {
     input: { type: 'string' }, output: { type: 'string' }, journal: { type: 'string' },
     'key-file': { type: 'string' }, url: { type: 'string' }, org: { type: 'string' }, actor: { type: 'string' },
     execute: { type: 'boolean', default: false },
+    'export-only': { type: 'boolean', default: false },
   } })
   for (const required of ['input', 'output', 'journal', 'key-file', 'url', 'org', 'actor']) if (!values[required]) throw new Error(`--${required} is required`)
   const input = externalPath(values.input); const output = externalPath(values.output); const journalPath = externalPath(values.journal)
@@ -85,11 +86,12 @@ export async function main(argv) {
   }
   journal ??= { batchId: randomUUID(), sourceHash: digest, org: values.org, actor: values.actor, url: values.url, existingSnapshots, results: {} }
   const save = () => fs.writeFileSync(journalPath, JSON.stringify(journal, null, 2), { mode: 0o600 })
-  console.log(JSON.stringify({ mode: values.execute ? 'execute' : 'dry-run', employees: records.length, preservedAccounts: existingSnapshots.length, newAccounts: records.length - existingSnapshots.length, role: 'Driver', country: 'KSA' }))
-  if (!values.execute) return
+  console.log(JSON.stringify({ mode: values['export-only'] ? 'export-only' : values.execute ? 'execute' : 'dry-run', employees: records.length, preservedAccounts: existingSnapshots.length, newAccounts: records.length - existingSnapshots.length, role: 'Driver', country: 'KSA' }))
+  if (!values.execute && !values['export-only']) return
+  if (values['export-only'] && records.some(r => journal.results[r.employeeId]?.status !== 'provisioned')) throw new Error('Export requires a completed import journal')
   // Check deployment before creating any Auth accounts. A null user is expected
   // to fail validation; a missing function is a hard preflight failure.
-  const probe = await client.rpc('provision_approved_driver_account', {
+  const probe = values['export-only'] ? { error: { code: '42501' } } : await client.rpc('provision_approved_driver_account', {
     p_user_id: null, p_actor_id: values.actor, p_organisation_id: values.org,
     p_employee_id: '000', p_full_name: 'preflight', p_country: 'KSA', p_position: 'preflight', p_iqama: null, p_batch_id: journal.batchId,
   })
@@ -125,7 +127,7 @@ export async function main(argv) {
       }
     }
   }
-  await Promise.all([worker(), worker(), worker()])
+  if (!values['export-only']) await Promise.all([worker(), worker(), worker()])
   if (failed) throw new Error('Import paused after an error. Completed accounts are recorded in the external journal; rerun resumes without resetting passwords.')
   const current = await allProfiles(client)
   for (const previous of journal.existingSnapshots) {
@@ -160,7 +162,7 @@ export async function main(argv) {
   workbook.Sheets['Read Me']['!cols'] = [{ wch: 25 }, { wch: 110 }]
   const positions = XLSX.utils.sheet_to_json(workbook.Sheets.Positions, { defval: '' }).map(p => ({ ...p, 'Access Role For New Accounts': 'Driver', 'Position Setup Status': 'Saved on driver records' }))
   workbook.Sheets.Positions = XLSX.utils.json_to_sheet(positions)
-  XLSX.writeFile(workbook, output, { compression: true })
+  fs.writeFileSync(output, XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer', compression: true }), { mode: 0o600 })
   journal.verifiedAt = new Date().toISOString(); save()
   console.log(JSON.stringify({ verified: records.length, preserved: existingSnapshots.length, workspaceLinked: Object.values(journal.results).filter(r => r.workspace_linked).length, credentialWorkbook: output }))
 }

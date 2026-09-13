@@ -21,12 +21,15 @@
  */
 import { useCallback, useEffect, useState } from 'react'
 import {
-  ClipboardCheck, Wrench, AlertTriangle, Loader2, RefreshCw, Send, MapPin,
+  ClipboardCheck, Wrench, AlertTriangle, Loader2, RefreshCw, Send, MapPin, ShieldAlert,
+  AlertOctagon, Award, Camera,
 } from 'lucide-react'
 import {
   getDamageAssessment, saveDamageAssessment, submitDamageAssessment, REPAIR_ROUTES,
 } from '../../lib/api/accidentDamageAssessment'
 import { getOpenRepairOrder, upsertRepairOrder, WORKSHOP_TYPES } from '../../lib/api/accidentRepairOrders'
+import EvidenceTable from './EvidenceTable'
+import NotifyRecipientsPanel from './NotifyRecipientsPanel'
 import { toUserMessage } from '../../lib/safeError'
 
 // Shared vocabulary between accident_damage_assessments.recommended_route and
@@ -62,13 +65,21 @@ function Field({ label, children }) {
   )
 }
 
-function Toggle({ checked, onChange, label, disabled }) {
+// A safety/mobility FLAG, not a plain form checkbox - each is a real,
+// schema-backed field (recommended_offroad / specialist_required /
+// total_loss_possible), just given the visual weight a safety flag deserves.
+function FlagToggle({ checked, onChange, label, icon: Icon, tone, disabled }) {
   return (
-    <label className={`flex items-center gap-2 text-sm text-[var(--text-secondary)] ${disabled ? 'opacity-60' : 'cursor-pointer'}`}>
-      <input type="checkbox" checked={!!checked} disabled={disabled}
-        onChange={(e) => onChange(e.target.checked)} className="accent-green-500" />
-      {label}
-    </label>
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={`px-3 py-2 rounded-lg border text-sm inline-flex items-center gap-2 disabled:opacity-60 disabled:cursor-default ${
+        checked ? `border-current ${tone} bg-current/10` : 'border-[var(--input-border)] text-[var(--text-muted)]'
+      }`}
+    >
+      <Icon size={14} /> {label}
+    </button>
   )
 }
 
@@ -237,13 +248,16 @@ export default function WorkshopAssessmentPanel({ accidentId, elevated, fmtCurre
           </Field>
         </div>
 
-        <div className="flex flex-wrap gap-4 pt-1">
-          <Toggle label="Recommend off-road" disabled={!editable} checked={draft?.recommended_offroad}
-            onChange={(v) => setDraft((d) => ({ ...d, recommended_offroad: v }))} />
-          <Toggle label="Specialist required" disabled={!editable} checked={draft?.specialist_required}
-            onChange={(v) => setDraft((d) => ({ ...d, specialist_required: v }))} />
-          <Toggle label="Total loss possible" disabled={!editable} checked={draft?.total_loss_possible}
-            onChange={(v) => setDraft((d) => ({ ...d, total_loss_possible: v }))} />
+        <div>
+          <p className="text-[11px] uppercase tracking-wide text-[var(--text-muted)] font-semibold mb-1.5">Safety &amp; mobility flags</p>
+          <div className="flex flex-wrap gap-2">
+            <FlagToggle label="Vehicle should not be driven" icon={ShieldAlert} tone="text-red-400" disabled={!editable}
+              checked={draft?.recommended_offroad} onChange={(v) => setDraft((d) => ({ ...d, recommended_offroad: v }))} />
+            <FlagToggle label="Specialist required" icon={Wrench} tone="text-amber-400" disabled={!editable}
+              checked={draft?.specialist_required} onChange={(v) => setDraft((d) => ({ ...d, specialist_required: v }))} />
+            <FlagToggle label="Total loss possible" icon={AlertOctagon} tone="text-red-400" disabled={!editable}
+              checked={draft?.total_loss_possible} onChange={(v) => setDraft((d) => ({ ...d, total_loss_possible: v }))} />
+          </div>
         </div>
 
         {elevated && editable && (
@@ -263,18 +277,48 @@ export default function WorkshopAssessmentPanel({ accidentId, elevated, fmtCurre
 
         <div className="pt-3 border-t border-[var(--input-border)]">
           <p className="text-[11px] uppercase tracking-wide text-[var(--text-muted)] font-semibold mb-2 flex items-center gap-1.5">
-            <MapPin size={11} /> Marked damage areas
+            <MapPin size={11} /> Damage assessment ({damageAreas.length})
           </p>
           {damageAreas.length === 0 ? (
-            <p className="text-sm text-[var(--text-muted)]">No damage areas marked yet - use the damage mapping tool to add marks.</p>
+            <p className="text-sm text-[var(--text-muted)]">No damage areas marked yet - use the "Mark vehicle/equipment damage" tab to add marks and photos.</p>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {damageAreas.map((a, i) => (
-                <div key={`${a.view}-${a.region_key}-${i}`} className="rounded-lg border border-[var(--input-border)] px-3 py-2 text-sm">
-                  <p className="text-[var(--text-primary)]">{a.component_label || a.region_key} <span className="text-[var(--text-muted)]">({a.view})</span></p>
-                  <p className="text-[11px] text-[var(--text-muted)]">{a.damage_type || 'Damage'}{a.severity ? ` · ${a.severity}` : ''}</p>
-                </div>
-              ))}
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-left text-[var(--text-muted)] border-b border-[var(--input-border)]">
+                    <th className="px-2 py-1.5 font-medium">Photo</th>
+                    <th className="px-2 py-1.5 font-medium">Component</th>
+                    <th className="px-2 py-1.5 font-medium">View</th>
+                    <th className="px-2 py-1.5 font-medium">Damage type</th>
+                    <th className="px-2 py-1.5 font-medium">Severity</th>
+                    <th className="px-2 py-1.5 font-medium">Note</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--input-border)]">
+                  {damageAreas.map((a, i) => (
+                    <tr key={`${a.view}-${a.region_key}-${i}`}>
+                      <td className="px-2 py-1.5">
+                        {Array.isArray(a.photo_refs) && a.photo_refs[0] ? (
+                          <img src={a.photo_refs[0]} alt="Damage" className="h-9 w-9 object-cover rounded border border-[var(--input-border)]" />
+                        ) : (
+                          <span className="h-9 w-9 rounded border border-dashed border-[var(--input-border)] flex items-center justify-center text-[var(--text-muted)]"><Camera size={12} /></span>
+                        )}
+                      </td>
+                      <td className="px-2 py-1.5 text-[var(--text-primary)]">{a.component_label || a.region_key}</td>
+                      <td className="px-2 py-1.5 text-[var(--text-secondary)]">{a.view}</td>
+                      <td className="px-2 py-1.5 text-[var(--text-secondary)]">{a.damage_type || 'N/A'}</td>
+                      <td className="px-2 py-1.5">
+                        <span className={`badge text-[10px] ${
+                          a.severity === 'major' ? 'bg-red-900/30 text-red-300 border border-red-700/50'
+                            : a.severity === 'moderate' ? 'bg-amber-900/30 text-amber-300 border border-amber-700/50'
+                              : 'bg-[var(--input-bg)] text-[var(--text-secondary)] border border-[var(--input-border)]'
+                        }`}>{a.severity || 'minor'}</span>
+                      </td>
+                      <td className="px-2 py-1.5 text-[var(--text-muted)]">{a.note || 'N/A'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
@@ -285,7 +329,15 @@ export default function WorkshopAssessmentPanel({ accidentId, elevated, fmtCurre
         {order && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pb-3 border-b border-[var(--input-border)]">
             <div><p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">Status</p><p className={`text-sm font-semibold ${ORDER_STATUS_TONE[order.status] || 'text-[var(--text-secondary)]'}`}>{ORDER_STATUS_LABEL[order.status] || order.status}</p></div>
-            <div><p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">Route</p><p className="text-sm text-[var(--text-primary)]">{ROUTE_LABEL[order.repair_route] || order.repair_route || 'N/A'}</p></div>
+            <div>
+              <p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">Route</p>
+              <p className="text-sm text-[var(--text-primary)] flex items-center gap-1.5">
+                {ROUTE_LABEL[order.repair_route] || order.repair_route || 'N/A'}
+                {assessment?.recommended_route && order.repair_route === assessment.recommended_route && (
+                  <span className="badge text-[10px] bg-green-900/30 text-green-300 border border-green-700/50 inline-flex items-center gap-1"><Award size={10} /> Recommended</span>
+                )}
+              </p>
+            </div>
             <div><p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">Quotation</p><p className="text-sm text-[var(--text-primary)]">{order.quotation_amount != null ? money(order.quotation_amount) : 'N/A'}</p></div>
             <div><p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">Planned completion</p><p className="text-sm text-[var(--text-primary)]">{order.planned_completion ? new Date(order.planned_completion).toLocaleDateString() : 'N/A'}</p></div>
           </div>
@@ -298,7 +350,11 @@ export default function WorkshopAssessmentPanel({ accidentId, elevated, fmtCurre
               <select className="input w-full" value={orderForm.repairRoute}
                 onChange={(e) => setOrderForm((f) => ({ ...f, repairRoute: e.target.value }))}>
                 <option value="">Select…</option>
-                {REPAIR_ROUTES.map((r) => <option key={r} value={r}>{ROUTE_LABEL[r] || r}</option>)}
+                {REPAIR_ROUTES.map((r) => (
+                  <option key={r} value={r}>
+                    {r === assessment?.recommended_route ? '★ ' : ''}{ROUTE_LABEL[r] || r}{r === assessment?.recommended_route ? ' (Recommended)' : ''}
+                  </option>
+                ))}
               </select>
             </Field>
             <Field label="Workshop type">
@@ -329,6 +385,19 @@ export default function WorkshopAssessmentPanel({ accidentId, elevated, fmtCurre
         ) : (
           <p className="text-xs text-[var(--text-muted)]">Only Admin / Manager / Director can open or update the repair order.</p>
         )}
+      </section>
+
+      <section className="card">
+        <EvidenceTable accidentId={accidentId} workstreamKey="assessment" elevated={elevated} title="Attachments" />
+      </section>
+
+      <section className="card">
+        <NotifyRecipientsPanel
+          accidentId={accidentId}
+          workstreamKey="assessment"
+          title="Notify recipients"
+          subject="Workshop assessment report"
+        />
       </section>
     </div>
   )

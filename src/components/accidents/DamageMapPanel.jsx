@@ -17,15 +17,16 @@
  * on the FIRST mark saved, rather than forcing an empty save just to open
  * this tab.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  MapPin, X, Trash2, Loader2, AlertTriangle, Check, ChevronLeft, ChevronRight,
+  MapPin, X, Trash2, Loader2, AlertTriangle, Check, ChevronLeft, ChevronRight, Camera,
 } from 'lucide-react'
 import {
   familyForVehicleType, FAMILY_VIEWS, layoutFor, groupMarksByKey, markKey, viewLabel,
   MARK_SEVERITIES, SEVERITY_DOT_TONE,
 } from '../../lib/vehicleDamageViews'
 import { getDamageAssessment, saveDamageAssessment, upsertDamageMark, removeDamageMark } from '../../lib/api/accidentDamageAssessment'
+import { uploadEvidenceFile } from '../../lib/api/accidentEvidence'
 import { DAMAGE_CONDITION_OPTS } from '../../lib/accidentVocab'
 import { toUserMessage } from '../../lib/safeError'
 
@@ -36,7 +37,9 @@ export default function DamageMapPanel({ accidentId, vehicleType, elevated, onCh
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
-  const [editing, setEditing] = useState(null) // {view, regionKey, label, damage_type, severity, note} | null
+  const [editing, setEditing] = useState(null) // {view, regionKey, label, damage_type, severity, note, photo_refs} | null
+  const [photoUploading, setPhotoUploading] = useState(false)
+  const photoInputRef = useRef(null)
 
   const family = useMemo(() => familyForVehicleType(vehicleType), [vehicleType])
   const views = FAMILY_VIEWS[family] || FAMILY_VIEWS.generic
@@ -72,8 +75,24 @@ export default function DamageMapPanel({ accidentId, vehicleType, elevated, onCh
       damage_type: existing?.damage_type || MARK_DAMAGE_TYPES[0],
       severity: existing?.severity || 'minor',
       note: existing?.note || '',
+      photo_refs: Array.isArray(existing?.photo_refs) ? existing.photo_refs : [],
       isNew: !existing,
     })
+  }
+
+  async function attachPhoto(e) {
+    const file = e.target.files?.[0]
+    if (photoInputRef.current) photoInputRef.current.value = ''
+    if (!file || !editing) return
+    setPhotoUploading(true); setErr('')
+    try {
+      const url = await uploadEvidenceFile(accidentId, file)
+      setEditing((s) => (s ? { ...s, photo_refs: [...(s.photo_refs || []), url] } : s))
+    } catch (e2) {
+      setErr(toUserMessage(e2, 'Could not attach that photo.'))
+    } finally {
+      setPhotoUploading(false)
+    }
   }
 
   async function ensureAssessmentId() {
@@ -96,6 +115,7 @@ export default function DamageMapPanel({ accidentId, vehicleType, elevated, onCh
         damage_type: editing.damage_type,
         severity: editing.severity,
         note: editing.note || null,
+        photo_refs: editing.photo_refs || [],
       })
       setAssessment(saved)
       setEditing(null)
@@ -223,6 +243,25 @@ export default function DamageMapPanel({ accidentId, vehicleType, elevated, onCh
               <textarea rows={2} className="input w-full" value={editing.note}
                 onChange={(e) => setEditing((s) => ({ ...s, note: e.target.value }))} />
             </div>
+            <div>
+              <label className="label mb-1.5 block">Photos</label>
+              <div className="flex flex-wrap gap-2 items-center">
+                {(editing.photo_refs || []).map((url, i) => (
+                  <div key={url + i} className="relative">
+                    <img src={url} alt={`Damage ${i + 1}`} className="h-14 w-14 object-cover rounded border border-[var(--input-border)]" />
+                    <button type="button" onClick={() => setEditing((s) => ({ ...s, photo_refs: s.photo_refs.filter((_, idx) => idx !== i) }))}
+                      className="absolute -top-1.5 -right-1.5 bg-red-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[9px]">
+                      <X size={9} />
+                    </button>
+                  </div>
+                ))}
+                <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={attachPhoto} />
+                <button type="button" className="btn-secondary text-xs inline-flex items-center gap-1.5" disabled={photoUploading}
+                  onClick={() => photoInputRef.current?.click()}>
+                  {photoUploading ? <Loader2 size={12} className="animate-spin" /> : <Camera size={12} />} Add photo
+                </button>
+              </div>
+            </div>
             <div className="flex gap-2">
               <button type="button" className="btn-primary text-xs inline-flex items-center gap-1.5" disabled={saving} onClick={saveMark}>
                 {saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} Save mark
@@ -253,16 +292,25 @@ export default function DamageMapPanel({ accidentId, vehicleType, elevated, onCh
                   setEditing({
                     view: a.view, regionKey: a.region_key, label: a.component_label || a.region_key,
                     damage_type: a.damage_type || MARK_DAMAGE_TYPES[0], severity: a.severity || 'minor',
-                    note: a.note || '', isNew: false,
+                    note: a.note || '', photo_refs: Array.isArray(a.photo_refs) ? a.photo_refs : [], isNew: false,
                   })
                 }}
-                className="text-left rounded-lg border border-[var(--input-border)] px-3 py-2 disabled:cursor-default"
+                className="text-left rounded-lg border border-[var(--input-border)] px-3 py-2 disabled:cursor-default flex items-start gap-2.5"
               >
-                <p className="text-sm text-[var(--text-primary)] flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: SEVERITY_DOT_TONE[a.severity] || SEVERITY_DOT_TONE.minor }} />
-                  {a.component_label || a.region_key} <span className="text-[11px] text-[var(--text-muted)]">({viewLabel(a.view)})</span>
-                </p>
-                <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{a.damage_type || 'Damage'}{a.note ? ` · ${a.note}` : ''}</p>
+                {Array.isArray(a.photo_refs) && a.photo_refs[0] ? (
+                  <img src={a.photo_refs[0]} alt="Damage" className="h-10 w-10 object-cover rounded border border-[var(--input-border)] shrink-0" />
+                ) : (
+                  <span className="h-10 w-10 rounded border border-dashed border-[var(--input-border)] flex items-center justify-center shrink-0 text-[var(--text-muted)]">
+                    <Camera size={14} />
+                  </span>
+                )}
+                <div className="min-w-0">
+                  <p className="text-sm text-[var(--text-primary)] flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: SEVERITY_DOT_TONE[a.severity] || SEVERITY_DOT_TONE.minor }} />
+                    {a.component_label || a.region_key} <span className="text-[11px] text-[var(--text-muted)]">({viewLabel(a.view)})</span>
+                  </p>
+                  <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{a.damage_type || 'Damage'}{a.note ? ` · ${a.note}` : ''}</p>
+                </div>
               </button>
             ))}
           </div>

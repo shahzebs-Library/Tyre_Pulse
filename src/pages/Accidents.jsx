@@ -3,7 +3,10 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useFilterState } from '../hooks/useFilterState'
 
 const AccidentReportBuilder = lazy(() => import('../components/accidents/AccidentReportBuilder'))
-import { AlertOctagon, Plus, Search, X, Save, FileText, Download, BarChart2, Eye, Hourglass, ChevronDown, Trash2, AlertTriangle, TrendingUp, Users, DollarSign, ShieldAlert, Lightbulb, ChevronRight, Clock, ShieldCheck, ArrowLeft, Mail, Presentation, Paperclip, FileSpreadsheet, Share2, CalendarClock, RotateCcw } from 'lucide-react'
+// Camera/BarcodeDetector scanning is a heavy, optional path - lazy-loaded like
+// the report builder above so it never adds to the form's initial bundle.
+const AssetIdentifyScanner = lazy(() => import('../components/accidents/AssetIdentifyScanner'))
+import { AlertOctagon, Plus, Search, X, Save, FileText, Download, BarChart2, Eye, Hourglass, ChevronDown, Trash2, AlertTriangle, TrendingUp, Users, DollarSign, ShieldAlert, Lightbulb, ChevronRight, Clock, ShieldCheck, ArrowLeft, Mail, Presentation, Paperclip, FileSpreadsheet, Share2, CalendarClock, RotateCcw, ScanLine } from 'lucide-react'
 
 // Categorized document slots on the incident form. Each `category` matches the
 // team routing in src/lib/accidentTeams.js (licence/ID/registration/police to
@@ -497,6 +500,11 @@ export default function Accidents() {
   const [assetQuery, setAssetQuery]            = useState('')
   const [showAssetDrop, setShowAssetDrop]      = useState(false)
   const assetDropRef                           = useRef(null)
+  // "Identify asset" QR/barcode scanner (Report Accident wizard step) - opens
+  // AssetIdentifyScanner, which resolves through the same fleet master and
+  // hands back a row via selectAsset, exactly like picking one from the
+  // type-ahead dropdown below.
+  const [showScanner, setShowScanner]          = useState(false)
   // Matched vehicle-master row for the currently entered asset (read-only
   // context shown under the Asset field). Auto-populate reads from here.
   const [workshopIsOther, setWorkshopIsOther] = useState(false)
@@ -3005,7 +3013,17 @@ export default function Accidents() {
                   />
                 </div>
                 <div className="relative" ref={assetDropRef}>
-                  <label className="label">Asset No *</label>
+                  <div className="flex items-center justify-between">
+                    <label className="label">Asset No *</label>
+                    <button
+                      type="button"
+                      onClick={() => setShowScanner(true)}
+                      className="text-[11px] text-green-400 hover:text-green-300 inline-flex items-center gap-1"
+                      title="Scan the vehicle's QR or barcode label to identify the asset"
+                    >
+                      <ScanLine size={11} /> Scan
+                    </button>
+                  </div>
                   <div className="relative">
                     <input
                       className="input pr-8" required
@@ -3719,6 +3737,17 @@ export default function Accidents() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Identify Asset scanner (Report Accident wizard step) ─────────── */}
+      {showScanner && (
+        <Suspense fallback={null}>
+          <AssetIdentifyScanner
+            country={activeCountry}
+            onResult={(asset) => selectAsset(asset)}
+            onClose={() => setShowScanner(false)}
+          />
+        </Suspense>
       )}
 
     </div>

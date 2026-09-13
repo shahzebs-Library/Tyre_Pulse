@@ -16,8 +16,8 @@ import { extractScanCode } from '../assetScan'
 
 const SCAN_COLS = 'id,asset_no,fleet_number,make,model,vehicle_type,registration_no,site,country'
 
-async function firstMatch(build, country) {
-  const rows = unwrap(await applyCountry(build(), country).order('country').order('id').limit(5)) || []
+async function firstMatch(query) {
+  const rows = unwrap(await query) || []
   return rows[0] || null
 }
 
@@ -30,9 +30,12 @@ export async function lookupScannedAsset(raw, country) {
   const code = extractScanCode(raw)
   if (!code) return null
 
+  // Each query is bounded with its own `.limit(5)` right beside its `.select(...)`
+  // - a scanned code identifies at most a handful of same-code rows across
+  // countries (V376), never a table-sized result.
   const exact = await firstMatch(
-    () => supabase.from('vehicle_fleet').select(SCAN_COLS).eq('asset_no', code),
-    country,
+    applyCountry(supabase.from('vehicle_fleet').select(SCAN_COLS).eq('asset_no', code), country)
+      .order('country').order('id').limit(5),
   )
   if (exact) return exact
 
@@ -40,13 +43,13 @@ export async function lookupScannedAsset(raw, country) {
   const literal = code.replace(/[%_]/g, (m) => `\\${m}`)
 
   const ciAsset = await firstMatch(
-    () => supabase.from('vehicle_fleet').select(SCAN_COLS).ilike('asset_no', literal),
-    country,
+    applyCountry(supabase.from('vehicle_fleet').select(SCAN_COLS).ilike('asset_no', literal), country)
+      .order('country').order('id').limit(5),
   )
   if (ciAsset) return ciAsset
 
   return firstMatch(
-    () => supabase.from('vehicle_fleet').select(SCAN_COLS).ilike('fleet_number', literal),
-    country,
+    applyCountry(supabase.from('vehicle_fleet').select(SCAN_COLS).ilike('fleet_number', literal), country)
+      .order('country').order('id').limit(5),
   )
 }

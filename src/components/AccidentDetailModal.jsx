@@ -19,7 +19,7 @@ import {
   X, Plus, Trash2, Send, Lock, CheckCircle2, XCircle,
   ShieldCheck, Hourglass, FileText, Wrench, MessageSquare, Briefcase, History, User, ClipboardList,
   ArrowLeft, AlertOctagon, ChevronRight, Download, Loader2, ShieldAlert, Clock, Pencil,
-  GitBranch, MapPin, Ban, Hash, Users, FileDown, ListChecks, Share2,
+  GitBranch, MapPin, Ban, Hash, Users, FileDown, ListChecks, Share2, Scale,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
@@ -49,6 +49,7 @@ import CaseWorkstreamsPanel from './accidents/CaseWorkstreamsPanel'
 import CaseTeamDistributionPanel from './accidents/CaseTeamDistributionPanel'
 import CasePortalShare from './accidents/CasePortalShare'
 import CaseSlaHeader from './accidents/CaseSlaHeader'
+import LiabilityPaymentPanel from './accidents/LiabilityPaymentPanel'
 import AccidentInsurerRecord from './insurance/AccidentInsurerRecord'
 import { loadCase } from '../lib/api/accidentCase'
 import { updateAccidentForPage } from '../lib/api/accidents'
@@ -133,6 +134,9 @@ const TABS = [
   // Interactive "who owns what" control: assign each workstream, set its status,
   // and mark one Not Applicable. Elevated users get the controls; others read-only.
   { key: 'workstreams', label: 'Workstreams', icon: ListChecks },
+  // Fault determination, GCC liability split and the police/Najm/Taqdeer
+  // authority-report checklist. Rendered by LiabilityPaymentPanel.
+  { key: 'liability', label: 'Responsibility & Payment', icon: Scale },
   { key: 'tracker',  label: 'Tracker', icon: ClipboardList },
   { key: 'repair',   label: 'Repair & Insurance', icon: ShieldAlert },
   { key: 'claim',    label: 'Claim & Recovery', icon: Briefcase },
@@ -491,6 +495,13 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
           <CaseWorkstreamsPanel
             accidentId={acc.id}
             country={acc.country}
+            elevated={elevated}
+            onChanged={() => { load(); onChanged?.() }}
+          />
+        )}
+        {tab === 'liability' && (
+          <LiabilityPaymentPanel
+            accidentId={acc.id}
             elevated={elevated}
             onChanged={() => { load(); onChanged?.() }}
           />

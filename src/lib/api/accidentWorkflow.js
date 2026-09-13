@@ -76,6 +76,11 @@ export async function setAccidentStage(id, stage, extra = {}) {
 export async function setAccidentVor(id, vor) {
   return unwrap(await supabase.from('accidents').update({ vor }).eq('id', id).select('id,vor,vor_since').single())
 }
+/** Who will pay for this case (accidentVocab.PAYER_OPTS: GCC / Insurance /
+ *  Recovery Claim) - the "Who will pay?" control on Responsibility & Payment. */
+export async function setAccidentPayer(id, payer) {
+  return unwrap(await supabase.from('accidents').update({ payer }).eq('id', id).select('id,payer').single())
+}
 
 // ── master email toggle (system_config) ───────────────────────────────────────
 function truthyConfig(v) {

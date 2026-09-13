@@ -540,6 +540,7 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
           <LiabilityPaymentPanel
             accidentId={acc.id}
             elevated={elevated}
+            acc={acc}
             onChanged={() => { load(); onChanged?.() }}
           />
         )}

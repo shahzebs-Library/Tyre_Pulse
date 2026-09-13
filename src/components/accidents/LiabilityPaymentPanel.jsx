@@ -19,11 +19,15 @@
  * closed-out finding is never silently overwritten.
  */
 import { useCallback, useEffect, useState } from 'react'
-import { Scale, ShieldCheck, AlertCircle, Loader2, RefreshCw, Lock, FileWarning } from 'lucide-react'
+import { Scale, ShieldCheck, Banknote, AlertCircle, Loader2, RefreshCw, Lock, FileWarning } from 'lucide-react'
 import {
   getLiabilityAssessment, saveLiabilityAssessment, approveLiabilityAssessment,
   listAuthorityReports, saveAuthorityReport,
 } from '../../lib/api/accidentLiability'
+import { setAccidentPayer } from '../../lib/api/accidentWorkflow'
+import { PAYER_OPTS, canonPayer } from '../../lib/accidentVocab'
+import NotifyRecipientsPanel from './NotifyRecipientsPanel'
+import EvidenceTable from './EvidenceTable'
 import { toUserMessage } from '../../lib/safeError'
 
 const LIABILITY_TYPES = [
@@ -91,7 +95,7 @@ function Field({ label, value, onChange, disabled, placeholder }) {
   )
 }
 
-export default function LiabilityPaymentPanel({ accidentId, elevated, onChanged }) {
+export default function LiabilityPaymentPanel({ accidentId, elevated, acc, onChanged }) {
   const [assessment, setAssessment] = useState(null) // null while loading, {} when none exists yet
   const [reports, setReports] = useState(null)
   const [draft, setDraft] = useState(null)
@@ -100,6 +104,7 @@ export default function LiabilityPaymentPanel({ accidentId, elevated, onChanged 
   const [err, setErr] = useState('')
   const [provisioned, setProvisioned] = useState(true)
   const [changeReason, setChangeReason] = useState('')
+  const [payerSaving, setPayerSaving] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true); setErr('')
@@ -147,6 +152,19 @@ export default function LiabilityPaymentPanel({ accidentId, elevated, onChanged 
       setErr(toUserMessage(e, 'Could not approve the assessment.'))
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function setPayer(payer) {
+    if (!elevated || payerSaving) return
+    setPayerSaving(true); setErr('')
+    try {
+      await setAccidentPayer(accidentId, payer)
+      onChanged?.()
+    } catch (e) {
+      setErr(toUserMessage(e, 'Could not save who will pay.'))
+    } finally {
+      setPayerSaving(false)
     }
   }
 
@@ -279,10 +297,29 @@ export default function LiabilityPaymentPanel({ accidentId, elevated, onChanged 
             )}
           </div>
         )}
+        <div className="pt-3 border-t border-[var(--input-border)]">
+          <label className="label flex items-center gap-1.5"><Banknote size={13} /> Who will pay?</label>
+          <div className="flex flex-wrap gap-2">
+            {PAYER_OPTS.map((p) => (
+              <button
+                key={p}
+                type="button"
+                disabled={!elevated || payerSaving}
+                onClick={() => setPayer(p)}
+                className={`px-3 py-1.5 rounded-lg border text-sm disabled:opacity-60 ${
+                  canonPayer(acc?.payer) === p
+                    ? 'border-blue-500 bg-blue-900/20 text-blue-300'
+                    : 'border-[var(--input-border)] text-[var(--text-secondary)] hover:border-[var(--text-muted)]'
+                }`}
+              >
+                {p}
+              </button>
+            ))}
+            {payerSaving && <Loader2 size={14} className="animate-spin text-[var(--text-muted)] self-center" />}
+          </div>
+        </div>
+
         {err && <p className="text-red-400 text-xs flex items-center gap-1.5"><AlertCircle size={12} /> {err}</p>}
-        <p className="text-[11px] text-[var(--text-muted)]">
-          Who pays and recovery status are tracked on the <strong>Claim &amp; Recovery</strong> tab.
-        </p>
       </section>
 
       <section className="card space-y-4">
@@ -311,6 +348,19 @@ export default function LiabilityPaymentPanel({ accidentId, elevated, onChanged 
             )
           })}
         </div>
+      </section>
+
+      <section className="card">
+        <EvidenceTable accidentId={accidentId} workstreamKey="liability" elevated={elevated} title="Responsibility documents" />
+      </section>
+
+      <section className="card">
+        <NotifyRecipientsPanel
+          accidentId={accidentId}
+          workstreamKey="liability"
+          title="Notify recipients"
+          subject="Responsibility & payment update"
+        />
       </section>
     </div>
   )

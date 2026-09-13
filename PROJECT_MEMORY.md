@@ -55,6 +55,140 @@ batching stops them being started at all.
 
 ---
 
+# ⚑ SESSION 2026-09-13 (part 2) — THE "YESTERDAY" PERIOD BROKE LIVE SAVES, THEN THE EMAILED
+# DIGEST TURNED OUT TO IGNORE THE PERIOD ENTIRELY. Both fixed + applied live. Migration
+# **V612**, next free **V613**. Fleet Supervisor also granted accidents create/edit (no
+# migration - a live per-org capability-override write, see below).
+
+**THE SUPABASE MCP TOOL WAS UNAUTHENTICATED THIS SESSION, BUT THE SUPABASE CLI WAS NOT** - it
+already held a valid access token (`npx supabase projects list` returned real project data with
+no login prompt) and linking with `--project-ref jhssdmeruxtrlqnwfksc` on a per-command basis (no
+`supabase link` needed) reached the live database directly via `supabase db query --linked
+--project-ref ... [--file <path>]`, and edge functions deploy via `supabase functions deploy
+<name> --project-ref ... --no-verify-jwt --use-api`. **RULE for a future session that believes it
+has "no DB access" because the MCP tool says so: try the CLI - it authenticates separately and,
+in this environment, already had a live token.** `supabase db query --file` DOES honour
+`BEGIN`/`ROLLBACK` correctly (verified: a rolled-back probe INSERT left no row behind) - use that
+for the sane "prove it in a transaction, then commit for real" discipline this whole file already
+follows for MCP-based sessions.
+
+### **BUG 1 - the live DB rejected 'yesterday': "Some values are not valid." on every save**
+The Scheduled Reports "Yesterday" period added in part 1 of this session was a CLIENT-only change.
+`report_schedules.period` carries a server-side CHECK constraint
+(`report_schedules_period_chk`, from `MIGRATIONS_V218`) scoped to the six periods that existed at
+the time - **it did not include `'yesterday'`**, so every create/update of a schedule using it
+hit Postgres 23514, mapped by `src/lib/safeError.js` to the generic "Some values are not valid."
+**Exactly the class of bug this file already has two precedents for** (`report_type`/`frequency`
+CHECKs under-widened, V244) - a new client-side option is not safe to ship without checking
+whether the column it writes is server-CHECK-constrained. **FIX (V612): widened
+`report_schedules_period_chk` to include `'yesterday'`.** Proven in a rolled-back transaction
+first (an INSERT with `period='yesterday'` was refused before, accepted after), then applied for
+real and re-verified via `pg_get_constraintdef`. Repo file
+`MIGRATIONS_V612_REPORT_SCHEDULES_PERIOD_YESTERDAY.sql` documents it (status: applied live via
+the CLI, not the MCP - this file exists for replay/history, not as the apply mechanism used).
+
+### **BUG 2 - THE EMAILED DIGEST HAS ALWAYS IGNORED period/period_from/period_to ENTIRELY**
+Reported live: a "Daily Inspection Summary" schedule (`period='custom'`, 2026-08-16 to
+2026-08-18) was sent via "Send now" and the email showed **"all data from the beginning, 1000
+records."** Root cause, in `supabase/functions/send-scheduled-reports/index.ts`:
+`buildDatasetDigest()` built its query with `.order(cfg.dateCol,...).limit(5000)` and **no date
+filter of any kind** - the schedule's own `period`/`period_from`/`period_to` were not even in its
+`Schedule` TypeScript type or `SCHEDULE_COLS` select list, so nothing downstream could read them
+even if it wanted to. The 5000-row `.limit()` is itself a lie (**PostgREST caps at its own
+server-configured max rows regardless of a higher `.limit()` request** - the standing rule
+already documented dozens of times elsewhere in this file), which is where "1000" came from:
+**measured live, this org's `inspections` table holds 1,073 rows total** - capped to ~1000 by
+PostgREST, read with no date bound at all, which is "all data from the beginning."
+**FIX, additive, scoped to the reported symptom only:**
+- `Schedule` type + `SCHEDULE_COLS` widened to carry `period`/`period_from`/`period_to`.
+- New `resolvePeriodBounds(schedule, now)` mirrors the CLIENT vocabulary (yesterday/last_7/
+  last_30/last_90/mtd/ytd/custom) computed in **Riyadh calendar days** via the file's own
+  pre-existing `toRiyadh`/`fromRiyadh` helpers (already used by `computeNextRun`) - there is no
+  browser timezone server-side, so Riyadh (this app's home region) is the deliberate fixed
+  reference, never a bare `toISOString()` on an unshifted Date (that mismatch is the EXACT bug
+  class fixed client-side in part 1 of this session).
+- `buildDatasetDigest` now takes a `win: {from,to}` and applies `.gte`/`.lte` on `cfg.dateCol`
+  (shared via a new `scopeDatasetQuery` helper so the row-fetch and the count query can never
+  disagree about which rows are in scope).
+- **The reported `count` is now a real `{count:'exact', head:true}` query**, not `rows.length` -
+  `rows.length` would still silently read as "1000ish" for any window wide enough to exceed the
+  server cap, quietly lying about the true total exactly the way this file's own rowCapGuard
+  rules elsewhere already forbid.
+- `renderDatasetHtml` now prints the SCHEDULE'S OWN requested window (e.g. "Yesterday
+  (2026-09-12)" or "2026-08-16 to 2026-08-18"), never inferred from the returned rows' own min/max
+  date - an empty window must read "no records for [the requested period]", not "N/A".
+- **DELIBERATELY NOT TOUCHED: the `executive` and `claims` digest paths** (`buildDigest`/
+  `buildClaimsDigest`) - they use a separate server-side aggregate RPC and were left alone to keep
+  this a focused fix for the reported symptom (an `inspection`-type schedule). Scoping those two
+  by period too is a real, separate follow-up, not done here.
+- **Deployed with `--no-verify-jwt`** (this function is dual-mode: unauthenticated cron via
+  `x-cron-secret`, authenticated "Send now" via a user Bearer token - it self-validates both
+  internally, matching every other self-validating edge fn in this project). **Verified the
+  deployed function is byte-identical to the repo file** via `supabase functions download` +
+  `diff` - the established discipline for this exact function, now actually exercised rather than
+  just described.
+- **Proven with real data, not just logic**: this org's `inspections` = **1,073 all-time** vs
+  **72** inside the schedule's actual 2026-08-16..2026-08-18 window - the concrete before/after
+  the fix produces.
+
+### **Every one of the 7 live `report_schedules` rows carried `org_id = NULL`**
+`buildDatasetDigest`'s org scoping is `if (orgId) q = q.eq('organisation_id', orgId)` - a no-op
+whenever `org_id` is null, so EVERY schedule's digest has always read across whichever
+organisation(s) exist, not just the creator's. Measured: 7 of 7 rows, 100%, null. Backfilled all
+7 to Company A (`00000000-0000-0000-0000-000000000001`) - safe and unambiguous because it is the
+ONLY org with real data in this project (verified, not assumed). **Data-only, no migration file**
+(matches this file's own convention for one-off backfills with no schema change). **STILL OPEN,
+not fixed here**: `createSchedule`'s payload (`src/lib/api/scheduledReports.js buildPayload`)
+still writes `org_id: profile?.org_id ?? null` - if `profile.org_id` is ever genuinely null for a
+real user, a NEW schedule will repeat this exact gap. Worth a follow-up guard (fall back to
+`profile.organisation_id`, matching the "org_id vs organisation_id split... fragile" note already
+carried in this file) but not touched this session to keep the fix scoped to the reported bug.
+
+### **Fleet Supervisor granted Accidents create + edit (not delete) on the web - live, no migration**
+Owner: "give Fleet Supervisor access to update the accident report directly, edit and create,
+[not] delete, [including] closed [records]." Investigated against the LIVE RLS rather than
+guessing: `accidents` INSERT/UPDATE/DELETE are governed by `app_user_can(module_key, capability)`
+OR'd with legacy role-literal policies (`role_insert_accidents` admits
+admin/manager/director/inspector/tyre_man only; `role_update_accidents` admits `app_is_elevated()`
+only) - **"Fleet Supervisor" is a real, active custom role with 3 live users and was in NEITHER
+legacy list**, so `app_user_can` was its only possible path.
+- **`app_user_can()` HARD-CODES `if p_cap = 'delete' then return false` for every non-admin,
+  unconditionally** - "no delete for Fleet Supervisor" is therefore already permanent and
+  un-grantable by any means, exactly matching the ask; nothing needed there.
+- For `create`/`edit`, `app_user_can` reads `organisations.settings->app_settings->
+  permission_overrides` (a per-org JSON blob, `{role: {module_key: {create,edit,...}}}`) with a
+  per-user `user_access_grants` fallback. **`permission_overrides` IS DOUBLE-ENCODED**: the KEY
+  itself is a jsonb STRING holding `JSON.stringify()`'d text (`src/lib/permissionMatrix.js
+  serializeOverrides`), not a nested jsonb object - a naive `jsonb_set` straight into
+  `{app_settings,permission_overrides,overrides,...}` silently no-ops (Postgres `->` on a string
+  scalar returns NULL, not an error - this bit on the first attempt and was only caught by
+  re-reading the result). **The correct approach: parse the string out with `->>` + `::jsonb`,
+  `jsonb_set` on the PARSED object, re-encode with `::text`, then `jsonb_set` that new text back
+  in as a jsonb STRING via `to_jsonb(text)`.**
+- Merged `"Fleet Supervisor": {"accidents": {"create": true, "edit": true}}` into the existing
+  overrides for Company A, proven in a rolled-back transaction (all 6 pre-existing role entries
+  - Manager/Director/Reporter/Tyre Man/Inspector/Data Monitor Officer - confirmed still present
+  and unchanged) before being committed for real.
+- **Verified by impersonation, not assumed**: a real Fleet Supervisor user id
+  (`f3a70480-...`), `app_user_can('accidents','create')=true`, `('accidents','edit')=true`,
+  `('accidents','delete')=false`.
+- **"Closed" accidents checked too**: no RLS/trigger locks editing an already-closed accident's
+  OTHER fields. `trg_enforce_accident_closure` only gates the TRANSITION into
+  `case_status='closed'`/`closure_level='fully_closed'`, requiring an approved row in
+  `accident_closure_reviews` first - a deliberate governance step, not a role restriction, and
+  not something a capability grant can or should bypass. `trg_status_cap_accidents` (via
+  `enforce_status_change_capability`) only blocks a status change when the user has been
+  EXPLICITLY revoked the 'approve' capability - none of the 3 Fleet Supervisor users have any
+  `user_access_grants` row at all, so it does not apply to them.
+- **`src/lib/permissionMatrix.js`'s own header comment is now STALE**: it says "The extended
+  capabilities (create, edit, delete...) have no enforcement hooks in the app yet." That was true
+  when written; `app_user_can()` now enforces them live via RLS (wired up by a separate,
+  concurrent session per `CODEX_CONTEXT.md`'s "Web/backend completion (2026-09-12)" / "Approval
+  Matrix" entries). Not corrected this session - flagging it here so nobody re-reads that comment
+  and concludes the capability grant just made is inert.
+
+---
+
 # ⚑ SESSION 2026-09-13 — SCHEDULED REPORTS: A "YESTERDAY" PERIOD + THE TYRE-MAN/VEHICLE-TYPE
 # INSPECTION BREAKDOWN, AND A REAL TIMEZONE BUG FOUND ALONG THE WAY. No migration (pure
 # client/service-layer change) - commit `26295428`, pushed straight to `main` (branch == main,

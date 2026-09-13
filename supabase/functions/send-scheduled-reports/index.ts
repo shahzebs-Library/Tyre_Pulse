@@ -82,6 +82,9 @@ type Schedule = {
   last_sent_at: string | null
   next_run_at: string | null
   org_id: string | null
+  period: string | null
+  period_from: string | null
+  period_to: string | null
 }
 
 function toRiyadh(d: Date): Date {
@@ -89,6 +92,54 @@ function toRiyadh(d: Date): Date {
 }
 function fromRiyadh(d: Date): Date {
   return new Date(d.getTime() - RIYADH_OFFSET_MIN * 60_000)
+}
+
+/** YYYY-MM-DD from a date that has already been through toRiyadh() - its UTC
+ *  fields then read as Riyadh wall-clock time, the same trick computeNextRun
+ *  above relies on. Never call this on a plain, unshifted Date. */
+function isoDay(d: Date): string {
+  return d.toISOString().slice(0, 10)
+}
+
+/**
+ * The coverage window a schedule was actually configured for - same
+ * vocabulary as the client (src/lib/api/scheduledReports.js resolvePeriod):
+ * yesterday / last_7 / last_30 / last_90 / mtd / ytd / custom. Computed in
+ * Riyadh calendar days, consistent with computeNextRun's own local-time
+ * handling in this file (there is no "browser timezone" server-side, so
+ * Riyadh - this app's home region - is the deliberate, fixed reference,
+ * never UTC-via-toISOString() on an unshifted date - that mismatch is
+ * exactly the class of bug already fixed client-side for this same period
+ * vocabulary; PROJECT_MEMORY.md, 2026-09-13).
+ * Returns {from,to} as null when the period cannot be resolved (missing
+ * custom bounds) - callers then read the whole table, the prior behaviour,
+ * never a silent narrowing to zero rows.
+ */
+function resolvePeriodBounds(s: Schedule, now: Date): { from: string | null; to: string | null; label: string } {
+  const nowLocal = toRiyadh(now)
+  const today = isoDay(nowLocal)
+  const period = s.period || 'last_30'
+
+  if (period === 'custom') {
+    return {
+      from: s.period_from || null,
+      to: s.period_to || null,
+      label: `${s.period_from || '...'} to ${s.period_to || '...'}`,
+    }
+  }
+  if (period === 'yesterday') {
+    const y = new Date(nowLocal)
+    y.setUTCDate(y.getUTCDate() - 1)
+    const day = isoDay(y)
+    return { from: day, to: day, label: `Yesterday (${day})` }
+  }
+  const from = new Date(nowLocal)
+  if (period === 'last_7') from.setUTCDate(from.getUTCDate() - 7)
+  else if (period === 'last_90') from.setUTCDate(from.getUTCDate() - 90)
+  else if (period === 'mtd') from.setUTCDate(1)
+  else if (period === 'ytd') from.setUTCMonth(0, 1)
+  else from.setUTCDate(from.getUTCDate() - 30) // last_30 and any unrecognised value
+  return { from: isoDay(from), to: today, label: `${isoDay(from)} to ${today}` }
 }
 
 /** Next run strictly after `now`, honouring frequency/day/time in Riyadh time. */
@@ -799,22 +850,46 @@ type DatasetDigest = {
   recent: Record<string, unknown>[]
 }
 
+/** Apply the schedule's own eq/org/date-window filters to a query - shared by
+ *  the exact head-count and the row-fetching query below so they can never
+ *  disagree about which rows are in scope. */
 // deno-lint-ignore no-explicit-any
-async function buildDatasetDigest(svc: any, cfg: DatasetDigestCfg, orgId: string | null): Promise<DatasetDigest> {
+function scopeDatasetQuery(q: any, cfg: DatasetDigestCfg, orgId: string | null, win: { from: string | null; to: string | null }) {
+  if (cfg.eqFilter) for (const [col, val] of Object.entries(cfg.eqFilter)) q = q.eq(col, val)
+  // Service role bypasses RLS, so scope to the schedule's org explicitly.
+  if (orgId) q = q.eq('organisation_id', orgId)
+  // The schedule's configured coverage window (see resolvePeriodBounds). Prior
+  // to this, every digest read the WHOLE table regardless of the period the
+  // owner picked - "Yesterday" or a 3-day custom range would still show
+  // all-time data. Missing bounds (custom with no dates set) leave the query
+  // unfiltered rather than narrowing it to nothing.
+  if (win.from) q = q.gte(cfg.dateCol, win.from)
+  if (win.to)   q = q.lte(cfg.dateCol, win.to)
+  return q
+}
+
+// deno-lint-ignore no-explicit-any
+async function buildDatasetDigest(svc: any, cfg: DatasetDigestCfg, orgId: string | null, win: { from: string | null; to: string | null }): Promise<DatasetDigest> {
   const cols = new Set<string>([cfg.dateCol])
   if (cfg.money) cols.add(cfg.money)
   cfg.groups.forEach(([, c]) => cols.add(c))
   cfg.recent.forEach(([c]) => cols.add(c))
   let q = svc.from(cfg.table).select([...cols].join(','))
     .order(cfg.dateCol, { ascending: cfg.orderAscending === true, nullsFirst: false }).limit(5000)
-  // Optional exact-match focus (e.g. PM programs where status='active').
-  if (cfg.eqFilter) for (const [col, val] of Object.entries(cfg.eqFilter)) q = q.eq(col, val)
-  // Service role bypasses RLS, so scope to the schedule's org explicitly.
-  if (orgId) q = q.eq('organisation_id', orgId)
+  q = scopeDatasetQuery(q, cfg, orgId, win)
   const { data, error } = await q
   if (error) throw new Error(`${cfg.table} query failed: ${error.message}`)
   // deno-lint-ignore no-explicit-any
   const rows = (data ?? []) as Record<string, any>[]
+
+  // The TRUE row count for the window, not rows.length - PostgREST caps any
+  // single response (including this one's .limit(5000)) at its own configured
+  // max rows, so a real count above that ceiling would otherwise silently
+  // read as "exactly 1000/whatever-the-cap-is" instead of the honest total.
+  let countQ = svc.from(cfg.table).select(cfg.dateCol, { count: 'exact', head: true })
+  countQ = scopeDatasetQuery(countQ, cfg, orgId, win)
+  const { count: exactCount, error: countErr } = await countQ
+  if (countErr) throw new Error(`${cfg.table} count failed: ${countErr.message}`)
 
   const cutoff = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10)
   let moneySum = 0, recent30 = 0
@@ -837,19 +912,25 @@ async function buildDatasetDigest(svc: any, cfg: DatasetDigestCfg, orgId: string
     label,
     items: [...maps[i].entries()].map(([l, v]) => ({ label: l, value: v })).sort((a, b) => b.value - a.value).slice(0, 6),
   }))
-  return { count: rows.length, moneySum, recent30, first, last, groups, recent: rows.slice(0, 12) }
+  // rows.length is only ever used as a last-resort fallback if the exact count
+  // request itself failed to return a number (should not happen; head counts
+  // do not hit the same row-payload cap the data query does).
+  return { count: exactCount ?? rows.length, moneySum, recent30, first, last, groups, recent: rows.slice(0, 12) }
 }
 
-function renderDatasetHtml(s: Schedule, cfg: DatasetDigestCfg, d: DatasetDigest, appUrl: string, currency: string): string {
+function renderDatasetHtml(s: Schedule, cfg: DatasetDigestCfg, d: DatasetDigest, appUrl: string, currency: string, windowLabel: string): string {
   const genAt = new Date().toISOString().slice(0, 16).replace('T', ' ')
-  const coverage = (d.first || d.last) ? `${dateShort(d.first)} to ${dateShort(d.last)}` : 'N/A'
+  // The window the schedule was actually configured for - never inferred from
+  // the data alone, or an empty window would print "N/A" instead of naming
+  // the period that legitimately found nothing.
+  const coverage = windowLabel || ((d.first || d.last) ? `${dateShort(d.first)} to ${dateShort(d.last)}` : 'N/A')
   const label = typeLabel(s.report_type)
 
   const summary = d.count === 0
-    ? `No ${label.toLowerCase()} records were found for this organisation yet. Rows appear here as soon as the data is captured.`
-    : `<b>${num(d.count)}</b> record(s) on file (${coverage})` +
+    ? `No ${label.toLowerCase()} records were found for ${coverage}. Widen the schedule's coverage period to see more.`
+    : `<b>${num(d.count)}</b> record(s) in ${coverage}` +
       `${cfg.money ? `, totalling <b>${money(d.moneySum, currency)}</b>` : ''}. ` +
-      `<b>${num(d.recent30)}</b> added in the last 30 days.`
+      `<b>${num(d.recent30)}</b> of those were added in the last 30 days.`
 
   // Group breakdowns, three columns per row.
   const groupRows: string[] = []
@@ -907,11 +988,20 @@ function renderDatasetHtml(s: Schedule, cfg: DatasetDigestCfg, d: DatasetDigest,
 
 /** Render the correct digest e-mail for one schedule. Each report type gets its
  *  own focused digest: claims -> claims desk; executive -> full exec intel;
- *  kpi/fleet/cost/inspection/accidents/stock/vendor -> their own dataset digest;
- *  builder:<id> custom layouts -> the accident dataset digest. */
+ *  kpi/fleet/cost/inspection/accidents/stock/vendor -> their own dataset digest,
+ *  scoped to the schedule's own coverage period; builder:<id> custom layouts ->
+ *  the accident dataset digest, same scoping.
+ *
+ *  NOTE: the executive and claims digests (buildDigest/buildClaimsDigest) are
+ *  NOT scoped by this fix - they already compute their own all-time + trailing
+ *  windows via a separate server-side aggregate and were left untouched to keep
+ *  this change to the reported symptom (an 'inspection' schedule showing
+ *  unfiltered data). If a schedule's period ever needs to bound those two as
+ *  well, that is a separate, deliberate follow-up. */
 // deno-lint-ignore no-explicit-any
 async function renderForSchedule(svc: any, s: Schedule, appUrl: string, currency: string): Promise<{ subject: string; html: string }> {
   const type = s.report_type ?? ''
+  const win = resolvePeriodBounds(s, new Date())
   let html: string
   if (type === 'claims') {
     html = renderClaimsHtml(s, await buildClaimsDigest(svc, s.org_id), appUrl, currency)
@@ -919,10 +1009,10 @@ async function renderForSchedule(svc: any, s: Schedule, appUrl: string, currency
     html = renderHtml(s, await buildDigest(svc, s.org_id), appUrl, currency)
   } else if (type.startsWith('builder:')) {
     const cfg = DATASET_DIGEST.accidents
-    html = renderDatasetHtml(s, cfg, await buildDatasetDigest(svc, cfg, s.org_id), appUrl, currency)
+    html = renderDatasetHtml(s, cfg, await buildDatasetDigest(svc, cfg, s.org_id, win), appUrl, currency, win.label)
   } else if (DATASET_DIGEST[type]) {
     const cfg = DATASET_DIGEST[type]
-    html = renderDatasetHtml(s, cfg, await buildDatasetDigest(svc, cfg, s.org_id), appUrl, currency)
+    html = renderDatasetHtml(s, cfg, await buildDatasetDigest(svc, cfg, s.org_id, win), appUrl, currency, win.label)
   } else {
     html = renderHtml(s, await buildDigest(svc, s.org_id), appUrl, currency)
   }
@@ -938,7 +1028,7 @@ async function systemCurrency(svc: any): Promise<string> {
   } catch { return '' }
 }
 
-const SCHEDULE_COLS = 'id,name,report_type,frequency,day_of_week,day_of_month,time_of_day,recipients,last_sent_at,next_run_at,org_id'
+const SCHEDULE_COLS = 'id,name,report_type,frequency,day_of_week,day_of_month,time_of_day,recipients,last_sent_at,next_run_at,org_id,period,period_from,period_to'
 
 /**
  * On-demand "Send now": an authenticated Admin/Manager/Director posts

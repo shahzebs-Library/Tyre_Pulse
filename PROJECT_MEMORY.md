@@ -55,6 +55,97 @@ batching stops them being started at all.
 
 ---
 
+# ⚑ SESSION 2026-09-13 — SCHEDULED REPORTS: A "YESTERDAY" PERIOD + THE TYRE-MAN/VEHICLE-TYPE
+# INSPECTION BREAKDOWN, AND A REAL TIMEZONE BUG FOUND ALONG THE WAY. No migration (pure
+# client/service-layer change) - commit `26295428`, pushed straight to `main` (branch == main,
+# no PR).
+
+**"The automation report" IS `/scheduled-reports` (Scheduled Reports).** The owner's own name for
+it - worth remembering verbatim, because the page's literal self-description is "Reports are
+delivered automatically when enabled," and nothing in the app is called "automation report" as a
+label. If a future request references "the automation report," start there.
+
+### What was asked and what shipped
+Owner: "add a one day report... option that covers yesterday - what was completed - tyre
+inspections - covered by tyre man name and vehicle type - how many done."
+- **New `PERIODS` entry `{ value: 'yesterday', label: 'Yesterday (1 day)' }`** in
+  `src/lib/api/scheduledReports.js` - available to EVERY report type via the existing "Report
+  Covers" dropdown (no UI change needed, it is populated from `PERIODS`), plus in `resolvePeriod`.
+- **The Inspection Summary report now carries a completed-inspections pivot: tyre man (inspector) x
+  vehicle type x count**, with per-type and grand totals, via NEW pure module
+  `src/lib/inspectionCoverage.js` (`isCompletedInspection`, `tyreManVehicleTypeSummary`,
+  `tyreManVehicleTypeTable`). "Completed" mirrors the SAME rule already used by
+  `src/lib/inspectorActivity.js` (`inspectorActivity()`- completed_date present OR status='Done')
+  - kept in sync deliberately, do not let the two definitions drift.
+- **PDF**: `exportToPdf` (`src/lib/exportUtils.js`) gained an additive `opts.extraTable` hook -
+  renders a second tabular section on its own page(s), in the same `_tableTheme`, ahead of the raw
+  record table. Callers that omit it are unaffected (used only by the inspection report today).
+- **Excel**: inspection reports now go through the existing multi-sheet `exportSheetsToExcel`
+  instead of the single-sheet `exportToExcel` - "Tyre Man Summary" tab first, the raw record list
+  second. Every OTHER report type is untouched (still single-sheet `exportToExcel`).
+- `dataset.cols`/`headers` for `inspection` in `DATASETS` (scheduledReports.js) widened to include
+  `vehicle_type` + `completed_date` (both already exist on `inspections`; purely additive to the
+  projection).
+- Zero-completed windows still render an honest "0" row (`All Tyre Men | 0 | 0 | ...`), never an
+  omitted section - "nothing completed" is an answer, not a reason to hide the table.
+
+### **THE REAL BUG, FOUND FROM THE OWNER'S BUG REPORT ("choose yesterday, we get today")**
+`resolvePeriod`'s `iso()` helper computed a period boundary as **`d.toISOString().slice(0, 10)`**
+- which reads the **UTC** calendar day, not the browser's LOCAL one. In any timezone WEST of UTC
+(most of the Americas), during LOCAL EVENING HOURS, "now"'s UTC calendar day is already tomorrow,
+so subtracting one day (for "Yesterday") landed back on TODAY'S OWN LOCAL DATE. Reproduced exactly:
+at 2026-09-12 23:30 `America/New_York` (2026-09-13T03:30:00Z), the old code returned `'2026-09-12'`
+for BOTH "today" (`last_7`'s `to`) and "yesterday" - a literal collision, matching the report word
+for word. The SAME bug (smaller symptom) affected every other period's `to`/`from` boundary too
+(`last_7`/`last_30`/`last_90`/`mtd`/`ytd`), just less visible on a multi-day window.
+**FIX: `iso()` now builds the date string from the Date object's OWN local
+`getFullYear()`/`getMonth()`/`getDate()`**, matching how `reportDateLabel()` (used for the on-screen
+label right next to it) was ALREADY computing dates - the two were inconsistent with each other
+before this fix, which is its own tell.
+**RULE, matches this file's existing pack of date-handling landmines (V381b's day-first parser,
+V388's 2-digit-year pivot, `coerceDate`): NEVER derive a date-only string for a `date` column
+comparison via `Date.prototype.toISOString()`. It is UTC. Use the object's local getters
+(`getFullYear`/`getMonth`/`getDate`), or the codebase's own `reportDateLabel`-style helpers.** A
+single-day window (`from === to`) makes this class of bug the LOUDEST, because there is no
+multi-day margin to absorb a one-day shift - if you are ever asked to add another "just today" /
+"just yesterday" period anywhere else in this codebase, check the date-string builder for exactly
+this pattern before shipping it.
+**Proven, not asserted**: reverted the fix, ran the regression suite, watched 3 of 4 targeted tests
+fail with exactly the reported symptom (`'2026-09-13'` where `'2026-09-12'` was expected), restored
+the fix, watched them pass. New test `src/test/resolvePeriod.test.js` pins this permanently
+(west-of-UTC evening, east-of-UTC - this app's own GCC region - early morning, and the
+`last_7`/`last_30`/`last_90`/`mtd`/`ytd` siblings), via `process.env.TZ` + `vi.setSystemTime`.
+
+### Verification
+Files touched: `src/lib/api/scheduledReports.js`, `src/lib/exportUtils.js`,
+`src/pages/ScheduledReports.jsx` (all modified), `src/lib/inspectionCoverage.js` (new),
+`src/test/inspectionCoverage.test.js` + `src/test/resolvePeriod.test.js` (new, 16 tests). 121 tests
+green across the affected files, `vite build` clean, `eslint` clean. Staged and committed by
+EXPLICIT PATH (not `git add -A`) - the working tree carried a large batch of unrelated, unfinished,
+uncommitted work from a separate concurrent task (driver-workspace fines/assignments, mobile
+profile, Flutter, `CODEX_CONTEXT.md`) that was deliberately left untouched and unpushed.
+
+### Still open, not done here
+The **emailed** (cron-delivered and "Send now") digest, in the `send-scheduled-reports` edge
+function, does NOT yet honour a schedule's saved period at all - it always shows a rolling
+"all-time total + last 30 days" view (a PRE-EXISTING limitation, not something this session
+introduced or fixed). So "Yesterday" and the tyre-man/vehicle-type breakdown currently only work
+through the on-screen **"Generate now"** PDF/Excel download, not the automated email itself. Wiring
+period-awareness (and the same breakdown) into that edge function is a real follow-up, but was
+NOT attempted here - no working Supabase MCP connection this session, and that specific function is
+flagged elsewhere in this file as high-risk to hand-edit without a deploy+diff verification loop.
+
+### `CODEX_CONTEXT.md` note
+This repo also carries `CODEX_CONTEXT.md`, a SEPARATE, actively-maintained "compact context" doc
+used by a different coding-agent track (Flutter mobile parity + a curated punch list of recent
+operational fixes - meter logs, checklist PDFs, approvals). It was NOT updated by this session: it
+already had substantial uncommitted, unrelated content sitting in the working tree at session start,
+and bundling this feature's note into that file's next commit would have wrongly attributed
+someone else's unverified entries to this session. If a future session wants Scheduled Reports
+changes reflected there too, add a line to its "Active repository state" section separately.
+
+---
+
 # ⚑ SESSION 2026-08-25 — MULTI-SELECT REGION + ASSET TYPE ON THE TYRE LIFECYCLE FILTERS. No migration; next free **V608**.
 Owner: "in the web tyre life cycle inside the remaining KM and Tyre change tracking / Running and Remaining
 needs the filters of region and vehicle type here, multi selection in the filter."

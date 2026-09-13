@@ -19,7 +19,7 @@
  */
 import { useCallback, useEffect, useState } from 'react'
 import {
-  FileCheck2, ShieldCheck, AlertCircle, Loader2, RefreshCw, Plus, Check, Banknote,
+  FileCheck2, ShieldCheck, AlertCircle, Loader2, RefreshCw, Plus, Check, Banknote, Pencil, Lock,
 } from 'lucide-react'
 import {
   getInsuranceClaim, listClaimDocuments, listRecoveries,
@@ -27,7 +27,15 @@ import {
   addClaimDocument, markClaimDocumentReceived,
   CLAIM_DECISIONS, RECOVERY_SOURCES, RECOVERY_STATUSES,
 } from '../../lib/api/accidentInsuranceClaims'
+import NotifyRecipientsPanel from './NotifyRecipientsPanel'
 import { toUserMessage } from '../../lib/safeError'
+
+const INSURANCE_RECIPIENTS = [
+  { key: 'insurer', label: 'Insurer / Broker' },
+  { key: 'fleet', label: 'Fleet Manager' },
+  { key: 'finance', label: 'Finance' },
+  { key: 'legal', label: 'Legal' },
+]
 
 // Suggested checklist — doc_type is free text server-side; this is a UI
 // convenience, not an enforced vocabulary.
@@ -97,6 +105,12 @@ export default function InsuranceClaimPanel({ accidentId, elevated, fmtCurrency,
   const [decisionForm, setDecisionForm] = useState({ decision: '', approvedAmount: '', reason: '' })
   const [settleForm, setSettleForm] = useState({ settledAmount: '', settledAt: '', reference: '' })
   const [recoveryForm, setRecoveryForm] = useState({ source: 'insurer', amount: '', status: 'pending', recoveredAt: '' })
+  // Once a claim is registered the registration form is LOCKED to a read-only
+  // summary (the card above already shows every field) - "Edit registration"
+  // reopens it, rather than always leaving an editable form sitting under a
+  // claim that is already being worked through decision/settlement.
+  const [editingReg, setEditingReg] = useState(false)
+  const [docsOverride, setDocsOverride] = useState(false)
 
   const money = (v) => (typeof fmtCurrency === 'function' ? fmtCurrency(v) : (v == null ? 'N/A' : String(v)))
 
@@ -136,6 +150,7 @@ export default function InsuranceClaimPanel({ accidentId, elevated, fmtCurrency,
         deductible: regForm.deductible === '' ? null : Number(regForm.deductible),
       })
       setClaim(saved)
+      setEditingReg(false)
       onChanged?.()
     } catch (e) {
       setErr(toUserMessage(e, 'Could not register the claim.'))
@@ -156,6 +171,7 @@ export default function InsuranceClaimPanel({ accidentId, elevated, fmtCurrency,
       })
       setClaim(result.claim || claim)
       setDecisionForm({ decision: '', approvedAmount: '', reason: '' })
+      setDocsOverride(false)
       onChanged?.()
     } catch (e) {
       setErr(toUserMessage(e, 'Could not record the claim decision.'))
@@ -244,7 +260,13 @@ export default function InsuranceClaimPanel({ accidentId, elevated, fmtCurrency,
   const hasClaim = !!claim?.id
   const addedDocTypes = new Set(docs.map((d) => d.doc_type))
   const missingDocs = SUGGESTED_DOCS.filter((d) => !addedDocTypes.has(d.doc_type))
-  const outstandingCount = docs.filter((d) => d.required && !d.received).length
+  const requiredDocs = docs.filter((d) => d.required)
+  const outstandingCount = requiredDocs.filter((d) => !d.received).length
+  // Complete only once at least one required document has actually been
+  // added AND none of them are outstanding - "nothing added yet" must never
+  // read as "complete".
+  const docsComplete = requiredDocs.length > 0 && outstandingCount === 0
+  const showRegForm = elevated && (!hasClaim || editingReg)
 
   return (
     <div className="p-6 space-y-6">
@@ -267,8 +289,21 @@ export default function InsuranceClaimPanel({ accidentId, elevated, fmtCurrency,
           </div>
         )}
 
-        {elevated ? (
+        {!elevated && (
+          <p className="text-xs text-[var(--text-muted)]">Only Admin / Manager / Director can register or update this claim.</p>
+        )}
+
+        {elevated && hasClaim && !editingReg && (
+          <button type="button" className="btn-secondary text-xs inline-flex items-center gap-1.5" onClick={() => setEditingReg(true)}>
+            <Pencil size={12} /> Edit registration
+          </button>
+        )}
+
+        {showRegForm && (
           <form onSubmit={submitRegister} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {hasClaim && (
+              <p className="sm:col-span-2 text-[11px] text-amber-300 flex items-center gap-1.5"><Lock size={11} /> Revising an already-registered claim - the insurer's own decision/settlement records below are unaffected.</p>
+            )}
             <Field label="Insurer">
               <input className="input w-full" value={regForm.insurer} onChange={(e) => setRegForm((f) => ({ ...f, insurer: e.target.value }))} />
             </Field>
@@ -286,20 +321,37 @@ export default function InsuranceClaimPanel({ accidentId, elevated, fmtCurrency,
               <input type="number" min="0" className="input w-full" value={regForm.deductible}
                 onChange={(e) => setRegForm((f) => ({ ...f, deductible: e.target.value }))} />
             </Field>
-            <div className="sm:col-span-2">
+            <div className="sm:col-span-2 flex items-center gap-2">
               <button type="submit" className="btn-primary text-xs" disabled={saving}>
-                {saving ? <Loader2 size={13} className="animate-spin" /> : (hasClaim ? 'Update claim' : 'Register claim')}
+                {saving ? <Loader2 size={13} className="animate-spin" /> : (hasClaim ? 'Save changes' : 'Register claim')}
               </button>
+              {hasClaim && (
+                <button type="button" className="btn-secondary text-xs" disabled={saving} onClick={() => setEditingReg(false)}>Cancel</button>
+              )}
             </div>
           </form>
-        ) : (
-          <p className="text-xs text-[var(--text-muted)]">Only Admin / Manager / Director can register or update this claim.</p>
         )}
       </section>
 
       {hasClaim && elevated && (
         <section className="card space-y-4">
           <h3 className="font-semibold text-[var(--text-primary)] flex items-center gap-2"><ShieldCheck size={16} /> Insurer decision</h3>
+
+          {!docsComplete && (
+            <div className="rounded-lg border border-amber-700/50 bg-amber-900/20 px-3 py-2 space-y-1.5">
+              <p className="text-xs text-amber-300">
+                {requiredDocs.length === 0
+                  ? 'No documents have been added to the checklist yet.'
+                  : `${outstandingCount} of ${requiredDocs.length} required document${requiredDocs.length === 1 ? '' : 's'} still outstanding.`}
+                {' '}Insurers usually decide once documents are complete.
+              </p>
+              <label className="flex items-center gap-1.5 text-[11px] text-amber-200">
+                <input type="checkbox" checked={docsOverride} onChange={(e) => setDocsOverride(e.target.checked)} />
+                Record the decision anyway (documents incomplete)
+              </label>
+            </div>
+          )}
+
           <form onSubmit={submitDecision} className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
             <Field label="Decision">
               <select className="input w-full" value={decisionForm.decision}
@@ -318,7 +370,7 @@ export default function InsuranceClaimPanel({ accidentId, elevated, fmtCurrency,
               <input className="input w-full" value={decisionForm.reason}
                 onChange={(e) => setDecisionForm((f) => ({ ...f, reason: e.target.value }))} />
             </Field>
-            <button type="submit" className="btn-secondary text-xs" disabled={saving || !decisionForm.decision}>
+            <button type="submit" className="btn-secondary text-xs" disabled={saving || !decisionForm.decision || (!docsComplete && !docsOverride)}>
               {saving ? <Loader2 size={13} className="animate-spin" /> : 'Record decision'}
             </button>
           </form>
@@ -350,8 +402,20 @@ export default function InsuranceClaimPanel({ accidentId, elevated, fmtCurrency,
       <section className="card space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="font-semibold text-[var(--text-primary)]">Document checklist</h3>
-          {outstandingCount > 0 && <span className="text-xs text-amber-400">{outstandingCount} outstanding</span>}
+          {requiredDocs.length > 0 && (
+            <span className={`text-xs font-semibold ${docsComplete ? 'text-green-400' : 'text-amber-400'}`}>
+              {requiredDocs.length - outstandingCount} of {requiredDocs.length} received
+            </span>
+          )}
         </div>
+        {requiredDocs.length > 0 && (
+          <div className="h-1.5 rounded-full bg-[var(--input-bg)] overflow-hidden">
+            <div
+              className={`h-full ${docsComplete ? 'bg-green-500' : 'bg-amber-500'}`}
+              style={{ width: `${Math.round(((requiredDocs.length - outstandingCount) / requiredDocs.length) * 100)}%` }}
+            />
+          </div>
+        )}
         {docs.length === 0 && <p className="text-sm text-[var(--text-muted)]">No documents added to the checklist yet.</p>}
         <div className="space-y-2">
           {docs.map((d) => (
@@ -433,6 +497,16 @@ export default function InsuranceClaimPanel({ accidentId, elevated, fmtCurrency,
             </div>
           </form>
         )}
+      </section>
+
+      <section className="card">
+        <NotifyRecipientsPanel
+          accidentId={accidentId}
+          workstreamKey="insurance"
+          recipients={INSURANCE_RECIPIENTS}
+          title="Notify recipients"
+          subject="Insurance claim update"
+        />
       </section>
 
       {err && <p className="text-red-400 text-xs flex items-center gap-1.5"><AlertCircle size={12} /> {err}</p>}

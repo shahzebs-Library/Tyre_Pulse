@@ -17,10 +17,48 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   Truck, PenLine, CheckCircle2, XCircle, AlertTriangle, Loader2, RefreshCw, ClipboardCheck, Trash2,
+  MapPin, Wrench, Check, Circle,
 } from 'lucide-react'
 import { listHandoverInspections, recordHandoverInspection } from '../../lib/api/accidentHandover'
+import { getOpenRepairOrder, upsertRepairOrder, WORKSHOP_TYPES } from '../../lib/api/accidentRepairOrders'
+import { getDowntime, saveDowntime, VEHICLE_STATUSES } from '../../lib/api/accidentDowntime'
+import { dispatchSteps } from '../../lib/accidentDispatch'
+import NotifyRecipientsPanel from './NotifyRecipientsPanel'
 import { toUserMessage } from '../../lib/safeError'
 import SignaturePad from '../SignaturePad'
+
+const WORKSHOP_TYPE_LABEL = {
+  internal: 'Internal workshop', external: 'External / third-party', insurer_approved: "Insurer's approved workshop",
+  dealer: 'Dealer', specialist: 'Specialist',
+}
+const VEHICLE_STATUS_LABEL = {
+  operational: 'Operational', restricted: 'Restricted', awaiting_recovery: 'Awaiting recovery',
+  off_road_accident: 'Off-road (accident)', under_inspection: 'Under inspection', under_repair: 'Under repair',
+  ready_for_inspection: 'Ready for inspection', rejected_after_repair: 'Rejected after repair',
+  returned_to_operation: 'Returned to operation', total_loss: 'Total loss', disposed: 'Disposed',
+}
+
+function Stepper({ steps }) {
+  return (
+    <div className="flex items-center overflow-x-auto pb-1">
+      {steps.map((s, i) => (
+        <div key={s.key} className="flex items-center shrink-0">
+          <div className="flex flex-col items-center gap-1 min-w-[92px]">
+            <span className={`w-7 h-7 rounded-full flex items-center justify-center border-2 ${
+              s.done ? 'border-green-500 bg-green-900/30 text-green-400'
+                : s.current ? 'border-blue-500 bg-blue-900/30 text-blue-300'
+                  : 'border-[var(--input-border)] text-[var(--text-muted)]'
+            }`}>
+              {s.done ? <Check size={14} /> : <Circle size={9} className={s.current ? 'fill-current' : ''} />}
+            </span>
+            <span className={`text-[11px] text-center leading-tight ${s.current ? 'text-[var(--text-primary)] font-semibold' : 'text-[var(--text-muted)]'}`}>{s.label}</span>
+          </div>
+          {i < steps.length - 1 && <span className={`h-0.5 w-10 mb-4 ${s.done ? 'bg-green-500' : 'bg-[var(--input-border)]'}`} />}
+        </div>
+      ))}
+    </div>
+  )
+}
 
 const DECISIONS = [
   { value: 'accepted', label: 'Accepted' },
@@ -58,10 +96,39 @@ export default function HandoverPanel({ accidentId, elevated, onChanged }) {
   const [signature, setSignature] = useState(null) // { dataUrl, signedAt }
   const [showPad, setShowPad] = useState(false)
 
+  // Destination/vendor (the SAME accident_repair_orders row Workshop
+  // Assessment writes - one workshop assignment per case, not a second one).
+  const [repairOrder, setRepairOrder] = useState(null) // null=loading, {}=none yet
+  const [destForm, setDestForm] = useState({ workshopType: '', workshopName: '' })
+  const [destSaving, setDestSaving] = useState(false)
+
+  // Dispatch details (accident_vehicle_downtime - recovery/towing/delivery).
+  const [downtime, setDowntime] = useState(null)
+  const [dispForm, setDispForm] = useState({
+    vehicle_status: '', recovery_required: false, towing_reference: '',
+    delivered_to_workshop_at: '', expected_return_date: '',
+  })
+  const [dispSaving, setDispSaving] = useState(false)
+
   const load = useCallback(async () => {
     setRows(null); setErr('')
     try {
-      setRows(await listHandoverInspections(accidentId))
+      const [h, order, d] = await Promise.all([
+        listHandoverInspections(accidentId),
+        getOpenRepairOrder(accidentId),
+        getDowntime(accidentId),
+      ])
+      setRows(h)
+      setRepairOrder(order || {})
+      setDestForm({ workshopType: order?.workshop_type || '', workshopName: order?.workshop_name || '' })
+      setDowntime(d || {})
+      setDispForm({
+        vehicle_status: d?.vehicle_status || '',
+        recovery_required: !!d?.recovery_required,
+        towing_reference: d?.towing_reference || '',
+        delivered_to_workshop_at: d?.delivered_to_workshop_at ? d.delivered_to_workshop_at.slice(0, 16) : '',
+        expected_return_date: d?.expected_return_date || '',
+      })
     } catch (e) {
       setErr(toUserMessage(e, 'Could not load the handover inspections.'))
       setRows([])
@@ -69,6 +136,45 @@ export default function HandoverPanel({ accidentId, elevated, onChanged }) {
   }, [accidentId])
 
   useEffect(() => { load() }, [load])
+
+  async function saveDestination(e) {
+    e.preventDefault()
+    if (destSaving) return
+    setDestSaving(true); setErr('')
+    try {
+      const saved = await upsertRepairOrder(accidentId, {
+        workshopType: destForm.workshopType || undefined,
+        workshopName: destForm.workshopName || undefined,
+      })
+      setRepairOrder(saved)
+      onChanged?.()
+    } catch (e2) {
+      setErr(toUserMessage(e2, 'Could not save the destination workshop.'))
+    } finally {
+      setDestSaving(false)
+    }
+  }
+
+  async function saveDispatch(e) {
+    e.preventDefault()
+    if (dispSaving) return
+    setDispSaving(true); setErr('')
+    try {
+      const saved = await saveDowntime(accidentId, {
+        vehicle_status: dispForm.vehicle_status || null,
+        recovery_required: dispForm.recovery_required,
+        towing_reference: dispForm.towing_reference || null,
+        delivered_to_workshop_at: dispForm.delivered_to_workshop_at ? new Date(dispForm.delivered_to_workshop_at).toISOString() : null,
+        expected_return_date: dispForm.expected_return_date || null,
+      }, { existingId: downtime?.id })
+      setDowntime(saved)
+      onChanged?.()
+    } catch (e2) {
+      setErr(toUserMessage(e2, 'Could not save the dispatch details.'))
+    } finally {
+      setDispSaving(false)
+    }
+  }
 
   async function submit(e) {
     e.preventDefault()
@@ -100,10 +206,84 @@ export default function HandoverPanel({ accidentId, elevated, onChanged }) {
     }
   }
 
+  const steps = dispatchSteps({ downtime, handoverRows: rows || [] })
+
   return (
     <div className="p-6 space-y-6">
+      <section className="card">
+        <h3 className="font-semibold text-[var(--text-primary)] flex items-center gap-2 mb-3"><Truck size={16} /> Dispatch &amp; handover progress</h3>
+        <Stepper steps={steps} />
+      </section>
+
       <section className="card space-y-4">
-        <h3 className="font-semibold text-[var(--text-primary)] flex items-center gap-2"><Truck size={16} /> Vehicle dispatch and handover</h3>
+        <h3 className="font-semibold text-[var(--text-primary)] flex items-center gap-2"><Wrench size={16} /> Destination workshop</h3>
+        {elevated ? (
+          <form onSubmit={saveDestination} className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+            <div>
+              <label className="label">Workshop type</label>
+              <select className="input w-full" value={destForm.workshopType} onChange={(e) => setDestForm((f) => ({ ...f, workshopType: e.target.value }))}>
+                <option value="">Select…</option>
+                {WORKSHOP_TYPES.map((t) => <option key={t} value={t}>{WORKSHOP_TYPE_LABEL[t] || t}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="label">Workshop / vendor name</label>
+              <input className="input w-full" value={destForm.workshopName} onChange={(e) => setDestForm((f) => ({ ...f, workshopName: e.target.value }))} />
+            </div>
+            <button type="submit" className="btn-secondary text-xs" disabled={destSaving}>
+              {destSaving ? <Loader2 size={13} className="animate-spin" /> : 'Save destination'}
+            </button>
+          </form>
+        ) : (
+          <div className="text-sm text-[var(--text-primary)]">
+            {repairOrder?.workshop_name || 'No destination workshop set.'}
+            {repairOrder?.workshop_type && <span className="text-[var(--text-muted)]"> · {WORKSHOP_TYPE_LABEL[repairOrder.workshop_type] || repairOrder.workshop_type}</span>}
+          </div>
+        )}
+        <p className="text-[11px] text-[var(--text-muted)]">Shared with the Workshop Assessment tab's repair order - one workshop assignment per case.</p>
+      </section>
+
+      <section className="card space-y-4">
+        <h3 className="font-semibold text-[var(--text-primary)] flex items-center gap-2"><MapPin size={16} /> Dispatch details</h3>
+        {elevated ? (
+          <form onSubmit={saveDispatch} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="label">Vehicle status</label>
+              <select className="input w-full" value={dispForm.vehicle_status} onChange={(e) => setDispForm((f) => ({ ...f, vehicle_status: e.target.value }))}>
+                <option value="">Select…</option>
+                {VEHICLE_STATUSES.map((v) => <option key={v} value={v}>{VEHICLE_STATUS_LABEL[v] || v}</option>)}
+              </select>
+            </div>
+            <Toggle label="Recovery / towing required" checked={dispForm.recovery_required}
+              onChange={(v) => setDispForm((f) => ({ ...f, recovery_required: v }))} />
+            <div>
+              <label className="label">Towing reference</label>
+              <input className="input w-full" value={dispForm.towing_reference} disabled={!dispForm.recovery_required}
+                onChange={(e) => setDispForm((f) => ({ ...f, towing_reference: e.target.value }))} />
+            </div>
+            <div>
+              <label className="label">Delivered to workshop</label>
+              <input type="datetime-local" className="input w-full" value={dispForm.delivered_to_workshop_at}
+                onChange={(e) => setDispForm((f) => ({ ...f, delivered_to_workshop_at: e.target.value }))} />
+            </div>
+            <div>
+              <label className="label">Expected return date</label>
+              <input type="date" className="input w-full" value={dispForm.expected_return_date}
+                onChange={(e) => setDispForm((f) => ({ ...f, expected_return_date: e.target.value }))} />
+            </div>
+            <div className="sm:col-span-2">
+              <button type="submit" className="btn-secondary text-xs" disabled={dispSaving}>
+                {dispSaving ? <Loader2 size={13} className="animate-spin" /> : 'Save dispatch details'}
+              </button>
+            </div>
+          </form>
+        ) : (
+          <p className="text-xs text-[var(--text-muted)]">Only Admin / Manager / Director can update dispatch details.</p>
+        )}
+      </section>
+
+      <section className="card space-y-4">
+        <h3 className="font-semibold text-[var(--text-primary)] flex items-center gap-2"><Truck size={16} /> Workshop receipt (vendor-completed)</h3>
         <p className="text-xs text-[var(--text-muted)]">
           Recorded by the receiving party at workshop check-in (or a later check-out receipt). Each
           inspection is its own record - a correction is added as a new entry, the original is kept.
@@ -237,6 +417,15 @@ export default function HandoverPanel({ accidentId, elevated, onChanged }) {
             })}
           </div>
         )}
+      </section>
+
+      <section className="card">
+        <NotifyRecipientsPanel
+          accidentId={accidentId}
+          workstreamKey="handover"
+          title="Notify recipients"
+          subject="Dispatch & handover update"
+        />
       </section>
 
       {showPad && (

@@ -81,6 +81,15 @@ export async function setAccidentVor(id, vor) {
 export async function setAccidentPayer(id, payer) {
   return unwrap(await supabase.from('accidents').update({ payer }).eq('id', id).select('id,payer').single())
 }
+/** The actual repair cost for this case - the figure the case header's
+ *  "Gross cost" tile reads. Its ONLY editable home is the Workshop Assessment
+ *  tab (the "Actual repair cost" field, distinct from the assessment's own
+ *  estimated_total_cost) - this column was previously edited by a since-
+ *  removed quick-editor and had become orphaned (no UI could set it at all)
+ *  while the case header kept showing whatever value it last held. */
+export async function setAccidentRepairCost(id, repairCost) {
+  return unwrap(await supabase.from('accidents').update({ repair_cost: repairCost }).eq('id', id).select('id,repair_cost').single())
+}
 
 // ── master email toggle (system_config) ───────────────────────────────────────
 function truthyConfig(v) {

@@ -300,6 +300,7 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
   const [caseData, setCaseData] = useState(null)
   const [remarks, setRemarks] = useState([])
   const [parts, setParts] = useState([])
+  const [recoveredTotal, setRecoveredTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -325,14 +326,23 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
       // never wedge the whole loader on an unhandled rejection and leave the
       // page stuck on an infinite skeleton ("cannot open the record"). Loading
       // is ALWAYS cleared; failures surface as a clean message, never a hang.
-      const [aR, rR, pR] = await Promise.allSettled([
+      const [aR, rR, pR, cvR] = await Promise.allSettled([
         supabase.from('accidents').select('*').eq('id', accidentId).single(),
         supabase.from('accident_remarks').select('*').eq('accident_id', accidentId).order('created_at', { ascending: false }),
         supabase.from('accident_parts').select('*').eq('accident_id', accidentId).order('created_at', { ascending: true }),
+        // Live recoveries (accident_claim_recoveries, the Insurance Claim tab's
+        // own table) - the case header's "Recovered" tile reads THIS, never
+        // the static accidents.recovered_amount column, which nothing keeps in
+        // sync any more. Best-effort: an unprovisioned table degrades to 0.
+        supabase.from('accident_claim_recoveries').select('amount,status').eq('accident_id', accidentId),
       ])
       const a = aR.status === 'fulfilled' ? aR.value : { data: null, error: aR.reason }
       if (a.error || !a.data) { setErr(loadErrMsg(a.error) || 'Accident record not found.'); setLoading(false); return }
       setAcc(a.data)
+      const recoveryRows = (cvR.status === 'fulfilled' && !cvR.value?.error) ? (cvR.value.data ?? []) : []
+      setRecoveredTotal(
+        recoveryRows.filter((r) => r.status === 'recovered').reduce((s, r) => s + (Number(r.amount) || 0), 0),
+      )
       // The V417 case model (workstreams / closure gate) is best-effort and
       // country-scoped. loadCase NEVER throws for a missing relation — it degrades
       // to the plain accidents row with capabilities.casesModel === false — so this
@@ -345,9 +355,10 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
       // record still renders. A partial-load hint is surfaced non-fatally.
       const rOk = rR.status === 'fulfilled' && !rR.value?.error
       const pOk = pR.status === 'fulfilled' && !pR.value?.error
+      const cvOk = cvR.status === 'fulfilled' && !cvR.value?.error
       setRemarks(rOk ? (rR.value.data ?? []) : [])
       setParts(pOk ? (pR.value.data ?? []) : [])
-      setErr((!rOk || !pOk) ? 'Some case details (log / parts) could not be loaded. Showing the incident record only.' : '')
+      setErr((!rOk || !pOk || !cvOk) ? 'Some case details (log / parts / recoveries) could not be loaded. Showing the incident record only.' : '')
       setLoading(false)
     } catch (e) {
       // Belt-and-braces: even a synchronous throw clears the loader.
@@ -457,14 +468,16 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
     }
   }, [caseData, company])
 
-  // Live financial rail — gross cost, recovered, net exposure.
+  // Live financial rail — gross cost, recovered, net exposure. Parts and
+  // Recovered ALWAYS read their live sources (partsTotal from accident_parts,
+  // recoveredTotal from accident_claim_recoveries) rather than the static
+  // accidents.parts_cost / recovered_amount columns, which nothing keeps in
+  // sync any more once a case is worked through the dedicated tabs.
   const money = useMemo(() => {
     const repair = Number(acc?.repair_cost) || 0
-    const partsC = Number(acc?.parts_cost) || partsTotal
-    const gross = repair + partsC
-    const recovered = Number(acc?.recovered_amount) || 0
-    return { gross, recovered, net: Math.max(0, gross - recovered) }
-  }, [acc, partsTotal])
+    const gross = repair + partsTotal
+    return { gross, recovered: recoveredTotal, net: Math.max(0, gross - recoveredTotal) }
+  }, [acc, partsTotal, recoveredTotal])
 
   async function runRpc(fn, args) {
     setBusy(true); setErr('')
@@ -1037,11 +1050,12 @@ function OverviewTab({ acc, fmtCurrency }) {
         <KV label="Severity" value={acc.severity} />
         <KV label="Status" value={acc.status} />
         <KV label="Country" value={acc.country} />
-        <KV label="Repair cost" value={acc.repair_cost != null ? fmtCurrency(acc.repair_cost) : '-'} />
-        <KV label="Parts cost" value={acc.parts_cost != null ? fmtCurrency(acc.parts_cost) : '-'} />
-        <KV label="Insurance claim no" value={acc.insurance_claim_no} />
         <KV label="Inspector" value={acc.inspector} />
         <KV label="Reported" value={acc.created_at ? new Date(acc.created_at).toLocaleString() : '-'} />
+        {/* Repair cost / Parts cost / Insurance claim no removed - each now has
+            its own live, current home (Workshop Assessment's "Actual repair
+            cost", the Parts & Repairs total, the Insurance Claim tab's claim
+            no) and this static snapshot could silently disagree with them. */}
       </div>
       {acc.description && (
         <div>

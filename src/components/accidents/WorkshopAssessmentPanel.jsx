@@ -28,6 +28,7 @@ import {
   getDamageAssessment, saveDamageAssessment, submitDamageAssessment, REPAIR_ROUTES,
 } from '../../lib/api/accidentDamageAssessment'
 import { getOpenRepairOrder, upsertRepairOrder, WORKSHOP_TYPES } from '../../lib/api/accidentRepairOrders'
+import { setAccidentRepairCost } from '../../lib/api/accidentWorkflow'
 import EvidenceTable from './EvidenceTable'
 import NotifyRecipientsPanel from './NotifyRecipientsPanel'
 import { toUserMessage } from '../../lib/safeError'
@@ -92,6 +93,13 @@ export default function WorkshopAssessmentPanel({ accidentId, elevated, acc, fmt
   const [err, setErr] = useState('')
 
   const [orderForm, setOrderForm] = useState({ repairRoute: '', workshopType: '', workshopName: '', quotationAmount: '', plannedCompletion: '' })
+  // The actual/final repair cost - the ONE editable home for accidents.
+  // repair_cost, the figure the case header's "Gross cost" tile reads.
+  // Distinct from the assessment's own estimated_total_cost (a pre-repair
+  // estimate) and the repair order's quotation/approved amounts (what the
+  // workshop quoted/was authorised) - this is what it actually cost.
+  const [actualCost, setActualCost] = useState(acc?.repair_cost ?? '')
+  const [actualCostSaving, setActualCostSaving] = useState(false)
 
   const money = (v) => (typeof fmtCurrency === 'function' ? fmtCurrency(v) : (v == null ? 'N/A' : String(v)))
 
@@ -174,6 +182,21 @@ export default function WorkshopAssessmentPanel({ accidentId, elevated, acc, fmt
       setErr(toUserMessage(e, 'Could not open the repair order.'))
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function saveActualCost(e) {
+    e.preventDefault()
+    if (actualCostSaving) return
+    setActualCostSaving(true); setErr('')
+    try {
+      const value = actualCost === '' ? null : Number(actualCost)
+      await setAccidentRepairCost(accidentId, value)
+      onChanged?.()
+    } catch (e2) {
+      setErr(toUserMessage(e2, 'Could not save the actual repair cost.'))
+    } finally {
+      setActualCostSaving(false)
     }
   }
 
@@ -387,6 +410,28 @@ export default function WorkshopAssessmentPanel({ accidentId, elevated, acc, fmt
           </form>
         ) : (
           <p className="text-xs text-[var(--text-muted)]">Only Admin / Manager / Director can open or update the repair order.</p>
+        )}
+      </section>
+
+      <section className="card space-y-3">
+        <h3 className="font-semibold text-[var(--text-primary)]">Actual repair cost</h3>
+        <p className="text-[11px] text-[var(--text-muted)]">
+          What the repair actually cost, once known - shown on the case header's "Gross cost" tile. Separate from
+          the estimate above and the repair order's quotation.
+        </p>
+        {elevated ? (
+          <form onSubmit={saveActualCost} className="flex items-end gap-3">
+            <div className="flex-1 max-w-[220px]">
+              <label className="label">Actual repair cost</label>
+              <input type="number" min="0" className="input w-full" value={actualCost}
+                onChange={(e) => setActualCost(e.target.value)} />
+            </div>
+            <button type="submit" className="btn-secondary text-xs" disabled={actualCostSaving}>
+              {actualCostSaving ? <Loader2 size={13} className="animate-spin" /> : 'Save'}
+            </button>
+          </form>
+        ) : (
+          <p className="text-sm text-[var(--text-primary)]">{acc?.repair_cost != null ? money(acc.repair_cost) : 'Not recorded'}</p>
         )}
       </section>
 

@@ -1,9 +1,10 @@
 /**
  * DamageMapPanel — the "Mark vehicle/equipment damage" case tab (mockups 8-10):
  * an orthographic multi-view mapper for on-road vehicles (bus/pickup/generic -
- * rotate through Front/Left/Right/Rear and tap a panel) and a single
- * component-tapping overview for a concrete pump (tap a named part - boom
- * section, outrigger, pump unit...). The vehicle family and its region/
+ * every view (Front/Left/Right/Rear) is its own always-visible button, tap
+ * the one you want directly - deliberately NOT a prev/next slider) and a
+ * single component-tapping overview for a concrete pump (tap a named part -
+ * boom section, outrigger, pump unit...). The vehicle family and its region/
  * component layout come from the pure engine src/lib/vehicleDamageViews.js;
  * this file is presentation + the write path only.
  *
@@ -19,7 +20,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  MapPin, X, Trash2, Loader2, AlertTriangle, Check, ChevronLeft, ChevronRight, Camera,
+  MapPin, X, Trash2, Loader2, AlertTriangle, Check, Camera,
 } from 'lucide-react'
 import {
   familyForVehicleType, FAMILY_VIEWS, layoutFor, groupMarksByKey, markKey, viewLabel,
@@ -29,7 +30,6 @@ import { getDamageAssessment, saveDamageAssessment, upsertDamageMark, removeDama
 import { uploadEvidenceFile } from '../../lib/api/accidentEvidence'
 import { DAMAGE_CONDITION_OPTS } from '../../lib/accidentVocab'
 import { toUserMessage } from '../../lib/safeError'
-import VehicleTyreDiagram from '../VehicleTyreDiagram'
 
 const MARK_DAMAGE_TYPES = DAMAGE_CONDITION_OPTS.filter((v) => v !== 'N/A')
 
@@ -42,14 +42,11 @@ export default function DamageMapPanel({ accidentId, vehicleType, assetNo, eleva
   const [photoUploading, setPhotoUploading] = useState(false)
   const photoInputRef = useRef(null)
 
-  // The REAL vehicle picture for this asset, via the SAME canonical resolver
-  // the rest of the app uses (VehicleTyreDiagram's own resolveLayoutKey) -
-  // visual confirmation that the click-surface grid below matches the actual
-  // machine. VehicleTyreDiagram only takes ONE type string, so when the
-  // incident's own vehicle_type snapshot is blank the asset number stands in
-  // (it understands TM/MP/WL/SL/PL prefixes directly) rather than silently
-  // defaulting to a pickup.
-  const diagramVehicleType = vehicleType || assetNo
+  // Family resolution goes through the SAME canonical resolver the rest of
+  // the app uses (src/lib/vehicleTyreLayout.js, via familyForVehicleType), so
+  // this click-surface grid always matches how the app classifies the same
+  // asset elsewhere - including falling back to the asset number (TM/MP/WL/
+  // SL/PL prefixes) when the incident's own vehicle_type snapshot is blank.
   const family = useMemo(() => familyForVehicleType(vehicleType, assetNo), [vehicleType, assetNo])
   const views = FAMILY_VIEWS[family] || FAMILY_VIEWS.generic
   const [activeView, setActiveView] = useState(views[0])
@@ -72,7 +69,6 @@ export default function DamageMapPanel({ accidentId, vehicleType, assetNo, eleva
   const damageAreas = useMemo(() => (Array.isArray(assessment?.damage_areas) ? assessment.damage_areas : []), [assessment])
   const marksMap = useMemo(() => groupMarksByKey(damageAreas), [damageAreas])
   const layout = layoutFor(family, activeView)
-  const viewIdx = views.indexOf(activeView)
 
   function openRegion(regionKey, label) {
     if (!elevated) return
@@ -165,37 +161,24 @@ export default function DamageMapPanel({ accidentId, vehicleType, assetNo, eleva
           </span>
         </div>
 
-        {/* The real vehicle picture for THIS asset (same resolver used
-            everywhere else in the app for this exact machine), so the click
-            grid below is visibly tied to the actual vehicle, not a generic
-            box grid. Read-only preview - no tyre/click data, purely visual. */}
-        <div className="rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)]/30 flex flex-col items-center py-4">
-          <VehicleTyreDiagram vehicleType={diagramVehicleType} width={200} />
-          <p className="text-[11px] text-[var(--text-muted)] mt-1">
-            {diagramVehicleType ? 'Reference picture for this asset' : 'No asset type on this incident - showing a generic reference'}
-          </p>
-        </div>
-
+        {/* Every view is its own always-visible button - tap the one you want
+            directly. No arrows, no hidden state, nothing to slide through. */}
         {views.length > 1 && (
-          <div className="flex items-center gap-2">
-            <button type="button" className="text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-30"
-              disabled={viewIdx <= 0} onClick={() => setActiveView(views[viewIdx - 1])}>
-              <ChevronLeft size={16} />
-            </button>
-            <div className="flex gap-1.5 flex-1">
-              {views.map((v) => (
-                <button key={v} type="button" onClick={() => setActiveView(v)}
-                  className={`px-2.5 py-1 rounded text-xs font-medium border ${
-                    activeView === v ? 'border-green-500 text-green-400 bg-green-900/10' : 'border-[var(--input-border)] text-[var(--text-secondary)]'
-                  }`}>
-                  {viewLabel(v)}
-                </button>
-              ))}
-            </div>
-            <button type="button" className="text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-30"
-              disabled={viewIdx >= views.length - 1} onClick={() => setActiveView(views[viewIdx + 1])}>
-              <ChevronRight size={16} />
-            </button>
+          <div className="flex flex-wrap gap-2">
+            {views.map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setActiveView(v)}
+                className={`px-3.5 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                  activeView === v
+                    ? 'border-green-500 text-green-400 bg-green-900/10'
+                    : 'border-[var(--input-border)] text-[var(--text-secondary)] hover:border-[var(--text-muted)]'
+                }`}
+              >
+                {viewLabel(v)}
+              </button>
+            ))}
           </div>
         )}
 

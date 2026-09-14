@@ -93,7 +93,7 @@ function Field({ label, children }) {
   )
 }
 
-export default function InsuranceClaimPanel({ accidentId, elevated, fmtCurrency, onChanged }) {
+export default function InsuranceClaimPanel({ accidentId, elevated, acc, fmtCurrency, onChanged }) {
   const [claim, setClaim] = useState(null) // null while loading, {} when none registered
   const [docs, setDocs] = useState([])
   const [recoveries, setRecoveries] = useState([])
@@ -111,6 +111,7 @@ export default function InsuranceClaimPanel({ accidentId, elevated, fmtCurrency,
   // claim that is already being worked through decision/settlement.
   const [editingReg, setEditingReg] = useState(false)
   const [docsOverride, setDocsOverride] = useState(false)
+  const [carriedFromReport, setCarriedFromReport] = useState(false)
 
   const money = (v) => (typeof fmtCurrency === 'function' ? fmtCurrency(v) : (v == null ? 'N/A' : String(v)))
 
@@ -124,16 +125,27 @@ export default function InsuranceClaimPanel({ accidentId, elevated, fmtCurrency,
       setClaim(claimRow)
       setDocs(d)
       setRecoveries(r)
+      // No claim has been formally registered yet (no accident_insurance_claims
+      // row) - carry forward whatever was already captured on the incident
+      // report itself (accidents.insurer/policy_no/insurance_claim_no/
+      // claim_amount) rather than showing a blank form under details the user
+      // already typed once. Once a claim IS registered, that row is always the
+      // one shown here - the incident report's own values are never read again.
+      const fromReport = !claimRow.id && !!acc
+      setCarriedFromReport(fromReport && !!(acc?.insurer || acc?.policy_no || acc?.insurance_claim_no || acc?.claim_amount))
       setRegForm({
-        insurer: claimRow.insurer || '', policyNo: claimRow.policy_no || '', claimNo: claimRow.claim_no || '',
-        claimAmount: '', deductible: claimRow.deductible ?? '',
+        insurer: claimRow.insurer || (fromReport ? acc.insurer : '') || '',
+        policyNo: claimRow.policy_no || (fromReport ? acc.policy_no : '') || '',
+        claimNo: claimRow.claim_no || (fromReport ? acc.insurance_claim_no : '') || '',
+        claimAmount: fromReport && acc.claim_amount != null ? String(acc.claim_amount) : '',
+        deductible: claimRow.deductible ?? '',
       })
     } catch (e) {
       setErr(toUserMessage(e, 'Could not load the insurance claim.'))
     } finally {
       setLoading(false)
     }
-  }, [accidentId])
+  }, [accidentId, acc])
 
   useEffect(() => { load() }, [load])
 
@@ -151,6 +163,7 @@ export default function InsuranceClaimPanel({ accidentId, elevated, fmtCurrency,
       })
       setClaim(saved)
       setEditingReg(false)
+      setCarriedFromReport(false)
       onChanged?.()
     } catch (e) {
       setErr(toUserMessage(e, 'Could not register the claim.'))
@@ -303,6 +316,9 @@ export default function InsuranceClaimPanel({ accidentId, elevated, fmtCurrency,
           <form onSubmit={submitRegister} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {hasClaim && (
               <p className="sm:col-span-2 text-[11px] text-amber-300 flex items-center gap-1.5"><Lock size={11} /> Revising an already-registered claim - the insurer's own decision/settlement records below are unaffected.</p>
+            )}
+            {carriedFromReport && (
+              <p className="sm:col-span-2 text-[11px] text-blue-300">Pre-filled from what was already entered on the incident report - check and register to make it the claim of record.</p>
             )}
             <Field label="Insurer">
               <input className="input w-full" value={regForm.insurer} onChange={(e) => setRegForm((f) => ({ ...f, insurer: e.target.value }))} />

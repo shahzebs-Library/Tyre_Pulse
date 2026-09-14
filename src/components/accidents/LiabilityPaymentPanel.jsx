@@ -110,8 +110,17 @@ export default function LiabilityPaymentPanel({ accidentId, elevated, acc, onCha
     setLoading(true); setErr('')
     try {
       const [a, r] = await Promise.all([getLiabilityAssessment(accidentId), listAuthorityReports(accidentId)])
-      setAssessment(a || {})
-      setDraft(a || {})
+      const row = a || {}
+      // No formal assessment yet - carry forward the GCC liability % already
+      // captured on the incident report (accidents.gcc_liability_ratio; same
+      // numeric percentage as our_liability_pct here) rather than showing a
+      // blank percentage under a figure the user already entered once. Every
+      // other field here is only asked once the assessment itself is opened.
+      if (!row.id && acc?.gcc_liability_ratio != null && row.our_liability_pct == null) {
+        row.our_liability_pct = acc.gcc_liability_ratio
+      }
+      setAssessment(row)
+      setDraft(row)
       setReports(r)
       setProvisioned(true)
     } catch (e) {
@@ -119,7 +128,7 @@ export default function LiabilityPaymentPanel({ accidentId, elevated, acc, onCha
     } finally {
       setLoading(false)
     }
-  }, [accidentId])
+  }, [accidentId, acc?.gcc_liability_ratio])
 
   useEffect(() => { load() }, [load])
 

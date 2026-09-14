@@ -8,7 +8,6 @@ describe('familyForVehicleType', () => {
     expect(familyForVehicleType('BUS')).toBe('bus')
     expect(familyForVehicleType('Minibus')).toBe('bus')
     expect(familyForVehicleType('Concrete Pump')).toBe('concrete_pump')
-    expect(familyForVehicleType('PLACING BOOM')).toBe('concrete_pump')
     expect(familyForVehicleType('pick-up')).toBe('pickup')
     expect(familyForVehicleType('Pickup Truck')).toBe('pickup')
   })
@@ -18,6 +17,27 @@ describe('familyForVehicleType', () => {
     expect(familyForVehicleType('')).toBe('generic')
     expect(familyForVehicleType(null)).toBe('generic')
     expect(familyForVehicleType(undefined)).toBe('generic')
+  })
+
+  it('a PLACING BOOM is tyreless mast-mounted gear, not the truck-mounted pump - the generic grid, never the chassis+outrigger pump layout', () => {
+    // Was 'concrete_pump' before this delegated to the canonical resolver;
+    // the fleet-owner-confirmed classification (vehicleTyreLayout.js) is that
+    // a placing boom has no chassis cab and no outriggers, so drawing it with
+    // the truck-mounted pump's component grid was the wrong shape.
+    expect(familyForVehicleType('PLACING BOOM')).toBe('generic')
+    expect(familyForVehicleType('STATIONARY PUMP')).toBe('generic')
+  })
+
+  it('matches a real fleet type the old bespoke keyword list did not know (wheel loader, tanker, trailer)', () => {
+    expect(familyForVehicleType('Wheel Loader')).toBe('generic')
+    expect(familyForVehicleType('Water Tanker')).toBe('generic')
+    expect(familyForVehicleType('Line Pump')).toBe('concrete_pump')
+  })
+
+  it('falls back to the ASSET NUMBER when vehicle_type is blank/junk - the canonical resolver can do this, the old bespoke list never could', () => {
+    expect(familyForVehicleType(null, 'MP093')).toBe('concrete_pump')
+    expect(familyForVehicleType('', 'TM514')).toBe('generic') // a transit mixer, not a pump
+    expect(familyForVehicleType(undefined, 'PL077')).toBe('pickup')
   })
 })
 

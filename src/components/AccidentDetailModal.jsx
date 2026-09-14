@@ -13,12 +13,12 @@
  * backward compatibility but is no longer used by the Accidents page.
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   X, Plus, Trash2, Send, Lock, CheckCircle2, XCircle,
   ShieldCheck, Hourglass, FileText, Wrench, MessageSquare, History, User, ClipboardList,
-  ArrowLeft, AlertOctagon, ChevronRight, Download, Loader2, Clock, Pencil,
+  ArrowLeft, AlertOctagon, ChevronLeft, ChevronRight, Download, Loader2, Clock, Pencil,
   GitBranch, MapPin, Ban, Hash, Users, FileDown, ListChecks, Share2, Scale, FileCheck2, ClipboardCheck, Truck,
   BadgeCheck,
 } from 'lucide-react'
@@ -29,7 +29,6 @@ import { useTenant } from '../contexts/TenantContext'
 import { formatCurrency as _fmtCurrencyBase } from '../lib/formatters'
 import {
   canonSeverity, canonStatus, TERMINAL_STAGES,
-  CLAIM_STATUS_LABELS, CLAIM_STATUS_OPTS,
   accidentSeverityPill, accidentStatusPill,
   SEVERITIES, toDbSeverity,
 } from '../lib/accidentVocab'
@@ -174,6 +173,92 @@ const TABS = [
 ]
 
 /**
+ * ScrollableTabStrip — the case-detail tab bar with visible scroll arrows.
+ * With 14 tabs the strip overflows on any screen narrower than roughly
+ * 1300px, and a plain `overflow-x-auto` gives no hint that anything sits
+ * off-screen - several tabs (Mark Damage among them) were only reachable by
+ * already knowing to scroll. Arrows appear only on the side there is
+ * actually more to scroll to (checked on mount/resize/scroll), so nothing
+ * shows on a screen wide enough to fit every tab.
+ */
+function ScrollableTabStrip({ tabs, active, onChange }) {
+  const trackRef = useRef(null)
+  const [canLeft, setCanLeft] = useState(false)
+  const [canRight, setCanRight] = useState(false)
+
+  const updateEdges = useCallback(() => {
+    const el = trackRef.current
+    if (!el) return
+    setCanLeft(el.scrollLeft > 4)
+    setCanRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4)
+  }, [])
+
+  useEffect(() => {
+    updateEdges()
+    const el = trackRef.current
+    if (!el) return
+    el.addEventListener('scroll', updateEdges, { passive: true })
+    window.addEventListener('resize', updateEdges)
+    return () => {
+      el.removeEventListener('scroll', updateEdges)
+      window.removeEventListener('resize', updateEdges)
+    }
+  }, [updateEdges, tabs.length])
+
+  // Keep the active tab in view when it changes via any other route (e.g.
+  // a card elsewhere on the page jumps straight to a tab).
+  useEffect(() => {
+    const el = trackRef.current
+    if (!el) return
+    const btn = el.querySelector(`[data-tab-key="${active}"]`)
+    btn?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
+  }, [active])
+
+  function scrollBy(dir) {
+    trackRef.current?.scrollBy({ left: dir * 220, behavior: 'smooth' })
+  }
+
+  return (
+    <div className="relative flex items-center border-b border-gray-800">
+      {canLeft && (
+        <button
+          type="button"
+          onClick={() => scrollBy(-1)}
+          aria-label="Scroll tabs left"
+          className="absolute left-0 z-10 h-full px-1.5 bg-gradient-to-r from-[var(--bg-base,#0b0f0d)] via-[var(--bg-base,#0b0f0d)] to-transparent text-gray-400 hover:text-white"
+        >
+          <ChevronLeft size={16} />
+        </button>
+      )}
+      <div ref={trackRef} className="flex gap-1 px-4 overflow-x-auto scroll-smooth">
+        {tabs.map(({ key, label, icon: Icon }) => (
+          <button
+            key={key}
+            data-tab-key={key}
+            onClick={() => onChange(key)}
+            className={`px-3 py-2.5 text-sm font-medium flex items-center gap-1.5 border-b-2 -mb-px whitespace-nowrap transition-colors shrink-0 ${
+              active === key ? 'border-green-500 text-green-400' : 'border-transparent text-gray-400 hover:text-white'
+            }`}
+          >
+            <Icon size={14} /> {label}
+          </button>
+        ))}
+      </div>
+      {canRight && (
+        <button
+          type="button"
+          onClick={() => scrollBy(1)}
+          aria-label="Scroll tabs right"
+          className="absolute right-0 z-10 h-full px-1.5 bg-gradient-to-l from-[var(--bg-base,#0b0f0d)] via-[var(--bg-base,#0b0f0d)] to-transparent text-gray-400 hover:text-white"
+        >
+          <ChevronRight size={16} />
+        </button>
+      )}
+    </div>
+  )
+}
+
+/**
  * AccidentDetailPage — full-page route component for `/accidents/:id`.
  *
  * Replaces the former modal. Renders a breadcrumb + back control, a live
@@ -288,16 +373,6 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
       site: acc.site || '',
       location: acc.location || '',
       description: acc.description || '',
-      claim_status: acc.claim_status || 'none',
-      insurer: acc.insurer || '',
-      policy_no: acc.policy_no || '',
-      claim_amount: acc.claim_amount ?? '',
-      claim_approved_amount: acc.claim_approved_amount ?? '',
-      deductible: acc.deductible ?? '',
-      recovered_amount: acc.recovered_amount ?? '',
-      repair_cost: acc.repair_cost ?? '',
-      workshop_name: acc.workshop_name || '',
-      workshop_location: acc.workshop_location || '',
     })
     setErr('')
     setEditing(true)
@@ -307,16 +382,13 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
 
   const saveEdit = useCallback(async () => {
     if (!editForm || !acc) return
-    // '' -> null; a non-numeric entry drops to null rather than writing NaN.
-    const num = (v) => {
-      const s = String(v ?? '').trim()
-      if (s === '') return null
-      const n = Number(s)
-      return Number.isFinite(n) ? n : null
-    }
     const trimOrNull = (v) => (String(v ?? '').trim() || null)
     // severity is a CHECK-constrained lowercase token — always go through toDbSeverity,
-    // never write the display label straight to the column.
+    // never write the display label straight to the column. Claim/insurance/repair
+    // fields are DELIBERATELY not part of this quick-editor's payload any more -
+    // they are now owned by the dedicated Insurance Claim / Workshop Assessment /
+    // Dispatch & Handover tabs (separate tables), so this editor never re-saves a
+    // stale copy of a fact that has its own, more complete home.
     const patch = {
       incident_date: editForm.incident_date || null,
       severity: toDbSeverity(editForm.severity) || null,
@@ -324,16 +396,6 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
       site: trimOrNull(editForm.site),
       location: trimOrNull(editForm.location),
       description: trimOrNull(editForm.description),
-      claim_status: editForm.claim_status || null,
-      insurer: trimOrNull(editForm.insurer),
-      policy_no: trimOrNull(editForm.policy_no),
-      claim_amount: num(editForm.claim_amount),
-      claim_approved_amount: num(editForm.claim_approved_amount),
-      deductible: num(editForm.deductible),
-      recovered_amount: num(editForm.recovered_amount),
-      repair_cost: num(editForm.repair_cost),
-      workshop_name: trimOrNull(editForm.workshop_name),
-      workshop_location: trimOrNull(editForm.workshop_location),
     }
     setSavingEdit(true); setErr('')
     const { error } = await updateAccidentForPage(acc.id, patch)
@@ -475,19 +537,7 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
   ) : (
     <>
       {/* Tabs */}
-      <div className="flex gap-1 px-4 border-b border-gray-800 overflow-x-auto">
-        {TABS.map(({ key, label, icon: Icon }) => (
-          <button
-            key={key}
-            onClick={() => setTab(key)}
-            className={`px-3 py-2.5 text-sm font-medium flex items-center gap-1.5 border-b-2 -mb-px whitespace-nowrap transition-colors ${
-              tab === key ? 'border-green-500 text-green-400' : 'border-transparent text-gray-400 hover:text-white'
-            }`}
-          >
-            <Icon size={14} /> {label}
-          </button>
-        ))}
-      </div>
+      <ScrollableTabStrip tabs={TABS} active={tab} onChange={setTab} />
 
       {err && <div className="mx-6 mt-4 bg-red-900/30 border border-red-700 text-red-300 rounded-lg px-4 py-2 text-sm">{err}</div>}
 
@@ -564,6 +614,7 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
             <InsuranceClaimPanel
               accidentId={acc.id}
               elevated={elevated}
+              acc={acc}
               fmtCurrency={fmtCurrency}
               onChanged={() => { load(); onChanged?.() }}
             />
@@ -577,6 +628,7 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
           <WorkshopAssessmentPanel
             accidentId={acc.id}
             elevated={elevated}
+            acc={acc}
             fmtCurrency={fmtCurrency}
             onChanged={() => { load(); onChanged?.() }}
           />
@@ -585,6 +637,7 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
           <HandoverPanel
             accidentId={acc.id}
             elevated={elevated}
+            acc={acc}
             onChanged={() => { load(); onChanged?.() }}
           />
         )}
@@ -592,6 +645,7 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
           <DamageMapPanel
             accidentId={acc.id}
             vehicleType={acc.vehicle_type}
+            assetNo={acc.asset_no}
             elevated={elevated}
             onChanged={() => { load(); onChanged?.() }}
           />
@@ -1478,36 +1532,10 @@ function InlineEditForm({ form, setForm, onSave, onCancel, saving, err }) {
         </div>
       </section>
 
-      <section className="space-y-3 border-t border-[var(--input-border)] pt-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">Claim &amp; recovery</p>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          <div>
-            <label className="label">Claim status</label>
-            <select className="input" value={form.claim_status} onChange={e => set('claim_status', e.target.value)}>
-              {CLAIM_STATUS_OPTS.map(s => <option key={s} value={s}>{CLAIM_STATUS_LABELS[s] || s}</option>)}
-            </select>
-          </div>
-          <Inp label="Insurer" value={form.insurer} onChange={v => set('insurer', v)} />
-          <Inp label="Policy / Claim no" value={form.policy_no} onChange={v => set('policy_no', v)} />
-          <Inp label="Claim amount" type="number" value={form.claim_amount} onChange={v => set('claim_amount', v)} />
-          <Inp label="Approved amount" type="number" value={form.claim_approved_amount} onChange={v => set('claim_approved_amount', v)} />
-          <Inp label="Deductible" type="number" value={form.deductible} onChange={v => set('deductible', v)} />
-          <Inp label="Recovered amount" type="number" value={form.recovered_amount} onChange={v => set('recovered_amount', v)} />
-        </div>
-      </section>
-
-      <section className="space-y-3 border-t border-[var(--input-border)] pt-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">Repair</p>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          <Inp label="Repair cost" type="number" value={form.repair_cost} onChange={v => set('repair_cost', v)} />
-          <Inp label="Workshop" value={form.workshop_name} onChange={v => set('workshop_name', v)} />
-          <Inp label="Workshop location" value={form.workshop_location} onChange={v => set('workshop_location', v)} />
-        </div>
-      </section>
-
       <p className="text-[11px] text-[var(--text-muted)]">
-        Workflow stage, closure and Vehicle Off Road are managed from the Overview and Closure tabs. For the full
-        GCC case form (documents, liability, Najm/Taqdeer) open this record on the Accidents register.
+        Workflow stage, closure and Vehicle Off Road are managed from the Overview and Closure tabs. Responsibility,
+        the insurance claim, the workshop assessment and dispatch/handover each have their own tab above - edit
+        those facts there, not here, so there is only ever one place that holds the current value.
       </p>
     </div>
   )

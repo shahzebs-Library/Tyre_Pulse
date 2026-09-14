@@ -12,34 +12,62 @@
  *
  * DIAGRAMS ARE DELIBERATELY ABSTRACT, NOT PHOTOREALISTIC. Each view is a small
  * CSS-grid "floor plan" of named, clickable cells - honest about being a
- * functional diagram rather than a traced vehicle silhouette this codebase has
- * no source art for. Region/component names are the thing that carries the
- * information; their on-screen position is illustrative, not to scale.
+ * functional diagram rather than a traced vehicle silhouette. The REAL vehicle
+ * picture for the asset (correct body art per type) is shown separately by
+ * DamageMapPanel via VehicleTyreDiagram, for visual confirmation; this grid is
+ * only the click surface for recording a mark.
+ *
+ * FAMILY RESOLUTION DELEGATES TO src/lib/vehicleTyreLayout.js - THE single,
+ * fleet-owner-confirmed classifier the rest of the app already uses for "what
+ * shape is this machine". Do NOT re-inline a second vehicle-type keyword list
+ * here: that is exactly the drift that once collapsed the whole pump family
+ * onto the wrong body (see vehicleTyreLayout.js's own header). It also lets a
+ * blank/junk `vehicle_type` fall back to the ASSET NUMBER (TM.../MP.../WL...),
+ * which this file's own resolver never could.
  */
+import { resolveLayoutKey, isTyrelessEquipment } from './vehicleTyreLayout'
 
-/** Vehicle "families" this tool knows a layout for; anything else falls back
- *  to 'generic'. Matched case-insensitively against vehicle_fleet.vehicle_type. */
+/** Vehicle "families" this tool knows a click-surface layout for; anything
+ *  else falls back to 'generic'. */
 export const FAMILIES = ['bus', 'pickup', 'concrete_pump', 'generic']
 
-const FAMILY_PATTERNS = [
-  { family: 'bus', re: /bus/i },
-  { family: 'concrete_pump', re: /concrete.?pump|placing.?boom|boom.?pump|pump.?truck/i },
-  { family: 'pickup', re: /pick.?up/i },
-]
+// Canonical layout key (vehicleTyreLayout.LAYOUT_KEYS) -> damage-marking
+// family. Only the machines whose real body genuinely matches the
+// component-tap pump grid (a truck-mounted chassis cab + boom + outriggers)
+// route to 'concrete_pump' - a mast-mounted PLACING BOOM has no chassis or
+// outriggers at all and is caught by isTyrelessEquipment() below instead.
+const LAYOUT_KEY_TO_FAMILY = {
+  Pickup: 'pickup',
+  'Wheel loader': 'generic',
+  'Skid loader': 'generic',
+  Canter: 'generic',
+  Bus: 'bus',
+  Tata: 'generic',
+  'Ashok Leyland': 'generic',
+  Tanker: 'generic',
+  Trailer: 'generic',
+  'Truck 6x4': 'generic',
+  'Tri-mixer': 'generic',
+  'Line pump': 'concrete_pump',
+  'Concrete pump': 'concrete_pump',
+}
 
 /**
- * Resolve a fleet `vehicle_type` string to one of FAMILIES. Unknown/blank
- * types resolve to 'generic' - a reasonable 4-view layout that applies to
- * most on-road vehicles, rather than pretending to know a type it does not.
- * @param {string} vehicleType
+ * Resolve a fleet `vehicle_type` (and, when it is blank/junk, the asset
+ * number) to one of FAMILIES via the canonical resolver.
+ * @param {string} [vehicleType]
+ * @param {string} [assetNo]
  * @returns {'bus'|'pickup'|'concrete_pump'|'generic'}
  */
-export function familyForVehicleType(vehicleType) {
-  const s = String(vehicleType ?? '')
-  for (const { family, re } of FAMILY_PATTERNS) {
-    if (re.test(s)) return family
-  }
-  return 'generic'
+export function familyForVehicleType(vehicleType, assetNo) {
+  const hasType = String(vehicleType ?? '').trim() !== ''
+  const hasAsset = String(assetNo ?? '').trim() !== ''
+  if (!hasType && !hasAsset) return 'generic' // nothing to resolve - say so, never guess
+  // Fixed/mast-mounted equipment (placing boom, stationary pump, generator,
+  // plant...) has no chassis/wheels, so it gets the plain 4-side grid, never
+  // the truck-mounted pump's chassis+outrigger component layout.
+  if (isTyrelessEquipment(vehicleType)) return 'generic'
+  return LAYOUT_KEY_TO_FAMILY[resolveLayoutKey(vehicleType, assetNo)] || 'generic'
 }
 
 /** View keys per family, in the order they should be offered/rotated through. */

@@ -83,7 +83,7 @@ function FlagToggle({ checked, onChange, label, icon: Icon, tone, disabled }) {
   )
 }
 
-export default function WorkshopAssessmentPanel({ accidentId, elevated, fmtCurrency, onChanged }) {
+export default function WorkshopAssessmentPanel({ accidentId, elevated, acc, fmtCurrency, onChanged }) {
   const [assessment, setAssessment] = useState(null) // null while loading, {} when none exists yet
   const [order, setOrder] = useState(null)
   const [draft, setDraft] = useState(null)
@@ -106,7 +106,10 @@ export default function WorkshopAssessmentPanel({ accidentId, elevated, fmtCurre
       setOrderForm({
         repairRoute: o?.repair_route || row.recommended_route || '',
         workshopType: o?.workshop_type || '',
-        workshopName: o?.workshop_name || '',
+        // No repair order opened yet - carry forward the workshop already
+        // named on the incident report (accidents.workshop_name) rather than
+        // showing a blank field under a name the user already typed once.
+        workshopName: o?.workshop_name || (!o ? acc?.workshop_name : '') || '',
         quotationAmount: o?.quotation_amount ?? '',
         plannedCompletion: o?.planned_completion || '',
       })
@@ -115,7 +118,7 @@ export default function WorkshopAssessmentPanel({ accidentId, elevated, fmtCurre
     } finally {
       setLoading(false)
     }
-  }, [accidentId])
+  }, [accidentId, acc?.workshop_name])
 
   useEffect(() => { load() }, [load])
 

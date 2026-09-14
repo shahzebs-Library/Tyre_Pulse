@@ -88,7 +88,7 @@ const BLANK_FORM = {
   rejection_reason: '', remarks: '', return_to_service_date: '', actual_downtime_days: '',
 }
 
-export default function HandoverPanel({ accidentId, elevated, onChanged }) {
+export default function HandoverPanel({ accidentId, elevated, acc, onChanged }) {
   const [rows, setRows] = useState(null) // null = loading
   const [err, setErr] = useState('')
   const [saving, setSaving] = useState(false)
@@ -120,7 +120,12 @@ export default function HandoverPanel({ accidentId, elevated, onChanged }) {
       ])
       setRows(h)
       setRepairOrder(order || {})
-      setDestForm({ workshopType: order?.workshop_type || '', workshopName: order?.workshop_name || '' })
+      // No repair order opened yet - carry forward the workshop already named
+      // on the incident report, same as Workshop Assessment's own form.
+      setDestForm({
+        workshopType: order?.workshop_type || '',
+        workshopName: order?.workshop_name || (!order ? acc?.workshop_name : '') || '',
+      })
       setDowntime(d || {})
       setDispForm({
         vehicle_status: d?.vehicle_status || '',
@@ -133,7 +138,7 @@ export default function HandoverPanel({ accidentId, elevated, onChanged }) {
       setErr(toUserMessage(e, 'Could not load the handover inspections.'))
       setRows([])
     }
-  }, [accidentId])
+  }, [accidentId, acc?.workshop_name])
 
   useEffect(() => { load() }, [load])
 

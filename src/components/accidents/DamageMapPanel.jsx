@@ -29,10 +29,11 @@ import { getDamageAssessment, saveDamageAssessment, upsertDamageMark, removeDama
 import { uploadEvidenceFile } from '../../lib/api/accidentEvidence'
 import { DAMAGE_CONDITION_OPTS } from '../../lib/accidentVocab'
 import { toUserMessage } from '../../lib/safeError'
+import VehicleTyreDiagram from '../VehicleTyreDiagram'
 
 const MARK_DAMAGE_TYPES = DAMAGE_CONDITION_OPTS.filter((v) => v !== 'N/A')
 
-export default function DamageMapPanel({ accidentId, vehicleType, elevated, onChanged }) {
+export default function DamageMapPanel({ accidentId, vehicleType, assetNo, elevated, onChanged }) {
   const [assessment, setAssessment] = useState(null) // null while loading, {} when none exists yet
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -41,7 +42,15 @@ export default function DamageMapPanel({ accidentId, vehicleType, elevated, onCh
   const [photoUploading, setPhotoUploading] = useState(false)
   const photoInputRef = useRef(null)
 
-  const family = useMemo(() => familyForVehicleType(vehicleType), [vehicleType])
+  // The REAL vehicle picture for this asset, via the SAME canonical resolver
+  // the rest of the app uses (VehicleTyreDiagram's own resolveLayoutKey) -
+  // visual confirmation that the click-surface grid below matches the actual
+  // machine. VehicleTyreDiagram only takes ONE type string, so when the
+  // incident's own vehicle_type snapshot is blank the asset number stands in
+  // (it understands TM/MP/WL/SL/PL prefixes directly) rather than silently
+  // defaulting to a pickup.
+  const diagramVehicleType = vehicleType || assetNo
+  const family = useMemo(() => familyForVehicleType(vehicleType, assetNo), [vehicleType, assetNo])
   const views = FAMILY_VIEWS[family] || FAMILY_VIEWS.generic
   const [activeView, setActiveView] = useState(views[0])
   useEffect(() => { setActiveView(views[0]) }, [family]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -151,7 +160,20 @@ export default function DamageMapPanel({ accidentId, vehicleType, elevated, onCh
       <section className="card space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <h3 className="font-semibold text-[var(--text-primary)] flex items-center gap-2"><MapPin size={16} /> Mark vehicle / equipment damage</h3>
-          <span className="text-[11px] text-[var(--text-muted)]">{vehicleType || 'Unknown type'} · {family === 'concrete_pump' ? 'Component diagram' : 'Multi-view diagram'}</span>
+          <span className="text-[11px] text-[var(--text-muted)]">
+            {assetNo ? `${assetNo} · ` : ''}{vehicleType || 'Unknown type'} · {family === 'concrete_pump' ? 'Component diagram' : 'Multi-view diagram'}
+          </span>
+        </div>
+
+        {/* The real vehicle picture for THIS asset (same resolver used
+            everywhere else in the app for this exact machine), so the click
+            grid below is visibly tied to the actual vehicle, not a generic
+            box grid. Read-only preview - no tyre/click data, purely visual. */}
+        <div className="rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)]/30 flex flex-col items-center py-4">
+          <VehicleTyreDiagram vehicleType={diagramVehicleType} width={200} />
+          <p className="text-[11px] text-[var(--text-muted)] mt-1">
+            {diagramVehicleType ? 'Reference picture for this asset' : 'No asset type on this incident - showing a generic reference'}
+          </p>
         </div>
 
         {views.length > 1 && (

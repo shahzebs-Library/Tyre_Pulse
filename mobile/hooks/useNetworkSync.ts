@@ -14,6 +14,7 @@ import * as Network from 'expo-network'
 import { addNetworkStateListener } from 'expo-network'
 import { syncQueue, getPendingCount } from '../lib/offlineQueue'
 import { syncRecordQueue, getPendingRecordCount } from '../lib/recordQueue'
+import { isNetworkUsable } from '../lib/networkReachable'
 
 /** Minimum ms between auto-sync attempts to avoid hammering the API */
 const DEBOUNCE_MS = 3_000
@@ -58,9 +59,17 @@ export function useNetworkSync(): void {
     // filesystem even with an empty queue. The old comment claimed expo-network
     // had no listener - that is not true of the installed version (8.0.8), and
     // components/SyncBanner.tsx already uses addNetworkStateListener.
+    //
+    // Gated on isNetworkUsable(), NOT `isConnected && isInternetReachable`: the
+    // reachability half of that pair is an async probe that can trail the
+    // connectivity-change EVENT by a moment (see lib/networkReachable.ts) -
+    // requiring it here meant a device that had just come back online could
+    // read isInternetReachable as false/undefined and this listener would
+    // silently do nothing, leaving already-saved field work stuck until
+    // something else (a manual Sync tap) forced it through.
     const sub = addNetworkStateListener(state => {
       if (!mounted) return
-      if (state.isConnected && state.isInternetReachable) attemptSync()
+      if (isNetworkUsable(state)) attemptSync()
     })
 
     // Safety net: a long, slow interval so a missed event can never strand queued
@@ -71,7 +80,7 @@ export function useNetworkSync(): void {
       if (!mounted) return
       try {
         const state = await Network.getNetworkStateAsync()
-        if (state.isConnected && state.isInternetReachable) {
+        if (isNetworkUsable(state)) {
           attemptSync()
         }
       } catch {
@@ -83,7 +92,7 @@ export function useNetworkSync(): void {
     // connectivity and items are queued from a previous offline session.
     Network.getNetworkStateAsync()
       .then(state => {
-        if (mounted && state.isConnected && state.isInternetReachable) {
+        if (mounted && isNetworkUsable(state)) {
           attemptSync()
         }
       })

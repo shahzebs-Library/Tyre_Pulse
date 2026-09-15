@@ -8,6 +8,7 @@ import {
 import { useLanguage } from '../contexts/LanguageContext'
 import { useTheme } from '../contexts/ThemeContext'
 import { addNetworkStateListener } from 'expo-network'
+import { isNetworkUsable } from '../lib/networkReachable'
 
 export default function SyncBanner() {
   const { t } = useLanguage()
@@ -44,8 +45,14 @@ export default function SyncBanner() {
 
   useEffect(() => {
     refresh()
+    // isNetworkUsable(), not `isConnected && isInternetReachable`: the latter's
+    // reachability half is an async probe that can read false/undefined for a
+    // beat right after connectivity actually returns (see
+    // lib/networkReachable.ts) - which used to make this banner keep saying
+    // "offline" and skip the auto-sync even though the device genuinely had a
+    // connection.
     const sub = addNetworkStateListener(state => {
-      const isOnline = !!state.isConnected && !!state.isInternetReachable
+      const isOnline = isNetworkUsable(state)
       setOnline(isOnline)
       if (isOnline) attemptSync()
     })

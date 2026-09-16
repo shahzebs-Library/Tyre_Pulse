@@ -1,54 +1,66 @@
 import { describe, it, expect } from 'vitest'
 import { dispatchSteps, DISPATCH_STEPS } from '../lib/accidentDispatch'
+import { DISPATCH_STEPPER } from '../lib/accidentCaseVocab'
 
-describe('dispatchSteps', () => {
-  it('marks every step not-done and the first one current with no data at all', () => {
+const keys = (steps) => steps.map((s) => s.key)
+const states = (steps) => steps.map((s) => s.state)
+
+describe('dispatchSteps (mock M2 stepper)', () => {
+  it('carries exactly the 4 DISPATCH_STEPPER steps in mock order', () => {
+    expect(DISPATCH_STEPS).toBe(DISPATCH_STEPPER)
+    expect(keys(dispatchSteps({}))).toEqual(['dispatched', 'arrived', 'signed_acceptance', 'vendor_assessment'])
+    expect(dispatchSteps({}).map((s) => s.n)).toEqual([1, 2, 3, 4])
+  })
+
+  it('with no data nothing is complete, step 1 is next, the rest pending', () => {
     const steps = dispatchSteps({})
+    expect(states(steps)).toEqual(['next', 'pending', 'pending', 'pending'])
     expect(steps.map((s) => s.done)).toEqual([false, false, false, false])
-    expect(steps.map((s) => s.current)).toEqual([true, false, false, false])
+    expect(steps.every((s) => s.at === null)).toBe(true)
   })
 
-  it('never fabricates a done step - recovery needs BOTH recovery_required and a towing reference', () => {
-    expect(dispatchSteps({ downtime: { recovery_required: true } })[0].done).toBe(false)
-    expect(dispatchSteps({ downtime: { towing_reference: 'TOW-1' } })[0].done).toBe(false)
-    expect(dispatchSteps({ downtime: { recovery_required: true, towing_reference: 'TOW-1' } })[0].done).toBe(true)
+  it('Dispatched completes from departure_at (with its date) or a post-departure live status', () => {
+    const a = dispatchSteps({ dispatch: { departure_at: '2026-09-16T08:00:00Z' } })
+    expect(a[0].state).toBe('complete')
+    expect(a[0].at).toBe('2026-09-16T08:00:00Z')
+    expect(a[1].state).toBe('next')
+    expect(dispatchSteps({ dispatch: { live_status: 'in_transit' } })[0].done).toBe(true)
+    expect(dispatchSteps({ dispatch: { live_status: 'preparing' } })[0].done).toBe(false)
   })
 
-  it('advances current to the delivered step once recovery is complete', () => {
-    const steps = dispatchSteps({ downtime: { recovery_required: true, towing_reference: 'TOW-1' } })
-    expect(steps[0].done).toBe(true)
-    expect(steps[0].current).toBe(false)
-    expect(steps[1].current).toBe(true)
-  })
-
-  it('marks "delivered" done only from a real delivered_to_workshop_at timestamp', () => {
+  it('Arrived completes from arrived_at, an arrived/accepted live status, or the legacy delivered_to_workshop_at', () => {
+    expect(dispatchSteps({ dispatch: { arrived_at: '2026-09-16T09:08:00Z' } })[1].at).toBe('2026-09-16T09:08:00Z')
+    expect(dispatchSteps({ dispatch: { live_status: 'arrived' } })[1].done).toBe(true)
+    expect(dispatchSteps({ downtime: { delivered_to_workshop_at: '2026-09-16T09:30:00Z' } })[1]).toMatchObject({ done: true, at: '2026-09-16T09:30:00Z' })
     expect(dispatchSteps({ downtime: {} })[1].done).toBe(false)
-    expect(dispatchSteps({ downtime: { delivered_to_workshop_at: '2026-08-01T09:00:00Z' } })[1].done).toBe(true)
   })
 
-  it('marks "inspected" done as soon as ANY handover inspection is recorded', () => {
-    expect(dispatchSteps({ handoverRows: [] })[2].done).toBe(false)
-    expect(dispatchSteps({ handoverRows: [{ decision: 'rejected' }] })[2].done).toBe(true)
+  it('Signed acceptance needs custody_accepted AND a timestamp/accepted status, or a legacy accepted receipt', () => {
+    expect(dispatchSteps({ dispatch: { custody_accepted: true } })[2].done).toBe(false)
+    expect(dispatchSteps({ dispatch: { custody_accepted: true, accepted_at: '2026-09-16T10:00:00Z' } })[2]).toMatchObject({ done: true, at: '2026-09-16T10:00:00Z' })
+    expect(dispatchSteps({ dispatch: { custody_accepted: true, live_status: 'accepted' } })[2].done).toBe(true)
+    expect(dispatchSteps({ handoverRows: [{ decision: 'rejected' }] })[2].done).toBe(false)
+    expect(dispatchSteps({ handoverRows: [{ decision: 'accepted' }] })[2].done).toBe(true)
   })
 
-  it('marks "returned" done from vehicle_status=returned_to_operation, never guessed from an accepted receipt alone', () => {
-    expect(dispatchSteps({ handoverRows: [{ decision: 'accepted' }] })[3].done).toBe(false)
-    expect(dispatchSteps({ downtime: { vehicle_status: 'returned_to_operation' } })[3].done).toBe(true)
+  it('Vendor assessment starts only once a quotation has at least been requested', () => {
+    expect(dispatchSteps({ repairOrder: { quotation_status: 'not_requested' } })[3].done).toBe(false)
+    expect(dispatchSteps({ repairOrder: {} })[3].done).toBe(false)
+    expect(dispatchSteps({ repairOrder: { quotation_status: 'requested' } })[3].done).toBe(true)
+    expect(dispatchSteps({ repairOrder: { quotation_status: 'approved' } })[3].done).toBe(true)
   })
 
-  it('marks nothing current once every step is done', () => {
+  it('the mock scenario: dispatched complete, arrived next, later steps pending', () => {
+    const steps = dispatchSteps({ dispatch: { departure_at: '2026-09-16T08:00:00Z', live_status: 'in_transit' } })
+    expect(states(steps)).toEqual(['complete', 'next', 'pending', 'pending'])
+  })
+
+  it('marks nothing next once every step is complete', () => {
     const steps = dispatchSteps({
-      downtime: {
-        recovery_required: true, towing_reference: 'TOW-1', delivered_to_workshop_at: '2026-08-01T09:00:00Z',
-        vehicle_status: 'returned_to_operation',
-      },
-      handoverRows: [{ decision: 'accepted' }],
+      dispatch: { departure_at: '2026-09-16T08:00:00Z', arrived_at: '2026-09-16T09:00:00Z', custody_accepted: true, accepted_at: '2026-09-16T09:30:00Z', live_status: 'accepted' },
+      repairOrder: { quotation_status: 'received' },
     })
-    expect(steps.every((s) => s.done)).toBe(true)
+    expect(steps.every((s) => s.state === 'complete')).toBe(true)
     expect(steps.some((s) => s.current)).toBe(false)
-  })
-
-  it('DISPATCH_STEPS carries exactly 4 steps in the mockup order', () => {
-    expect(DISPATCH_STEPS.map((s) => s.key)).toEqual(['recovery', 'delivered', 'inspected', 'returned'])
   })
 })

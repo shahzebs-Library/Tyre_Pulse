@@ -62,6 +62,7 @@ const { navSpy } = vi.hoisted(() => ({ navSpy: vi.fn() }))
 vi.mock('react-router-dom', () => ({
   useParams: () => ({ id: 'acc-1' }),
   useNavigate: () => navSpy,
+  useLocation: () => ({ pathname: '/accidents/acc-1', search: '', state: null }),
 }))
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ profile: { id: 'u1', role: 'Admin' } }) }))
 vi.mock('../contexts/SettingsContext', () => ({ useSettings: () => ({ activeCurrency: 'SAR' }) }))
@@ -92,10 +93,11 @@ describe('AccidentDetailPage (/accidents/:id)', () => {
     await screen.findByRole('button', { name: /Download Case/i })
 
     // "Claim & Recovery" was retired (its fields moved onto this tab, see the
-    // note in AccidentDetailModal.jsx's TABS array) - "Insurance Claim" is its
-    // successor and, like the old tab, formats money via the active currency.
-    fireEvent.click(screen.getByRole('button', { name: /Insurance Claim/i }))
-    await waitFor(() => expect(screen.getByRole('heading', { name: /Insurance claim/i })).toBeInTheDocument())
+    // note in AccidentDetailModal.jsx's TABS array) - the numbered mock tab
+    // "3. Insurance / Claims" is its successor and, like the old tab, formats
+    // money via the active currency.
+    fireEvent.click(screen.getByRole('button', { name: /Insurance \/ Claims/i }))
+    await waitFor(() => expect(screen.getByRole('heading', { name: /Claim document package/i })).toBeInTheDocument())
 
     fireEvent.click(screen.getByRole('button', { name: /Parts & Repairs/i }))
     await waitFor(() => expect(screen.getByText('Bumper')).toBeInTheDocument())
@@ -106,8 +108,8 @@ describe('AccidentDetailPage (/accidents/:id)', () => {
     await screen.findByRole('button', { name: /Download Case/i })
 
     // The record tabs carry no per-tab save form; editing is one shared editor.
-    fireEvent.click(screen.getByRole('button', { name: /Insurance Claim/i }))
-    await waitFor(() => expect(screen.getByRole('heading', { name: /Insurance claim/i })).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /Insurance \/ Claims/i }))
+    await waitFor(() => expect(screen.getByRole('heading', { name: /Claim document package/i })).toBeInTheDocument())
     expect(screen.queryByRole('button', { name: /Save Insurance Claim/i })).toBeNull()
 
     // Edit Incident opens the editor INSIDE the case; it must NOT navigate away.

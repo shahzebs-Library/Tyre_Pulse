@@ -26,7 +26,90 @@
  * when the row names one, otherwise it is left out rather than guessed).
  */
 
+import { NOTIFY_ROLES } from './accidentCaseVocab'
+
 const CATEGORY = { ACTIONS: 'actions', DOCUMENTS: 'documents', SLA: 'sla', EMAILS: 'emails' }
+
+// Which case-detail tab an entry "belongs" to (the drawer's "Open related tab"
+// link). Keys are AccidentDetailModal's TABS keys.
+const WORKSTREAM_TAB = {
+  fleet_validation: 'fleet_validation', assessment: 'assessment', insurance: 'insurance_claim',
+  liability: 'liability', damage_map: 'damage_map', handover: 'handover',
+}
+export const relatedTabFor = (workstreamKey, fallback = 'workstreams') => WORKSTREAM_TAB[workstreamKey] || fallback
+
+export const CHANNEL_LABEL = {
+  in_app: 'In-app', email_out: 'Email', email_in: 'Email', comment: 'Comment', call: 'Call', external_portal: 'Portal',
+}
+export const channelLabel = (channel) => CHANNEL_LABEL[channel] || (channel ? String(channel).replace(/_/g, ' ') : 'Not set')
+
+/**
+ * Members per NOTIFY_ROLES group from the org's profiles - the ONLY honest
+ * source for a "<group> · <count>" recipients cell. Counts approved, unlocked
+ * profiles whose role is one of the group's roles. Returns Map(groupKey ->
+ * count); a group with no members is present with 0 (0 is a fact, not a gap).
+ */
+export function groupMemberCounts(profiles = []) {
+  const counts = new Map(NOTIFY_ROLES.map((g) => [g.key, 0]))
+  for (const p of profiles || []) {
+    if (!p || p.approved === false || p.locked === true) continue
+    const role = String(p.role || '').trim().toLowerCase()
+    if (!role) continue
+    for (const g of NOTIFY_ROLES) {
+      if (g.roles.some((r) => r.toLowerCase() === role)) counts.set(g.key, (counts.get(g.key) || 0) + 1)
+    }
+  }
+  return counts
+}
+
+/** The NOTIFY_ROLES group a to_party string names (by key or label), or null. */
+export function groupForParty(party) {
+  const k = String(party || '').trim().toLowerCase()
+  if (!k) return null
+  return NOTIFY_ROLES.find((g) => g.key === k || g.label.toLowerCase() === k || `${g.label.toLowerCase()} group` === k) || null
+}
+
+/**
+ * Recipients cell: "<group> · <count>" when to_party is a known group AND the
+ * count is derivable; the group name alone when it is not; the raw party
+ * (a named person) otherwise; 'Not set' for a blank. Never a fake count.
+ * @returns {{label:string, count:number|null, group:object|null}}
+ */
+export function recipientsLabel(comm, groupCounts = null) {
+  const party = comm?.to_party || comm?.from_party || ''
+  if (!party) return { label: 'Not set', count: null, group: null }
+  const group = groupForParty(party)
+  if (!group) return { label: party, count: null, group: null }
+  const n = groupCounts?.get?.(group.key)
+  const count = Number.isFinite(n) ? n : null
+  return { label: count != null ? `${group.label} · ${count}` : group.label, count, group }
+}
+
+/**
+ * Status cell. "Delivered n/n" ONLY when per-recipient delivery is recorded on
+ * the row (a `delivery` object {delivered,total} the delivery pipeline may
+ * stamp; this app records none today), otherwise the honest verbs: a future
+ * occurred_at is "Scheduled in <x>", an outbound row "Sent", an inbound row
+ * "Received", an internal note "Logged".
+ */
+export function deliveryStatusLabel(comm, now = Date.now()) {
+  const d = comm?.delivery
+  if (d && Number.isFinite(Number(d.delivered)) && Number.isFinite(Number(d.total)) && Number(d.total) > 0) {
+    return `Delivered ${Number(d.delivered)}/${Number(d.total)}`
+  }
+  const at = comm?.occurred_at ? new Date(comm.occurred_at).getTime() : NaN
+  if (Number.isFinite(at) && at > now + 60000) return `Scheduled in ${durationLabel(at - now)}`
+  if (comm?.direction === 'outbound') return 'Sent'
+  if (comm?.direction === 'inbound') return 'Received'
+  return 'Logged'
+}
+
+/** verified/total evidence rows, optionally for one workstream. */
+export function evidenceVerification(evidence = [], workstreamKey = null) {
+  const rows = (evidence || []).filter((e) => e && (!workstreamKey || e.workstream_key === workstreamKey))
+  const verified = rows.filter((e) => e.verification_status === 'verified').length
+  return { verified, total: rows.length }
+}
 
 export const FILTERS = [
   { key: 'all', label: 'All' },
@@ -82,6 +165,7 @@ const HANDOVER_LABEL = {
  */
 export function buildTimelineFeed({
   acc, workstreamEvents = [], communications = [], handovers = [], slaInstances = [], claim = null, usersById = new Map(),
+  evidence = [], groupCounts = null,
 } = {}) {
   const raw = []
 
@@ -100,6 +184,12 @@ export function buildTimelineFeed({
       ]).join(' · '),
       status: 'completed',
       iconKey: 'report',
+      actor: acc.driver_name || acc.inspector || null,
+      relatedTab: 'overview',
+      chips: (() => {
+        const v = evidenceVerification(evidence)
+        return v.total ? [`Verified ${v.verified}/${v.total}`] : []
+      })(),
     })
   }
 
@@ -115,25 +205,37 @@ export function buildTimelineFeed({
       detail: e.note || '',
       status: e.to_status === 'completed' ? 'completed' : (e.to_status === 'in_progress' ? 'in_progress' : 'completed'),
       iconKey: 'workstream',
+      actor: nameOf(usersById, e.actor_id),
+      relatedTab: relatedTabFor(e.workstream_key),
+      chips: (() => {
+        const v = evidenceVerification(evidence, e.workstream_key)
+        return v.total ? [`Verified ${v.verified}/${v.total}`] : []
+      })(),
     })
   }
 
   for (const c of communications) {
     if (!c?.occurred_at) continue
-    const channelLabel = { in_app: 'In-app notice', email_out: 'Email', email_in: 'Email', comment: 'Comment', call: 'Call', external_portal: 'Portal message' }[c.channel] || c.channel
+    const commChannel = { in_app: 'In-app notice', email_out: 'Email', email_in: 'Email', comment: 'Comment', call: 'Call', external_portal: 'Portal message' }[c.channel] || c.channel
     raw.push({
       id: `comm-${c.id}`,
       at: c.occurred_at,
       category: (c.channel === 'email_out' || c.channel === 'email_in') ? CATEGORY.EMAILS : CATEGORY.ACTIONS,
-      title: c.subject || channelLabel,
+      title: c.subject || commChannel,
       subtitle: c.direction === 'outbound'
         ? compact([c.to_party ? `to ${c.to_party}` : null]).join(' ')
         : c.direction === 'inbound'
           ? compact([c.from_party ? `from ${c.from_party}` : null]).join(' ')
           : compact([c.author_name ? `by ${c.author_name}` : null]).join(' '),
-      detail: channelLabel,
+      detail: commChannel,
       status: 'completed',
       iconKey: 'mail',
+      actor: c.author_name || c.from_party || null,
+      relatedTab: c.workstream_key ? relatedTabFor(c.workstream_key, 'log') : 'log',
+      chips: (() => {
+        const r = recipientsLabel(c, groupCounts)
+        return r.count != null ? [`${r.count} recipient${r.count === 1 ? '' : 's'}`] : []
+      })(),
     })
   }
 
@@ -148,6 +250,9 @@ export function buildTimelineFeed({
       detail: h.rejection_reason || h.remarks || '',
       status: 'completed',
       iconKey: 'handover',
+      actor: h.inspector_name || null,
+      relatedTab: 'handover',
+      chips: [],
     })
   }
 
@@ -161,6 +266,9 @@ export function buildTimelineFeed({
       detail: '',
       status: 'completed',
       iconKey: 'document',
+      actor: null,
+      relatedTab: 'insurance_claim',
+      chips: [],
     })
   }
 
@@ -173,9 +281,13 @@ export function buildTimelineFeed({
       category: CATEGORY.SLA,
       title: s.name || 'SLA due',
       subtitle: '',
-      detail: s.breached ? 'Breached' : (s.state === 'completed' ? 'Completed on time' : (overdue ? `${(s.team || s.workstream_key || 'Owner')} SLA not started` : 'Due')),
-      status: s.state === 'completed' ? 'completed' : (s.state === 'running' ? 'pending' : 'pending'),
+      detail: s.breached ? 'Breached' : (s.state === 'met' ? 'SLA met' : (overdue ? `${(s.team || s.workstream_key || 'Owner')} SLA not started` : 'Due')),
+      status: s.state === 'met' ? 'completed' : 'pending',
       iconKey: 'sla',
+      slaMet: s.state === 'met',
+      actor: null,
+      relatedTab: relatedTabFor(s.workstream_key),
+      chips: [],
     })
   }
 

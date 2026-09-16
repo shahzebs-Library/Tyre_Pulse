@@ -14,7 +14,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import {
   X, Plus, Trash2, Send, Lock, CheckCircle2, XCircle,
   ShieldCheck, Hourglass, FileText, Wrench, MessageSquare, History, User, ClipboardList,
@@ -57,6 +57,7 @@ import DamageMapPanel from './accidents/DamageMapPanel'
 import FleetValidationPanel from './accidents/FleetValidationPanel'
 import AccidentInsurerRecord from './insurance/AccidentInsurerRecord'
 import { loadCase } from '../lib/api/accidentCase'
+import { CASE_FLOW } from '../lib/accidentCaseVocab'
 import { updateAccidentForPage } from '../lib/api/accidents'
 import { renderAccidentCasePdf } from '../lib/accidentCasePdf'
 import { toUserMessage } from '../lib/safeError'
@@ -118,54 +119,37 @@ function computeDelay(acc, closure) {
   return { delayed: days != null && days > DELAY_THRESHOLD_DAYS, days }
 }
 
+// Tab order follows the owner's mock case flow (accidentCaseVocab.CASE_FLOW):
+// Overview, then Workstream 1..7 in mock order, then the supporting tabs. The
+// numbered label is what the mock prints ("Workstream 3 of 7") so web and
+// Flutter read the same. Panels: FleetValidationPanel, WorkshopAssessmentPanel,
+// InsuranceClaimPanel, LiabilityPaymentPanel, DamageMapPanel, HandoverPanel,
+// AccidentCaseTimeline (own page, linked from Overview). The retired "Repair &
+// Insurance" / "Claim & Recovery" tabs stay retired - the accidents columns are
+// untouched, only removed from this screen; AccidentInsurerRecord lives under
+// Insurance Claim.
+const FLOW_TAB_KEY = {
+  fleet_validation: 'fleet_validation',
+  assessment: 'assessment',
+  insurance: 'insurance_claim',
+  liability: 'liability',
+  damage_map: 'damage_map',
+  handover: 'handover',
+}
+const FLOW_ICON = {
+  fleet_validation: BadgeCheck, assessment: ClipboardCheck, insurance: FileCheck2,
+  liability: Scale, damage_map: MapPin, handover: Truck,
+}
+const flowTabs = CASE_FLOW
+  .filter((s) => FLOW_TAB_KEY[s.key])
+  .map((s) => ({ key: FLOW_TAB_KEY[s.key], label: `${s.n}. ${s.label}`, title: `Workstream ${s.n} of ${CASE_FLOW.length}: ${s.label}`, icon: FLOW_ICON[s.key] }))
+
 const TABS = [
   { key: 'overview', label: 'Overview', icon: FileText },
-  // One tab per team: a row of team tabs (Fleet, HSE, Insurance, Workshop, Finance)
-  // switches the view, and the selected team shows its single progress bar plus only
-  // its own work, inputs and files. Elevated users assign owners inline; others
-  // read-only. (Rendered by CaseTeamDistributionPanel.)
+  ...flowTabs,
   { key: 'teams',    label: 'Teams', icon: Users },
-  // Interactive "who owns what" control: assign each workstream, set its status,
-  // and mark one Not Applicable. Elevated users get the controls; others read-only.
   { key: 'workstreams', label: 'Workstreams', icon: ListChecks },
-  // Incident summary + a derived fleet-readiness checklist (asset on file,
-  // driver/site/date recorded, GPS, photos, an authority report) + the
-  // fleet_validation workstream's own progress control + notify-insurance.
-  // Rendered by FleetValidationPanel.
-  { key: 'fleet_validation', label: 'Fleet Validation', icon: BadgeCheck },
-  // Fault determination, GCC liability split and the police/Najm/Taqdeer
-  // authority-report checklist. Rendered by LiabilityPaymentPanel.
-  { key: 'liability', label: 'Responsibility & Payment', icon: Scale },
-  // Register/update the insurance claim, record the insurer's decision and
-  // settlement, work the required-document checklist, and track recoveries.
-  // Rendered by InsuranceClaimPanel — distinct from the read-only
-  // AccidentInsurerRecord shown on the "Claim & Recovery" tab below, which
-  // compares against the separate insurer-maintained claim register.
-  { key: 'insurance_claim', label: 'Insurance Claim', icon: FileCheck2 },
-  // Visible/hidden damage, cost + downtime estimates, a repair-route
-  // recommendation, and the repair order that recommendation opens.
-  // Rendered by WorkshopAssessmentPanel.
-  { key: 'assessment', label: 'Workshop Assessment', icon: ClipboardCheck },
-  // Workshop receipt / vehicle handover inspection, signed on the spot.
-  // Rendered by HandoverPanel.
-  { key: 'handover', label: 'Dispatch & Handover', icon: Truck },
-  // Orthographic multi-view / component-tapping damage marker. Rendered by
-  // DamageMapPanel, writing into the SAME accident_damage_assessments row the
-  // Workshop Assessment tab reads read-only.
-  { key: 'damage_map', label: 'Mark Damage', icon: MapPin },
   { key: 'tracker',  label: 'Tracker', icon: ClipboardList },
-  // "Repair & Insurance" and "Claim & Recovery" (the pre-existing tabs reading
-  // the original accidents columns: damage_class/fault_status/gcc_liability_
-  // ratio/najm_*/taqdeer_*/workshop_*/insurer/policy_no/claim_*/recovery_*)
-  // were RETIRED here at the user's explicit choice, once every field they
-  // showed became covered by the 4 new tabs above (Responsibility & Payment,
-  // Insurance Claim, Workshop Assessment) - keeping both was showing the same
-  // real-world fact (fault, claim amount, workshop, recovery...) in two
-  // different, non-syncing places. The underlying accidents columns are
-  // UNTOUCHED (no migration, no data change) - only removed from this screen.
-  // The one non-duplicated piece the old Claim & Recovery tab carried -
-  // AccidentInsurerRecord, a read-only comparison against the insurer's OWN
-  // claim register - now lives on the Insurance Claim tab instead.
   { key: 'parts',    label: 'Parts & Repairs', icon: Wrench },
   { key: 'log',      label: 'Case Log', icon: MessageSquare },
   { key: 'activity', label: 'Activity', icon: History },
@@ -231,10 +215,11 @@ function ScrollableTabStrip({ tabs, active, onChange }) {
         </button>
       )}
       <div ref={trackRef} className="flex gap-1 px-4 overflow-x-auto scroll-smooth">
-        {tabs.map(({ key, label, icon: Icon }) => (
+        {tabs.map(({ key, label, title, icon: Icon }) => (
           <button
             key={key}
             data-tab-key={key}
+            title={title || label}
             onClick={() => onChange(key)}
             className={`px-3 py-2.5 text-sm font-medium flex items-center gap-1.5 border-b-2 -mb-px whitespace-nowrap transition-colors shrink-0 ${
               active === key ? 'border-green-500 text-green-400' : 'border-transparent text-gray-400 hover:text-white'
@@ -295,7 +280,16 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
   const [downloading, setDownloading] = useState(false)
   const [caseDownloading, setCaseDownloading] = useState(false)
 
-  const [tab, setTab] = useState('overview')
+  // A link may ask for a specific tab (`/accidents/:id?tab=damage_map`, or
+  // router state.openTab from the timeline page). Only a key the strip knows is
+  // honoured; anything else lands on Overview.
+  const location = useLocation()
+  const [tab, setTab] = useState(() => {
+    const fromState = location?.state?.openTab
+    const fromQuery = new URLSearchParams(location?.search || '').get('tab')
+    const wanted = fromState || fromQuery
+    return TABS.some((t) => t.key === wanted) ? wanted : 'overview'
+  })
   const [acc, setAcc] = useState(null)
   const [caseData, setCaseData] = useState(null)
   const [remarks, setRemarks] = useState([])
@@ -609,6 +603,8 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
         {tab === 'fleet_validation' && (
           <FleetValidationPanel
             accidentId={acc.id}
+            workstreams={caseData?.workstreams || []}
+            onNavigateTab={setTab}
             elevated={elevated}
             acc={acc}
             onChanged={() => { load(); onChanged?.() }}
@@ -617,6 +613,8 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
         {tab === 'liability' && (
           <LiabilityPaymentPanel
             accidentId={acc.id}
+            workstreams={caseData?.workstreams || []}
+            onNavigateTab={setTab}
             elevated={elevated}
             acc={acc}
             onChanged={() => { load(); onChanged?.() }}
@@ -626,6 +624,8 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
           <div className="space-y-4">
             <InsuranceClaimPanel
               accidentId={acc.id}
+              workstreams={caseData?.workstreams || []}
+              onNavigateTab={setTab}
               elevated={elevated}
               acc={acc}
               fmtCurrency={fmtCurrency}
@@ -640,6 +640,8 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
         {tab === 'assessment' && (
           <WorkshopAssessmentPanel
             accidentId={acc.id}
+            workstreams={caseData?.workstreams || []}
+            onNavigateTab={setTab}
             elevated={elevated}
             acc={acc}
             fmtCurrency={fmtCurrency}
@@ -649,6 +651,8 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
         {tab === 'handover' && (
           <HandoverPanel
             accidentId={acc.id}
+            workstreams={caseData?.workstreams || []}
+            onNavigateTab={setTab}
             elevated={elevated}
             acc={acc}
             onChanged={() => { load(); onChanged?.() }}
@@ -657,6 +661,9 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
         {tab === 'damage_map' && (
           <DamageMapPanel
             accidentId={acc.id}
+            acc={acc}
+            workstreams={caseData?.workstreams || []}
+            onNavigateTab={setTab}
             vehicleType={acc.vehicle_type}
             assetNo={acc.asset_no}
             elevated={elevated}

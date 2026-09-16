@@ -6,7 +6,11 @@ const AccidentReportBuilder = lazy(() => import('../components/accidents/Acciden
 // Camera/BarcodeDetector scanning is a heavy, optional path - lazy-loaded like
 // the report builder above so it never adds to the form's initial bundle.
 const AssetIdentifyScanner = lazy(() => import('../components/accidents/AssetIdentifyScanner'))
-import { AlertOctagon, Plus, Search, X, Save, FileText, Download, BarChart2, Eye, Hourglass, ChevronDown, Trash2, AlertTriangle, TrendingUp, Users, DollarSign, ShieldAlert, Lightbulb, ChevronRight, Clock, ShieldCheck, ArrowLeft, Mail, Presentation, Paperclip, FileSpreadsheet, Share2, CalendarClock, RotateCcw, ScanLine } from 'lucide-react'
+import { AlertOctagon, Plus, Search, X, Save, FileText, Download, BarChart2, Eye, Hourglass, ChevronDown, Trash2, AlertTriangle, TrendingUp, Users, DollarSign, ShieldAlert, Lightbulb, ChevronRight, Clock, ShieldCheck, ArrowLeft, Mail, Presentation, Paperclip, FileSpreadsheet, Share2, CalendarClock, RotateCcw, ScanLine, Lock, MapPin } from 'lucide-react'
+import { REPORT_WIZARD_STEPS } from '../lib/accidentCaseVocab'
+import VehicleMasterCard from '../components/accidents/VehicleMasterCard'
+import { Illustration } from '../components/illustrations'
+import { vehicleArt } from '../lib/brand/vehicleArt'
 
 // Categorized document slots on the incident form. Each `category` matches the
 // team routing in src/lib/accidentTeams.js (licence/ID/registration/police to
@@ -85,11 +89,175 @@ ChartJS.register(
 // source `src/lib/accidentVocab.js` (imported above) — do NOT re-declare here.
 
 // Section divider for the sectioned incident form.
-function FormSection({ title, children }) {
+// "Step N of 7: Label" for a REPORT_WIZARD_STEPS key - the SAME vocabulary the
+// mobile report wizard prints, so a desktop user reading the whole form on one
+// page and a field user stepping through it on a phone see identical step
+// names. Returns '' for an unknown key rather than inventing a number.
+export function wizardStepLabel(key) {
+  const s = REPORT_WIZARD_STEPS.find((x) => x.key === key)
+  return s ? `Step ${s.n} of ${REPORT_WIZARD_STEPS.length}: ${s.label}` : ''
+}
+
+// `step` (a REPORT_WIZARD_STEPS key) prints the step eyebrow above the section
+// title. Several sections can share one step (Incident + Classification are
+// both "Incident details"); only the FIRST section of a step passes `step`.
+function FormSection({ title, step, children }) {
+  const stepLabel = step ? wizardStepLabel(step) : ''
   return (
     <div className="pt-1">
+      {stepLabel && (
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-green-400 mb-1">{stepLabel}</p>
+      )}
       <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)] border-b border-[var(--input-border)] pb-1.5 mb-3">{title}</p>
       {children}
+    </div>
+  )
+}
+
+// ── Identify asset (Step 1) - pure helpers, exported so they are testable
+// without rendering the 3,700-line page. ────────────────────────────────────
+
+/** Fleet rows matching a typed query on asset no / vehicle type / site / plate. */
+export function matchFleetAssets(fleetAssets, query) {
+  const q = String(query || '').trim().toLowerCase()
+  if (!q) return []
+  return (fleetAssets || []).filter((a) =>
+    a.asset_no?.toLowerCase().includes(q) ||
+    a.vehicle_type?.toLowerCase().includes(q) ||
+    a.site?.toLowerCase().includes(q) ||
+    a.registration_no?.toLowerCase().includes(q) ||
+    a.fleet_number?.toLowerCase().includes(q),
+  )
+}
+
+/** The plate/fleet identifier the accidents.plate_number column stores - same
+ *  precedence the form has always used (fleet_number, else registration_no). */
+export const assetPlate = (a) => a?.fleet_number || a?.registration_no || ''
+
+/** "12,345 km" or 'Not recorded' - a null meter is a gap, never zero. */
+export function meterLabel(km) {
+  if (km == null || km === '' || !Number.isFinite(Number(km))) return 'Not recorded'
+  return `${Number(km).toLocaleString()} km`
+}
+
+/** Operational status first (what the machine is doing today), else the
+ *  register status (is it on the fleet), else 'Not set'. */
+export function assetStatusLabel(a) {
+  const v = a?.ops_status || a?.status
+  return v ? String(v).replace(/_/g, ' ') : 'Not set'
+}
+
+/**
+ * Apply a fleet-master row to the form. Plate, vehicle type and country are
+ * FACTS ABOUT THE VEHICLE and always follow the asset. The incident SITE is a
+ * fact about the INCIDENT: it defaults to the asset's home site but, once the
+ * user has chosen where the incident happened, a later asset re-resolve must
+ * never silently overwrite that choice.
+ */
+export function applyAssetToForm(form, asset, { siteTouched = false } = {}) {
+  if (!asset) return form
+  return {
+    ...form,
+    plate_number: assetPlate(asset) || form.plate_number,
+    vehicle_type: asset.vehicle_type || form.vehicle_type,
+    site: siteTouched ? form.site : (asset.site || form.site),
+    country: asset.country || form.country,
+  }
+}
+
+/** The read-only rows the "Auto-filled from fleet master" block shows. */
+export function autoFilledRows(asset, form) {
+  const a = asset || {}
+  const makeModel = [a.make, a.model].filter(Boolean).join(' ')
+  return [
+    { key: 'asset_no', label: 'Asset no', value: form?.asset_no || a.asset_no || '' },
+    { key: 'plate', label: 'Plate / Fleet no', value: form?.plate_number || assetPlate(a) },
+    { key: 'make_model', label: 'Make / model', value: makeModel },
+    { key: 'vehicle_type', label: 'Vehicle type', value: form?.vehicle_type || a.vehicle_type || '' },
+    { key: 'home_site', label: 'Site (home)', value: a.site || '' },
+    { key: 'current_km', label: 'Current meter', value: a.current_km == null ? '' : meterLabel(a.current_km), blankLabel: 'Not recorded' },
+    { key: 'status', label: 'Status', value: a.ops_status || a.status ? assetStatusLabel(a) : '' },
+  ].map((r) => ({ ...r, display: r.value ? r.value : (r.blankLabel || 'Not set') }))
+}
+
+export const FLEET_MASTER_LOCK_NOTE =
+  'These details are sourced from fleet master and cannot be edited here. If any detail is incorrect, please update it in the fleet system.'
+
+/** Read-only, lock-marked field grid. Exported so a test can render it alone. */
+export function AutoFilledFromFleetMaster({ asset, form }) {
+  const rows = autoFilledRows(asset, form)
+  return (
+    <div className="rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)]/40 p-3" data-testid="auto-filled-fleet-master">
+      <div className="flex items-center gap-1.5 mb-2">
+        <Lock size={12} className="text-[var(--text-muted)]" />
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">Auto-filled from fleet master</p>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {rows.map((r) => (
+          <div key={r.key}>
+            <label className="label flex items-center gap-1" htmlFor={`fm-${r.key}`}>
+              <Lock size={10} className="text-[var(--text-dim)]" aria-hidden="true" /> {r.label}
+            </label>
+            <input
+              id={`fm-${r.key}`}
+              className="input opacity-80 cursor-not-allowed"
+              value={r.display}
+              readOnly
+              aria-readonly="true"
+              tabIndex={-1}
+            />
+          </div>
+        ))}
+      </div>
+      <p className="text-[11px] text-[var(--text-dim)] mt-2">{FLEET_MASTER_LOCK_NOTE}</p>
+    </div>
+  )
+}
+
+/**
+ * "Asset loaded from fleet master" summary card (the mock's card) over the full
+ * VehicleMasterCard. Exported for the identify-asset test.
+ */
+export function AssetLoadedCard({ asset, onChange }) {
+  if (!asset) return null
+  const rows = [
+    ['Asset no', asset.asset_no],
+    ['Vehicle type', asset.vehicle_type],
+    ['Plate', assetPlate(asset)],
+    ['Make / model', [asset.make, asset.model].filter(Boolean).join(' ')],
+    ['Site (home)', asset.site],
+    ['Country', asset.country],
+    ['Current meter', asset.current_km == null ? 'Not recorded' : meterLabel(asset.current_km)],
+    ['Status', assetStatusLabel(asset)],
+  ]
+  return (
+    <div className="rounded-lg border border-green-800/50 bg-green-900/10 p-3" data-testid="asset-loaded-card">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <Illustration name={vehicleArt(asset.vehicle_type)} size={56} title={asset.vehicle_type || 'Vehicle'} className="shrink-0" />
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-green-400">Asset loaded from fleet master</p>
+            <p className="text-base font-bold text-[var(--text-primary)] font-mono truncate">{asset.asset_no || 'Not set'}</p>
+          </div>
+        </div>
+        {onChange && (
+          <button type="button" onClick={onChange} className="btn-ghost text-xs whitespace-nowrap inline-flex items-center gap-1">
+            <RotateCcw size={12} /> Change asset
+          </button>
+        )}
+      </div>
+      <dl className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2 mt-3 text-xs">
+        {rows.map(([label, value]) => (
+          <div key={label}>
+            <dt className="text-[var(--text-muted)]">{label}</dt>
+            <dd className="text-[var(--text-primary)] font-medium truncate">{value != null && String(value).trim() !== '' ? value : 'Not set'}</dd>
+          </div>
+        ))}
+      </dl>
+      <details className="mt-3">
+        <summary className="text-[11px] text-[var(--text-muted)] cursor-pointer hover:text-[var(--text-primary)]">Full fleet master record</summary>
+        <div className="mt-2"><VehicleMasterCard asset={asset} /></div>
+      </details>
     </div>
   )
 }
@@ -612,15 +780,13 @@ export default function Accidents() {
     [fleetAssets],
   )
 
-  const assetMatches = useMemo(() => {
-    if (!assetQuery.trim()) return []
-    const q = assetQuery.toLowerCase()
-    return fleetAssets.filter(a =>
-      a.asset_no?.toLowerCase().includes(q) ||
-      a.vehicle_type?.toLowerCase().includes(q) ||
-      a.site?.toLowerCase().includes(q)
-    )
-  }, [assetQuery, fleetAssets])
+  const assetMatches = useMemo(() => matchFleetAssets(fleetAssets, assetQuery), [assetQuery, fleetAssets])
+
+  // Has the user chosen WHERE the incident happened? Until they have, the
+  // incident site follows the asset's home site; after they have, no asset
+  // re-resolve may overwrite it. Editing an existing record counts as chosen -
+  // its stored site is a fact already on file.
+  const incidentSiteTouched = useRef(false)
 
   // The list is capped for readability, but a silent cap reads as "that is every
   // match" - which is exactly how the missing-assets problem stayed invisible.
@@ -638,18 +804,12 @@ export default function Accidents() {
   const applyAssetMaster = useCallback((asset) => {
     if (!asset) { setAssetInfo(null); return }
     setAssetInfo(asset)
-    setForm(f => ({
-      ...f,
-      // Plate, vehicle type, site AND country all FOLLOW the asset (replace, not
-      // fill-if-empty). They are facts about the vehicle, so changing the asset
-      // number must immediately refresh them instead of leaving the previous
-      // asset's values stale. When the asset lacks a value the existing one is
-      // kept (never blanked by a partial master record).
-      plate_number: asset.fleet_number || asset.registration_no || f.plate_number,
-      vehicle_type: asset.vehicle_type || f.vehicle_type,
-      site:         asset.site         || f.site,
-      country:      asset.country      || f.country,
-    }))
+    // Plate, vehicle type AND country FOLLOW the asset (replace, not
+    // fill-if-empty) - they are facts about the vehicle and are rendered
+    // read-only. The incident SITE only defaults from the asset while the user
+    // has not chosen one (applyAssetToForm). A partial master record never
+    // blanks an existing value.
+    setForm(f => applyAssetToForm(f, asset, { siteTouched: incidentSiteTouched.current }))
   }, [])
 
   function selectAsset(asset) {
@@ -657,6 +817,15 @@ export default function Accidents() {
     setAssetQuery(asset.asset_no)
     setShowAssetDrop(false)
     applyAssetMaster(asset)
+  }
+
+  // "Change asset": clear the identified asset and its auto-filled facts so the
+  // search box is back in charge. The incident site the user picked is KEPT.
+  function changeAsset() {
+    setAssetInfo(null)
+    setAssetQuery('')
+    setForm(f => ({ ...f, asset_no: '', plate_number: '', vehicle_type: '' }))
+    setShowAssetDrop(true)
   }
 
   // Debounced lookup: whenever the asset number changes (typed or picked),
@@ -668,10 +837,16 @@ export default function Accidents() {
     if (!no) { setAssetInfo(null); return }
     const t = setTimeout(async () => {
       let asset = fleetAssets.find(a => (a.asset_no || '').toLowerCase() === no.toLowerCase())
-      if (!asset) {
-        // Country-scoped: the same code in another country is a different
-        // machine (V376), so its plate/site must never auto-fill this form.
-        try { asset = await getAssetByNo(no, activeCountry) } catch { asset = null }
+      // The picker rows are LEAN (asset_no/type/site/country/plate only). The
+      // fleet-master card needs make/model/current meter/status too, so a
+      // picker hit is ENRICHED from the full COLS read; a miss is looked up the
+      // same way. Country-scoped either way: the same code in another country
+      // is a different machine (V376), so its facts must never fill this form.
+      if (!asset || asset.make === undefined) {
+        try {
+          const full = await getAssetByNo(no, activeCountry)
+          if (full) asset = { ...(asset || {}), ...full }
+        } catch { /* keep the lean picker row, or null */ }
       }
       if (asset && (asset.asset_no || '').toLowerCase() === no.toLowerCase()) applyAssetMaster(asset)
       else setAssetInfo(null)
@@ -1444,13 +1619,18 @@ export default function Accidents() {
     setEditId(null)
     setFormError('')
     setAssetQuery('')
+    setAssetInfo(null)
     recoveredTouched.current = false   // a fresh record auto-calculates Recovered
+    incidentSiteTouched.current = false // a fresh record defaults its site from the asset
     setShowForm(true)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const openEdit = useCallback((row) => {
     setAssetQuery(row.asset_no ?? '')
+    // A stored incident site is a decision already on file - the asset
+    // re-resolve that follows must not replace it with the home site.
+    incidentSiteTouched.current = Boolean(row.site && row.site !== 'Unassigned')
     const d = (v) => (v ? String(v).split('T')[0] : '')
     setForm({
       incident_date:         d(row.incident_date),
@@ -2979,6 +3159,7 @@ export default function Accidents() {
                     setForm(EMPTY_FORM)
                     setAssetQuery('')
                     setAssetInfo(null)
+                    incidentSiteTouched.current = false
                     setFormError('')
                     setDocPreview(null)
                   }}
@@ -3001,33 +3182,26 @@ export default function Accidents() {
             )}
 
             <form id="accident-inline-form" onSubmit={handleSave} className="space-y-3">
-              <FormSection title="Incident">
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                <div>
-                  <label className="label">Incident Date *</label>
-                  <DateField
-                    value={form.incident_date}
-                    onChange={(v) => setForm(f => ({ ...f, incident_date: v }))}
-                    placeholder="Select date"
-                    ariaLabel="Incident date"
-                  />
-                </div>
+              {/* ── Step 1 of 7: Identify asset (M7) ─────────────────────────── */}
+              <FormSection title="Identify asset" step="identify_asset">
                 <div className="relative" ref={assetDropRef}>
-                  <div className="flex items-center justify-between">
-                    <label className="label">Asset No *</label>
+                  <div className="flex items-center justify-between gap-3 flex-wrap mb-1">
+                    <label className="label mb-0" htmlFor="acc-asset-search">Asset No *</label>
                     <button
                       type="button"
                       onClick={() => setShowScanner(true)}
-                      className="text-[11px] text-green-400 hover:text-green-300 inline-flex items-center gap-1"
+                      className="btn-secondary text-xs inline-flex items-center gap-1.5"
                       title="Scan the vehicle's QR or barcode label to identify the asset"
                     >
-                      <ScanLine size={11} /> Scan
+                      <ScanLine size={13} /> Scan asset QR / barcode
                     </button>
                   </div>
                   <div className="relative">
+                    <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)] pointer-events-none" />
                     <input
-                      className="input pr-8" required
-                      placeholder="Type to search..."
+                      id="acc-asset-search"
+                      className="input pl-8 pr-8" required
+                      placeholder="Search by asset no, plate, vehicle type or site"
                       value={assetQuery}
                       onChange={e => {
                         setAssetQuery(e.target.value)
@@ -3039,20 +3213,31 @@ export default function Accidents() {
                     />
                     <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)] pointer-events-none" />
                   </div>
+                  {assetQuery.trim() && (
+                    <p className="text-[11px] text-[var(--text-muted)] mt-1" data-testid="asset-match-count">
+                      {assetMatches.length} matching asset{assetMatches.length === 1 ? '' : 's'}
+                      {assetMatches.length > assetSuggestions.length ? ` (showing ${assetSuggestions.length})` : ''}
+                    </p>
+                  )}
                   {showAssetDrop && assetSuggestions.length > 0 && (
-                    <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg shadow-xl overflow-hidden max-h-52 overflow-y-auto">
+                    <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg shadow-xl overflow-hidden max-h-64 overflow-y-auto">
                       {assetSuggestions.map(a => (
                         <button
-                          key={a.asset_no}
+                          key={`${a.country || ''}-${a.asset_no}`}
                           type="button"
                           onMouseDown={() => selectAsset(a)}
-                          className="w-full text-left px-3 py-2 hover:bg-[var(--input-bg-hover)] transition-colors flex items-center justify-between gap-3"
+                          className="w-full text-left px-3 py-2 hover:bg-[var(--input-bg-hover)] transition-colors flex items-center gap-3"
                         >
-                          <span className="text-[var(--text-primary)] font-mono text-sm">{a.asset_no}</span>
-                          <span className="text-[var(--text-muted)] text-xs truncate">
-                            {[a.vehicle_type, a.site, multiCountryFleet ? a.country : null]
-                              .filter(Boolean).join(' · ')}
+                          <Illustration name={vehicleArt(a.vehicle_type)} size={32} title={a.vehicle_type || 'Vehicle'} decorative className="shrink-0" />
+                          <span className="text-[var(--text-primary)] font-mono text-sm shrink-0">{a.asset_no}</span>
+                          <span className="text-[var(--text-muted)] text-xs truncate flex-1">
+                            {[a.vehicle_type || 'Type not set', multiCountryFleet ? a.country : null].filter(Boolean).join(' · ')}
                           </span>
+                          {assetPlate(a) && (
+                            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-[var(--input-border)] text-[var(--text-secondary)] shrink-0">
+                              {assetPlate(a)}
+                            </span>
+                          )}
                         </button>
                       ))}
                       {assetMatches.length > assetSuggestions.length && (
@@ -3072,58 +3257,82 @@ export default function Accidents() {
                       </p>
                     </div>
                   )}
-                  {assetInfo && (assetInfo.vehicle_type || assetInfo.make || assetInfo.model || assetInfo.fleet_number) && (
-                    <p className="text-[11px] text-[var(--text-muted)] mt-1 truncate">
-                      Master: {[
-                        assetInfo.vehicle_type,
-                        [assetInfo.make, assetInfo.model, assetInfo.year].filter(Boolean).join(' '),
-                        assetInfo.fleet_number ? `Fleet ${assetInfo.fleet_number}` : '',
-                      ].filter(Boolean).join(' | ') || 'N/A'}
-                    </p>
-                  )}
                 </div>
-                <div>
-                  <label className="label">Fleet No</label>
-                  <input
-                    className="input" placeholder="Auto-filled from asset"
-                    value={form.plate_number}
-                    onChange={e => setForm(f => ({ ...f, plate_number: e.target.value }))}
-                  />
-                </div>
-                <div>
-                  <label className="label">Vehicle Type</label>
-                  <input
-                    className="input" placeholder="Auto-filled from asset"
-                    value={form.vehicle_type}
-                    onChange={e => setForm(f => ({ ...f, vehicle_type: e.target.value }))}
-                  />
-                </div>
-              </div>
 
+                {assetInfo && (
+                  <div className="mt-3 space-y-3">
+                    <AssetLoadedCard asset={assetInfo} onChange={changeAsset} />
+                    <AutoFilledFromFleetMaster asset={assetInfo} form={form} />
+                  </div>
+                )}
+                {!assetInfo && form.asset_no.trim() && (
+                  <p className="text-[11px] text-amber-400 mt-2">
+                    This asset number is not in the fleet master for {activeCountry && activeCountry !== 'All' ? activeCountry : 'this scope'}. It will be saved as typed; plate and vehicle type stay blank until the asset is registered.
+                  </p>
+                )}
+
+                {/* Where did the incident occur? - the INCIDENT site, a fact
+                    about the event, separate from the asset's home site. */}
+                <div className="mt-3 rounded-lg border border-[var(--input-border)] p-3">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <MapPin size={12} className="text-[var(--text-muted)]" />
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">Where did the incident occur?</p>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    <div>
+                      <label className="label" htmlFor="acc-incident-site">Incident site</label>
+                      <input
+                        id="acc-incident-site"
+                        className="input" list="acc-sites"
+                        placeholder={assetInfo?.site ? `Defaults to home site ${assetInfo.site}` : 'Select or type a site'}
+                        value={form.site}
+                        onChange={e => {
+                          incidentSiteTouched.current = true
+                          setForm(f => ({ ...f, site: e.target.value }))
+                        }}
+                      />
+                      <datalist id="acc-sites">{sites.map(s => <option key={s} value={s} />)}</datalist>
+                      {assetInfo?.site && form.site && form.site !== assetInfo.site && (
+                        <p className="text-[11px] text-[var(--text-muted)] mt-1">Differs from the asset home site ({assetInfo.site}).</p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="label" htmlFor="acc-incident-location">Location</label>
+                      <input
+                        id="acc-incident-location"
+                        className="input" placeholder="e.g. GCC Plant, gate 3"
+                        value={form.location}
+                        onChange={e => setForm(f => ({ ...f, location: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <label className="label flex items-center gap-1" htmlFor="acc-country">
+                        <Lock size={10} className="text-[var(--text-dim)]" aria-hidden="true" /> Country
+                      </label>
+                      <input
+                        id="acc-country"
+                        className="input opacity-80 cursor-not-allowed"
+                        value={form.country || 'Not set'}
+                        readOnly
+                        aria-readonly="true"
+                        tabIndex={-1}
+                        title="Follows the identified asset's country"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </FormSection>
+
+              {/* ── Step 2 of 7: Incident details ─────────────────────────────── */}
+              <FormSection title="Incident" step="incident">
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 <div>
-                  <label className="label">Site</label>
-                  <input
-                    className="input" list="acc-sites"
-                    value={form.site}
-                    onChange={e => setForm(f => ({ ...f, site: e.target.value }))}
-                  />
-                  <datalist id="acc-sites">{sites.map(s => <option key={s} value={s} />)}</datalist>
-                </div>
-                <div>
-                  <label className="label">Location</label>
-                  <input
-                    className="input" placeholder="e.g. GCC Plant, gate 3"
-                    value={form.location}
-                    onChange={e => setForm(f => ({ ...f, location: e.target.value }))}
-                  />
-                </div>
-                <div>
-                  <label className="label">Country</label>
-                  <input
-                    className="input"
-                    value={form.country}
-                    onChange={e => setForm(f => ({ ...f, country: e.target.value }))}
+                  <label className="label">Incident Date *</label>
+                  <DateField
+                    value={form.incident_date}
+                    onChange={(v) => setForm(f => ({ ...f, incident_date: v }))}
+                    placeholder="Select date"
+                    ariaLabel="Incident date"
                   />
                 </div>
               </div>
@@ -3194,7 +3403,7 @@ export default function Accidents() {
               {/* Which teams this case needs - the stage toggles are shown only to
                   the Fleet team (who scope the case) plus admins and the creator. */}
               {canSeeSection('stageWaivers', { role: profile?.role, isSuperAdmin: profile?.is_super_admin, isCreator: !editId || records.find(r => String(r.id) === String(editId))?.reported_by === profile?.id, stageWaivers: form.stage_waivers }) && (
-              <FormSection title="Which teams this case needs">
+              <FormSection title="Which teams this case needs" step="people_authority">
                 <p className="text-xs text-[var(--text-dim)] mb-3">
                   Switch off any stage this incident does not need - a car park scratch needs no HSE
                   investigation. A stage that is off is hidden from the case, and its team is not asked for
@@ -3606,10 +3815,55 @@ export default function Accidents() {
               </FormSection>
               )}
 
+              {/* ── Step 4 of 7: Mark damage - lives on the case Damage-mapping
+                  tab (the orthographic mapper); a desktop form links to it once
+                  the record exists rather than duplicating the mapper here. */}
+              <FormSection title="Mark damage" step="damage">
+                {editId ? (
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/accidents/${editId}?tab=damage_map`, { state: { openTab: 'damage_map' } })}
+                    className="btn-secondary text-xs inline-flex items-center gap-1.5"
+                  >
+                    <MapPin size={13} /> Open the damage map for this case
+                  </button>
+                ) : (
+                  <p className="text-xs text-[var(--text-dim)]">Damage is marked on the vehicle map on the case Damage-mapping tab. Save this incident first; the map opens from the saved case.</p>
+                )}
+              </FormSection>
+
+              {/* ── Step 5 of 7: Evidence ───────────────────────────────────── */}
+              <FormSection title="Evidence" step="evidence">
+              <div>
+                <label className="label">Accident Photos</label>
+                <input
+                  type="file" accept="image/*" multiple className="input text-sm py-1.5"
+                  onChange={handlePhotoFiles}
+                />
+                {form.photos.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {form.photos.map((src, i) => (
+                      <div key={i} className="relative">
+                        <PhotoPreview src={src} alt={`Photo ${i + 1}`} className="h-16 w-16 object-cover rounded border border-[var(--input-border)]" />
+                        <button
+                          type="button"
+                          onClick={() => removePhoto(i)}
+                          className="absolute -top-1.5 -right-1.5 bg-red-700 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] hover:bg-red-500"
+                        >
+                          <X size={8} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+                <p className="text-[11px] text-[var(--text-dim)] mt-2">Photos taken at the scene. Each photo is attached to the case evidence table on save.</p>
+              </FormSection>
+
               {/* Case documents — each routes to its owning team on the
                   Distribute-to-Teams tab (licence/ID/registration/police to Fleet,
                   Najm/Taqdeer to Insurance). One file per slot; image or PDF. */}
-              <FormSection title="Documents">
+              <FormSection title="Documents" step="documents">
                 <div className="flex items-start justify-between gap-3 mb-3">
                   <p className="text-xs text-[var(--text-dim)]">
                     Attach the driver and vehicle papers and the reports (image or PDF). Each file is routed to the team that owns it. You can preview and download any file, or download them all together.
@@ -3659,29 +3913,26 @@ export default function Accidents() {
                 </div>
               </FormSection>
 
-              <div>
-                <label className="label">Accident Photos</label>
-                <input
-                  type="file" accept="image/*" multiple className="input text-sm py-1.5"
-                  onChange={handlePhotoFiles}
-                />
-                {form.photos.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {form.photos.map((src, i) => (
-                      <div key={i} className="relative">
-                        <PhotoPreview src={src} alt={`Photo ${i + 1}`} className="h-16 w-16 object-cover rounded border border-[var(--input-border)]" />
-                        <button
-                          type="button"
-                          onClick={() => removePhoto(i)}
-                          className="absolute -top-1.5 -right-1.5 bg-red-700 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] hover:bg-red-500"
-                        >
-                          <X size={8} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              {/* ── Step 7 of 7: Review and submit ─────────────────────────── */}
+              <FormSection title="Review and submit" step="review">
+                <dl className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2 text-xs">
+                  {[
+                    ['Asset', form.asset_no],
+                    ['Incident site', form.site],
+                    ['Incident date', form.incident_date],
+                    ['Severity', form.severity],
+                    ['Driver', form.driver_name],
+                    ['Photos', form.photos.length ? `${form.photos.length} attached` : ''],
+                    ['Documents', (form.documents || []).filter(d => d?.url).length ? `${(form.documents || []).filter(d => d?.url).length} attached` : ''],
+                    ['Status', form.status],
+                  ].map(([label, value]) => (
+                    <div key={label}>
+                      <dt className="text-[var(--text-muted)]">{label}</dt>
+                      <dd className="text-[var(--text-primary)] font-medium truncate">{value ? value : 'Not set'}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </FormSection>
 
               <div className="flex gap-3 pt-2">
                 <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">

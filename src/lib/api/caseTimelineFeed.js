@@ -17,7 +17,8 @@ import { listHandoverInspections } from './accidentHandover'
 import { listSlaInstances } from './accidentSla'
 import { getInsuranceClaim } from './accidentInsuranceClaims'
 import { listProfiles } from './users'
-import { buildTimelineFeed, buildParticipants } from '../caseTimelineFeed'
+import { listEvidence } from './accidentEvidence'
+import { buildTimelineFeed, buildParticipants, groupMemberCounts } from '../caseTimelineFeed'
 
 async function settle(promise, fallback) {
   try {
@@ -29,14 +30,22 @@ async function settle(promise, fallback) {
 
 /**
  * @param {object} acc - the already-loaded accidents row
- * @returns {Promise<{entries:object[], notifications:object[], participants:object[]}>}
+ * @returns {Promise<{entries:object[], notifications:object[], participants:object[],
+ *   groupCounts:Map<string,number>, evidence:object[]}>}
+ *   `groupCounts` = NOTIFY_ROLES group key -> live member count (from the same
+ *   profiles read that names actors), so the delivery log can print
+ *   "Insurance · 3" from real role membership - never a made-up count.
+ *   `evidence` = the case's accident_evidence rows (one bounded per-accident
+ *   read; the composer derives "Verified n/n" chips from it).
  */
+const EMPTY = { entries: [], notifications: [], participants: [], groupCounts: new Map(), evidence: [] }
+
 export async function loadCaseTimeline(acc) {
   const accidentId = acc?.id
-  if (!accidentId) return { entries: [], notifications: [], participants: [] }
+  if (!accidentId) return EMPTY
   const country = acc.country
 
-  const [workstreamEvents, workstreamRows, communications, handovers, slaInstances, claim, profiles] = await Promise.all([
+  const [workstreamEvents, workstreamRows, communications, handovers, slaInstances, claim, profiles, evidence] = await Promise.all([
     settle(listWorkstreamEvents(accidentId, { country }), []),
     settle(listWorkstreams(accidentId, { country }), []),
     settle(listCommunications(accidentId), []),
@@ -44,14 +53,16 @@ export async function loadCaseTimeline(acc) {
     settle(listSlaInstances(accidentId), []),
     settle(getInsuranceClaim(accidentId), null),
     settle(listProfiles(), []),
+    settle(listEvidence(accidentId), []),
   ])
 
   const usersById = new Map((profiles || []).map((p) => [p.id, p]))
+  const groupCounts = groupMemberCounts(profiles || [])
 
   const entries = buildTimelineFeed({
-    acc, workstreamEvents, communications, handovers, slaInstances, claim, usersById,
+    acc, workstreamEvents, communications, handovers, slaInstances, claim, usersById, evidence, groupCounts,
   })
   const participants = buildParticipants({ workstreamRows, communications, handovers, usersById })
 
-  return { entries, notifications: communications, participants }
+  return { entries, notifications: communications, participants, groupCounts, evidence }
 }

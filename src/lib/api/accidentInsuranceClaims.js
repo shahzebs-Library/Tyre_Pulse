@@ -17,6 +17,14 @@
  * empty/null state via isMissingRelation.
  */
 import { supabase, unwrap, isMissingRelation } from './_client'
+// Sibling readers the M4 tab context composes (loadClaimTabContext, bottom).
+import { listEvidence } from './accidentEvidence'
+import { getLiabilityAssessment } from './accidentLiability'
+import { getOpenRepairOrder } from './accidentRepairOrders'
+import { getDamageAssessment } from './accidentDamageAssessment'
+import { listWorkstreams } from './accidentCase'
+import { listCommunications } from './accidentCommunications'
+import { listProfiles } from './users'
 
 const CLAIM_COLS =
   'id,accident_id,country,site,insurance_applicable,policy_id,policy_no,insurer,broker,' +
@@ -219,4 +227,46 @@ export async function markClaimDocumentReceived(accidentId, documentId, storageR
     }),
     'document',
   )
+}
+
+// ── M4 tab context (additive) ───────────────────────────────────────────────
+
+/** Read one settled promise, degrading a failure to the given empty value. */
+const settled = (r, empty) => (r.status === 'fulfilled' ? (r.value ?? empty) : empty)
+
+/**
+ * Everything the "Register insurance claim" tab reads, in ONE round of
+ * parallel best-effort reads. The claim itself is authoritative (its failure
+ * is reported); every sibling (evidence package, liability, repair route,
+ * workstream owners, prior document requests, profiles) degrades to an honest
+ * empty value so one unprovisioned table cannot blank the tab.
+ */
+export async function loadClaimTabContext(accidentId, { country } = {}) {
+  if (!accidentId) throw new Error('An incident is required.')
+  const [claim, docs, recoveries, evidence, liability, repairOrder, assessment, workstreams, comms, profiles] =
+    await Promise.allSettled([
+      getInsuranceClaim(accidentId),
+      listClaimDocuments(accidentId),
+      listRecoveries(accidentId),
+      listEvidence(accidentId),
+      getLiabilityAssessment(accidentId),
+      getOpenRepairOrder(accidentId),
+      getDamageAssessment(accidentId),
+      listWorkstreams(accidentId, { country }),
+      listCommunications(accidentId, { limit: 100 }),
+      listProfiles(),
+    ])
+  if (claim.status === 'rejected') throw claim.reason
+  return {
+    claim: claim.value || null,
+    docs: settled(docs, []),
+    recoveries: settled(recoveries, []),
+    evidence: settled(evidence, []),
+    liability: settled(liability, null),
+    repairOrder: settled(repairOrder, null),
+    assessment: settled(assessment, null),
+    workstreams: settled(workstreams, []),
+    communications: settled(comms, []),
+    profiles: settled(profiles, []),
+  }
 }

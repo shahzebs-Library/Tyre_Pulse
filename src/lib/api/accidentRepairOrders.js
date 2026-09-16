@@ -12,14 +12,44 @@
  * SHIP-BEFORE-MIGRATE, same as accidentCase.js: reads degrade to an honest
  * empty/null state via isMissingRelation.
  */
-import { supabase, unwrap, isMissingRelation } from './_client'
+import { supabase, unwrap, isMissingRelation, isMissingColumn } from './_client'
 
-const ORDER_COLS =
+const BASE_ORDER_COLS =
   'id,accident_id,country,site,repair_route,workshop_type,workshop_name,vendor_id,' +
   'external_workshop,po_required,po_reference,insurer_approval_required,insurer_approved,' +
   'quotation_amount,approved_amount,planned_start,planned_completion,actual_start,' +
   'actual_completion,offroad_start,status,recommended_by,approved_by,approved_at,' +
   'approval_remarks,delay_reason,created_by,created_at,updated_at'
+
+/**
+ * Vendor contact / quotation columns added by
+ * supabase/migrations/20260916130000_accident_mock_field_parity.sql (mock M2
+ * "Destination and vendor" block, M5 quotation status). NOT yet applied live:
+ * a select naming them fails the whole request (42703 / PGRST204), so every
+ * read tries the full list first and retries with BASE_ORDER_COLS when
+ * isMissingColumn says the column is not provisioned. Rows read that way
+ * simply lack the keys; the UI renders "Not set".
+ */
+export const VENDOR_COLS = [
+  'vendor_city', 'vendor_contact_name', 'vendor_contact_phone', 'vendor_contact_email',
+  'vendor_registration_no', 'vendor_inspector_name', 'expected_duration_days', 'quotation_status',
+]
+const ORDER_COLS = BASE_ORDER_COLS + ',' + VENDOR_COLS.join(',')
+
+export const VENDOR_NOT_PROVISIONED_MESSAGE =
+  'Vendor contact fields are not provisioned on this database yet. Ask an administrator to apply the accident mock field parity migration.'
+
+/** Run `build(cols)` with the vendor columns, retrying on the base list when
+ *  those columns do not exist yet. Checked BEFORE isMissingRelation because a
+ *  missing-column message also reads "does not exist". */
+async function withVendorFallback(build) {
+  try {
+    return await build(ORDER_COLS)
+  } catch (err) {
+    if (isMissingColumn(err)) return build(BASE_ORDER_COLS)
+    throw err
+  }
+}
 
 const TASK_COLS =
   'id,accident_id,repair_order_id,country,site,title,description,estimated_hours,' +
@@ -30,9 +60,10 @@ const QC_COLS =
   'checklist,road_test_done,alignment_ok,tyres_ok,no_leaks,warning_lights_clear,result,' +
   'remarks,created_by,created_at,updated_at'
 
-/** repair_route tokens (accident_repair_orders CHECK, verified live). */
+/** repair_route tokens (accident_repair_orders CHECK, verified live; 'on_site'
+ *  is added by supabase/migrations/20260916130000_accident_mock_field_parity.sql). */
 export const REPAIR_ROUTES = [
-  'none', 'temporary', 'internal', 'external', 'insurer_approved',
+  'none', 'temporary', 'internal', 'external', 'on_site', 'insurer_approved',
   'dealer', 'specialist', 'replacement', 'total_loss', 'disposal', 'under_review',
 ]
 /** workshop_type tokens (accident_repair_orders CHECK, verified live). */
@@ -61,17 +92,17 @@ function unwrapRpc(result, key) {
 export async function getOpenRepairOrder(accidentId) {
   if (!accidentId) return null
   return readOrEmpty(
-    async () =>
+    () => withVendorFallback(async (cols) =>
       unwrap(
         await supabase
           .from('accident_repair_orders')
-          .select(ORDER_COLS)
+          .select(cols)
           .eq('accident_id', accidentId)
           .not('status', 'in', '("completed","cancelled")')
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle(),
-      ),
+      )),
     null,
   )
 }
@@ -79,17 +110,17 @@ export async function getOpenRepairOrder(accidentId) {
 /** Every repair order for a case (open and closed), newest first. */
 export async function listRepairOrders(accidentId) {
   if (!accidentId) return []
-  return readOrEmpty(async () => {
+  return readOrEmpty(() => withVendorFallback(async (cols) => {
     return (
       unwrap(
         await supabase
           .from('accident_repair_orders')
-          .select(ORDER_COLS)
+          .select(cols)
           .eq('accident_id', accidentId)
           .order('created_at', { ascending: false }),
       ) || []
     )
-  }, [])
+  }), [])
 }
 
 /** Tasks for one repair order, in their set order. */
@@ -144,6 +175,35 @@ export async function upsertRepairOrder(accidentId, { repairRoute, workshopType,
     }),
     'repair_order',
   )
+}
+
+/**
+ * Update the vendor contact block (mock M2 "Destination and vendor") on an
+ * existing repair order. Direct RLS-governed UPDATE - the upsert RPC does not
+ * take these columns. Only VENDOR_COLS keys are written; a missing column
+ * (migration not applied) surfaces as one plain sentence, never a raw error.
+ */
+export async function updateVendorDetails(repairOrderId, patch = {}) {
+  if (!repairOrderId) throw new Error('A repair order is required.')
+  const row = {}
+  for (const k of VENDOR_COLS) {
+    if (k in patch) row[k] = patch[k] === '' ? null : patch[k]
+  }
+  if (row.quotation_status && !['not_requested', 'requested', 'received', 'approved', 'rejected'].includes(row.quotation_status)) {
+    throw new Error(`Invalid quotation status "${row.quotation_status}".`)
+  }
+  if (row.expected_duration_days != null && !(Number.isInteger(Number(row.expected_duration_days)) && Number(row.expected_duration_days) >= 0)) {
+    throw new Error('Expected duration must be a whole number of days.')
+  }
+  if (!Object.keys(row).length) throw new Error('Nothing to update.')
+  try {
+    return unwrap(
+      await supabase.from('accident_repair_orders').update(row).eq('id', repairOrderId).select(ORDER_COLS).single(),
+    )
+  } catch (err) {
+    if (isMissingColumn(err)) throw new Error(VENDOR_NOT_PROVISIONED_MESSAGE)
+    throw err
+  }
 }
 
 /** Add a repair task under a repair order. */

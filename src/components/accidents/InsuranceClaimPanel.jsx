@@ -1,62 +1,60 @@
 /**
- * InsuranceClaimPanel — the "Register insurance claim" case tab: register/update
- * the claim, record the insurer's decision, settle it, track recoveries, and work
- * a required-document checklist. Backed by accidentInsuranceClaims.js
- * (accident_insurance_claims + accident_claim_documents + accident_claim_recoveries,
- * all writes via the accident_claim_* / accident_recovery_record RPCs), verified
- * live against project jhssdmeruxtrlqnwfksc before this panel was written.
+ * InsuranceClaimPanel - the "Register insurance claim" case tab, field for
+ * field the owner's mock M4 (Workstream 3 of 7, Insurance / Claims):
  *
- * Distinct from AccidentInsurerRecord (mounted on the older "Claim & Recovery"
- * tab): that panel READS the separate, pre-existing insurance_claim_register
- * ledger (an insurer-maintained document) purely for comparison. This panel is
- * this case's OWN claim workflow — the thing this app writes to when a claim is
- * actually being worked. Neither writes the other's table.
+ *   header      WorkstreamHeader (received / with team / SLA) + "External repair
+ *               assessment" banner when the repair route is external
+ *   section 1   Claim document package: the 8 CLAIM_PACKAGE_DOCS with
+ *               Received / Missing / "N received", "7 of 8 required documents",
+ *               Request <doc> (logs an accident_case_communications request) and
+ *               Upload document (the existing accident_evidence upload)
+ *   section 2   Claim registration: insurer, policy, claim number (auto after
+ *               registration), liability + GCC %, claim amount, deductible, net
+ *               claimable (derived); "Register claim with insurer" is LOCKED
+ *               until every required document is in
+ *   section 3   Payment and recovery: status pill, approved, recovered (sum),
+ *               outstanding (derived), source, last updated, update recovery
+ *   section 4   After registration notify: NOTIFY_ROLES chips with the resolved
+ *               workstream owner's name when known
+ *   footer      Save claim draft | Complete documents; "<Command Center owner>
+ *               is monitoring SLA and missing documents."
  *
- * The document checklist offers a suggested set of claim documents (doc_type is
- * free text server-side, no CHECK) so a required item can be added with one
- * click; "mark received" flips the outstanding flag without requiring a file
- * attachment yet (the RPC already supports an optional storage_ref for later).
+ * Every number comes from src/lib/claimPackage.js (pure). Writes still go
+ * through accidentInsuranceClaims.js (RPC-backed register/decision/settlement/
+ * recovery) - the older decision + settlement forms live on under the
+ * "Insurer decision" disclosure, unchanged in behaviour.
+ *
+ * "Save claim draft" keeps the unsent registration form on THIS device
+ * (localStorage) and says so; a draft must not call the register RPC, which
+ * moves the insurance workstream to in_progress and posts claim_amount onto
+ * the accident - that is registration, not a draft.
  */
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  FileCheck2, ShieldCheck, AlertCircle, Loader2, RefreshCw, Plus, Check, Banknote, Pencil, Lock,
+  FileCheck2, ShieldCheck, AlertCircle, AlertTriangle, Loader2, RefreshCw, Check, Banknote, Pencil,
+  Upload, Send, ChevronDown, ChevronRight, Save, ListChecks, Megaphone, Info,
 } from 'lucide-react'
 import {
-  getInsuranceClaim, listClaimDocuments, listRecoveries,
-  registerClaim, decideClaim, settleClaim, recordRecovery,
-  addClaimDocument, markClaimDocumentReceived,
+  loadClaimTabContext, registerClaim, decideClaim, settleClaim, recordRecovery,
   CLAIM_DECISIONS, RECOVERY_SOURCES, RECOVERY_STATUSES,
 } from '../../lib/api/accidentInsuranceClaims'
-import NotifyRecipientsPanel from './NotifyRecipientsPanel'
+import { addEvidence } from '../../lib/api/accidentEvidence'
+import { logCommunication } from '../../lib/api/accidentCommunications'
+import { CLAIM_PACKAGE_DOCS } from '../../lib/accidentCaseVocab'
+import {
+  buildClaimPackage, netClaimable, outstanding, recoveredTotal, lastUpdatedAt,
+  liabilityLabel, gccLiabilityPct, isExternalRepairRoute, resolveNotifyPeople, commandCenterOwner,
+} from '../../lib/claimPackage'
+import WorkstreamHeader from './WorkstreamHeader'
+import { useAuth } from '../../contexts/AuthContext'
 import { toUserMessage } from '../../lib/safeError'
+import { formatCurrency, formatDateTime } from '../../lib/formatters'
 
-const INSURANCE_RECIPIENTS = [
-  { key: 'insurer', label: 'Insurer / Broker' },
-  { key: 'fleet', label: 'Fleet Manager' },
-  { key: 'finance', label: 'Finance' },
-  { key: 'legal', label: 'Legal' },
-]
+const COUNTRY_CURRENCY = { KSA: 'SAR', UAE: 'AED', Egypt: 'EGP' }
+const NOT_SET = 'Not set'
+const REQUEST_SUBJECT_PREFIX = 'Document request: '
 
-// Suggested checklist — doc_type is free text server-side; this is a UI
-// convenience, not an enforced vocabulary.
-const SUGGESTED_DOCS = [
-  { doc_type: 'driving_license', label: 'Driving License' },
-  { doc_type: 'vehicle_registration', label: 'Vehicle Registration' },
-  { doc_type: 'police_report', label: 'Police Report' },
-  { doc_type: 'najm_report', label: 'Najm Report' },
-  { doc_type: 'taqdeer_report', label: 'Taqdeer Estimation' },
-  { doc_type: 'repair_quotation', label: 'Repair Quotation' },
-  { doc_type: 'policy_copy', label: 'Insurance Policy Copy' },
-  { doc_type: 'damage_photos', label: 'Damage Photos' },
-]
-const DOC_LABEL = Object.fromEntries(SUGGESTED_DOCS.map((d) => [d.doc_type, d.label]))
-function docLabel(docType) {
-  return DOC_LABEL[docType] || docType.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
-}
-
-// The claim's full decision/status vocabulary (accident_insurance_claims.decision
-// CHECK, 02_DATA_MODEL.sql B5) — wider than CLAIM_DECISIONS, which is only the
-// subset a "record decision" action may assert.
+// accident_insurance_claims.decision vocabulary (02_DATA_MODEL.sql B5).
 const CLAIM_STATUS_LABEL = {
   not_required: 'Not required', under_review: 'Under review', documents_incomplete: 'Documents incomplete',
   registered: 'Registered', awaiting_acknowledgement: 'Awaiting acknowledgement', awaiting_surveyor: 'Awaiting surveyor',
@@ -65,9 +63,10 @@ const CLAIM_STATUS_LABEL = {
   disputed: 'Disputed', legal_escalation: 'Legal escalation',
 }
 const CLAIM_STATUS_TONE = {
-  fully_approved: 'text-green-400', settled: 'text-green-400', partially_approved: 'text-amber-400',
-  rejected: 'text-red-400', withdrawn: 'text-red-400', disputed: 'text-red-400', legal_escalation: 'text-red-400',
-  not_required: 'text-[var(--text-muted)]',
+  fully_approved: 'bg-emerald-500/15 text-emerald-500', settled: 'bg-emerald-500/15 text-emerald-500',
+  partially_approved: 'bg-amber-500/15 text-amber-500', rejected: 'bg-red-500/15 text-red-500',
+  withdrawn: 'bg-red-500/15 text-red-500', disputed: 'bg-red-500/15 text-red-500',
+  legal_escalation: 'bg-red-500/15 text-red-500',
 }
 const DECISION_ACTION_LABEL = {
   fully_approved: 'Fully approve', partially_approved: 'Partially approve', rejected: 'Reject', withdrawn: 'Withdraw',
@@ -79,67 +78,109 @@ const RECOVERY_STATUS_LABEL = {
   pending: 'Pending', in_progress: 'In progress', partial: 'Partial', recovered: 'Recovered',
   written_off: 'Written off', not_applicable: 'Not applicable',
 }
-const RECOVERY_STATUS_TONE = {
-  recovered: 'text-green-400', partial: 'text-amber-400', in_progress: 'text-blue-300',
-  written_off: 'text-red-400', pending: 'text-[var(--text-muted)]', not_applicable: 'text-[var(--text-muted)]',
+
+const draftKey = (id) => `tp.claimDraft.${id}`
+function readDraft(id) {
+  try { const raw = window.localStorage.getItem(draftKey(id)); return raw ? JSON.parse(raw) : null } catch { return null }
+}
+function writeDraft(id, draft) {
+  try { window.localStorage.setItem(draftKey(id), JSON.stringify(draft)); return true } catch { return false }
 }
 
-function Field({ label, children }) {
+function Field({ label, children, hint }) {
   return (
     <div>
       <label className="label">{label}</label>
       {children}
+      {hint ? <p className="mt-1 text-[11px] text-[var(--text-muted)]">{hint}</p> : null}
+    </div>
+  )
+}
+function ReadOnly({ label, value, tone = '' }) {
+  return (
+    <div>
+      <p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">{label}</p>
+      <p className={`text-sm text-[var(--text-primary)] ${tone}`}>{value == null || value === '' ? NOT_SET : value}</p>
+    </div>
+  )
+}
+function SectionTitle({ n, icon: Icon, children, right }) {
+  return (
+    <div className="flex items-center justify-between flex-wrap gap-2">
+      <h3 className="font-semibold text-[var(--text-primary)] flex items-center gap-2">
+        <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[var(--input-bg)] text-[11px]">{n}</span>
+        <Icon size={16} /> {children}
+      </h3>
+      {right}
     </div>
   )
 }
 
-export default function InsuranceClaimPanel({ accidentId, elevated, acc, fmtCurrency, onChanged }) {
-  const [claim, setClaim] = useState(null) // null while loading, {} when none registered
-  const [docs, setDocs] = useState([])
-  const [recoveries, setRecoveries] = useState([])
+export default function InsuranceClaimPanel({ accidentId, elevated, acc, fmtCurrency, onChanged, workstreams: wsProp }) {
+  const { profile } = useAuth()
+  const authorName = profile?.full_name || profile?.username || null
+
+  const [ctx, setCtx] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
+  const [notice, setNotice] = useState('')
 
   const [regForm, setRegForm] = useState({ insurer: '', policyNo: '', claimNo: '', claimAmount: '', deductible: '' })
   const [decisionForm, setDecisionForm] = useState({ decision: '', approvedAmount: '', reason: '' })
   const [settleForm, setSettleForm] = useState({ settledAmount: '', settledAt: '', reference: '' })
   const [recoveryForm, setRecoveryForm] = useState({ source: 'insurer', amount: '', status: 'pending', recoveredAt: '' })
-  // Once a claim is registered the registration form is LOCKED to a read-only
-  // summary (the card above already shows every field) - "Edit registration"
-  // reopens it, rather than always leaving an editable form sitting under a
-  // claim that is already being worked through decision/settlement.
   const [editingReg, setEditingReg] = useState(false)
+  const [decisionOpen, setDecisionOpen] = useState(false)
   const [docsOverride, setDocsOverride] = useState(false)
-  const [carriedFromReport, setCarriedFromReport] = useState(false)
+  const [recoveryOpen, setRecoveryOpen] = useState(false)
+  const [uploadOpen, setUploadOpen] = useState(false)
+  const [uploadKey, setUploadKey] = useState('')
+  const [highlightMissing, setHighlightMissing] = useState(false)
+  const [requested, setRequested] = useState(() => new Set())
+  const [draftSavedAt, setDraftSavedAt] = useState(null)
+  const [notified, setNotified] = useState(false)
 
-  const money = (v) => (typeof fmtCurrency === 'function' ? fmtCurrency(v) : (v == null ? 'N/A' : String(v)))
+  const packageRef = useRef(null)
+  const fileRef = useRef(null)
+
+  const currency = acc?.currency || COUNTRY_CURRENCY[acc?.country] || null
+  const money = useCallback((v) => {
+    if (v == null || v === '' || !Number.isFinite(Number(v))) return NOT_SET
+    if (typeof fmtCurrency === 'function') return fmtCurrency(v)
+    return currency ? formatCurrency(v, currency, 0) : Number(v).toLocaleString('en-US')
+  }, [fmtCurrency, currency])
+  const when = (iso) => (iso ? formatDateTime(iso, acc?.country || 'All') : NOT_SET)
 
   const load = useCallback(async () => {
     setLoading(true); setErr('')
     try {
-      const [c, d, r] = await Promise.all([
-        getInsuranceClaim(accidentId), listClaimDocuments(accidentId), listRecoveries(accidentId),
-      ])
-      const claimRow = c || {}
-      setClaim(claimRow)
-      setDocs(d)
-      setRecoveries(r)
-      // No claim has been formally registered yet (no accident_insurance_claims
-      // row) - carry forward whatever was already captured on the incident
-      // report itself (accidents.insurer/policy_no/insurance_claim_no/
-      // claim_amount) rather than showing a blank form under details the user
-      // already typed once. Once a claim IS registered, that row is always the
-      // one shown here - the incident report's own values are never read again.
+      const data = await loadClaimTabContext(accidentId, { country: acc?.country })
+      setCtx(data)
+      const claimRow = data.claim || {}
+      const draft = claimRow.id ? null : readDraft(accidentId)
       const fromReport = !claimRow.id && !!acc
-      setCarriedFromReport(fromReport && !!(acc?.insurer || acc?.policy_no || acc?.insurance_claim_no || acc?.claim_amount))
       setRegForm({
-        insurer: claimRow.insurer || (fromReport ? acc.insurer : '') || '',
-        policyNo: claimRow.policy_no || (fromReport ? acc.policy_no : '') || '',
-        claimNo: claimRow.claim_no || (fromReport ? acc.insurance_claim_no : '') || '',
-        claimAmount: fromReport && acc.claim_amount != null ? String(acc.claim_amount) : '',
-        deductible: claimRow.deductible ?? '',
+        insurer: claimRow.insurer || draft?.insurer || (fromReport ? acc.insurer : '') || '',
+        policyNo: claimRow.policy_no || draft?.policyNo || (fromReport ? acc.policy_no : '') || '',
+        claimNo: claimRow.claim_no || '',
+        // accident_claim_register posts claim_amount onto the ACCIDENT row (the
+        // claims table carries no such column), so the accident is its source.
+        claimAmount: draft?.claimAmount ?? (acc?.claim_amount != null ? String(acc.claim_amount) : ''),
+        deductible: claimRow.deductible ?? draft?.deductible ?? '',
       })
+      if (draft?.savedAt) setDraftSavedAt(draft.savedAt)
+      // Prior document requests already on the case timeline read as "Requested".
+      const prior = new Set()
+      for (const c of data.communications || []) {
+        const subj = String(c?.subject || '')
+        if (subj.startsWith(REQUEST_SUBJECT_PREFIX)) {
+          const label = subj.slice(REQUEST_SUBJECT_PREFIX.length)
+          const doc = CLAIM_PACKAGE_DOCS.find((d) => d.label === label)
+          if (doc) prior.add(doc.key)
+        }
+      }
+      setRequested(prior)
     } catch (e) {
       setErr(toUserMessage(e, 'Could not load the insurance claim.'))
     } finally {
@@ -149,10 +190,34 @@ export default function InsuranceClaimPanel({ accidentId, elevated, acc, fmtCurr
 
   useEffect(() => { load() }, [load])
 
+  const claim = ctx?.claim || null
+  const hasClaim = !!claim?.id
+  const workstreams = useMemo(() => (Array.isArray(wsProp) && wsProp.length ? wsProp : ctx?.workstreams) || [], [wsProp, ctx?.workstreams])
+  const pkg = useMemo(() => buildClaimPackage(ctx?.evidence || []), [ctx?.evidence])
+  const recovered = recoveredTotal(ctx?.recoveries || [])
+  const claimAmount = hasClaim ? (acc?.claim_amount ?? claim.claim_amount ?? null) : (regForm.claimAmount === '' ? null : Number(regForm.claimAmount))
+  const deductible = hasClaim ? claim.deductible : (regForm.deductible === '' ? null : Number(regForm.deductible))
+  const net = netClaimable(claimAmount, deductible)
+  const owed = outstanding(claimAmount, claim?.approved_amount, recovered)
+  const people = useMemo(() => resolveNotifyPeople(workstreams, ctx?.profiles || []), [workstreams, ctx?.profiles])
+  const ccOwner = commandCenterOwner(workstreams, ctx?.profiles || [])
+  const insuranceWs = workstreams.find((w) => w.workstream_key === 'insurance')
+  const insuranceOwner = insuranceWs?.owner_id
+    ? (ctx?.profiles || []).find((p) => p.id === insuranceWs.owner_id) : null
+  const ownerName = insuranceOwner?.full_name || insuranceOwner?.username || null
+  const external = isExternalRepairRoute(ctx?.repairOrder, ctx?.assessment)
+  const liab = liabilityLabel(ctx?.liability)
+  const gccPct = gccLiabilityPct(ctx?.liability)
+  const latestRecovery = (ctx?.recoveries || [])[0] || null
+  const canRegister = pkg.canRegister
+  const showRegForm = elevated && (!hasClaim || editingReg)
+
+  // ── writes ──────────────────────────────────────────────────────────────
   async function submitRegister(e) {
-    e.preventDefault()
-    if (saving) return
-    setSaving(true); setErr('')
+    e?.preventDefault?.()
+    if (saving || !elevated) return
+    if (!hasClaim && !canRegister) return
+    setSaving(true); setErr(''); setNotice('')
     try {
       const saved = await registerClaim(accidentId, {
         insurer: regForm.insurer || null,
@@ -161,14 +226,72 @@ export default function InsuranceClaimPanel({ accidentId, elevated, acc, fmtCurr
         claimAmount: regForm.claimAmount === '' ? null : Number(regForm.claimAmount),
         deductible: regForm.deductible === '' ? null : Number(regForm.deductible),
       })
-      setClaim(saved)
+      setCtx((c) => ({ ...(c || {}), claim: saved }))
       setEditingReg(false)
-      setCarriedFromReport(false)
+      try { window.localStorage.removeItem(draftKey(accidentId)) } catch { /* device storage unavailable */ }
+      setDraftSavedAt(null)
+      setNotice(hasClaim ? 'Claim registration updated.' : 'Claim registered with the insurer.')
       onChanged?.()
-    } catch (e) {
-      setErr(toUserMessage(e, 'Could not register the claim.'))
+    } catch (e2) {
+      setErr(toUserMessage(e2, 'Could not register the claim.'))
     } finally {
       setSaving(false)
+    }
+  }
+
+  function saveDraft() {
+    const draft = { insurer: regForm.insurer, policyNo: regForm.policyNo, claimAmount: regForm.claimAmount, deductible: regForm.deductible, savedAt: new Date().toISOString() }
+    if (writeDraft(accidentId, draft)) {
+      setDraftSavedAt(draft.savedAt)
+      setNotice('Claim draft saved on this device. Nothing has been sent to the insurer.')
+    } else {
+      setErr('The draft could not be saved on this device.')
+    }
+  }
+
+  function completeDocuments() {
+    setHighlightMissing(true)
+    setUploadOpen(true)
+    if (!uploadKey && pkg.missingRequired[0]) setUploadKey(pkg.missingRequired[0].key)
+    packageRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+  }
+
+  async function requestDoc(doc) {
+    if (saving) return
+    setSaving(true); setErr(''); setNotice('')
+    try {
+      await logCommunication(accidentId, {
+        channel: 'in_app', direction: 'outbound',
+        subject: `${REQUEST_SUBJECT_PREFIX}${doc.label}`,
+        body: `${doc.label} is required to register the insurance claim. Please upload it to the case.`,
+        toParty: 'Fleet', authorName, workstreamKey: 'insurance',
+      })
+      setRequested((prev) => new Set(prev).add(doc.key))
+      setNotice(`${doc.label} requested. The request is on the case timeline.`)
+    } catch (e) {
+      setErr(toUserMessage(e, 'Could not log the document request.'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function uploadDoc(file) {
+    const doc = CLAIM_PACKAGE_DOCS.find((d) => d.key === uploadKey)
+    if (!file || !doc || saving) return
+    setSaving(true); setErr(''); setNotice('')
+    try {
+      const row = await addEvidence(accidentId, file, {
+        kind: doc.countable ? 'photo' : 'document', caption: doc.label,
+        workstreamKey: 'insurance', requirementKey: doc.key,
+      })
+      setCtx((c) => ({ ...(c || {}), evidence: [row, ...((c?.evidence) || [])] }))
+      setNotice(`${doc.label} uploaded.`)
+      onChanged?.()
+    } catch (e) {
+      setErr(toUserMessage(e, 'Could not upload the document.'))
+    } finally {
+      setSaving(false)
+      if (fileRef.current) fileRef.current.value = ''
     }
   }
 
@@ -182,12 +305,12 @@ export default function InsuranceClaimPanel({ accidentId, elevated, acc, fmtCurr
         approvedAmount: decisionForm.approvedAmount === '' ? null : Number(decisionForm.approvedAmount),
         reason: decisionForm.reason || null,
       })
-      setClaim(result.claim || claim)
+      setCtx((c) => ({ ...(c || {}), claim: result.claim || c?.claim }))
       setDecisionForm({ decision: '', approvedAmount: '', reason: '' })
       setDocsOverride(false)
       onChanged?.()
-    } catch (e) {
-      setErr(toUserMessage(e, 'Could not record the claim decision.'))
+    } catch (e2) {
+      setErr(toUserMessage(e2, 'Could not record the claim decision.'))
     } finally {
       setSaving(false)
     }
@@ -203,11 +326,11 @@ export default function InsuranceClaimPanel({ accidentId, elevated, acc, fmtCurr
         settledAt: settleForm.settledAt || null,
         reference: settleForm.reference || null,
       })
-      setClaim(result.claim || claim)
+      setCtx((c) => ({ ...(c || {}), claim: result.claim || c?.claim }))
       setSettleForm({ settledAmount: '', settledAt: '', reference: '' })
       onChanged?.()
-    } catch (e) {
-      setErr(toUserMessage(e, 'Could not record the settlement.'))
+    } catch (e2) {
+      setErr(toUserMessage(e2, 'Could not record the settlement.'))
     } finally {
       setSaving(false)
     }
@@ -216,7 +339,7 @@ export default function InsuranceClaimPanel({ accidentId, elevated, acc, fmtCurr
   async function submitRecovery(e) {
     e.preventDefault()
     if (saving) return
-    setSaving(true); setErr('')
+    setSaving(true); setErr(''); setNotice('')
     try {
       const saved = await recordRecovery(accidentId, {
         source: recoveryForm.source,
@@ -224,44 +347,44 @@ export default function InsuranceClaimPanel({ accidentId, elevated, acc, fmtCurr
         status: recoveryForm.status,
         recoveredAt: recoveryForm.recoveredAt || null,
       })
-      setRecoveries((prev) => [saved, ...prev])
+      setCtx((c) => ({ ...(c || {}), recoveries: [saved, ...((c?.recoveries) || [])] }))
       setRecoveryForm({ source: 'insurer', amount: '', status: 'pending', recoveredAt: '' })
+      setRecoveryOpen(false)
+      setNotice('Recovery recorded. The adjustment is timestamped on the case.')
       onChanged?.()
-    } catch (e) {
-      setErr(toUserMessage(e, 'Could not record the recovery.'))
+    } catch (e2) {
+      setErr(toUserMessage(e2, 'Could not record the recovery.'))
     } finally {
       setSaving(false)
     }
   }
 
-  async function addDoc(docType) {
-    setSaving(true); setErr('')
+  async function notifyAfterRegistration() {
+    if (saving || !hasClaim) return
+    setSaving(true); setErr(''); setNotice('')
     try {
-      const saved = await addClaimDocument(accidentId, { docType })
-      setDocs((prev) => [...prev, saved])
+      const status = CLAIM_STATUS_LABEL[claim.decision] || claim.decision || 'Registered'
+      const nextAction = pkg.complete ? 'Await insurer acknowledgement' : `Complete documents (${pkg.missingRequired.map((d) => d.label).join(', ')})`
+      await logCommunication(accidentId, {
+        channel: 'in_app', direction: 'outbound',
+        subject: 'Insurance claim registered',
+        body: `Claim number ${claim.claim_no || NOT_SET}. Documents ${pkg.counterLabel}. Claim amount ${money(claimAmount)}. Status ${status}. Next action: ${nextAction}.`,
+        toParty: people.map((p) => p.display).join(', '), authorName, workstreamKey: 'insurance',
+      })
+      setNotified(true)
+      setNotice('Notification logged on the case timeline.')
     } catch (e) {
-      setErr(toUserMessage(e, 'Could not add the document to the checklist.'))
+      setErr(toUserMessage(e, 'Could not log the notification.'))
     } finally {
       setSaving(false)
     }
   }
 
-  async function markReceived(documentId) {
-    setSaving(true); setErr('')
-    try {
-      const saved = await markClaimDocumentReceived(accidentId, documentId)
-      setDocs((prev) => prev.map((d) => (d.id === documentId ? saved : d)))
-    } catch (e) {
-      setErr(toUserMessage(e, 'Could not mark the document received.'))
-    } finally {
-      setSaving(false)
-    }
-  }
-
+  // ── render ──────────────────────────────────────────────────────────────
   if (loading) {
-    return <div className="p-6 flex items-center gap-2 text-[var(--text-muted)]"><Loader2 size={16} className="animate-spin" /> Loading insurance claim…</div>
+    return <div className="p-6 flex items-center gap-2 text-[var(--text-muted)]"><Loader2 size={16} className="animate-spin" /> Loading insurance claim...</div>
   }
-  if (err && claim == null) {
+  if (err && !ctx) {
     return (
       <div className="p-6 space-y-3">
         <p className="text-red-400 flex items-center gap-2"><AlertCircle size={16} /> {err}</p>
@@ -270,261 +393,292 @@ export default function InsuranceClaimPanel({ accidentId, elevated, acc, fmtCurr
     )
   }
 
-  const hasClaim = !!claim?.id
-  const addedDocTypes = new Set(docs.map((d) => d.doc_type))
-  const missingDocs = SUGGESTED_DOCS.filter((d) => !addedDocTypes.has(d.doc_type))
-  const requiredDocs = docs.filter((d) => d.required)
-  const outstandingCount = requiredDocs.filter((d) => !d.received).length
-  // Complete only once at least one required document has actually been
-  // added AND none of them are outstanding - "nothing added yet" must never
-  // read as "complete".
-  const docsComplete = requiredDocs.length > 0 && outstandingCount === 0
-  const showRegForm = elevated && (!hasClaim || editingReg)
+  const statusLabel = hasClaim ? (CLAIM_STATUS_LABEL[claim.decision] || claim.decision || 'Registered') : 'Not registered'
+  const statusTone = hasClaim ? (CLAIM_STATUS_TONE[claim.decision] || 'bg-blue-500/15 text-blue-400') : 'bg-[var(--input-bg)] text-[var(--text-secondary)]'
 
   return (
-    <div className="p-6 space-y-6">
-      <section className="card space-y-4">
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <h3 className="font-semibold text-[var(--text-primary)] flex items-center gap-2"><FileCheck2 size={16} /> Insurance claim</h3>
-          {hasClaim && (
-            <span className={`text-sm font-semibold ${CLAIM_STATUS_TONE[claim.decision] || 'text-[var(--text-secondary)]'}`}>
-              {CLAIM_STATUS_LABEL[claim.decision] || claim.decision}
-            </span>
-          )}
-        </div>
+    <div className="p-6 space-y-6" data-testid="insurance-claim-panel">
+      <WorkstreamHeader
+        accidentId={accidentId}
+        workstreamKey="insurance"
+        workstreams={workstreams}
+        ownerName={ownerName}
+        banner={external ? 'External repair assessment' : null}
+      />
 
-        {hasClaim && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pb-3 border-b border-[var(--input-border)]">
-            <div><p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">Insurer</p><p className="text-sm text-[var(--text-primary)]">{claim.insurer || 'N/A'}</p></div>
-            <div><p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">Policy no.</p><p className="text-sm text-[var(--text-primary)]">{claim.policy_no || 'N/A'}</p></div>
-            <div><p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">Claim no.</p><p className="text-sm text-[var(--text-primary)]">{claim.claim_no || 'N/A'}</p></div>
-            <div><p className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">Approved amount</p><p className="text-sm font-semibold text-green-400">{claim.approved_amount != null ? money(claim.approved_amount) : 'N/A'}</p></div>
+      {/* 1 Claim document package */}
+      <section ref={packageRef} className="card space-y-4" data-testid="claim-package">
+        <SectionTitle n={1} icon={FileCheck2}
+          right={<span className={`text-xs font-semibold ${pkg.complete ? 'text-emerald-500' : 'text-amber-500'}`}>{pkg.counterLabel}</span>}>
+          Claim document package
+        </SectionTitle>
+        <div className="h-1.5 rounded-full bg-[var(--input-bg)] overflow-hidden">
+          <div className={`h-full ${pkg.complete ? 'bg-emerald-500' : 'bg-amber-500'}`}
+            style={{ width: `${pkg.requiredTotal ? Math.round((pkg.requiredReceived / pkg.requiredTotal) * 100) : 0}%` }} />
+        </div>
+        <ul className="divide-y divide-[var(--input-border)]">
+          {pkg.items.map((d) => {
+            const missing = d.required && !d.received
+            const hot = missing && highlightMissing
+            return (
+              <li key={d.key} data-testid={`pkg-${d.key}`}
+                className={`flex items-center justify-between gap-3 py-2 px-2 rounded-md ${hot ? 'bg-amber-500/10 ring-1 ring-amber-400' : ''}`}>
+                <div className="min-w-0 flex items-center gap-2">
+                  {d.received ? <Check size={14} className="text-emerald-500 shrink-0" /> : <AlertCircle size={14} className="text-amber-500 shrink-0" />}
+                  <div className="min-w-0">
+                    <p className="text-sm text-[var(--text-primary)] truncate">{d.label}{d.required ? '' : ' (optional)'}</p>
+                    {d.latestAt ? <p className="text-[11px] text-[var(--text-muted)]">Latest {when(d.latestAt)}</p> : null}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className={`text-xs font-medium ${d.received ? 'text-emerald-500' : 'text-amber-500'}`}>{d.statusLabel}</span>
+                  {missing && elevated ? (
+                    requested.has(d.key)
+                      ? <span className="text-[11px] text-[var(--text-muted)]">Requested</span>
+                      : <button type="button" className="btn-secondary text-[11px] inline-flex items-center gap-1" disabled={saving} onClick={() => requestDoc(d)}>
+                          <Send size={11} /> Request {d.label.toLowerCase()}
+                        </button>
+                  ) : null}
+                </div>
+              </li>
+            )
+          })}
+        </ul>
+        {!pkg.complete && (
+          <p className="text-xs text-amber-500 flex items-center gap-1.5"><AlertTriangle size={13} /> Claim registration unlocks when all required documents are complete.</p>
+        )}
+        {elevated && (
+          <div className="pt-2 border-t border-[var(--input-border)] space-y-2">
+            <button type="button" className="btn-secondary text-xs inline-flex items-center gap-1.5" onClick={() => { setUploadOpen((v) => !v); if (!uploadKey) setUploadKey((pkg.missingRequired[0] || pkg.items[0]).key) }}>
+              <Upload size={12} /> Upload document
+            </button>
+            {uploadOpen && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+                <Field label="Document">
+                  <select className="input w-full" aria-label="Document to upload" value={uploadKey} onChange={(e) => setUploadKey(e.target.value)}>
+                    {pkg.items.map((d) => <option key={d.key} value={d.key}>{d.label}{d.received ? ' (received)' : ''}</option>)}
+                  </select>
+                </Field>
+                <Field label="File">
+                  <input ref={fileRef} type="file" aria-label="Choose file" className="input w-full text-xs" disabled={saving || !uploadKey}
+                    onChange={(e) => uploadDoc(e.target.files?.[0])} />
+                </Field>
+              </div>
+            )}
           </div>
         )}
+      </section>
 
-        {!elevated && (
-          <p className="text-xs text-[var(--text-muted)]">Only Admin / Manager / Director can register or update this claim.</p>
+      {/* 2 Claim registration */}
+      <section className="card space-y-4" data-testid="claim-registration">
+        <SectionTitle n={2} icon={ShieldCheck}
+          right={hasClaim && elevated && !editingReg ? (
+            <button type="button" className="btn-secondary text-xs inline-flex items-center gap-1.5" onClick={() => setEditingReg(true)}><Pencil size={12} /> Edit registration</button>
+          ) : null}>
+          Claim registration
+        </SectionTitle>
+        {!elevated && <p className="text-xs text-[var(--text-muted)]">Only Admin / Manager / Director can register or update this claim.</p>}
+
+        <form onSubmit={submitRegister} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {showRegForm ? (
+            <>
+              <Field label="Insurer"><input className="input w-full" aria-label="Insurer" value={regForm.insurer} onChange={(e) => setRegForm((f) => ({ ...f, insurer: e.target.value }))} /></Field>
+              <Field label="Policy no."><input className="input w-full" aria-label="Policy no." value={regForm.policyNo} onChange={(e) => setRegForm((f) => ({ ...f, policyNo: e.target.value }))} /></Field>
+            </>
+          ) : (
+            <>
+              <ReadOnly label="Insurer" value={claim?.insurer} />
+              <ReadOnly label="Policy no." value={claim?.policy_no} />
+            </>
+          )}
+          {hasClaim && editingReg ? (
+            <Field label="Claim number" hint="Leave blank if the insurer has not issued one yet.">
+              <input className="input w-full" aria-label="Claim number" value={regForm.claimNo} onChange={(e) => setRegForm((f) => ({ ...f, claimNo: e.target.value }))} />
+            </Field>
+          ) : (
+            <ReadOnly label="Claim number" value={hasClaim ? (claim.claim_no || NOT_SET) : 'Auto-generated after registration'} tone={hasClaim && claim.claim_no ? '' : 'text-[var(--text-muted)] italic'} />
+          )}
+          <ReadOnly label="Liability" value={liab || NOT_SET} />
+          <ReadOnly label="GCC liability %" value={gccPct == null ? NOT_SET : `${gccPct}%`} />
+          {showRegForm ? (
+            <>
+              <Field label="Claim amount"><input type="number" min="0" className="input w-full" aria-label="Claim amount" value={regForm.claimAmount} onChange={(e) => setRegForm((f) => ({ ...f, claimAmount: e.target.value }))} /></Field>
+              <Field label="Deductible"><input type="number" min="0" className="input w-full" aria-label="Deductible" value={regForm.deductible} onChange={(e) => setRegForm((f) => ({ ...f, deductible: e.target.value }))} /></Field>
+            </>
+          ) : (
+            <>
+              <ReadOnly label="Claim amount" value={money(claimAmount)} />
+              <ReadOnly label="Deductible" value={money(deductible)} />
+            </>
+          )}
+          <ReadOnly label="Net claimable" value={money(net)} tone="font-semibold" />
+
+          {showRegForm && (
+            <div className="sm:col-span-2 lg:col-span-4 flex items-center gap-3 flex-wrap pt-1">
+              {!hasClaim ? (
+                <>
+                  <button type="submit" className="btn-primary text-xs inline-flex items-center gap-1.5" disabled={saving || !canRegister} aria-disabled={!canRegister}>
+                    {saving ? <Loader2 size={13} className="animate-spin" /> : <ShieldCheck size={13} />} Register claim with insurer
+                  </button>
+                  {!canRegister && <span className="text-[11px] text-[var(--text-muted)]">Enable once all required documents are complete.</span>}
+                </>
+              ) : (
+                <>
+                  <button type="submit" className="btn-primary text-xs" disabled={saving}>{saving ? <Loader2 size={13} className="animate-spin" /> : 'Save changes'}</button>
+                  <button type="button" className="btn-secondary text-xs" disabled={saving} onClick={() => setEditingReg(false)}>Cancel</button>
+                  <span className="text-[11px] text-amber-500">Revising a registered claim. Insurer decisions and settlements are unaffected.</span>
+                </>
+              )}
+            </div>
+          )}
+        </form>
+
+        {hasClaim && elevated && (
+          <div className="border-t border-[var(--input-border)] pt-3">
+            <button type="button" className="text-xs font-medium inline-flex items-center gap-1 text-[var(--text-secondary)]" onClick={() => setDecisionOpen((v) => !v)} aria-expanded={decisionOpen}>
+              {decisionOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />} Insurer decision
+            </button>
+            {decisionOpen && (
+              <div className="mt-3 space-y-4">
+                {!pkg.complete && (
+                  <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 space-y-1.5">
+                    <p className="text-xs text-amber-500">{pkg.counterLabel} received. Insurers usually decide once documents are complete.</p>
+                    <label className="flex items-center gap-1.5 text-[11px] text-amber-500">
+                      <input type="checkbox" checked={docsOverride} onChange={(e) => setDocsOverride(e.target.checked)} /> Record the decision anyway (documents incomplete)
+                    </label>
+                  </div>
+                )}
+                <form onSubmit={submitDecision} className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                  <Field label="Decision">
+                    <select className="input w-full" value={decisionForm.decision} onChange={(e) => setDecisionForm((f) => ({ ...f, decision: e.target.value }))}>
+                      <option value="">Select...</option>
+                      {CLAIM_DECISIONS.map((d) => <option key={d} value={d}>{DECISION_ACTION_LABEL[d] || d}</option>)}
+                    </select>
+                  </Field>
+                  {(decisionForm.decision === 'fully_approved' || decisionForm.decision === 'partially_approved') && (
+                    <Field label="Approved amount">
+                      <input type="number" min="0" className="input w-full" value={decisionForm.approvedAmount} onChange={(e) => setDecisionForm((f) => ({ ...f, approvedAmount: e.target.value }))} />
+                    </Field>
+                  )}
+                  <Field label="Reason / remarks">
+                    <input className="input w-full" value={decisionForm.reason} onChange={(e) => setDecisionForm((f) => ({ ...f, reason: e.target.value }))} />
+                  </Field>
+                  <button type="submit" className="btn-secondary text-xs" disabled={saving || !decisionForm.decision || (!pkg.complete && !docsOverride)}>
+                    {saving ? <Loader2 size={13} className="animate-spin" /> : 'Record decision'}
+                  </button>
+                </form>
+                <div className="border-t border-[var(--input-border)] pt-3">
+                  <p className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2 mb-2"><Banknote size={14} /> Settlement</p>
+                  <form onSubmit={submitSettlement} className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+                    <Field label="Settled amount"><input type="number" min="0" className="input w-full" value={settleForm.settledAmount} onChange={(e) => setSettleForm((f) => ({ ...f, settledAmount: e.target.value }))} /></Field>
+                    <Field label="Settled on"><input type="date" className="input w-full" value={settleForm.settledAt} onChange={(e) => setSettleForm((f) => ({ ...f, settledAt: e.target.value }))} /></Field>
+                    <Field label="Reference"><input className="input w-full" value={settleForm.reference} onChange={(e) => setSettleForm((f) => ({ ...f, reference: e.target.value }))} /></Field>
+                    <button type="submit" className="btn-secondary text-xs" disabled={saving || settleForm.settledAmount === '' || !settleForm.settledAt}>
+                      {saving ? <Loader2 size={13} className="animate-spin" /> : 'Record settlement'}
+                    </button>
+                  </form>
+                </div>
+              </div>
+            )}
+          </div>
         )}
+      </section>
 
-        {elevated && hasClaim && !editingReg && (
-          <button type="button" className="btn-secondary text-xs inline-flex items-center gap-1.5" onClick={() => setEditingReg(true)}>
-            <Pencil size={12} /> Edit registration
+      {/* 3 Payment and recovery */}
+      <section className="card space-y-4" data-testid="claim-payment">
+        <SectionTitle n={3} icon={Banknote}
+          right={<span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${statusTone}`} data-testid="claim-status">{statusLabel}</span>}>
+          Payment and recovery
+        </SectionTitle>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+          <ReadOnly label="Approved amount" value={money(claim?.approved_amount)} />
+          <ReadOnly label="Recovered amount" value={money(recovered)} />
+          <ReadOnly label="Outstanding" value={money(owed)} tone="font-semibold" />
+          <ReadOnly label="Recovery source" value={latestRecovery ? (RECOVERY_SOURCE_LABEL[latestRecovery.source] || latestRecovery.source) : NOT_SET} />
+          <ReadOnly label="Last updated" value={when(lastUpdatedAt(claim, ctx?.recoveries || []))} />
+        </div>
+        {(ctx?.recoveries || []).length > 0 && (
+          <ul className="space-y-1">
+            {(ctx.recoveries).map((r) => (
+              <li key={r.id} className="flex items-center justify-between gap-3 text-xs rounded-md border border-[var(--input-border)] px-3 py-1.5">
+                <span className="text-[var(--text-primary)]">{RECOVERY_SOURCE_LABEL[r.source] || r.source}{r.reference ? ` (ref ${r.reference})` : ''}</span>
+                <span className="text-[var(--text-secondary)]">{money(r.amount)} | {RECOVERY_STATUS_LABEL[r.status] || r.status} | {when(r.updated_at || r.created_at)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {elevated && (
+          <div className="space-y-3">
+            <button type="button" className="btn-secondary text-xs inline-flex items-center gap-1.5" onClick={() => setRecoveryOpen((v) => !v)}>
+              <Banknote size={12} /> Update recovery amount
+            </button>
+            {recoveryOpen && (
+              <form onSubmit={submitRecovery} className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+                <Field label="Source">
+                  <select className="input w-full" value={recoveryForm.source} onChange={(e) => setRecoveryForm((f) => ({ ...f, source: e.target.value }))}>
+                    {RECOVERY_SOURCES.map((s) => <option key={s} value={s}>{RECOVERY_SOURCE_LABEL[s]}</option>)}
+                  </select>
+                </Field>
+                <Field label="Amount"><input type="number" min="0" className="input w-full" value={recoveryForm.amount} onChange={(e) => setRecoveryForm((f) => ({ ...f, amount: e.target.value }))} /></Field>
+                <Field label="Status">
+                  <select className="input w-full" value={recoveryForm.status} onChange={(e) => setRecoveryForm((f) => ({ ...f, status: e.target.value }))}>
+                    {RECOVERY_STATUSES.map((s) => <option key={s} value={s}>{RECOVERY_STATUS_LABEL[s]}</option>)}
+                  </select>
+                </Field>
+                {recoveryForm.status === 'recovered' && (
+                  <Field label="Recovered on"><input type="date" className="input w-full" value={recoveryForm.recoveredAt} onChange={(e) => setRecoveryForm((f) => ({ ...f, recoveredAt: e.target.value }))} /></Field>
+                )}
+                <div>
+                  <button type="submit" className="btn-primary text-xs" disabled={saving || (recoveryForm.status === 'recovered' && !recoveryForm.recoveredAt)}>
+                    {saving ? <Loader2 size={13} className="animate-spin" /> : 'Add recovery'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        )}
+        <p className="text-[11px] text-[var(--text-muted)] flex items-start gap-1.5"><Info size={12} className="mt-0.5 shrink-0" /> Recovery amounts remain editable after operational case closure. Every adjustment is timestamped and audited.</p>
+      </section>
+
+      {/* 4 After registration notify */}
+      <section className="card space-y-3" data-testid="claim-notify">
+        <SectionTitle n={4} icon={Megaphone}>After registration notify</SectionTitle>
+        <div className="flex flex-wrap gap-2">
+          {people.map((p) => (
+            <span key={p.key} className="inline-flex items-center gap-1.5 rounded-full border border-[var(--input-border)] px-3 py-1 text-xs text-[var(--text-primary)]" data-testid={`notify-${p.key}`}>
+              {p.display}
+              <span className="text-[var(--text-muted)]">{p.visibilityOnly ? '(visibility)' : p.name ? p.label : ''}</span>
+            </span>
+          ))}
+        </div>
+        <p className="text-[11px] text-[var(--text-muted)]">Notification includes claim number, document status, claim amount, and next action.</p>
+        {elevated && (
+          <button type="button" className="btn-secondary text-xs inline-flex items-center gap-1.5" disabled={saving || !hasClaim || notified} onClick={notifyAfterRegistration}>
+            {notified ? <Check size={12} /> : <Megaphone size={12} />} {notified ? 'Notification logged' : 'Log notification now'}
           </button>
         )}
-
-        {showRegForm && (
-          <form onSubmit={submitRegister} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {hasClaim && (
-              <p className="sm:col-span-2 text-[11px] text-amber-300 flex items-center gap-1.5"><Lock size={11} /> Revising an already-registered claim - the insurer's own decision/settlement records below are unaffected.</p>
-            )}
-            {carriedFromReport && (
-              <p className="sm:col-span-2 text-[11px] text-blue-300">Pre-filled from what was already entered on the incident report - check and register to make it the claim of record.</p>
-            )}
-            <Field label="Insurer">
-              <input className="input w-full" value={regForm.insurer} onChange={(e) => setRegForm((f) => ({ ...f, insurer: e.target.value }))} />
-            </Field>
-            <Field label="Policy no.">
-              <input className="input w-full" value={regForm.policyNo} onChange={(e) => setRegForm((f) => ({ ...f, policyNo: e.target.value }))} />
-            </Field>
-            <Field label="Claim no.">
-              <input className="input w-full" value={regForm.claimNo} onChange={(e) => setRegForm((f) => ({ ...f, claimNo: e.target.value }))} />
-            </Field>
-            <Field label="Claim amount">
-              <input type="number" min="0" className="input w-full" value={regForm.claimAmount}
-                onChange={(e) => setRegForm((f) => ({ ...f, claimAmount: e.target.value }))} placeholder="Leave blank to keep unchanged" />
-            </Field>
-            <Field label="Deductible">
-              <input type="number" min="0" className="input w-full" value={regForm.deductible}
-                onChange={(e) => setRegForm((f) => ({ ...f, deductible: e.target.value }))} />
-            </Field>
-            <div className="sm:col-span-2 flex items-center gap-2">
-              <button type="submit" className="btn-primary text-xs" disabled={saving}>
-                {saving ? <Loader2 size={13} className="animate-spin" /> : (hasClaim ? 'Save changes' : 'Register claim')}
-              </button>
-              {hasClaim && (
-                <button type="button" className="btn-secondary text-xs" disabled={saving} onClick={() => setEditingReg(false)}>Cancel</button>
-              )}
-            </div>
-          </form>
-        )}
+        {!hasClaim && <p className="text-[11px] text-[var(--text-muted)]">Available once the claim is registered.</p>}
       </section>
 
-      {hasClaim && elevated && (
-        <section className="card space-y-4">
-          <h3 className="font-semibold text-[var(--text-primary)] flex items-center gap-2"><ShieldCheck size={16} /> Insurer decision</h3>
-
-          {!docsComplete && (
-            <div className="rounded-lg border border-amber-700/50 bg-amber-900/20 px-3 py-2 space-y-1.5">
-              <p className="text-xs text-amber-300">
-                {requiredDocs.length === 0
-                  ? 'No documents have been added to the checklist yet.'
-                  : `${outstandingCount} of ${requiredDocs.length} required document${requiredDocs.length === 1 ? '' : 's'} still outstanding.`}
-                {' '}Insurers usually decide once documents are complete.
-              </p>
-              <label className="flex items-center gap-1.5 text-[11px] text-amber-200">
-                <input type="checkbox" checked={docsOverride} onChange={(e) => setDocsOverride(e.target.checked)} />
-                Record the decision anyway (documents incomplete)
-              </label>
-            </div>
-          )}
-
-          <form onSubmit={submitDecision} className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
-            <Field label="Decision">
-              <select className="input w-full" value={decisionForm.decision}
-                onChange={(e) => setDecisionForm((f) => ({ ...f, decision: e.target.value }))}>
-                <option value="">Select…</option>
-                {CLAIM_DECISIONS.map((d) => <option key={d} value={d}>{DECISION_ACTION_LABEL[d] || d}</option>)}
-              </select>
-            </Field>
-            {(decisionForm.decision === 'fully_approved' || decisionForm.decision === 'partially_approved') && (
-              <Field label="Approved amount">
-                <input type="number" min="0" className="input w-full" value={decisionForm.approvedAmount}
-                  onChange={(e) => setDecisionForm((f) => ({ ...f, approvedAmount: e.target.value }))} />
-              </Field>
-            )}
-            <Field label="Reason / remarks">
-              <input className="input w-full" value={decisionForm.reason}
-                onChange={(e) => setDecisionForm((f) => ({ ...f, reason: e.target.value }))} />
-            </Field>
-            <button type="submit" className="btn-secondary text-xs" disabled={saving || !decisionForm.decision || (!docsComplete && !docsOverride)}>
-              {saving ? <Loader2 size={13} className="animate-spin" /> : 'Record decision'}
-            </button>
-          </form>
-
-          <div className="border-t border-[var(--input-border)] pt-4">
-            <p className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2 mb-2"><Banknote size={14} /> Settlement</p>
-            <form onSubmit={submitSettlement} className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
-              <Field label="Settled amount">
-                <input type="number" min="0" className="input w-full" value={settleForm.settledAmount}
-                  onChange={(e) => setSettleForm((f) => ({ ...f, settledAmount: e.target.value }))} />
-              </Field>
-              <Field label="Settled on">
-                <input type="date" className="input w-full" value={settleForm.settledAt}
-                  onChange={(e) => setSettleForm((f) => ({ ...f, settledAt: e.target.value }))} />
-              </Field>
-              <Field label="Reference">
-                <input className="input w-full" value={settleForm.reference}
-                  onChange={(e) => setSettleForm((f) => ({ ...f, reference: e.target.value }))} />
-              </Field>
-              <button type="submit" className="btn-secondary text-xs"
-                disabled={saving || settleForm.settledAmount === '' || !settleForm.settledAt}>
-                {saving ? <Loader2 size={13} className="animate-spin" /> : 'Record settlement'}
-              </button>
-            </form>
-          </div>
-        </section>
-      )}
-
-      <section className="card space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="font-semibold text-[var(--text-primary)]">Document checklist</h3>
-          {requiredDocs.length > 0 && (
-            <span className={`text-xs font-semibold ${docsComplete ? 'text-green-400' : 'text-amber-400'}`}>
-              {requiredDocs.length - outstandingCount} of {requiredDocs.length} received
-            </span>
-          )}
-        </div>
-        {requiredDocs.length > 0 && (
-          <div className="h-1.5 rounded-full bg-[var(--input-bg)] overflow-hidden">
-            <div
-              className={`h-full ${docsComplete ? 'bg-green-500' : 'bg-amber-500'}`}
-              style={{ width: `${Math.round(((requiredDocs.length - outstandingCount) / requiredDocs.length) * 100)}%` }}
-            />
-          </div>
+      {/* Actions + footer */}
+      <div className="flex items-center gap-3 flex-wrap">
+        {elevated && !hasClaim && (
+          <button type="button" className="btn-secondary text-xs inline-flex items-center gap-1.5" onClick={saveDraft} disabled={saving}>
+            <Save size={12} /> Save claim draft
+          </button>
         )}
-        {docs.length === 0 && <p className="text-sm text-[var(--text-muted)]">No documents added to the checklist yet.</p>}
-        <div className="space-y-2">
-          {docs.map((d) => (
-            <div key={d.id} className="flex items-center justify-between gap-3 rounded-lg border border-[var(--input-border)] px-3 py-2">
-              <div className="min-w-0">
-                <p className="text-sm text-[var(--text-primary)] truncate">{d.doc_name || docLabel(d.doc_type)}</p>
-                {d.received_at && <p className="text-[11px] text-[var(--text-muted)]">Received {new Date(d.received_at).toLocaleDateString()}</p>}
-              </div>
-              {d.received ? (
-                <span className="text-xs text-green-400 flex items-center gap-1 shrink-0"><Check size={13} /> Received</span>
-              ) : elevated ? (
-                <button className="btn-secondary text-xs shrink-0" disabled={saving} onClick={() => markReceived(d.id)}>Mark received</button>
-              ) : (
-                <span className="text-xs text-amber-400 shrink-0">Outstanding</span>
-              )}
-            </div>
-          ))}
-        </div>
-        {elevated && missingDocs.length > 0 && (
-          <div className="pt-2 border-t border-[var(--input-border)]">
-            <p className="text-[11px] text-[var(--text-muted)] mb-2">Add to checklist</p>
-            <div className="flex flex-wrap gap-2">
-              {missingDocs.map((d) => (
-                <button key={d.doc_type} type="button" className="btn-secondary text-xs inline-flex items-center gap-1" disabled={saving}
-                  onClick={() => addDoc(d.doc_type)}>
-                  <Plus size={12} /> {d.label}
-                </button>
-              ))}
-            </div>
-          </div>
+        {!pkg.complete && (
+          <button type="button" className="btn-primary text-xs inline-flex items-center gap-1.5" onClick={completeDocuments}>
+            <ListChecks size={12} /> Complete documents
+          </button>
         )}
-      </section>
+        {draftSavedAt && !hasClaim && <span className="text-[11px] text-[var(--text-muted)]">Draft saved on this device {when(draftSavedAt)}</span>}
+      </div>
+      {ccOwner ? (
+        <p className="text-[11px] text-[var(--text-muted)]" data-testid="cc-footer">{ccOwner} is monitoring SLA and missing documents.</p>
+      ) : null}
 
-      <section className="card space-y-4">
-        <h3 className="font-semibold text-[var(--text-primary)]">Recoveries</h3>
-        {recoveries.length === 0 && <p className="text-sm text-[var(--text-muted)]">No recovery recorded yet.</p>}
-        <div className="space-y-2">
-          {recoveries.map((r) => (
-            <div key={r.id} className="flex items-center justify-between gap-3 rounded-lg border border-[var(--input-border)] px-3 py-2">
-              <div className="min-w-0">
-                <p className="text-sm text-[var(--text-primary)]">{RECOVERY_SOURCE_LABEL[r.source] || r.source}</p>
-                {r.reference && <p className="text-[11px] text-[var(--text-muted)]">Ref: {r.reference}</p>}
-              </div>
-              <div className="text-right shrink-0">
-                <p className="text-sm font-semibold text-[var(--text-primary)]">{r.amount != null ? money(r.amount) : 'N/A'}</p>
-                <p className={`text-[11px] ${RECOVERY_STATUS_TONE[r.status] || 'text-[var(--text-muted)]'}`}>{RECOVERY_STATUS_LABEL[r.status] || r.status}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-        {elevated && (
-          <form onSubmit={submitRecovery} className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end pt-2 border-t border-[var(--input-border)]">
-            <Field label="Source">
-              <select className="input w-full" value={recoveryForm.source}
-                onChange={(e) => setRecoveryForm((f) => ({ ...f, source: e.target.value }))}>
-                {RECOVERY_SOURCES.map((s) => <option key={s} value={s}>{RECOVERY_SOURCE_LABEL[s]}</option>)}
-              </select>
-            </Field>
-            <Field label="Amount">
-              <input type="number" min="0" className="input w-full" value={recoveryForm.amount}
-                onChange={(e) => setRecoveryForm((f) => ({ ...f, amount: e.target.value }))} />
-            </Field>
-            <Field label="Status">
-              <select className="input w-full" value={recoveryForm.status}
-                onChange={(e) => setRecoveryForm((f) => ({ ...f, status: e.target.value }))}>
-                {RECOVERY_STATUSES.map((s) => <option key={s} value={s}>{RECOVERY_STATUS_LABEL[s]}</option>)}
-              </select>
-            </Field>
-            {recoveryForm.status === 'recovered' && (
-              <Field label="Recovered on">
-                <input type="date" className="input w-full" value={recoveryForm.recoveredAt}
-                  onChange={(e) => setRecoveryForm((f) => ({ ...f, recoveredAt: e.target.value }))} />
-              </Field>
-            )}
-            <div>
-              <button type="submit" className="btn-secondary text-xs" disabled={saving || (recoveryForm.status === 'recovered' && !recoveryForm.recoveredAt)}>
-                {saving ? <Loader2 size={13} className="animate-spin" /> : 'Add recovery'}
-              </button>
-            </div>
-          </form>
-        )}
-      </section>
-
-      <section className="card">
-        <NotifyRecipientsPanel
-          accidentId={accidentId}
-          workstreamKey="insurance"
-          recipients={INSURANCE_RECIPIENTS}
-          title="Notify recipients"
-          subject="Insurance claim update"
-        />
-      </section>
-
+      {notice && <p className="text-emerald-500 text-xs flex items-center gap-1.5"><Check size={12} /> {notice}</p>}
       {err && <p className="text-red-400 text-xs flex items-center gap-1.5"><AlertCircle size={12} /> {err}</p>}
     </div>
   )

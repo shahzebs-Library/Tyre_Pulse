@@ -25,8 +25,7 @@ import 'package:tyre_pulse/core/network/supabase_tables.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_handover_gating.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_timeline_feed.dart';
 
-final accidentTimelineRepositoryProvider =
-    Provider<AccidentTimelineRepository>(
+final accidentTimelineRepositoryProvider = Provider<AccidentTimelineRepository>(
   (ref) => AccidentTimelineRepository(
     SupabaseAccidentTimelineRemote(ref.watch(supabaseClientProvider)),
   ),
@@ -80,8 +79,7 @@ final class SupabaseAccidentTimelineRemote implements AccidentTimelineRemote {
       );
 
   @override
-  Future<List<Map<String, Object?>>> evidence(String accidentId) async =>
-      _rows(
+  Future<List<Map<String, Object?>>> evidence(String accidentId) async => _rows(
         await _client
             .from(SupabaseTables.accidentEvidence)
             .select(
@@ -211,20 +209,18 @@ class AccidentTimelineRepository with SupabaseGateway {
       }
     }
 
-    final List<AccidentEvidenceRow> evidence =
-        (await secondary(
+    final List<AccidentEvidenceRow> evidence = (await secondary(
       TimelineLedger.evidence,
       () => _remote.evidence(accidentId),
     ))
-            .map(AccidentEvidenceRow.fromRow)
-            .toList();
-    final List<AccidentSlaRow> slas =
-        (await secondary(
+        .map(AccidentEvidenceRow.fromRow)
+        .toList();
+    final List<AccidentSlaRow> slas = (await secondary(
       TimelineLedger.sla,
       () => _remote.slaInstances(accidentId),
     ))
-            .map(AccidentSlaRow.fromRow)
-            .toList();
+        .map(AccidentSlaRow.fromRow)
+        .toList();
 
     AccidentDispatch? dispatch;
     try {

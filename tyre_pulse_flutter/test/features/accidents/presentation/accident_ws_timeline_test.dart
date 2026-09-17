@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
@@ -117,8 +118,7 @@ class FakeTimelineRemote implements AccidentTimelineRemote {
           'team': 'External workshop',
           'start_at': DateTime(2026, 9, 16, 14).toIso8601String(),
           'due_at': _now.add(const Duration(minutes: 52)).toIso8601String(),
-          'warning_at':
-              _now.add(const Duration(minutes: 30)).toIso8601String(),
+          'warning_at': _now.add(const Duration(minutes: 30)).toIso8601String(),
         },
       ];
 
@@ -231,7 +231,8 @@ void main() {
     expect(find.text('Accident reported'), findsNothing);
   });
 
-  testWidgets('notifications tab shows the honest delivery log and gates '
+  testWidgets(
+      'notifications tab shows the honest delivery log and gates '
       'recipient management to Admin', (WidgetTester tester) async {
     await _pump(tester, FakeTimelineRemote(), role: RoleId.manager);
     await tester.tap(find.text('Notifications'));
@@ -300,8 +301,7 @@ void main() {
     expect(remote.inserted.single['author_id'], 'user-1');
   });
 
-  testWidgets('stays readable in Arabic and Urdu',
-      (WidgetTester tester) async {
+  testWidgets('stays readable in Arabic and Urdu', (WidgetTester tester) async {
     for (final String locale in <String>['ar', 'ur']) {
       await _pump(tester, FakeTimelineRemote(), locale: Locale(locale));
       expect(tester.takeException(), isNull);

@@ -41,8 +41,7 @@ void main() {
       expect(receiptMissing(draft.toFieldMap()), isEmpty);
     });
 
-    test('whitespace names and an unticked checkbox still count as blank',
-        () {
+    test('whitespace names and an unticked checkbox still count as blank', () {
       final HandoverReceiptDraft draft = HandoverReceiptDraft(
         arrivedAt: now,
         receivedByName: '   ',
@@ -207,7 +206,7 @@ void main() {
   });
 
   test('fromRow reads jsonb lists, numerics and booleans honestly', () {
-    final AccidentDispatch d = AccidentDispatch.fromRow(<String, Object?>{
+    final AccidentDispatch d = AccidentDispatch.fromRow(const <String, Object?>{
       'id': 'x',
       'accident_id': 'a',
       'live_status': 'arrived',

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:supabase_flutter/supabase_flutter.dart'
-    show PostgrestException;
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
@@ -88,7 +88,7 @@ final class _Fakes {
             read: (String table, String columns, Map<String, Object> f) async {
               if (table == 'accident_authority_reports') return authority;
               if (columns.contains('field_audit') && !extendedProvisioned) {
-                throw PostgrestException(message: 'x', code: '42703');
+                throw const PostgrestException(message: 'x', code: '42703');
               }
               return assessments;
             },
@@ -235,9 +235,8 @@ void main() {
     expect(saved['our_liability_pct'], 100);
     expect(saved['payer'], 'our_insurance');
     expect(saved['taqdeer_required'], isTrue);
-    final Map<String, Object?> audit =
-        (saved['field_audit']! as Map<String, Object?>)['taqdeer_required']!
-            as Map<String, Object?>;
+    final Map<String, Object?> audit = (saved['field_audit']!
+        as Map<String, Object?>)['taqdeer_required']! as Map<String, Object?>;
     expect(audit['recorded_by'], 'Signed-in reviewer');
     expect(find.text('Responsibility details saved'), findsOneWidget);
     expect(find.byKey(const Key('accident.resp.draftChip')), findsNothing);
@@ -253,6 +252,12 @@ void main() {
       'Missing Taqdeer document requested',
     );
 
+    // Two queued toasts (saved, then requested) sit over the footer on a
+    // phone; let both expire before pressing Continue.
+    for (int i = 0; i < 2; i++) {
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+    }
     await _tapKey(tester, 'accident.resp.continue');
     expect(navigated, 'damage_map');
   });

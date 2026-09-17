@@ -60,6 +60,21 @@ String accidentSeverityBadge(AccidentMockCopy copy, String? severity) {
   return humaniseAccidentToken(token);
 }
 
+/// The bare level ("Major", not "Major accident") for the M6 notification
+/// priority row, which the mock prints beside the badge that already carries
+/// the full wording.
+String accidentSeverityLevel(AccidentMockCopy copy, String? severity) {
+  final String token = severity?.trim().toLowerCase() ?? '';
+  if (token.isEmpty) return copy('severityNotSet');
+  if (token.contains('severe') ||
+      token.contains('major') ||
+      token.contains('fatal') ||
+      token.contains('total')) {
+    return copy('severityLevelMajor');
+  }
+  return accidentSeverityBadge(copy, severity);
+}
+
 bool accidentIsClosed(AccidentRecord record) {
   final String status = <String?>[
     record.caseStatus,
@@ -212,6 +227,7 @@ const Map<String, List<String>> _strings = <String, List<String>>{
 
   // M6 severity + summary
   'severityMajor': <String>['Major accident', 'حادث جسيم', 'بڑا حادثہ'],
+  'severityLevelMajor': <String>['Major', 'جسيم', 'بڑا'],
   'severityModerate': <String>['Moderate', 'متوسط', 'درمیانہ'],
   'severityMinor': <String>['Minor', 'بسيط', 'معمولی'],
   'severityNotSet': <String>[
@@ -455,7 +471,6 @@ const Map<String, List<String>> _strings = <String, List<String>>{
   'verified': <String>['Verified', 'تم التحقق', 'تصدیق شدہ'],
   'pending': <String>['Pending', 'قيد الانتظار', 'زیر التوا'],
   'missing': <String>['Missing', 'مفقود', 'غائب'],
-  'received': <String>['Received', 'مستلم', 'موصول'],
   'none': <String>['None', 'لا يوجد', 'کوئی نہیں'],
   'docsTitle': <String>[
     'Responsibility documents',

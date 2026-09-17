@@ -5,6 +5,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
@@ -118,8 +119,8 @@ class FakeAccidentCaseRows implements AccidentCaseRows {
     Map<String, Object?> patch,
   ) async {
     _checkColumns(patch);
-    final Map<String, dynamic> row = table(name)
-        .firstWhere((Map<String, dynamic> r) => r['id'] == id);
+    final Map<String, dynamic> row =
+        table(name).firstWhere((Map<String, dynamic> r) => r['id'] == id);
     row.addAll(patch);
     return row;
   }

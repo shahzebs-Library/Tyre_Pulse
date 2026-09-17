@@ -393,8 +393,7 @@ class AccidentLiabilityRepository with SupabaseGateway {
                 'accident_id': id,
                 if (country != null && country.trim().isNotEmpty)
                   'country': country.trim(),
-                if (site != null && site.trim().isNotEmpty)
-                  'site': site.trim(),
+                if (site != null && site.trim().isNotEmpty) 'site': site.trim(),
                 ...row,
               },
             )
@@ -435,8 +434,7 @@ class AccidentLiabilityRepository with SupabaseGateway {
                 'authority_type': report.authorityType,
                 if (country != null && country.trim().isNotEmpty)
                   'country': country.trim(),
-                if (site != null && site.trim().isNotEmpty)
-                  'site': site.trim(),
+                if (site != null && site.trim().isNotEmpty) 'site': site.trim(),
                 ...patch,
               },
             )

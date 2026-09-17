@@ -376,8 +376,10 @@ class _State extends ConsumerState<AccidentWorkshopAssessmentMockWorkspace> {
                 onUpload: _busy ? null : () => _upload(a.doc),
               ),
             if (route == 'external' &&
-                !hasAttachment(attachments, submitGatingAttachment))
-              ...<Widget>[
+                !hasAttachment(
+                  attachments,
+                  submitGatingAttachment,
+                )) ...<Widget>[
               const SizedBox(height: TpSpace.sm),
               const AccidentWsWarning(
                 message: 'Attach vendor quotation to enable submission to '
@@ -562,9 +564,7 @@ class _VehicleCard extends ConsumerWidget {
     final VehicleAsset? loaded = switch (detail) {
       AsyncData<VehicleDetailOutcome>(value: final VehicleDetailLoaded v) =>
         v.asset,
-      AsyncData<VehicleDetailOutcome>(
-        value: final VehicleDetailFromCache v
-      ) =>
+      AsyncData<VehicleDetailOutcome>(value: final VehicleDetailFromCache v) =>
         v.asset,
       _ => null,
     };

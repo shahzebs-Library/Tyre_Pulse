@@ -33,8 +33,8 @@ void main() {
         status.rows.map((r) => r.doc.key),
         claimPackageDocs.map((d) => d.key),
       );
-      final ClaimDocumentStatus photos = status.rows
-          .firstWhere((r) => r.doc.key == 'damage_photographs');
+      final ClaimDocumentStatus photos =
+          status.rows.firstWhere((r) => r.doc.key == 'damage_photographs');
       expect(photos.label, '9 received');
       expect(status.rows.first.label, 'Received');
       expect(
@@ -111,8 +111,7 @@ void main() {
     });
 
     test('notify chip resolves owner role, else the configured role', () {
-      final NotifyRole fleet =
-          notifyRoles.firstWhere((r) => r.key == 'fleet');
+      final NotifyRole fleet = notifyRoles.firstWhere((r) => r.key == 'fleet');
       expect(
         notifyChipText(fleet, 'Fleet Supervisor'),
         'Fleet Supervisor · Fleet',

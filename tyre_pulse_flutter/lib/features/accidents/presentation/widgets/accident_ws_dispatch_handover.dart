@@ -416,9 +416,8 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
               key: const Key('accident.dispatch.transit'),
               label: c.t('Transit elapsed', 'مدة النقل', 'سفر کا گزرا وقت'),
               value: transit == null ? c.notSet : formatElapsed(transit),
-              tone: transitTimerRunning(d)
-                  ? TpStatus.warning
-                  : TpStatus.neutral,
+              tone:
+                  transitTimerRunning(d) ? TpStatus.warning : TpStatus.neutral,
             ),
             AccidentMockChip(
               key: const Key('accident.dispatch.vendorSla'),
@@ -479,8 +478,8 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
               tone: TpStatus.info,
               text: c.t(
                 'Dispatch legs are not provisioned on this database yet. '
-                'Dispatch details, handover condition and the workshop '
-                'receipt cannot be recorded until the migration is applied.',
+                    'Dispatch details, handover condition and the workshop '
+                    'receipt cannot be recorded until the migration is applied.',
                 'سجلات الإرسال غير مفعلة في قاعدة البيانات بعد. لا يمكن '
                     'تسجيل التفاصيل حتى يتم تطبيق الترحيل.',
                 'روانگی کے ریکارڈ اس ڈیٹا بیس میں ابھی فراہم نہیں کیے '
@@ -494,7 +493,7 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
               tone: TpStatus.info,
               text: c.t(
                 'Vendor contact fields are not provisioned yet; only the '
-                'workshop name is stored.',
+                    'workshop name is stored.',
                 'حقول اتصال المورد غير مفعلة بعد؛ يتم حفظ اسم الورشة فقط.',
                 'وینڈر رابطہ فیلڈز ابھی فراہم نہیں؛ صرف ورکشاپ کا نام '
                     'محفوظ ہوتا ہے۔',
@@ -520,8 +519,8 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
             tone: TpStatus.info,
             text: c.t(
               'After acceptance, vendor can add inspection details, '
-              'quotation, parts, schedule and progress in its own workspace. '
-              'PO is created only after quotation review and approval.',
+                  'quotation, parts, schedule and progress in its own workspace. '
+                  'PO is created only after quotation review and approval.',
               'بعد الاستلام يمكن للمورد إضافة تفاصيل الفحص وعرض السعر '
                   'والقطع والجدول والتقدم في مساحته الخاصة. يُنشأ أمر '
                   'الشراء فقط بعد مراجعة عرض السعر واعتماده.',
@@ -791,18 +790,20 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 const SizedBox(width: TpSpace.sm),
-                TpStatusChip(
-                  status: d == null
-                      ? TpStatus.unknown
-                      : d.custodyAccepted
-                          ? TpStatus.ok
-                          : d.isInTransit
-                              ? TpStatus.warning
-                              : TpStatus.info,
-                  label: d == null
-                      ? c.notSet
-                      : dispatchLiveStateLabel(d.liveStatus),
-                  isCompact: true,
+                Flexible(
+                  child: TpStatusChip(
+                    status: d == null
+                        ? TpStatus.unknown
+                        : d.custodyAccepted
+                            ? TpStatus.ok
+                            : d.isInTransit
+                                ? TpStatus.warning
+                                : TpStatus.info,
+                    label: d == null
+                        ? c.notSet
+                        : dispatchLiveStateLabel(d.liveStatus),
+                    isCompact: true,
+                  ),
                 ),
               ],
             ),
@@ -1100,13 +1101,19 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
                       .join(' · ')
                 ),
                 (
-                  c.t('Incoming odometer', 'عداد المسافة عند الوصول',
-                      'آمد کا اوڈومیٹر'),
+                  c.t(
+                    'Incoming odometer',
+                    'عداد المسافة عند الوصول',
+                    'آمد کا اوڈومیٹر',
+                  ),
                   d.inOdometerKm == null ? null : '${d.inOdometerKm} km'
                 ),
                 (
-                  c.t('Incoming engine hours', 'ساعات المحرك عند الوصول',
-                      'آمد کے انجن گھنٹے'),
+                  c.t(
+                    'Incoming engine hours',
+                    'ساعات المحرك عند الوصول',
+                    'آمد کے انجن گھنٹے',
+                  ),
                   d.inEngineHours?.toString()
                 ),
                 (
@@ -1199,7 +1206,7 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
               tone: TpStatus.info,
               text: c.t(
                 'No dispatch leg is recorded yet. Record the dispatch first; '
-                'the receipt is signed against it.',
+                    'the receipt is signed against it.',
                 'لم يُسجل إرسال بعد. سجّل الإرسال أولاً؛ يُوقع الاستلام '
                     'عليه.',
                 'ابھی کوئی روانگی درج نہیں۔ پہلے روانگی درج کریں؛ وصولی اسی '
@@ -1243,15 +1250,21 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
           ),
           const SizedBox(height: TpSpace.sm),
           TpInput(
-            label: c.t('Incoming odometer (km)', 'عداد المسافة عند الوصول',
-                'آمد کا اوڈومیٹر'),
+            label: c.t(
+              'Incoming odometer (km)',
+              'عداد المسافة عند الوصول',
+              'آمد کا اوڈومیٹر',
+            ),
             controller: _rOdo,
             keyboardType: TextInputType.number,
           ),
           const SizedBox(height: TpSpace.sm),
           TpInput(
-            label: c.t('Incoming engine hours', 'ساعات المحرك عند الوصول',
-                'آمد کے انجن گھنٹے'),
+            label: c.t(
+              'Incoming engine hours',
+              'ساعات المحرك عند الوصول',
+              'آمد کے انجن گھنٹے',
+            ),
             controller: _rHours,
             keyboardType: TextInputType.number,
           ),
@@ -1292,8 +1305,7 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
               ),
             ],
             onChanged: (int value) => setState(
-              () => _receipt =
-                  _receipt.copyWith(conditionMatches: value == 1),
+              () => _receipt = _receipt.copyWith(conditionMatches: value == 1),
             ),
           ),
           const SizedBox(height: TpSpace.sm),
@@ -1466,8 +1478,7 @@ class _State extends ConsumerState<AccidentDispatchHandoverMockWorkspace> {
           for (final NumberedStep step in dispatchStepper)
             Builder(
               builder: (BuildContext context) {
-                final DispatchStepState state =
-                    dispatchStepState(step.key, d);
+                final DispatchStepState state = dispatchStepState(step.key, d);
                 final DateTime? at = dispatchStepTime(step.key, d);
                 final TpStatus tone = switch (state) {
                   DispatchStepState.complete => TpStatus.ok,

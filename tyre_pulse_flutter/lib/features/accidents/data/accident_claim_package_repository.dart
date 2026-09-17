@@ -150,7 +150,7 @@ class AccidentClaimPackageRepository with SupabaseGateway {
     });
   }
 
-  /// "Request <document>": an internal in-app communication on the case so
+  /// "Request `<document>`": an internal in-app communication on the case so
   /// the ask is on the record for the Command Center.
   Future<void> requestDocument({
     required String accidentId,

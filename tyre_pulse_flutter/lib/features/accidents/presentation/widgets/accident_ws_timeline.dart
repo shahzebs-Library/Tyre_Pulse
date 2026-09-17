@@ -56,6 +56,12 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
   String _filter = 'all';
   Timer? _ticker;
   late DateTime _now;
+  // Sheet controllers live with the workspace, not the sheet call: a bottom
+  // sheet keeps rebuilding through its close animation, so a controller
+  // disposed the moment the sheet returns is used after disposal.
+  final TextEditingController _noteController = TextEditingController();
+  final TextEditingController _notifySubject = TextEditingController();
+  final TextEditingController _notifyBody = TextEditingController();
 
   DateTime _clock() => widget.clock?.call() ?? DateTime.now();
 
@@ -76,6 +82,9 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
   @override
   void dispose() {
     _ticker?.cancel();
+    _noteController.dispose();
+    _notifySubject.dispose();
+    _notifyBody.dispose();
     super.dispose();
   }
 
@@ -144,7 +153,7 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
   // ── actions ───────────────────────────────────────────────────────────
 
   Future<void> _addNote() async {
-    final TextEditingController controller = TextEditingController();
+    final TextEditingController controller = _noteController..clear();
     final WsKitCopy c = WsKitCopy(context);
     final bool? confirmed = await TpBottomSheet.show<bool>(
       context: context,
@@ -172,7 +181,6 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
       ),
     );
     final String body = controller.text;
-    controller.dispose();
     if (confirmed != true) return;
     await _run(
       () => ref.read(accidentTimelineRepositoryProvider).addNote(
@@ -187,8 +195,8 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
 
   Future<void> _notifyParticipants() async {
     final WsKitCopy c = WsKitCopy(context);
-    final TextEditingController subject = TextEditingController();
-    final TextEditingController body = TextEditingController();
+    final TextEditingController subject = _notifySubject..clear();
+    final TextEditingController body = _notifyBody..clear();
     final Set<String> groups = <String>{};
     final bool? confirmed = await TpBottomSheet.show<bool>(
       context: context,
@@ -205,7 +213,7 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
                 tone: TpStatus.info,
                 text: c.t(
                   'This logs the notification on the case ledger. Delivery '
-                  'to people is done by the server notification engine.',
+                      'to people is done by the server notification engine.',
                   'يسجل هذا الإشعار في سجل القضية. التسليم للأشخاص يتم عبر '
                       'محرك إشعارات الخادم.',
                   'یہ اطلاع کیس لیجر میں درج ہوتی ہے۔ افراد تک ترسیل سرور '
@@ -250,8 +258,6 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
     );
     final String subjectText = subject.text;
     final String bodyText = body.text;
-    subject.dispose();
-    body.dispose();
     if (confirmed != true) return;
     await _run(
       () => ref.read(accidentTimelineRepositoryProvider).notifyParticipants(
@@ -284,8 +290,8 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
             Text(
               c.t(
                 'Recipients are set by Admin per event and role. The groups '
-                'below are the roles each event reaches; membership comes '
-                'from user profiles.',
+                    'below are the roles each event reaches; membership comes '
+                    'from user profiles.',
                 'يحدد المسؤول المستلمين لكل حدث ودور. المجموعات أدناه هي '
                     'الأدوار التي يصل إليها كل حدث؛ العضوية من ملفات '
                     'المستخدمين.',
@@ -345,9 +351,8 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
               Text(
                 '• $warning',
                 style: TextStyle(
-                  color: TpPalette.of(context)
-                      .forStatus(TpStatus.warning)
-                      .onSoft,
+                  color:
+                      TpPalette.of(context).forStatus(TpStatus.warning).onSoft,
                 ),
               ),
             if (entry.body != null) ...<Widget>[
@@ -368,13 +373,11 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
     final AccidentRecord record = widget.snapshot.accident;
     final AccidentTimelineData? data = _data;
     final Duration? age = caseOpenAge(record, _now);
-    final AccidentSlaRow? next =
-        data == null ? null : nextSla(data.slas, _now);
+    final AccidentSlaRow? next = data == null ? null : nextSla(data.slas, _now);
     final String? dueIn = dueInLabel(next, _now);
     final WorkspaceContext? workspace = ref.watch(workspaceContextProvider);
-    final bool isAdmin =
-        workspace != null &&
-            (workspace.role.isAdministrator || workspace.isSuperAdmin);
+    final bool isAdmin = workspace != null &&
+        (workspace.role.isAdministrator || workspace.isSuperAdmin);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -785,8 +788,7 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            for (final (String, String) row
-                in participantRows(widget.snapshot))
+            for (final (String, String) row in participantRows(widget.snapshot))
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 5),
                 child: Row(

@@ -57,8 +57,12 @@ class AccidentMockPanel extends StatelessWidget {
   const AccidentMockPanel({required this.child, super.key});
   final Widget child;
   @override
-  Widget build(BuildContext context) =>
-      TpCard(padding: const EdgeInsets.all(TpSpace.md), child: child);
+  Widget build(BuildContext context) => TpCard(
+        padding: const EdgeInsets.all(TpSpace.md),
+        // Checklist and toggle rows paint ink on the nearest Material; the
+        // card surface must not be the thing they paint through.
+        child: Material(type: MaterialType.transparency, child: child),
+      );
 }
 
 class AccidentMockSection extends StatelessWidget {

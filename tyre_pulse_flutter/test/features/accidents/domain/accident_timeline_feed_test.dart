@@ -246,7 +246,7 @@ void main() {
 
   test('fromRow readers cope with jsonb and strings', () {
     final AccidentCommunication c =
-        AccidentCommunication.fromRow(<String, Object?>{
+        AccidentCommunication.fromRow(const <String, Object?>{
       'id': 'c9',
       'channel': 'in_app',
       'direction': 'outbound',
@@ -256,7 +256,7 @@ void main() {
     });
     expect(c.attachmentCount, 2);
     expect(c.isNotification, isTrue);
-    final AccidentSlaRow s = AccidentSlaRow.fromRow(<String, Object?>{
+    final AccidentSlaRow s = AccidentSlaRow.fromRow(const <String, Object?>{
       'id': 's9',
       'state': 'breached',
       'due_at': '2026-09-16T10:00:00Z',

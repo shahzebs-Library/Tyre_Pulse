@@ -11,14 +11,14 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart' show immutable;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tyre_pulse/core/storage/secure_key_value_store.dart';
+import 'package:tyre_pulse/core/storage/secure_read.dart';
 import 'package:tyre_pulse/core/storage/storage_providers.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_case_schema.dart';
 
 final Provider<AccidentResponsibilityDraftStore>
     accidentResponsibilityDraftStoreProvider =
     Provider<AccidentResponsibilityDraftStore>(
-  (Ref ref) =>
-      AccidentResponsibilityDraftStore(ref.watch(secureStoreProvider)),
+  (Ref ref) => AccidentResponsibilityDraftStore(ref.watch(secureStoreProvider)),
 );
 
 @immutable

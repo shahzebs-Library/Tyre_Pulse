@@ -956,9 +956,21 @@ class _WorkstreamFactRow extends StatelessWidget {
               if (workstream.progressPct != null &&
                   workstream.progressPct! >= 0 &&
                   workstream.progressPct! <= 100)
-                Text(
-                  '${workflowCopy('recordedProgress')}: ${workstream.progressPct}%',
-                  style: Theme.of(context).textTheme.bodySmall,
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: Text(
+                        workflowCopy('recordedProgress'),
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                    Text(
+                      '${workstream.progressPct}%',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                  ],
                 ),
               if (workstream.updatedAt != null) ...<Widget>[
                 const SizedBox(height: TpSpace.xs),

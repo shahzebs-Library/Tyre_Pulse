@@ -453,16 +453,13 @@ enum DispatchStepState { complete, next, pending }
 /// `vendor_assessment` is never marked complete here (it lives in the
 /// vendor's own workspace) and reads Next once acceptance is signed.
 DispatchStepState dispatchStepState(String stepKey, AccidentDispatch? d) {
-  final bool dispatched = d != null &&
-      d.departureAt != null &&
-      d.liveStatus != 'preparing';
+  final bool dispatched =
+      d != null && d.departureAt != null && d.liveStatus != 'preparing';
   final bool arrived = d != null && (d.arrivedAt != null || d.hasArrived);
   final bool accepted = d != null && d.custodyAccepted;
   switch (stepKey) {
     case 'dispatched':
-      return dispatched
-          ? DispatchStepState.complete
-          : DispatchStepState.next;
+      return dispatched ? DispatchStepState.complete : DispatchStepState.next;
     case 'arrived':
       if (arrived) return DispatchStepState.complete;
       return dispatched ? DispatchStepState.next : DispatchStepState.pending;

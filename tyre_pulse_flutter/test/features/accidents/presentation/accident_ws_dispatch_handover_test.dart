@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
@@ -69,7 +70,7 @@ class FakeDispatchRemote implements AccidentDispatchRemote {
   @override
   Future<Map<String, Object?>?> latestDispatch(String accidentId) async {
     if (dispatchesMissing) {
-      throw PostgrestException(
+      throw const PostgrestException(
         message: 'relation "public.accident_dispatches" does not exist',
         code: '42P01',
       );
@@ -83,7 +84,7 @@ class FakeDispatchRemote implements AccidentDispatchRemote {
     List<String> columns,
   ) async {
     if (vendorColumnsMissing && columns.contains('vendor_city')) {
-      throw PostgrestException(
+      throw const PostgrestException(
         message: 'column accident_repair_orders.vendor_city does not exist',
         code: '42703',
       );

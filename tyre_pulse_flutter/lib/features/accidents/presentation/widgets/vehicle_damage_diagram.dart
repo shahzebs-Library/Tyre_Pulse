@@ -429,8 +429,8 @@ class _DamageZoneOverlayPainter extends CustomPainter {
       Offset(zone.left + zone.width, zone.top + zone.height),
       size,
     );
-    final Rect rect = Rect.fromPoints(topLeft, bottomRight)
-        .intersect(Offset.zero & size);
+    final Rect rect =
+        Rect.fromPoints(topLeft, bottomRight).intersect(Offset.zero & size);
     if (rect.isEmpty) return;
     final RRect rounded = RRect.fromRectAndRadius(
       rect,

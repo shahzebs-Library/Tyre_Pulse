@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:supabase_flutter/supabase_flutter.dart'
-    show PostgrestException;
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
@@ -70,7 +70,7 @@ final class _Fakes {
           AccidentFleetValidationRepository(
             read: (_) async {
               if (!provisioned) {
-                throw PostgrestException(message: 'x', code: '42P01');
+                throw const PostgrestException(message: 'x', code: '42P01');
               }
               return items;
             },

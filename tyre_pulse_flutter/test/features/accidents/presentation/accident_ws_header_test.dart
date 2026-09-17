@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:supabase_flutter/supabase_flutter.dart'
-    show PostgrestException;
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_sla_repository.dart';
@@ -137,7 +137,7 @@ void main() {
     await _pump(
       tester,
       read: (_) async =>
-          throw PostgrestException(message: 'missing', code: '42P01'),
+          throw const PostgrestException(message: 'missing', code: '42P01'),
     );
     expect(
       _line(tester, 'accident.ws.header.line2'),

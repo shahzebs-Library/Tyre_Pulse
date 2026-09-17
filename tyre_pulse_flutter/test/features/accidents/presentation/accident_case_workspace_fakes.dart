@@ -10,6 +10,7 @@ library;
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:tyre_pulse/core/storage/private_storage_reference_resolver.dart';
 import 'package:tyre_pulse/core/storage/secure_key_value_store.dart';
 import 'package:tyre_pulse/core/storage/secure_read.dart';
@@ -147,8 +148,7 @@ final class EmptyTimelineRemote implements AccidentTimelineRemote {
       const <Map<String, Object?>>[];
 
   @override
-  Future<Map<String, Object?>?> latestDispatch(String accidentId) async =>
-      null;
+  Future<Map<String, Object?>?> latestDispatch(String accidentId) async => null;
 
   @override
   Future<Map<String, Object?>?> accidentPosition(String accidentId) async =>

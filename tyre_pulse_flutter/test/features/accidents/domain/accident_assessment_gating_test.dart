@@ -53,8 +53,7 @@ AccidentEvidenceItem _att(String key) => AccidentEvidenceItem(
 
 void main() {
   group('mergeDamageRows', () {
-    test('lists both sources, assessment first, phone marks de-duplicated',
-        () {
+    test('lists both sources, assessment first, phone marks de-duplicated', () {
       final List<AssessmentDamageRow> rows = mergeDamageRows(
         damageAreas: _areas,
         damageDescription: _phone,
@@ -74,8 +73,7 @@ void main() {
     });
 
     test('phone severity Major folds to severe; prose is not a mark', () {
-      final List<AssessmentDamageRow> phone =
-          damageRowsFromDescription(_phone);
+      final List<AssessmentDamageRow> phone = damageRowsFromDescription(_phone);
       expect(phone[1].severity, 'severe');
       expect(damageRowsFromDescription('Front bumper scratched'), isEmpty);
       expect(damageRowsFromDescription('{not json'), isEmpty);

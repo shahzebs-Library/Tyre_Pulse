@@ -467,9 +467,8 @@ final class AccidentDamageMark {
           ),
       // Only an angled perspective is carried explicitly; a plain side is
       // fully described by [view], keeping older drafts value-equal.
-      perspective: perspective != null && perspective.isAngled
-          ? perspective
-          : null,
+      perspective:
+          perspective != null && perspective.isAngled ? perspective : null,
       normalizedX: _doubleValue(json['x'] ?? json['normalizedX']),
       normalizedY: _doubleValue(json['y'] ?? json['normalizedY']),
       areaLabel: _nonEmptyString(
@@ -711,12 +710,13 @@ final class AccidentDamageMap {
 
   /// Marks captured on exactly [perspective] - a bus mark saved on the
   /// angled Front-left chip is counted there, not under Front.
-  int countForPerspective(AccidentDamagePerspective perspective) => _marks
-      .values
-      .where(
-        (AccidentDamageMark mark) => mark.effectivePerspective == perspective,
-      )
-      .length;
+  int countForPerspective(AccidentDamagePerspective perspective) =>
+      _marks.values
+          .where(
+            (AccidentDamageMark mark) =>
+                mark.effectivePerspective == perspective,
+          )
+          .length;
 
   AccidentDamageMap withMark(AccidentDamageMark mark) {
     final Map<String, AccidentDamageMark> next =

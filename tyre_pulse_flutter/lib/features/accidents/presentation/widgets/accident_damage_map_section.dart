@@ -108,8 +108,10 @@ class _AccidentDamageMapSectionState extends State<AccidentDamageMapSection> {
   @override
   void didUpdateWidget(covariant AccidentDamageMapSection oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.vehicle?.id != widget.vehicle?.id &&
-        !_perspectives.contains(_perspective)) {
+    // A different asset opens on its own family's first view (a pump on
+    // Top, a road vehicle on Left); keeping the previous asset's view would
+    // land the reporter on a side that means nothing for the new one.
+    if (oldWidget.vehicle?.id != widget.vehicle?.id) {
       _perspective = _perspectives.first;
       _selectedMarkId = null;
     }
@@ -276,8 +278,8 @@ class _AccidentDamageMapSectionState extends State<AccidentDamageMapSection> {
 
   Future<void> _viewAllMarks() async {
     final AccidentCopy copy = AccidentCopy.of(context);
-    final AccidentDamageMark? chosen = await showModalBottomSheet<
-        AccidentDamageMark>(
+    final AccidentDamageMark? chosen =
+        await showModalBottomSheet<AccidentDamageMark>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
@@ -706,11 +708,11 @@ class _MarksHeader extends StatelessWidget {
           )
         : '${_markedAreasLabel(context, count)} · '
             '${_localized(
-              context,
-              en: 'Review list',
-              ar: 'قائمة المراجعة',
-              ur: 'جائزہ فہرست',
-            )}';
+            context,
+            en: 'Review list',
+            ar: 'قائمة المراجعة',
+            ur: 'جائزہ فہرست',
+          )}';
     return Material(
       color: Colors.transparent,
       child: InkWell(

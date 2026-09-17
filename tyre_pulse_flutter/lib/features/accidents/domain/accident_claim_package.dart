@@ -194,7 +194,7 @@ const Map<String, String> notifyRoleWorkstream = <String, String>{
   'insurance': 'insurance',
 };
 
-/// "<owner> · <label>" for a notify chip: the resolved owner role when the
+/// "`<owner>` · `<label>`" for a notify chip: the resolved owner role when the
 /// workstream carries one, else the first configured role name.
 String notifyChipText(NotifyRole role, String? resolvedOwnerRole) {
   final String owner = resolvedOwnerRole?.trim() ?? '';

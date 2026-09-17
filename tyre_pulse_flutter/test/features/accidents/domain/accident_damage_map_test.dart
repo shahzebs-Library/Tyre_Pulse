@@ -7,8 +7,7 @@ import 'package:tyre_pulse/features/accidents/domain/accident_damage_map.dart';
 
 void main() {
   group('mock vocabulary (M8-M10)', () {
-    test('damage types are the shared vocabulary in mock order, with Bent',
-        () {
+    test('damage types are the shared vocabulary in mock order, with Bent', () {
       expect(
         AccidentDamageType.values.map((AccidentDamageType t) => t.name),
         damageTypes.map((VocabItem item) => item.key),
@@ -128,7 +127,8 @@ void main() {
       );
     });
 
-    test('front-left is captured on the front artwork and stored as its '
+    test(
+        'front-left is captured on the front artwork and stored as its '
         'own token', () {
       const AccidentDamagePerspective angled =
           AccidentDamagePerspective.frontLeft;
@@ -171,14 +171,13 @@ void main() {
       expect(restored.viewToken, 'front_left');
 
       final AccidentDamageMap map =
-          AccidentDamageMap.fromMarks(<AccidentDamageMark>[mark]);
+          AccidentDamageMap.fromMarks(const <AccidentDamageMark>[mark]);
       expect(map.countForPerspective(angled), 1);
       expect(map.countForPerspective(AccidentDamagePerspective.front), 0);
       expect(map.exactCountForView(AccidentDamageView.front), 1);
     });
 
-    test('a plain side keeps writing the view name and stays value-equal',
-        () {
+    test('a plain side keeps writing the view name and stays value-equal', () {
       const AccidentDamageMark plain = AccidentDamageMark(
         zoneId: 'left_front_door',
         view: AccidentDamageView.left,

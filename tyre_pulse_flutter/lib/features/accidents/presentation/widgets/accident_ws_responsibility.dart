@@ -54,8 +54,7 @@ class _AccidentResponsibilityMockWorkspaceState
   bool _loading = true;
   AppError? _error;
   bool _extended = false;
-  AccidentLiabilityAssessment _assessment =
-      const AccidentLiabilityAssessment();
+  AccidentLiabilityAssessment _assessment = const AccidentLiabilityAssessment();
   final Map<String, AccidentAuthorityReport> _authority =
       <String, AccidentAuthorityReport>{};
   AccidentEvidenceLoad _docs = const AccidentEvidenceLoad(provisioned: false);
@@ -101,9 +100,8 @@ class _AccidentResponsibilityMockWorkspaceState
       _error = null;
     });
     try {
-      final AccidentLiabilityLoad load = await ref
-          .read(accidentLiabilityRepositoryProvider)
-          .load(_record.id);
+      final AccidentLiabilityLoad load =
+          await ref.read(accidentLiabilityRepositoryProvider).load(_record.id);
       final AccidentEvidenceLoad docs = await ref
           .read(accidentCaseDocsRepositoryProvider)
           .listEvidence(_record.id);
@@ -175,8 +173,8 @@ class _AccidentResponsibilityMockWorkspaceState
   // --- Local edits + draft -------------------------------------------------
 
   void _setAuthority(String type, {String? reportNo, String? reportStatus}) {
-    final AccidentAuthorityReport current = _authority[type] ??
-        AccidentAuthorityReport(authorityType: type);
+    final AccidentAuthorityReport current =
+        _authority[type] ?? AccidentAuthorityReport(authorityType: type);
     _authority[type] = AccidentAuthorityReport(
       id: current.id,
       authorityType: type,
@@ -259,7 +257,7 @@ class _AccidentResponsibilityMockWorkspaceState
 
   void _setPct({required bool ours, required String raw}) {
     final num? value = num.tryParse(raw.trim());
-    final num? clamped = value == null ? null : value.clamp(0, 100);
+    final num? clamped = value?.clamp(0, 100);
     _assessment = ours
         ? _assessment.copyWith(ourLiabilityPct: clamped)
         : _assessment.copyWith(thirdPartyPct: clamped);
@@ -1005,8 +1003,7 @@ class _AccidentResponsibilityMockWorkspaceState
             : copy('optional');
     final String uploader = stored == null
         ? copy('notSet')
-        : stored.uploadedBy != null &&
-                stored.uploadedBy == _workspace?.userId
+        : stored.uploadedBy != null && stored.uploadedBy == _workspace?.userId
             ? copy('you')
             : stored.uploadedBy == null
                 ? copy('notSet')

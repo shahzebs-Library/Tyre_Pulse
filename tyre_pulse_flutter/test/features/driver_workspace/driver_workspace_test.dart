@@ -24,55 +24,71 @@ void main() {
       'acknowledged': true,
     };
     expect(
-        validateDriverFineResponse(
-            <String, Object?>{...values, 'resolution': 'instalments'},),
-        isNull,);
+      validateDriverFineResponse(
+        <String, Object?>{...values, 'resolution': 'instalments'},
+      ),
+      isNull,
+    );
     expect(
-        validateDriverFineResponse(
-            <String, Object?>{...values, 'resolution': 'company_recovery'},),
-        isNull,);
+      validateDriverFineResponse(
+        <String, Object?>{...values, 'resolution': 'company_recovery'},
+      ),
+      isNull,
+    );
     expect(
-        validateDriverFineResponse(
-            <String, Object?>{...values, 'resolution': 'already_paid'},),
-        contains('reference'),);
+      validateDriverFineResponse(
+        <String, Object?>{...values, 'resolution': 'already_paid'},
+      ),
+      contains('reference'),
+    );
     expect(
-        validateDriverFineResponse(
-            <String, Object?>{...values, 'resolution': 'direct_payment'},),
-        contains('date'),);
+      validateDriverFineResponse(
+        <String, Object?>{...values, 'resolution': 'direct_payment'},
+      ),
+      contains('date'),
+    );
     expect(
-        validateDriverFineResponse(<String, Object?>{
-          ...values,
-          'resolution': 'dispute',
-          'acknowledged': false,
-        }),
-        contains('sign'),);
+      validateDriverFineResponse(<String, Object?>{
+        ...values,
+        'resolution': 'dispute',
+        'acknowledged': false,
+      }),
+      contains('sign'),
+    );
   });
   test('invalid backend payloads do not fabricate a workspace', () {
     expect(() => DriverWorkspaceDto.fromJson(null), throwsFormatException);
   });
   testWidgets('driver sees response action but no staff review control',
       (WidgetTester tester) async {
-    await tester.pumpWidget(ProviderScope(
+    await tester.pumpWidget(
+      ProviderScope(
         child: MaterialApp(
-            home: Scaffold(
-                body: SingleChildScrollView(
-                    child: DriverFineCard(
-      fine: const <String, Object?>{
-        'id': 'fine',
-        'notice_reference': 'N1',
-        'amount': 500,
-        'currency': 'SAR',
-        'status': 'open',
-        'response_status': 'awaiting_response',
-        'paid_amount': 0,
-        'evidence': <DriverRow>[],
-        'responses': <DriverRow>[],
-      },
-      data: const DriverWorkspaceSnapshot(
-          data: <String, Object?>{'can_respond': true},),
-      onAction: (String action, [DriverRow? fine]) async {},
-      onChanged: () async {},
-    ),),),),),);
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: DriverFineCard(
+                fine: const <String, Object?>{
+                  'id': 'fine',
+                  'notice_reference': 'N1',
+                  'amount': 500,
+                  'currency': 'SAR',
+                  'status': 'open',
+                  'response_status': 'awaiting_response',
+                  'paid_amount': 0,
+                  'evidence': <DriverRow>[],
+                  'responses': <DriverRow>[],
+                },
+                data: const DriverWorkspaceSnapshot(
+                  data: <String, Object?>{'can_respond': true},
+                ),
+                onAction: (String action, [DriverRow? fine]) async {},
+                onChanged: () async {},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
     await tester.tap(find.text('N1 · 500 SAR'));
     await tester.pumpAndSettle();
     expect(find.text('Acknowledge and respond'), findsOneWidget);

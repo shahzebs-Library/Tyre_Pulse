@@ -26,8 +26,7 @@ import 'package:tyre_pulse/core/network/supabase_gateway.dart';
 import 'package:tyre_pulse/core/network/supabase_tables.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_handover_gating.dart';
 
-final accidentDispatchRepositoryProvider =
-    Provider<AccidentDispatchRepository>(
+final accidentDispatchRepositoryProvider = Provider<AccidentDispatchRepository>(
   (ref) => AccidentDispatchRepository(
     SupabaseAccidentDispatchRemote(ref.watch(supabaseClientProvider)),
   ),
@@ -487,9 +486,8 @@ class AccidentDispatchRepository with SupabaseGateway {
           'accessories': input.accessories,
           'outgoing_photos': photoRefs,
           'outgoing_signed_by': _clean(input.outgoingSignedBy),
-          'outgoing_signed_at': signature == null
-              ? null
-              : _clock().toUtc().toIso8601String(),
+          'outgoing_signed_at':
+              signature == null ? null : _clock().toUtc().toIso8601String(),
           'outgoing_signature': signature,
         },
       );

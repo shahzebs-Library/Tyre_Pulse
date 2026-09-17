@@ -40,8 +40,7 @@ class AccidentInsuranceClaimMockWorkspace extends ConsumerStatefulWidget {
   final void Function(String workspaceKey) onNavigate;
 
   @override
-  ConsumerState<AccidentInsuranceClaimMockWorkspace> createState() =>
-      _State();
+  ConsumerState<AccidentInsuranceClaimMockWorkspace> createState() => _State();
 }
 
 class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
@@ -223,11 +222,11 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
             if (registered) ...<Widget>[
               AccidentWsFact(
                 label: 'Insurer',
-                value: accidentWsText(claim?.insurer ?? _record.insurer),
+                value: accidentWsText(claim.insurer ?? _record.insurer),
               ),
               AccidentWsFact(
                 label: 'Policy no.',
-                value: accidentWsText(claim?.policyNo ?? _record.policyNo),
+                value: accidentWsText(claim.policyNo ?? _record.policyNo),
               ),
             ] else ...<Widget>[
               TpInput(label: 'Insurer', controller: _insurer, isRequired: true),
@@ -242,7 +241,7 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
             AccidentWsFact(
               label: 'Claim number',
               value: registered
-                  ? accidentWsText(claim?.claimNo ?? _record.insuranceClaimNo)
+                  ? accidentWsText(claim.claimNo ?? _record.insuranceClaimNo)
                   : 'Auto-generated after registration',
             ),
             AccidentWsFact(label: 'Liability', value: liability),
@@ -499,8 +498,8 @@ class _State extends ConsumerState<AccidentInsuranceClaimMockWorkspace> {
   }
 
   String _commandCenterLabel() {
-    final NotifyRole role = notifyRoles
-        .firstWhere((NotifyRole r) => r.key == 'command_center');
+    final NotifyRole role =
+        notifyRoles.firstWhere((NotifyRole r) => r.key == 'command_center');
     return role.roles.isEmpty
         ? role.label
         : '${role.roles.first} (Command Center)';

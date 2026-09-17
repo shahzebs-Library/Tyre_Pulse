@@ -430,8 +430,7 @@ AccidentDamageAssessmentRecord assessmentFromRow(Map<String, dynamic> row) {
         for (final Object? a in areas)
           if (a is Map) Map<String, Object?>.from(a),
     ],
-    parityColumnsPresent:
-        assessmentParityColumns.every(row.containsKey),
+    parityColumnsPresent: assessmentParityColumns.every(row.containsKey),
     assessorName: _string(row['assessor_name']),
     assessedAt: _dateTime(row['assessed_at']),
     visibleDamage: _string(row['visible_damage']),

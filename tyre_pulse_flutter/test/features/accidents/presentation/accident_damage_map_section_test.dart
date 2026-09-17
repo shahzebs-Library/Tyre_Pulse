@@ -598,6 +598,9 @@ void main() {
     );
     expect(pendingSave.onPressed, isNull);
 
+    await tester.ensureVisible(
+      find.byKey(AccidentDamageZoneSheetKeys.confirmSuggestion),
+    );
     await tester.tap(
       find.byKey(AccidentDamageZoneSheetKeys.confirmSuggestion),
     );
@@ -694,6 +697,9 @@ void main() {
     expect(find.text('Close-up damage photos'), findsOneWidget);
     expect(find.text('0 attached'), findsOneWidget);
 
+    await tester.ensureVisible(
+      find.byKey(AccidentDamageZoneSheetKeys.photoAction),
+    );
     await tester.tap(find.byKey(AccidentDamageZoneSheetKeys.photoAction));
     await tester.pumpAndSettle();
     expect(find.text('2 attached'), findsOneWidget);
@@ -755,6 +761,9 @@ void main() {
     expect(find.text('0 attached'), findsOneWidget);
     expect(find.byKey(AccidentDamageZoneSheetKeys.remove), findsNothing);
 
+    await tester.ensureVisible(
+      find.byKey(AccidentDamageZoneSheetKeys.photoAction),
+    );
     await tester.tap(find.byKey(AccidentDamageZoneSheetKeys.photoAction));
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.byKey(AccidentDamageZoneSheetKeys.save));

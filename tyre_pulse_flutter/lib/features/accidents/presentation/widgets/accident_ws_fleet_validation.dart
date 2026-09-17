@@ -665,11 +665,12 @@ class _AccidentFleetValidationMockWorkspaceState
                       ),
                       const SizedBox(height: TpSpace.sm),
                     ],
-                    for (int i = 0; i < fleetValidationItems.length; i++)
-                      ...<Widget>[
-                        if (i > 0) Divider(height: 1, color: palette.border),
-                        _itemRow(copy, palette, fleetValidationItems[i]),
-                      ],
+                    for (int i = 0;
+                        i < fleetValidationItems.length;
+                        i++) ...<Widget>[
+                      if (i > 0) Divider(height: 1, color: palette.border),
+                      _itemRow(copy, palette, fleetValidationItems[i]),
+                    ],
                   ],
                 ),
     );
@@ -719,10 +720,9 @@ class _AccidentFleetValidationMockWorkspaceState
                     children: <Widget>[
                       Text(
                         vocab.label,
-                        style:
-                            Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                ),
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
                       ),
                       Text(
                         subtitle,
@@ -818,7 +818,7 @@ class _AccidentFleetValidationMockWorkspaceState
           AccidentInfoRow(copy('packageIncludes'), copy('packageList')),
           AccidentInfoRow(
             copy('priority'),
-            accidentSeverityBadge(copy, _record.severity),
+            accidentSeverityLevel(copy, _record.severity),
           ),
           CheckboxListTile(
             key: const Key('accident.fleet.sendWhenComplete'),

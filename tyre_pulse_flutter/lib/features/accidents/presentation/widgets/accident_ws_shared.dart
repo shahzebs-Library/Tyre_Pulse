@@ -137,11 +137,18 @@ class AccidentWsSection extends StatelessWidget {
             ),
           ),
           Divider(height: 1, color: palette.border),
-          Padding(
-            padding: const EdgeInsets.all(TpSpace.md),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: children,
+          // ListTile-family rows (checklists, notify toggles) paint their
+          // ink on the nearest Material; without this one they would try to
+          // paint through the card's decorated background and Flutter's
+          // debug check refuses the tree.
+          Material(
+            type: MaterialType.transparency,
+            child: Padding(
+              padding: const EdgeInsets.all(TpSpace.md),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: children,
+              ),
             ),
           ),
         ],
@@ -331,14 +338,12 @@ Future<AccidentPhotoSource?> pickAccidentEvidenceSource(
             ListTile(
               leading: const Icon(Icons.photo_camera_outlined),
               title: const Text('Take a photo'),
-              onTap: () =>
-                  Navigator.of(sheet).pop(AccidentPhotoSource.camera),
+              onTap: () => Navigator.of(sheet).pop(AccidentPhotoSource.camera),
             ),
             ListTile(
               leading: const Icon(Icons.folder_open_outlined),
               title: const Text('Choose a file from the device'),
-              onTap: () =>
-                  Navigator.of(sheet).pop(AccidentPhotoSource.gallery),
+              onTap: () => Navigator.of(sheet).pop(AccidentPhotoSource.gallery),
             ),
             const SizedBox(height: TpSpace.sm),
           ],

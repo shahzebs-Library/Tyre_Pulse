@@ -209,10 +209,10 @@ final class TimelineEntry {
   final String title;
   final TimelineCategory category;
 
-  /// Rendered as "by <actor>".
+  /// Rendered as "by `<actor>`".
   final String? actor;
 
-  /// Rendered as "to <audience>".
+  /// Rendered as "to `<audience>`".
   final String? audience;
   final List<String> details;
 
@@ -422,8 +422,8 @@ List<TimelineEntry> buildTimelineFeed(TimelineFeedInput input) {
         ],
         status: TimelineStatus.completed,
         body: c.body,
-        slaMet: c.workstreamKey != null &&
-            metWorkstreams.contains(c.workstreamKey),
+        slaMet:
+            c.workstreamKey != null && metWorkstreams.contains(c.workstreamKey),
       ),
     );
   }
@@ -529,8 +529,8 @@ List<DeliveryLogRow> buildDeliveryLog(TimelineFeedInput input) {
     rows.add(
       DeliveryLogRow(
         id: c.id,
-        trigger: c.subject ??
-            (c.channel == 'email_out' ? 'Email' : 'Notification'),
+        trigger:
+            c.subject ?? (c.channel == 'email_out' ? 'Email' : 'Notification'),
         recipients: c.toParty ?? '',
         recipientCount: _recipientCount(c.toParty),
         channel: c.channel == 'email_out' ? 'Email' : 'In-app',

@@ -115,13 +115,13 @@ void main() {
       find.byKey(AccidentReportIntakeKeys.step(AccidentIntakePage.documents)),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Step 6 of 7'), findsOneWidget);
+    expect(find.text('Step 6 of 7: Documents'), findsOneWidget);
     expect(find.byType(AccidentOptionalDocumentList), findsOneWidget);
     expect(find.byType(AccidentEvidenceChecklist), findsNothing);
     await tester
         .tap(find.byKey(const ValueKey<String>('accident.report.continue')));
     await tester.pumpAndSettle();
-    expect(find.text('Step 7 of 7'), findsOneWidget);
+    expect(find.text('Step 7 of 7: Review and submit'), findsOneWidget);
     expect(find.text('Submit accident'), findsOneWidget);
   });
 
@@ -165,7 +165,9 @@ void main() {
       (image.image as AssetImage).assetName,
       'assets/vehicle_photos/concrete_pump.png',
     );
-    expect(find.text('Assigned driver'), findsOneWidget);
+    expect(find.text('Site (home)'), findsNWidgets(2));
+    expect(find.text(accidentFleetMasterLockNote), findsOneWidget);
+    expect(find.text('Assigned driver'), findsNothing);
     await tester.tap(find.text('Change asset'));
     expect(changed, isTrue);
     expect(tester.takeException(), isNull);
@@ -183,7 +185,7 @@ void main() {
         findsOneWidget,
       );
     }
-    expect(find.text('Step 1 of 7'), findsOneWidget);
+    expect(find.text('Step 1 of 7: Identify asset'), findsOneWidget);
     expect(find.text('Scan QR / barcode'), findsOneWidget);
 
     await tester.ensureVisible(find.text('Select fleet asset'));
@@ -204,16 +206,19 @@ void main() {
       find.byKey(AccidentReportIntakeKeys.assetMaster),
       findsOneWidget,
     );
-    expect(find.text('Asset no.'), findsOneWidget);
-    expect(find.text('Plate'), findsOneWidget);
-    expect(find.text('Vehicle type'), findsOneWidget);
-    expect(find.text('Home site'), findsOneWidget);
-    expect(find.text('Current meter'), findsOneWidget);
-    expect(find.text('Fleet status'), findsOneWidget);
+    expect(find.text('Asset no'), findsNWidgets(2));
+    expect(find.text('Plate'), findsNWidgets(2));
+    expect(find.text('Vehicle type'), findsNWidgets(2));
+    expect(find.text('Site (home)'), findsNWidgets(2));
+    expect(find.text('Current meter'), findsNWidgets(2));
+    expect(find.text('Status'), findsNWidgets(2));
+    expect(find.text('Make / model'), findsNWidgets(2));
+    expect(find.text('Country'), findsOneWidget);
+    expect(find.text(accidentFleetMasterLockNote), findsOneWidget);
 
     await tester.pump(const Duration(milliseconds: 800));
     await tester.pumpAndSettle();
-    expect(find.textContaining('Draft saved'), findsOneWidget);
+    expect(find.textContaining('Draft saved on device'), findsOneWidget);
     expect(
       store.values.containsKey(AccidentReportDraftStore.storageKey),
       isTrue,
@@ -245,7 +250,7 @@ void main() {
     await tester
         .tap(find.byKey(const ValueKey<String>('accident.report.continue')));
     await tester.pumpAndSettle();
-    expect(find.text('Step 2 of 7'), findsOneWidget);
+    expect(find.text('Step 2 of 7: Incident details'), findsOneWidget);
     await tester.ensureVisible(
       find.byType(DropdownButtonFormField<String>).first,
     );
@@ -270,7 +275,10 @@ void main() {
         .tap(find.byKey(const ValueKey<String>('accident.report.continue')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Step 3 of 7'), findsOneWidget);
+    expect(
+      find.text('Step 3 of 7: People and authority'),
+      findsOneWidget,
+    );
     expect(find.text('Driver name'), findsOneWidget);
     expect(find.text('Incident site'), findsNothing);
     expect(reports.submitCalls, 0);

@@ -1,7 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tyre_pulse/features/accidents/domain/accident_case_vocab.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_damage_map.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_report_intake.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
+
+bool _matches(VehicleAsset asset, String term) =>
+    (asset.assetNo ?? '').toLowerCase().contains(term.toLowerCase());
 
 const VehicleAsset _vehicle = VehicleAsset(
   id: 'vehicle-1',
@@ -57,16 +61,152 @@ AccidentReportIntakeDraft _validDraft({
     );
 
 void main() {
-  test('reporter intake has five distinct steps', () {
+  test('the wizard pages are the seven reportWizardSteps, in order', () {
+    expect(AccidentReportStep.values, hasLength(reportWizardSteps.length));
+    for (int i = 0; i < reportWizardSteps.length; i++) {
+      final AccidentReportStep step = AccidentReportStep.values[i];
+      expect(step.key, reportWizardSteps[i].key);
+      expect(step.number, i + 1);
+      expect(step.label, reportWizardSteps[i].label);
+      expect(
+        step.eyebrow,
+        'Step ${i + 1} of 7: ${reportWizardSteps[i].label}',
+      );
+      expect(step.counter, 'Step ${i + 1} of 7');
+    }
     expect(
-      AccidentReportStep.values,
-      <AccidentReportStep>[
-        AccidentReportStep.incident,
-        AccidentReportStep.peopleAuthority,
-        AccidentReportStep.damage,
-        AccidentReportStep.evidenceDocuments,
-        AccidentReportStep.review,
-      ],
+      AccidentReportStep.identifyAsset.eyebrow,
+      'Step 1 of 7: Identify asset',
+    );
+    expect(AccidentReportStep.damage.eyebrow, 'Step 4 of 7: Mark damage');
+    expect(AccidentReportStep.review.next, isNull);
+    expect(AccidentReportStep.identifyAsset.previous, isNull);
+    expect(
+      AccidentReportStep.identifyAsset.next,
+      AccidentReportStep.incident,
+    );
+  });
+
+  test('identify-asset page only asks for the asset', () {
+    final AccidentReportIntakeDraft draft = AccidentReportIntakeDraft(
+      incidentAt: DateTime(2026, 8, 30, 9, 15),
+    );
+    expect(
+      draft.validationMessagesFor(AccidentReportStep.identifyAsset),
+      <String>['Select a fleet asset or enter an asset number.'],
+    );
+    expect(
+      draft.validationMessagesFor(AccidentReportStep.damage),
+      isEmpty,
+    );
+    expect(
+      draft.validationMessagesFor(AccidentReportStep.documents),
+      isEmpty,
+    );
+    expect(draft.firstBlockingStep, AccidentReportStep.identifyAsset);
+    expect(
+      draft.allValidationMessages
+          .where((String m) => m.startsWith('Select a fleet asset'))
+          .length,
+      1,
+      reason: 'the shared asset message is listed once',
+    );
+  });
+
+  test('Step 1 match list reports the true total and bounds the rows', () {
+    final List<VehicleAsset> fleet = <VehicleAsset>[
+      for (int i = 0; i < 120; i++)
+        VehicleAsset(
+          id: 'a$i',
+          assetNo: 'TM${i.toString().padLeft(3, '0')}',
+        ),
+      const VehicleAsset(id: 'cp', assetNo: 'CP3012'),
+    ];
+    final AccidentAssetMatchPage all = matchAssetsForReport(
+      fleet,
+      '',
+      matches: _matches,
+    );
+    expect(all.total, 121);
+    expect(all.shown, hasLength(accidentAssetMatchLimit));
+    expect(all.isTruncated, isTrue);
+    expect(all.hiddenCount, 71);
+
+    final AccidentAssetMatchPage narrowed = matchAssetsForReport(
+      fleet,
+      '  cp30 ',
+      matches: _matches,
+    );
+    expect(narrowed.total, 1);
+    expect(narrowed.shown.single.assetNo, 'CP3012');
+    expect(narrowed.isTruncated, isFalse);
+
+    final AccidentAssetMatchPage tens = matchAssetsForReport(
+      fleet,
+      'TM01',
+      matches: _matches,
+    );
+    expect(tens.total, 10);
+    expect(tens.shown, hasLength(10));
+    expect(
+      () => tens.shown.add(const VehicleAsset(id: 'x')),
+      throwsUnsupportedError,
+    );
+  });
+
+  test('an incident site the reporter edited is never overwritten', () {
+    expect(
+      incidentSiteAfterAssetChange(
+        current: '',
+        userEdited: false,
+        nextHomeSite: 'Diriyah',
+      ),
+      'Diriyah',
+      reason: 'an empty field takes the home site as a default',
+    );
+    expect(
+      incidentSiteAfterAssetChange(
+        current: 'Diriyah',
+        userEdited: false,
+        previousHomeSite: 'Diriyah',
+        nextHomeSite: 'Qiddiya G2',
+      ),
+      'Qiddiya G2',
+      reason: 'an untouched default follows a re-selection',
+    );
+    expect(
+      incidentSiteAfterAssetChange(
+        current: 'Riyadh Metro',
+        userEdited: true,
+        previousHomeSite: 'Diriyah',
+        nextHomeSite: 'Qiddiya G2',
+      ),
+      'Riyadh Metro',
+      reason: 'a typed site is the reporter statement, not the register',
+    );
+    expect(
+      incidentSiteAfterAssetChange(
+        current: 'Diriyah',
+        userEdited: true,
+        previousHomeSite: 'Diriyah',
+        nextHomeSite: 'Qiddiya G2',
+      ),
+      'Diriyah',
+      reason: 'even a site equal to the old home site stays once chosen',
+    );
+    expect(
+      incidentSiteAfterAssetChange(
+        current: 'Riyadh Metro',
+        userEdited: false,
+        previousHomeSite: 'Diriyah',
+        nextHomeSite: 'Qiddiya G2',
+      ),
+      'Riyadh Metro',
+      reason: 'a differing value is kept even without the edit flag',
+    );
+    expect(
+      incidentSiteAfterAssetChange(current: '   ', userEdited: true),
+      '',
     );
   });
 
@@ -188,7 +328,7 @@ void main() {
 
     expect(draft.completedEvidenceCount(requirements), 2);
     expect(
-      draft.validationMessagesFor(AccidentReportStep.evidenceDocuments),
+      draft.validationMessagesFor(AccidentReportStep.evidence),
       isEmpty,
     );
   });
@@ -212,7 +352,7 @@ void main() {
 
     expect(
       missingDamagePhoto.validationMessagesFor(
-        AccidentReportStep.evidenceDocuments,
+        AccidentReportStep.evidence,
       ),
       <String>['1 required photograph(s) are still missing.'],
     );

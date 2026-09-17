@@ -49,8 +49,9 @@ abstract final class AccidentCaseScreenKeys {
 
 enum _CaseMenuAction { claim, updateWorkstream, waiveWorkstream }
 
-/// Seven distinct role workspaces backed by the accident row, the real
-/// workstream ledger and the authenticated user's real notification inbox.
+/// Seven case workspaces in the owner's mock case-flow order (Workstream 1
+/// of 7 .. 7 of 7), each backed by the accident row and the real workstream
+/// ledger.
 ///
 /// Workstream status updates use the verified online RPC. Missing fields remain
 /// visibly unrecorded; the remaining case decisions retain their read-only boundary.
@@ -213,15 +214,6 @@ class _AccidentCaseScreenState extends ConsumerState<AccidentCaseScreen>
         message: copy('caseNotFoundMessage'),
       );
     }
-    final List<Key> bodyKeys = <Key>[
-      AccidentCaseScreenKeys.damageMapping,
-      AccidentCaseScreenKeys.fleet,
-      AccidentCaseScreenKeys.responsibility,
-      AccidentCaseScreenKeys.insurance,
-      AccidentCaseScreenKeys.assessment,
-      AccidentCaseScreenKeys.externalWorkshop,
-      AccidentCaseScreenKeys.timeline,
-    ];
     return Column(
       children: <Widget>[
         AnimatedBuilder(
@@ -239,12 +231,14 @@ class _AccidentCaseScreenState extends ConsumerState<AccidentCaseScreen>
                   snapshot: snapshot,
                   onRefresh: _load,
                   controller: _scrollControllers[workspace.index],
-                  bodyKey: bodyKeys[workspace.index],
+                  bodyKey: _bodyKeyFor(workspace),
                   onOpenIncident: () => Navigator.of(context).maybePop(),
                   onOpenClaims: () => unawaited(_openClaims()),
                   onViewDamage: () => _tabController.animateTo(
                     AccidentCaseWorkspace.damageMapping.index,
                   ),
+                  onNavigateWorkspace: (AccidentCaseWorkspace target) =>
+                      _tabController.animateTo(target.index),
                   onUpdateWorkstream: _editableWorkstreams.any(
                     (item) => workspace.workstreamKeys.contains(item.key),
                   )
@@ -259,6 +253,20 @@ class _AccidentCaseScreenState extends ConsumerState<AccidentCaseScreen>
       ],
     );
   }
+
+  static Key _bodyKeyFor(AccidentCaseWorkspace workspace) =>
+      switch (workspace) {
+        AccidentCaseWorkspace.fleet => AccidentCaseScreenKeys.fleet,
+        AccidentCaseWorkspace.assessment => AccidentCaseScreenKeys.assessment,
+        AccidentCaseWorkspace.insurance => AccidentCaseScreenKeys.insurance,
+        AccidentCaseWorkspace.responsibility =>
+          AccidentCaseScreenKeys.responsibility,
+        AccidentCaseWorkspace.damageMapping =>
+          AccidentCaseScreenKeys.damageMapping,
+        AccidentCaseWorkspace.externalWorkshop =>
+          AccidentCaseScreenKeys.externalWorkshop,
+        AccidentCaseWorkspace.timeline => AccidentCaseScreenKeys.timeline,
+      };
 
   Widget _workspaceNavigation() {
     final AccidentCaseWorkspace current =

@@ -7,15 +7,121 @@
 library;
 
 import 'package:flutter/foundation.dart';
+import 'package:tyre_pulse/features/accidents/domain/accident_case_vocab.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_damage_map.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
 
+/// The report wizard's pages, one per `reportWizardSteps` entry, so the
+/// validation groups and the printed "Step N of 7" can never disagree.
 enum AccidentReportStep {
-  incident,
-  peopleAuthority,
-  damage,
-  evidenceDocuments,
-  review,
+  identifyAsset('identify_asset'),
+  incident('incident'),
+  peopleAuthority('people_authority'),
+  damage('damage'),
+  evidence('evidence'),
+  documents('documents'),
+  review('review');
+
+  const AccidentReportStep(this.key);
+
+  /// The `reportWizardSteps` key this page is numbered by.
+  final String key;
+
+  NumberedStep get wizardStep {
+    for (final NumberedStep step in reportWizardSteps) {
+      if (step.key == key) return step;
+    }
+    // The enum mirrors the vocabulary one-to-one; a missing entry is a
+    // programming error, never a runtime state.
+    throw StateError('reportWizardSteps has no entry for $key');
+  }
+
+  /// One-based step number as printed in the eyebrow.
+  int get number => wizardStep.n;
+
+  String get label => wizardStep.label;
+
+  /// The mock's eyebrow: `Step 1 of 7: Identify asset`.
+  String get eyebrow => 'Step $number of ${reportWizardSteps.length}: $label';
+
+  /// The shorter form used where the label is printed separately.
+  String get counter => 'Step $number of ${reportWizardSteps.length}';
+
+  AccidentReportStep? get next =>
+      index + 1 < values.length ? values[index + 1] : null;
+
+  AccidentReportStep? get previous => index == 0 ? null : values[index - 1];
+}
+
+/// How many matching assets Step 1 lists before asking for a narrower
+/// search. The whole cached fleet is still searched - only the rendered
+/// list is bounded, and the count always reports the true total.
+const int accidentAssetMatchLimit = 50;
+
+/// One page of Step 1 search results over the already-loaded fleet cache.
+@immutable
+final class AccidentAssetMatchPage {
+  const AccidentAssetMatchPage({
+    required this.shown,
+    required this.total,
+    required this.limit,
+  });
+
+  /// The rows rendered, in cache order, at most [limit].
+  final List<VehicleAsset> shown;
+
+  /// Every asset that matched, including the ones not rendered.
+  final int total;
+
+  final int limit;
+
+  bool get isTruncated => total > shown.length;
+
+  int get hiddenCount => total - shown.length;
+}
+
+/// Filters [assets] with [matches] (the fleet repository's own search
+/// predicate, injected so this file stays free of data-layer imports) and
+/// bounds the rendered list at [limit] without hiding the true count.
+AccidentAssetMatchPage matchAssetsForReport(
+  List<VehicleAsset> assets,
+  String query, {
+  required bool Function(VehicleAsset asset, String term) matches,
+  int limit = accidentAssetMatchLimit,
+}) {
+  final String term = query.trim();
+  final List<VehicleAsset> all = term.isEmpty
+      ? List<VehicleAsset>.of(assets)
+      : assets
+          .where((VehicleAsset asset) => matches(asset, term))
+          .toList(growable: false);
+  final int bound = limit < 0 ? 0 : limit;
+  return AccidentAssetMatchPage(
+    shown: List<VehicleAsset>.unmodifiable(all.take(bound)),
+    total: all.length,
+    limit: bound,
+  );
+}
+
+/// The incident site to keep after the selected asset changes.
+///
+/// The home site is only ever a convenience default: it fills an empty
+/// field, and it follows a re-selection only while the field still holds
+/// the previous asset's home site untouched. Once the reporter has edited
+/// the site it is never overwritten, because where the incident happened is
+/// their statement, not the fleet register's.
+String incidentSiteAfterAssetChange({
+  required String current,
+  required bool userEdited,
+  String? previousHomeSite,
+  String? nextHomeSite,
+}) {
+  final String trimmed = current.trim();
+  final String next = nextHomeSite?.trim() ?? '';
+  if (userEdited && trimmed.isNotEmpty) return trimmed;
+  if (trimmed.isEmpty) return next;
+  if (trimmed == (previousHomeSite?.trim() ?? '')) return next;
+  return trimmed;
 }
 
 @immutable
@@ -237,6 +343,10 @@ final class AccidentReportIntakeDraft {
   List<String> validationMessagesFor(AccidentReportStep step) {
     final List<String> messages = <String>[];
     switch (step) {
+      case AccidentReportStep.identifyAsset:
+        if (effectiveAssetNo.isEmpty) {
+          messages.add('Select a fleet asset or enter an asset number.');
+        }
       case AccidentReportStep.incident:
         if (effectiveAssetNo.isEmpty) {
           messages.add('Select a fleet asset or enter an asset number.');
@@ -297,8 +407,9 @@ final class AccidentReportIntakeDraft {
           messages.add('Record the Najm reference.');
         }
       case AccidentReportStep.damage:
-      // A near miss or no-damage event legitimately has no damage mark.
-      case AccidentReportStep.evidenceDocuments:
+        // A near miss or no-damage event legitimately has no damage mark.
+        break;
+      case AccidentReportStep.evidence:
         final List<AccidentEvidenceRequirement> requirements =
             evidenceRequirementsFor(this);
         final int missing = requirements
@@ -310,17 +421,36 @@ final class AccidentReportIntakeDraft {
         if (missing > 0) {
           messages.add('$missing required photograph(s) are still missing.');
         }
+      case AccidentReportStep.documents:
+        // Supporting documents are optional at intake.
+        break;
       case AccidentReportStep.review:
-      // Review confirms the captured facts. Supporting documents and the
-      // legacy driver-statement field are deliberately non-blocking.
+        // Review confirms the captured facts. Supporting documents and the
+        // legacy driver-statement field are deliberately non-blocking.
+        break;
     }
     return messages;
   }
 
-  List<String> get allValidationMessages => <String>[
-        for (final AccidentReportStep step in AccidentReportStep.values)
-          ...validationMessagesFor(step),
-      ];
+  /// Every blocking message once, in page order. The asset message belongs
+  /// to both the identify and incident pages and is de-duplicated here.
+  List<String> get allValidationMessages {
+    final List<String> messages = <String>[];
+    for (final AccidentReportStep step in AccidentReportStep.values) {
+      for (final String message in validationMessagesFor(step)) {
+        if (!messages.contains(message)) messages.add(message);
+      }
+    }
+    return messages;
+  }
+
+  /// The first page that still blocks submission, if any.
+  AccidentReportStep? get firstBlockingStep {
+    for (final AccidentReportStep step in AccidentReportStep.values) {
+      if (validationMessagesFor(step).isNotEmpty) return step;
+    }
+    return null;
+  }
 
   bool get isReadyToSubmit => allValidationMessages.isEmpty;
 

@@ -105,6 +105,38 @@ abstract final class SupabaseTables {
   /// Live schema/RLS verified; docs/accident-module/02_DATA_MODEL.sql and 14_INSURANCE.sql.
   static const String accidentInsuranceClaims = 'accident_insurance_claims';
 
+  /// Live since V417 (docs/accident-module/02_DATA_MODEL.sql). The vendor
+  /// contact columns on this table come from the 2026-09-16 parity migration,
+  /// which is AUTHORED, NOT APPLIED - a reader must catch a schema mismatch.
+  static const String accidentRepairOrders = 'accident_repair_orders';
+
+  /// Live since V417. The legacy accepted/rejected handover decision.
+  static const String accidentHandoverInspections =
+      'accident_handover_inspections';
+
+  /// Live since V417 (12_SLA_ENGINE.sql).
+  static const String accidentSlaInstances = 'accident_sla_instances';
+
+  /// Live since V417 (11_NOTIFICATIONS.sql). Notes, emails and calls on a case.
+  static const String accidentCaseCommunications =
+      'accident_case_communications';
+
+  /// Live since V417 (13_EVIDENCE.sql).
+  static const String accidentEvidence = 'accident_evidence';
+
+  /// AUTHORED, NOT APPLIED: `supabase/migrations/20260916130000_accident_mock_
+  /// field_parity.sql`. One row per dispatch leg. Every reader of this table
+  /// must treat a 42P01 as "not provisioned yet", never as an empty leg.
+  static const String accidentDispatches = 'accident_dispatches';
+
+  /// Live since V417 (14_INSURANCE.sql / 15_REPAIR_FINANCE.sql /
+  /// 02_DATA_MODEL.sql). Read by the mock M4/M5 workspaces. Columns the
+  /// 2026-09-16 parity migration adds are read defensively.
+  static const String accidentClaimRecoveries = 'accident_claim_recoveries';
+  static const String accidentLiabilityAssessments =
+      'accident_liability_assessments';
+  static const String accidentDamageAssessments = 'accident_damage_assessments';
+
   /// VERIFIED real (artifact 02 section 1: referenced by 20 migrations) and
   /// carried by the `ENGINE_HOURS_LOG` offline command in artifact 06 section
   /// 2. Listed apart from the block above only because artifact 02's call-site
@@ -148,6 +180,14 @@ abstract final class SupabaseTables {
     accidentParts,
     accidentCaseWorkstreams,
     accidentInsuranceClaims,
+    accidentEvidence,
+    accidentHandoverInspections,
+    accidentSlaInstances,
+    accidentClaimRecoveries,
+    accidentLiabilityAssessments,
+    accidentDamageAssessments,
+    accidentRepairOrders,
+    accidentCaseCommunications,
     engineHoursLogs,
   };
 

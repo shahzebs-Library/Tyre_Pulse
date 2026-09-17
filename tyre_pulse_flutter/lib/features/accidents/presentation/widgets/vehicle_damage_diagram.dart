@@ -3,8 +3,9 @@
 /// The selected fleet asset drives the image through the shared vehicle
 /// photo resolver used by Assets and Work Orders. Unknown classes do not
 /// borrow a different vehicle: they receive a neutral fleet icon. The only
-/// custom painting here is the interaction overlay (zone boundaries and
-/// saved markers), never a fabricated vehicle silhouette.
+/// custom painting here is the interaction overlay (numbered markers, the
+/// selected mark's label and the hatched selected area), never a fabricated
+/// vehicle silhouette.
 library;
 
 import 'package:flutter/material.dart';
@@ -22,6 +23,9 @@ class VehicleDamageDiagram extends StatelessWidget {
     this.readOnly = false,
     this.selectedZoneId,
     this.selectedAreaLabel,
+    this.selectedMarkNumber,
+    this.hatchedZone,
+    this.perspectiveBadge,
     super.key,
   });
 
@@ -32,6 +36,16 @@ class VehicleDamageDiagram extends StatelessWidget {
   final bool readOnly;
   final String? selectedZoneId;
   final String? selectedAreaLabel;
+
+  /// The list number of the selected mark, printed beside its marker.
+  final int? selectedMarkNumber;
+
+  /// The catalog zone of the selected area, drawn as a hatched region.
+  final AccidentDamageZone? hatchedZone;
+
+  /// A short badge for an angled perspective (for example "Front-left")
+  /// so the reporter can see the artwork is the nearest orthographic side.
+  final String? perspectiveBadge;
 
   @override
   Widget build(BuildContext context) {
@@ -91,8 +105,37 @@ class VehicleDamageDiagram extends StatelessWidget {
                         palette: palette,
                         framing: framing,
                         selectedZoneId: selectedZoneId,
+                        selectedLabel: selectedAreaLabel,
+                        selectedNumber: selectedMarkNumber,
+                        hatchedZone: hatchedZone,
+                        textDirection: Directionality.of(context),
                       ),
                     ),
+                    if (perspectiveBadge != null)
+                      PositionedDirectional(
+                        start: 8,
+                        top: 8,
+                        child: IgnorePointer(
+                          child: DecoratedBox(
+                            key: const Key('accident.damage.perspectiveBadge'),
+                            decoration: BoxDecoration(
+                              color: palette.surface,
+                              border: Border.all(color: palette.border),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              child: Text(
+                                perspectiveBadge!,
+                                style: Theme.of(context).textTheme.labelSmall,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                     if (selectedAreaLabel != null)
                       PositionedDirectional(
                         start: 8,
@@ -113,7 +156,10 @@ class VehicleDamageDiagram extends StatelessWidget {
                                   vertical: 4,
                                 ),
                                 child: Text(
-                                  selectedAreaLabel!,
+                                  selectedMarkNumber == null
+                                      ? selectedAreaLabel!
+                                      : '$selectedMarkNumber · '
+                                          '${selectedAreaLabel!}',
                                   textAlign: TextAlign.center,
                                   style: Theme.of(context).textTheme.labelSmall,
                                 ),
@@ -270,18 +316,29 @@ class _DamageZoneOverlayPainter extends CustomPainter {
     required this.map,
     required this.palette,
     required this.framing,
+    required this.textDirection,
     this.selectedZoneId,
+    this.selectedLabel,
+    this.selectedNumber,
+    this.hatchedZone,
   });
 
   final AccidentDamageView view;
   final AccidentDamageMap map;
   final TpPalette palette;
   final _DamageViewFraming framing;
+  final TextDirection textDirection;
   final String? selectedZoneId;
+  final String? selectedLabel;
+  final int? selectedNumber;
+  final AccidentDamageZone? hatchedZone;
 
   @override
   void paint(Canvas canvas, Size size) {
+    _paintHatchedZone(canvas, size);
     final List<AccidentDamageMark> marks = map.marks;
+    Offset? selectedCenter;
+    TpStatusColors? selectedColors;
     for (int index = 0; index < marks.length; index++) {
       final AccidentDamageMark mark = marks[index];
       if (mark.effectiveView != view) continue;
@@ -307,7 +364,10 @@ class _DamageZoneOverlayPainter extends CustomPainter {
       final TpStatusColors colors = palette.forStatus(tone);
       final Offset center = framing.sourceToViewport(Offset(x, y), size);
       if (!framing.isVisible(center, size)) continue;
-      if (mark.zoneId == selectedZoneId) {
+      final bool isSelected = mark.zoneId == selectedZoneId;
+      if (isSelected) {
+        selectedCenter = center;
+        selectedColors = colors;
         canvas.drawCircle(
           center,
           accidentDamageMarkerRadius + 7,
@@ -351,6 +411,108 @@ class _DamageZoneOverlayPainter extends CustomPainter {
         center - Offset(number.width / 2, number.height / 2),
       );
     }
+    if (selectedCenter != null && selectedColors != null) {
+      _paintSelectedLabel(canvas, size, selectedCenter, selectedColors);
+    }
+  }
+
+  /// Tints and hatches the selected catalog zone so the marked area reads as
+  /// a region, not only as a pin.
+  void _paintHatchedZone(Canvas canvas, Size size) {
+    final AccidentDamageZone? zone = hatchedZone;
+    if (zone == null || zone.view != view) return;
+    final Offset topLeft = framing.sourceToViewport(
+      Offset(zone.left, zone.top),
+      size,
+    );
+    final Offset bottomRight = framing.sourceToViewport(
+      Offset(zone.left + zone.width, zone.top + zone.height),
+      size,
+    );
+    final Rect rect = Rect.fromPoints(topLeft, bottomRight)
+        .intersect(Offset.zero & size);
+    if (rect.isEmpty) return;
+    final RRect rounded = RRect.fromRectAndRadius(
+      rect,
+      const Radius.circular(6),
+    );
+    canvas.drawRRect(
+      rounded,
+      Paint()..color = palette.primary.withValues(alpha: 0.14),
+    );
+    canvas.save();
+    canvas.clipRRect(rounded);
+    final Paint hatch = Paint()
+      ..color = palette.primary.withValues(alpha: 0.55)
+      ..strokeWidth = 1.2;
+    const double spacing = 9;
+    final double span = rect.width + rect.height;
+    for (double offset = 0; offset <= span; offset += spacing) {
+      canvas.drawLine(
+        Offset(rect.left + offset, rect.top),
+        Offset(rect.left, rect.top + offset),
+        hatch,
+      );
+    }
+    canvas.restore();
+    canvas.drawRRect(
+      rounded,
+      Paint()
+        ..color = palette.primary
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5,
+    );
+  }
+
+  /// Prints "N · label" beside the selected marker, kept inside the canvas.
+  void _paintSelectedLabel(
+    Canvas canvas,
+    Size size,
+    Offset center,
+    TpStatusColors colors,
+  ) {
+    final String? label = selectedLabel;
+    if (label == null || label.trim().isEmpty) return;
+    final String text =
+        selectedNumber == null ? label.trim() : '$selectedNumber · $label';
+    final TextPainter painter = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(
+          color: colors.base,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          height: 1.1,
+        ),
+      ),
+      textDirection: textDirection,
+      maxLines: 1,
+      ellipsis: '…',
+    )..layout(maxWidth: (size.width * .6).clamp(40.0, size.width));
+    const double pad = 5;
+    final double width = painter.width + pad * 2;
+    final double height = painter.height + pad * 2;
+    double left = center.dx + accidentDamageMarkerRadius + 6;
+    if (left + width > size.width) {
+      left = center.dx - accidentDamageMarkerRadius - 6 - width;
+    }
+    final double maxLeft = (size.width - width).clamp(0.0, size.width);
+    left = left.clamp(0.0, maxLeft);
+    final double maxTop = (size.height - height).clamp(0.0, size.height);
+    final double top = (center.dy - height / 2).clamp(0.0, maxTop);
+    final RRect box = RRect.fromRectAndRadius(
+      Rect.fromLTWH(left, top, width, height),
+      const Radius.circular(5),
+    );
+    canvas.drawRRect(box, Paint()..color = Colors.white.withValues(alpha: .92));
+    canvas.drawRRect(
+      box,
+      Paint()
+        ..color = colors.base
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
+    painter.paint(canvas, Offset(left + pad, top + pad));
   }
 
   @override
@@ -358,8 +520,12 @@ class _DamageZoneOverlayPainter extends CustomPainter {
       oldDelegate.view != view ||
       oldDelegate.map != map ||
       oldDelegate.selectedZoneId != selectedZoneId ||
+      oldDelegate.selectedLabel != selectedLabel ||
+      oldDelegate.selectedNumber != selectedNumber ||
+      oldDelegate.hatchedZone != hatchedZone ||
       oldDelegate.palette != palette ||
-      oldDelegate.framing != framing;
+      oldDelegate.framing != framing ||
+      oldDelegate.textDirection != textDirection;
 }
 
 /// All exact view images are audited 768x768 source canvases. Side views use

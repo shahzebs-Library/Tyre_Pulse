@@ -2,9 +2,201 @@ import 'dart:convert';
 import 'dart:ui' show Rect;
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tyre_pulse/features/accidents/domain/accident_case_vocab.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_damage_map.dart';
 
 void main() {
+  group('mock vocabulary (M8-M10)', () {
+    test('damage types are the shared vocabulary in mock order, with Bent',
+        () {
+      expect(
+        AccidentDamageType.values.map((AccidentDamageType t) => t.name),
+        damageTypes.map((VocabItem item) => item.key),
+      );
+      expect(
+        AccidentDamageType.values.map(accidentDamageTypeVocabLabel),
+        <String>[
+          'Dent',
+          'Scratch',
+          'Cracked',
+          'Broken',
+          'Missing',
+          'Bent',
+          'Other',
+        ],
+      );
+    });
+
+    test('the stored severe token is labelled Major', () {
+      expect(
+        AccidentDamageSeverity.values.map(accidentDamageLevelVocabLabel),
+        <String>['Minor', 'Moderate', 'Major'],
+      );
+      expect(AccidentDamageSeverity.severe.name, 'severe');
+      expect(accidentDamageNoteMaxLength, 200);
+    });
+
+    test('older damage type spellings fold through canonDamageType', () {
+      AccidentDamageType typeOf(String raw) => AccidentDamageMark.fromJson(
+            <String, Object?>{'zone_id': 'z', 'damage_type': raw},
+          ).damageType;
+      expect(typeOf('crack'), AccidentDamageType.cracked);
+      expect(typeOf('dented'), AccidentDamageType.dent);
+      expect(typeOf('bent'), AccidentDamageType.bent);
+      expect(typeOf('BENT'), AccidentDamageType.bent);
+      expect(typeOf('exploded'), AccidentDamageType.other);
+    });
+
+    test('view chips follow familyViewOrder per asset class', () {
+      List<String> tokens(String family) => accidentDamagePerspectivesFor(
+            family,
+          ).map((AccidentDamagePerspective p) => p.token).toList();
+      expect(
+        tokens('bus'),
+        <String>['left', 'front_left', 'front', 'right', 'rear', 'top'],
+      );
+      expect(
+        tokens('concrete_pump'),
+        <String>['top', 'left', 'right', 'front', 'rear'],
+      );
+      expect(
+        tokens('pickup'),
+        <String>['left', 'right', 'front', 'rear', 'top'],
+      );
+      expect(tokens('generic'), tokens('pickup'));
+      expect(tokens('hovercraft'), tokens('generic'));
+      for (final String family in familyViewOrder.keys) {
+        expect(tokens(family), familyViewOrder[family]);
+      }
+    });
+
+    test('asset classes map onto the three mock families or generic', () {
+      String family({
+        required AccidentDamageAssetClass assetClass,
+        String? vehicleType,
+        String? assetNo,
+      }) =>
+          accidentDamageFamilyFor(
+            assetClass: assetClass,
+            vehicleType: vehicleType,
+            assetNo: assetNo,
+          );
+      expect(
+        family(
+          assetClass: AccidentDamageAssetClass.bus,
+          vehicleType: '32-seater bus',
+        ),
+        'bus',
+      );
+      expect(
+        family(
+          assetClass: AccidentDamageAssetClass.heavyTruck,
+          vehicleType: 'SANY Concrete Pump 5 axle',
+        ),
+        'concrete_pump',
+      );
+      expect(
+        family(
+          assetClass: AccidentDamageAssetClass.heavyTruck,
+          vehicleType: 'Line Pump',
+          assetNo: 'LP-004',
+        ),
+        'concrete_pump',
+      );
+      expect(
+        family(
+          assetClass: AccidentDamageAssetClass.heavyTruck,
+          vehicleType: 'Transit Mixer',
+        ),
+        'generic',
+      );
+      expect(
+        family(
+          assetClass: AccidentDamageAssetClass.roadVehicle,
+          vehicleType: 'Double-Cab Pickup',
+        ),
+        'pickup',
+      );
+      expect(family(assetClass: AccidentDamageAssetClass.loader), 'generic');
+      expect(family(assetClass: AccidentDamageAssetClass.legacy), 'generic');
+      expect(
+        family(
+          assetClass: AccidentDamageAssetClass.fixedEquipment,
+          vehicleType: 'Chiller',
+        ),
+        'generic',
+      );
+    });
+
+    test('front-left is captured on the front artwork and stored as its '
+        'own token', () {
+      const AccidentDamagePerspective angled =
+          AccidentDamagePerspective.frontLeft;
+      expect(angled.isAngled, isTrue);
+      expect(angled.baseView, AccidentDamageView.front);
+      expect(AccidentDamagePerspective.front.isAngled, isFalse);
+      expect(
+        AccidentDamagePerspective.fromToken('front_left'),
+        AccidentDamagePerspective.frontLeft,
+      );
+      expect(
+        AccidentDamagePerspective.fromToken('frontLeft'),
+        AccidentDamagePerspective.frontLeft,
+      );
+      expect(AccidentDamagePerspective.fromToken('sideways'), isNull);
+
+      const AccidentDamageMark mark = AccidentDamageMark(
+        zoneId: 'front_bumper',
+        view: AccidentDamageView.front,
+        perspective: angled,
+        normalizedX: .3,
+        normalizedY: .7,
+        areaLabel: 'Front-left bumper corner',
+        damageType: AccidentDamageType.bent,
+        severity: AccidentDamageSeverity.severe,
+      );
+      final Map<String, Object?> json = mark.toJson();
+      expect(json['view'], 'front_left');
+      expect(json['damage_type'], 'bent');
+      expect(json['severity'], 'severe');
+      expect(json['zone_id'], 'front_bumper');
+      expect(json['area'], 'Front-left bumper corner');
+
+      final AccidentDamageMark restored = AccidentDamageMark.fromJson(
+        jsonDecode(jsonEncode(json))! as Map<String, Object?>,
+      );
+      expect(restored, mark);
+      expect(restored.view, AccidentDamageView.front);
+      expect(restored.effectivePerspective, angled);
+      expect(restored.viewToken, 'front_left');
+
+      final AccidentDamageMap map =
+          AccidentDamageMap.fromMarks(<AccidentDamageMark>[mark]);
+      expect(map.countForPerspective(angled), 1);
+      expect(map.countForPerspective(AccidentDamagePerspective.front), 0);
+      expect(map.exactCountForView(AccidentDamageView.front), 1);
+    });
+
+    test('a plain side keeps writing the view name and stays value-equal',
+        () {
+      const AccidentDamageMark plain = AccidentDamageMark(
+        zoneId: 'left_front_door',
+        view: AccidentDamageView.left,
+        severity: AccidentDamageSeverity.minor,
+      );
+      const AccidentDamageMark explicit = AccidentDamageMark(
+        zoneId: 'left_front_door',
+        view: AccidentDamageView.left,
+        perspective: AccidentDamagePerspective.left,
+        severity: AccidentDamageSeverity.minor,
+      );
+      expect(plain.toJson()['view'], 'left');
+      expect(explicit.toJson()['view'], 'left');
+      expect(explicit, plain);
+      expect(AccidentDamageMark.fromJson(plain.toJson()), plain);
+    });
+  });
+
   group('kAccidentDamageZones catalog integrity', () {
     test('every zone id is unique across the whole catalog', () {
       final List<String> ids =

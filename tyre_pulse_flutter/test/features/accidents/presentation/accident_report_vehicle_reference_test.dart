@@ -7,6 +7,7 @@ import 'package:tyre_pulse/app/theme/tp_theme.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_damage_map.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_report_screen.dart';
 import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_damage_map_section.dart';
+import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_damage_zone_sheet.dart';
 import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_report_intake_widgets.dart';
 import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
@@ -80,6 +81,20 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(AccidentDamageMapSection), findsOneWidget);
+    expect(find.text('Step 4 of 7: Mark damage'), findsOneWidget);
+    // A concrete pump opens on Top (M9: Top, Left, Right, Front, Rear).
+    final Image top = tester.widget<Image>(
+      find.byKey(const Key('accident.damage.multiview.top')),
+    );
+    expect(
+      (top.image as AssetImage).assetName,
+      'assets/vehicle_multiview_views/'
+      'sany_concrete_pump_5axle_five_view_v1_top.png',
+    );
+    await tester.tap(
+      find.byKey(AccidentDamageMapSectionKeys.viewTab(AccidentDamageView.left)),
+    );
+    await tester.pumpAndSettle();
     final Image left = tester.widget<Image>(
       find.byKey(const Key('accident.damage.multiview.left')),
     );
@@ -165,7 +180,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Save mark'));
+    await tester.tap(find.byKey(AccidentDamageZoneSheetKeys.save));
     await tester.pumpAndSettle();
     expect(
       find.byKey(AccidentDamageMapSectionKeys.marksSummary),
@@ -183,9 +198,9 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Change fleet asset').first);
+    await tester.ensureVisible(find.text('Change asset').first);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Change fleet asset').first);
+    await tester.tap(find.text('Change asset').first);
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(ListTile, 'WL509').last);
     await tester.pumpAndSettle();
@@ -210,6 +225,46 @@ void main() {
       (loaderLeft.image as AssetImage).assetName,
       'assets/vehicle_multiview_views/'
       'sany_wheel_loader_five_view_v1_left.png',
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('an incident site the reporter typed survives an asset change', (
+    WidgetTester tester,
+  ) async {
+    await _pumpReport(tester);
+    await _selectPump(tester);
+    expect(find.text('Step 1 of 7: Identify asset'), findsOneWidget);
+    expect(find.text('2 matching assets'), findsOneWidget);
+    expect(find.text('Where did the incident occur?'), findsOneWidget);
+    expect(find.text(accidentIncidentSiteHelp), findsOneWidget);
+    expect(find.text(accidentFleetMasterLockNote), findsOneWidget);
+
+    final Finder siteField = find.descendant(
+      of: find.byKey(AccidentReportIntakeKeys.incidentSite),
+      matching: find.byType(TextField),
+    );
+    await tester.ensureVisible(siteField);
+    expect(tester.widget<TextField>(siteField).controller?.text, 'Diriyah');
+    await tester.enterText(siteField, 'Riyadh Metro');
+    await tester.pumpAndSettle();
+
+    tester
+        .state<ScrollableState>(find.byType(Scrollable).first)
+        .position
+        .jumpTo(0);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Change asset').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Change asset').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ListTile, 'WL509').last);
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.widget<TextField>(siteField).controller?.text,
+      'Riyadh Metro',
+      reason: 'the loader home site (Qiddiya G2) must not overwrite it',
     );
     expect(tester.takeException(), isNull);
   });

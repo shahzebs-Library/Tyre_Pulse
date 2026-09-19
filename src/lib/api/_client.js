@@ -71,6 +71,23 @@ export function isMissingRelation(err) {
 }
 
 /**
+ * True when a failure means "this COLUMN is not provisioned yet" (a migration
+ * authored in the repo but not yet applied - the SHIP-BEFORE-MIGRATE case).
+ * PostgREST fails the whole request on an unknown column (42703 / PGRST204),
+ * so a caller that selects newly-added columns should fall back to its base
+ * column list when this is true, rather than showing an error.
+ */
+const MISSING_COLUMN_CODES = new Set(['42703', 'PGRST204'])
+
+export function isMissingColumn(err) {
+  if (!err) return false
+  const code = err.code || err.cause?.code
+  if (code && MISSING_COLUMN_CODES.has(String(code))) return true
+  const raw = String(err.cause?.message ?? err.message ?? '').toLowerCase()
+  return raw.includes('could not find the') && raw.includes('column')
+}
+
+/**
  * Null-safe country scoping. When a real country is active, include rows for
  * that country OR with a NULL country (legitimately uncategorised rows are
  * never silently dropped). With no country (or "All"), apply no filter.

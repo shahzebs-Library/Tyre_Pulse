@@ -1,20 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
-import 'package:tyre_pulse/core/storage/private_storage_reference_resolver.dart';
-import 'package:tyre_pulse/core/storage/storage_providers.dart';
 import 'package:tyre_pulse/features/accidents/accidents_providers.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_repository.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_models.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_case_screen.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_detail_screen.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_ui.dart';
+import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_case_workspaces.dart';
+import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_dispatch_handover.dart';
+import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_fleet_validation.dart';
+import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_insurance_claim.dart';
+import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_responsibility.dart';
+import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_timeline.dart';
+import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_workshop_assessment.dart';
+import 'package:tyre_pulse/features/accidents/presentation/widgets/vehicle_damage_diagram.dart';
 
-const String _dataImage =
-    'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
+import 'presentation/accident_case_workspace_fakes.dart';
 
 void main() {
   testWidgets(
@@ -44,7 +50,14 @@ void main() {
       ),
       findsOneWidget,
     );
-    for (int index = 3; index > 0; index--) {
+    expect(
+      find.descendant(
+        of: navigation,
+        matching: find.text('Workstream 3 of 7'),
+      ),
+      findsOneWidget,
+    );
+    for (int index = 2; index > 0; index--) {
       await tester.tap(find.byKey(AccidentCaseScreenKeys.previousWorkspace));
       await tester.pumpAndSettle();
     }
@@ -60,7 +73,7 @@ void main() {
       expect(
         find.descendant(
           of: navigation,
-          matching: find.text('Step $step of 7'),
+          matching: find.text('Workstream $step of 7'),
         ),
         findsOneWidget,
       );
@@ -122,9 +135,8 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('case detail exposes seven exclusive real-data role workspaces', (
-    WidgetTester tester,
-  ) async {
+  testWidgets('case detail walks the seven mock workspaces in case-flow order',
+      (WidgetTester tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await _pump(
@@ -134,71 +146,53 @@ void main() {
       ),
     );
 
+    // The case opens on its active workstream: insurance, workstream 3 of 7.
     expect(find.byKey(AccidentCaseScreenKeys.tabs), findsOneWidget);
     expect(find.byKey(AccidentCaseScreenKeys.insurance), findsOneWidget);
-    expect(find.text('Step 4 of 7'), findsWidgets);
+    expect(find.text('Workstream 3 of 7'), findsWidgets);
+    expect(find.byType(AccidentInsuranceClaimMockWorkspace), findsOneWidget);
 
     await _selectCaseWorkspace(tester, 'Damage mapping');
     expect(find.byKey(AccidentCaseScreenKeys.damageMapping), findsOneWidget);
-    expect(find.text('Case Details'), findsOneWidget);
-    expect(find.text('Step 1 of 7'), findsWidgets);
-    expect(find.text('Damage mapping'), findsWidgets);
+    expect(find.text('Workstream 5 of 7'), findsWidgets);
+    expect(find.byType(VehicleDamageDiagram), findsOneWidget);
     expect(find.text('Boom section 3'), findsOneWidget);
     expect(find.textContaining('ACC-2026-0182'), findsWidgets);
-    expect(find.textContaining('Mixer 3208'), findsOneWidget);
+    expect(find.textContaining('Mixer 3208'), findsWidgets);
     expect(find.text('11 May 2026 • 08:15'), findsOneWidget);
     expect(
       find.text('Vehicle collided with barrier while reversing.'),
       findsOneWidget,
     );
-    expect(find.text('CLM-8821'), findsNothing);
-    expect(find.text('Central Workshop'), findsNothing);
     expect(find.text('Local workflow preview'), findsNothing);
 
     await _selectCaseWorkspace(tester, 'Fleet validation');
     expect(find.byKey(AccidentCaseScreenKeys.fleet), findsOneWidget);
-    expect(find.text('Step 2 of 7'), findsWidgets);
-    expect(find.text('Salim R.'), findsWidgets);
+    expect(find.text('Workstream 1 of 7'), findsWidgets);
+    expect(find.byType(AccidentFleetValidationMockWorkspace), findsOneWidget);
+
+    await _selectCaseWorkspace(tester, 'Workshop assessment');
+    expect(find.byKey(AccidentCaseScreenKeys.assessment), findsOneWidget);
+    expect(find.text('Workstream 2 of 7'), findsWidgets);
     expect(
-      find.text('Vehicle collided with barrier while reversing.'),
+      find.byType(AccidentWorkshopAssessmentMockWorkspace),
       findsOneWidget,
     );
 
     await _selectCaseWorkspace(tester, 'Responsibility & payer');
     expect(find.byKey(AccidentCaseScreenKeys.responsibility), findsOneWidget);
-    expect(find.text('Step 3 of 7'), findsWidgets);
-    expect(find.text('Our driver / GCC'), findsOneWidget);
-    expect(find.text('DUB-2026-88142'), findsOneWidget);
-    expect(find.text('TQD-994'), findsOneWidget);
-    expect(find.text('CLM-8821'), findsNothing);
-
-    await _selectCaseWorkspace(tester, 'Insurance / Claims');
-    expect(find.byKey(AccidentCaseScreenKeys.insurance), findsOneWidget);
-    expect(find.text('Step 4 of 7'), findsWidgets);
-    expect(find.text('CLM-8821'), findsOneWidget);
-    expect(find.text('1500'), findsOneWidget);
-    expect(
-      find.text('Vehicle collided with barrier while reversing.'),
-      findsNothing,
-    );
-
-    await _selectCaseWorkspace(tester, 'Workshop assessment');
-    expect(find.byKey(AccidentCaseScreenKeys.assessment), findsOneWidget);
-    expect(find.text('Step 5 of 7'), findsWidgets);
-    expect(find.text('Central Workshop'), findsOneWidget);
-    expect(find.text('Major Body Damage'), findsOneWidget);
-    expect(find.text('46900'), findsOneWidget);
-    expect(find.text('CLM-8821'), findsNothing);
+    expect(find.text('Workstream 4 of 7'), findsWidgets);
+    expect(find.byType(AccidentResponsibilityMockWorkspace), findsOneWidget);
 
     await _selectCaseWorkspace(tester, 'External workshop');
     expect(find.byKey(AccidentCaseScreenKeys.externalWorkshop), findsOneWidget);
-    expect(find.text('Step 6 of 7'), findsWidgets);
-    expect(find.text('Dubai Industrial City'), findsWidgets);
+    expect(find.text('Workstream 6 of 7'), findsWidgets);
+    expect(find.byType(AccidentDispatchHandoverMockWorkspace), findsOneWidget);
 
     await _selectCaseWorkspace(tester, 'Timeline & notifications');
     expect(find.byKey(AccidentCaseScreenKeys.timeline), findsOneWidget);
-    expect(find.text('Step 7 of 7'), findsWidgets);
-    expect(find.text('CLM-8821'), findsNothing);
+    expect(find.text('Workstream 7 of 7'), findsWidgets);
+    expect(find.byType(AccidentTimelineMockWorkspace), findsOneWidget);
     expect(find.text('Local workflow preview'), findsNothing);
 
     await tester.tap(find.byKey(AccidentCaseScreenKeys.boundaryAction));
@@ -207,6 +201,27 @@ void main() {
       find.textContaining('require verified server actions'),
       findsWidgets,
     );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a workstream widget can jump to another workspace by flow key',
+      (WidgetTester tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await _pump(
+      tester,
+      const AccidentCaseScreen(
+        route: AccidentCaseRoute(accidentId: AccidentId('acc-1')),
+      ),
+    );
+    final AccidentCaseWorkspaceView view = tester.widget(
+      find.byType(AccidentCaseWorkspaceView),
+    );
+    expect(view.onNavigateWorkspace, isNotNull);
+    view.onNavigateWorkspace!(AccidentCaseWorkspace.fromFlowKey('handover')!);
+    await tester.pumpAndSettle();
+    expect(find.byKey(AccidentCaseScreenKeys.externalWorkshop), findsOneWidget);
+    expect(find.text('Workstream 6 of 7'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
 
@@ -247,13 +262,9 @@ Future<void> _pump(
 }) async {
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [
+      overrides: <Override>[
+        ...accidentCaseWorkspaceOverrides(),
         accidentRepositoryProvider.overrideWithValue(_FakeRepository()),
-        privateStorageReferenceResolverProvider.overrideWithValue(
-          PrivateStorageReferenceResolver(
-            (String bucket, String path, int expiresIn) async => _dataImage,
-          ),
-        ),
       ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,

@@ -36,7 +36,15 @@ it('discards old authority immediately on a site change and rechecks the server'
   await screen.findByRole('alert')
 })
 it('does not call the server when the retry intent cannot be persisted', async () => {
-  const write = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('Storage full') })
+  // WHERE THE SPY GOES DEPENDS ON WHAT PROVIDED THE STORAGE (see
+  // navFavorites.test.js's "localStorage unavailable" block for the full
+  // reasoning): under a recent Node, src/test/setup.js installs a plain-object
+  // stand-in whose methods are OWN properties, so a Storage.prototype spy does
+  // not reach them and this test would otherwise pass vacuously against real
+  // storage while asserting `h.request` was never called.
+  const target = Object.prototype.hasOwnProperty.call(localStorage, 'setItem') ? localStorage : Storage.prototype
+  const write = vi.spyOn(target, 'setItem').mockImplementation(() => { throw new Error('Storage full') })
+  expect(vi.isMockFunction(localStorage.setItem)).toBe(true)
   render(<WorkOrderApprovalGate orderId="wo1" />)
   fireEvent.change(await screen.findByLabelText('Submission reason'), { target: { value: 'Repair' } })
   fireEvent.click(screen.getByRole('button', { name: 'Request approval' }))

@@ -27,7 +27,6 @@ import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_repo
 import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_fleet_providers.dart';
-import 'package:tyre_pulse/features/assets/presentation/vehicle_photo_resolver.dart';
 import 'package:uuid/uuid.dart';
 
 class AccidentReportScreen extends ConsumerStatefulWidget {
@@ -89,6 +88,10 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
 
   AccidentIntakePage _currentStep = AccidentIntakePage.identifyAsset;
   String _assetQuery = '';
+
+  /// True once the reporter has typed or chosen the incident site. A fleet
+  /// home site then never overwrites it (see [incidentSiteAfterAssetChange]).
+  bool _incidentSiteEdited = false;
   _DraftState _draftState = _DraftState.ready;
   DateTime? _draftSavedAt;
   Timer? _saveDebounce;
@@ -103,7 +106,7 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
   void initState() {
     super.initState();
     _asset = _controller();
-    _incidentSite = _controller();
+    _incidentSite = _controller()..addListener(_noteIncidentSiteEdit);
     _incidentLocation = _controller();
     _meterAtIncident = _controller();
     _narrative = _controller();
@@ -131,6 +134,13 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
     controller.addListener(_markDraftDirty);
     _ownedControllers.add(controller);
     return controller;
+  }
+
+  /// Programmatic fills (asset selection, draft restore) run under
+  /// [_suppressDraftChanges]; anything else is the reporter's own edit.
+  void _noteIncidentSiteEdit() {
+    if (_suppressDraftChanges) return;
+    _incidentSiteEdited = true;
   }
 
   @override
@@ -202,6 +212,10 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
         : draft.effectiveAssetNo;
     _incidentAt = draft.incidentAt;
     _incidentSite.text = draft.incidentSite;
+    // A saved site that differs from the asset's home site was chosen by
+    // the reporter; keep protecting it after the restore.
+    _incidentSiteEdited = draft.incidentSite.trim().isNotEmpty &&
+        draft.incidentSite.trim() != (draft.vehicle?.site?.trim() ?? '');
     _incidentLocation.text = draft.incidentLocation;
     _meterAtIncident.text = draft.meterAtIncident;
     _type = draft.accidentType;
@@ -370,10 +384,13 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
     _suppressDraftChanges = true;
     _selectedVehicle = selected;
     _asset.text = selected.assetNo ?? selected.fleetNumber ?? '';
-    if (_incidentSite.text.trim().isEmpty ||
-        _incidentSite.text.trim() == previous?.site?.trim()) {
-      _incidentSite.text = selected.site?.trim() ?? '';
-    }
+    final String nextSite = incidentSiteAfterAssetChange(
+      current: _incidentSite.text,
+      userEdited: _incidentSiteEdited,
+      previousHomeSite: previous?.site,
+      nextHomeSite: selected.site,
+    );
+    if (nextSite != _incidentSite.text) _incidentSite.text = nextSite;
     final String previousDriver = previous?.operatorName?.trim() ?? '';
     if (_driverName.text.trim().isEmpty ||
         _driverName.text.trim() == previousDriver) {
@@ -560,25 +577,7 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
     AccidentReportIntakeDraft draft,
     AccidentIntakePage page,
   ) =>
-      switch (page) {
-        AccidentIntakePage.identifyAsset => draft.effectiveAssetNo.isEmpty
-            ? draft
-                .validationMessagesFor(AccidentReportStep.incident)
-                .take(1)
-                .toList()
-            : const <String>[],
-        AccidentIntakePage.incident =>
-          draft.validationMessagesFor(AccidentReportStep.incident),
-        AccidentIntakePage.peopleAuthority =>
-          draft.validationMessagesFor(AccidentReportStep.peopleAuthority),
-        AccidentIntakePage.damage =>
-          draft.validationMessagesFor(AccidentReportStep.damage),
-        AccidentIntakePage.evidence =>
-          draft.validationMessagesFor(AccidentReportStep.evidenceDocuments),
-        AccidentIntakePage.documents ||
-        AccidentIntakePage.review =>
-          const <String>[],
-      };
+      draft.validationMessagesFor(page);
 
   Future<void> _saveAndExit() async {
     if (_submitting) return;
@@ -607,29 +606,22 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
     final bool saved = await _saveDraft(surfaceError: true);
     if (!mounted) return;
     if (!saved) return;
-    final int next = _currentStep.index + 1;
-    if (next < AccidentIntakePage.values.length) {
-      _goToStep(AccidentIntakePage.values[next]);
-    }
+    final AccidentIntakePage? next = _currentStep.next;
+    if (next != null) _goToStep(next);
   }
 
   void _backStep() {
-    if (_currentStep.index == 0) return;
-    _goToStep(AccidentIntakePage.values[_currentStep.index - 1]);
+    final AccidentIntakePage? previous = _currentStep.previous;
+    if (previous != null) _goToStep(previous);
   }
 
   Future<void> _submit() async {
     final AccidentReportIntakeDraft draft = _snapshot();
     final List<String> missing = draft.allValidationMessages;
     if (missing.isNotEmpty) {
-      AccidentIntakePage first = AccidentIntakePage.identifyAsset;
-      for (final AccidentIntakePage step in AccidentIntakePage.values) {
-        if (_validationForPage(draft, step).isNotEmpty) {
-          first = step;
-          break;
-        }
-      }
-      _goToStep(first);
+      _goToStep(
+        draft.firstBlockingStep ?? AccidentIntakePage.identifyAsset,
+      );
       setState(() => _error = missing.join('\n'));
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(missing.first)),
@@ -793,19 +785,19 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
   }) =>
       switch (_currentStep) {
         AccidentIntakePage.identifyAsset => AccidentIntakeCanvas(
-            title: '1 · Identify asset',
+            title: _currentStep.label,
             subtitle: 'Select the fleet asset involved in this incident.',
             icon: Icons.local_shipping_outlined,
             child: _identifyStep(fleet, assets, copy),
           ),
         AccidentIntakePage.incident => AccidentSection(
-            title: '2 · Incident',
+            title: _currentStep.label,
             subtitle: 'Record when, where and what happened.',
             icon: Icons.event_note_outlined,
             child: _incidentStep(),
           ),
         AccidentIntakePage.peopleAuthority => AccidentSection(
-            title: '3 · People & authority',
+            title: _currentStep.label,
             subtitle: 'Record only the people, safety, Najm and third-party '
                 'facts needed at the scene.',
             icon: Icons.people_outline,
@@ -821,7 +813,7 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
             ),
           ),
         AccidentIntakePage.damage => AccidentIntakeCanvas(
-            title: '4 · Damage mapping',
+            title: _currentStep.label,
             subtitle: <String?>[
               _selectedVehicle?.displayIdentity,
               _selectedVehicle?.vehicleType,
@@ -831,7 +823,7 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
                 if (_selectedVehicle != null) ...<Widget>[
-                  _VehicleSearchResult(
+                  AccidentAssetMatchRow(
                     asset: _selectedVehicle!,
                     unavailableLabel: copy('unrecordedAsset'),
                     onTap: () => _goToStep(AccidentIntakePage.identifyAsset),
@@ -849,7 +841,7 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
             ),
           ),
         AccidentIntakePage.evidence => AccidentSection(
-            title: '5 · Evidence photos',
+            title: _currentStep.label,
             subtitle: 'Add one scene overview and one close-up for each marked '
                 'damage area. Supporting documents are optional at intake.',
             icon: Icons.fact_check_outlined,
@@ -870,7 +862,7 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
             ),
           ),
         AccidentIntakePage.documents => AccidentSection(
-            title: '6 · Documents',
+            title: _currentStep.label,
             subtitle: 'Add available supporting documents. Optional at intake.',
             icon: Icons.folder_copy_outlined,
             child: AccidentOptionalDocumentList(
@@ -882,7 +874,7 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
             ),
           ),
         AccidentIntakePage.review => AccidentSection(
-            title: '7 · Review and submit',
+            title: _currentStep.label,
             subtitle: 'Check the exact report and send it to Fleet validation. '
                 'Optional documents never block this submission.',
             icon: Icons.assignment_turned_in_outlined,
@@ -896,13 +888,13 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
     AccidentCopy copy,
   ) {
     final VehicleFleetListOutcome? outcome = fleet.value;
-    final List<VehicleAsset> matches = assets
-        .where(
-          (VehicleAsset asset) =>
-              _assetQuery.trim().isEmpty ||
-              vehicleMatchesSearch(asset, _assetQuery.trim()),
-        )
-        .toList();
+    final bool fleetReady = outcome is VehicleFleetListLoaded ||
+        outcome is VehicleFleetListFromCache;
+    final AccidentAssetMatchPage matches = matchAssetsForReport(
+      assets,
+      _assetQuery,
+      matches: vehicleMatchesSearch,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
@@ -926,16 +918,17 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
               onChanged: (String value) => setState(() => _assetQuery = value),
             ),
             const SizedBox(height: TpSpace.sm),
-            if (outcome is VehicleFleetListLoaded ||
-                outcome is VehicleFleetListFromCache)
-              Text('${matches.length} matching assets'),
-            if (matches.isEmpty &&
-                (outcome is VehicleFleetListLoaded ||
-                    outcome is VehicleFleetListFromCache))
+            if (fleetReady)
+              Text(
+                '${matches.total} matching assets',
+                key: AccidentReportIntakeKeys.matchCount,
+                style: Theme.of(context).textTheme.labelLarge,
+              ),
+            if (fleetReady && matches.total == 0)
               const Text('No matching fleet asset'),
-            for (final VehicleAsset asset in matches.take(3)) ...<Widget>[
+            for (final VehicleAsset asset in matches.shown) ...<Widget>[
               const SizedBox(height: TpSpace.sm),
-              _VehicleSearchResult(
+              AccidentAssetMatchRow(
                 asset: asset,
                 selected: asset.id == _selectedVehicle?.id,
                 unavailableLabel: copy('unrecordedAsset'),
@@ -943,6 +936,16 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
                   FocusManager.instance.primaryFocus?.unfocus();
                   _selectVehicle(asset);
                 },
+              ),
+            ],
+            if (matches.isTruncated) ...<Widget>[
+              const SizedBox(height: TpSpace.sm),
+              Text(
+                'Showing the first ${matches.limit} of ${matches.total} '
+                'matches. ${matches.hiddenCount} more results, refine your '
+                'search.',
+                key: AccidentReportIntakeKeys.matchOverflow,
+                style: Theme.of(context).textTheme.bodySmall,
               ),
             ],
             const SizedBox(height: TpSpace.sm),
@@ -984,7 +987,7 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
           AccidentFleetMasterCard(
             asset: _selectedVehicle!,
             onChange: () => _pickVehicle(assets),
-            changeLabel: copy('changeAsset'),
+            changeLabel: 'Change asset',
             unavailableLabel: copy('notRecorded'),
           )
         else
@@ -1007,23 +1010,15 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           prefixIcon: Icons.speed_outlined,
         ),
-        const SizedBox(height: TpSpace.xs),
-        Text(
-          'Fleet-master fields above are locked. Incident site and location '
-          'remain separately editable.',
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
         const SizedBox(height: TpSpace.lg),
-        Text(
-          'Where did the incident occur?',
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
-        const SizedBox(height: TpSpace.sm),
-        TpInput(
-          label: 'Incident site',
+        AccidentIncidentSiteSelector(
           controller: _incidentSite,
-          prefixIcon: Icons.location_on_outlined,
-          helperText: 'This may differ from the asset home site.',
+          knownSites: knownSitesFrom(assets),
+          homeSite: _selectedVehicle?.site,
+          onSiteChosen: (String site) {
+            _incidentSiteEdited = true;
+            _change(() => _incidentSite.text = site);
+          },
         ),
         const SizedBox(height: TpSpace.sm),
         TpInput(
@@ -1450,12 +1445,12 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
 
   Widget _bottomBar() {
     final String statusLabel = switch (_draftState) {
-      _DraftState.ready => 'Draft auto-saves on this device',
+      _DraftState.ready => 'Draft auto-saves on device',
       _DraftState.dirty => 'Unsaved changes',
       _DraftState.saving => 'Saving draft…',
       _DraftState.saved => _draftSavedAt == null
-          ? 'Draft saved on this device'
-          : 'Draft saved · '
+          ? 'Draft saved on device'
+          : 'Draft saved on device · '
               '${MaterialLocalizations.of(context).formatTimeOfDay(TimeOfDay.fromDateTime(_draftSavedAt!))}',
       _DraftState.failed => 'Draft save failed',
       _DraftState.restoring => 'Restoring saved draft…',
@@ -1785,7 +1780,7 @@ class _VehiclePickerSheetState extends State<_VehiclePickerSheet> {
                             const SizedBox(height: TpSpace.sm),
                         itemBuilder: (BuildContext context, int index) {
                           final VehicleAsset asset = shown[index];
-                          return _VehicleSearchResult(
+                          return AccidentAssetMatchRow(
                             asset: asset,
                             unavailableLabel: widget.copy('unrecordedAsset'),
                             onTap: () {
@@ -1798,91 +1793,6 @@ class _VehiclePickerSheetState extends State<_VehiclePickerSheet> {
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _VehicleSearchResult extends StatelessWidget {
-  const _VehicleSearchResult({
-    required this.asset,
-    required this.unavailableLabel,
-    required this.onTap,
-    this.selected = false,
-  });
-
-  final VehicleAsset asset;
-  final String unavailableLabel;
-  final VoidCallback onTap;
-  final bool selected;
-
-  @override
-  Widget build(BuildContext context) {
-    final String? photo = vehiclePhotoAsset(asset);
-    final String identity = asset.displayIdentity ?? unavailableLabel;
-    final String details = <String?>[
-      asset.vehicleType,
-      asset.registrationNo == null ? null : 'Plate ${asset.registrationNo}',
-      asset.make,
-      asset.model,
-      asset.site,
-    ]
-        .whereType<String>()
-        .map((String value) => value.trim())
-        .where((String value) => value.isNotEmpty)
-        .join(' · ');
-    final TpPalette palette = TpPalette.of(context);
-    return TpCard(
-      padding: EdgeInsets.zero,
-      child: Material(
-        color: Colors.transparent,
-        child: ListTile(
-          selected: selected,
-          selectedTileColor: palette.primarySoft,
-          onTap: onTap,
-          contentPadding: const EdgeInsets.all(TpSpace.sm),
-          leading: Container(
-            width: 78,
-            height: 62,
-            clipBehavior: Clip.antiAlias,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: palette.surfaceAlt,
-              borderRadius: BorderRadius.circular(TpRadius.sm),
-            ),
-            child: photo == null
-                ? Icon(
-                    vehicleFallbackIcon(asset),
-                    color: palette.primary,
-                    size: 32,
-                  )
-                : Image.asset(
-                    photo,
-                    fit: BoxFit.contain,
-                    width: double.infinity,
-                    height: double.infinity,
-                    semanticLabel: identity,
-                  ),
-          ),
-          title: Directionality(
-            textDirection: TextDirection.ltr,
-            child: Text(
-              identity,
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-            ),
-          ),
-          subtitle: details.isEmpty
-              ? null
-              : Text(
-                  details,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-          trailing:
-              Icon(selected ? Icons.check_circle : Icons.chevron_right_rounded),
         ),
       ),
     );

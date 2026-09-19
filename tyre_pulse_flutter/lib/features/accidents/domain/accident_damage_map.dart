@@ -13,9 +13,124 @@
 library;
 
 import 'package:flutter/foundation.dart';
+import 'package:tyre_pulse/features/accidents/domain/accident_case_vocab.dart';
 
-/// One side the vehicle is viewed from.
+/// One orthographic side the vehicle artwork is drawn from.
+///
+/// Every audited multi-view asset ships exactly these five images, and the
+/// case screens switch over this enum exhaustively, so the mocks' angled
+/// "Front-left" chip is modelled as an [AccidentDamagePerspective] that maps
+/// onto the front artwork rather than as a sixth enum value with no image.
 enum AccidentDamageView { front, rear, left, right, top }
+
+/// One selectable chip on the damage mapper, in the vocabulary of
+/// `familyViewOrder`. Five perspectives are the orthographic views
+/// themselves; [frontLeft] is the bus mock's angled corner view and is
+/// captured on the front artwork ([baseView]) while serialising as its own
+/// `front_left` token so the web reads exactly what was chosen.
+enum AccidentDamagePerspective {
+  left('left', AccidentDamageView.left),
+  frontLeft('front_left', AccidentDamageView.front),
+  front('front', AccidentDamageView.front),
+  right('right', AccidentDamageView.right),
+  rear('rear', AccidentDamageView.rear),
+  top('top', AccidentDamageView.top);
+
+  const AccidentDamagePerspective(this.token, this.baseView);
+
+  /// The persisted `view` token - a `familyViewOrder` key.
+  final String token;
+
+  /// The artwork and zone catalog this perspective is captured on.
+  final AccidentDamageView baseView;
+
+  /// The perspective a plain orthographic [view] is shown as.
+  static AccidentDamagePerspective fromView(AccidentDamageView view) =>
+      switch (view) {
+        AccidentDamageView.left => AccidentDamagePerspective.left,
+        AccidentDamageView.front => AccidentDamagePerspective.front,
+        AccidentDamageView.right => AccidentDamagePerspective.right,
+        AccidentDamageView.rear => AccidentDamagePerspective.rear,
+        AccidentDamageView.top => AccidentDamagePerspective.top,
+      };
+
+  /// Whether this chip is a genuine angle rather than a plain side.
+  bool get isAngled => fromView(baseView) != this;
+
+  /// Parses a persisted token. Accepts the canonical `front_left` as well
+  /// as the enum name spelling, and `null` for anything unrecognised so a
+  /// draft never gains a view nobody chose.
+  static AccidentDamagePerspective? fromToken(Object? raw) {
+    if (raw is! String) return null;
+    final String normalized = raw.trim().toLowerCase().replaceAll('-', '_');
+    for (final AccidentDamagePerspective perspective in values) {
+      if (perspective.token == normalized ||
+          perspective.name.toLowerCase() == normalized) {
+        return perspective;
+      }
+    }
+    return null;
+  }
+}
+
+/// The `familyViewOrder` family a fleet asset belongs to.
+///
+/// Only the three families the owner's mocks draw get their own chip order;
+/// anything else is `generic`, never a borrowed family. A concrete or line
+/// pump is the one heavy truck that reads as `concrete_pump`; a transit
+/// mixer stays generic because no mock exists for it.
+String accidentDamageFamilyFor({
+  required AccidentDamageAssetClass assetClass,
+  String? assetNo,
+  String? vehicleType,
+  String? make,
+  String? model,
+}) {
+  final String value = <String?>[assetNo, vehicleType, make, model]
+      .whereType<String>()
+      .join(' ')
+      .toLowerCase()
+      .replaceAll(RegExp(r'[-_/]+'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+  final bool isPump = value.contains('concrete pump') ||
+      value.contains('line pump') ||
+      value.contains('pump truck') ||
+      RegExp(r'(^|\s)(cp|mp|lp)\s*\d').hasMatch(value);
+  return switch (assetClass) {
+    AccidentDamageAssetClass.bus => 'bus',
+    AccidentDamageAssetClass.roadVehicle => 'pickup',
+    AccidentDamageAssetClass.heavyTruck ||
+    AccidentDamageAssetClass.fixedEquipment =>
+      isPump ? 'concrete_pump' : 'generic',
+    AccidentDamageAssetClass.loader ||
+    AccidentDamageAssetClass.legacy =>
+      'generic',
+  };
+}
+
+/// The chips offered for [family], in mock order. An unknown family or an
+/// unknown token in the shared vocabulary falls back to the generic order
+/// rather than silently dropping a chip.
+List<AccidentDamagePerspective> accidentDamagePerspectivesFor(String family) {
+  final List<String> tokens =
+      familyViewOrder[family] ?? familyViewOrder['generic']!;
+  final List<AccidentDamagePerspective> result = <AccidentDamagePerspective>[
+    for (final String token in tokens)
+      if (AccidentDamagePerspective.fromToken(token)
+          case final AccidentDamagePerspective perspective)
+        perspective,
+  ];
+  return result.isEmpty
+      ? const <AccidentDamagePerspective>[
+          AccidentDamagePerspective.left,
+          AccidentDamagePerspective.right,
+          AccidentDamagePerspective.front,
+          AccidentDamagePerspective.rear,
+          AccidentDamagePerspective.top,
+        ]
+      : List<AccidentDamagePerspective>.unmodifiable(result);
+}
 
 /// Component geometry used to hit-test the selected asset's own artwork.
 ///
@@ -125,12 +240,32 @@ class AccidentDamageZone {
 /// deliberately reused rather than inventing a parallel scale for one zone.
 enum AccidentDamageSeverity { minor, moderate, severe }
 
-/// The visible form of damage at one marked point.
-///
-/// These tokens deliberately match the field vocabulary used by the accident
-/// evidence and technical-assessment specs. Keep the enum names stable: they
-/// are persisted as lowercase JSON strings by [AccidentDamageMark.toJson].
-enum AccidentDamageType { dent, scratch, cracked, broken, missing, other }
+/// The visible form of damage at one marked point - the `damageTypes`
+/// vocabulary in mock order (Dent, Scratch, Cracked, Broken, Missing, Bent,
+/// Other). Keep the enum names stable: they are persisted as lowercase JSON
+/// strings by [AccidentDamageMark.toJson], and older spellings (`crack`,
+/// `dented`) are folded by `canonDamageType` on read.
+enum AccidentDamageType { dent, scratch, cracked, broken, missing, bent, other }
+
+/// The vocabulary label for [type] - the single source shared with the web.
+String accidentDamageTypeVocabLabel(AccidentDamageType type) {
+  for (final VocabItem item in damageTypes) {
+    if (item.key == type.name) return item.label;
+  }
+  return type.name;
+}
+
+/// The vocabulary label for [severity]: the stored `severe` token prints as
+/// "Major" everywhere the mocks show a level.
+String accidentDamageLevelVocabLabel(AccidentDamageSeverity severity) {
+  for (final VocabItem item in damageLevels) {
+    if (item.key == severity.name) return item.label;
+  }
+  return severity.name;
+}
+
+/// Longest note one mark may carry - mirrors the mock's `0/200` counter.
+const int accidentDamageNoteMaxLength = damageNoteMax;
 
 /// The reporter's explicit disposition of an automated suggestion.
 enum AccidentDamageSuggestionDecision { pending, confirmed, corrected }
@@ -279,6 +414,7 @@ final class AccidentDamageMark {
     this.damageType = AccidentDamageType.other,
     this.note,
     this.view,
+    this.perspective,
     this.normalizedX,
     this.normalizedY,
     this.areaLabel,
@@ -302,6 +438,14 @@ final class AccidentDamageMark {
           if (_nonEmptyString(value) case final String reference) reference,
     ];
     final Map<String, Object?>? suggestionJson = _jsonMap(json['suggestion']);
+    final Object? rawView = json['view'];
+    // `front_left` (and any other perspective token) resolves to its base
+    // view so the mark still renders on the artwork it was captured on.
+    final AccidentDamagePerspective? perspective =
+        AccidentDamagePerspective.fromToken(rawView);
+    final Object? rawType = json['damage_type'] ?? json['damageType'];
+    final String canonType =
+        canonDamageType(rawType is String ? rawType : null);
 
     return AccidentDamageMark(
       zoneId: zoneId,
@@ -312,14 +456,19 @@ final class AccidentDamageMark {
           AccidentDamageSeverity.minor,
       damageType: _enumByName<AccidentDamageType>(
             AccidentDamageType.values,
-            json['damage_type'] ?? json['damageType'],
+            canonType.isEmpty ? null : canonType,
           ) ??
           AccidentDamageType.other,
       note: _nonEmptyString(json['note']),
-      view: _enumByName<AccidentDamageView>(
-        AccidentDamageView.values,
-        json['view'],
-      ),
+      view: perspective?.baseView ??
+          _enumByName<AccidentDamageView>(
+            AccidentDamageView.values,
+            rawView,
+          ),
+      // Only an angled perspective is carried explicitly; a plain side is
+      // fully described by [view], keeping older drafts value-equal.
+      perspective:
+          perspective != null && perspective.isAngled ? perspective : null,
       normalizedX: _doubleValue(json['x'] ?? json['normalizedX']),
       normalizedY: _doubleValue(json['y'] ?? json['normalizedY']),
       areaLabel: _nonEmptyString(
@@ -337,6 +486,10 @@ final class AccidentDamageMark {
   final AccidentDamageType damageType;
   final String? note;
   final AccidentDamageView? view;
+
+  /// The chip the reporter captured this mark on. `null` on older drafts,
+  /// which then read as the plain perspective of [effectiveView].
+  final AccidentDamagePerspective? perspective;
   final double? normalizedX;
   final double? normalizedY;
   final String? areaLabel;
@@ -353,6 +506,16 @@ final class AccidentDamageMark {
   AccidentDamageView? get effectiveView =>
       view ?? accidentDamageViewOfZone(zoneId);
 
+  /// The perspective this mark is listed and counted under.
+  AccidentDamagePerspective? get effectivePerspective {
+    if (perspective != null) return perspective;
+    final AccidentDamageView? base = effectiveView;
+    return base == null ? null : AccidentDamagePerspective.fromView(base);
+  }
+
+  /// The persisted `view` token (`front_left` for the angled bus chip).
+  String? get viewToken => effectivePerspective?.token;
+
   bool get hasExactPoint =>
       normalizedX != null &&
       normalizedY != null &&
@@ -367,6 +530,7 @@ final class AccidentDamageMark {
     String? note,
     bool clearNote = false,
     AccidentDamageView? view,
+    AccidentDamagePerspective? perspective,
     double? normalizedX,
     double? normalizedY,
     String? areaLabel,
@@ -379,7 +543,10 @@ final class AccidentDamageMark {
         severity: severity ?? this.severity,
         damageType: damageType ?? this.damageType,
         note: clearNote ? null : note ?? this.note,
-        view: view ?? this.view,
+        view: perspective?.baseView ?? view ?? this.view,
+        perspective: perspective != null
+            ? (perspective.isAngled ? perspective : null)
+            : (view == null || view == this.view ? this.perspective : null),
         normalizedX: normalizedX ?? this.normalizedX,
         normalizedY: normalizedY ?? this.normalizedY,
         areaLabel: areaLabel ?? this.areaLabel,
@@ -391,7 +558,10 @@ final class AccidentDamageMark {
 
   Map<String, Object?> toJson() => <String, Object?>{
         'zone_id': zoneId,
-        if (view != null) 'view': view!.name,
+        if (perspective != null && perspective!.isAngled)
+          'view': perspective!.token
+        else if (view != null)
+          'view': view!.name,
         if (normalizedX != null) 'x': normalizedX,
         if (normalizedY != null) 'y': normalizedY,
         if (_nonEmptyString(areaLabel) != null) 'area': areaLabel!.trim(),
@@ -412,6 +582,7 @@ final class AccidentDamageMark {
           other.damageType == damageType &&
           other.note == note &&
           other.view == view &&
+          other.effectivePerspective == effectivePerspective &&
           other.normalizedX == normalizedX &&
           other.normalizedY == normalizedY &&
           other.areaLabel == areaLabel &&
@@ -425,6 +596,7 @@ final class AccidentDamageMark {
         damageType,
         note,
         view,
+        effectivePerspective,
         normalizedX,
         normalizedY,
         areaLabel,
@@ -535,6 +707,16 @@ final class AccidentDamageMap {
   int exactCountForView(AccidentDamageView view) => _marks.values
       .where((AccidentDamageMark mark) => mark.effectiveView == view)
       .length;
+
+  /// Marks captured on exactly [perspective] - a bus mark saved on the
+  /// angled Front-left chip is counted there, not under Front.
+  int countForPerspective(AccidentDamagePerspective perspective) =>
+      _marks.values
+          .where(
+            (AccidentDamageMark mark) =>
+                mark.effectivePerspective == perspective,
+          )
+          .length;
 
   AccidentDamageMap withMark(AccidentDamageMark mark) {
     final Map<String, AccidentDamageMark> next =

@@ -405,11 +405,14 @@ class _DriverWorkspacePanelState extends ConsumerState<DriverWorkspacePanel> {
                         ),
                     const SizedBox(height: 16),
                     const DriverText('Assigned work'),
-                    ...data.rows('work').map((DriverRow work) => ListTile(
-                          title: DriverText('${work['title']}'),
-                          subtitle: DriverText(
-                              _human('${work['status'] ?? 'Not supplied'}'),),
-                        ),),
+                    ...data.rows('work').map(
+                          (DriverRow work) => ListTile(
+                            title: DriverText('${work['title']}'),
+                            subtitle: DriverText(
+                              _human('${work['status'] ?? 'Not supplied'}'),
+                            ),
+                          ),
+                        ),
                     const DriverText('Verified work and driver records'),
                     const DriverText(
                       'Unmatched historical records require identity review before they appear here.',
@@ -531,7 +534,8 @@ class _DriverFineCardState extends ConsumerState<DriverFineCard> {
         childrenPadding: const EdgeInsets.all(12),
         children: <Widget>[
           DriverText(
-              '${f['authority']} · ${f['asset_no']} · ${f['incident_at']}',),
+            '${f['authority']} · ${f['asset_no']} · ${f['incident_at']}',
+          ),
           DriverText('${f['description']}'),
           DriverText('Assignment: ${f['assignment_reason']}'),
           DriverText(
@@ -593,7 +597,8 @@ class _DriverFineCardState extends ConsumerState<DriverFineCard> {
             (DriverRow r) => Column(
               children: <Widget>[
                 DriverText(
-                    '${_human('${r['resolution']}')} · ${r['signed_at']}',),
+                  '${_human('${r['resolution']}')} · ${r['signed_at']}',
+                ),
                 DriverText('${r['explanation']}'),
                 if (r['payment_reference'] != null)
                   DriverText('${r['payment_reference']}'),

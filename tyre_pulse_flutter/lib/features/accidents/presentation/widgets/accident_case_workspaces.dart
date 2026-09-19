@@ -1,17 +1,18 @@
-/// Seven read-only accident case workspaces backed only by the verified
-/// accident row, workstream ledger and authenticated notification inbox.
+/// Seven accident case workspaces in the owner's mock case-flow order.
+///
+/// Six of them are the mock-matched workstream widgets
+/// (`accident_ws_*.dart`); damage mapping stays the read-only inline
+/// workspace backed only by the verified accident row.
 library;
 
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tyre_pulse/app/localization/tp_direction.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
-import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_case_workflow.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_damage_map.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_models.dart';
@@ -19,57 +20,78 @@ import 'package:tyre_pulse/features/accidents/presentation/accident_case_workflo
 import 'package:tyre_pulse/features/accidents/presentation/accident_copy.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_damage_copy.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_ui.dart';
-import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_role_workspaces_primary.dart';
-import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_role_workspaces_secondary.dart';
+import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_dispatch_handover.dart';
+import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_fleet_validation.dart';
+import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_insurance_claim.dart';
+import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_responsibility.dart';
+import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_timeline.dart';
+import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_workshop_assessment.dart';
 import 'package:tyre_pulse/features/accidents/presentation/widgets/vehicle_damage_diagram.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
-import 'package:tyre_pulse/features/notifications/domain/app_notification.dart';
-import 'package:tyre_pulse/features/notifications/notifications_providers.dart';
 
+/// Declared in the mock case-flow order so `step` (index + 1) prints
+/// "Workstream 1 of 7" .. "Workstream 7 of 7" exactly as the owner's screens.
 enum AccidentCaseWorkspace {
-  damageMapping,
   fleet,
-  responsibility,
-  insurance,
   assessment,
+  insurance,
+  responsibility,
+  damageMapping,
   externalWorkshop,
-  timeline,
+  timeline;
+
+  /// Resolves a `caseFlow` key (see `accident_case_vocab.dart`) to the
+  /// workspace that renders it. Unknown keys resolve to null so a widget can
+  /// never navigate somewhere that does not exist.
+  static AccidentCaseWorkspace? fromFlowKey(String key) =>
+      _byFlowKey[key.trim()];
+
+  static const Map<String, AccidentCaseWorkspace> _byFlowKey =
+      <String, AccidentCaseWorkspace>{
+    'fleet_validation': AccidentCaseWorkspace.fleet,
+    'assessment': AccidentCaseWorkspace.assessment,
+    'insurance': AccidentCaseWorkspace.insurance,
+    'liability': AccidentCaseWorkspace.responsibility,
+    'damage_map': AccidentCaseWorkspace.damageMapping,
+    'handover': AccidentCaseWorkspace.externalWorkshop,
+    'timeline': AccidentCaseWorkspace.timeline,
+  };
 }
 
 extension AccidentCaseWorkspaceDefinition on AccidentCaseWorkspace {
   int get step => index + 1;
 
   String get labelKey => switch (this) {
-        AccidentCaseWorkspace.damageMapping => 'workspaceDamage',
         AccidentCaseWorkspace.fleet => 'workspaceFleet',
-        AccidentCaseWorkspace.responsibility => 'workspaceResponsibility',
-        AccidentCaseWorkspace.insurance => 'workspaceInsurance',
         AccidentCaseWorkspace.assessment => 'workspaceAssessment',
+        AccidentCaseWorkspace.insurance => 'workspaceInsurance',
+        AccidentCaseWorkspace.responsibility => 'workspaceResponsibility',
+        AccidentCaseWorkspace.damageMapping => 'workspaceDamage',
         AccidentCaseWorkspace.externalWorkshop => 'workspaceExternal',
         AccidentCaseWorkspace.timeline => 'workspaceTimeline',
       };
 
   IconData get icon => switch (this) {
-        AccidentCaseWorkspace.damageMapping => Icons.touch_app_outlined,
         AccidentCaseWorkspace.fleet => Icons.fact_check_outlined,
-        AccidentCaseWorkspace.responsibility => Icons.balance_outlined,
-        AccidentCaseWorkspace.insurance => Icons.verified_user_outlined,
         AccidentCaseWorkspace.assessment => Icons.handyman_outlined,
+        AccidentCaseWorkspace.insurance => Icons.verified_user_outlined,
+        AccidentCaseWorkspace.responsibility => Icons.balance_outlined,
+        AccidentCaseWorkspace.damageMapping => Icons.touch_app_outlined,
         AccidentCaseWorkspace.externalWorkshop => Icons.local_shipping_outlined,
         AccidentCaseWorkspace.timeline => Icons.timeline_outlined,
       };
 
   List<String> get workstreamKeys => switch (this) {
-        AccidentCaseWorkspace.damageMapping => const <String>[
-            'incident_evidence',
-          ],
         AccidentCaseWorkspace.fleet => const <String>['fleet_validation'],
-        AccidentCaseWorkspace.responsibility => const <String>['liability'],
+        AccidentCaseWorkspace.assessment => const <String>['assessment'],
         AccidentCaseWorkspace.insurance => const <String>[
             'insurance',
             'finance',
           ],
-        AccidentCaseWorkspace.assessment => const <String>['assessment'],
+        AccidentCaseWorkspace.responsibility => const <String>['liability'],
+        AccidentCaseWorkspace.damageMapping => const <String>[
+            'incident_evidence',
+          ],
         AccidentCaseWorkspace.externalWorkshop => const <String>[
             'repair',
             'workshop_qc',
@@ -79,7 +101,7 @@ extension AccidentCaseWorkspaceDefinition on AccidentCaseWorkspace {
       };
 }
 
-class AccidentCaseWorkspaceView extends ConsumerWidget {
+class AccidentCaseWorkspaceView extends StatelessWidget {
   const AccidentCaseWorkspaceView({
     required this.workspace,
     required this.snapshot,
@@ -90,6 +112,7 @@ class AccidentCaseWorkspaceView extends ConsumerWidget {
     this.onOpenClaims,
     this.onUpdateWorkstream,
     this.onViewDamage,
+    this.onNavigateWorkspace,
     super.key,
   });
 
@@ -103,8 +126,13 @@ class AccidentCaseWorkspaceView extends ConsumerWidget {
   final VoidCallback? onUpdateWorkstream;
   final VoidCallback? onViewDamage;
 
+  /// Invoked when a workstream widget asks to jump to another workspace
+  /// (its `onNavigate` case-flow key, mapped through
+  /// [AccidentCaseWorkspace.fromFlowKey]).
+  final void Function(AccidentCaseWorkspace workspace)? onNavigateWorkspace;
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final AccidentCopy copy = AccidentCopy.of(context);
     final AccidentCaseWorkflowCopy workflowCopy =
         AccidentCaseWorkflowCopy.of(context);
@@ -148,7 +176,6 @@ class AccidentCaseWorkspaceView extends ConsumerWidget {
                   const SizedBox(height: TpSpace.md),
                   ..._workspaceBody(
                     context,
-                    ref,
                     projection,
                     copy,
                     workflowCopy,
@@ -164,74 +191,57 @@ class AccidentCaseWorkspaceView extends ConsumerWidget {
     );
   }
 
+  void _navigate(String key) {
+    final AccidentCaseWorkspace? target =
+        AccidentCaseWorkspace.fromFlowKey(key);
+    if (target != null) onNavigateWorkspace?.call(target);
+  }
+
   List<Widget> _workspaceBody(
     BuildContext context,
-    WidgetRef ref,
     AccidentCaseWorkflowProjection projection,
     AccidentCopy copy,
     AccidentCaseWorkflowCopy workflowCopy,
   ) {
     final AccidentRecord record = snapshot.accident;
-    if (workspace == AccidentCaseWorkspace.fleet) {
-      return <Widget>[
-        AccidentFleetValidationWorkspace(
-          snapshot: snapshot,
-          onOpenIncident: onOpenIncident,
-          onUpdateWorkstream: onUpdateWorkstream,
-        ),
-      ];
-    }
-    if (workspace == AccidentCaseWorkspace.responsibility) {
-      return <Widget>[
-        AccidentResponsibilityPaymentWorkspace(
-          snapshot: snapshot,
-          onUpdateWorkstream: onUpdateWorkstream,
-        ),
-      ];
-    }
-    if (workspace == AccidentCaseWorkspace.insurance) {
-      return <Widget>[
-        AccidentInsuranceClaimsWorkspace(
-          snapshot: snapshot,
-          onRegisterClaim: onOpenClaims,
-          onUpdateWorkstream: onUpdateWorkstream,
-        ),
-      ];
-    }
-    if (workspace == AccidentCaseWorkspace.assessment) {
-      return <Widget>[
-        AccidentWorkshopAssessmentWorkspace(
-          snapshot: snapshot,
-          onViewDamage: onViewDamage,
-          onSaveAssessment: onUpdateWorkstream,
-          onSubmitAssessment: onUpdateWorkstream,
-        ),
-      ];
-    }
-    if (workspace == AccidentCaseWorkspace.externalWorkshop) {
-      return <Widget>[
-        AccidentExternalWorkshopWorkspace(
-          snapshot: snapshot,
-          onEditVendor: onUpdateWorkstream,
-          onAcceptVehicle: onUpdateWorkstream,
-        ),
-      ];
-    }
-    if (workspace == AccidentCaseWorkspace.timeline) {
-      final String userId =
-          ref.watch(workspaceContextProvider)?.userId.trim() ?? '';
-      final AsyncValue<List<AppNotification>>? inbox =
-          userId.isEmpty ? null : ref.watch(notificationsInboxProvider);
-      final List<AppNotification> notifications =
-          inbox?.value ?? const <AppNotification>[];
-      return <Widget>[
-        AccidentTimelineNotificationsWorkspace(
-          snapshot: snapshot,
-          notifications: notifications,
-        ),
-      ];
-    }
     return switch (workspace) {
+      AccidentCaseWorkspace.fleet => <Widget>[
+          AccidentFleetValidationMockWorkspace(
+            snapshot: snapshot,
+            onNavigate: _navigate,
+            onOpenIncident: onOpenIncident,
+          ),
+        ],
+      AccidentCaseWorkspace.assessment => <Widget>[
+          AccidentWorkshopAssessmentMockWorkspace(
+            snapshot: snapshot,
+            onNavigate: _navigate,
+          ),
+        ],
+      AccidentCaseWorkspace.insurance => <Widget>[
+          AccidentInsuranceClaimMockWorkspace(
+            snapshot: snapshot,
+            onNavigate: _navigate,
+          ),
+        ],
+      AccidentCaseWorkspace.responsibility => <Widget>[
+          AccidentResponsibilityMockWorkspace(
+            snapshot: snapshot,
+            onNavigate: _navigate,
+          ),
+        ],
+      AccidentCaseWorkspace.externalWorkshop => <Widget>[
+          AccidentDispatchHandoverMockWorkspace(
+            snapshot: snapshot,
+            onNavigate: _navigate,
+          ),
+        ],
+      AccidentCaseWorkspace.timeline => <Widget>[
+          AccidentTimelineMockWorkspace(
+            snapshot: snapshot,
+            onNavigate: _navigate,
+          ),
+        ],
       AccidentCaseWorkspace.damageMapping => <Widget>[
           _WorkspaceCard(
             title: copy('damageMapTitle'),
@@ -314,441 +324,8 @@ class AccidentCaseWorkspaceView extends ConsumerWidget {
             workflowCopy: workflowCopy,
           ),
         ],
-      AccidentCaseWorkspace.fleet => <Widget>[
-          _WorkspaceCard(
-            title: workflowCopy('validationFacts'),
-            icon: Icons.directions_car_filled_outlined,
-            child: _FactGrid(
-              facts: <_Fact>[
-                _Fact(
-                  AppLocalizations.of(context).accidentCaseAssetLabel,
-                  record.assetNo,
-                ),
-                _Fact(copy('vehicleType'), record.vehicleType),
-                _Fact(copy('plate'), record.plateNumber),
-                _Fact(copy('reporter'), record.reporterName),
-                _Fact(copy('driver'), record.driverName),
-                _Fact(copy('description'), record.description),
-                _Fact(
-                  copy('injuries'),
-                  _booleanLabel(record.injuries, workflowCopy),
-                ),
-                _Fact(
-                  copy('thirdParty'),
-                  _booleanLabel(record.thirdPartyInvolved, workflowCopy),
-                ),
-                _Fact(
-                  AppLocalizations.of(context).accidentCaseLocationLabel,
-                  record.location,
-                ),
-                _Fact(copy('site'), record.site),
-                _Fact(
-                  copy('workflowStage'),
-                  humaniseAccidentToken(record.workflowStage),
-                ),
-                _Fact(
-                  copy('caseStatus'),
-                  humaniseAccidentToken(record.caseStatus),
-                ),
-              ],
-              missing: copy('notRecorded'),
-            ),
-          ),
-          const SizedBox(height: TpSpace.md),
-          _WorkspaceCard(
-            title: workflowCopy('workstreamControl'),
-            icon: Icons.checklist_rtl_outlined,
-            collapsible: true,
-            child: _RequirementRegister(
-              items: <_CaseRequirement>[
-                _CaseRequirement(
-                  label: AppLocalizations.of(context).accidentCaseAssetLabel,
-                  value: record.assetNo,
-                  required: true,
-                ),
-                _CaseRequirement(
-                  label: copy('driver'),
-                  value: record.driverName,
-                  required: true,
-                ),
-                _CaseRequirement(
-                  label: copy('incidentFacts'),
-                  value: humaniseAccidentToken(record.accidentType),
-                  required: true,
-                ),
-                _CaseRequirement(
-                  label: workflowCopy('damageEvidence'),
-                  value: record.photos.isEmpty
-                      ? null
-                      : workflowCopy.evidenceLinked(record.photos.length),
-                  required: true,
-                ),
-                _CaseRequirement(
-                  label: workflowCopy('policeReport'),
-                  value: record.policeReportNo,
-                ),
-                _CaseRequirement(
-                  label: workflowCopy('najmReport'),
-                  value: record.najmStatus,
-                ),
-                _CaseRequirement(
-                  label: copy('wsAssessment'),
-                  value: projection.workstream('assessment')?.status,
-                ),
-              ],
-              copy: copy,
-              workflowCopy: workflowCopy,
-            ),
-          ),
-          const SizedBox(height: TpSpace.md),
-          _WorkstreamLedger(
-            projection: projection,
-            keys: workspace.workstreamKeys,
-            copy: copy,
-            workflowCopy: workflowCopy,
-          ),
-        ],
-      AccidentCaseWorkspace.responsibility => <Widget>[
-          _WorkspaceCard(
-            title: workflowCopy('responsibilityTitle'),
-            icon: Icons.account_balance_outlined,
-            child: _FactGrid(
-              facts: <_Fact>[
-                _Fact(copy('fault'), humaniseAccidentToken(record.faultStatus)),
-                _Fact(
-                  copy('responsible'),
-                  humaniseAccidentToken(record.responsibleParty),
-                ),
-                _Fact(
-                  copy('liable'),
-                  humaniseAccidentToken(record.liableParty),
-                ),
-                _Fact(copy('payer'), humaniseAccidentToken(record.payer)),
-              ],
-              missing: copy('notRecorded'),
-            ),
-          ),
-          const SizedBox(height: TpSpace.md),
-          _WorkspaceCard(
-            title: workflowCopy('documentRegister'),
-            icon: Icons.folder_copy_outlined,
-            collapsible: true,
-            child: _RequirementRegister(
-              items: <_CaseRequirement>[
-                _CaseRequirement(
-                  label: workflowCopy('policeReport'),
-                  value: record.policeReportNo,
-                ),
-                _CaseRequirement(
-                  label: workflowCopy('najmStatus'),
-                  value: record.najmStatus,
-                ),
-                _CaseRequirement(
-                  label: workflowCopy('najmFault'),
-                  value: record.najmFault,
-                ),
-                _CaseRequirement(
-                  label: workflowCopy('taqdeerNumber'),
-                  value: record.taqdeerNo,
-                ),
-                _CaseRequirement(
-                  label: workflowCopy('taqdeerStatus'),
-                  value: record.taqdeerStatus,
-                ),
-                _CaseRequirement(
-                  label: copy('thirdParty'),
-                  value: _booleanLabel(record.thirdPartyInvolved, workflowCopy),
-                ),
-                _CaseRequirement(
-                  label: workflowCopy('thirdPartyRegistration'),
-                  value: null,
-                ),
-                _CaseRequirement(
-                  label: workflowCopy('thirdPartyPolicy'),
-                  value: null,
-                ),
-                _CaseRequirement(
-                  label: workflowCopy('drivingLicence'),
-                  value: null,
-                ),
-                _CaseRequirement(
-                  label: workflowCopy('companyUndertaking'),
-                  value: null,
-                ),
-              ],
-              copy: copy,
-              workflowCopy: workflowCopy,
-            ),
-          ),
-          const SizedBox(height: TpSpace.md),
-          _WorkstreamLedger(
-            projection: projection,
-            keys: workspace.workstreamKeys,
-            copy: copy,
-            workflowCopy: workflowCopy,
-          ),
-        ],
-      AccidentCaseWorkspace.insurance => <Widget>[
-          _WorkspaceCard(
-            title: workflowCopy('claimPackageTitle'),
-            icon: Icons.policy_outlined,
-            child: _FactGrid(
-              facts: <_Fact>[
-                _Fact(copy('insurer'), record.insurer),
-                _Fact(copy('policy'), record.policyNo),
-                _Fact(copy('claimNo'), record.insuranceClaimNo),
-                _Fact(
-                  copy('claimStatus'),
-                  humaniseAccidentToken(record.claimStatus),
-                ),
-                _Fact(copy('claimed'), _number(record.claimAmount)),
-                _Fact(copy('approved'), _number(record.claimApprovedAmount)),
-                _Fact(
-                  copy('recoveryStatus'),
-                  humaniseAccidentToken(record.recoveryStatus),
-                ),
-                _Fact(copy('recovered'), _number(record.recoveredAmount)),
-              ],
-              missing: copy('notRecorded'),
-            ),
-          ),
-          const SizedBox(height: TpSpace.md),
-          _WorkspaceCard(
-            title: workflowCopy('claimRecoveryTitle'),
-            icon: Icons.account_balance_wallet_outlined,
-            collapsible: true,
-            child: _FactGrid(
-              facts: <_Fact>[
-                _Fact(copy('claimed'), _number(record.claimAmount)),
-                _Fact(copy('approved'), _number(record.claimApprovedAmount)),
-                _Fact(workflowCopy('deductible'), _number(record.deductible)),
-                _Fact(copy('recovered'), _number(record.recoveredAmount)),
-                _Fact(
-                  workflowCopy('recoveryReference'),
-                  null,
-                ),
-                _Fact(
-                  workflowCopy('amount'),
-                  _number(record.amountTransfer),
-                ),
-              ],
-              missing: copy('notRecorded'),
-            ),
-          ),
-          const SizedBox(height: TpSpace.md),
-          _WorkstreamLedger(
-            projection: projection,
-            keys: workspace.workstreamKeys,
-            copy: copy,
-            workflowCopy: workflowCopy,
-          ),
-        ],
-      AccidentCaseWorkspace.assessment => <Widget>[
-          _WorkspaceCard(
-            title: copy('wsAssessment'),
-            icon: Icons.build_circle_outlined,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                _LabeledText(
-                  label: copy('damage'),
-                  value: _shown(
-                    _damageMapSummary(record.damageDescription, copy),
-                    copy,
-                  ),
-                ),
-                const SizedBox(height: TpSpace.md),
-                _FactGrid(
-                  facts: <_Fact>[
-                    _Fact(
-                      copy('repairType'),
-                      humaniseAccidentToken(record.repairType),
-                    ),
-                    _Fact(
-                      copy('damageCondition'),
-                      humaniseAccidentToken(record.damageCondition),
-                    ),
-                    _Fact(
-                      copy('estimatedDamage'),
-                      _number(record.estimatedDamageCost),
-                    ),
-                    _Fact(copy('workshop'), record.workshopName),
-                    _Fact(copy('repairCost'), _number(record.repairCost)),
-                    _Fact(copy('expectedRelease'), record.expectedReleaseDate),
-                  ],
-                  missing: copy('notRecorded'),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: TpSpace.md),
-          _WorkspaceCard(
-            title: workflowCopy('assessmentHint'),
-            icon: Icons.rule_folder_outlined,
-            collapsible: true,
-            child: _RequirementRegister(
-              items: <_CaseRequirement>[
-                _CaseRequirement(
-                  label: copy('damage'),
-                  value: _damageMapSummary(record.damageDescription, copy),
-                  required: true,
-                ),
-                _CaseRequirement(
-                  label: workflowCopy('accidentPhotos'),
-                  value: record.photos.isEmpty
-                      ? null
-                      : workflowCopy.evidenceLinked(record.photos.length),
-                  required: true,
-                ),
-                _CaseRequirement(
-                  label: workflowCopy('workshopRecommendation'),
-                  value: record.repairType,
-                ),
-                _CaseRequirement(
-                  label: workflowCopy('repairQuotationDocument'),
-                  value: null,
-                ),
-                _CaseRequirement(
-                  label: workflowCopy('safeToMove'),
-                  value: null,
-                ),
-                _CaseRequirement(
-                  label: workflowCopy('towingRequired'),
-                  value: null,
-                ),
-                _CaseRequirement(
-                  label: workflowCopy('vehicleOffRoad'),
-                  value: null,
-                ),
-                _CaseRequirement(
-                  label: workflowCopy('labourHours'),
-                  value: null,
-                ),
-                _CaseRequirement(
-                  label: workflowCopy('labourCost'),
-                  value: null,
-                ),
-                _CaseRequirement(
-                  label: workflowCopy('partsAvailability'),
-                  value: null,
-                ),
-              ],
-              copy: copy,
-              workflowCopy: workflowCopy,
-            ),
-          ),
-          const SizedBox(height: TpSpace.md),
-          _WorkstreamLedger(
-            projection: projection,
-            keys: workspace.workstreamKeys,
-            copy: copy,
-            workflowCopy: workflowCopy,
-          ),
-        ],
-      AccidentCaseWorkspace.externalWorkshop => <Widget>[
-          _WorkspaceCard(
-            title: workflowCopy('dispatchReceiptTitle'),
-            icon: Icons.local_shipping_outlined,
-            child: _FactGrid(
-              facts: <_Fact>[
-                _Fact(
-                  copy('repairType'),
-                  humaniseAccidentToken(record.repairType),
-                ),
-                _Fact(copy('workshop'), record.workshopName),
-                _Fact(copy('exactLocation'), record.workshopLocation),
-                _Fact(copy('nextAction'), record.nextStep),
-                _Fact(copy('expectedRelease'), record.expectedReleaseDate),
-                _Fact(copy('actualRelease'), record.releaseDate),
-                _Fact(copy('repairCost'), _number(record.repairCost)),
-              ],
-              missing: copy('notRecorded'),
-            ),
-          ),
-          const SizedBox(height: TpSpace.md),
-          _WorkspaceCard(
-            title: workflowCopy('handoverTitle'),
-            icon: Icons.assignment_turned_in_outlined,
-            collapsible: true,
-            child: _RequirementRegister(
-              items: <_CaseRequirement>[
-                _CaseRequirement(
-                  label: workflowCopy('externalWorkshopArrivalMilestone'),
-                  value: null,
-                  required: true,
-                ),
-                _CaseRequirement(
-                  label: workflowCopy('vendorQuotationReceivedMilestone'),
-                  value: null,
-                  required: true,
-                ),
-                _CaseRequirement(
-                  label: workflowCopy('workshopAssessmentDocument'),
-                  value: null,
-                  required: true,
-                ),
-                _CaseRequirement(
-                  label: workflowCopy('fleetAcceptance'),
-                  value: null,
-                  required: true,
-                ),
-                _CaseRequirement(
-                  label: workflowCopy('purchaseOrderDocument'),
-                  value: null,
-                ),
-                _CaseRequirement(
-                  label: workflowCopy('handoverReceipt'),
-                  value: null,
-                ),
-              ],
-              copy: copy,
-              workflowCopy: workflowCopy,
-            ),
-          ),
-          const SizedBox(height: TpSpace.md),
-          _WorkstreamLedger(
-            projection: projection,
-            keys: workspace.workstreamKeys,
-            copy: copy,
-            workflowCopy: workflowCopy,
-          ),
-        ],
-      AccidentCaseWorkspace.timeline => <Widget>[
-          _TimelineWorkspace(
-            timeline: _TimelineCard(
-              projection: projection,
-              copy: copy,
-              workflowCopy: workflowCopy,
-            ),
-            notifications: _CaseNotifications(
-              accidentId: record.id,
-              ref: ref,
-              copy: copy,
-              workflowCopy: workflowCopy,
-            ),
-          ),
-        ],
     };
   }
-}
-
-class _TimelineWorkspace extends StatelessWidget {
-  const _TimelineWorkspace({
-    required this.timeline,
-    required this.notifications,
-  });
-  final Widget timeline;
-  final Widget notifications;
-
-  @override
-  Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          timeline,
-          const SizedBox(height: TpSpace.md),
-          notifications,
-        ],
-      );
 }
 
 class _WorkspaceHeader extends StatelessWidget {
@@ -1255,123 +832,6 @@ class _FactGrid extends StatelessWidget {
       );
 }
 
-class _CaseRequirement {
-  const _CaseRequirement({
-    required this.label,
-    required this.value,
-    this.required = false,
-  });
-
-  final String label;
-  final String? value;
-  final bool required;
-
-  bool get isRecorded => value?.trim().isNotEmpty ?? false;
-}
-
-/// A compact, read-only register of what the current role can verify from the
-/// server row. Missing values remain visibly unknown; this widget never turns
-/// absence into an approval or a completed document.
-class _RequirementRegister extends StatelessWidget {
-  const _RequirementRegister({
-    required this.items,
-    required this.copy,
-    required this.workflowCopy,
-  });
-
-  final List<_CaseRequirement> items;
-  final AccidentCopy copy;
-  final AccidentCaseWorkflowCopy workflowCopy;
-
-  @override
-  Widget build(BuildContext context) => Column(
-        children: <Widget>[
-          for (int index = 0; index < items.length; index++) ...<Widget>[
-            if (index > 0)
-              Divider(height: TpSpace.lg, color: TpPalette.of(context).border),
-            _RequirementRow(
-              requirement: items[index],
-              missing: copy('notRecorded'),
-              recorded: workflowCopy('recorded'),
-              missingRequired: workflowCopy('missing'),
-            ),
-          ],
-        ],
-      );
-}
-
-class _RequirementRow extends StatelessWidget {
-  const _RequirementRow({
-    required this.requirement,
-    required this.missing,
-    required this.recorded,
-    required this.missingRequired,
-  });
-
-  final _CaseRequirement requirement;
-  final String missing;
-  final String recorded;
-  final String missingRequired;
-
-  @override
-  Widget build(BuildContext context) {
-    final bool isRecorded = requirement.isRecorded;
-    final TpStatus status = isRecorded
-        ? TpStatus.ok
-        : requirement.required
-            ? TpStatus.warning
-            : TpStatus.unknown;
-    final TpStatusColors colors = TpPalette.of(context).forStatus(status);
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Icon(
-          isRecorded
-              ? Icons.task_alt_rounded
-              : requirement.required
-                  ? Icons.error_outline_rounded
-                  : Icons.remove_circle_outline_rounded,
-          color: colors.base,
-          size: TpSizing.iconMd,
-        ),
-        const SizedBox(width: TpSpace.sm),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(
-                requirement.label,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-              ),
-              const SizedBox(height: TpSpace.xs),
-              Text(
-                _textOrMissing(requirement.value, missing),
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: isRecorded
-                          ? TpPalette.of(context).textSecondary
-                          : colors.onSoft,
-                    ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: TpSpace.sm),
-        TpStatusChip(
-          status: status,
-          label: isRecorded
-              ? recorded
-              : requirement.required
-                  ? missingRequired
-                  : missing,
-          isCompact: true,
-        ),
-      ],
-    );
-  }
-}
-
 class _LabeledText extends StatelessWidget {
   const _LabeledText({required this.label, required this.value});
   final String label;
@@ -1496,9 +956,21 @@ class _WorkstreamFactRow extends StatelessWidget {
               if (workstream.progressPct != null &&
                   workstream.progressPct! >= 0 &&
                   workstream.progressPct! <= 100)
-                Text(
-                  '${workflowCopy('recordedProgress')}: ${workstream.progressPct}%',
-                  style: Theme.of(context).textTheme.bodySmall,
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: Text(
+                        workflowCopy('recordedProgress'),
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                    Text(
+                      '${workstream.progressPct}%',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                  ],
                 ),
               if (workstream.updatedAt != null) ...<Widget>[
                 const SizedBox(height: TpSpace.xs),
@@ -1524,171 +996,6 @@ class _WorkstreamFactRow extends StatelessWidget {
       ],
     );
   }
-}
-
-class _TimelineCard extends StatelessWidget {
-  const _TimelineCard({
-    required this.projection,
-    required this.copy,
-    required this.workflowCopy,
-  });
-  final AccidentCaseWorkflowProjection projection;
-  final AccidentCopy copy;
-  final AccidentCaseWorkflowCopy workflowCopy;
-
-  @override
-  Widget build(BuildContext context) {
-    final List<AccidentWorkstream> updates = projection.datedUpdates;
-    return _WorkspaceCard(
-      title: workflowCopy('timelineTitle'),
-      icon: Icons.timeline_outlined,
-      child: updates.isEmpty
-          ? Text(workflowCopy('timelineEmpty'))
-          : Column(
-              children: <Widget>[
-                for (int index = 0;
-                    index < updates.length;
-                    index++) ...<Widget>[
-                  if (index > 0)
-                    Divider(
-                      height: TpSpace.lg,
-                      color: TpPalette.of(context).border,
-                    ),
-                  _WorkstreamFactRow(
-                    workstream: updates[index],
-                    copy: copy,
-                    workflowCopy: workflowCopy,
-                  ),
-                ],
-              ],
-            ),
-    );
-  }
-}
-
-class _CaseNotifications extends StatelessWidget {
-  const _CaseNotifications({
-    required this.accidentId,
-    required this.ref,
-    required this.copy,
-    required this.workflowCopy,
-  });
-  final String accidentId;
-  final WidgetRef ref;
-  final AccidentCopy copy;
-  final AccidentCaseWorkflowCopy workflowCopy;
-
-  @override
-  Widget build(BuildContext context) {
-    final String userId =
-        ref.watch(workspaceContextProvider)?.userId.trim() ?? '';
-    final AsyncValue<List<AppNotification>>? inbox =
-        userId.isEmpty ? null : ref.watch(notificationsInboxProvider);
-    return _WorkspaceCard(
-      title: workflowCopy('notificationsTitle'),
-      icon: Icons.notifications_active_outlined,
-      child: inbox == null
-          ? Text(workflowCopy('notificationsNoWorkspace'))
-          : inbox.when(
-              data: (List<AppNotification> rows) {
-                final List<AppNotification> related = rows
-                    .where(
-                      (AppNotification item) =>
-                          _belongsToCase(item, accidentId),
-                    )
-                    .toList(growable: false);
-                if (related.isEmpty) {
-                  return Text(workflowCopy('notificationsEmpty'));
-                }
-                return Column(
-                  children: <Widget>[
-                    for (int index = 0;
-                        index < related.length;
-                        index++) ...<Widget>[
-                      if (index > 0)
-                        Divider(
-                          height: TpSpace.lg,
-                          color: TpPalette.of(context).border,
-                        ),
-                      _NotificationFactRow(
-                        notification: related[index],
-                        copy: copy,
-                        workflowCopy: workflowCopy,
-                      ),
-                    ],
-                  ],
-                );
-              },
-              loading: () => Row(
-                children: <Widget>[
-                  const SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                  const SizedBox(width: TpSpace.sm),
-                  Expanded(child: Text(workflowCopy('notificationsLoading'))),
-                ],
-              ),
-              error: (Object error, StackTrace stackTrace) => Text(
-                workflowCopy('notificationsFailed'),
-                style: TextStyle(
-                  color:
-                      TpPalette.of(context).forStatus(TpStatus.critical).base,
-                ),
-              ),
-            ),
-    );
-  }
-}
-
-class _NotificationFactRow extends StatelessWidget {
-  const _NotificationFactRow({
-    required this.notification,
-    required this.copy,
-    required this.workflowCopy,
-  });
-  final AppNotification notification;
-  final AccidentCopy copy;
-  final AccidentCaseWorkflowCopy workflowCopy;
-
-  @override
-  Widget build(BuildContext context) => Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Icon(notification.icon, color: TpPalette.of(context).primary),
-          const SizedBox(width: TpSpace.sm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  _textOrMissing(notification.title, copy('notRecorded')),
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                ),
-                if (notification.body?.trim().isNotEmpty ?? false)
-                  Text(
-                    notification.body!.trim(),
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                const SizedBox(height: TpSpace.xs),
-                Text(
-                  _formatDateTime(context, notification.createdAt),
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: TpPalette.of(context).textSecondary,
-                      ),
-                ),
-              ],
-            ),
-          ),
-          TpStatusChip(
-            status: notification.isRead ? TpStatus.neutral : TpStatus.info,
-            label: workflowCopy(notification.isRead ? 'read' : 'unread'),
-            isCompact: true,
-          ),
-        ],
-      );
 }
 
 class _ReadOnlyTruthCard extends StatelessWidget {
@@ -1770,16 +1077,6 @@ AccidentWorkstream? _nextHandoff(
   return null;
 }
 
-bool _belongsToCase(AppNotification notification, String accidentId) {
-  if (notification.entityId?.trim() != accidentId.trim()) return false;
-  final String type =
-      (notification.entityType ?? notification.type ?? '').toLowerCase();
-  return type.isEmpty ||
-      type.contains('accident') ||
-      type.contains('incident') ||
-      type.contains('claim');
-}
-
 String _owner(AccidentWorkstream? workstream, AccidentCopy copy) {
   final String owner = <String?>[workstream?.team, workstream?.ownerRole]
       .whereType<String>()
@@ -1827,11 +1124,6 @@ AccidentDamageMap _decodeDamageMap(String? raw) {
 AccidentDamageView _initialDamageView(AccidentDamageMap map) => map.isEmpty
     ? AccidentDamageView.left
     : map.marks.first.effectiveView ?? AccidentDamageView.left;
-
-String? _damageMapSummary(String? raw, AccidentCopy copy) {
-  final AccidentDamageMap map = _decodeDamageMap(raw);
-  return map.isEmpty ? null : '${map.count} ${copy('damageMapZonesLabel')}';
-}
 
 IconData _damageViewIcon(AccidentDamageView view) => switch (view) {
       AccidentDamageView.front => Icons.directions_car_filled_outlined,

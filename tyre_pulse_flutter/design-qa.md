@@ -746,3 +746,59 @@ all discovered compact-layout and golden regressions were corrected. No
 actionable P0, P1 or P2 finding remains in the implemented reference family.
 
 final result: passed
+
+---
+
+# 2026-09-17 - Accident case tabs rebuilt to the owner's 10 mock screens
+
+The accident case screen (`/accidents/:id/case`) no longer renders the six
+generic read-only role workspaces. It walks the owner's case flow, numbered
+"Workstream N of 7" in the exact mock order, with one mock-matched widget per
+workstream:
+
+| # | Workspace | Widget | Flow key |
+|---|-----------|--------|----------|
+| 1 | Fleet validation | `AccidentFleetValidationMockWorkspace` | `fleet_validation` |
+| 2 | Workshop assessment | `AccidentWorkshopAssessmentMockWorkspace` | `assessment` |
+| 3 | Insurance / Claims | `AccidentInsuranceClaimMockWorkspace` | `insurance` |
+| 4 | Responsibility and payer | `AccidentResponsibilityMockWorkspace` | `liability` |
+| 5 | Damage mapping | inline `_DamageMappingWorkspace` (read-only diagram) | `damage_map` |
+| 6 | Dispatch and handover | `AccidentDispatchHandoverMockWorkspace` | `handover` |
+| 7 | Timeline and closure | `AccidentTimelineMockWorkspace` | `timeline` |
+
+- `enum AccidentCaseWorkspace` is declared in that order, so `step` (index +
+  1) is the mock number without any second table; `fromFlowKey` maps a
+  widget's `onNavigate` key back onto the enum and the screen animates the tab
+  controller to it. Unknown keys resolve to null and navigate nowhere.
+- Vocabulary (step labels, owners, fault tiles, document lists) is the single
+  source `lib/features/accidents/domain/accident_case_vocab.dart`
+  (`caseFlow`); the shared header `accident_ws_header.dart` prints
+  "Workstream N of 7: Title | Owner: Team" from it.
+- Copy: `accident_case_workflow_copy.dart` `stepOf` now reads "Workstream
+  %step% of %total%" in en/ar/ur so the navigation strip, the step chip and
+  the mock headers agree.
+- Database: the workspaces read the tables added by the AUTHORED, NOT YET
+  APPLIED migration `supabase/migrations/20260916130000_accident_mock_field_parity.sql`
+  (`accident_case_schema.dart` names each one). Until it is applied, every
+  widget reports the table as not provisioned rather than inventing a value.
+- Tests: `accident_case_workspaces_test.dart` pumps all seven workspaces in
+  en and ar (RTL) inside the same fake provider wiring the `accident_ws_*`
+  suites use (shared through the new
+  `test/features/accidents/presentation/accident_case_workspace_fakes.dart`),
+  asserts the mock numbering and widget per tab, and keeps the damage-map
+  assertions. `accident_mock_screens_test.dart` walks the case screen in the
+  new order; its detail-screen golden `accident_case_overview_light.png` is
+  untouched because the detail screen did not change.
+- Superseded here: the six old role workspaces
+  (`accident_role_workspaces_primary/secondary.dart`) are no longer mounted by
+  the case screen. The files and their own tests remain.
+
+## Verification
+
+- `flutter analyze --fatal-infos`, `dart format` and `flutter test` were NOT
+  run locally: no Flutter SDK is installed on this machine. The code was
+  written conservatively (80-column, typed, no new lints) and MUST be verified
+  by `.github/workflows/flutter-ci.yml` before this entry is trusted.
+- No device capture. Mock parity is asserted by widget tests only.
+
+final result: pending CI

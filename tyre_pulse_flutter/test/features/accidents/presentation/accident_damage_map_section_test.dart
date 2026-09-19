@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
+import 'package:tyre_pulse/features/accidents/domain/accident_case_vocab.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_damage_map.dart';
 import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_damage_map_section.dart';
 import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_damage_zone_sheet.dart';
@@ -317,19 +318,20 @@ void main() {
       ),
     );
 
+    // M9: a concrete pump opens on its Top view.
     final Image image = tester.widget<Image>(
-      find.byKey(const Key('accident.damage.multiview.left')),
+      find.byKey(const Key('accident.damage.multiview.top')),
     );
     expect(
       (image.image as AssetImage).assetName,
       'assets/vehicle_multiview_views/'
-      'sany_concrete_pump_5axle_five_view_v1_left.png',
+      'sany_concrete_pump_5axle_five_view_v1_top.png',
     );
-    expect(image.fit, BoxFit.cover);
+    expect(image.fit, BoxFit.contain);
     final Rect viewport = tester.getRect(
       find.byKey(AccidentDamageMapSectionKeys.diagram),
     );
-    expect(viewport.width / viewport.height, closeTo(16 / 9, .01));
+    expect(viewport.width / viewport.height, closeTo(1, .01));
   });
 
   testWidgets('each selector loads its own exact vehicle-view image', (
@@ -387,7 +389,7 @@ void main() {
       expect(find.text('X 50% / Y 79%'), findsOneWidget);
       expect(find.text('Front bumper'), findsOneWidget);
 
-      await tester.tap(find.text('Save mark'));
+      await tester.tap(find.byKey(AccidentDamageZoneSheetKeys.save));
       await tester.pumpAndSettle();
 
       expect(reported, isNotNull);
@@ -467,8 +469,8 @@ void main() {
     await tester.pumpAndSettle();
     await _tapZoneCentre(tester, bumper);
 
-    expect(find.text('Remove mark'), findsOneWidget);
-    await tester.tap(find.text('Remove mark'));
+    expect(find.byKey(AccidentDamageZoneSheetKeys.remove), findsOneWidget);
+    await tester.tap(find.byKey(AccidentDamageZoneSheetKeys.remove));
     await tester.pumpAndSettle();
 
     expect(map.hasMark('front_bumper'), isFalse);
@@ -512,9 +514,9 @@ void main() {
     );
     await tester.pumpAndSettle();
     await _tapZoneCentre(tester, bumper);
-    await tester.tap(find.text('Severe'));
+    await tester.tap(find.text('Major'));
     await tester.enterText(find.byType(TextField).last, 'Cracked mounting');
-    await tester.tap(find.text('Save mark'));
+    await tester.tap(find.byKey(AccidentDamageZoneSheetKeys.save));
     await tester.pumpAndSettle();
 
     await tester.tap(
@@ -528,7 +530,7 @@ void main() {
     );
     expect(find.text('Front • Front bumper'), findsOneWidget);
     expect(find.text('Cracked mounting'), findsOneWidget);
-    expect(find.text('Severe'), findsOneWidget);
+    expect(find.text('Major'), findsOneWidget);
     expect(map.marks.single.severity, AccidentDamageSeverity.severe);
   });
 
@@ -546,7 +548,7 @@ void main() {
     await tester.tapAt(Offset(rect.left + 4, rect.top + 4));
     await tester.pumpAndSettle();
 
-    expect(find.text('Save mark'), findsNothing);
+    expect(find.byKey(AccidentDamageZoneSheetKeys.save), findsNothing);
     expect(
       find.byKey(AccidentDamageZoneSheetKeys.selectedAreaPanel),
       findsNothing,
@@ -596,12 +598,15 @@ void main() {
     );
     expect(pendingSave.onPressed, isNull);
 
+    await tester.ensureVisible(
+      find.byKey(AccidentDamageZoneSheetKeys.confirmSuggestion),
+    );
     await tester.tap(
       find.byKey(AccidentDamageZoneSheetKeys.confirmSuggestion),
     );
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.byKey(AccidentDamageZoneSheetKeys.save));
-    await tester.tap(find.text('Save mark'));
+    await tester.tap(find.byKey(AccidentDamageZoneSheetKeys.save));
     await tester.pumpAndSettle();
 
     expect(reported, isNotNull);
@@ -653,7 +658,7 @@ void main() {
     expect(find.text('Corrected by reporter'), findsOneWidget);
 
     await tester.ensureVisible(find.byKey(AccidentDamageZoneSheetKeys.save));
-    await tester.tap(find.text('Save mark'));
+    await tester.tap(find.byKey(AccidentDamageZoneSheetKeys.save));
     await tester.pumpAndSettle();
 
     final AccidentDamageMark mark = reported!.marks.single;
@@ -692,11 +697,14 @@ void main() {
     expect(find.text('Close-up damage photos'), findsOneWidget);
     expect(find.text('0 attached'), findsOneWidget);
 
+    await tester.ensureVisible(
+      find.byKey(AccidentDamageZoneSheetKeys.photoAction),
+    );
     await tester.tap(find.byKey(AccidentDamageZoneSheetKeys.photoAction));
     await tester.pumpAndSettle();
     expect(find.text('2 attached'), findsOneWidget);
     await tester.ensureVisible(find.byKey(AccidentDamageZoneSheetKeys.save));
-    await tester.tap(find.text('Save mark'));
+    await tester.tap(find.byKey(AccidentDamageZoneSheetKeys.save));
     await tester.pumpAndSettle();
 
     expect(reported!.marks.single.photoCount, 2);
@@ -751,12 +759,15 @@ void main() {
 
     expect(find.text('Front fender'), findsOneWidget);
     expect(find.text('0 attached'), findsOneWidget);
-    expect(find.text('Remove mark'), findsNothing);
+    expect(find.byKey(AccidentDamageZoneSheetKeys.remove), findsNothing);
 
+    await tester.ensureVisible(
+      find.byKey(AccidentDamageZoneSheetKeys.photoAction),
+    );
     await tester.tap(find.byKey(AccidentDamageZoneSheetKeys.photoAction));
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.byKey(AccidentDamageZoneSheetKeys.save));
-    await tester.tap(find.text('Save mark'));
+    await tester.tap(find.byKey(AccidentDamageZoneSheetKeys.save));
     await tester.pumpAndSettle();
 
     expect(reported, isNotNull);
@@ -848,8 +859,9 @@ void main() {
         vehicleType: 'Snowkey Chiller',
       ),
     ];
+    // The pump opens on Top (its boom), the others on Left.
     const List<String> expectedComponents = <String>[
-      'Equipment body',
+      'Boom',
       'Cab',
       'Equipment panel',
     ];
@@ -871,5 +883,170 @@ void main() {
       await tester.pumpAndSettle();
     }
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('bus chips follow the M8 order and Front-left is its own chip', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    AccidentDamageMap? reported;
+    await _pump(
+      tester,
+      map: const AccidentDamageMap.empty(),
+      onChanged: (AccidentDamageMap next) => reported = next,
+      vehicle: const VehicleAsset(
+        id: 'bus-207',
+        assetNo: 'BUS-207',
+        make: 'Ashok Leyland',
+        vehicleType: '32-seater bus',
+      ),
+    );
+
+    final List<Key> chips = tester
+        .widgetList(
+          find.descendant(
+            of: find.byKey(AccidentDamageMapSectionKeys.viewChips),
+            matching: find.byWidgetPredicate(
+              (Widget w) =>
+                  w.key != null &&
+                  w.key.toString().contains('accident.damage.view.'),
+            ),
+          ),
+        )
+        .map((Widget w) => w.key!)
+        .toList();
+    expect(
+      chips,
+      <Key>[
+        for (final String token in familyViewOrder['bus']!)
+          Key('accident.damage.view.$token'),
+      ],
+    );
+    expect(find.text('Front-left'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(
+        AccidentDamageMapSectionKeys.perspectiveTab(
+          AccidentDamagePerspective.frontLeft,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    // The angled chip is captured on the front artwork and says so.
+    expect(
+      find.byKey(const Key('accident.damage.multiview.front')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('accident.damage.perspectiveBadge')),
+      findsOneWidget,
+    );
+    final AccidentDamageZone bumper = accidentDamageZonesFor(
+      AccidentDamageView.front,
+      assetClass: AccidentDamageAssetClass.bus,
+    ).firstWhere((AccidentDamageZone zone) => zone.id == 'front_bumper');
+    await _tapZoneCentre(tester, bumper);
+    await tester.tap(
+      find.byKey(
+        AccidentDamageZoneSheetKeys.damageTypeChip(AccidentDamageType.bent),
+      ),
+    );
+    await tester.tap(find.text('Major'));
+    await tester.ensureVisible(find.byKey(AccidentDamageZoneSheetKeys.save));
+    await tester.tap(find.byKey(AccidentDamageZoneSheetKeys.save));
+    await tester.pumpAndSettle();
+
+    final AccidentDamageMark mark = reported!.marks.single;
+    expect(mark.effectivePerspective, AccidentDamagePerspective.frontLeft);
+    expect(mark.view, AccidentDamageView.front);
+    expect(mark.damageType, AccidentDamageType.bent);
+    expect(mark.severity, AccidentDamageSeverity.severe);
+    expect(mark.toJson()['view'], 'front_left');
+    expect(mark.toJson()['damage_type'], 'bent');
+    expect(mark.toJson()['severity'], 'severe');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'area sheet offers every mock damage type, Major, and a 200 character '
+      'note counter', (WidgetTester tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    AccidentDamageMap? reported;
+    await _pump(
+      tester,
+      map: const AccidentDamageMap.empty(),
+      onChanged: (AccidentDamageMap next) => reported = next,
+    );
+    final AccidentDamageZone bumper = accidentDamageZonesFor(
+      AccidentDamageView.front,
+    ).firstWhere((AccidentDamageZone zone) => zone.id == 'front_bumper');
+    await tester.tap(
+      find.byKey(
+        AccidentDamageMapSectionKeys.viewTab(AccidentDamageView.front),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _tapZoneCentre(tester, bumper);
+
+    for (final VocabItem type in damageTypes) {
+      expect(find.text(type.label), findsOneWidget, reason: type.key);
+    }
+    for (final VocabItem level in damageLevels) {
+      expect(find.text(level.label), findsWidgets, reason: level.key);
+    }
+    expect(find.text('Severe'), findsNothing);
+    expect(find.text('0/200'), findsOneWidget);
+    expect(find.text('Save area and continue'), findsOneWidget);
+
+    final String longNote = 'x' * 250;
+    await tester.enterText(
+      find.byKey(AccidentDamageZoneSheetKeys.note),
+      longNote,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('200/200'), findsOneWidget);
+    await tester.ensureVisible(find.byKey(AccidentDamageZoneSheetKeys.save));
+    await tester.tap(find.byKey(AccidentDamageZoneSheetKeys.save));
+    await tester.pumpAndSettle();
+    expect(reported!.marks.single.note, hasLength(200));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'selected-area card prints type, Major and photo count with Edit and '
+      'Remove', (WidgetTester tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    AccidentDamageMap? reported;
+    await _pump(
+      tester,
+      map: AccidentDamageMap.fromMarks(
+        const <AccidentDamageMark>[
+          AccidentDamageMark(
+            zoneId: 'left_front_door',
+            view: AccidentDamageView.left,
+            normalizedX: .5,
+            normalizedY: .5,
+            areaLabel: 'Front-left bumper corner',
+            damageType: AccidentDamageType.broken,
+            severity: AccidentDamageSeverity.severe,
+            photoReferences: <String>['a', 'b'],
+          ),
+        ],
+      ),
+      onChanged: (AccidentDamageMap next) => reported = next,
+    );
+    expect(find.text('Broken · Major · 2 photos'), findsOneWidget);
+    expect(find.text('1 marked area · Review list'), findsOneWidget);
+    expect(find.text('View all 1 marked area'), findsOneWidget);
+    expect(
+      find.byKey(AccidentDamageMapSectionKeys.selectedEdit),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(AccidentDamageMapSectionKeys.selectedRemove));
+    await tester.pumpAndSettle();
+    expect(reported?.isEmpty, isTrue);
   });
 }

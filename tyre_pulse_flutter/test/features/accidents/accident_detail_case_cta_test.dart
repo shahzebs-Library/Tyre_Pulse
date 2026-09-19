@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
@@ -10,6 +11,8 @@ import 'package:tyre_pulse/features/accidents/data/accident_repository.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_models.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_case_screen.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_detail_screen.dart';
+
+import 'presentation/accident_case_workspace_fakes.dart';
 
 const AccidentRecord _record = AccidentRecord(
   id: 'acc-1',
@@ -94,7 +97,10 @@ Future<GoRouter> _pumpFlow(WidgetTester tester) async {
 
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [
+      overrides: <Override>[
+        // The case screen now mounts the mock workstream widgets, which read
+        // their repositories on load; keep every read in memory.
+        ...accidentCaseWorkspaceOverrides(),
         accidentRepositoryProvider.overrideWithValue(_CaseRepository()),
       ],
       child: MaterialApp.router(

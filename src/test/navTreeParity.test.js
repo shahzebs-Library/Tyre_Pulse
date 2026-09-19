@@ -240,6 +240,7 @@ const ROUTES_BEFORE_REGROUP = [
 const ROUTES_ADDED_SINCE_REGROUP = [
   '/repair-requests',
   '/store-material-issue',
+  '/driver-workspace',
 ]
 
 const catalogItems = () => NAV_CATALOG.flatMap((g) => g.items)

@@ -232,6 +232,10 @@ void main() {
     (WidgetTester tester) async {
       final _Pumped p = await _pumpSignedIn(tester);
 
+      // The button sits below the driver workspace panel on a phone-height
+      // surface; scroll it into view the way a person would.
+      await tester.ensureVisible(find.widgetWithText(TpButton, 'Sign out'));
+      await tester.pump();
       await tester.tap(find.widgetWithText(TpButton, 'Sign out'));
       await tester.pumpAndSettle();
       expect(find.text('Sign out?'), findsOneWidget);
@@ -253,6 +257,10 @@ void main() {
     (WidgetTester tester) async {
       final _Pumped p = await _pumpSignedIn(tester);
 
+      // The button sits below the driver workspace panel on a phone-height
+      // surface; scroll it into view the way a person would.
+      await tester.ensureVisible(find.widgetWithText(TpButton, 'Sign out'));
+      await tester.pump();
       await tester.tap(find.widgetWithText(TpButton, 'Sign out'));
       await tester.pumpAndSettle();
 

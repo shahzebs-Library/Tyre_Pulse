@@ -100,7 +100,8 @@
     "deploymentEnabled": {
       "claude/accident-builder-report-ui-2bkwb5": false,
       "claude/ksa-asset-mobile-visibility-xlnp7m": false,
-      "claude/workshop-job-card-flow": false
+      "claude/workshop-job-card-flow": false,
+      "feature/accident-case-web-redesign": false
     }
   },
   "ignoreCommand": "node scripts/vercel-ignore-build.mjs"

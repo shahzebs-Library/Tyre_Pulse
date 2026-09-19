@@ -66,12 +66,21 @@ class TpStatusChip extends StatelessWidget {
               ),
               const SizedBox(width: TpSpace.xs),
             ],
-            Text(
-              text,
-              style: Theme.of(context)
-                  .textTheme
-                  .labelMedium
-                  ?.copyWith(color: colors.onSoft),
+            // A chip is a single line by definition. When a host hands it a
+            // width narrower than its label (a Wrap on a 400px phone, a
+            // ListTile trailing slot) it trims with an ellipsis instead of
+            // painting an overflow stripe across the card.
+            Flexible(
+              child: Text(
+                text,
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context)
+                    .textTheme
+                    .labelMedium
+                    ?.copyWith(color: colors.onSoft),
+              ),
             ),
           ],
         ),

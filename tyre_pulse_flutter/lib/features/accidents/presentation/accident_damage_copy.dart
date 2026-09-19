@@ -4,6 +4,8 @@
 /// never drift on what a zone or view is called.
 library;
 
+import 'package:flutter/widgets.dart';
+import 'package:tyre_pulse/features/accidents/domain/accident_case_vocab.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_damage_map.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_copy.dart';
 
@@ -100,23 +102,81 @@ String accidentDamageZoneLabel(AccidentCopy copy, String zoneId) =>
 String accidentDamageViewLabel(AccidentCopy copy, AccidentDamageView view) =>
     copy(accidentDamageViewLabelKey(view));
 
+/// The level word for one mark. The stored `severe` token is printed as the
+/// mocks' "Major" (`damageLevels` in the shared vocabulary); the catalog's
+/// own translation is kept for the non-English catalogs, which carry no
+/// separate "Major" entry yet.
 String accidentDamageSeverityLabel(
   AccidentCopy copy,
   AccidentDamageSeverity severity,
-) =>
-    copy(accidentDamageSeverityLabelKey(severity));
+) {
+  final String catalog = copy(accidentDamageSeverityLabelKey(severity));
+  final bool englishCatalog = copy('minor') == 'Minor';
+  return englishCatalog ? accidentDamageLevelVocabLabel(severity) : catalog;
+}
+
+/// Locale-aware level label used by the report's own damage screens.
+String accidentDamageLevelLabel(
+  BuildContext context,
+  AccidentDamageSeverity severity,
+) {
+  final String language = Localizations.localeOf(context).languageCode;
+  return switch ((language, severity)) {
+    ('ar', AccidentDamageSeverity.minor) => 'طفيف',
+    ('ar', AccidentDamageSeverity.moderate) => 'متوسط',
+    ('ar', AccidentDamageSeverity.severe) => 'كبير',
+    ('ur', AccidentDamageSeverity.minor) => 'معمولی',
+    ('ur', AccidentDamageSeverity.moderate) => 'درمیانہ',
+    ('ur', AccidentDamageSeverity.severe) => 'بڑا',
+    (_, _) => accidentDamageLevelVocabLabel(severity),
+  };
+}
+
+/// The chip label for one perspective, in the shared `viewLabels`
+/// vocabulary for English and a feature-local translation otherwise.
+String accidentDamagePerspectiveLabel(
+  BuildContext context,
+  AccidentDamagePerspective perspective,
+) {
+  final String language = Localizations.localeOf(context).languageCode;
+  return switch ((language, perspective)) {
+    ('ar', AccidentDamagePerspective.left) => 'يسار',
+    ('ar', AccidentDamagePerspective.frontLeft) => 'أمامي يسار',
+    ('ar', AccidentDamagePerspective.front) => 'أمام',
+    ('ar', AccidentDamagePerspective.right) => 'يمين',
+    ('ar', AccidentDamagePerspective.rear) => 'خلف',
+    ('ar', AccidentDamagePerspective.top) => 'أعلى',
+    ('ur', AccidentDamagePerspective.left) => 'بائیں',
+    ('ur', AccidentDamagePerspective.frontLeft) => 'سامنے بائیں',
+    ('ur', AccidentDamagePerspective.front) => 'سامنے',
+    ('ur', AccidentDamagePerspective.right) => 'دائیں',
+    ('ur', AccidentDamagePerspective.rear) => 'پیچھے',
+    ('ur', AccidentDamagePerspective.top) => 'اوپر',
+    (_, _) => viewLabels[perspective.token] ?? perspective.token,
+  };
+}
 
 String accidentDamageTypeCopyLabel(
   AccidentCopy copy,
   AccidentDamageType type,
-) =>
-    copy(
-      switch (type) {
-        AccidentDamageType.dent => 'damageDent',
-        AccidentDamageType.scratch => 'damageScratch',
-        AccidentDamageType.cracked => 'damageCracked',
-        AccidentDamageType.broken => 'damageBroken',
-        AccidentDamageType.missing => 'damageMissing',
-        AccidentDamageType.other => 'damageOther',
-      },
-    );
+) {
+  // `bent` is newer than the shipped catalogs; the shared vocabulary is its
+  // single English source until the next ARB refresh carries it.
+  if (type == AccidentDamageType.bent) {
+    final String catalog = copy('damageBent');
+    return catalog == 'damageBent'
+        ? accidentDamageTypeVocabLabel(type)
+        : catalog;
+  }
+  return copy(
+    switch (type) {
+      AccidentDamageType.dent => 'damageDent',
+      AccidentDamageType.scratch => 'damageScratch',
+      AccidentDamageType.cracked => 'damageCracked',
+      AccidentDamageType.broken => 'damageBroken',
+      AccidentDamageType.missing => 'damageMissing',
+      AccidentDamageType.bent => 'damageBent',
+      AccidentDamageType.other => 'damageOther',
+    },
+  );
+}

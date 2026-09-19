@@ -73,6 +73,7 @@ const { navSpy } = vi.hoisted(() => ({ navSpy: vi.fn() }))
 vi.mock('react-router-dom', () => ({
   useParams: () => ({ id: 'acc-1' }),
   useNavigate: () => navSpy,
+  useLocation: () => ({ pathname: '/accidents/acc-1', search: '', state: null }),
 }))
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ profile: { id: 'u1', role: 'Admin' } }) }))
 vi.mock('../contexts/SettingsContext', () => ({ useSettings: () => ({ activeCurrency: 'SAR' }) }))

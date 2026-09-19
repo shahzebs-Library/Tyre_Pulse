@@ -9775,3 +9775,47 @@ Branch `claude/accident-builder-report-ui-2bkwb5`. All build-clean; new tests gr
   the trigger, so include it in the same disabled-trigger UPDATE), `auth.users.email` is a normal column
   (+ set `email_confirmed_at`), but **`auth.identities.email` is a GENERATED column** — do NOT assign it;
   update `identity_data->>'email'` (and `email_verified`) via `jsonb_set` and the generated `email` follows.
+
+---
+
+# ⚑ SESSION 2026-09-16 — ACCIDENT CASE TABS REBUILT TO THE OWNER'S 10 MOCK SCREENS (web). BRANCH
+# `feature/accident-case-web-redesign` STAYS UNMERGED (owner: "keep it unmerged, I cannot disturb production").
+# Migration `supabase/migrations/20260916130000_accident_mock_field_parity.sql` is AUTHORED, NOT APPLIED.
+
+Owner rule: web may be a wider desktop layout, mandatory-ness may differ web vs mobile, but the FIELDS and the
+step/workstream numbers must match the mocks on BOTH web and Flutter. Web first (this session), Flutter next.
+The mock images are NOT in the repo; their field transcription lives only in the session scratchpad. Case ids in
+the mocks are `ACC-2026-0148 · CP-045` = the live `reference_no` format (do NOT change to TP-ACC).
+
+- **`src/lib/accidentCaseVocab.js` = THE mock vocabulary** (7 report steps, 7-step CASE_FLOW "Workstream N of 7",
+  5 fault tiles on the live liability_type tokens, 6 payer tokens, 7 responsibility docs, 8 claim-package docs,
+  6 fleet-validation items, 3 repair-route tiles incl. NEW `on_site`, 4-step dispatch stepper, 7 damage types,
+  levels minor/moderate/severe with 'severe' LABELLED Major, per-family view order incl. `top`/`front_left`).
+  Flutter must import the same lists when its turn comes. `faultStatusFor` had the Number(null)-is-0 trap on
+  first write and its own test caught it.
+- **`WorkstreamHeader.jsx`** = the "Workstream N of 7 | Owner | Received · With team · SLA remaining" strip
+  every mock tab opens with; mounted on M2-M6. `AccidentDetailModal` TABS reordered to CASE_FLOW with numbered
+  labels ("3. Insurance / Claims") and now honours `?tab=` / `state.openTab`; passes `workstreams` +
+  `onNavigateTab` to every panel.
+- **New `isMissingColumn()` in `_client.js`**: PostgREST fails the whole request on an unknown column (42703 /
+  PGRST204), so every panel selecting the NEW columns retries with its base column list and shows an honest
+  "not provisioned yet" note. This is what lets the branch run against production BEFORE the migration.
+- **Two real bugs fixed**: `caseTimelineFeed.js` tested SLA state `completed` (live CHECK is `met`) so a met SLA
+  never showed as met; `HandoverPanel` wrote a timestamp into date-only `delivered_to_workshop_at` (migration
+  makes it timestamptz).
+- Panels rebuilt field for field: HandoverPanel (new `accident_dispatches` table, gated "Sign and accept"),
+  LiabilityPaymentPanel (payer now on `accident_liability_assessments.payer`, NOT `accidents.payer`),
+  InsuranceClaimPanel (register locked until the 8 docs are complete; package reads `accident_evidence`
+  by requirement_key, old `accident_claim_documents` rows no longer counted), WorkshopAssessmentPanel (3 route
+  tiles + Recommended, submit gated on vendor quotation), FleetValidationPanel (6 items persisted to new
+  `accident_fleet_validation_items`), DamageMapPanel (mock types/levels/views, reads Flutter marks from
+  `accidents.damage_description` v2 as a fallback but never writes it), Accidents.jsx create form (Step 1..7
+  eyebrows, read-only fleet-master block, SEPARATE incident site never overwritten once chosen),
+  AccidentCaseTimeline (SLA met badge, honest delivery labels, row drawer).
+- **Honest gaps stated in the UI, not hidden**: "Delivered n/n" cannot show (no per-recipient delivery table);
+  Notify buttons LOG a communication row, they do not send; claim number is entered by hand (RPC does not
+  mint one); "Save claim draft" is localStorage only.
+- Verification: eslint 0 errors; `vite build` clean; 28 accident/guard test files **330/330**; the two
+  detail-page test files needed `useLocation` added to their react-router mocks. Committed locally by explicit
+  pathspec, NOT pushed (branch also added to `vercel.json` deploymentEnabled=false so a later push raises no
+  preview). Next: Flutter screens to the same vocab; apply the migration ONLY on the owner's explicit yes.

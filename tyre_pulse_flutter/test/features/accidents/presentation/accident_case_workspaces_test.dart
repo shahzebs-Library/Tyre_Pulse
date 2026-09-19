@@ -3,21 +3,30 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
-import 'package:tyre_pulse/core/permissions/access_resolver.dart';
-import 'package:tyre_pulse/core/permissions/roles.dart';
-import 'package:tyre_pulse/core/workspace/workspace_context.dart';
-import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
-import 'package:tyre_pulse/core/workspace/workspace_scope.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_models.dart';
 import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_case_workspaces.dart';
-import 'package:tyre_pulse/features/notifications/domain/app_notification.dart';
-import 'package:tyre_pulse/features/notifications/notifications_providers.dart';
+import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_dispatch_handover.dart';
+import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_fleet_validation.dart';
+import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_insurance_claim.dart';
+import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_responsibility.dart';
+import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_timeline.dart';
+import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_ws_workshop_assessment.dart';
+import 'package:tyre_pulse/features/accidents/presentation/widgets/vehicle_damage_diagram.dart';
 
-const _record = AccidentRecord(
+import 'accident_case_workspace_fakes.dart';
+
+const String _damageMarks =
+    '{"version":2,"marks":[{"zone_id":"left_boom","view":"left","x":0.5,'
+    '"y":0.5,"area":"Boom section 3","damage_type":"cracked",'
+    '"severity":"severe","photo_references":[]}]}';
+
+const AccidentRecord _record = AccidentRecord(
   id: 'case-1',
+  referenceNo: 'ACC-2026-0148',
   assetNo: 'CP-045',
   site: 'Verified yard',
   incidentDate: '2026-09-01',
+  description: 'Vehicle collided with barrier while reversing.',
   driverName: 'Recorded driver',
   workshopName: 'Recorded workshop',
   workshopLocation: 'Recorded location',
@@ -27,34 +36,53 @@ const _record = AccidentRecord(
   najmFault: 'Shared finding',
   taqdeerNo: 'TAQ-21',
   taqdeerStatus: 'under review',
+  damageDescription: _damageMarks,
 );
-const _context = WorkspaceContext(
-  userId: 'user-1',
-  role: UserRole.known(RoleId.admin),
-  effectivePermissions: AccessState(role: UserRole.known(RoleId.admin)),
-  countryScope: CountryScope.none,
-  siteScope: SiteScope.none,
-);
+
+/// The mock case-flow order the owner's screens number 1..7.
+const List<AccidentCaseWorkspace> _mockOrder = <AccidentCaseWorkspace>[
+  AccidentCaseWorkspace.fleet,
+  AccidentCaseWorkspace.assessment,
+  AccidentCaseWorkspace.insurance,
+  AccidentCaseWorkspace.responsibility,
+  AccidentCaseWorkspace.damageMapping,
+  AccidentCaseWorkspace.externalWorkshop,
+  AccidentCaseWorkspace.timeline,
+];
+
+/// The widget each mock workspace renders. Damage mapping stays the inline
+/// read-only workspace, so it is asserted through its diagram instead.
+Finder _mockFinder(AccidentCaseWorkspace workspace) => switch (workspace) {
+      AccidentCaseWorkspace.fleet =>
+        find.byType(AccidentFleetValidationMockWorkspace),
+      AccidentCaseWorkspace.assessment =>
+        find.byType(AccidentWorkshopAssessmentMockWorkspace),
+      AccidentCaseWorkspace.insurance =>
+        find.byType(AccidentInsuranceClaimMockWorkspace),
+      AccidentCaseWorkspace.responsibility =>
+        find.byType(AccidentResponsibilityMockWorkspace),
+      AccidentCaseWorkspace.damageMapping => find.byType(VehicleDamageDiagram),
+      AccidentCaseWorkspace.externalWorkshop =>
+        find.byType(AccidentDispatchHandoverMockWorkspace),
+      AccidentCaseWorkspace.timeline =>
+        find.byType(AccidentTimelineMockWorkspace),
+    };
 
 Future<void> _pump(
   WidgetTester tester,
   AccidentCaseWorkspace workspace, {
   Locale locale = const Locale('en'),
-  List<AccidentWorkstream> workstreams = const [],
-  List<AppNotification> notifications = const [],
+  List<AccidentWorkstream> workstreams = const <AccidentWorkstream>[],
+  void Function(AccidentCaseWorkspace target)? onNavigateWorkspace,
 }) async {
-  tester.view.physicalSize = const Size(320, 760);
+  tester.view.physicalSize = const Size(400, 900);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
-  final controller = ScrollController();
+  final ScrollController controller = ScrollController();
   addTearDown(controller.dispose);
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [
-        workspaceContextProvider.overrideWithValue(_context),
-        notificationsInboxProvider
-            .overrideWith((ref) => Stream.value(notifications)),
-      ],
+      overrides: accidentCaseWorkspaceOverrides(),
       child: MaterialApp(
         theme: TpTheme.light,
         locale: locale,
@@ -71,6 +99,7 @@ Future<void> _pump(
             onRefresh: () async {},
             controller: controller,
             bodyKey: const Key('body'),
+            onNavigateWorkspace: onNavigateWorkspace,
           ),
         ),
       ),
@@ -80,74 +109,87 @@ Future<void> _pump(
 }
 
 void main() {
-  for (final entry in {
-    AccidentCaseWorkspace.fleet: 'Fleet validation checklist',
-    AccidentCaseWorkspace.insurance: 'Deductible',
-    AccidentCaseWorkspace.assessment: 'Safe to move',
-  }.entries) {
-    testWidgets(
-        '${entry.key.name} reference-critical details are open initially',
-        (tester) async {
-      await _pump(tester, entry.key);
-      expect(find.text(entry.value), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    });
-  }
+  test('the enum is declared in the mock case-flow order', () {
+    expect(AccidentCaseWorkspace.values, _mockOrder);
+    for (int index = 0; index < _mockOrder.length; index++) {
+      expect(_mockOrder[index].step, index + 1);
+    }
+  });
 
-  for (final workspace in AccidentCaseWorkspace.values
-      .where((value) => value != AccidentCaseWorkspace.damageMapping)) {
-    testWidgets(
-        '${workspace.name} stays readable on compact Arabic without fake progress',
-        (tester) async {
+  test('every case-flow key maps to exactly one workspace', () {
+    const Map<String, AccidentCaseWorkspace> expected =
+        <String, AccidentCaseWorkspace>{
+      'fleet_validation': AccidentCaseWorkspace.fleet,
+      'assessment': AccidentCaseWorkspace.assessment,
+      'insurance': AccidentCaseWorkspace.insurance,
+      'liability': AccidentCaseWorkspace.responsibility,
+      'damage_map': AccidentCaseWorkspace.damageMapping,
+      'handover': AccidentCaseWorkspace.externalWorkshop,
+      'timeline': AccidentCaseWorkspace.timeline,
+    };
+    for (final MapEntry<String, AccidentCaseWorkspace> entry
+        in expected.entries) {
+      expect(AccidentCaseWorkspace.fromFlowKey(entry.key), entry.value);
+    }
+    expect(AccidentCaseWorkspace.fromFlowKey('finance'), isNull);
+    expect(AccidentCaseWorkspace.fromFlowKey(''), isNull);
+  });
+
+  for (int index = 0; index < _mockOrder.length; index++) {
+    final AccidentCaseWorkspace workspace = _mockOrder[index];
+    final int step = index + 1;
+
+    testWidgets('${workspace.name} renders the mock widget as workstream $step',
+        (WidgetTester tester) async {
+      await _pump(tester, workspace);
+      expect(tester.takeException(), isNull);
+      expect(find.text('Workstream $step of 7'), findsOneWidget);
+      expect(_mockFinder(workspace), findsOneWidget);
+      expect(find.text('Local workflow preview'), findsNothing);
+      expect(
+        find.byKey(const Key('accident.case.readOnlyStatus')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('${workspace.name} stays readable on compact Arabic (RTL)',
+        (WidgetTester tester) async {
       await _pump(tester, workspace, locale: const Locale('ar'));
       expect(tester.takeException(), isNull);
       expect(
         Directionality.of(tester.element(find.byKey(const Key('body')))),
         TextDirection.rtl,
       );
-      expect(find.text('0%'), findsNothing);
+      expect(find.text('مسار العمل $step من 7'), findsOneWidget);
+      expect(_mockFinder(workspace), findsOneWidget);
       expect(find.text('Local workflow preview'), findsNothing);
     });
   }
 
-  testWidgets(
-      'external location and release date never become receipt or acceptance proof',
-      (tester) async {
-    await _pump(tester, AccidentCaseWorkspace.externalWorkshop);
-    expect(find.text('Recorded location'), findsOneWidget);
-    expect(find.text('2026-09-06'), findsOneWidget);
-    expect(find.text('External workshop arrival confirmed'), findsOneWidget);
-    expect(find.text('Recorded'), findsNothing);
+  testWidgets('damage mapping stays the read-only inline workspace',
+      (WidgetTester tester) async {
+    await _pump(tester, AccidentCaseWorkspace.damageMapping);
+    expect(find.byType(VehicleDamageDiagram), findsOneWidget);
+    expect(find.text('Boom section 3'), findsOneWidget);
+    expect(find.textContaining('ACC-2026-0148'), findsWidgets);
+    expect(
+      find.text('Vehicle collided with barrier while reversing.'),
+      findsOneWidget,
+    );
     expect(find.text('Not recorded'), findsWidgets);
+    expect(find.text('Recorded'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets(
-      'responsibility documents show each authority field without expanding',
-      (tester) async {
-    await _pump(tester, AccidentCaseWorkspace.responsibility);
-    for (final value in [
-      'POL-42',
-      'received',
-      'Shared finding',
-      'TAQ-21',
-      'under review',
-    ]) {
-      expect(find.text(value), findsOneWidget);
-    }
-    expect(find.text('Verified'), findsNothing);
-  });
-
-  testWidgets(
-      'workstream ledger shows waiver reason and explicit progress without expanding',
-      (tester) async {
+  testWidgets('damage mapping ledger shows waiver reason and progress',
+      (WidgetTester tester) async {
     await _pump(
       tester,
-      AccidentCaseWorkspace.assessment,
-      workstreams: const [
+      AccidentCaseWorkspace.damageMapping,
+      workstreams: const <AccidentWorkstream>[
         AccidentWorkstream(
           id: 'ws',
-          key: 'assessment',
+          key: 'incident_evidence',
           status: 'waived',
           notApplicable: true,
           naReason: 'No repair required after review',
@@ -160,37 +202,12 @@ void main() {
     expect(find.text('25%'), findsOneWidget);
   });
 
-  testWidgets(
-      'timeline and real case-linked notifications are visible together',
-      (tester) async {
-    await _pump(
-      tester,
-      AccidentCaseWorkspace.timeline,
-      notifications: [
-        AppNotification(
-          id: 'one',
-          userId: 'user-1',
-          isRead: false,
-          createdAt: DateTime.utc(2026, 9, 1),
-          entityId: 'case-1',
-          entityType: 'accident',
-          title: 'Real update',
-        ),
-        AppNotification(
-          id: 'two',
-          userId: 'user-1',
-          isRead: false,
-          createdAt: DateTime.utc(2026, 9, 1),
-          entityId: 'case-2',
-          entityType: 'accident',
-          title: 'Other case',
-        ),
-      ],
-    );
+  testWidgets('timeline is the mock timeline and notifications workspace',
+      (WidgetTester tester) async {
+    await _pump(tester, AccidentCaseWorkspace.timeline);
     expect(find.text('Case timeline & notifications'), findsOneWidget);
-    expect(find.text('Notifications'), findsOneWidget);
-    expect(find.text('Real update'), findsOneWidget);
-    expect(find.text('Other case'), findsNothing);
+    expect(find.text('Workstream 7 of 7'), findsOneWidget);
     expect(find.textContaining('Delivered'), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 }

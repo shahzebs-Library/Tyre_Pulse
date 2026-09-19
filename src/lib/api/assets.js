@@ -4,19 +4,25 @@
  */
 import { supabase, unwrap, applyCountry, ServiceError, fetchAllPages, fetchAllRpcPages } from './_client'
 
-const COLS =
-  // ops_status is the OPERATIONAL state from the owner's monthly asset sheet
-  // (running / breakdown / idle / planned scrap / being reallocated). It is a
-  // different fact from `status`, which says whether the asset is on the
-  // current fleet at all - a machine can be Active in the register and broken
-  // down today, and collapsing the two would hide exactly that case.
-  // chassis_no + serial_no are here for the checklist auto-fill, which reads
-  // them through AUTO_FILL_SOURCES['asset.chassis_no']. They are populated on
-  // 389 and 513 of 1,617 assets, so the field they feed stays CONDITIONALLY
-  // locked - it fills and locks where the register really has a value and
-  // stays typeable everywhere else, rather than locking blank.
-  'id,asset_no,fleet_number,make,model,vehicle_type,registration_no,chassis_no,serial_no,site,country,status,is_active,'
-  + 'current_km,tyre_size,capacity,engine_no,ops_status,ops_status_note,ops_status_at,created_at'
+// ops_status is the OPERATIONAL state from the owner's monthly asset sheet
+// (running / breakdown / idle / planned scrap / being reallocated). It is a
+// different fact from `status`, which says whether the asset is on the
+// current fleet at all - a machine can be Active in the register and broken
+// down today, and collapsing the two would hide exactly that case.
+// chassis_no + serial_no are here for the checklist auto-fill, which reads
+// them through AUTO_FILL_SOURCES['asset.chassis_no']. They are populated on
+// 389 and 513 of 1,617 assets, so the field they feed stays CONDITIONALLY
+// locked - it fills and locks where the register really has a value and
+// stays typeable everywhere else, rather than locking blank.
+// year/department/operator_name are original vehicle_fleet columns
+// (MASTER_MIGRATION.sql / MIGRATIONS_V6.sql) that were never selected here -
+// added so a full vehicle-master read (assetScan.js's Identify Asset scanner,
+// and anywhere else that wants the same field set the Flutter app's own
+// VehicleDetailScreen shows) does not have to maintain a second column list.
+// EXPORTED so callers reuse this ONE list rather than drifting from it.
+export const COLS =
+  'id,asset_no,fleet_number,make,model,vehicle_type,year,registration_no,chassis_no,serial_no,site,country,status,is_active,'
+  + 'department,operator_name,current_km,tyre_size,capacity,engine_no,ops_status,ops_status_note,ops_status_at,created_at'
 
 /**
  * List fleet assets, newest first. Country-scoped (null-safe) and optionally

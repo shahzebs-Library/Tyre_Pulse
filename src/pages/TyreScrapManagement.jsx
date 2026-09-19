@@ -300,6 +300,28 @@ export default function TyreScrapManagement() {
   const scrapped = useMemo(() => filtered.filter(isScrap), [filtered])
   const allScrapped = useMemo(() => countryFiltered.filter(isScrap), [countryFiltered])
 
+  /**
+   * The base for the 12-month trend: site, brand and reason apply, the DATE
+   * cutoff does not.
+   *
+   * Holding out the date is the point - the chart reports on time, so narrowing
+   * it by the period filter would just truncate the series it exists to show.
+   * The other three used to be held out as well, which left a fleet-wide trend
+   * sitting directly beneath KPI tiles narrowed to one site.
+   */
+  const trendScrapped = useMemo(() => (
+    countryFiltered.filter(t => {
+      if (!isScrap(t)) return false
+      if (filterSite !== 'All' && t.site !== filterSite) return false
+      if (filterBrand !== 'All' && t.brand !== filterBrand) return false
+      if (filterReason !== 'All') {
+        const reason = (t.removal_reason ?? '').toLowerCase()
+        if (!reason.includes(filterReason.toLowerCase())) return false
+      }
+      return true
+    })
+  ), [countryFiltered, filterSite, filterBrand, filterReason])
+
   // ── Unique options for dropdowns ──────────────────────────────────────────────
   const siteOptions = useMemo(() => {
     const s = [...new Set(countryFiltered.map(t => t.site).filter(Boolean))].sort()
@@ -347,7 +369,7 @@ export default function TyreScrapManagement() {
         cost: 0,
       })
     }
-    allScrapped.forEach(t => {
+    trendScrapped.forEach(t => {
       const ref = t.removal_date || t.issue_date
       if (!ref) return
       const m = ref.slice(0, 7)
@@ -358,7 +380,7 @@ export default function TyreScrapManagement() {
       }
     })
     return months
-  }, [allScrapped, dataAnchor])
+  }, [trendScrapped, dataAnchor])
 
   // ── Doughnut: by removal reason ───────────────────────────────────────────────
   const reasonDonut = useMemo(() => {
@@ -942,6 +964,15 @@ export default function TyreScrapManagement() {
                   <p className="text-xs text-[var(--text-muted)] font-medium mb-3 flex items-center gap-2">
                     <TrendingDown className="text-red-400" size={13} /> Monthly Scrap Trend, Last 12 Months
                   </p>
+                  {/* The trend follows the site, brand and reason filters; it
+                      deliberately ignores the period filter, which would only
+                      truncate the twelve months it exists to show. */}
+                  {trendScrapped.length !== allScrapped.length && (
+                    <p className="text-[11px] text-[var(--text-dim)] -mt-2 mb-2">
+                      Covers the {trendScrapped.length} scrapped {trendScrapped.length === 1 ? 'tyre' : 'tyres'} matching
+                      your site, brand and reason filters, of {allScrapped.length} in total. The period filter is not applied.
+                    </p>
+                  )}
                   <div className="h-52">
                     {monthlyTrend.some(m => m.count > 0)
                       ? <Line data={trendChartData} options={trendChartOpts} />

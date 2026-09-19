@@ -216,4 +216,142 @@ describe('KPI tiles are computed over the filtered rows, not the raw ones', () =
     mustNot(s, 'let d = [...inspections] if (siteFilter)', 'asset in the register')
     mustNot(s, 'fleetMaster.filter(v => !siteFilter || v.site === siteFilter)', 'asset in the register')
   })
+
+  /* ──────────────────────────────────────────────────────────────────────────
+   * The 2026-09-19 filter audit. Each of these shipped with its tiles computed
+   * over the RAW rows while the table beneath them was filtered, so narrowing
+   * to one site left the headline numbers stating fleet-wide figures. All four
+   * sat OUTSIDE this guard's page list, which is why they survived.
+   * ────────────────────────────────────────────────────────────────────────── */
+
+  it('PartsRequests: the tiles and the status pie cover the scoped rows, holding out status', () => {
+    const s = flat('PartsRequests.jsx')
+
+    // The scope the tiles cover: site + search.
+    must(s, 'const scoped = useMemo(() =>', 'the tiles must cover a scoped set, not the raw rows')
+    must(s, "if (filters.site !== 'All' && String(r.site || '') !== filters.site) return false",
+      'site narrows the tiles')
+    // RULE 1: status is held out - two tiles and the pie ARE status readings.
+    must(s, "const filtered = useMemo(() => ( filters.status === 'All' ? scoped : scoped.filter",
+      'RULE 1: the status filter is applied one layer DOWN, on the table only')
+
+    // Both aggregates read the scope.
+    must(s, 'const summary = useMemo(() => summarizeParts(scoped, {}), [scoped])',
+      'the tile aggregate reads the scoped rows')
+    must(s, 'return scoped.filter((r) => normalizePartsStatus(r.status)',
+      'Fulfilled Today reads the scoped rows')
+
+    // RULE 2.
+    must(s, 'These figures cover the {fmtNum(scoped.length)} request', 'RULE 2: a caption states the scope')
+
+    // The old defect, spelled out so a revert is unmistakable.
+    mustNot(s, 'summarizeParts(rows, {})', 'the old defect: the tiles read the unfiltered rows')
+    mustNot(s, 'return rows.filter((r) => normalizePartsStatus(r.status)',
+      'the old defect: Fulfilled Today read the unfiltered rows')
+  })
+
+  it('CorrectiveActions: every tile narrows the same way, and each toggle holds out its own dimension', () => {
+    const s = flat('CorrectiveActions.jsx')
+
+    // ONE predicate with an opt-out drives the tiles and the table.
+    must(s, 'const narrow = useCallback((arr, skip) => {', 'one predicate, with an opt-out, drives every figure')
+    must(s, "if (skip !== 'status' && statusFilter)", 'RULE 1: the status tiles hold out the status filter')
+    must(s, "if (skip !== 'overdue' && overdueOnly)", 'RULE 1: the Overdue tile holds out the overdue toggle')
+    // Site, priority and search always apply - that is the defect being fixed.
+    must(s, 'if (priorityFilter) out = out.filter(a => a.priority === priorityFilter)', 'priority always applies')
+    must(s, 'if (siteFilter) out = out.filter(a => a.site === siteFilter)', 'site always applies')
+
+    must(s, "const statusBase = useMemo(() => narrow(actions, 'status')", 'the status counts read the hold-out base')
+    must(s, "narrow(actions, 'overdue')", 'the overdue count reads its own hold-out base')
+    must(s, 'const avgClose = useMemo(() => avgDaysToClose(narrow(actions, null))',
+      'avg-to-close is not a toggle, so it covers the fully filtered set')
+    must(s, 'const arr = narrow(actions, null)', 'the table reads the fully filtered set')
+
+    // The breakdown bar's denominator matches the tiles above it.
+    must(s, 'statusBase.length ? Math.round(counts.Open / statusBase.length * 100) : 0',
+      'the breakdown percentages share the base the tiles use')
+
+    // RULE 2.
+    must(s, 'These figures cover the {statusBase.length} action', 'RULE 2: a caption states the scope')
+
+    // The old defect.
+    mustNot(s, 'const avgClose = useMemo(() => avgDaysToClose(actions), [actions])',
+      'the old defect: avg-to-close read the raw actions')
+    mustNot(s, 'actions.filter(a => overdueDays(a.due_date, a.status) !== null).length, [actions]',
+      'the old defect: the overdue count read the raw actions')
+    mustNot(s, 'actions.length ? Math.round(counts.Open / actions.length * 100) : 0',
+      'the old defect: the breakdown divided by the whole register')
+  })
+
+  it('RecallTracker: the KPI tiles cover the filtered registry, holding out status', () => {
+    const s = flat('RecallTracker.jsx')
+
+    must(s, 'const kpiScope = useMemo(() => {', 'the tiles read a scoped set')
+    must(s, "if (filterSeverity !== 'All' && r.severity !== filterSeverity) return false", 'severity narrows the tiles')
+    must(s, "if (filterSource !== 'All' && r.source !== filterSource) return false", 'source narrows the tiles')
+
+    must(s, "const active = kpiScope.filter(r => r.status === 'Active')", 'Active Recalls reads the scope')
+    must(s, "const closed = kpiScope.filter(r => r.status === 'Closed'", 'Avg Days to Close reads the scope')
+    must(s, '}, [kpiScope, matchTyresForRecall])', 'the KPI memo depends on the scope')
+
+    // RULE 2 - a recall board is a safety record, so a narrowed figure says so.
+    must(s, 'These figures cover the {kpiScope.length} recall', 'RULE 2: a caption states the scope')
+
+    // The old defect.
+    mustNot(s, "const active = recalls.filter(r => r.status === 'Active')", 'the old defect: the tiles read the raw registry')
+    mustNot(s, '}, [recalls, matchTyresForRecall])', 'the old defect: the KPI memo depended on the raw registry')
+  })
+
+  it('TyreScrapManagement: the 12-month trend follows the filters, holding out the period', () => {
+    const s = flat('TyreScrapManagement.jsx')
+
+    must(s, 'const trendScrapped = useMemo(() => (', 'the trend reads its own filtered base')
+    must(s, "if (filterSite !== 'All' && t.site !== filterSite) return false", 'site narrows the trend')
+    must(s, "if (filterBrand !== 'All' && t.brand !== filterBrand) return false", 'brand narrows the trend')
+    must(s, 'trendScrapped.forEach(t => {', 'the trend buckets the filtered base')
+    must(s, '}, [trendScrapped, dataAnchor])', 'the trend memo depends on the filtered base')
+
+    // RULE 1: the chart reports on time, so the period filter is held out - and
+    // RULE 2: the caption names that hold-out rather than leaving it inferred.
+    must(s, 'The period filter is not applied.', 'RULE 2: the caption names the dimension held out')
+
+    // The old defect.
+    mustNot(s, 'allScrapped.forEach(t => { const ref = t.removal_date || t.issue_date',
+      'the old defect: the trend read every scrapped tyre')
+    mustNot(s, '}, [allScrapped, dataAnchor])', 'the old defect: the trend memo depended on the unfiltered set')
+  })
+
+  it('Certifications: the tiles and all three charts cover the scoped rows, holding out status, type and expiry', () => {
+    const s = flat('Certifications.jsx')
+
+    must(s, 'const analyticsScope = useMemo(() => {', 'the tiles read a scoped set')
+    must(s, "if (subjectFilter !== 'all' && r.subject_type !== subjectFilter) return false", 'subject narrows the tiles')
+    must(s, 'const analytics = useMemo(() => buildCertAnalytics(analyticsScope, now), [analyticsScope, now])',
+      'the analytics that feed every tile and chart read the scope')
+
+    // RULE 1: each held-out filter is the dimension something here reports on -
+    // status (doughnut + tiles), type (by-type bar), expiry (renewal pipeline).
+    mustNot(s, "const analyticsScope = useMemo(() => { const q = search.trim().toLowerCase() return (rows || []).filter((r) => { if (statusFilter",
+      'RULE 1: the scope must NOT apply the status filter to itself')
+    mustNot(s, 'if (typeFilter !== \'all\' && (String(r.cert_type || \'\').trim() || \'Unspecified\') !== typeFilter) return false if (q)',
+      'RULE 1: the scope must NOT apply the type filter to itself')
+
+    // RULE 2.
+    must(s, 'These figures cover the {analyticsScope.length} certificate', 'RULE 2: a caption states the scope')
+
+    // The old defect.
+    mustNot(s, 'const analytics = useMemo(() => buildCertAnalytics(rows || [], now), [rows, now])',
+      'the old defect: every tile and chart read the whole register')
+  })
+
+  it('BrandPerformance: no dead search state shadowing the table own filter', () => {
+    const s = flat('BrandPerformance.jsx')
+
+    // EnterpriseTable already provides the search; the page carried a SECOND,
+    // unreachable one (no input was ever wired to setTableSearch), so the brand
+    // table was filtered by a value the user could never change.
+    mustNot(s, 'tableSearch', 'the dead duplicate search state must stay removed')
+    must(s, 'enableGlobalFilter={true}', 'the table own search is what filters the brand list')
+    must(s, 'data={metrics}', 'the table is handed the metrics directly')
+  })
 })

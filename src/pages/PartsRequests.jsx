@@ -156,10 +156,19 @@ export default function PartsRequests() {
 
   const siteOptions = useMemo(() => distinctSites(rows), [rows])
 
-  const filtered = useMemo(() => {
+  /**
+   * The SCOPE the tiles and the chart cover: site + search, but NOT status.
+   *
+   * Status is deliberately held out. Two of the four tiles (Open Requests,
+   * Fulfilled Today) and the whole status pie ARE status readings, so counting
+   * them over a status-narrowed set makes them restate the status the reader
+   * already picked - "Open Requests: 0" the moment they look at fulfilled ones.
+   * Holding out the dimension a figure reports on is the same rule the
+   * Accidents register follows for its Delayed toggle.
+   */
+  const scoped = useMemo(() => {
     const q = filters.q.trim().toLowerCase()
     return rows.filter((r) => {
-      if (filters.status !== 'All' && normalizePartsStatus(r.status) !== filters.status) return false
       if (filters.site !== 'All' && String(r.site || '') !== filters.site) return false
       if (q) {
         const hay = `${r.part_name || ''} ${r.asset_no || ''} ${r.notes || ''}`.toLowerCase()
@@ -169,17 +178,29 @@ export default function PartsRequests() {
     })
   }, [rows, filters])
 
+  const filtered = useMemo(() => (
+    filters.status === 'All'
+      ? scoped
+      : scoped.filter((r) => normalizePartsStatus(r.status) === filters.status)
+  ), [scoped, filters.status])
+
   // Paged, not capped - this register used to stop at 500 rows.
   // The exports below still walk `filtered` in full.
   const pager = usePagedRows(filtered)
 
-  const summary = useMemo(() => summarizeParts(rows, {}), [rows])
+  // Was `summarizeParts(rows)`: the tiles stated fleet-wide figures directly
+  // above a table narrowed to one site, so the two contradicted each other.
+  const summary = useMemo(() => summarizeParts(scoped, {}), [scoped])
 
   const fulfilledToday = useMemo(() => {
     const today = todayISO()
-    return rows.filter((r) => normalizePartsStatus(r.status) === 'fulfilled'
+    return scoped.filter((r) => normalizePartsStatus(r.status) === 'fulfilled'
       && String(r.fulfilled_at || '').slice(0, 10) === today).length
-  }, [rows])
+  }, [scoped])
+
+  // True only while the tiles cover less than the whole register, which is when
+  // the caption below them is worth printing.
+  const scopeNarrowed = scoped.length !== rows.length
 
   // ── Charts (EChart + reportColors) ─────────────────────────────────────────
   const statusChartOption = useMemo(() => {
@@ -369,6 +390,16 @@ export default function PartsRequests() {
           )
         })}
       </div>
+
+      {/* RULE 2: when the tiles cover a narrowed set, say so. A silently
+          narrowed KPI is the same defect one level down. */}
+      {!loading && scopeNarrowed && (
+        <p className="text-xs text-[var(--text-muted)] -mt-1">
+          These figures cover the {fmtNum(scoped.length)} request{scoped.length === 1 ? '' : 's'} matching
+          your site and search filters, of {fmtNum(rows.length)} in total. They ignore the status filter so
+          the status figures stay readable.
+        </p>
+      )}
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

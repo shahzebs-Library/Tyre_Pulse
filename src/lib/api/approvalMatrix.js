@@ -121,7 +121,15 @@ export const simulateApprovalPolicy = (context, draftId = null) => policyRpc('ap
   p_user_id: context.user_id || null, p_draft_id: draftId,
   // Sent only when chosen, so a server without regional routing still answers.
   ...(context.region ? { p_region: context.region } : {}),
+  // A vehicle's base site decides its region, exactly as a real submission would.
+  ...(context.asset_no ? { p_asset_no: String(context.asset_no).trim() } : {}),
 })
+/** Vehicles per region and the published route each region currently gets. */
+export async function getApprovalRegionCoverage(entityType = 'inspection') {
+  const data = unwrap(await supabase.rpc('approval_region_coverage', { p_entity_type: entityType }))
+  if (!data || !Array.isArray(data.regions)) throw new ServiceError('The server did not confirm the operation.', 'invalid_response')
+  return data
+}
 export async function listApprovalPolicyEvents(policyId) {
   return unwrap(await fetchAllPages((from, to) => supabase.from('approval_policy_events')
     .select('id,policy_id,action,actor_id,reason,created_at,snapshot')

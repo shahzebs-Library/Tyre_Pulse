@@ -12,6 +12,7 @@ import { STARTER_TEMPLATES } from '../lib/workflow/starterTemplates'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { toUserMessage } from '../lib/safeError'
+import { listSites } from '../lib/api/sites'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -51,7 +52,12 @@ const CONDITION_OPS = [
   { value: '<=', label: '≤ at most' },
 ]
 
+// region / site / country come from the document's location. The server derives
+// `region` from the site register at launch, so `region = CENTRAL` routes every
+// site in that region without listing them.
+const LOCATION_FIELDS = ['region', 'site', 'country']
 const CONDITION_FIELDS = [
+  ...LOCATION_FIELDS,
   'replacement_cost', 'total_cost', 'downtime_hours', 'severity',
   'pressure_reading', 'tread_depth', 'cost_per_tyre', 'status',
 ]
@@ -138,10 +144,14 @@ function toPayloadStep(s) {
   if (s.sla_hours !== '' && !isNaN(Number(s.sla_hours))) out.sla_hours = Number(s.sla_hours)
   if (s.condition && s.condition.field && s.condition.value !== '') {
     const num = Number(s.condition.value)
+    // Region and site are stored upper-case on the register; the server compares
+    // exactly, so "central" must be saved as CENTRAL or the step never matches.
+    const upperField = s.condition.field === 'region' || s.condition.field === 'site'
     out.condition = {
       field: s.condition.field,
       op: s.condition.op,
-      value: s.condition.value !== '' && !isNaN(num) ? num : s.condition.value,
+      value: upperField ? String(s.condition.value).trim().toUpperCase()
+        : s.condition.value !== '' && !isNaN(num) ? num : s.condition.value,
     }
   }
   return out
@@ -367,8 +377,9 @@ function StepEditor({
                 <input
                   type="text"
                   value={step.condition.value}
+                  list={LOCATION_FIELDS.includes(step.condition.field) ? `wf-condition-${step.condition.field}` : undefined}
                   onChange={e => setCondition({ value: e.target.value })}
-                  placeholder="value (e.g. 5000)"
+                  placeholder={LOCATION_FIELDS.includes(step.condition.field) ? `${step.condition.field} (e.g. ${step.condition.field === 'region' ? 'CENTRAL' : step.condition.field === 'site' ? 'NHC' : 'KSA'})` : 'value (e.g. 5000)'}
                   className="w-full bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg px-2 py-1.5 text-[var(--text-primary)] text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500"
                 />
               </div>
@@ -507,6 +518,18 @@ export default function WorkflowBuilder() {
   }, [isEdit, defId, hydrateForm])
 
   useEffect(() => { load() }, [load])
+
+  // Location values for the condition pickers. Best effort: a failed read just
+  // leaves the value box free-text, it never blocks editing a workflow.
+  const [siteRows, setSiteRows] = useState([])
+  useEffect(() => {
+    let live = true
+    listSites({ activeOnly: true }).then(rows => { if (live) setSiteRows(rows) }).catch(() => {})
+    return () => { live = false }
+  }, [])
+  const regionValues = [...new Set(siteRows.map(s => String(s.region || '').trim().toUpperCase()).filter(Boolean))].sort()
+  const siteValues = [...new Set(siteRows.map(s => s.name).filter(Boolean))].sort()
+  const countryValues = [...new Set(siteRows.map(s => s.country).filter(Boolean))].sort()
 
   function goBack() { navigate(BUILDER_ROUTE) }
 
@@ -803,7 +826,10 @@ export default function WorkflowBuilder() {
           </div>
           <p className="text-[11px] text-[var(--text-muted)] mt-3 leading-relaxed">
             Optional steps and conditions are evaluated server-side at runtime against the
-            document context. The chain above shows the maximal path.
+            document context. The chain above shows the maximal path. For regional routing,
+            add a condition <span className="font-mono">region = CENTRAL</span> (or WESTERN) on each
+            regional step; the region is read from the document's site in Site Management.
+            A first step whose condition does not match is skipped at launch.
           </p>
         </div>
       </div>
@@ -839,6 +865,9 @@ export default function WorkflowBuilder() {
       <datalist id="wf-condition-fields">
         {CONDITION_FIELDS.map(f => <option key={f} value={f} />)}
       </datalist>
+      <datalist id="wf-condition-region">{regionValues.map(v => <option key={v} value={v} />)}</datalist>
+      <datalist id="wf-condition-site">{siteValues.map(v => <option key={v} value={v} />)}</datalist>
+      <datalist id="wf-condition-country">{countryValues.map(v => <option key={v} value={v} />)}</datalist>
     </form>
   )
 }

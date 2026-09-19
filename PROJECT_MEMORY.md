@@ -55,6 +55,106 @@ batching stops them being started at all.
 
 ---
 
+# ⚑ SESSION 2026-09-19 — WEB FILTER AUDIT (6 REAL DEFECTS) + THE ACCIDENT BRANCH MERGED TO MAIN.
+# No migration. Main went `ae0bfcf1` -> `763653a1` (filters) -> `9991aeff` (accident merge).
+
+### **THE OWNER SAID "pushed all and metrged to main" AND NOTHING HAD BEEN PUSHED**
+`git status` still showed all 7 filter files as uncommitted working-tree changes and `origin/main` carried
+**zero** of them (`scopeNarrowed` count 0, the guard still at its old 6 tests). This is the THIRD time this
+file has had to record the same thing. **RULE, already written here twice and now three times: verify the
+merge against `origin/main` before believing it - a claim that work was pushed is not evidence it was.** The
+cheap check is content, not refs: `git show origin/main:<file> | grep -c <new-symbol>`.
+
+### **THE KPI-vs-FILTER DEFECT CLASS - 6 pages computed their tiles over the RAW rows**
+The table beneath them was filtered; the headline numbers above described a set the reader was not looking at.
+It is a ONE-TOKEN slip (`rows` vs `filtered`) and it is invisible in review, which is why six survived.
+**TWO RULES, and the first is the one people get wrong:**
+1. **HOLD-OUT.** A tile that is ALSO a filter toggle, or that REPORTS ON a dimension, must hold out its OWN
+   dimension. Scoping it by everything including its own dimension makes it restate the filter the reader
+   just picked, so it stops being a target you can aim at - "Open Requests: 12" while filtered to Open is
+   not a reading, it is an echo.
+2. **DISCLOSURE.** When the tiles cover a narrowed set, the page SAYS SO next to them ("These figures cover
+   the N requests matching the current filters"). A correct number with no scope note is still misleading.
+- **PartsRequests** 4 tiles + status pie -> a `scoped` set (site + search, NOT status).
+- **CorrectiveActions** counts/overdue/avg-close + the breakdown bar -> ONE `narrow(arr, skip)` predicate with
+  a per-tile opt-out; the bar's denominators repointed `actions.length` -> `statusBase.length` (3 sites).
+- **RecallTracker** KPIs -> `kpiScope` (severity/source/search). A recall board is a safety record.
+- **TyreScrapManagement** monthly trend -> `trendScrapped` (site/brand/reason). The PERIOD filter is
+  deliberately NOT applied to a 12-month trend and the caption says so.
+- **Certifications** analytics -> `analyticsScope` (subject + search), holding out status, type AND expiry so
+  the doughnut, the by-type bar and the renewal pipeline all stay aimable.
+- **BrandPerformance** had a dead search box filtering nothing - EnterpriseTable already supplies its own
+  global filter. Removed the state + the no-op `filteredMetrics`.
+
+### **I RETRACTED ONE OF MY OWN FINDINGS BEFORE CHANGING ANYTHING - GatePass is CORRECT**
+Its breakdown is labelled "Today by Site", sits with the "Total Today" tiles, and the log search belongs to a
+separate panel further down the page. Reported the retraction rather than "fixing" working code. **The scans
+that found the six also produced heavy false positives; every hit was hand-verified (~12 candidates, 6 real).**
+
+### **CORRECT-BY-DESIGN, DO NOT "FIX" THESE** (verified during the sweep)
+RootCauseEngine, SitesMasterPanel, SecurityCenter, LedgerPage, TyreSpecifications, Procurement,
+DriverManagement, WarrantyTracker, OcrScanner, AssetDisposals, TyrePool, HoldingCompany, InsurancePolicies.
+Also confirmed sound: `src/lib/filterSelection.js` and its 12 suites (123 tests), exports never bypass the
+filters, no self-locking option lists, option lists are not row-capped, and `===` compares on site/brand/
+vehicle_type are safe BECAUSE of V245/V246/V247/V588 normalisation - do not "harden" them with case folding.
+
+### **THE GUARD IS THE HALF THAT LASTS: `src/test/kpiFilterAwareness.test.js` 6 -> 12 SOURCE SCANS**
+Coverage was ~20 of 231 filter-bearing files, which is exactly why six defects survived. Each new case names
+the OLD defect via `mustNot` so a revert is unmistakable rather than merely failing. **Every new guard was
+mutation-tested: planted the reversion, watched it fail, restored.** They are SOURCE scans, not render tests,
+because these pages are wired to AuthContext/SettingsContext/router/supabase/chart.js and the aggregates are
+local `useMemo`s with no exported seam.
+
+### **WINDOWS MAX_PATH BLOCKED `git worktree`, AND THE PLUMBING WORKAROUND IS THE REUSABLE PART**
+The filter fixes had to reach main WITHOUT the 24-commit accident branch, and the working tree carried a
+PARALLEL session's uncommitted damage-map work that must never be swept in. `git worktree add` died with
+`Filename too long` on the deep Flutter test paths. **Never `git stash` on a shared tree** (this file already
+records that hiding a sibling's work that way looked like data loss). The route that works, and touches no
+working tree at all:
+```
+export GIT_INDEX_FILE=.git/tmp-index      # a THROWAWAY index, not the real one
+git read-tree origin/main
+git update-index --add --cacheinfo <mode>,<blob>,<path>   # per file, blobs from your own commit
+TREE=$(git write-tree)
+NEW=$(git commit-tree $TREE -p origin/main)               # graft onto main's tip
+git push origin $NEW:refs/heads/main
+```
+**THE CHECK THAT MAKES IT SAFE, and it is not optional: diff the files between `origin/main` and your
+branch's BASE first.** If main has moved them, grafting your branch's copy CLOBBERS main's version silently.
+Here all 7 were byte-identical, so nothing was lost. Verified the resulting tree with
+`git diff --stat origin/main $TREE` = exactly the 7 files.
+
+### **THE ACCIDENT BRANCH IS MERGED - THIS REVERSES A STANDING INSTRUCTION**
+Owner: "lets merge the accident also so i can test it actually". The recorded "keep it unmerged, I cannot
+disturb production" is therefore SUPERSEDED, and the 2026-09-16 entry now says so at its own head.
+- Merge commit `9991aeff`, two parents (main + `ab7f0870`). **Conflict-free, and that was proven BEFORE
+  touching anything with `git merge-tree --write-tree origin/main <branch>`** - it writes a merged tree and
+  reports conflicts without a checkout, which is the right tool on a dirty shared tree.
+- 148 files / ~32.8k insertions: the web case tabs AND the Flutter case workspaces + report wizard.
+- Verified first: `vite build` exit 0, **34 test files / 613 tests passed**, and the build ran against the
+  DIRTY tree (branch content PLUS the sibling's in-flight damage-map work), which is a stronger signal than
+  branch HEAD alone.
+- Main contributes only 3 mobile files to the merge (`ae0bfcf1`, the reachability-probe fix); the merged
+  `src/` is byte-identical to branch HEAD's.
+- `vercel.json`'s `deploymentEnabled` gains `feature/accident-case-web-redesign: false` - harmless on main,
+  and it is why pushing the branch ref raised no preview build.
+
+### **THE MIGRATION IS STILL NOT APPLIED, AND THE APP IS BUILT TO SURVIVE THAT**
+`supabase/migrations/20260916130000_accident_mock_field_parity.sql` (2 new tables: `accident_dispatches`,
+`accident_fleet_validation_items`) needs the owner's explicit yes. **PostgREST fails the WHOLE request on an
+unknown column (42703 / PGRST204)**, so `isMissingColumn()` in `src/lib/api/_client.js` is what keeps the
+merged code working against production today: 8 modules retry with their BASE column list and render an
+honest "not provisioned yet" note instead of an error. **Do not delete those fallbacks when the migration
+lands** - they are also what lets a future column ship ahead of its migration.
+
+### **NOT VERIFIED: the production deploy.** A pushed commit is not a deployed site (standing rule). The
+Supabase MCP was unauthenticated this session and there is no Vercel access here, so nobody has confirmed the
+newest `target: production` deployment carries `9991aeff`. Check that before telling anyone it is testable.
+**Two pushes to main this session** - the filter fix, then the merge - against the one-merge-per-session rule;
+the second was an explicit owner request mid-session, which is the documented exception.
+
+---
+
 # ⚑ SESSION 2026-09-13 (part 2) — THE "YESTERDAY" PERIOD BROKE LIVE SAVES, THEN THE EMAILED
 # DIGEST TURNED OUT TO IGNORE THE PERIOD ENTIRELY. Both fixed + applied live. Migration
 # **V612**, next free **V613**. Fleet Supervisor also granted accidents create/edit (no
@@ -9778,9 +9878,10 @@ Branch `claude/accident-builder-report-ui-2bkwb5`. All build-clean; new tests gr
 
 ---
 
-# ⚑ SESSION 2026-09-16 — ACCIDENT CASE TABS REBUILT TO THE OWNER'S 10 MOCK SCREENS (web). BRANCH
-# `feature/accident-case-web-redesign` STAYS UNMERGED (owner: "keep it unmerged, I cannot disturb production").
-# Migration `supabase/migrations/20260916130000_accident_mock_field_parity.sql` is AUTHORED, NOT APPLIED.
+# ⚑ SESSION 2026-09-16 — ACCIDENT CASE TABS REBUILT TO THE OWNER'S 10 MOCK SCREENS (web).
+# **SUPERSEDED 2026-09-19: the branch IS MERGED TO MAIN.** The "STAYS UNMERGED" instruction recorded here was
+# REVERSED by the owner ("lets merge the accident also so i can test it") - see the 2026-09-19 entry at the top.
+# Migration `supabase/migrations/20260916130000_accident_mock_field_parity.sql` is STILL AUTHORED, NOT APPLIED.
 
 Owner rule: web may be a wider desktop layout, mandatory-ness may differ web vs mobile, but the FIELDS and the
 step/workstream numbers must match the mocks on BOTH web and Flutter. Web first (this session), Flutter next.

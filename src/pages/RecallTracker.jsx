@@ -197,16 +197,45 @@ export default function RecallTracker() {
     })
   }, [tyres])
 
+  /**
+   * The SCOPE the KPI tiles cover: severity, source and search - but NOT status.
+   *
+   * Status is held out because two of the four tiles (Active Recalls, Avg Days
+   * to Close) ARE status readings, and counting them over a status-narrowed set
+   * makes each one restate the status the reader already picked. Every other
+   * filter DOES apply: these tiles used to be computed over the raw `recalls`,
+   * so narrowing to one severity left them stating registry-wide figures above
+   * a table showing that severity alone.
+   */
+  const kpiScope = useMemo(() => {
+    const q = String(search || '').trim().toLowerCase()
+    return recalls.filter(r => {
+      if (filterSeverity !== 'All' && r.severity !== filterSeverity) return false
+      if (filterSource !== 'All' && r.source !== filterSource) return false
+      if (q) {
+        return (
+          r.recall_number?.toLowerCase().includes(q) ||
+          r.brand?.toLowerCase().includes(q) ||
+          r.description?.toLowerCase().includes(q) ||
+          r.affected_sizes?.some(sz => sz.toLowerCase().includes(q))
+        )
+      }
+      return true
+    })
+  }, [recalls, filterSeverity, filterSource, search])
+
+  const kpiScopeNarrowed = kpiScope.length !== recalls.length
+
   // ── Derived KPIs ───────────────────────────────────────────────────────────
   const kpis = useMemo(() => {
-    const active = recalls.filter(r => r.status === 'Active')
+    const active = kpiScope.filter(r => r.status === 'Active')
     const affectedSet = new Set()
     active.forEach(r => matchTyresForRecall(r).forEach(t => affectedSet.add(t.id)))
 
     const recallsWithHit = active.filter(r => matchTyresForRecall(r).length > 0).length
     const responseRate = active.length > 0 ? Math.round((recallsWithHit / active.length) * 100) : 0
 
-    const closed = recalls.filter(r => r.status === 'Closed' && r.closed_at && r.issue_date)
+    const closed = kpiScope.filter(r => r.status === 'Closed' && r.closed_at && r.issue_date)
     const avgDays = closed.length > 0
       ? Math.round(closed.reduce((s, r) => s + (daysBetween(r.issue_date, r.closed_at) ?? 0), 0) / closed.length)
       : null
@@ -217,7 +246,7 @@ export default function RecallTracker() {
       responseRate,
       avgDaysToClose: avgDays,
     }
-  }, [recalls, matchTyresForRecall])
+  }, [kpiScope, matchTyresForRecall])
 
   // ── Filtered recalls ───────────────────────────────────────────────────────
   const filtered = useMemo(() => {
@@ -695,6 +724,16 @@ export default function RecallTracker() {
           color="text-blue-400"
         />
       </div>
+
+      {/* A recall board is a safety record: when these figures cover less than
+          the whole registry, that has to be on screen, not inferred. */}
+      {kpiScopeNarrowed && (
+        <p className="text-xs text-[var(--text-muted)] -mt-2">
+          These figures cover the {kpiScope.length} recall{kpiScope.length === 1 ? '' : 's'} matching your
+          severity, source and search filters, of {recalls.length} in the registry. They ignore the status
+          filter so the active and closed figures stay readable.
+        </p>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-1 overflow-x-auto">

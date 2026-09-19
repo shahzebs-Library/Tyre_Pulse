@@ -45,7 +45,6 @@ export default function BrandPerformance() {
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState(null)
   const [selected, setSelected]   = useState(null)
-  const [tableSearch, setTableSearch] = useState('')
   // Authoritative fleet-level tyre cost from the classified expense grid.
   const [fleetTyreCost, setFleetTyreCost] = useState(null)
 
@@ -178,10 +177,6 @@ export default function BrandPerformance() {
   const bestBrand  = [...metrics].sort((a, b) => a.failureRate - b.failureRate)[0]
   const worstBrand = [...metrics].sort((a, b) => b.failureRate - a.failureRate)[0]
   const totalCostAll = metrics.reduce((s, b) => s + b.totalCost, 0)
-
-  const filteredMetrics = tableSearch
-    ? metrics.filter(b => b.brand.toLowerCase().includes(tableSearch.toLowerCase()))
-    : metrics
 
   // Top 10 brands by count for the ranking chart
   const top10 = metrics.slice(0, 10)
@@ -455,7 +450,7 @@ export default function BrandPerformance() {
           <EnterpriseTable
             reportMeta={reportMeta}
             columns={brandColumns}
-            data={filteredMetrics}
+            data={metrics}
             loading={false}
             enableGlobalFilter={true}
             searchPlaceholder="Search brand..."

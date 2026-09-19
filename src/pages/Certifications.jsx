@@ -117,7 +117,31 @@ export default function Certifications() {
 
   useEffect(() => { load() }, [load])
 
-  const analytics = useMemo(() => buildCertAnalytics(rows || [], now), [rows, now])
+  /**
+   * The SCOPE the tiles and the three charts cover: subject + free-text search.
+   *
+   * Status, certificate type and the expiry dates are deliberately held out,
+   * because each is the dimension a figure on this page REPORTS ON - the status
+   * doughnut and the Valid/Expiring/Expired tiles are status readings, the
+   * by-type bar is a type reading, and the renewal pipeline is a time reading.
+   * Narrowing any of them by its own filter makes it restate the choice the
+   * reader just made. Subject and search are not reported on by anything, so
+   * they DO apply: without them the tiles stated register-wide figures above a
+   * table narrowed to one driver or one search.
+   */
+  const analyticsScope = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return (rows || []).filter((r) => {
+      if (subjectFilter !== 'all' && r.subject_type !== subjectFilter) return false
+      if (q) {
+        const hay = `${r.subject_name || ''} ${r.cert_type || ''} ${r.cert_number || ''} ${r.issuer || ''}`.toLowerCase()
+        if (!hay.includes(q)) return false
+      }
+      return true
+    })
+  }, [rows, subjectFilter, search])
+
+  const analytics = useMemo(() => buildCertAnalytics(analyticsScope, now), [analyticsScope, now])
   const enriched = useMemo(() => enrichCertifications(rows || [], now), [rows, now])
 
   const certTypes = useMemo(() => {
@@ -371,6 +395,15 @@ export default function Certifications() {
           )
         })}
       </div>
+
+      {/* When the tiles and charts cover a narrowed set, say so. */}
+      {!loading && analyticsScope.length !== (rows || []).length && (
+        <p className="text-xs text-[var(--text-muted)] -mt-1">
+          These figures cover the {analyticsScope.length} certificate{analyticsScope.length === 1 ? '' : 's'} matching
+          your subject and search filters, of {(rows || []).length} tracked. The status, type and expiry filters are
+          not applied here, so the status, type and renewal views stay readable.
+        </p>
+      )}
 
       {/* Charts */}
       {!missing && !empty && (

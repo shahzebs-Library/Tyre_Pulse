@@ -5,7 +5,7 @@ import { PGlite } from '@electric-sql/pglite';
 
 const sql = await readFile(new URL('../migrations/20260912110325_driver_workspace_fines_and_assignments.sql', import.meta.url), 'utf8');
 const storageSql = await readFile(new URL('../migrations/20260912110823_driver_fine_private_evidence_storage.sql', import.meta.url), 'utf8');
-const enterpriseSql = await readFile(new URL('../migrations/20260921131708_driver_fine_enterprise_workflows.sql', import.meta.url), 'utf8');
+const enterpriseSql = await readFile(new URL('../migrations/20260921134725_driver_fine_enterprise_workflows.sql', import.meta.url), 'utf8');
 const id = n => `00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
 test('driver workspace enforces ownership, historical assignment and signed case transitions', async t => {
  const db = new PGlite(); let request = 100;

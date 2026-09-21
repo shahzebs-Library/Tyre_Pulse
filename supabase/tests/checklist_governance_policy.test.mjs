@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import { PGlite } from '@electric-sql/pglite'
 
-const migrationUrl = new URL('../migrations/20260921113000_checklist_governance_policy.sql', import.meta.url)
+const migrationUrl = new URL('../migrations/20260921123304_checklist_governance_policy.sql', import.meta.url)
 const ORG = '11111111-1111-4111-8111-111111111111'
 const USER = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const TEMPLATE = '22222222-2222-4222-8222-222222222222'

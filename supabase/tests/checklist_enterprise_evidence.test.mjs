@@ -3,9 +3,9 @@ import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import { PGlite } from '@electric-sql/pglite'
 
-const migrationUrl = new URL('../migrations/20260921075921_checklist_enterprise_evidence_and_compliance.sql', import.meta.url)
-const skipMigrationUrl = new URL('../migrations/20260921083057_checklist_assignment_skip_audit.sql', import.meta.url)
-const approvalAgeMigrationUrl = new URL('../migrations/20260921085147_checklist_approval_age_monitor.sql', import.meta.url)
+const migrationUrl = new URL('../migrations/20260921082100_checklist_enterprise_evidence_and_compliance.sql', import.meta.url)
+const skipMigrationUrl = new URL('../migrations/20260921084052_checklist_assignment_skip_audit.sql', import.meta.url)
+const approvalAgeMigrationUrl = new URL('../migrations/20260921085751_checklist_approval_age_monitor.sql', import.meta.url)
 const ORG = '11111111-1111-4111-8111-111111111111'
 const TEMPLATE = '22222222-2222-4222-8222-222222222222'
 

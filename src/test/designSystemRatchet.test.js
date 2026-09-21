@@ -31,10 +31,25 @@ import { join, resolve } from 'node:path'
 
 const PAGES_DIR = resolve(process.cwd(), 'src/pages')
 
-/** Current, measured debt. LOWER these as pages migrate. Never raise them. */
+/**
+ * Current, measured debt. LOWER these as pages migrate. Never raise them.
+ *
+ * rawOverlay 130 -> 128 on 2026-09-21: StockManagement and PmPrograms moved
+ * their dialogs onto Modal. WorkOrders migrated 3 of its 4 overlays but stays
+ * on the list, because its remaining one is a right-hand DRAWER using the
+ * `tp-drawer-panel` contract that `dialogFit.test.jsx` pins - Modal has no
+ * drawer size, so converting it would turn a full-height rail into a centred
+ * box. The count is of FILES, not occurrences, which is why 3 converted
+ * overlays moved the number by 0 for that file.
+ *
+ * rawTable stays 194: every table examined so far was correctly REFUSED. They
+ * carry composite cells, server-driven sorting or their own TablePagination,
+ * and EnterpriseTable would bring a second search box and a different export.
+ * A refused migration is a good outcome here, not an outstanding task.
+ */
 const BASELINE = {
   rawTable: 194,
-  rawOverlay: 130,
+  rawOverlay: 128,
 }
 
 function readAllPages() {

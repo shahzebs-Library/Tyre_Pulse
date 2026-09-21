@@ -3,11 +3,13 @@ import { stock } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
-import { Plus, Save, X, History, FileText, Download, ArrowLeftRight, Package, Lock } from 'lucide-react'
+import { Plus, Save, History, FileText, Download, ArrowLeftRight, Package, Lock } from 'lucide-react'
 import Skeleton from '../components/ui/Skeleton'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
+import Card, { CardBody, CardHeader } from '../components/ui/Card'
+import Modal from '../components/ui/Modal'
 import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import { formatDate } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
@@ -141,6 +143,14 @@ export default function StockManagement() {
   }, [activeCountry, t])
 
   useEffect(() => { load() }, [load])
+
+  // Stable identities on purpose. Modal's behaviour hook lists `onClose` in its
+  // dependency array, so an inline arrow re-runs the effect on EVERY render of
+  // this page. The movement-history dialog carries text inputs whose keystrokes
+  // re-render the page, and a re-run re-focuses the panel - the field would lose
+  // focus after each character.
+  const closeHistory = useCallback(() => setHistoryFor(null), [])
+  const closeForm = useCallback(() => setShowForm(false), [])
 
   function deriveStatus(r) {
     if (r.stock_qty <= r.critical_level) return 'Critical'
@@ -478,7 +488,7 @@ export default function StockManagement() {
           </div>
 
           {/* Table */}
-          <div className="card p-0 overflow-hidden">
+          <Card pad="none" clip>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -584,19 +594,20 @@ export default function StockManagement() {
               </table>
               <TablePagination {...stockPager} />
             </div>
-          </div>
+          </Card>
         </>
       )}
 
       {/* ── TRANSFER TAB ──────────────────────────────────────────────────────── */}
       {activeTab === 'transfer' && (
         <div className="max-w-lg">
-          <div className="card space-y-5">
-            <div className="flex items-center gap-2 mb-1">
-              <ArrowLeftRight size={18} className="text-blue-400" />
-              <h2 className="text-base font-semibold text-[var(--text-primary)]">{t('stock.transfer.heading')}</h2>
-            </div>
-            <p className="text-[var(--text-muted)] text-sm -mt-3">{t('stock.transfer.subtitle')}</p>
+          <Card className="space-y-[var(--space-5)]">
+            <CardHeader
+              level={2}
+              icon={ArrowLeftRight}
+              title={t('stock.transfer.heading')}
+              description={t('stock.transfer.subtitle')}
+            />
 
             {transferMsg && (
               <div className="bg-green-900/30 border border-green-700 text-green-300 rounded-lg px-4 py-3 text-sm">
@@ -772,7 +783,7 @@ export default function StockManagement() {
                 {transferring ? t('stock.transfer.transferring') : t('stock.transfer.transferStock')}
               </button>
             </form>
-          </div>
+          </Card>
         </div>
       )}
 
@@ -780,7 +791,9 @@ export default function StockManagement() {
       {activeTab === 'timeline' && (
         <div className="space-y-4">
           {/* Comparison stat */}
-          <div className="card flex flex-wrap items-center gap-4">
+          {/* Card is flex-col by default; this strip reads as one row, so the
+              direction is set through `style` where it deterministically wins. */}
+          <Card className="flex-wrap items-center gap-[var(--space-4)]" style={{ flexDirection: 'row' }}>
             <div className="text-sm text-[var(--text-muted)]">
               <span className="font-medium text-[var(--text-primary)]">{t('stock.timeline.today')}</span> {todayIssues} {t('stock.timeline.issues')}
             </div>
@@ -799,7 +812,7 @@ export default function StockManagement() {
                 </span>
               )}
             </div>
-          </div>
+          </Card>
 
           {/* Date range picker */}
           <div className="flex flex-wrap items-center gap-3">
@@ -837,9 +850,9 @@ export default function StockManagement() {
 
           {/* Bar chart */}
           {tlByDate.length > 0 && (
-            <div className="card">
-              <p className="text-sm text-[var(--text-muted)] mb-3">{t('stock.timeline.chartTitle')}</p>
-              <div style={{ height: 220 }}>
+            <Card>
+              <CardHeader level={2} title={t('stock.timeline.chartTitle')} />
+              <CardBody style={{ height: 220 }}>
                 <Bar
                   data={tlChartData}
                   options={{
@@ -852,12 +865,12 @@ export default function StockManagement() {
                     },
                   }}
                 />
-              </div>
-            </div>
+              </CardBody>
+            </Card>
           )}
 
           {/* Daily table */}
-          <div className="card p-0 overflow-hidden">
+          <Card pad="none" clip>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -894,25 +907,23 @@ export default function StockManagement() {
               </table>
               <TablePagination {...timelinePager} />
             </div>
-          </div>
+          </Card>
         </div>
       )}
 
       {/* Movement History Modal */}
       {historyFor && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setHistoryFor(null)}>
-          <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-4 border-b border-[var(--input-border)]">
-              <div>
-                <h2 className="text-lg font-semibold text-[var(--text-primary)]">{t('stock.historyModal.title', { site: historyFor.site })}</h2>
-                <p className="text-[var(--text-muted)] text-xs mt-0.5">{t('stock.historyModal.subtitle', { description: historyFor.description || '', qty: historyFor.stock_qty })}</p>
-              </div>
-              <button onClick={() => setHistoryFor(null)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
-            </div>
-
-            {/* Approval & Workflow Engine — status, immutable trail, approver action, start picker.
-                Gates the ledger-post (stock issuance/adjustment) control below via onStateChange. */}
-            <div className="p-4 border-b border-[var(--input-border)]">
+        <Modal
+          open
+          onClose={closeHistory}
+          size="lg"
+          title={t('stock.historyModal.title', { site: historyFor.site })}
+          subtitle={t('stock.historyModal.subtitle', { description: historyFor.description || '', qty: historyFor.stock_qty })}
+          bodyClassName="space-y-[var(--space-4)]"
+        >
+          {/* Approval & Workflow Engine — status, immutable trail, approver action, start picker.
+              Gates the ledger-post (stock issuance/adjustment) control below via onStateChange. */}
+          <div>
               <EntityApprovalPanel
                 entityType="stock_issue"
                 entityId={historyFor.id}
@@ -961,7 +972,7 @@ export default function StockManagement() {
 
             {/* Quick adjustment form */}
             {adjForm && (
-              <div className="p-4 border-b border-[var(--input-border)] bg-[var(--input-bg)]/30">
+              <div className="p-4 rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)]/30">
                 <p className="text-xs text-[var(--text-muted)] mb-3">{t('stock.historyModal.logMovement')}</p>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                   <div>
@@ -1009,8 +1020,9 @@ export default function StockManagement() {
               </div>
             )}
 
-            {/* History table */}
-            <div className="overflow-y-auto flex-1">
+            {/* History table. The dialog body is the scroll container now, so
+                the sticky header still pins and there is no nested scroller. */}
+            <div>
               {loadingMov ? (
                 <div className="text-center py-8 text-[var(--text-muted)]">{t('stock.historyModal.loading')}</div>
               ) : movements.length === 0 ? (
@@ -1059,20 +1071,18 @@ export default function StockManagement() {
                 </>
               )}
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* Add/Edit Form modal */}
-      {showForm && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowForm(false)}>
-          <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-[var(--text-primary)]">{editId ? t('stock.form.editTitle') : t('stock.form.addTitle')}</h2>
-              <button onClick={() => setShowForm(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
-            </div>
-            {error && <div className="bg-red-900/30 border border-red-700 text-red-300 rounded-lg px-4 py-2 mb-4 text-sm">{error}</div>}
-            <form onSubmit={save} className="space-y-3">
+      <Modal
+        open={showForm}
+        onClose={closeForm}
+        size="md"
+        title={editId ? t('stock.form.editTitle') : t('stock.form.addTitle')}
+      >
+        {error && <div className="bg-red-900/30 border border-red-700 text-red-300 rounded-lg px-4 py-2 mb-4 text-sm">{error}</div>}
+        <form onSubmit={save} className="space-y-3">
               <div>
                 <label className="label">{t('stock.form.site')}</label>
                 <input className="input" value={form.site} onChange={e => setForm(f => ({ ...f, site: e.target.value }))} required list="stock-sites" />
@@ -1095,12 +1105,10 @@ export default function StockManagement() {
                 <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
                   <Save size={16} /> {saving ? t('stock.form.saving') : t('stock.form.save')}
                 </button>
-                <button type="button" onClick={() => setShowForm(false)} className="btn-secondary">{t('stock.form.cancel')}</button>
+                <button type="button" onClick={closeForm} className="btn-secondary">{t('stock.form.cancel')}</button>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
+        </form>
+      </Modal>
     </div>
   )
 }

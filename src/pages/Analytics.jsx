@@ -20,6 +20,7 @@ import { colorAt, withAlpha } from '../lib/reportColors'
 import { COST_MODES, costModeLabel, pickMonthly, splitTotals } from '../lib/costSources'
 import { loadGovernedCostSplit, COST_SPLIT_TTL_MS } from '../lib/api/governedCost'
 import CostValue from '../components/cost/CostValue'
+import Card, { CardHeader, CardBody } from '../components/ui/Card'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend)
 
@@ -289,65 +290,68 @@ export default function Analytics() {
           <AlertTriangle size={14} /> {summaryError}
         </div>
       )}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="card text-center">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-[var(--gap-grid)]">
+        <Card className="text-center">
           <p className="text-2xl font-bold text-white">
             {summaryLoading
               ? <span className="inline-block h-7 w-16 rounded bg-white/10 animate-pulse align-middle" />
               : kpiTotal.toLocaleString()}
           </p>
           <p className="text-xs text-gray-500 mt-1">{t('analytics.kpi.totalTyres')}</p>
-        </div>
-        <div className="card text-center">
+        </Card>
+        <Card className="text-center">
           <p className="text-2xl font-bold text-blue-400">
             {summaryLoading
               ? <span className="inline-block h-7 w-20 rounded bg-white/10 animate-pulse align-middle" />
               : formatCurrencyCompact(kpiCost, activeCurrency)}
           </p>
           <p className="text-xs text-gray-500 mt-1">{t('analytics.kpi.totalCost')}</p>
-        </div>
-        <div className="card text-center">
+        </Card>
+        <Card className="text-center">
           <p className="text-2xl font-bold text-emerald-400">
             {summaryLoading
               ? <span className="inline-block h-7 w-20 rounded bg-white/10 animate-pulse align-middle" />
               : formatCurrencyCompact(kpiAvg, activeCurrency)}
           </p>
           <p className="text-xs text-gray-500 mt-1">{t('analytics.kpi.avgCost')}</p>
-        </div>
-        <div className="card text-center">
+        </Card>
+        <Card className="text-center">
           <p className="text-2xl font-bold text-red-400">
             {summaryLoading
               ? <span className="inline-block h-7 w-12 rounded bg-white/10 animate-pulse align-middle" />
               : kpiHighRisk.toLocaleString()}
           </p>
           <p className="text-xs text-gray-500 mt-1">{t('analytics.kpi.highRisk')}</p>
-        </div>
+        </Card>
       </div>
 
       {/* Tyres vs Maintenance cost split (additive, independent load) */}
-      <div className="card">
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-          <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-            <Layers size={15} style={{ color: costModeColor }} /> Tyres vs Maintenance
-          </h3>
-          <div className="inline-flex rounded-lg border border-[var(--border-dim)] overflow-hidden">
-            {COST_MODES.map((m) => (
-              <button
-                key={m.key}
-                type="button"
-                onClick={() => setCostMode(m.key)}
-                className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-                  costMode === m.key
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-transparent text-gray-400 hover:text-white'
-                }`}
-              >
-                {m.label}
-              </button>
-            ))}
-          </div>
-        </div>
+      <Card>
+        <CardHeader
+          level={2}
+          icon={Layers}
+          title="Tyres vs Maintenance"
+          actions={
+            <div className="inline-flex rounded-lg border border-[var(--border-dim)] overflow-hidden">
+              {COST_MODES.map((m) => (
+                <button
+                  key={m.key}
+                  type="button"
+                  onClick={() => setCostMode(m.key)}
+                  className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                    costMode === m.key
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-transparent text-gray-400 hover:text-white'
+                  }`}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          }
+        />
 
+        <CardBody>
         {costLoading ? (
           <div className="animate-pulse h-64 rounded-lg bg-white/5" />
         ) : costError ? (
@@ -375,7 +379,8 @@ export default function Analytics() {
             </div>
           </>
         )}
-      </div>
+        </CardBody>
+      </Card>
 
       {error && !loading && (
         <div className="flex items-center gap-2 text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-xl px-4 py-3">
@@ -391,27 +396,29 @@ export default function Analytics() {
       )}
 
       {loading ? (
-        <div className="grid grid-cols-1 gap-6">
-          <div className="card animate-pulse h-64" />
-          <div className="card animate-pulse h-64" />
+        <div className="grid grid-cols-1 gap-[var(--gap-section)]">
+          <Card className="animate-pulse h-64" />
+          <Card className="animate-pulse h-64" />
         </div>
       ) : filtered.length > 0 ? (
         <>
           {/* Monthly trend chart */}
-          <div className="card">
-            <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
-              <TrendingUp size={15} className="text-blue-400" /> Monthly Trend
-            </h3>
-            <div style={{ height: 300 }}>
-              <Bar data={chartData} options={chartOpts} />
-            </div>
-          </div>
+          <Card>
+            <CardHeader level={2} icon={TrendingUp} title="Monthly Trend" />
+            <CardBody>
+              <div style={{ height: 300 }}>
+                <Bar data={chartData} options={chartOpts} />
+              </div>
+            </CardBody>
+          </Card>
 
           {/* Site Metrics */}
-          <div className="card p-0 overflow-hidden">
-            <div className="px-4 py-3 border-b border-[var(--border-dim)]">
-              <h3 className="text-sm font-semibold text-white">{t('analytics.site.title')}</h3>
-            </div>
+          <Card pad="none" clip>
+            <CardHeader
+              level={2}
+              title={t('analytics.site.title')}
+              className="!mb-0 px-[var(--space-4)] py-[var(--space-3)] border-b border-[var(--border-dim)]"
+            />
             <EnterpriseTable
               reportMeta={reportMeta}
               columns={siteColumns}
@@ -426,13 +433,15 @@ export default function Analytics() {
               pageSizeOptions={[10, 25, 50]}
               emptyMessage="No site data"
             />
-          </div>
+          </Card>
 
           {/* Brand Metrics */}
-          <div className="card p-0 overflow-hidden">
-            <div className="px-4 py-3 border-b border-[var(--border-dim)]">
-              <h3 className="text-sm font-semibold text-white">{t('analytics.brand.title')}</h3>
-            </div>
+          <Card pad="none" clip>
+            <CardHeader
+              level={2}
+              title={t('analytics.brand.title')}
+              className="!mb-0 px-[var(--space-4)] py-[var(--space-3)] border-b border-[var(--border-dim)]"
+            />
             <EnterpriseTable
               reportMeta={reportMeta}
               columns={brandColumns}
@@ -447,14 +456,14 @@ export default function Analytics() {
               pageSizeOptions={[10, 25, 50]}
               emptyMessage="No brand data"
             />
-          </div>
+          </Card>
         </>
       ) : (
-        <div className="card text-center py-14">
+        <Card className="text-center py-[var(--space-12)]">
           <Activity size={36} className="text-gray-700 mx-auto mb-3" />
           <p className="text-gray-400 font-medium">No data available</p>
           <p className="text-gray-600 text-sm mt-1">Adjust your filters or import tyre records.</p>
-        </div>
+        </Card>
       )}
     </div>
   )

@@ -34,9 +34,9 @@ const PAGES_DIR = resolve(process.cwd(), 'src/pages')
 /**
  * Current, measured debt. LOWER these as pages migrate. Never raise them.
  *
- * rawOverlay 130 -> 128 -> 125 -> 122 on 2026-09-21. Wave 1 moved StockManagement
+ * rawOverlay 130 -> 128 -> 125 -> 121 on 2026-09-21. Wave 1 moved StockManagement
  * and PmPrograms; wave 2 Combinations, HeatIntelligence and SerialTracker; wave 3
- * FleetRenewal, TechnicianScorecard and FitmentValidation.
+ * FleetRenewal, TechnicianScorecard, FitmentValidation and DtcDiagnostics.
  *
  * THIS NUMBER IS FOR THE COMMITTED TREE, WHICH IS NOT ALWAYS THE WORKING TREE.
  * While parallel migrations are in flight the working tree reads LOWER than what
@@ -61,7 +61,7 @@ const PAGES_DIR = resolve(process.cwd(), 'src/pages')
  */
 const BASELINE = {
   rawTable: 194,
-  rawOverlay: 122,
+  rawOverlay: 121,
 }
 
 function readAllPages() {
@@ -119,14 +119,15 @@ describe('design-system ratchet', () => {
     ).toBe(BASELINE.rawOverlay)
   })
 
-  it('a Card is never given a padding or border utility that cannot win', () => {
-    // THIS TRAP HAS BITTEN TWICE, so it is pinned rather than remembered.
+  it('a Card is never given a style utility that cannot win', () => {
+    // THIS TRAP HAS BITTEN THREE TIMES, so it is pinned rather than remembered.
     //
-    // Card sets `padding`, `border` and `borderColor` as INLINE styles. A plain
-    // Tailwind class is a normal declaration and loses to an inline one, so
-    // `<Card className="py-12">` is DEAD - and it fails SILENTLY: the element
+    // A plain Tailwind class is a normal declaration and loses to an inline one,
+    // so `<Card className="py-12">` is DEAD - and it fails SILENTLY: the element
     // still renders, it just quietly collapses to --pad-card. The victims are
-    // always empty states, which is where the roominess was the whole point.
+    // always empty states and alert banners, which is where the roominess or the
+    // tint was the whole point. One instance was a fitment PASS/FAIL verdict
+    // card whose green-or-red edge would simply have vanished.
     //
     // `!`-prefixed classes are exempt because !important in a stylesheet DOES
     // beat a normal inline declaration - that is why CardHeader's `!mb-0` is
@@ -134,9 +135,41 @@ describe('design-system ratchet', () => {
     // px-*/py-* are fine; the `[\s>]` is what keeps them out of this rule.
     //
     // The fix is never to add `!`: put the spacing on an inner element, or use
-    // the `pad` prop. `!important` on a layout utility is a fight you win once
-    // and lose the next time someone nests something.
-    const DEAD = /^(?:p[xytblr]?-|border(?:$|-))/
+    // the `pad`/`tone` props. `!important` on a layout utility is a fight you
+    // win once and lose the next time someone nests something.
+    //
+    // Card sets padding, background, border and box-shadow inline, so a
+    // class for ANY of those is dead. The first version of this rule policed
+    // only padding and border, and a later migration found live dead `bg-*` on
+    // a Card that it had waved through.
+    //
+    // A VARIANT PREFIX DOES NOT SAVE THE CLASS: `hover:border-blue-600` is just
+    // as dead as `border-blue-600`, and that exact form shipped on a clickable
+    // tile. Strip the variant chain before testing.
+    //
+    // `text-` needs care: only the COLOUR utilities are dead. `text-sm` and
+    // `text-center` are size and alignment, which Card does not set, so they
+    // work and must not be flagged.
+    const TEXT_NOT_COLOUR = new Set([
+      'xs', 'sm', 'base', 'lg', 'xl', '2xl', '3xl', '4xl', '5xl', '6xl', '7xl', '8xl', '9xl',
+      'left', 'center', 'right', 'justify', 'start', 'end',
+      'wrap', 'nowrap', 'balance', 'pretty', 'ellipsis', 'clip',
+    ])
+    const stripVariants = (t) => t.replace(/^(?:[A-Za-z0-9_-]+:)+/, '')
+    const isDead = (raw) => {
+      const t = stripVariants(raw)
+      if (raw.startsWith('!') || t.startsWith('!')) return false   // !important does win
+      if (/^p[xytblrse]?-/.test(t)) return true                     // padding
+      if (/^bg-/.test(t)) return true                               // background
+      if (/^(?:border|shadow)(?:$|-)/.test(t)) return true          // border, box-shadow
+      // NOTE: `text-*` is deliberately NOT here. Card used to set `color`
+      // inline, which killed every text colour class an author wrote; the fix
+      // was to move the default into .tp-card so those classes work, rather
+      // than to police ~20 of them across the app. TEXT_NOT_COLOUR is kept
+      // because the distinction is the reason, and it will matter again if
+      // colour is ever pulled back inline.
+      return false
+    }
     const offenders = []
     for (const p of PAGES) {
       if (!/from '[^']*components\/ui\/Card'/.test(p.src)) continue
@@ -158,7 +191,7 @@ describe('design-system ratchet', () => {
         const tokens = (cls[1] || cls[2] || '')
           .split(/\s+/)
           .filter(Boolean)
-          .filter((t) => !t.startsWith('!') && DEAD.test(t))
+          .filter(isDead)
         if (tokens.length) offenders.push(`${p.file}: ${tokens.join(' ')}`)
       }
     }

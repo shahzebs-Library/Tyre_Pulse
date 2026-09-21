@@ -34,9 +34,18 @@ const PAGES_DIR = resolve(process.cwd(), 'src/pages')
 /**
  * Current, measured debt. LOWER these as pages migrate. Never raise them.
  *
- * rawOverlay 130 -> 128 -> 125 -> 121 on 2026-09-21. Wave 1 moved StockManagement
- * and PmPrograms; wave 2 Combinations, HeatIntelligence and SerialTracker; wave 3
- * FleetRenewal, TechnicianScorecard, FitmentValidation and DtcDiagnostics.
+ * rawOverlay 130 -> 128 -> 125 -> 121 -> 115 on 2026-09-21. Wave 1 moved
+ * StockManagement and PmPrograms; wave 2 Combinations, HeatIntelligence and
+ * SerialTracker; wave 3 FleetRenewal, TechnicianScorecard, FitmentValidation and
+ * DtcDiagnostics; wave 4 DriverSafety, EngineHours, HoldingCompany, RfidRegistry,
+ * DailyOps and VehicleWashing.
+ *
+ * LOWER THIS IN THE SAME COMMIT AS THE MIGRATION, NOT AFTERWARDS. Wave 4 shipped
+ * its overlay conversions and left the baseline at 121 against a real 116, which
+ * turned this ratchet RED on main. A guard failing for a GOOD reason still reads
+ * as a broken build, and the next person's instinct is to raise the number back
+ * rather than read why - which would silently re-admit the debt this exists to
+ * hold out.
  *
  * THIS NUMBER IS FOR THE COMMITTED TREE, WHICH IS NOT ALWAYS THE WORKING TREE.
  * While parallel migrations are in flight the working tree reads LOWER than what
@@ -61,7 +70,7 @@ const PAGES_DIR = resolve(process.cwd(), 'src/pages')
  */
 const BASELINE = {
   rawTable: 194,
-  rawOverlay: 121,
+  rawOverlay: 115,
 }
 
 function readAllPages() {

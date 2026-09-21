@@ -88,7 +88,11 @@ describe('checklist schedules service', () => {
 
   it('skipAssignment sets status skipped', async () => {
     h.state.result = { data: { id: 'a1' }, error: null }
-    await cs.skipAssignment('a1')
-    expect(h.state.last._calls.update).toEqual({ status: 'skipped' })
+    await cs.skipAssignment('a1', 'Asset out of service')
+    expect(h.state.last._calls.update).toEqual({ status: 'skipped', skip_reason: 'Asset out of service' })
+  })
+
+  it('skipAssignment refuses an unaudited skip', async () => {
+    await expect(cs.skipAssignment('a1', '  ')).rejects.toThrow(/reason is required/i)
   })
 })

@@ -9,7 +9,7 @@ import { supabase, unwrap, applyCountry } from './_client'
 const SCHED_COLS =
   'id,organisation_id,country,template_id,name,cadence,sites,asset_nos,assignee_role,start_date,next_due,active,created_by,created_at,updated_at'
 const ASSIGN_COLS =
-  'id,country,schedule_id,template_id,template_name,site,asset_no,assignee_role,due_date,status,submission_id,completed_at,created_at,updated_at'
+  'id,country,schedule_id,template_id,template_name,site,asset_no,assignee_role,due_date,status,submission_id,completed_at,skip_reason,skipped_by,skipped_at,created_at,updated_at'
 
 // ── Schedules ───────────────────────────────────────────────────────────────
 
@@ -93,7 +93,9 @@ export async function completeAssignment(id, submissionId) {
     .eq('id', id).select(ASSIGN_COLS).single())
 }
 
-export async function skipAssignment(id) {
+export async function skipAssignment(id, reason) {
+  const skipReason = String(reason || '').trim()
+  if (!skipReason) throw new Error('A reason is required to skip this checklist assignment.')
   return unwrap(await supabase.from('checklist_assignments')
-    .update({ status: 'skipped' }).eq('id', id).select(ASSIGN_COLS).single())
+    .update({ status: 'skipped', skip_reason: skipReason }).eq('id', id).select(ASSIGN_COLS).single())
 }

@@ -4,6 +4,7 @@ import test from 'node:test'
 import { PGlite } from '@electric-sql/pglite'
 
 const migrationUrl = new URL('../migrations/20260921075921_checklist_enterprise_evidence_and_compliance.sql', import.meta.url)
+const skipMigrationUrl = new URL('../migrations/20260921083057_checklist_assignment_skip_audit.sql', import.meta.url)
 const ORG = '11111111-1111-4111-8111-111111111111'
 const TEMPLATE = '22222222-2222-4222-8222-222222222222'
 
@@ -79,5 +80,27 @@ test('compliance uses assignments and exposes missing evidence', async () => {
     due_count: 1, completed_count: 1, completed_late_count: 1,
     evidence_gap_count: 1, compliance_pct: '100.0', on_time_pct: '0.0',
   })
+  await db.close()
+})
+
+test('assignment skips require an immutable reason and server timestamp', async () => {
+  const db = await database()
+  await db.exec(await readFile(skipMigrationUrl, 'utf8'))
+  await db.exec(`insert into public.checklist_assignments
+    (template_id, template_name, country, site, due_date, status)
+    values ('${TEMPLATE}', 'Workshop', 'KSA', 'Riyadh', '2026-09-10', 'pending')`)
+  await assert.rejects(
+    db.exec(`update public.checklist_assignments set status = 'skipped'`),
+    /reason is required/,
+  )
+  await db.exec(`update public.checklist_assignments
+    set status = 'skipped', skip_reason = '  Asset out of service  '`)
+  const result = await db.query(`select skip_reason, skipped_at is not null as stamped
+    from public.checklist_assignments`)
+  assert.deepEqual(result.rows[0], { skip_reason: 'Asset out of service', stamped: true })
+  await assert.rejects(
+    db.exec(`update public.checklist_assignments set skip_reason = 'Changed later'`),
+    /skip evidence is immutable/,
+  )
   await db.close()
 })

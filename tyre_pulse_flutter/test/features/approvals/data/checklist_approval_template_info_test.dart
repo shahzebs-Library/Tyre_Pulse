@@ -104,6 +104,22 @@ void main() {
     });
   });
 
+  group('ChecklistApprovalTemplateInfo.fromSnapshot', () {
+    test('uses the immutable template_id and fields', () {
+      final ChecklistApprovalTemplateInfo? info =
+          ChecklistApprovalTemplateInfo.fromSnapshot(<String, Object?>{
+        'template_id': 'tpl-old',
+        'require_area_manager': true,
+        'fields': <Object?>[
+          <String, Object?>{'id': 'old-q', 'type': 'text', 'label': 'Original'},
+        ],
+      });
+      expect(info?.id, 'tpl-old');
+      expect(info?.requireAreaManager, isTrue);
+      expect(info?.fields.single.label, 'Original');
+    });
+  });
+
   group('asTemplateLike', () {
     test(
         'carries only requireAreaManager, matching what the ladder engine '

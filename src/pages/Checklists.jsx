@@ -106,6 +106,7 @@ export default function Checklists() {
 
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('all')
+  const [evidenceFilter, setEvidenceFilter] = useState('all')
   // The submission open in the quick viewer, if any.
   const [viewId, setViewId] = useState(null)
   // The language of the printed sheet, chosen at download time - the floor copy
@@ -157,10 +158,14 @@ export default function Checklists() {
     const byTemplate = templateParam
       ? submissions.filter((s) => String(s.template_id) === templateParam)
       : submissions
-    if (!q) return byTemplate
-    return byTemplate.filter((s) =>
+    const byEvidence = evidenceFilter === 'all' ? byTemplate
+      : evidenceFilter === 'gap'
+        ? byTemplate.filter((s) => s.template_snapshot_status !== 'exact')
+        : byTemplate.filter((s) => s.template_snapshot_status === evidenceFilter)
+    if (!q) return byEvidence
+    return byEvidence.filter((s) =>
       [s.template_name, s.title, s.asset_no, s.site, s.status].filter(Boolean).some((v) => String(v).toLowerCase().includes(q)))
-  }, [submissions, search, templateParam])
+  }, [submissions, search, templateParam, evidenceFilter])
   const submissionsPager = usePagedRows(filteredSubmissions)
 
   // Name the template we were sent to look at, so a filtered-to-nothing list
@@ -256,6 +261,18 @@ export default function Checklists() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
+        {tab === 'submissions' && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-[var(--text-muted)]">Evidence</span>
+            <select className="input py-2" value={evidenceFilter} onChange={(e) => setEvidenceFilter(e.target.value)}>
+              <option value="all">All evidence</option>
+              <option value="exact">Exact revision</option>
+              <option value="gap">Evidence gaps</option>
+              <option value="legacy_unavailable">Legacy unavailable</option>
+              <option value="missing_revision">Missing revision</option>
+            </select>
+          </div>
+        )}
         {tab === 'submissions' && (
           <div className="flex items-center gap-2">
             <span className="text-xs text-[var(--text-muted)]">PDF language</span>
@@ -483,6 +500,11 @@ export default function Checklists() {
                     </td>
                     <td className="table-cell">
                       <span className={`badge text-xs ${statusBadge(s.status)}`}>{prettyStatus(s.status)}</span>
+                      <div className={`text-[11px] mt-1 ${s.template_snapshot_status === 'exact' ? 'text-green-400' : 'text-amber-400'}`}>
+                        {s.template_snapshot_status === 'exact' ? 'Exact template evidence'
+                          : s.template_snapshot_status === 'missing_revision' ? 'Template revision missing'
+                            : 'Legacy evidence unavailable'}
+                      </div>
                     </td>
                     <td className="table-cell whitespace-nowrap text-[var(--text-muted)]">
                       <ChecklistDates submission={s} template={templates.find(t => t.id === s.template_id)} />

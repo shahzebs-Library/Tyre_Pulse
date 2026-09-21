@@ -550,15 +550,39 @@ export default function ChecklistInsights() {
         ) : compliance.due === 0 ? (
           <p className="text-sm text-[var(--text-muted)]">No scheduled assignments exist in this period, so a compliance percentage cannot be reported yet.</p>
         ) : (
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-            <KpiCard title="Due" value={compliance.due.toLocaleString()} icon={CalendarClock} />
-            <KpiCard title="Completed" value={compliance.completed.toLocaleString()} icon={CheckCircle2} />
-            <KpiCard title="Compliance" value={fmtPct(compliance.compliancePct)} icon={ShieldCheck} />
-            <KpiCard title="On time" value={fmtPct(compliance.onTimePct)} icon={TrendingUp} />
-            <KpiCard title="Evidence gaps" value={compliance.evidenceGaps.toLocaleString()}
-              sub={`${compliance.overdue} overdue`} icon={AlertTriangle}
-              accent={compliance.evidenceGaps ? 'text-amber-400' : 'text-green-400'} />
-          </div>
+          <>
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+              <KpiCard title="Due" value={compliance.due.toLocaleString()} icon={CalendarClock} />
+              <KpiCard title="Completed" value={compliance.completed.toLocaleString()} icon={CheckCircle2} />
+              <KpiCard title="Compliance" value={fmtPct(compliance.compliancePct)} icon={ShieldCheck} />
+              <KpiCard title="On time" value={fmtPct(compliance.onTimePct)} icon={TrendingUp} />
+              <KpiCard title="Evidence gaps" value={compliance.evidenceGaps.toLocaleString()}
+                sub={`${compliance.overdue} overdue`} icon={AlertTriangle}
+                accent={compliance.evidenceGaps ? 'text-amber-400' : 'text-green-400'} />
+            </div>
+            <div className="overflow-x-auto border border-[var(--border-dim)] rounded-lg">
+              <table className="w-full text-sm">
+                <thead><tr className="text-left text-xs text-[var(--text-muted)] border-b border-[var(--border-dim)]">
+                  <th className="px-3 py-2 font-medium">Template / site</th>
+                  <th className="px-3 py-2 font-medium text-right">Due</th>
+                  <th className="px-3 py-2 font-medium text-right">Completed</th>
+                  <th className="px-3 py-2 font-medium text-right">Overdue</th>
+                  <th className="px-3 py-2 font-medium text-right">Compliance</th>
+                  <th className="px-3 py-2 font-medium text-right">Evidence gaps</th>
+                </tr></thead>
+                <tbody>{compliance.rows.map((row) => (
+                  <tr key={`${row.template_id}:${row.country}:${row.site}`} className="border-b border-[var(--border-dim)] last:border-0">
+                    <td className="px-3 py-2"><div className="text-[var(--text-primary)]">{row.template_name}</div><div className="text-xs text-[var(--text-muted)]">{[row.site, row.country].filter(Boolean).join(' · ')}</div></td>
+                    <td className="px-3 py-2 text-right">{Number(row.due_count).toLocaleString()}</td>
+                    <td className="px-3 py-2 text-right">{Number(row.completed_count).toLocaleString()}</td>
+                    <td className="px-3 py-2 text-right">{Number(row.overdue_count).toLocaleString()}</td>
+                    <td className="px-3 py-2 text-right">{row.compliance_pct == null ? 'N/A' : `${Number(row.compliance_pct).toFixed(1)}%`}</td>
+                    <td className={`px-3 py-2 text-right ${Number(row.evidence_gap_count) ? 'text-amber-400' : ''}`}>{Number(row.evidence_gap_count).toLocaleString()}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
 

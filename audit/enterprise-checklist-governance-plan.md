@@ -64,8 +64,9 @@ When a denominator is zero, report `N/A`; never report a misleading zero percent
 - [x] Label pre-existing records as `legacy_unavailable` instead of reconstructing history.
 - [x] Preserve offline submissions against their recorded version when that revision exists.
 - [x] Render the stored snapshot in web review and PDF paths.
-- [ ] Render the stored snapshot in installed mobile review paths.
-- [ ] Add evidence-quality filters to the submission register.
+- [x] Render the stored snapshot in the primary Flutter approval review path.
+- [ ] Release and verify the Flutter snapshot reader on Android and iOS.
+- [x] Add evidence-quality filters to the submission register.
 
 Acceptance: changing a published template creates a new version; it never changes the questions or rules shown for an earlier exact-snapshot submission.
 
@@ -76,7 +77,8 @@ Acceptance: changing a published template creates a new version; it never change
 - [ ] Approve the active asset population by site and vehicle class.
 - [ ] Approve cadence rules by checklist and operating risk.
 - [ ] Configure a one-site pilot without bulk-generating historical obligations.
-- [ ] Add authorised skip/reschedule reasons and actor evidence.
+- [x] Require an immutable skip reason, actor and server timestamp.
+- [ ] Add a governed reschedule flow with reason, actor and original due date.
 - [ ] Reconcile assignment generation against the active fleet daily.
 
 Acceptance: for a selected day/site, active scope, expected assignments, generated assignments and exclusions reconcile exactly.
@@ -106,7 +108,8 @@ Acceptance: the same user cannot bypass separation of duties, stale/mobile retri
 
 - [ ] Replace browser-wide raw-row aggregation with scoped server aggregates.
 - [ ] Add operator, supervisor, area-manager, enterprise and audit views.
-- [ ] Add finding recurrence, action aging, approval aging and evidence-integrity drill-downs.
+- [ ] Add finding recurrence, action aging and approval aging drill-downs.
+- [x] Add assignment and evidence-integrity drill-down by template/site.
 - [ ] Produce controlled CSV/Excel analysis exports and signed PDF audit packs.
 - [ ] Add scheduled monthly reconciliation with export metadata/checksum.
 

@@ -241,11 +241,12 @@ export default function MyChecklists() {
 
   const handleSkip = useCallback(async (a) => {
     if (!a?.id) return
-    if (!window.confirm(`Skip "${a.template_name || 'this checklist'}"? It will be marked skipped and removed from your to-do list.`)) return
+    const reason = window.prompt(`Why is "${a.template_name || 'this checklist'}" being skipped? This reason becomes part of the audit record.`)
+    if (!reason?.trim()) return
     setBusyId(a.id); setError('')
     try {
-      await skipAssignment(a.id)
-      setAssignments((prev) => prev.map((r) => r.id === a.id ? { ...r, status: 'skipped' } : r))
+      const updated = await skipAssignment(a.id, reason)
+      setAssignments((prev) => prev.map((r) => r.id === a.id ? { ...r, ...updated } : r))
       showToast('success', 'Assignment skipped.')
     } catch (err) {
       showToast('error', toUserMessage(err, 'Could not skip this assignment.'))

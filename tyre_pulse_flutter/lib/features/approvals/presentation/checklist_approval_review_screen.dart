@@ -157,7 +157,14 @@ class _ChecklistApprovalReviewScreenState
           .byId(_submissionId);
       ChecklistApprovalTemplateInfo? templateInfo;
       final String? templateId = item?.templateId;
-      if (templateId != null && templateId.isNotEmpty) {
+      if (item != null && item.templateSnapshot.isNotEmpty) {
+        templateInfo = ChecklistApprovalTemplateInfo.fromSnapshot(
+          item.templateSnapshot,
+        );
+      }
+      if (templateInfo == null &&
+          templateId != null &&
+          templateId.isNotEmpty) {
         // Best-effort - see the library comment: labels degrade to field
         // ids and the ladder is treated as single-stage when this fails.
         templateInfo = await ref

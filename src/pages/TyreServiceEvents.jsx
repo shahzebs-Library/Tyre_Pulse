@@ -23,6 +23,8 @@ import {
   RefreshCw,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import Card, { CardHeader } from '../components/ui/Card'
+import Modal from '../components/ui/Modal'
 import { useSettings } from '../contexts/SettingsContext'
 import { formatCurrencyCompact } from '../lib/formatters'
 import {
@@ -88,6 +90,13 @@ function EventModal({ open, initial, onClose, onSaved }) {
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
   const isRemoval = form.event_type === 'replacement' || form.event_type === 'repair'
 
+  // ONE guarded close for every dismissal path. The hand-rolled overlay guarded
+  // NONE of them - the backdrop, the X and Cancel all closed straight through a
+  // save in flight, and only the submit button was disabled. Modal adds Escape,
+  // so a shared guard is what keeps that from being a fourth unguarded path.
+  // `busy` always clears in submit's `finally`, so this can never wedge shut.
+  const close = useCallback(() => { if (!busy) onClose?.() }, [busy, onClose])
+
   const submit = useCallback(async (e) => {
     e?.preventDefault?.()
     setError('')
@@ -107,24 +116,20 @@ function EventModal({ open, initial, onClose, onSaved }) {
     }
   }, [form, editing, initial, onSaved, onClose])
 
-  if (!open) return null
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onMouseDown={onClose}>
-      <form
-        onSubmit={submit}
-        onMouseDown={(e) => e.stopPropagation()}
-        className="card w-full max-w-2xl max-h-[90vh] overflow-y-auto space-y-4"
-      >
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-[var(--text-primary)]">
-            {editing ? 'Edit service event' : 'Log service event'}
-          </h2>
-          <button type="button" onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">
-            <X size={18} />
-          </button>
-        </div>
-
+    // `size="lg"`, not the nominal "form" md: the hand-rolled panel was max-w-2xl
+    // (42rem, widened to 56rem past 1280px by index.css), and md would narrow a
+    // two-column ten-field form by a quarter. lg tracks the width it already had.
+    <Modal
+      open={open}
+      onClose={close}
+      title={editing ? 'Edit service event' : 'Log service event'}
+      size="lg"
+    >
+      {/* The submit button stays INSIDE the form rather than moving to Modal's
+          `footer` slot, which would need a form="id" association - a behaviour
+          change, not a styling one. */}
+      <form onSubmit={submit} className="space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="label">Tyre serial</label>
@@ -187,34 +192,40 @@ function EventModal({ open, initial, onClose, onSaved }) {
             {busy ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
             {busy ? 'Saving...' : editing ? 'Save changes' : 'Log event'}
           </button>
-          <button type="button" onClick={onClose} className="btn-secondary text-sm">Cancel</button>
+          <button type="button" onClick={close} className="btn-secondary text-sm">Cancel</button>
         </div>
       </form>
-    </div>
+    </Modal>
   )
 }
 
 // ─── Delete confirm ───────────────────────────────────────────────────────────
 function ConfirmDelete({ open, onCancel, onConfirm, busy }) {
-  if (!open) return null
+  // Same unguarded-dismissal story as the event form: the backdrop and Cancel
+  // both closed through a delete in flight. `deleting` clears in the caller's
+  // `finally`, so guarding every path here cannot leave the dialog stuck open.
+  const close = () => { if (!busy) onCancel?.() }
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onMouseDown={onCancel}>
-      <div className="card w-full max-w-sm space-y-4" onMouseDown={(e) => e.stopPropagation()}>
-        <div className="flex items-start gap-3">
-          <AlertTriangle size={20} className="text-red-400 mt-0.5 shrink-0" />
-          <div>
-            <p className="text-[var(--text-primary)] font-semibold">Delete this service event?</p>
-            <p className="text-sm text-[var(--text-muted)] mt-1">This action cannot be undone.</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3 justify-end">
-          <button onClick={onCancel} className="btn-secondary text-sm">Cancel</button>
+    <Modal
+      open={open}
+      onClose={close}
+      title="Delete this service event?"
+      size="sm"
+      // No form here, so the action row belongs in the footer slot.
+      footer={(
+        <>
+          <button onClick={close} className="btn-secondary text-sm">Cancel</button>
           <button onClick={onConfirm} disabled={busy} className="btn-danger text-sm inline-flex items-center gap-2 disabled:opacity-60">
             {busy ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />} Delete
           </button>
-        </div>
+        </>
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <AlertTriangle size={20} className="text-red-400 mt-0.5 shrink-0" />
+        <p className="text-sm text-[var(--text-muted)]">This action cannot be undone.</p>
       </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -222,10 +233,12 @@ function ConfirmDelete({ open, onCancel, onConfirm, busy }) {
 function RankCard({ title, icon: Icon, rows, labelKey, currency, empty }) {
   const max = rows.reduce((m, r) => Math.max(m, r.count), 0) || 1
   return (
-    <div className="card">
-      <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 inline-flex items-center gap-2">
-        <Icon size={15} className="text-[var(--text-muted)]" /> {title}
-      </h3>
+    <Card>
+      {/* CardHeader is safe for these: the titles are short, so `truncate` has
+          nothing to cut, and its muted icon slot reproduces the hand-rolled
+          inline-flex heading exactly - which as a DIRECT child of a flex-col
+          Card would have stretched to full width instead of hugging its text. */}
+      <CardHeader title={title} icon={Icon} />
       {rows.length === 0 ? (
         <p className="text-sm text-[var(--text-muted)] py-6 text-center">{empty}</p>
       ) : (
@@ -246,7 +259,7 @@ function RankCard({ title, icon: Icon, rows, labelKey, currency, empty }) {
           ))}
         </ul>
       )}
-    </div>
+    </Card>
   )
 }
 
@@ -447,8 +460,12 @@ export default function TyreServiceEvents() {
         }
       />
 
+      {/* Both banners carried a DEAD `border border-<colour>` class - Card sets
+          `border` inline and wins - so the amber and red edges they depend on to
+          read as a warning at all are now the `tone` prop. Row direction is
+          inline for the same reason: `.flex-col` is emitted after `.flex-row`. */}
       {error === 'missing' && (
-        <div className="card border border-amber-800/50 flex items-start gap-3">
+        <Card tone="warn" className="items-start gap-3" style={{ flexDirection: 'row' }}>
           <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
           <div>
             <p className="text-amber-300 font-medium">Tyre service events are not enabled on this database yet.</p>
@@ -456,16 +473,16 @@ export default function TyreServiceEvents() {
               Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V151_TYRE_SERVICE_EVENTS.sql</span>, then reload.
             </p>
           </div>
-        </div>
+        </Card>
       )}
       {error && error !== 'missing' && (
-        <div className="card border border-red-800/50 flex items-start justify-between gap-3">
+        <Card tone="crit" className="items-start justify-between gap-3" style={{ flexDirection: 'row' }}>
           <div className="flex items-start gap-3">
             <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
             <div><p className="text-red-300 font-medium">Could not load service events.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
           </div>
           <button onClick={load} className="btn-secondary text-sm inline-flex items-center gap-1.5 shrink-0"><RefreshCw size={14} /> Retry</button>
-        </div>
+        </Card>
       )}
 
       {/* KPI tiles */}
@@ -473,22 +490,27 @@ export default function TyreServiceEvents() {
         {kpis.map((kp) => {
           const Icon = kp.icon
           return (
-            <div key={kp.label} className="card">
+            // `kp.tone` is a text-colour class and stays on the icon and the
+            // value line; it is NOT Card's `tone`, which tints the border.
+            <Card key={kp.label}>
               <div className="flex items-center justify-between">
                 <p className="text-xs text-[var(--text-muted)]">{kp.label}</p>
                 <Icon size={16} className={kp.tone} />
               </div>
               <p className={`text-2xl font-bold mt-1 ${kp.tone}`}>{rows === null ? 'N/A' : kp.value}</p>
               <p className="text-[11px] text-[var(--text-dim)] mt-0.5">{rows === null ? '' : kp.sub}</p>
-            </div>
+            </Card>
           )
         })}
       </div>
 
       {/* Charts row: type doughnut + monthly trend */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="card lg:col-span-1">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Events by type</h3>
+        {/* The chart wells keep their own h-64 / h-52: that is the definite
+            height chart.js needs under maintainAspectRatio:false, and it was
+            never on the card, so moving to Card cannot collapse it. */}
+        <Card className="lg:col-span-1">
+          <CardHeader title="Events by type" />
           <div className="h-64">
             {rows === null
               ? <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" />
@@ -496,10 +518,10 @@ export default function TyreServiceEvents() {
                 ? <Doughnut data={donutData} options={donutOpts} />
                 : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No service events yet.</div>}
           </div>
-        </div>
+        </Card>
 
-        <div className="card lg:col-span-2">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Events over the last 12 months</h3>
+        <Card className="lg:col-span-2">
+          <CardHeader title="Events over the last 12 months" />
           <div className="h-64">
             {rows === null
               ? <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" />
@@ -507,27 +529,27 @@ export default function TyreServiceEvents() {
                 ? <Bar data={trendData} options={barOpts} />
                 : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No dated events to trend.</div>}
           </div>
-        </div>
+        </Card>
       </div>
 
       {/* Rankings + site breakdown */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <RankCard title="Most-serviced assets" icon={Building2} rows={analysis.topAssets} labelKey="asset_no" currency={activeCurrency} empty={rows === null ? 'Loading...' : 'No asset-linked events.'} />
         <RankCard title="Most-serviced positions" icon={MapPin} rows={analysis.topPositions} labelKey="position" currency={activeCurrency} empty={rows === null ? 'Loading...' : 'No position data recorded.'} />
-        <div className="card">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 inline-flex items-center gap-2">
-            <Building2 size={15} className="text-[var(--text-muted)]" /> Events by site
-          </h3>
+        <Card>
+          <CardHeader title="Events by site" icon={Building2} />
           <div className="h-52">
             {analysis.bySite.length
               ? <Bar data={siteChart} options={siteBarOpts} />
               : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">{rows === null ? 'Loading...' : 'No site data recorded.'}</div>}
           </div>
-        </div>
+        </Card>
       </div>
 
-      {/* Filters */}
-      <div className="card space-y-3">
+      {/* Filters. No `clip`: everything out of flow in here is a native <select>
+          or a native date input, which the browser paints outside the page's
+          overflow context, so there is nothing for a clipped card to cut. */}
+      <Card className="space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[200px]">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
@@ -567,10 +589,15 @@ export default function TyreServiceEvents() {
             </button>
           ))}
         </div>
-      </div>
+      </Card>
 
-      {/* Table */}
-      <div className="card overflow-hidden !p-0">
+      {/* Table. `pad="none" clip` replaces the old `overflow-hidden !p-0`: the
+          `!important` existed only to beat .card's padding, and the kit has a
+          prop for it. It stays a raw <table> - it already owns its sortable
+          headers, usePagedRows + TablePagination and the Excel/PDF export above,
+          and it carries composite cells (a typed badge, a row action pair) that
+          EnterpriseTable would have to give a second search box to reproduce. */}
+      <Card pad="none" clip>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -629,7 +656,7 @@ export default function TyreServiceEvents() {
           </table>
         </div>
         <TablePagination {...pager} />
-      </div>
+      </Card>
 
       <EventModal open={modalOpen} initial={editRow} onClose={() => setModalOpen(false)} onSaved={load} />
       <ConfirmDelete open={Boolean(deleteRow)} busy={deleting} onCancel={() => setDeleteRow(null)} onConfirm={confirmDelete} />

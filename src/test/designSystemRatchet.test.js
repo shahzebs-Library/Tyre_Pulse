@@ -39,7 +39,8 @@ const PAGES_DIR = resolve(process.cwd(), 'src/pages')
  * SerialTracker; wave 3 FleetRenewal, TechnicianScorecard, FitmentValidation and
  * DtcDiagnostics; wave 4 DriverSafety, EngineHours, HoldingCompany, RfidRegistry,
  * DailyOps and VehicleWashing; wave 5 TyreSpecifications, OrgHierarchy,
- * SpeedLimiter and ColdChain.
+ * SpeedLimiter and ColdChain; wave 6 PartsCatalog, BayScheduling, UploadData,
+ * Budgets, Certifications, AssetBreakdowns and TyreServiceEvents.
  *
  * A THIRD FILE NOW CONVERTS OVERLAYS AND CORRECTLY STAYS ON THIS LIST.
  * RotationSchedule moved its ScheduleModal but keeps two `tp-drawer-panel`
@@ -77,7 +78,7 @@ const PAGES_DIR = resolve(process.cwd(), 'src/pages')
  */
 const BASELINE = {
   rawTable: 194,
-  rawOverlay: 111,
+  rawOverlay: 104,
 }
 
 function readAllPages() {

@@ -71,6 +71,40 @@ export function isMissingRelation(err) {
 }
 
 /**
+ * probeRelation - does this table actually exist?
+ *
+ * WHY THIS IS NEEDED AT ALL. Most `listX()` services deliberately DEGRADE a
+ * missing relation to `[]` so a page ships before its migration is applied.
+ * That is the right default, but it destroys the distinction the page needs:
+ * "nothing recorded yet" and "this table does not exist" arrive identically.
+ * Several pages carry a correct "apply the migration" banner behind a `catch`
+ * that the swallowing service guarantees will never run - so the page instead
+ * invites the user to create the first record in a table that is not there.
+ *
+ * THE HONESTY RULE IS `checked`. When we cannot tell - a network failure, an
+ * RLS denial, anything that is not a definite missing-relation - this reports
+ * `checked: false` and `exists: true`, so a caller NEVER renders "apply the
+ * migration" on a guess. A false provisioning banner sends someone to the
+ * database over a dropped request; that is worse than the empty state.
+ *
+ * Costs one HEAD request and returns no rows, so call it only when a list came
+ * back empty AND the page actually renders such a banner.
+ */
+export async function probeRelation(table) {
+  try {
+    const { error } = await supabase.from(table).select('id', { head: true, count: 'exact' }).limit(1)
+    if (error) {
+      if (isMissingRelation(error)) return { exists: false, checked: true }
+      return { exists: true, checked: false }
+    }
+    return { exists: true, checked: true }
+  } catch (err) {
+    if (isMissingRelation(err)) return { exists: false, checked: true }
+    return { exists: true, checked: false }
+  }
+}
+
+/**
  * True when a failure means "this COLUMN is not provisioned yet" (a migration
  * authored in the repo but not yet applied - the SHIP-BEFORE-MIGRATE case).
  * PostgREST fails the whole request on an unknown column (42703 / PGRST204),

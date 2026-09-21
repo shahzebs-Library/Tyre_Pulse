@@ -20,6 +20,8 @@ import {
   FileText, CheckCircle2, RotateCcw, Search, MapPin, Timer,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import Card from '../components/ui/Card'
+import Modal from '../components/ui/Modal'
 import EmptyState from '../components/EmptyState'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -45,12 +47,30 @@ const SEVERITY_TONE = {
   critical: '#ef4444', high: '#f59e0b', medium: '#3b82f6', low: '#22c55e',
 }
 
+/**
+ * A headline number that doubles as a filter.
+ *
+ * Three utilities on the old `.card` version were DEAD the moment this became a
+ * Card, and one of them was invisible: `p-4` (Card sets padding inline, so it is
+ * `pad="tight"` now, which is the same 1rem) and `hover:border-white/20` - a
+ * variant prefix does not save a class from an inline declaration, so the hover
+ * cue simply never rendered. `interactive` replaces it and adds the
+ * focus-visible ring the hand-rolled version never had.
+ *
+ * The selected border stays an inline `borderColor`, not a class and not the
+ * tone prop, because it must beat Card's own inline border. It is applied ONLY
+ * when active: passing `borderColor: undefined` would delete Card's value and
+ * drop the border back to currentColor.
+ */
 function Tile({ label, value, sub, icon: Icon, active, onClick, tone }) {
   const Cmp = onClick ? 'button' : 'div'
   return (
-    <Cmp
+    <Card
+      as={Cmp}
       onClick={onClick}
-      className={`card p-4 text-left w-full ${onClick ? 'hover:border-white/20 transition-colors' : ''}`}
+      pad="tight"
+      interactive={!!onClick}
+      className="text-left w-full"
       style={active ? { borderColor: 'var(--accent)' } : undefined}
     >
       <div className="flex items-center justify-between mb-1">
@@ -61,7 +81,7 @@ function Tile({ label, value, sub, icon: Icon, active, onClick, tone }) {
         {value === null || value === undefined ? 'N/A' : value}
       </div>
       {sub && <div className="text-[11px] mt-0.5" style={{ color: 'var(--text-dim)' }}>{sub}</div>}
-    </Cmp>
+    </Card>
   )
 }
 
@@ -202,16 +222,24 @@ export default function AssetBreakdowns() {
         )}
       />
 
+      {/* `p-4` was dead here (Card pads inline) - `pad="tight"` is the same
+          1rem. The red edge moves to `tone`, which is the one route that
+          reaches the border; the red wash stays inline because that IS an
+          inline declaration and so still wins. Row direction is inline for the
+          same reason: Card is `flex flex-col` and a plain `flex-row` loses. */}
       {error && (
-        <div className="card p-4 flex items-start justify-between gap-3"
-          style={{ background: TONE.danger.bg, borderColor: TONE.danger.border }}>
+        <Card tone="crit" pad="tight" className="items-start justify-between gap-3"
+          style={{ flexDirection: 'row', background: TONE.danger.bg }}>
           <p className="text-sm" style={{ color: TONE.danger.text }}>{error}</p>
           <button onClick={load} className="btn-secondary text-xs">Retry</button>
-        </div>
+        </Card>
       )}
 
+      {/* Not `clip`: the only out-of-flow content here is a native <select>,
+          whose option list the browser paints outside the page's overflow
+          context, so a card can never cut it off. */}
       {showFilters && (
-        <div className="card p-4">
+        <Card pad="tight">
           <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
             <label className="block">
               <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Search</span>
@@ -262,13 +290,14 @@ export default function AssetBreakdowns() {
               <X className="w-3 h-3" /> Clear filters
             </button>
           </div>
-        </div>
+        </Card>
       )}
 
       {loading ? (
-        <div className="card p-10 text-center text-sm" style={{ color: 'var(--text-secondary)' }}>
+        // `p-10` was dead; --space-10 is the same 2.5rem and reaches the card.
+        <Card className="text-center text-sm" style={{ padding: 'var(--space-10)', color: 'var(--text-secondary)' }}>
           Loading the breakdown register...
-        </div>
+        </Card>
       ) : unavailable ? (
         <EmptyState
           icon={Wrench}
@@ -299,7 +328,7 @@ export default function AssetBreakdowns() {
           </div>
 
           {findings.length > 0 && (
-            <div className="card p-4 space-y-2">
+            <Card pad="tight" className="space-y-2">
               <h3 className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>What needs attention</h3>
               {findings.map((f, i) => (
                 <div key={i} className="rounded-lg px-3 py-2 text-sm"
@@ -307,11 +336,11 @@ export default function AssetBreakdowns() {
                   {f.text}
                 </div>
               ))}
-            </div>
+            </Card>
           )}
 
           <div className="grid gap-4 lg:grid-cols-2">
-            <div className="card p-4">
+            <Card pad="tight">
               <h3 className="text-sm font-medium mb-3" style={{ color: 'var(--text-primary)' }}>How long they have been down</h3>
               {bands.every((b) => !b.count) ? (
                 <p className="text-sm" style={{ color: 'var(--text-dim)' }}>No machines are down in this view.</p>
@@ -324,9 +353,9 @@ export default function AssetBreakdowns() {
                   <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{b.count}</span>
                 </button>
               ))}
-            </div>
+            </Card>
 
-            <div className="card p-4">
+            <Card pad="tight">
               <h3 className="text-sm font-medium mb-3" style={{ color: 'var(--text-primary)' }}>Where they are down</h3>
               {!bySite.length ? (
                 <p className="text-sm" style={{ color: 'var(--text-dim)' }}>Nothing to show in this view.</p>
@@ -339,11 +368,11 @@ export default function AssetBreakdowns() {
                   <span className="text-sm font-medium w-8 text-right" style={{ color: 'var(--text-primary)' }}>{g.count}</span>
                 </button>
               ))}
-            </div>
+            </Card>
           </div>
 
           {repeats.length > 0 && (
-            <div className="card p-4">
+            <Card pad="tight">
               <h3 className="text-sm font-medium mb-1" style={{ color: 'var(--text-primary)' }}>Machines that keep breaking down</h3>
               <p className="text-[11px] mb-3" style={{ color: 'var(--text-dim)' }}>
                 Counted over every breakdown recorded, not just the current view - a repeat is what separates a bad day from a bad machine.
@@ -358,10 +387,13 @@ export default function AssetBreakdowns() {
                   </button>
                 ))}
               </div>
-            </div>
+            </Card>
           )}
 
-          <div className="card overflow-hidden">
+          {/* `clip` is the legitimate case: the table is cropped to the card
+              radius. It cannot reach TablePagination's rows-per-page control,
+              which is a native <select> the browser paints outside the page. */}
+          <Card clip>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -429,14 +461,25 @@ export default function AssetBreakdowns() {
               </table>
               <TablePagination {...breakdownPager} />
             </div>
-          </div>
+          </Card>
         </>
       )}
 
+      {/* This overlay had NO backdrop close, NO X and NO Escape - the only way
+          out was a Cancel button that stayed live while a save was in flight,
+          so a record could be dismissed mid-write with no way to learn whether
+          it had been written. Modal supplies all three close paths and every
+          one of them, plus Cancel, now runs through the same `busy` guard.
+          `submit` clears `busy` in a `finally`, so this can never become
+          unclosable. The submit button stays inside the form. */}
       {form && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)' }}>
-          <form onSubmit={submit} className="card p-5 w-full max-w-lg space-y-3 max-h-[85vh] overflow-y-auto">
-            <h3 className="text-base font-medium" style={{ color: 'var(--text-primary)' }}>Report a breakdown</h3>
+        <Modal
+          open
+          onClose={() => { if (!busy) setForm(null) }}
+          title="Report a breakdown"
+          size="md"
+        >
+          <form onSubmit={submit} className="space-y-3">
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="block">
                 <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Asset number</span>
@@ -481,21 +524,34 @@ export default function AssetBreakdowns() {
             </div>
             {formError && <p className="text-sm" style={{ color: TONE.danger.text }}>{formError}</p>}
             <div className="flex justify-end gap-2 pt-1">
-              <button type="button" onClick={() => setForm(null)} className="btn-secondary text-sm">Cancel</button>
+              <button type="button" onClick={() => { if (!busy) setForm(null) }} disabled={busy} className="btn-secondary text-sm">Cancel</button>
               <button type="submit" disabled={busy} className="btn-primary text-sm">
                 {busy ? 'Saving...' : 'Record breakdown'}
               </button>
             </div>
           </form>
-        </div>
+        </Modal>
       )}
 
+      {/* Form-less confirm, so the buttons belong in `footer`. Same story as
+          the dialog above: the hand-rolled version offered only an unguarded
+          Cancel, and `doReturn` clears `busy` in a `finally`. */}
       {returning && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)' }}>
-          <div className="card p-5 w-full max-w-md space-y-3">
-            <h3 className="text-base font-medium" style={{ color: 'var(--text-primary)' }}>
-              {returning.asset_no} back in service
-            </h3>
+        <Modal
+          open
+          onClose={() => { if (!busy) setReturning(null) }}
+          title={`${returning.asset_no} back in service`}
+          size="sm"
+          footer={(
+            <>
+              <button onClick={() => { if (!busy) setReturning(null) }} disabled={busy} className="btn-secondary text-sm">Cancel</button>
+              <button onClick={doReturn} disabled={busy || !returning.returned_on} className="btn-primary text-sm">
+                {busy ? 'Saving...' : 'Confirm return'}
+              </button>
+            </>
+          )}
+        >
+          <div className="space-y-3">
             <p className="text-xs" style={{ color: 'var(--text-dim)' }}>
               Enter the day it actually returned, not today. Recording it late would make the downtime read shorter than it was.
             </p>
@@ -505,14 +561,8 @@ export default function AssetBreakdowns() {
                 onChange={(e) => setReturning({ ...returning, returned_on: e.target.value })}
                 className="input w-full mt-1" />
             </label>
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setReturning(null)} className="btn-secondary text-sm">Cancel</button>
-              <button onClick={doReturn} disabled={busy || !returning.returned_on} className="btn-primary text-sm">
-                {busy ? 'Saving...' : 'Confirm return'}
-              </button>
-            </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   )

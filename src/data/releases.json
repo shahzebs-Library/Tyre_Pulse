@@ -1,5 +1,13 @@
 [
   {
+    "id": "2026.09.21.1",
+    "date": "2026-09-21",
+    "changes": [{
+      "modules": ["vehicle_washing"],
+      "text": {"en": "Washing records now show who entered them, chemicals used and checklist results. Staff activity, expanded filters and exports help review entries, with one-click access to recorded evidence."}
+    }]
+  },
+  {
     "id": "2026.09.12.4",
     "date": "2026-09-12",
     "changes": [

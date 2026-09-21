@@ -9,11 +9,12 @@
  * surface an "apply MIGRATIONS_V270_WASH_MODULE.sql" hint instead of throwing.
  */
 import { supabase, unwrap, applyCountry, fetchAllPages, isMissingRelation } from './_client'
+import { validateWashDetails, canonicalWashValue } from '../washDetails'
 
 export const COLS =
   'id,organisation_id,country,site,area,asset_no,vehicle_type,wash_date,wash_time,' +
   'wash_type,bay,washed_by,water_liters,cost,duration_min,status,odometer_km,notes,photos,' +
-  'created_by,created_at,updated_at'
+  'created_by,created_at,updated_at,wash_details,captured_at,entry_name,entry_username,completed_by,completed_at'
 
 /** Controlled vocabularies (mirror the DB CHECK constraints). */
 export const WASH_TYPES = ['Exterior', 'Interior', 'Full', 'Engine Bay', 'Undercarriage', 'Steam', 'Waterless']
@@ -102,7 +103,7 @@ function textOrNull(v, max = 200) {
  *   type?:string, assetNo?:string, status?:string, limit?:number }} [opts]
  */
 export async function listWashRecords({
-  country, from, to, site, area, type, assetNo, status, limit = 20000,
+  country, from, to, site, area, type, assetNo, status, limit = Infinity,
 } = {}) {
   const pageFn = (pFrom, pTo) => {
     let q = supabase.from('wash_records').select(COLS)
@@ -117,11 +118,13 @@ export async function listWashRecords({
     return q
       .order('wash_date', { ascending: false })
       .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
       .range(pFrom, pTo)
   }
   try {
-    const { data, error } = await fetchAllPages(pageFn, { pageSize: 1000, max: limit })
+    const { data, error, truncated } = await fetchAllPages(pageFn, { pageSize: 1000, max: limit })
     if (error) throw error
+    if (truncated) throw new Error('Wash history exceeds the reporting limit. Narrow the date range before reporting.')
     return data || []
   } catch (err) {
     if (isMissingRelation(err)) return []
@@ -159,6 +162,7 @@ function buildPayload(values = {}) {
     odometer_km: numOrNull(values.odometer_km),
     notes: textOrNull(values.notes, 4000),
     photos: photoArray(values.photos),
+    ...(Object.hasOwn(values, 'wash_details') ? { wash_details: validateWashDetails(values.wash_details) } : {}),
     country: values.country ?? null,
   }
 }
@@ -166,8 +170,20 @@ function buildPayload(values = {}) {
 /** Create a wash record. `asset_no` is required. */
 export async function createWashRecord(values = {}) {
   const payload = buildPayload(values)
+  payload.captured_at = new Date().toISOString()
+  if (values.client_uuid) payload.client_uuid = String(values.client_uuid).slice(0,120)
   if (!payload.asset_no) throw new Error('An asset number is required.')
   if (!payload.wash_date) payload.wash_date = new Date().toISOString().slice(0, 10)
+  if (payload.client_uuid) {
+    const result = await supabase.from('wash_records').upsert(payload, { onConflict: 'client_uuid', ignoreDuplicates: true }).select(COLS).maybeSingle()
+    const created = unwrap(result)
+    if (created) return created
+    const existing = unwrap(await supabase.from('wash_records').select(COLS).eq('client_uuid', payload.client_uuid).single())
+    if (Object.entries(payload).some(([key,value]) => !['client_uuid','captured_at'].includes(key) && JSON.stringify(canonicalWashValue(value)) !== JSON.stringify(canonicalWashValue(existing[key])))) {
+      throw new Error('This wash was already saved with different details. Open its record to correct it.')
+    }
+    return existing
+  }
   return unwrap(await supabase.from('wash_records').insert(payload).select(COLS).single())
 }
 
@@ -221,6 +237,7 @@ export async function scheduleWash(values = {}) {
 export async function correctWashRecord(id, patch = {}, reason = '') {
   if (!id) throw new Error('A record id is required.')
   const clean = {}
+  if (Object.hasOwn(patch, 'wash_details')) clean.wash_details = validateWashDetails(patch.wash_details)
   for (const k of CORRECTABLE_FIELDS) {
     if (!Object.prototype.hasOwnProperty.call(patch, k)) continue
     const v = patch[k]
@@ -299,4 +316,20 @@ export async function washExportFleet(rows) {
     fleet.push(...(unwrap(result) || []))
   }
   return fleet
+}
+
+export async function enrichWashPeople(rows) {
+  const people = new Map()
+  const missing = rows.filter(r => r.created_by && !r.entry_name && !r.entry_username)
+  for (let i = 0; i < missing.length; i += 500) {
+    const data = unwrap(await supabase.rpc('wash_entry_people', { p_ids: missing.slice(i, i + 500).map(r => r.id) }))
+    for (const p of data || []) people.set(p.id, p)
+  }
+  const corrected = new Map()
+  for(let i=0;i<rows.length;i+=500) {
+    const result = await fetchAllPages((from,to) => supabase.from('wash_record_corrections').select('id,wash_id,corrected_by').in('wash_id',rows.slice(i,i+500).map(r=>r.id)).order('id').range(from,to))
+    if(result.truncated) throw new Error('Correction history could not be loaded completely.')
+    for(const c of unwrap(result) || []) corrected.set(c.wash_id,[...new Set([...(corrected.get(c.wash_id) || []),c.corrected_by].filter(Boolean))])
+  }
+  return rows.map(r => ({ ...r, entry_name: r.entry_name || people.get(r.created_by)?.full_name || null, entry_username: r.entry_username || people.get(r.created_by)?.username || null, corrected_by_ids: corrected.get(r.id) || [] }))
 }

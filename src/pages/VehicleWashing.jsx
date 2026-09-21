@@ -46,6 +46,7 @@ import {
 import { Link } from 'react-router-dom'
 import DownloadNotice from '../components/ui/DownloadNotice'
 import PageHeader from '../components/ui/PageHeader'
+import Card, { CardHeader } from '../components/ui/Card'
 import DateField from '../components/ui/DateField'
 import Modal from '../components/ui/Modal'
 import NotInUseNotice from '../components/ui/NotInUseNotice'
@@ -70,6 +71,11 @@ import { resolveStorageUrl } from '../lib/storageRefs'
 import { washVehicleKey } from '../lib/washReportPdf'
 import { safeImageSrc } from '../lib/safeUrl'
 import { toUserMessage } from '../lib/safeError'
+import { enrichWashPeople } from '../lib/api/washRecords'
+import { entryPerson, emptyWashDetails, checklistSummary, staffWashActivity } from '../lib/washDetails'
+import WashDetailsForm from '../components/washing/WashDetailsForm'
+import WashRecordViewer from '../components/washing/WashRecordViewer'
+import WashAdvancedFilters from '../components/washing/WashAdvancedFilters'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, ArcElement,
@@ -81,6 +87,7 @@ const WRITE_ROLES = new Set(['Admin', 'Manager', 'Director'])
 const TABS = [
   { id: 'reporting', label: 'Reporting', icon: LayoutDashboard },
   { id: 'register', label: 'Log', icon: ListChecks },
+  { id: 'staff', label: 'Staff activity', icon: BarChart3 },
   { id: 'schedule', label: 'Schedule', icon: CalendarClock },
   { id: 'log', label: 'Quick Log', icon: ClipboardList },
 ]
@@ -122,7 +129,7 @@ const EDIT_FIELDS = [
   { key: 'odometer_km', label: 'Odometer (km)', type: 'number' },
   { key: 'notes', label: 'Notes', type: 'text' },
 ]
-const EDIT_LABEL = Object.fromEntries(EDIT_FIELDS.map((f) => [f.key, f.label]))
+const EDIT_LABEL = { ...Object.fromEntries(EDIT_FIELDS.map((f) => [f.key, f.label])), wash_details: 'Chemicals / checklist' }
 
 /** Current local time as HH:MM (auto-captured at save; not user-editable). */
 function nowHHMM() {
@@ -179,6 +186,7 @@ export default function VehicleWashing() {
   const { profile, isSuperAdmin, hasPermission } = useAuth()
   const canWrite = isSuperAdmin === true || WRITE_ROLES.has(profile?.role)
   const canCreate = canWrite || profile?.role === 'Fleet Supervisor'
+  const canReadFleet = hasPermission?.('fleet_master') === true
   const reportMeta = useReportMeta('Vehicle Washing Report')
   const [pdfBusy, setPdfBusy] = useState(false)
   const [pdfStatus, setPdfStatus] = useState('')
@@ -186,6 +194,8 @@ export default function VehicleWashing() {
   const dismissDownload = useCallback(() => setPdfStatus(''), [])
 
   const [tab, setTab] = useState('reporting')
+  const [viewRow, setViewRow] = useState(null)
+  const loadTicket = useRef(0)
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -199,7 +209,7 @@ export default function VehicleWashing() {
   const clearFilters = () => setFilters({ from: '', to: '', site: 'All', area: 'All', type: 'All' })
 
   // Quick-log form.
-  const [form, setForm] = useState({ ...EMPTY_FORM, wash_date: todayISO() })
+  const [form, setForm] = useState(() => ({ ...EMPTY_FORM, client_uuid: crypto.randomUUID(), wash_date: todayISO(), wash_details: emptyWashDetails() }))
   const setField = (k, v) => setForm((f) => ({ ...f, [k]: v }))
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
@@ -245,23 +255,28 @@ export default function VehicleWashing() {
   const [deleting, setDeleting] = useState(false)
 
   const load = useCallback(async () => {
+    const ticket = ++loadTicket.current
     setRefreshing(true)
     setError('')
     try {
-      const data = await listWashRecords({ country: activeCountry })
-      setRows(Array.isArray(data) ? data : [])
+      const data = await enrichWashPeople(await listWashRecords({ country: activeCountry }))
+      const fleet = canReadFleet ? await washExportFleet(data) : []
+      const fleetMap = new Map(fleet.map(v => [washVehicleKey(v),v]))
+      if (ticket !== loadTicket.current) return
+      setRows(data.map(r => ({ ...r, registration_no: fleetMap.get(washVehicleKey(r))?.registration_no, region: fleetMap.get(washVehicleKey(r))?.region })))
       setMissing(false)
       setUpdatedAt(new Date())
     } catch (err) {
+      if (ticket !== loadTicket.current) return
+      setRows([])
       if (isMissingRelation(err)) { setMissing(true); setRows([]) }
       else setError(toUserMessage(err, 'Could not load wash records.'))
     } finally {
-      setLoading(false)
-      setRefreshing(false)
+      if (ticket === loadTicket.current) { setLoading(false); setRefreshing(false) }
     }
-  }, [activeCountry])
+  }, [activeCountry, canReadFleet])
 
-  useEffect(() => { setLoading(true); load() }, [load])
+  useEffect(() => { setLoading(true); setRows([]); setViewRow(null); load() }, [load, profile?.id, profile?.organisation_id])
 
   // Filter option lists derived from the loaded rows.
   const siteOptions = useMemo(() => distinctSites(rows), [rows])
@@ -361,7 +376,7 @@ export default function VehicleWashing() {
   }, [activeCountry])
 
   const resetForm = useCallback(() => {
-    setForm({ ...EMPTY_FORM, wash_date: todayISO() })
+    setForm({ ...EMPTY_FORM, client_uuid: crypto.randomUUID(), wash_date: todayISO(), wash_details: emptyWashDetails() })
     setMaster(null)
     setPreviews({})
     setPhotoError('')
@@ -410,7 +425,7 @@ export default function VehicleWashing() {
         wash_time: nowHHMM(),               // captured automatically at save
         country: activeCountry !== 'All' ? activeCountry : null,
       })
-      if (created) setRows((r) => [created, ...r])
+      if (created) setRows((r) => [created, ...r.filter(x => x.id !== created.id)])
       setFormOk('Wash logged.')
       resetForm()
       setUpdatedAt(new Date())
@@ -470,6 +485,7 @@ export default function VehicleWashing() {
       const v = row[f.key]
       draft[f.key] = v === null || v === undefined ? '' : String(v).slice(0, f.key === 'wash_date' ? 10 : 4000)
     }
+    draft.wash_details = row.wash_details || emptyWashDetails()
     setEditDraft(draft)
     setCorrections([])
     setCorrectionsState('loading')
@@ -495,7 +511,7 @@ export default function VehicleWashing() {
       const before = editRow[f.key] === null || editRow[f.key] === undefined ? '' : String(editRow[f.key])
       const after = String(editDraft[f.key] ?? '')
       return before.slice(0, f.key === 'wash_date' ? 10 : undefined) !== after
-    }).map((f) => f.key)
+    }).map((f) => f.key).concat(JSON.stringify(editRow.wash_details || emptyWashDetails()) !== JSON.stringify(editDraft.wash_details) ? ['wash_details'] : [])
   }, [editRow, editDraft])
 
   const saveCorrection = useCallback(async () => {
@@ -521,7 +537,7 @@ export default function VehicleWashing() {
         )
         return
       }
-      const updated = { ...editRow, ...patch }
+      const updated = { ...editRow, ...patch, ...(res.record || {}) }
       setRows((r) => r.map((x) => (x.id === editRow.id ? updated : x)))
       setEditRow(updated)
       setEditOk(res.changed === 1 ? '1 field corrected.' : `${res.changed} fields corrected.`)
@@ -546,22 +562,10 @@ export default function VehicleWashing() {
    * audit trail as any other change.
    */
   const completeSchedule = useCallback(async (row) => {
-    if (!row) return
-    setError('')
-    try {
-      const res = await correctWashRecord(row.id, { status: 'Completed' }, 'Scheduled wash carried out')
-      if (!res || res.ok !== true) {
-        setError(res?.reason === 'forbidden'
-          ? 'You do not have permission to correct a wash record.'
-          : 'Could not mark the scheduled wash as completed.')
-        return
-      }
-      setRows((r) => r.map((x) => (x.id === row.id ? { ...x, status: 'Completed' } : x)))
-      setUpdatedAt(new Date())
-    } catch (err) {
-      setError(toUserMessage(err, 'Could not mark the scheduled wash as completed.'))
-    }
-  }, [])
+    await openEdit(row)
+    setEditDraft(d => ({ ...d, status: 'Completed', wash_date: todayISO(), wash_time: nowHHMM() }))
+    setEditReason('Scheduled wash carried out')
+  }, [openEdit])
 
   const doDelete = useCallback(async () => {
     if (!confirmDelete) return
@@ -581,8 +585,8 @@ export default function VehicleWashing() {
   // Cost is carried as the same words the screen shows: "No charge" for a
   // recorded zero, "Not recorded" for a blank. A downloaded 0 in a money column
   // reads as a measurement failure in a spreadsheet, which it is not.
-  const EXPORT_COLS = ['wash_date', 'wash_time', 'asset_no', 'vehicle_type', 'wash_type', 'site', 'area', 'bay', 'washed_by', 'status', 'cost']
-  const EXPORT_HEADERS = ['Date', 'Time', 'Asset', 'Vehicle Type', 'Wash Type', 'Site', 'Area', 'Bay', 'Operator', 'Status', 'Cost']
+  const EXPORT_COLS = ['wash_date', 'wash_time', 'asset_no', 'vehicle_type', 'wash_type', 'site', 'area', 'bay', 'washed_by', 'status', 'cost', 'entered_by', 'username', 'received_at', 'chemicals', 'checklist']
+  const EXPORT_HEADERS = ['Date', 'Time', 'Asset', 'Vehicle Type', 'Wash Type', 'Site', 'Area', 'Bay', 'Operator', 'Status', 'Cost', 'Entered by', 'Username', 'Received at', 'Chemicals used', 'Checklist']
   const exportRowsFrom = (list) => (Array.isArray(list) ? list : []).map((r) => ({
     wash_date: r.wash_date ? String(r.wash_date).slice(0, 10) : '',
     wash_time: r.wash_time || '',
@@ -595,6 +599,9 @@ export default function VehicleWashing() {
     washed_by: r.washed_by || '',
     status: r.status || '',
     cost: formatWashCost(r.cost),
+    entered_by: entryPerson(r), username: r.entry_username || '', received_at: r.created_at || '',
+    chemicals: r.wash_details?.chemical_status === 'none' ? 'No chemical used' : (r.wash_details?.chemicals || []).map(c => [c.name,c.manufacturer,c.quantity,c.unit,c.dilution,c.sds_url].filter(Boolean).join(' / ')).join('; ') || 'Not recorded',
+    checklist: (r.wash_details?.checklist || []).map(c => `${c.label}: ${c.result}${c.note ? ` (${c.note})` : ''}`).join('; ') || 'Not recorded',
   }))
   const exportExcel = async (list, label = 'Vehicle Washing') => {
     if (pdfLock.current) return
@@ -653,7 +660,11 @@ export default function VehicleWashing() {
       />
 
       {missing && (
-        <div className="card border border-amber-800/50 flex items-start gap-3">
+        // `border border-amber-800/50` would be DEAD as a class: Card sets border
+        // inline and wins, so the tint is carried by `tone`. Card is `flex flex-col`
+        // and `.flex-col` is emitted after `.flex-row`, so row direction has to be
+        // inline too - Card spreads `style` last.
+        <Card tone="warn" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
           <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
           <div>
             <p className="text-amber-300 font-medium">Vehicle Washing is not enabled on this database yet.</p>
@@ -661,14 +672,14 @@ export default function VehicleWashing() {
               Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V270_WASH_MODULE.sql</span>, then reload.
             </p>
           </div>
-        </div>
+        </Card>
       )}
 
       {error && (
-        <div className="card border border-red-800/50 flex items-start gap-3">
+        <Card tone="crit" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
           <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
           <div><p className="text-red-300 font-medium">Something went wrong.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
-        </div>
+        </Card>
       )}
 
       {/* Nothing has ever been logged: state it above the zeros so an empty
@@ -690,7 +701,7 @@ export default function VehicleWashing() {
           return (
             <button
               key={t.id}
-              onClick={() => setTab(t.id)}
+              onClick={() => { setTab(t.id); if(t.id === 'staff') setRegFilter('dateBasis','received') }}
               className={`inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${on ? 'border-blue-500 text-[var(--text-primary)]' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}
             >
               <Icon size={15} /> {t.label}
@@ -700,10 +711,26 @@ export default function VehicleWashing() {
       </div>
 
       {/* ─────────────── REPORTING ─────────────── */}
+      {['reporting','register','staff'].includes(tab) && <WashAdvancedFilters
+        rows={rows} value={tab === 'reporting' ? filters : regFilters}
+        onChange={tab === 'reporting' ? setFilters : setRegFilters} userId={profile?.id}
+        scope={`${profile?.organisation_id}:${profile?.id}:${activeCountry}`} includeArea={tab !== 'reporting'} includeBasic={tab === 'staff'} />}
+
+      {tab === 'staff' && <div className="card space-y-4">
+        <h2 className="font-semibold">Entries by person</h2>
+        <p className="text-sm text-[var(--text-muted)]">Each received record counts once. Edits and upload retries do not add entries. These filters are shared with the Log tab.</p>
+        <div className="flex flex-wrap gap-3"><label>From<DateField value={regFilters.from} onChange={v => setRegFilter('from',v)} ariaLabel="Staff activity from" /></label><label>To<DateField value={regFilters.to} onChange={v => setRegFilter('to',v)} ariaLabel="Staff activity to" /></label><button className="btn-secondary" onClick={clearRegFilters}>Reset filters</button><button className="btn-secondary" disabled={!regRows.length || pdfBusy} onClick={() => exportExcel(regRows,'Wash staff activity records')}>Export matching entries</button></div>
+        {loading ? <p>Loading…</p> : error ? <p role="alert">{error}</p> : <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr>{['Person','Entries submitted','Distinct vehicles','Completed records','Scheduled records','Last received'].map(label => <th className="text-start p-2" key={label}>{label}</th>)}</tr></thead><tbody>{staffWashActivity(regRows).map(p => <tr className="border-t border-[var(--input-border)]" key={p.id}><td className="p-2"><button className="text-blue-400 underline" onClick={() => { setRegFilter('enteredBy',p.id); setTab('register') }}>{p.name}</button></td><td className="p-2">{p.entries}</td><td className="p-2">{p.vehicles}</td><td className="p-2">{p.completed}</td><td className="p-2">{p.scheduled}</td><td className="p-2">{fmtStamp(p.last)}</td></tr>)}</tbody></table>{!regRows.length && <p>No entries match these filters.</p>}</div>}
+      </div>}
+
       {tab === 'reporting' && (
         <div className="space-y-4">
-          {/* Filter bar */}
-          <div className="card space-y-3">
+          {/* Filter bar. The quick ranges stay on this own wrapping row rather than
+              moving into CardHeader's `actions`, which is flex-shrink-0 and cannot
+              wrap: four buttons in a non-shrinking box push a phone-width card into
+              horizontal page scroll. Card is deliberately NOT clipped here either -
+              DateField renders a real calendar panel. */}
+          <Card className="space-y-3">
             <div className="flex items-center gap-2 text-[var(--text-secondary)]">
               <Filter size={15} /> <span className="text-sm font-medium">Filters</span>
               <div className="ml-auto flex flex-wrap gap-1.5">
@@ -754,21 +781,21 @@ export default function VehicleWashing() {
                 </button>
               </div>
             </div>
-          </div>
+          </Card>
 
           {/* KPI tiles */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {kpis.map((k) => {
               const Icon = k.icon
               return (
-                <div key={k.label} className="card">
+                <Card key={k.label}>
                   <div className="flex items-center justify-between">
                     <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                     <Icon size={15} className="text-[var(--text-muted)]" />
                   </div>
                   <p className="text-xl font-bold text-[var(--text-primary)] mt-1">{loading ? '-' : k.value}</p>
                   {k.hint && <p className="text-[10px] text-[var(--text-muted)] mt-1">{k.hint}</p>}
-                </div>
+                </Card>
               )
             })}
           </div>
@@ -783,52 +810,44 @@ export default function VehicleWashing() {
 
           {/* Charts */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className="card">
-              <div className="flex items-center gap-2 mb-3">
-                <TrendingUp size={16} className="text-[var(--text-secondary)]" />
-                <h3 className="font-semibold text-[var(--text-primary)]">Monthly wash trend</h3>
-              </div>
+            <Card>
+              <CardHeader icon={TrendingUp} title="Monthly wash trend" />
               <div className="h-[240px]">
                 {summary.totalWashes === 0
                   ? <EmptyChart />
                   : <Line data={trendData} options={lineOpts} />}
               </div>
-            </div>
-            <div className="card">
-              <div className="flex items-center gap-2 mb-3">
-                <PieChart size={16} className="text-[var(--text-secondary)]" />
-                <h3 className="font-semibold text-[var(--text-primary)]">Washes by type</h3>
-              </div>
+            </Card>
+            <Card>
+              <CardHeader icon={PieChart} title="Washes by type" />
               <div className="h-[240px]">
                 {summary.byType.length === 0
                   ? <EmptyChart />
                   : <Doughnut data={typeData} options={doughnutOpts} />}
               </div>
-            </div>
-            <div className="card">
-              <div className="flex items-center gap-2 mb-3">
-                <BarChart3 size={16} className="text-[var(--text-secondary)]" />
-                <h3 className="font-semibold text-[var(--text-primary)]">Washes by site</h3>
-              </div>
+            </Card>
+            <Card>
+              <CardHeader icon={BarChart3} title="Washes by site" />
               <div className="h-[240px]">
                 {summary.bySite.length === 0
                   ? <EmptyChart />
                   : <Bar data={siteCountData} options={barOpts} />}
               </div>
-            </div>
+            </Card>
           </div>
 
           {/* Compliance: who is overdue for a wash. This reads the WHOLE record
               set, not the filters above, because a vehicle being 12 days
               unwashed is a fleet fact that a date range must not soften. */}
-          <div className="card">
-            <div className="flex items-center gap-2 mb-3">
-              <CalendarClock size={16} className="text-[var(--text-secondary)]" />
-              <h3 className="font-semibold text-[var(--text-primary)]">Due for a wash</h3>
-              <span className="text-[11px] text-[var(--text-muted)]">
-                {WASH_INTERVAL_DAYS} day interval, whole fleet history
-              </span>
-            </div>
+          <Card>
+            {/* The basis line moves to CardHeader's `description`, under the title.
+                It is what keeps "Due for a wash" honest, so it must keep reading
+                next to the heading rather than being dropped in the migration. */}
+            <CardHeader
+              icon={CalendarClock}
+              title="Due for a wash"
+              description={`${WASH_INTERVAL_DAYS} day interval, whole fleet history`}
+            />
             {loading ? (
               <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-9 bg-[var(--input-bg)] rounded animate-pulse" />)}</div>
             ) : dueList.length === 0 ? (
@@ -874,14 +893,14 @@ export default function VehicleWashing() {
                 )}
               </div>
             )}
-          </div>
+          </Card>
         </div>
       )}
 
       {/* ─────────────── LOG (register) ─────────────── */}
       {tab === 'register' && (
         <div className="space-y-4">
-          <div className="card space-y-3">
+          <Card className="space-y-3">
             <div className="flex items-center gap-2 text-[var(--text-secondary)]">
               <Filter size={15} /> <span className="text-sm font-medium">Filters</span>
               <span className="text-[11px] text-[var(--text-muted)]">every record, plans included</span>
@@ -935,7 +954,7 @@ export default function VehicleWashing() {
               </button>
               <span className="text-xs text-[var(--text-muted)]">{regRows.length} record(s) match. The download carries exactly these rows.</span>
             </div>
-          </div>
+          </Card>
 
           {/* What the cost column on these records actually says. Washing is not
               reported as a cost driver anywhere; this is a per-record fact. */}
@@ -943,12 +962,14 @@ export default function VehicleWashing() {
             <p className="text-xs text-[var(--text-muted)]">{regCost.note}</p>
           )}
 
-          <div className="card">
-            <div className="flex items-center gap-2 mb-3">
-              <ClipboardList size={16} className="text-[var(--text-secondary)]" />
-              <h3 className="font-semibold text-[var(--text-primary)]">Wash records</h3>
-              <span className="text-[11px] text-[var(--text-muted)]">{regRows.length} matched</span>
-            </div>
+          <Card>
+            {/* One short span is what `actions` is for; it cannot wrap, so a row of
+                buttons would belong on its own row instead. */}
+            <CardHeader
+              icon={ClipboardList}
+              title="Wash records"
+              actions={<span className="text-[11px] text-[var(--text-muted)]">{regRows.length} matched</span>}
+            />
             {loading ? (
               <div className="space-y-2">{[0, 1, 2, 3].map((i) => <div key={i} className="h-9 bg-[var(--input-bg)] rounded animate-pulse" />)}</div>
             ) : regRows.length === 0 ? (
@@ -972,6 +993,9 @@ export default function VehicleWashing() {
                       <th className="py-2 pr-3 font-medium">Area</th>
                       <th className="py-2 pr-3 font-medium">Bay</th>
                       <th className="py-2 pr-3 font-medium">Operator</th>
+                      <th className="py-2 pr-3 font-medium">Entered by</th>
+                      <th className="py-2 pr-3 font-medium">Checklist</th>
+                      <th className="py-2 pr-3 font-medium">View</th>
                       <th className="py-2 pr-3 font-medium">Cost</th>
                       <th className="py-2 pr-3 font-medium text-center">Photos</th>
                       <th className="py-2 pr-3 font-medium">Status</th>
@@ -995,6 +1019,9 @@ export default function VehicleWashing() {
                         <td className="py-2 pr-3 text-[var(--text-secondary)]">{r.area || 'N/A'}</td>
                         <td className="py-2 pr-3 text-[var(--text-secondary)]">{r.bay || 'N/A'}</td>
                         <td className="py-2 pr-3 text-[var(--text-secondary)]">{r.washed_by || 'N/A'}</td>
+                        <td className="py-2 pr-3 text-[var(--text-secondary)]">{entryPerson(r)}<span className="block text-xs">{fmtStamp(r.created_at)}</span></td>
+                        <td className="py-2 pr-3">{checklistSummary(r)}</td>
+                        <td className="py-2 pr-3"><button className="btn-secondary text-xs" onClick={() => setViewRow(r)} aria-label={`View wash ${r.asset_no}`}>View record</button></td>
                         <td className="py-2 pr-3 text-[var(--text-secondary)]">{formatWashCost(r.cost)}</td>
                         <td className="py-2 pr-3 text-center text-[var(--text-secondary)]">
                           {Array.isArray(r.photos) && r.photos.length > 0 ? (
@@ -1024,21 +1051,23 @@ export default function VehicleWashing() {
                 <TablePagination {...regPager} />
               </div>
             )}
-          </div>
+          </Card>
         </div>
       )}
 
       {/* ─────────────── SCHEDULE ─────────────── */}
       {tab === 'schedule' && canCreate && (
         <div className="space-y-4">
-          <div className="card">
-            <div className="flex items-center gap-2 mb-1">
-              <CalendarPlus size={18} className="text-[var(--text-secondary)]" />
-              <h3 className="font-semibold text-[var(--text-primary)]">Schedule a wash</h3>
-            </div>
-            <p className="text-xs text-[var(--text-muted)] mb-4">
-              A scheduled wash is a plan for a future date. It is kept as its own record and is never counted as a wash performed.
-            </p>
+          {/* NOT clipped: ReferencePicker below renders its result list as real DOM
+              inside this card, and clipping would cut it off. */}
+          <Card>
+            {/* The plan-is-not-a-wash rule is the point of this panel, so it keeps
+                its place directly under the heading as CardHeader's description. */}
+            <CardHeader
+              icon={CalendarPlus}
+              title="Schedule a wash"
+              description="A scheduled wash is a plan for a future date. It is kept as its own record and is never counted as a wash performed."
+            />
 
             {schedOk && (
               <div className="mb-4 rounded-lg border border-emerald-800/50 bg-emerald-500/10 flex items-center gap-2 px-3 py-2">
@@ -1098,7 +1127,7 @@ export default function VehicleWashing() {
                 <button type="button" onClick={() => { setSched({ ...EMPTY_SCHEDULE }); setSchedError(''); setSchedOk('') }} className="text-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)]">Clear</button>
               </div>
             </form>
-          </div>
+          </Card>
 
           <SchedulePanel
             title="Scheduled and not done"
@@ -1111,7 +1140,7 @@ export default function VehicleWashing() {
             canWrite={canWrite}
             onComplete={completeSchedule}
             onEdit={openEdit}
-            tone="border-amber-800/50"
+            tone="warn"
           />
 
           <SchedulePanel
@@ -1128,11 +1157,10 @@ export default function VehicleWashing() {
 
       {/* ─────────────── QUICK LOG ─────────────── */}
       {tab === 'log' && canCreate && (
-        <div className="card max-w-4xl">
-          <div className="flex items-center gap-2 mb-4">
-            <Droplets size={18} className="text-[var(--text-secondary)]" />
-            <h3 className="font-semibold text-[var(--text-primary)]">Log a vehicle wash</h3>
-          </div>
+        // `max-w-*` is not one of the properties Card sets inline, so it still wins.
+        // Not clipped: the asset ReferencePicker renders a DOM result list in here.
+        <Card className="max-w-4xl">
+          <CardHeader icon={Droplets} title="Log a vehicle wash" />
 
           {formOk && (
             <div className="mb-4 rounded-lg border border-emerald-800/50 bg-emerald-500/10 flex items-center gap-2 px-3 py-2">
@@ -1273,6 +1301,10 @@ export default function VehicleWashing() {
               {photoError && <p className="text-[11px] text-red-300">{photoError}</p>}
             </div>
 
+            <div className="sm:col-span-2 lg:col-span-3">
+              {rows.some(r=>r.asset_no === form.asset_no && r.wash_date === form.wash_date && r.status === 'Completed') && <p role="status" className="text-sm text-amber-600 mb-3">A completed wash already exists for this vehicle and date. Check the Log before recording a repeat wash.</p>}
+              <p className="text-sm mb-3">Entered by: {profile?.full_name || profile?.username || 'Your signed-in account'}</p><WashDetailsForm value={form.wash_details} onChange={v => setField('wash_details',v)} />
+            </div>
             <div className="sm:col-span-2 lg:col-span-3 flex items-center gap-3 pt-1">
               <button type="submit" disabled={saving || missing} className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60">
                 {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Log wash
@@ -1280,9 +1312,10 @@ export default function VehicleWashing() {
               <button type="button" onClick={resetForm} className="text-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)]">Clear</button>
             </div>
           </form>
-        </div>
+        </Card>
       )}
 
+      <WashRecordViewer row={viewRow} onClose={() => setViewRow(null)} />
       {/* Edit / correct */}
       <Modal
         open={!!editRow}
@@ -1316,6 +1349,7 @@ export default function VehicleWashing() {
               The original value is kept. Each change is recorded against this record with your reason, so the
               history below always shows what the record said before.
             </p>
+            <WashDetailsForm value={editDraft.wash_details} onChange={v => setEditDraft(d => ({ ...d, wash_details: v }))} />
 
             {editOk && (
               <div className="rounded-lg border border-emerald-800/50 bg-emerald-500/10 flex items-center gap-2 px-3 py-2">
@@ -1411,25 +1445,30 @@ export default function VehicleWashing() {
         )}
       </Modal>
 
-      {/* Delete confirm */}
+      {/* Delete confirm. Modal's backdrop click calls onClose, which keeps the same
+          "a save in flight cannot be dismissed" guard the hand-rolled overlay had. */}
       {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => !deleting && setConfirmDelete(null)}>
-          <div className="card max-w-md w-full" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center gap-2 mb-2">
-              <AlertTriangle size={18} className="text-red-400" />
-              <h3 className="font-semibold text-[var(--text-primary)]">Delete wash record</h3>
-            </div>
-            <p className="text-sm text-[var(--text-muted)]">
-              Delete the wash logged for <span className="text-[var(--text-primary)] font-medium">{confirmDelete.asset_no || 'this asset'}</span> on {fmtDate(confirmDelete.wash_date)}? This cannot be undone.
-            </p>
-            <div className="flex items-center justify-end gap-2 mt-4">
+        <Modal
+          open
+          onClose={() => { if (!deleting) setConfirmDelete(null) }}
+          size="sm"
+          title="Delete wash record"
+          footer={(
+            <>
               <button onClick={() => setConfirmDelete(null)} disabled={deleting} className="px-3 py-1.5 text-sm rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)]">Cancel</button>
               <button onClick={doDelete} disabled={deleting} className="px-3 py-1.5 text-sm rounded-lg bg-red-600 hover:bg-red-500 text-white inline-flex items-center gap-1.5 disabled:opacity-60">
                 {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />} Delete
               </button>
-            </div>
+            </>
+          )}
+        >
+          <div className="flex items-start gap-2">
+            <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
+            <p className="text-sm text-[var(--text-muted)]">
+              Delete the wash logged for <span className="text-[var(--text-primary)] font-medium">{confirmDelete.asset_no || 'this asset'}</span> on {fmtDate(confirmDelete.wash_date)}? This cannot be undone.
+            </p>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   )
@@ -1440,16 +1479,19 @@ export default function VehicleWashing() {
  * and what is still ahead. Marking one completed routes through the same
  * correction RPC as any other edit, so there is no second write path.
  */
-function SchedulePanel({ title, rows, emptyText, loading, lateColumn = false, canWrite, onComplete, onEdit, tone = '' }) {
+function SchedulePanel({ title, rows, emptyText, loading, lateColumn = false, canWrite, onComplete, onEdit, tone = 'default' }) {
   // Paged, not capped. This list used to render rows.slice(0, 200).
   const pager = usePagedRows(rows)
   return (
-    <div className={`card ${tone}`}>
-      <div className="flex items-center gap-2 mb-3">
-        <CalendarClock size={16} className="text-[var(--text-secondary)]" />
-        <h3 className="font-semibold text-[var(--text-primary)]">{title}</h3>
-        <span className="text-[11px] text-[var(--text-muted)]">{rows.length}</span>
-      </div>
+    // `tone` used to be a border class the caller passed in. On Card that class is
+    // dead - the border is set inline - so it is a Card tone token now, and the
+    // "scheduled and not done" list keeps its amber edge.
+    <Card tone={tone}>
+      <CardHeader
+        icon={CalendarClock}
+        title={title}
+        actions={<span className="text-[11px] text-[var(--text-muted)]">{rows.length}</span>}
+      />
       {loading ? (
         <div className="space-y-2">{[0, 1].map((i) => <div key={i} className="h-9 bg-[var(--input-bg)] rounded animate-pulse" />)}</div>
       ) : rows.length === 0 ? (
@@ -1502,7 +1544,7 @@ function SchedulePanel({ title, rows, emptyText, loading, lateColumn = false, ca
           <TablePagination {...pager} />
         </div>
       )}
-    </div>
+    </Card>
   )
 }
 

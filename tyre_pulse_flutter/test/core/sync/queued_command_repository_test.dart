@@ -100,6 +100,42 @@ void main() {
   });
 
   group('round trip', () {
+    test(
+      'wash evidence and capture time survive offline persistence',
+      () async {
+        final evidence = <String, Object?>{
+          'version': 1,
+          'chemical_status': 'none',
+          'chemicals': <Object?>[],
+          'checklist': <Object?>[
+            <String, Object?>{
+              'label': 'Exterior surfaces',
+              'result': 'fail',
+              'note': 'Mud remains',
+            },
+          ],
+        };
+        final capturedAt = testNow.toUtc().toIso8601String();
+        final result = await repository.enqueue(
+          type: CommandType.washRecord,
+          payload: <String, Object?>{
+            'asset_no': 'TM514',
+            'wash_details': evidence,
+            'captured_at': capturedAt,
+          },
+          workspace: _workspace(),
+          now: testNow,
+        );
+        expect(result.droppedFields, isEmpty);
+        final stored = await db.queueDao.commandById(result.command.id);
+        final payload = jsonDecode(stored!.payloadJson) as Map<String, dynamic>;
+        expect(payload['wash_details'], evidence);
+        expect(payload['captured_at'], capturedAt);
+        expect(stored.createdBy, testUser);
+        expect(stored.workspaceId, workspaceA);
+      },
+    );
+
     test('a real row lands in pending_commands and can be read back', () async {
       final EnqueueResult result = await repository.enqueue(
         type: CommandType.washRecord,

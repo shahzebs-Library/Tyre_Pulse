@@ -34,11 +34,23 @@ const PAGES_DIR = resolve(process.cwd(), 'src/pages')
 /**
  * Current, measured debt. LOWER these as pages migrate. Never raise them.
  *
- * rawOverlay 130 -> 128 -> 125 -> 121 -> 115 on 2026-09-21. Wave 1 moved
+ * rawOverlay 130 -> 128 -> 125 -> 121 -> 115 -> 110 on 2026-09-21. Wave 1 moved
  * StockManagement and PmPrograms; wave 2 Combinations, HeatIntelligence and
  * SerialTracker; wave 3 FleetRenewal, TechnicianScorecard, FitmentValidation and
  * DtcDiagnostics; wave 4 DriverSafety, EngineHours, HoldingCompany, RfidRegistry,
- * DailyOps and VehicleWashing.
+ * DailyOps and VehicleWashing; wave 5 TyreSpecifications, OrgHierarchy,
+ * SpeedLimiter and ColdChain.
+ *
+ * A THIRD FILE NOW CONVERTS OVERLAYS AND CORRECTLY STAYS ON THIS LIST.
+ * RotationSchedule moved its ScheduleModal but keeps two `tp-drawer-panel`
+ * rails, widened by a DIRECT-CHILD selector in index.css that
+ * `dialogFit.test.jsx` pins. Modal portals its own centred panel, so the
+ * selector would stop matching and a full-height rail would become a box.
+ *
+ * 110 is the MEASURED count after main's wave (115 -> 114) and wave 5
+ * (115 -> 111) merged. The two waves touched disjoint pages so the
+ * removals add up, but the number was COUNTED on the merged tree rather
+ * than inferred - a ratchet that guesses its own baseline is not a ratchet.
  *
  * LOWER THIS IN THE SAME COMMIT AS THE MIGRATION, NOT AFTERWARDS. Wave 4 shipped
  * its overlay conversions and left the baseline at 121 against a real 116, which
@@ -70,7 +82,7 @@ const PAGES_DIR = resolve(process.cwd(), 'src/pages')
  */
 const BASELINE = {
   rawTable: 194,
-  rawOverlay: 115,
+  rawOverlay: 110,
 }
 
 function readAllPages() {

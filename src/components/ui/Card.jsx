@@ -206,14 +206,35 @@ export function CardHeader({
   )
 }
 
-/** CardBody — the content well. `grow` makes equal-height cards in a grid. */
-export function CardBody({ grow = false, className = '', style, children }) {
+/**
+ * CardBody — the content well. `grow` makes equal-height cards in a grid.
+ *
+ * IT FORWARDS A REF, AND THAT IS NOT CONVENIENCE. BoardOverview captures its
+ * charts for the PDF export by walking `chartRefs.current[key]
+ * .querySelector('canvas')`. When CardBody swallowed the ref, the capture
+ * target had to stay on a hand-rolled inner div - and a later tidy-up moving it
+ * onto CardBody would have broken the export SILENTLY: the page still renders,
+ * the PDF just loses its charts. Forwarding the ref removes the trap instead of
+ * documenting it.
+ *
+ * A chart well still needs a DEFINITE height (`style={{ height: '16rem' }}`)
+ * because chart.js `maintainAspectRatio:false` sizes from its parent.
+ */
+export const CardBody = forwardRef(function CardBody(
+  { grow = false, className = '', style, children, ...rest },
+  ref,
+) {
   return (
-    <div className={`min-w-0 ${grow ? 'flex-1' : ''} ${className}`} style={{ fontSize: 'var(--fs-body)', lineHeight: 'var(--lh-body)', ...style }}>
+    <div
+      ref={ref}
+      className={`min-w-0 ${grow ? 'flex-1' : ''} ${className}`}
+      style={{ fontSize: 'var(--fs-body)', lineHeight: 'var(--lh-body)', ...style }}
+      {...rest}
+    >
       {children}
     </div>
   )
-}
+})
 
 /** CardFooter — separated action row; sits at the bottom of an equal-height card. */
 export function CardFooter({ className = '', style, children }) {

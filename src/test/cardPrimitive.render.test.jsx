@@ -120,6 +120,25 @@ describe('Card primitive', () => {
     expect(junk.getAllByTestId('ic').at(-1).style.color).toBe('var(--text-muted)')
   })
 
+  it('CardBody forwards a ref, so a capture target can live on it', () => {
+    // BoardOverview's PDF export walks chartRefs.current[key]
+    // .querySelector('canvas'). When CardBody swallowed the ref the target had
+    // to sit on a hand-rolled inner div, and moving it onto CardBody later
+    // would have broken the export SILENTLY - page fine, PDF charts gone.
+    const ref = { current: null }
+    render(
+      <Card>
+        <CardBody ref={ref} style={{ height: '16rem' }}>
+          <canvas data-testid="cv" />
+        </CardBody>
+      </Card>,
+    )
+    expect(ref.current).toBeInstanceOf(HTMLElement)
+    expect(ref.current.querySelector('canvas')).not.toBeNull()
+    // The definite height must survive too: chart.js sizes from its parent.
+    expect(ref.current.style.height).toBe('16rem')
+  })
+
   describe('the hover cue must survive (regression)', () => {
     /**
      * Card sets `border` and `box-shadow` inline so stray `border-*` utilities

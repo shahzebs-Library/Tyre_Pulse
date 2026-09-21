@@ -5,6 +5,7 @@ import { PGlite } from '@electric-sql/pglite';
 
 const sql = await readFile(new URL('../migrations/20260912110325_driver_workspace_fines_and_assignments.sql', import.meta.url), 'utf8');
 const storageSql = await readFile(new URL('../migrations/20260912110823_driver_fine_private_evidence_storage.sql', import.meta.url), 'utf8');
+const enterpriseSql = await readFile(new URL('../migrations/20260921131708_driver_fine_enterprise_workflows.sql', import.meta.url), 'utf8');
 const id = n => `00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
 test('driver workspace enforces ownership, historical assignment and signed case transitions', async t => {
  const db = new PGlite(); let request = 100;
@@ -32,10 +33,10 @@ test('driver workspace enforces ownership, historical assignment and signed case
    CREATE TABLE wo_tasks(id uuid PRIMARY KEY,organisation_id uuid,assignee_user_id uuid,country text,site text,title text,status text,job_id uuid);
    CREATE TABLE notifications(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),user_id uuid,type text,title text,body text,entity_type text,entity_id text);
    CREATE TABLE driver_training(id uuid PRIMARY KEY,organisation_id uuid,country text,driver_name text,course_name text,result text,notes text);
-   INSERT INTO profiles(id,org_id,full_name) VALUES ('${id(2)}','${id(1)}','Manager'),('${id(3)}','${id(1)}','Driver A'),('${id(4)}','${id(1)}','Driver B'),('${id(5)}','${id(1)}','Supervisor'),('${id(6)}','${id(9)}','Other tenant');
+   INSERT INTO profiles(id,org_id,full_name,role) VALUES ('${id(2)}','${id(1)}','Manager','Manager'),('${id(3)}','${id(1)}','Driver A','Driver'),('${id(4)}','${id(1)}','Driver B','Driver'),('${id(5)}','${id(1)}','Supervisor','Supervisor'),('${id(6)}','${id(9)}','Other tenant','Manager'),('${id(10)}','${id(1)}','Finance Reviewer','Finance');
    INSERT INTO vehicle_fleet(id,organisation_id,asset_no,country,site) VALUES ('${id(7)}','${id(1)}','TM1','KSA','JEDDAH'),('${id(8)}','${id(9)}','OTHER','KSA','JEDDAH');
    GRANT USAGE ON SCHEMA auth TO authenticated; GRANT SELECT ON profiles TO authenticated;
-   BEGIN; ${sql} ${storageSql} COMMIT; SET ROLE authenticated;
+   BEGIN; ${sql} ${storageSql} ${enterpriseSql} COMMIT; SET ROLE authenticated;
   `);
   await actor(2);
   const a = (await command('create_driver',{driver_id:'EMP1',driver_name:'Same Name',country:'KSA',site:'JEDDAH'})).driver_id;
@@ -54,7 +55,7 @@ test('driver workspace enforces ownership, historical assignment and signed case
   await t.test('pickers require staff access and stay within tenant',async()=>{
    await actor(3); await assert.rejects(db.query("select driver_workspace_options('users','',0)"),e=>e.code==='42501');
    await actor(2); const users=(await db.query("select driver_workspace_options('users','',0) r")).rows[0].r;
-   assert.equal(users.length,4); assert.ok(!users.some(u=>u.id===id(6)));
+   assert.equal(users.length,5); assert.ok(!users.some(u=>u.id===id(6)));
    const vehicles=(await db.query("select driver_workspace_options('vehicles','',0) r")).rows[0].r;
    assert.deepEqual(vehicles.map(v=>v.id),[id(7)]);
   });
@@ -92,16 +93,42 @@ test('driver workspace enforces ownership, historical assignment and signed case
    assert.equal(data.fines[0].responses[0].notice_snapshot.amount,500);
    await assert.rejects(command('review_fine',{driver_id:a,fine_id:fine,version:2,decision:'approve',reason:'Self approval'}),e=>e.code==='42501');
   });
-  await t.test('review and payment are separate; stale updates fail; partial payments retain balance',async()=>{
+  await t.test('supervisor and finance approvals are separate; only finance records payment',async()=>{
    await actor(5);
    await command('review_fine',{driver_id:a,fine_id:fine,version:2,decision:'approve',reason:'Arrangement reviewed'});
-   assert.equal((await read(a)).fines[0].status,'open');
-   await assert.rejects(command('review_fine',{driver_id:a,fine_id:fine,version:2,decision:'payment',reason:'Old update'}),e=>e.code==='40001');
-   await command('review_fine',{driver_id:a,fine_id:fine,version:3,decision:'payment',reason:'Verified receipt',payment_reference:'PAY1',payment_amount:100});
+   assert.equal((await read(a)).fines[0].review_stage,'finance');
+   await assert.rejects(command('review_fine',{driver_id:a,fine_id:fine,version:3,decision:'payment',reason:'Supervisor payment',payment_reference:'NO',payment_amount:100}),e=>e.code==='22023');
+   await actor(10);
+   await command('review_fine',{driver_id:a,fine_id:fine,version:3,decision:'approve',reason:'Finance approved arrangement'});
+   assert.equal((await read(a)).fines[0].response_status,'approved');
+   await assert.rejects(command('review_fine',{driver_id:a,fine_id:fine,version:3,decision:'payment',reason:'Old update'}),e=>e.code==='40001');
+   await command('review_fine',{driver_id:a,fine_id:fine,version:4,decision:'payment',reason:'Verified receipt',payment_reference:'PAY1',payment_amount:100});
    assert.equal((await read(a)).balances[0].outstanding,400);
-   await assert.rejects(command('review_fine',{driver_id:a,fine_id:fine,version:4,decision:'payment',reason:'Overpayment',payment_reference:'PAY2',payment_amount:500}),e=>e.code==='22023');
-   await command('review_fine',{driver_id:a,fine_id:fine,version:4,decision:'payment',reason:'Verified final receipt',payment_reference:'PAY2',payment_amount:400});
+   await assert.rejects(command('review_fine',{driver_id:a,fine_id:fine,version:5,decision:'payment',reason:'Overpayment',payment_reference:'PAY2',payment_amount:500}),e=>e.code==='22023');
+   await command('review_fine',{driver_id:a,fine_id:fine,version:5,decision:'payment',reason:'Verified final receipt',payment_reference:'PAY2',payment_amount:400});
    assert.equal((await read(a)).fines[0].status,'settled');
+   assert.deepEqual((await read(a)).fines[0].reviews.map(r=>r.stage),['supervisor','finance','finance','finance']);
+  });
+  await t.test('signed corrections require acknowledgment again and reassignment preserves the old case',async()=>{
+   await actor(5);
+   const payload={driver_id:a,vehicle_id:id(7),notice_reference:'NOTICE2',authority:'Authority',incident_at:'2026-01-02T08:00:00Z',amount:300,currency:'SAR',description:'Second official notice',assignment_reason:'Initial assignment evidence'};
+   const second=(await command('create_fine',payload)).id;
+   await actor(3); await command('respond_fine',{...response,fine_id:second,version:1,resolution:'dispute',explanation:'I was not assigned to this vehicle'});
+   await actor(2); await command('correct_fine',{driver_id:a,fine_id:second,version:2,amount:350,reason:'Authority issued a corrected amount'});
+   let corrected=(await read(a)).fines.find(x=>x.id===second);
+   assert.equal(corrected.amount,350); assert.equal(corrected.response_status,'awaiting_response'); assert.equal(corrected.review_stage,'driver'); assert.equal(corrected.responses.length,1);
+   await actor(3); await command('respond_fine',{...response,fine_id:second,version:3,resolution:'dispute',explanation:'Corrected notice still belongs to another driver'});
+   await actor(2); const replacement=await command('reassign_fine',{driver_id:a,fine_id:second,version:4,target_driver_id:b,vehicle_id:id(7),reason:'Shift register confirms Driver B'});
+   const oldCase=(await read(a)).fines.find(x=>x.id===second); assert.equal(oldCase.status,'cancelled'); assert.equal(oldCase.superseded_by_fine_id,replacement.id);
+   const newCase=(await read(b)).fines.find(x=>x.id===replacement.id); assert.equal(newCase.status,'open'); assert.equal(newCase.review_stage,'driver'); assert.equal(newCase.responses.length,0); assert.equal(newCase.supersedes_fine_id,second);
+  });
+  await t.test('reminders are idempotent and the scoped staff register exposes workflow queues',async()=>{
+   const due=new Date(Date.now()+7*86400000).toISOString().slice(0,10);
+   await actor(5); await command('create_fine',{driver_id:a,vehicle_id:id(7),notice_reference:'NOTICE3',authority:'Authority',incident_at:'2026-01-03T08:00:00Z',due_date:due,amount:200,currency:'SAR',description:'Reminder test notice',assignment_reason:'Confirmed shift register'});
+   await actor(2); const first=(await db.query('select driver_workspace_run_reminders() r')).rows[0].r; assert.ok(first.sent>=1);
+   const again=(await db.query('select driver_workspace_run_reminders() r')).rows[0].r; assert.equal(again.sent,0);
+   await actor(10); const register=(await db.query("select driver_fine_register('{\"review_stage\":\"driver\"}',0) r")).rows[0].r;
+   assert.ok(register.rows.some(row=>row.notice_reference==='NOTICE3')); assert.ok(register.rows.every(row=>row.review_stage==='driver'));
   });
   await t.test('team reassignment removes old access and preserves dated history',async()=>{
    await actor(2); await command('assign_team',{driver_id:a,vehicle_id:id(7),reason:'Supervisor released'});

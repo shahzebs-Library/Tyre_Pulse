@@ -22,6 +22,14 @@ export async function driverWorkspaceOptions(kind, search = '', offset = 0) {
   return unwrap(await supabase.rpc('driver_workspace_options', { p_kind: kind, p_search: search, p_offset: offset }))
 }
 
+export async function loadDriverFineRegister(filters = {}, offset = 0) {
+  return unwrap(await supabase.rpc('driver_fine_register', { p_filters: filters, p_offset: offset }))
+}
+
+export async function runDriverFineReminders() {
+  return unwrap(await supabase.rpc('driver_workspace_run_reminders'))
+}
+
 export async function fineSignature(responseId) {
   return unwrap(await supabase.from('driver_fine_responses').select('signature').eq('id', responseId).single()).signature
 }

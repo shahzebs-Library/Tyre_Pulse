@@ -16,6 +16,16 @@
  *    legitimately renders inside it. Pass `clip` only when the content really is
  *    an image or chart that must be cropped to the radius.
  *
+ *    THE HAZARD IS DOM-RENDERED OVERLAYS, NOT EVERY DROPDOWN — the distinction
+ *    matters or the rule gets applied superstitiously. A native `<select>` is
+ *    SAFE: the browser paints its option list as an OS-level popup outside the
+ *    page's layout and stacking context, so an ancestor's overflow cannot touch
+ *    it. That is why `TablePagination`'s rows-per-page select inside a clipped
+ *    table card is fine, and a report that it is clipped should be refuted
+ *    rather than "fixed". What IS at risk is anything rendered as real DOM
+ *    inside the card and positioned out of flow: `useAnchoredPopover` panels,
+ *    `MultiSelectFilter`, a SearchBox result list, a custom date picker.
+ *
  * 2. NO `backdrop-filter`. `.card` blurs its backdrop for the dark glass look.
  *    Over an opaque white light-mode card that renders nothing while still
  *    forcing a compositor layer, so it was pure cost on the light default.
@@ -94,6 +104,18 @@ const Card = forwardRef(function Card(
  * CardHeader — title, optional description, optional right-aligned actions.
  * `level` renders a REAL heading element so the page keeps a sequential h1→h6
  * outline for screen readers; it is not a font-size switch.
+ *
+ * `actions` IS `flex-shrink-0` AND THEREFORE CANNOT WRAP. That is right for one
+ * or two controls, which should never be squeezed by a long title. It is wrong
+ * for a row of filter or quick-range buttons: an inner `flex-wrap` inside a
+ * non-shrinking box has nothing to wrap against, so on a phone the row pushes
+ * the card wider and the page gains horizontal scroll — which `ux` rules treat
+ * as a defect, and which is invisible at desktop width. Put a multi-button
+ * group on its own wrapping row beneath the header instead.
+ *
+ * Note the padding asymmetry with `Card`: CardHeader sets NO inline padding, so
+ * `px-*`/`py-*` classes work here. It does set `marginBottom` inline, which is
+ * why overriding that needs `!mb-0`.
  */
 export function CardHeader({
   title,

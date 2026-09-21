@@ -33,6 +33,8 @@ import {
   Navigation,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import Card, { CardBody, CardHeader } from '../components/ui/Card'
+import Modal from '../components/ui/Modal'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   listTemperatureReadings, createTemperatureReading,
@@ -64,23 +66,43 @@ const STATUS_META = {
   normal: { label: 'Normal', badge: 'bg-emerald-900/30 text-emerald-300 border-emerald-800/50', dot: 'bg-emerald-400', icon: Thermometer },
 }
 
-/** Blowout-risk band styling (5 levels from blowoutRiskScore). */
+/**
+ * Blowout-risk band styling (5 levels from blowoutRiskScore).
+ *
+ * The per-band SURFACE classes these maps used to carry are gone: the card
+ * surface now comes from the kit's Card, which sets its padding, background and
+ * border inline. A class here would be dead, and dead style strings are how a
+ * later reader re-applies one and wonders why nothing moves. Border tint lives
+ * in RISK_CARD_TONE / SEVERITY_CARD_TONE below.
+ */
 const RISK_META = {
-  extreme: { label: 'Extreme', badge: 'bg-red-900/50 text-red-200 border-red-700/60', card: 'border-red-800/60 bg-red-950/30', pill: 'bg-red-600 text-white', tone: 'text-red-400' },
-  high: { label: 'High', badge: 'bg-orange-900/40 text-orange-200 border-orange-700/50', card: 'border-orange-800/50 bg-orange-950/20', pill: 'bg-orange-500 text-white', tone: 'text-orange-400' },
-  elevated: { label: 'Elevated', badge: 'bg-amber-900/30 text-amber-200 border-amber-700/50', card: 'border-amber-800/40 bg-amber-950/10', pill: 'bg-amber-500 text-slate-900', tone: 'text-amber-400' },
-  medium: { label: 'Medium', badge: 'bg-sky-900/30 text-sky-200 border-sky-700/50', card: 'border-sky-800/40', pill: 'bg-sky-500 text-white', tone: 'text-sky-400' },
-  low: { label: 'Low', badge: 'bg-emerald-900/30 text-emerald-200 border-emerald-700/50', card: 'border-emerald-800/40', pill: 'bg-emerald-500 text-white', tone: 'text-emerald-400' },
+  extreme: { label: 'Extreme', badge: 'bg-red-900/50 text-red-200 border-red-700/60', pill: 'bg-red-600 text-white', tone: 'text-red-400' },
+  high: { label: 'High', badge: 'bg-orange-900/40 text-orange-200 border-orange-700/50', pill: 'bg-orange-500 text-white', tone: 'text-orange-400' },
+  elevated: { label: 'Elevated', badge: 'bg-amber-900/30 text-amber-200 border-amber-700/50', pill: 'bg-amber-500 text-slate-900', tone: 'text-amber-400' },
+  medium: { label: 'Medium', badge: 'bg-sky-900/30 text-sky-200 border-sky-700/50', pill: 'bg-sky-500 text-white', tone: 'text-sky-400' },
+  low: { label: 'Low', badge: 'bg-emerald-900/30 text-emerald-200 border-emerald-700/50', pill: 'bg-emerald-500 text-white', tone: 'text-emerald-400' },
 }
 
-/** Ambient severity → hero panel styling. */
+/** Ambient severity → pill styling. */
 const SEVERITY_META = {
-  extreme: { label: 'Extreme', panel: 'border-red-800/60 bg-red-950/30', pill: 'bg-red-600 text-white' },
-  very_high: { label: 'Very high', panel: 'border-orange-800/50 bg-orange-950/20', pill: 'bg-orange-500 text-white' },
-  high: { label: 'High', panel: 'border-amber-800/50 bg-amber-950/10', pill: 'bg-amber-500 text-slate-900' },
-  moderate: { label: 'Moderate', panel: 'border-sky-800/40', pill: 'bg-sky-500 text-white' },
-  low: { label: 'Low', panel: 'border-emerald-800/40', pill: 'bg-emerald-500 text-white' },
+  extreme: { label: 'Extreme', pill: 'bg-red-600 text-white' },
+  very_high: { label: 'Very high', pill: 'bg-orange-500 text-white' },
+  high: { label: 'High', pill: 'bg-amber-500 text-slate-900' },
+  moderate: { label: 'Moderate', pill: 'bg-sky-500 text-white' },
+  low: { label: 'Low', pill: 'bg-emerald-500 text-white' },
 }
+
+/**
+ * Band → Card border tone.
+ *
+ * The kit's Card tints the BORDER only, deliberately, so a wall of band tiles
+ * stays scannable. Card has four tints against five bands, so extreme and high
+ * share `crit`: they are the two "act now" bands. Nothing is lost by the
+ * collapse, because the pill, the badge and the label colour beside each border
+ * still carry all five levels.
+ */
+const RISK_CARD_TONE = { extreme: 'crit', high: 'crit', elevated: 'warn', medium: 'info', low: 'good' }
+const SEVERITY_CARD_TONE = { extreme: 'crit', very_high: 'crit', high: 'warn', moderate: 'info', low: 'good' }
 
 const TABS = [
   ['conditions', 'Conditions', Sun],
@@ -426,7 +448,17 @@ export default function HeatIntelligence() {
     })
     setFormError(''); setShowModal(true)
   }
-  const closeModal = () => { if (!saving) { setShowModal(false); setEditing(null) } }
+  // One named close per dialog, carrying the in-flight guard, because each is
+  // reached from four places: Escape, the backdrop, the X and Cancel. Repeating
+  // `!saving &&` at each of them is how one of them ends up missing it.
+  //
+  // `useCallback` is belt and braces rather than a requirement: this repo's
+  // `useDialogBehavior` deliberately holds `onClose` in a ref and keeps it OUT
+  // of its dependency array, precisely so a re-created callback cannot yank
+  // focus out of a field on every keystroke. Stable identities cost nothing and
+  // keep that true even if the hook's contract ever changes back.
+  const closeModal = useCallback(() => { if (!saving) { setShowModal(false); setEditing(null) } }, [saving])
+  const closeDelete = useCallback(() => { if (!deleting) setConfirmDelete(null) }, [deleting])
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
 
   const previewBand = useMemo(
@@ -514,8 +546,8 @@ export default function HeatIntelligence() {
       {tab === 'conditions' && (
         <div className="space-y-6">
           {/* Hero */}
-          <div className={`card border ${severityMeta.panel}`}>
-            <div className="flex flex-wrap items-center gap-6">
+          <Card tone={SEVERITY_CARD_TONE[conditions.heat_severity] || 'good'}>
+            <div className="flex flex-wrap items-center gap-[var(--space-6)]">
               <div className="text-center">
                 <p className="text-5xl font-bold text-[var(--text-primary)]">{conditions.ambient_c}°C</p>
                 <p className="text-xs uppercase tracking-wider text-[var(--text-muted)] mt-1">Ambient</p>
@@ -536,15 +568,18 @@ export default function HeatIntelligence() {
                 </p>
               </div>
             </div>
-          </div>
+          </Card>
 
           {/* Live ambient weather (Open-Meteo, free/keyless) with seasonal fallback */}
-          <div className="card">
-            <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
-              <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
-                <ThermometerSun size={15} className="text-amber-400" /> Live ambient weather
-              </h3>
-              {liveWeather?.ambient_c != null ? (
+          <Card>
+            {/* The Live-vs-Seasonal badge sits in `actions` so it stays beside the
+                title: it is what tells the reader whether the figures above are a
+                real reading or climatology. */}
+            <CardHeader
+              level={2}
+              icon={ThermometerSun}
+              title="Live ambient weather"
+              actions={liveWeather?.ambient_c != null ? (
                 <span className="text-[11px] font-bold uppercase px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-700/40 inline-flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Live : {liveWeather.source}
                 </span>
@@ -553,8 +588,8 @@ export default function HeatIntelligence() {
                   Seasonal average
                 </span>
               )}
-            </div>
-
+            />
+            <CardBody>
             {weatherLoading && liveWeather == null ? (
               <p className="text-sm text-[var(--text-muted)] inline-flex items-center gap-2">
                 <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" /> Fetching live conditions for {city}...
@@ -603,15 +638,16 @@ export default function HeatIntelligence() {
                 {weatherError ? `${weatherError} ` : ''}Showing the seasonal average for {city} ({conditions.ambient_c}°C). Live weather refreshes hourly when reachable.
               </p>
             )}
-          </div>
+            </CardBody>
+          </Card>
 
           {/* Air Quality & Dust (Open-Meteo Air Quality, free/keyless) */}
-          <div className="card">
-            <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
-              <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
-                <Wind size={15} className="text-sky-400" /> Air quality &amp; dust
-              </h3>
-              {liveAir ? (
+          <Card>
+            <CardHeader
+              level={2}
+              icon={Wind}
+              title="Air quality & dust"
+              actions={liveAir ? (
                 <span className="text-[11px] font-bold uppercase px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-700/40 inline-flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Live : {liveAir.source}
                 </span>
@@ -620,8 +656,8 @@ export default function HeatIntelligence() {
                   Unavailable
                 </span>
               )}
-            </div>
-
+            />
+            <CardBody>
             {aqLoading && liveAir == null ? (
               <p className="text-sm text-[var(--text-muted)] inline-flex items-center gap-2">
                 <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" /> Fetching air quality for {city}...
@@ -651,37 +687,32 @@ export default function HeatIntelligence() {
                 {aqError ? `${aqError} ` : ''}Live air quality for {city} is unavailable right now. It refreshes hourly when reachable.
               </p>
             )}
-          </div>
+            </CardBody>
+          </Card>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-[var(--gap-grid)]">
             {/* All-city bars + Gay-Lussac + correlation */}
-            <div className="space-y-6">
-              <div className="card">
-                <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
-                  <Thermometer size={15} className="text-orange-400" /> All GCC cities — {conditions.month} ambient
-                </h3>
-                <div style={{ height: 320 }}><Bar data={cityBarData} options={cityBarOptions} /></div>
-              </div>
+            <div className="space-y-[var(--space-6)]">
+              <Card>
+                <CardHeader level={2} icon={Thermometer} title={`All GCC cities — ${conditions.month} ambient`} />
+                <CardBody style={{ height: 320 }}><Bar data={cityBarData} options={cityBarOptions} /></CardBody>
+              </Card>
 
-              <div className="card">
-                <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-2 flex items-center gap-2">
-                  <Gauge size={15} className="text-sky-400" /> Gay-Lussac pressure effect
-                </h3>
+              <Card>
+                <CardHeader level={2} icon={Gauge} title="Gay-Lussac pressure effect" />
                 <p className="text-sm text-[var(--text-secondary)]">
                   At {conditions.road_surface_c}°C road surface, a 105 PSI cold tyre reaches approximately{' '}
                   <strong className="text-[var(--text-primary)]">{Math.round(105 * (conditions.road_surface_c + 273.15) / (25 + 273.15))} PSI</strong>{' '}
                   — a <strong className="text-orange-400">{conditions.pressure_increase_pct}% expected rise</strong> from ambient heat.
                 </p>
-                <div className="mt-3 rounded-lg border border-red-800/50 bg-red-950/20 px-3 py-2">
+                <div className="mt-[var(--space-3)] rounded-lg border border-red-800/50 bg-red-950/20 px-3 py-2">
                   <p className="text-xs font-bold uppercase text-red-300 mb-0.5 inline-flex items-center gap-1"><AlertTriangle size={12} /> Critical</p>
                   <p className="text-sm text-red-200">Always inflate when COLD. Never release pressure from hot tyres — the reading is normal heat expansion.</p>
                 </div>
-              </div>
+              </Card>
 
-              <div className="card">
-                <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-2 flex items-center gap-2">
-                  <Activity size={15} className="text-emerald-400" /> Heat–pressure correlation (logged readings)
-                </h3>
+              <Card>
+                <CardHeader level={2} icon={Activity} title="Heat–pressure correlation" description="Computed from the logged readings." />
                 {correlation.correlation == null ? (
                   <p className="text-sm text-[var(--text-muted)]">
                     Need at least 3 logged readings carrying both temperature and pressure to compute a correlation. Currently {correlation.samples} complete pair{correlation.samples === 1 ? '' : 's'}.
@@ -692,15 +723,13 @@ export default function HeatIntelligence() {
                     across {correlation.samples} logged reading{correlation.samples === 1 ? '' : 's'} — {correlation.correlation > 0.5 ? 'temperature and pressure rise together as expected under heat.' : correlation.correlation < -0.5 ? 'inverse relationship — investigate sensor placement or bleeding of hot tyres.' : 'weak linear relationship in the current sample.'}
                   </p>
                 )}
-              </div>
+              </Card>
             </div>
 
             {/* Safety protocol */}
-            <div className="card">
-              <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
-                <ShieldCheck size={15} className="text-emerald-400" /> Desert heat-safety protocol
-              </h3>
-              <div className="space-y-4">
+            <Card>
+              <CardHeader level={2} icon={ShieldCheck} title="Desert heat-safety protocol" />
+              <div className="space-y-[var(--space-4)]">
                 {[
                   ['Before departure', Wind, ['Check all tyre pressures when COLD (before 08:00)', 'Inspect for sidewall bulges and cracks', 'Ensure tread depth is ≥3mm for desert routes', 'Verify no damage from the previous trip']],
                   ['During operation', ThermometerSun, ['Avoid sudden braking on hot roads', 'If a pressure warning sounds — pull over safely', 'Do NOT deflate hot tyres to reduce pressure', 'Allow tyres to cool 30+ mins before inspection']],
@@ -718,7 +747,7 @@ export default function HeatIntelligence() {
                   </div>
                 ))}
               </div>
-            </div>
+            </Card>
           </div>
         </div>
       )}
@@ -752,49 +781,55 @@ export default function HeatIntelligence() {
           </div>
 
           {tyresError && (
-            <div className="card border border-red-800/50 flex items-start gap-3">
+            /* Card is flex-col by default and Tailwind emits .flex-col after
+               .flex-row, so a row-direction card sets its direction through
+               `style`, where Card spreads it last and it deterministically wins. */
+            <Card tone="crit" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
               <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
               <div><p className="text-red-300 font-medium">Couldn’t load fleet tyres.</p><p className="text-[var(--text-muted)] text-sm mt-1">{tyresError}</p></div>
-            </div>
+            </Card>
           )}
 
           {/* Band tiles */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-[var(--gap-grid)]">
             {['extreme', 'high', 'elevated', 'medium', 'low'].map((level) => {
               const meta = RISK_META[level]
               return (
-                <div key={level} className={`card border ${meta.card}`}>
+                <Card key={level} pad="tight" tone={RISK_CARD_TONE[level]}>
                   <div className="flex items-center justify-between">
                     <p className={`text-xs font-semibold uppercase tracking-wider ${meta.tone}`}>{meta.label}</p>
                     <Flame size={14} className={meta.tone} />
                   </div>
                   <p className="text-2xl font-bold mt-1 text-[var(--text-primary)]">{tyres === null ? '—' : (fleetRisk.risk_summary?.[level] || 0)}</p>
-                </div>
+                </Card>
               )
             })}
           </div>
 
           {/* Ranked cards */}
           {tyres === null || tyresLoading ? (
-            <div className="space-y-2">{[0, 1, 2, 3].map((i) => <div key={i} className="h-20 card animate-pulse" />)}</div>
+            <div className="space-y-2">{[0, 1, 2, 3].map((i) => <Card key={i} className="h-20 animate-pulse" />)}</div>
           ) : (tyres || []).length === 0 ? (
-            <div className="card text-center py-12">
+            /* `py-12` would be DEAD on a Card - Card sets padding inline and
+               inline beats a class - so the empty state's breathing room is a
+               spacing token on the content instead. */
+            <Card className="text-center" style={{ paddingBlock: 'var(--space-12)' }}>
               <Truck size={26} className="mx-auto mb-2 text-[var(--text-muted)] opacity-60" />
               <p className="text-[var(--text-secondary)] font-medium">No installed tyres to assess.</p>
               <p className="text-sm text-[var(--text-muted)] mt-1">Blowout risk scores every fitted tyre in <span className="font-mono">tyre_records</span>. Import or fit tyres to populate this view.</p>
-            </div>
+            </Card>
           ) : (fleetRisk.high_risk_tyres || []).length === 0 ? (
-            <div className="card border border-emerald-800/50 text-center py-12">
+            <Card tone="good" className="text-center" style={{ paddingBlock: 'var(--space-12)' }}>
               <ShieldCheck size={26} className="mx-auto mb-2 text-emerald-400" />
               <p className="text-emerald-300 font-medium">No elevated-or-higher blowout risk under {conditions.city} heat.</p>
               <p className="text-sm text-[var(--text-muted)] mt-1">All {fleetRisk.fleet_size} installed tyres score below 30.</p>
-            </div>
+            </Card>
           ) : (
             <div className="space-y-2">
               {(fleetRisk.high_risk_tyres || []).map((t) => {
                 const meta = RISK_META[t.risk_level] || RISK_META.medium
                 return (
-                  <div key={t.id ?? `${t.asset_no}-${t.position}-${t.serial}`} className={`card border ${meta.card}`}>
+                  <Card key={t.id ?? `${t.asset_no}-${t.position}-${t.serial}`} pad="tight" tone={RISK_CARD_TONE[t.risk_level] || 'info'}>
                     <div className="flex items-start gap-3">
                       <span className={`shrink-0 mt-0.5 text-sm font-bold px-2.5 py-1 rounded ${meta.pill}`}>{Math.round(t.risk_score)}</span>
                       <div className="min-w-0 flex-1">
@@ -820,7 +855,7 @@ export default function HeatIntelligence() {
                         ))}
                       </div>
                     </div>
-                  </div>
+                  </Card>
                 )
               })}
               {fleetRisk.high_risk_tyres.length >= 30 && (
@@ -834,10 +869,8 @@ export default function HeatIntelligence() {
       {/* ═══════════════ PRESSURE CALCULATOR ═══════════════ */}
       {tab === 'calculator' && (
         <div className="max-w-2xl space-y-5">
-          <div className="card">
-            <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
-              <Calculator size={15} className="text-sky-400" /> Gay-Lussac heat pressure calculator
-            </h3>
+          <Card>
+            <CardHeader level={2} icon={Calculator} title="Gay-Lussac heat pressure calculator" />
             <p className="text-sm text-[var(--text-secondary)] mb-4">
               Projects hot tyre pressure from a cold inflation figure using P₁/T₁ = P₂/T₂, at {conditions.city}’s {conditions.month} ambient of {conditions.ambient_c}°C.
             </p>
@@ -846,10 +879,10 @@ export default function HeatIntelligence() {
               <input id="cold-psi" className="input w-full" type="number" step="1" min="0" value={coldPsi} onChange={(e) => setColdPsi(e.target.value)} />
               <p className="text-[11px] text-[var(--text-muted)] mt-1">Inflation temperature assumed 25°C (cold).</p>
             </div>
-          </div>
+          </Card>
 
-          <div className="card">
-            <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Expected pressure by time of day — {conditions.city}, {conditions.month}</h3>
+          <Card>
+            <CardHeader level={2} title={`Expected pressure by time of day — ${conditions.city}, ${conditions.month}`} />
             {!(Number(coldPsi) > 0) ? (
               <p className="text-sm text-[var(--text-muted)]">Enter a cold inflation pressure above to project hot pressures.</p>
             ) : (
@@ -883,7 +916,7 @@ export default function HeatIntelligence() {
                 )}
               </>
             )}
-          </div>
+          </Card>
         </div>
       )}
 
@@ -895,7 +928,7 @@ export default function HeatIntelligence() {
             const meta = RISK_META[route.risk] || SEVERITY_META[route.risk] || RISK_META.medium
             const badge = RISK_META[route.risk]?.badge || 'bg-sky-900/30 text-sky-200 border-sky-700/50'
             return (
-              <div key={route.name} className={`card border ${RISK_META[route.risk]?.card || ''}`}>
+              <Card key={route.name} pad="tight" tone={RISK_CARD_TONE[route.risk] || 'default'}>
                 <div className="flex items-start justify-between flex-wrap gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -915,7 +948,7 @@ export default function HeatIntelligence() {
                     <p className={`text-xl font-bold ${meta.tone || 'text-[var(--text-primary)]'}`}>{Math.round(route.desert_exposure * 100)}%</p>
                   </div>
                 </div>
-              </div>
+              </Card>
             )
           })}
         </div>
@@ -937,7 +970,7 @@ export default function HeatIntelligence() {
           </div>
 
           {notProvisioned && (
-            <div className="card border border-amber-800/50 flex items-start gap-3">
+            <Card tone="warn" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
               <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
               <div>
                 <p className="text-amber-300 font-medium">The manual temperature logger isn’t enabled on this database yet.</p>
@@ -945,38 +978,35 @@ export default function HeatIntelligence() {
                   Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V188_TYRE_TEMPERATURE_READINGS.sql</span>, then reload. Conditions, blowout risk, calculator and routes work without it.
                 </p>
               </div>
-            </div>
+            </Card>
           )}
 
           {error && (
-            <div className="card border border-red-800/50 flex items-start gap-3">
+            <Card tone="crit" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
               <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
               <div><p className="text-red-300 font-medium">Couldn’t load temperature readings.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
-            </div>
+            </Card>
           )}
 
           {/* KPI tiles */}
-          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-[var(--gap-grid)]">
             {kpis.map((k) => {
               const Icon = k.icon
               return (
-                <div key={k.label} className="card">
+                <Card key={k.label} pad="tight">
                   <div className="flex items-center justify-between">
                     <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                     <Icon size={16} className={k.tone} />
                   </div>
                   <p className={`text-2xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
-                </div>
+                </Card>
               )
             })}
           </div>
 
           {/* Hotspots attention panel */}
-          <div className="card">
-            <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
-              <ShieldAlert size={15} className="text-red-400" /> Thermal hotspots
-              <span className="text-xs font-normal text-[var(--text-muted)]">(high &amp; critical, hottest first)</span>
-            </h3>
+          <Card>
+            <CardHeader level={2} icon={ShieldAlert} title="Thermal hotspots" description="High and critical readings, hottest first." />
             {rows === null ? (
               <div className="h-16 bg-[var(--input-bg)] rounded animate-pulse" />
             ) : hot.length === 0 ? (
@@ -1002,10 +1032,10 @@ export default function HeatIntelligence() {
                 {hot.length > 24 && <div className="rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)]/40 px-3 py-2 flex items-center text-xs text-[var(--text-muted)]">+{hot.length - 24} more</div>}
               </div>
             )}
-          </div>
+          </Card>
 
           {/* Latest-per-position snapshot */}
-          <div className="card overflow-hidden !p-0">
+          <Card pad="none" clip>
             <div className="px-4 pt-4 pb-3">
               <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
                 <Thermometer size={15} /> Latest reading per tyre position
@@ -1043,10 +1073,11 @@ export default function HeatIntelligence() {
                 <TablePagination {...latestPager} />
               </div>
             )}
-          </div>
+          </Card>
 
-          {/* Filters */}
-          <div className="card space-y-3">
+          {/* Filters. Deliberately NOT clipped: this card hosts native selects,
+              and a clipped card is what cuts a dropdown off. */}
+          <Card className="space-y-[var(--space-3)]">
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative flex-1 min-w-[200px]">
                 <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
@@ -1076,10 +1107,10 @@ export default function HeatIntelligence() {
               {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
               <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {summary.totalReadings}</span>
             </div>
-          </div>
+          </Card>
 
           {/* Table */}
-          <div className="card overflow-hidden !p-0">
+          <Card pad="none" clip>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -1123,18 +1154,21 @@ export default function HeatIntelligence() {
               </table>
             </div>
             <TablePagination {...pager} />
-          </div>
+          </Card>
         </div>
       )}
 
-      {/* Create / Edit modal */}
+      {/* Create / Edit modal.
+          The submit button stays INSIDE the <form> rather than moving to the
+          Modal footer: a footer-hosted button would need an explicit form="id"
+          association, which is a behaviour change this migration does not make. */}
       {showModal && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" onClick={closeModal}>
-          <div className="card w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-[var(--text-primary)]">{editing ? 'Edit reading' : 'Log temperature reading'}</h3>
-              <button onClick={closeModal} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
-            </div>
+        <Modal
+          open
+          onClose={closeModal}
+          title={editing ? 'Edit reading' : 'Log temperature reading'}
+          size="md"
+        >
             <form onSubmit={submit} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -1218,31 +1252,32 @@ export default function HeatIntelligence() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
+        </Modal>
       )}
 
-      {/* Delete confirm */}
+      {/* Delete confirm. No form here, so the actions belong in the footer. */}
       {confirmDelete && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" onClick={() => !deleting && setConfirmDelete(null)}>
-          <div className="card w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-full bg-red-900/30 flex items-center justify-center shrink-0"><Trash2 size={18} className="text-red-400" /></div>
-              <div>
-                <h3 className="text-[var(--text-primary)] font-semibold">Delete this reading?</h3>
-                <p className="text-sm text-[var(--text-muted)] mt-1">
-                  {confirmDelete.asset_no || 'Reading'}{confirmDelete.tyre_position ? ` · ${confirmDelete.tyre_position}` : ''} · {fmtC(confirmDelete.temperature_c)} · {fmtDateTime(confirmDelete.recorded_at)}. This can’t be undone.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center justify-end gap-2 mt-5">
-              <button onClick={() => setConfirmDelete(null)} className="btn-secondary text-sm" disabled={deleting}>Cancel</button>
+        <Modal
+          open
+          onClose={closeDelete}
+          title="Delete this reading?"
+          size="sm"
+          footer={
+            <>
+              <button onClick={closeDelete} className="btn-secondary text-sm" disabled={deleting}>Cancel</button>
               <button onClick={doDelete} className="btn-danger text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={deleting}>
                 <Trash2 size={14} /> {deleting ? 'Deleting…' : 'Delete'}
               </button>
-            </div>
+            </>
+          }
+        >
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-full bg-red-900/30 flex items-center justify-center shrink-0"><Trash2 size={18} className="text-red-400" /></div>
+            <p className="text-sm text-[var(--text-muted)]">
+              {confirmDelete.asset_no || 'Reading'}{confirmDelete.tyre_position ? ` · ${confirmDelete.tyre_position}` : ''} · {fmtC(confirmDelete.temperature_c)} · {fmtDateTime(confirmDelete.recorded_at)}. This can’t be undone.
+            </p>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   )

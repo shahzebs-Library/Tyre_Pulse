@@ -32,6 +32,7 @@ import {
   Factory, Activity, CircleDollarSign,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import Card, { CardHeader } from '../components/ui/Card'
 import EmailPdfButton from '../components/EmailPdfButton'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -232,54 +233,64 @@ function LifecycleEsgView() {
         }
       />
 
+      {/* Card owns its border inline, so the old `border-red-800/50` class would be
+          dead here; `tone` carries the red tint instead. The row lives in an inner
+          div because Card is flex-col. */}
       {error && (
-        <div className="card border border-red-800/50 flex items-start gap-3">
-          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
-          <div><p className="text-red-300 font-medium">Couldn't load carbon data.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
-        </div>
+        <Card tone="crit">
+          <div className="flex items-start gap-[var(--space-3)]">
+            <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
+            <div><p className="text-red-300 font-medium">Couldn't load carbon data.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
+          </div>
+        </Card>
       )}
 
       {/* Methodology disclosure */}
-      <div className="card border border-amber-700/40 bg-amber-900/10 flex items-start gap-3">
-        <Info size={16} className="text-amber-400 mt-0.5 shrink-0" />
-        <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
-          <span className="font-semibold text-amber-300">Lifecycle model.</span>{' '}
-          Embedded CO₂ per new tyre = manufacturing (by vehicle class) + {CO2_FACTORS.transport_to_uae} kg transport-to-UAE + {CO2_FACTORS.end_of_life} kg end-of-life.
-          Retreading saves {CO2_FACTORS.retread_saving} kg/tyre; under-inflation adds {CO2_FACTORS.underinflation_per_10k_km} kg per 10,000 km. Vehicle class is
-          derived by joining each tyre's asset to <span className="font-mono text-xs">vehicle_fleet.vehicle_type</span>. Trees ≈ 1 per {KG_CO2_PER_TREE_YEAR} kg CO₂/yr.
-        </p>
-      </div>
-
-      {carbon.retreadFromTextOnly && (
-        <div className="card border border-yellow-700/40 bg-yellow-900/10 flex items-start gap-3">
-          <AlertTriangle size={16} className="text-yellow-400 mt-0.5 shrink-0" />
-          <p className="text-sm text-[var(--text-secondary)]">
-            <span className="font-semibold text-yellow-300">Retread signal derived from text.</span>{' '}
-            No explicit <span className="font-mono text-xs">retread</span> category was found; retread counts are inferred from free-text removal reasons and should be treated as indicative.
+      <Card tone="warn">
+        <div className="flex items-start gap-[var(--space-3)]">
+          <Info size={16} className="text-amber-400 mt-0.5 shrink-0" />
+          <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
+            <span className="font-semibold text-amber-300">Lifecycle model.</span>{' '}
+            Embedded CO₂ per new tyre = manufacturing (by vehicle class) + {CO2_FACTORS.transport_to_uae} kg transport-to-UAE + {CO2_FACTORS.end_of_life} kg end-of-life.
+            Retreading saves {CO2_FACTORS.retread_saving} kg/tyre; under-inflation adds {CO2_FACTORS.underinflation_per_10k_km} kg per 10,000 km. Vehicle class is
+            derived by joining each tyre's asset to <span className="font-mono text-xs">vehicle_fleet.vehicle_type</span>. Trees ≈ 1 per {KG_CO2_PER_TREE_YEAR} kg CO₂/yr.
           </p>
         </div>
+      </Card>
+
+      {carbon.retreadFromTextOnly && (
+        <Card tone="warn">
+          <div className="flex items-start gap-[var(--space-3)]">
+            <AlertTriangle size={16} className="text-yellow-400 mt-0.5 shrink-0" />
+            <p className="text-sm text-[var(--text-secondary)]">
+              <span className="font-semibold text-yellow-300">Retread signal derived from text.</span>{' '}
+              No explicit <span className="font-mono text-xs">retread</span> category was found; retread counts are inferred from free-text removal reasons and should be treated as indicative.
+            </p>
+          </div>
+        </Card>
       )}
 
       {/* KPI tiles */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-[var(--gap-grid)]">
         {kpis.map((k) => {
           const Icon = k.icon
           return (
-            <div key={k.label} className="card">
+            <Card key={k.label}>
               <div className="flex items-center justify-between">
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
               <p className={`text-2xl font-bold mt-1 truncate ${k.tone}`}>{loading ? '—' : k.value}</p>
               <p className="text-xs text-[var(--text-muted)] mt-0.5">{loading ? '' : k.sub}</p>
-            </div>
+            </Card>
           )
         })}
       </div>
 
       {/* ESG scorecard */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="card flex flex-col justify-between">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-[var(--gap-grid)]">
+        {/* Card is already `flex flex-col`; only the justification is added here. */}
+        <Card className="justify-between">
           <div className="flex items-center justify-between">
             <p className="text-xs text-[var(--text-muted)]">ESG score</p>
             <Award size={16} className={esgTone} />
@@ -295,16 +306,16 @@ function LifecycleEsgView() {
                 : <><AlertTriangle size={15} className="text-amber-400" /><span className="text-amber-400">Below certification threshold (70)</span></>}
             </div>
           </div>
-        </div>
+        </Card>
 
-        <div className="card">
+        <Card>
           <p className="text-xs text-[var(--text-muted)] mb-2">ESG components</p>
           <ComponentRow label="Retread rate" value={`${s.retreadRatePct}%`} band={carbon.retreadBand.label} tone={bandTone(carbon.retreadBand.urgency)} icon={Recycle} />
           <ComponentRow label="Pressure compliance" value={`${s.pressureCompliancePct}%`} icon={Gauge} />
           <ComponentRow label="Fleet intensity" value={carbon.intensity.fleetIntensityKgPerKm != null ? `${carbon.intensity.fleetIntensityKgPerKm} kg/km` : '—'} band={carbon.intensity.band.band !== 'unknown' ? carbon.intensity.band.label : 'No fleet-km data'} tone={bandTone(carbon.intensity.band.urgency)} icon={Activity} last />
-        </div>
+        </Card>
 
-        <div className="card">
+        <Card>
           <p className="text-xs text-[var(--text-muted)] mb-2">Reduction vs prior period</p>
           <div className="flex items-center gap-2">
             <TrendingDown size={22} className={carbon.reductionVsPriorPct != null && carbon.reductionVsPriorPct > 0 ? 'text-green-400' : 'text-[var(--text-muted)]'} />
@@ -316,36 +327,41 @@ function LifecycleEsgView() {
             <Equiv icon={TreePine} tone="text-green-400" value={fmt(eq.treesSavedRetreading)} label="trees saved" />
             <Equiv icon={Truck} tone="text-blue-400" value={fmt(eq.drivingEquivalentKm)} label="km driving-equiv" />
           </div>
-        </div>
+        </Card>
       </div>
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="card">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Embedded CO₂ by vehicle class (kg)</h3>
+      {/* Charts. These stay PADDED, so the canvas never reaches the radius and
+          `clip` would only arm the clipping hazard for a later menu. */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-[var(--gap-grid)]">
+        <Card>
+          <CardHeader level={2} title="Embedded CO₂ by vehicle class (kg)" />
           <div className="h-64">
             {loading ? <ChartSkeleton />
               : carbon.tyreBreakdown.length ? <Bar data={classBar} options={barOpts('kg CO₂')} />
                 : <EmptyChart empty="No new tyres in this period." />}
           </div>
-        </div>
-        <div className="card">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Monthly embedded CO₂ (last 12 months, kg)</h3>
+        </Card>
+        <Card>
+          <CardHeader level={2} title="Monthly embedded CO₂ (last 12 months, kg)" />
           <div className="h-64">
             {loading ? <ChartSkeleton />
               : carbon.monthlyTrend.some((m) => m.estimatedCo2Kg > 0) ? <Bar data={trendBar} options={barOpts('kg CO₂')} />
                 : <EmptyChart empty="No dated tyre issues to trend." />}
           </div>
-        </div>
+        </Card>
       </div>
 
-      {/* By-class emissions table (lifetime odometer × per-km factor) */}
-      <div className="card overflow-hidden !p-0">
-        <div className="px-4 py-3 border-b border-[var(--input-border)] flex items-center gap-2">
-          <BarChart3 size={15} className="text-brand-bright" />
-          <h3 className="text-sm font-semibold text-[var(--text-primary)]">Operational emissions by class</h3>
-          <span className="text-xs text-[var(--text-muted)] ml-auto">lifetime odometer × per-km factor</span>
-        </div>
+      {/* By-class emissions table (lifetime odometer × per-km factor).
+          `clip` is correct here: the edge-to-edge table must crop to the radius,
+          and this card holds no menu, select or date picker to clip. */}
+      <Card pad="none" clip>
+        <CardHeader
+          level={2}
+          icon={BarChart3}
+          title="Operational emissions by class"
+          actions={<span className="text-xs text-[var(--text-muted)]">lifetime odometer × per-km factor</span>}
+          className="!mb-0 px-[var(--space-4)] py-[var(--space-3)] border-b border-[var(--border-dim)]"
+        />
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -377,14 +393,16 @@ function LifecycleEsgView() {
             </tbody>
           </table>
         </div>
-      </div>
+      </Card>
 
+      {/* Card sets `padding` INLINE, so a `py-*` utility here would be dead and the
+          empty state would silently collapse. The extra breathing room is a token. */}
       {!loading && !hasData && (
-        <div className="card text-center py-12">
+        <Card className="text-center" style={{ paddingTop: 'var(--space-12)', paddingBottom: 'var(--space-12)' }}>
           <Leaf size={28} className="mx-auto mb-2 text-[var(--text-muted)] opacity-60" />
           <p className="text-[var(--text-secondary)] font-medium">No lifecycle carbon signal for this scope.</p>
           <p className="text-sm text-[var(--text-muted)] mt-1">Add tyre records and fleet vehicles, or widen the period, to populate the ESG model.</p>
-        </div>
+        </Card>
       )}
 
       {/* Offsets ledger */}
@@ -456,16 +474,19 @@ function OffsetsPanel({ offsets, canWrite, activeCountry, onChange }) {
   }
 
   return (
-    <div className="card">
-      <div className="flex items-center gap-2 mb-3">
-        <TreePine size={16} className="text-green-400" />
-        <h3 className="text-sm font-semibold text-[var(--text-primary)]">Carbon offsets ledger</h3>
-        {offsets.length > 0 && (
-          <span className="text-xs text-[var(--text-muted)] ml-auto">
+    // No `clip`: the form below carries a native control, and a clipped card is
+    // exactly the popover bug Card exists to end.
+    <Card>
+      <CardHeader
+        level={2}
+        icon={TreePine}
+        title="Carbon offsets ledger"
+        actions={offsets.length > 0 ? (
+          <span className="text-xs text-[var(--text-muted)]">
             {totalTonnes.toFixed(2)} t · <CircleDollarSign size={11} className="inline -mt-0.5" /> AED {fmt(totalAed)}
           </span>
-        )}
-      </div>
+        ) : null}
+      />
 
       {canWrite && (
         <form onSubmit={submit} className="grid grid-cols-1 md:grid-cols-5 gap-2 mb-4">
@@ -510,7 +531,7 @@ function OffsetsPanel({ offsets, canWrite, activeCountry, onChange }) {
           ))}
         </div>
       )}
-    </div>
+    </Card>
   )
 }
 
@@ -542,12 +563,14 @@ function InitiativesPanel({ initiatives, canWrite, activeCountry, onChange }) {
   }
 
   return (
-    <div className="card">
-      <div className="flex items-center gap-2 mb-3">
-        <Target size={16} className="text-brand-bright" />
-        <h3 className="text-sm font-semibold text-[var(--text-primary)]">Reduction initiatives</h3>
-        {initiatives.length > 0 && <span className="text-xs text-[var(--text-muted)] ml-auto">{asTonnes(totalKg)} t claimed savings</span>}
-      </div>
+    // No `clip`: the status <select> in the form below must not be clipped.
+    <Card>
+      <CardHeader
+        level={2}
+        icon={Target}
+        title="Reduction initiatives"
+        actions={initiatives.length > 0 ? <span className="text-xs text-[var(--text-muted)]">{asTonnes(totalKg)} t claimed savings</span> : null}
+      />
 
       {canWrite && (
         <form onSubmit={submit} className="grid grid-cols-1 md:grid-cols-6 gap-2 mb-4">
@@ -595,7 +618,7 @@ function InitiativesPanel({ initiatives, canWrite, activeCountry, onChange }) {
           ))}
         </div>
       )}
-    </div>
+    </Card>
   )
 }
 
@@ -766,74 +789,80 @@ function FuelEmissionsView() {
       />
 
       {error && (
-        <div className="card border border-red-800/50 flex items-start gap-3">
-          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
-          <div><p className="text-red-300 font-medium">Couldn't load fuel usage.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
-        </div>
+        <Card tone="crit">
+          <div className="flex items-start gap-[var(--space-3)]">
+            <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
+            <div><p className="text-red-300 font-medium">Couldn't load fuel usage.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
+          </div>
+        </Card>
       )}
 
       {/* Methodology disclosure */}
-      <div className="card border border-amber-700/40 bg-amber-900/10 flex items-start gap-3">
-        <Info size={16} className="text-amber-400 mt-0.5 shrink-0" />
-        <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
-          <span className="font-semibold text-amber-300">Estimate.</span>{' '}
-          CO₂ is derived from distance travelled per tyre record and the IPCC diesel factor of{' '}
-          <span className="font-semibold">{DIESEL_KG_PER_L} kg/L</span>. Distance is real fleet data; the
-          litres-per-km conversion uses a fleet-average consumption assumption.
-        </p>
-      </div>
+      <Card tone="warn">
+        <div className="flex items-start gap-[var(--space-3)]">
+          <Info size={16} className="text-amber-400 mt-0.5 shrink-0" />
+          <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
+            <span className="font-semibold text-amber-300">Estimate.</span>{' '}
+            CO₂ is derived from distance travelled per tyre record and the IPCC diesel factor of{' '}
+            <span className="font-semibold">{DIESEL_KG_PER_L} kg/L</span>. Distance is real fleet data; the
+            litres-per-km conversion uses a fleet-average consumption assumption.
+          </p>
+        </div>
+      </Card>
 
       {/* KPI tiles */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-[var(--gap-grid)]">
         {kpis.map((k) => {
           const Icon = k.icon
           return (
-            <div key={k.label} className="card">
+            <Card key={k.label}>
               <div className="flex items-center justify-between">
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
               <p className={`text-2xl font-bold mt-1 truncate ${k.tone}`}>{rows === null ? '—' : k.value}</p>
               <p className="text-xs text-[var(--text-muted)] mt-0.5">{rows === null ? '' : k.sub}</p>
-            </div>
+            </Card>
           )
         })}
       </div>
 
-      {/* Offset banner */}
+      {/* Offset banner. Card is `flex flex-col`, and Tailwind emits `.flex-col`
+          AFTER `.flex-row`, so a `flex-row` CLASS would silently lose. The
+          direction is set inline, which Card spreads last. */}
       {hasData && (
-        <div className="card flex items-center gap-3">
+        <Card className="items-center gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
           <TreePine size={18} className="text-green-400 shrink-0" />
           <p className="text-sm text-[var(--text-secondary)]">
             Offsetting this period's emissions would take an estimated{' '}
             <span className="font-semibold text-green-400">{treesToOffset(carbon.totalCo2).toLocaleString()}</span>{' '}
             trees absorbing CO₂ for a year.
           </p>
-        </div>
+        </Card>
       )}
 
       {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="card">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Monthly CO₂ emissions (kg)</h3>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-[var(--gap-grid)]">
+        <Card>
+          <CardHeader level={2} title="Monthly CO₂ emissions (kg)" />
           <div className="h-64">
             {rows === null ? <ChartSkeleton />
               : carbon.byMonth.length ? <Bar data={monthBar} options={barOpts} />
                 : <EmptyChart empty="No dated fuel usage in this period." />}
           </div>
-        </div>
-        <div className="card">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">CO₂ by site (top 10)</h3>
+        </Card>
+        <Card>
+          <CardHeader level={2} title="CO₂ by site (top 10)" />
           <div className="h-64">
             {rows === null ? <ChartSkeleton />
               : topSites.length ? <Doughnut data={siteDoughnut} options={doughnutOpts} />
                 : <EmptyChart empty="No site emissions to show." />}
           </div>
-        </div>
+        </Card>
       </div>
 
-      {/* Filters */}
-      <div className="card">
+      {/* Filters. Deliberately NOT clipped: it holds a native <select>. */}
+      <Card>
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[200px]">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
@@ -846,10 +875,12 @@ function FuelEmissionsView() {
           {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
           <span className="text-xs text-[var(--text-muted)] ml-auto">{filteredVehicles.length} of {carbon.byVehicle.length} vehicles</span>
         </div>
-      </div>
+      </Card>
 
-      {/* Vehicle emissions table */}
-      <div className="card overflow-hidden !p-0">
+      {/* Vehicle emissions table. `pad="none"` lets the table run edge to edge, but
+          NO `clip`: TablePagination renders a native rows-per-page <select>, and a
+          clipped card is the hazard this primitive exists to retire. */}
+      <Card pad="none">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -886,7 +917,7 @@ function FuelEmissionsView() {
           </table>
         </div>
         <TablePagination {...pager} />
-      </div>
+      </Card>
     </>
   )
 }

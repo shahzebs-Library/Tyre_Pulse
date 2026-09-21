@@ -459,10 +459,15 @@ export default function Analytics() {
           </Card>
         </>
       ) : (
-        <Card className="text-center py-[var(--space-12)]">
-          <Activity size={36} className="text-gray-700 mx-auto mb-3" />
-          <p className="text-gray-400 font-medium">No data available</p>
-          <p className="text-gray-600 text-sm mt-1">Adjust your filters or import tyre records.</p>
+        <Card>
+          {/* The vertical room lives on this inner element, not the Card: Card
+              sets `padding` inline and a plain py-* class cannot beat that, so
+              the empty state would silently collapse to --pad-card. */}
+          <div className="text-center" style={{ paddingTop: 'var(--space-10)', paddingBottom: 'var(--space-10)' }}>
+            <Activity size={36} className="text-gray-700 mx-auto mb-3" />
+            <p className="text-gray-400 font-medium">No data available</p>
+            <p className="text-gray-600 text-sm mt-1">Adjust your filters or import tyre records.</p>
+          </div>
         </Card>
       )}
     </div>

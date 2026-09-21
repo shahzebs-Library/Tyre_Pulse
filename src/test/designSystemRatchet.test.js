@@ -34,22 +34,26 @@ const PAGES_DIR = resolve(process.cwd(), 'src/pages')
 /**
  * Current, measured debt. LOWER these as pages migrate. Never raise them.
  *
- * rawOverlay 130 -> 128 on 2026-09-21: StockManagement and PmPrograms moved
- * their dialogs onto Modal. WorkOrders migrated 3 of its 4 overlays but stays
- * on the list, because its remaining one is a right-hand DRAWER using the
- * `tp-drawer-panel` contract that `dialogFit.test.jsx` pins - Modal has no
- * drawer size, so converting it would turn a full-height rail into a centred
- * box. The count is of FILES, not occurrences, which is why 3 converted
- * overlays moved the number by 0 for that file.
+ * rawOverlay 130 -> 128 -> 125 on 2026-09-21. Wave 1 moved StockManagement and
+ * PmPrograms; wave 2 moved Combinations, HeatIntelligence and SerialTracker.
  *
- * rawTable stays 194: every table examined so far was correctly REFUSED. They
- * carry composite cells, server-driven sorting or their own TablePagination,
- * and EnterpriseTable would bring a second search box and a different export.
- * A refused migration is a good outcome here, not an outstanding task.
+ * TWO FILES CONVERTED OVERLAYS AND STILL SIT ON THIS LIST, WHICH IS CORRECT.
+ * WorkOrders converted 3 of 4 and RepairRequests 3 of 4; the one each keeps is
+ * a right-hand DRAWER on the `tp-drawer-panel` contract that
+ * `dialogFit.test.jsx` pins. Modal has no drawer size - its panel is a centred
+ * box capped at 92dvh - so converting would turn a full-height rail into a
+ * dialog. That is a layout change, not a migration. The count is of FILES, not
+ * occurrences, so six converted overlays moved this number by zero.
+ *
+ * rawTable stays 194: all 19 tables examined across both waves were correctly
+ * REFUSED. They carry composite cells, server-driven sorting, or their own
+ * usePagedRows + TablePagination + export pipeline, and EnterpriseTable would
+ * bring a second search box and a competing export. A refusal is the right
+ * outcome here, not an outstanding task - do not read this number as debt.
  */
 const BASELINE = {
   rawTable: 194,
-  rawOverlay: 128,
+  rawOverlay: 125,
 }
 
 function readAllPages() {
@@ -105,6 +109,47 @@ describe('design-system ratchet', () => {
           `Count went ${BASELINE.rawOverlay} -> ${offenders.length}.`
         : `Debt reduced to ${offenders.length}. Lower BASELINE.rawOverlay to ${offenders.length} in this file.`,
     ).toBe(BASELINE.rawOverlay)
+  })
+
+  it('a Card is never given a padding or border utility that cannot win', () => {
+    // THIS TRAP HAS BITTEN TWICE, so it is pinned rather than remembered.
+    //
+    // Card sets `padding`, `border` and `borderColor` as INLINE styles. A plain
+    // Tailwind class is a normal declaration and loses to an inline one, so
+    // `<Card className="py-12">` is DEAD - and it fails SILENTLY: the element
+    // still renders, it just quietly collapses to --pad-card. The victims are
+    // always empty states, which is where the roominess was the whole point.
+    //
+    // `!`-prefixed classes are exempt because !important in a stylesheet DOES
+    // beat a normal inline declaration - that is why CardHeader's `!mb-0` is
+    // correct. CardHeader/CardBody/CardFooter set no inline padding, so their
+    // px-*/py-* are fine; the `[\s>]` is what keeps them out of this rule.
+    //
+    // The fix is never to add `!`: put the spacing on an inner element, or use
+    // the `pad` prop. `!important` on a layout utility is a fight you win once
+    // and lose the next time someone nests something.
+    const DEAD = /^(?:p[xytblr]?-|border(?:$|-))/
+    const offenders = []
+    for (const p of PAGES) {
+      if (!/from '[^']*components\/ui\/Card'/.test(p.src)) continue
+      // Attributes of one <Card ...> tag: stop at the first '>' that is not
+      // inside a brace expression, which is enough for real-world JSX here.
+      for (const m of p.src.matchAll(/<Card[\s]([^>]*?)\/?>/g)) {
+        const attrs = m[1]
+        const cls = attrs.match(/className=(?:"([^"]*)"|\{`([^`]*)`\})/)
+        if (!cls) continue
+        const tokens = (cls[1] || cls[2] || '')
+          .split(/\s+/)
+          .filter(Boolean)
+          .filter((t) => !t.startsWith('!') && DEAD.test(t))
+        if (tokens.length) offenders.push(`${p.file}: ${tokens.join(' ')}`)
+      }
+    }
+    expect(
+      offenders,
+      `These utilities are dead - Card sets padding/border inline and wins.\n` +
+        `Move the spacing to an inner element (or use the pad prop):\n  ${offenders.join('\n  ')}`,
+    ).toEqual([])
   })
 
   it('the Card primitive is never given the legacy .card class as well', () => {

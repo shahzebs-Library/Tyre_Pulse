@@ -2752,4 +2752,100 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get accidentCopyCatalog =>
       'loadFailed=تعذر تحميل سجل الحادث. حاول مرة أخرى.~notRecorded=غير مسجل~dashboardTitle=مركز قيادة الحوادث~dashboardSubtitle=سجل مباشر حسب الصلاحيات~reportAction=الإبلاغ عن حادث~reportShort=إبلاغ~loadingRegister=جارٍ تحميل سجل الحوادث…~dashboardEyebrow=إدارة حوادث المعدات والمركبات~dashboardHeroTitle=كل حالة بمسار مسؤول واحد~dashboardHeroMessage=الأسطول والتأمين والورشة والفحص والتسليم والاسترداد ظاهرة دون مؤشرات مختلقة.~searchHint=ابحث بالمعدة أو المرجع أو الموقع~allCases=كل الحالات~reportedByMe=بلاغاتي~anyStatus=أي حالة~open=مفتوح~closed=مغلق~noMatches=لا توجد حالات مطابقة~noMatchesMessage=غيّر التصفية أو أنشئ بلاغًا جديدًا.~loadMore=تحميل حالات أخرى~loading=جارٍ التحميل…~detailTitle=تفاصيل الحادث~loadingFacts=جارٍ تحميل بيانات الحالة…~notFound=الحادث غير موجود~notFoundMessage=السجل خارج نطاق صلاحيتك أو لم يعد موجودًا.~openFlow=فتح مسار الحالة المسؤول~incidentFacts=بيانات الحادث~incidentFactsHint=أدلة المبلّغ وهوية المركبة~liability=المسؤولية والدفع~liabilityHint=المتسبب والمسؤول والجهة الدافعة~insurance=التأمين والاسترداد~insuranceHint=المطالبة والاسترداد منفصلان عن الإغلاق~workshopRelease=الورشة والتسليم~workshopReleaseHint=التقييم والإصلاح والفحص وإعادة المركبة~closure=ضوابط الإغلاق~closureHint=اعتماد الإغلاق وحالة القضية منفصلان~vehicleType=نوع المركبة~plate=اللوحة / رقم الأسطول~type=نوع الحادث~severity=الخطورة~reporter=المبلّغ~evidenceFiles=ملفات الأدلة~description=الوصف~damage=الضرر~fault=حالة الخطأ~responsible=الطرف المتسبب~liable=الطرف المسؤول~payer=الجهة الدافعة~insurer=شركة التأمين~policy=الوثيقة~claimNo=رقم المطالبة~claimStatus=حالة المطالبة~claimed=المبلغ المطالب به~approved=المبلغ المعتمد~recoveryStatus=حالة الاسترداد~recovered=المبلغ المسترد~repairType=نوع الإصلاح~workshop=الورشة~repairCost=تكلفة الإصلاح~expectedRelease=التسليم المتوقع~actualRelease=التسليم الفعلي~nextAction=الإجراء التالي~workflowStage=مرحلة سير العمل~caseStatus=حالة القضية~closureRequest=طلب الإغلاق~closureLevel=مستوى الإغلاق~caseTitle=مسؤولية القضية~caseId=رقم الحالة~incidentDateLabel=تاريخ الحادث~damageMapTitle=خريطة الأضرار~damageMapHint=اضغط على منطقة لتحديد الضرر~damageMapZonesLabel=منطقة/مناطق محددة~damageMapNoneMarked=لم يتم تحديد أي ضرر بعد~damageViewFront=الأمام~damageViewRear=الخلف~damageViewLeft=الجانب الأيسر~damageViewRight=الجانب الأيمن~damageViewTop=من الأعلى~zoneFrontBumper=الصادم الأمامي~zoneHood=غطاء المحرك~zoneWindshield=الزجاج الأمامي~zoneLeftHeadlight=المصباح الأمامي الأيسر~zoneRightHeadlight=المصباح الأمامي الأيمن~zoneRearBumper=الصادم الخلفي~zoneTailgate=الباب الخلفي~zoneRearWindshield=الزجاج الخلفي~zoneLeftTailLight=المصباح الخلفي الأيسر~zoneRightTailLight=المصباح الخلفي الأيمن~zoneFrontFender=الرفراف الأمامي~zoneFrontDoor=الباب الأمامي~zoneRearDoor=الباب الخلفي~zoneRearFender=الرفراف الخلفي~zoneMirror=المرآة الجانبية~zoneRoof=السقف~damageMarkSeverityLabel=شدة الضرر~damageMarkNoteLabel=ملاحظة (اختياري)~damageMarkSave=حفظ العلامة~damageMarkRemove=إزالة العلامة~loadingWorkstreams=جارٍ تحميل مسارات العمل…~caseNotFound=القضية غير موجودة~caseNotFoundMessage=الحادث خارج نطاق صلاحيتك أو لم يعد موجودًا.~endToEnd=مسار القضية من البداية للنهاية~notActivated=مسار القضية غير مفعّل~notActivatedMessage=الحادث موجود لكن نموذج مسارات العمل غير مهيأ. لم يتم افتراض أي تقدم.~noWorkstreams=لا توجد مسارات معيّنة~noWorkstreamsMessage=نموذج القضية متاح لكن لم تُوجّه لها مسارات بعد.~timeline=الخط الزمني للمسؤولية~timelineHint=بيانات للقراءة فقط من سجل مسارات القضية~boundary=حدود التحكم~boundaryHint=لا يتم اختلاق أي إجراءات~boundaryMessage=قرارات التأمين والتقييم والإصلاح والفحص والتسليم والإغلاق والاسترداد تتطلب إجراءات خادم موثقة. لا توجد تعديلات مباشرة غير آمنة.~done=مكتمل~inProgress=قيد التنفيذ~pending=معلق~notRequired=غير مطلوب~reason=السبب~wsIncident=الحادث والأدلة~wsFleet=تحقق الأسطول~wsLiability=المسؤولية والسلامة~wsInsurance=مطالبة التأمين~wsAssessment=تقييم الورشة~wsRepair=تنفيذ الإصلاح~wsQc=فحص الورشة~wsHandover=تسليم المركبة~wsFinance=الاسترداد والمالية~wsCorrective=الإجراءات التصحيحية~selectAsset=اختر معدة من الأسطول~changeAsset=تغيير المعدة~assetSearch=المعدة أو رقم الأسطول أو اللوحة أو الطراز~unrecordedAsset=معدة غير مسجلة~photoFailed=تعذر حفظ صورة الدليل. حاول مرة أخرى.~workspaceLoading=مساحة العمل ما زالت قيد التحميل. حاول مرة أخرى.~required=المعدة والموقع والوصف وصورة دليل واحدة على الأقل مطلوبة.~fieldsDropped=تعذر حفظ جميع الحقول. لم يتم عرض البلاغ كمقدم.~saveFailed=تعذر حفظ البلاغ على هذا الجهاز. حاول مرة أخرى.~saved=تم حفظ البلاغ~savedTitle=تم حفظ بلاغ الحادث بأمان~savedMessage=البلاغ والأدلة في قائمة مزامنة الجهاز وسيتم رفعهما ضمن مساحة العمل النشطة.~backRegister=العودة إلى سجل الحوادث~reportTitle=الإبلاغ عن حادث~reportSubtitle=التقاط أدلة يعمل دون اتصال~firstResponse=الاستجابة الأولى~captureFacts=سجّل الوقائع في الموقع~captureFactsMessage=اختر المعدة أولاً لتعبئة موقعها وهويتها من سجل الأسطول. صورة دليل واحدة على الأقل إلزامية.~assetLocation=1. المعدة والموقع~assetLocationHint=سجل الأسطول هو المرجع عند توفره~fleetUnavailable=البحث في الأسطول غير متاح. الإدخال اليدوي متاح.~assetNo=رقم المعدة~site=الموقع~exactLocation=المكان الدقيق للحادث~classification=2. التصنيف~classificationHint=يمكن مراجعة التصنيف الميداني لاحقًا~minor=بسيط~moderate=متوسط~severe=خطير~fatal=مميت~collision=تصادم~rollover=انقلاب~propertyDamage=ضرر ممتلكات~other=أخرى~whatHappened=ماذا حدث؟~notes=ملاحظات فورية~evidence=3. الأدلة~evidenceAttached=صور أدلة مرفقة • الحد الأدنى 1~camera=الكاميرا~gallery=المعرض~evidencePhoto=صورة دليل~removePhoto=إزالة الصورة~saveReport=حفظ بلاغ الحادث';
+
+  @override
+  String get washEvidenceTitle => 'قائمة الفحص والمواد الكيميائية';
+
+  @override
+  String get washEnteredByLabel => 'أدخل بواسطة';
+
+  @override
+  String get washChemicalUseLabel => 'المواد الكيميائية المستخدمة';
+
+  @override
+  String get washNotRecorded => 'غير مسجل';
+
+  @override
+  String get washNoChemical => 'لم تستخدم مواد كيميائية';
+
+  @override
+  String get washChemicalUsed => 'تم استخدام مادة كيميائية';
+
+  @override
+  String get washProductName => 'اسم المنتج';
+
+  @override
+  String get washManufacturer => 'الشركة المصنعة';
+
+  @override
+  String get washQuantity => 'الكمية والوحدة';
+
+  @override
+  String get washDilution => 'التخفيف المستخدم (حسب ملصق المنتج)';
+
+  @override
+  String get washAddProduct => 'إضافة منتج';
+
+  @override
+  String get washRemoveProduct => 'إزالة المنتج';
+
+  @override
+  String get washChecklistTitle => 'قائمة فحص الغسيل';
+
+  @override
+  String get washCheckExterior => 'الأسطح الخارجية';
+
+  @override
+  String get washCheckGlass => 'النوافذ والمرايا والأضواء';
+
+  @override
+  String get washCheckWheels => 'العجلات وأقواس العجلات';
+
+  @override
+  String get washCheckCab => 'داخل المقصورة';
+
+  @override
+  String get washCheckRinse => 'الشطف النهائي والبقايا الظاهرة';
+
+  @override
+  String get washNotChecked => 'لم يتم الفحص';
+
+  @override
+  String get washChecked => 'تم الفحص';
+
+  @override
+  String get washIssueFound => 'توجد مشكلة';
+
+  @override
+  String get washNotApplicable => 'لا ينطبق';
+
+  @override
+  String get washIssueNote => 'تفاصيل المشكلة / تعليق';
+
+  @override
+  String get washEvidenceRequired =>
+      'أدخل أسماء المنتجات وصف أي مشاكل في قائمة الفحص.';
+
+  @override
+  String get washViewRecord => 'عرض سجل الغسيل';
+
+  @override
+  String get washReceivedAt => 'وقت الاستلام';
+
+  @override
+  String get washSearchHistory => 'البحث بالمركبة أو الشخص أو الموقع';
+
+  @override
+  String get washMyEntries => 'إدخالاتي';
+
+  @override
+  String get washAllEntries => 'كل الإدخالات';
+
+  @override
+  String get washSavedOnDevice =>
+      'تم الحفظ على هذا الجهاز. حالة الرفع متاحة في المزامنة.';
+
+  @override
+  String get washHistoryLimit =>
+      'السجل كبير جدًا لتحميله بالكامل. استخدم تقرير الويب.';
 }

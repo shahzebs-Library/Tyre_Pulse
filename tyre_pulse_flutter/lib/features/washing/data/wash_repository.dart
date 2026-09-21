@@ -55,7 +55,7 @@ import 'package:uuid/uuid.dart';
 
 const String _washColumns = 'id,asset_no,vehicle_type,wash_date,wash_time,'
     'wash_type,site,bay,washed_by,water_liters,cost,duration_min,'
-    'odometer_km,status,notes,photos,created_at';
+    'odometer_km,status,notes,photos,created_at,created_by,entry_name,entry_username,wash_details,captured_at';
 
 /// Local (device-timezone) `YYYY-MM-DD`. This feature's own copy of the same
 /// small technique `meter_log_repository.dart`'s `todayIsoDate` provides -
@@ -94,6 +94,7 @@ final class SubmitWashInput {
     this.odometerKm,
     this.notes,
     this.photoLocalPaths = const <String>[],
+    this.washDetails,
   });
 
   final String assetNo;
@@ -123,6 +124,7 @@ final class SubmitWashInput {
 
   /// Up to [WashPhotoCapture.maxPhotos] local file paths, in display order.
   final List<String> photoLocalPaths;
+  final Map<String, dynamic>? washDetails;
 }
 
 /// The narrow surface this feature needs from Supabase. Abstract so a
@@ -172,15 +174,52 @@ final class SupabaseWashRepository
 
   @override
   Future<List<WashRecord>> listRecentWashes({int limit = 200}) async {
-    final List<Map<String, dynamic>> rows =
-        await guard<List<Map<String, dynamic>>>(
-      () => _client
-          .from(SupabaseTables.washRecords)
-          .select(_washColumns)
-          .order('wash_date', ascending: false, nullsFirst: false)
-          .order('created_at', ascending: false)
-          .limit(limit),
-    );
+    final rows = <Map<String, dynamic>>[];
+    // Fetch complete history; never derive due status or staff totals from a
+    // silent 200-row cap. Bound runaway history explicitly.
+    for (var start = 0; start < 20000; start += 500) {
+      final batch = await guard<List<Map<String, dynamic>>>(
+        () => _client
+            .from(SupabaseTables.washRecords)
+            .select(_washColumns)
+            .order('wash_date', ascending: false, nullsFirst: false)
+            .order('created_at', ascending: false)
+            .order('id')
+            .range(start, start + 499),
+      );
+      rows.addAll(batch);
+      if (batch.length < 500) break;
+      if (start == 19500) {
+        throw StateError('Wash history exceeds the complete-history limit.');
+      }
+    }
+    final missing = rows
+        .where(
+          (r) =>
+              r['created_by'] != null &&
+              r['entry_name'] == null &&
+              r['entry_username'] == null,
+        )
+        .toList();
+    for (var start = 0; start < missing.length; start += 500) {
+      final end = (start + 500) < missing.length ? start + 500 : missing.length;
+      final result = await guard<dynamic>(
+        () => _client.rpc(
+          'wash_entry_people',
+          params: {
+            'p_ids': missing.sublist(start, end).map((r) => r['id']).toList(),
+          },
+        ),
+      );
+      final people = {
+        for (final p in (result as List<dynamic>).cast<Map<String, dynamic>>())
+          p['id']: p,
+      };
+      for (final row in missing.sublist(start, end)) {
+        row['entry_name'] = people[row['created_by']]?['full_name'];
+        row['entry_username'] = people[row['created_by']]?['username'];
+      }
+    }
     return <WashRecord>[
       for (final Map<String, dynamic> row in rows) WashRecord.fromRow(row),
     ];
@@ -191,6 +230,12 @@ final class SupabaseWashRepository
     required WorkspaceContext workspace,
     required SubmitWashInput input,
   }) async {
+    // Refuse loss of evidence before enqueueing, even on an older registry.
+    final allowed =
+        CommandRegistry.specFor(CommandType.washRecord).fieldAllowList;
+    if (input.washDetails != null && !allowed.contains('wash_details')) {
+      throw StateError('This build cannot queue washing evidence.');
+    }
     final String asset = input.assetNo.trim();
     final String date = input.washDate ?? todayIsoDate();
     final List<String> photos = <String>[
@@ -207,6 +252,8 @@ final class SupabaseWashRepository
         'site': _trimmedOrNull(input.site),
         'country': input.country,
         'created_by': workspace.userId,
+        'captured_at': DateTime.now().toUtc().toIso8601String(),
+        if (input.washDetails != null) 'wash_details': input.washDetails,
         'washed_by': _trimmedOrNull(input.washedBy),
         'wash_date': date,
         'wash_time': _nowLocalHhMm(),

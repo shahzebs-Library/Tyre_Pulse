@@ -2757,4 +2757,100 @@ class AppLocalizationsUr extends AppLocalizations {
   @override
   String get accidentCopyCatalog =>
       'loadFailed=حادثہ ریکارڈ لوڈ نہیں ہو سکا۔ دوبارہ کوشش کریں۔~notRecorded=درج نہیں~dashboardTitle=حادثہ کمانڈ سینٹر~dashboardSubtitle=اجازت کے مطابق براہ راست رجسٹر~reportAction=حادثہ رپورٹ کریں~reportShort=رپورٹ~loadingRegister=حادثہ رجسٹر لوڈ ہو رہا ہے…~dashboardEyebrow=PMV حادثہ کنٹرول~dashboardHeroTitle=ہر کیس، ایک جواب دہ راستہ~dashboardHeroMessage=فلیٹ، انشورنس، ورکشاپ، QC، حوالگی اور ریکوری بغیر فرضی KPI کے واضح رہتے ہیں۔~searchHint=اثاثہ، حوالہ، سائٹ یا مقام تلاش کریں~allCases=تمام کیس~reportedByMe=میری رپورٹس~anyStatus=کوئی بھی حالت~open=کھلا~closed=بند~noMatches=کوئی مماثل کیس نہیں~noMatchesMessage=فلٹر بدلیں یا نئی حادثہ رپورٹ بنائیں۔~loadMore=مزید کیس لوڈ کریں~loading=لوڈ ہو رہا ہے…~detailTitle=حادثے کی تفصیل~loadingFacts=کیس کے حقائق لوڈ ہو رہے ہیں…~notFound=حادثہ نہیں ملا~notFoundMessage=یہ ریکارڈ آپ کی رسائی سے باہر ہے یا موجود نہیں۔~openFlow=جواب دہ کیس فلو کھولیں~incidentFacts=حادثے کے حقائق~incidentFactsHint=رپورٹر کے ثبوت اور گاڑی کی شناخت~liability=ذمہ داری اور ادائیگی~liabilityHint=قصوروار، ذمہ دار اور ادائیگی کرنے والا~insurance=انشورنس اور ریکوری~insuranceHint=دعویٰ اور ریکوری بندش سے الگ ہیں~workshopRelease=ورکشاپ اور ریلیز~workshopReleaseHint=تشخیص، مرمت، QC اور گاڑی کی واپسی~closure=بندش کے کنٹرول~closureHint=پرانا منظوری عمل اور جدید کیس حالت الگ ہیں~vehicleType=گاڑی کی قسم~plate=پلیٹ / فلیٹ نمبر~type=حادثے کی قسم~severity=شدت~reporter=رپورٹر~evidenceFiles=ثبوت فائلیں~description=تفصیل~damage=نقصان~fault=غلطی کی حالت~responsible=قصوروار فریق~liable=ذمہ دار فریق~payer=ادائیگی کرنے والا~insurer=انشورنس کمپنی~policy=پالیسی~claimNo=دعویٰ نمبر~claimStatus=دعویٰ حالت~claimed=دعویٰ رقم~approved=منظور رقم~recoveryStatus=ریکوری حالت~recovered=وصول رقم~repairType=مرمت کی قسم~workshop=ورکشاپ~repairCost=مرمت لاگت~expectedRelease=متوقع ریلیز~actualRelease=اصل ریلیز~nextAction=اگلا اقدام~workflowStage=ورک فلو مرحلہ~caseStatus=کیس حالت~closureRequest=بندش درخواست~closureLevel=بندش سطح~caseTitle=کیس جواب دہی~caseId=کیس آئی ڈی~incidentDateLabel=واقعے کی تاریخ~damageMapTitle=نقصان کا نقشہ~damageMapHint=نقصان کی نشاندہی کے لیے حصے پر ٹیپ کریں~damageMapZonesLabel=حصے نشان زد~damageMapNoneMarked=ابھی تک کوئی حصہ نشان زد نہیں~damageViewFront=سامنے~damageViewRear=پیچھے~damageViewLeft=بائیں جانب~damageViewRight=دائیں جانب~damageViewTop=اوپر سے~zoneFrontBumper=اگلا بمپر~zoneHood=بونٹ~zoneWindshield=اگلا شیشہ~zoneLeftHeadlight=بائیں ہیڈلائٹ~zoneRightHeadlight=دائیں ہیڈلائٹ~zoneRearBumper=پچھلا بمپر~zoneTailgate=پچھلا دروازہ~zoneRearWindshield=پچھلا شیشہ~zoneLeftTailLight=بائیں ٹیل لائٹ~zoneRightTailLight=دائیں ٹیل لائٹ~zoneFrontFender=اگلا فینڈر~zoneFrontDoor=اگلا دروازہ~zoneRearDoor=پچھلا دروازہ~zoneRearFender=پچھلا فینڈر~zoneMirror=سائیڈ مرر~zoneRoof=چھت~damageMarkSeverityLabel=شدت~damageMarkNoteLabel=نوٹ (اختیاری)~damageMarkSave=نشان محفوظ کریں~damageMarkRemove=نشان ہٹائیں~loadingWorkstreams=ورک اسٹریم لوڈ ہو رہے ہیں…~caseNotFound=کیس نہیں ملا~caseNotFoundMessage=یہ حادثہ آپ کی اجازت سے باہر ہے یا موجود نہیں۔~endToEnd=مکمل کیس فلو~notActivated=کیس ورک فلو فعال نہیں~notActivatedMessage=حادثہ موجود ہے لیکن ورک اسٹریم ماڈل تیار نہیں۔ کوئی پیش رفت فرض نہیں کی گئی۔~noWorkstreams=کوئی ورک اسٹریم مقرر نہیں~noWorkstreamsMessage=کیس ماڈل دستیاب ہے لیکن ابھی راستہ مقرر نہیں ہوا۔~timeline=جواب دہ ٹائم لائن~timelineHint=کیس ورک اسٹریم لیجر کی صرف پڑھنے والی حقیقت~boundary=کنٹرول حد~boundaryHint=اقدامات فرض نہیں کیے گئے~boundaryMessage=انشورنس، تشخیص، مرمت، QC، حوالگی، بندش اور ریکوری فیصلوں کے لیے تصدیق شدہ سرور عمل ضروری ہیں۔ غیر محفوظ براہ راست ترمیم نہیں۔~done=مکمل~inProgress=جاری~pending=زیر التوا~notRequired=ضروری نہیں~reason=وجہ~wsIncident=حادثہ اور ثبوت~wsFleet=فلیٹ تصدیق~wsLiability=ذمہ داری اور حفاظت~wsInsurance=انشورنس دعویٰ~wsAssessment=ورکشاپ تشخیص~wsRepair=مرمت عمل~wsQc=ورکشاپ QC~wsHandover=گاڑی حوالگی~wsFinance=ریکوری اور مالیات~wsCorrective=اصلاحی اقدامات~selectAsset=فلیٹ اثاثہ منتخب کریں~changeAsset=اثاثہ بدلیں~assetSearch=اثاثہ، فلیٹ نمبر، پلیٹ یا ماڈل~unrecordedAsset=غیر درج اثاثہ~photoFailed=ثبوت تصویر محفوظ نہیں ہو سکی۔ دوبارہ کوشش کریں۔~workspaceLoading=ورک اسپیس ابھی لوڈ ہو رہی ہے۔ دوبارہ کوشش کریں۔~required=اثاثہ، سائٹ، تفصیل اور کم از کم ایک ثبوت تصویر ضروری ہے۔~fieldsDropped=تمام فیلڈ محفوظ نہیں ہوئے۔ رپورٹ جمع شدہ نہیں دکھائی گئی۔~saveFailed=رپورٹ اس آلے پر محفوظ نہیں ہو سکی۔ دوبارہ کوشش کریں۔~saved=رپورٹ محفوظ~savedTitle=حادثہ رپورٹ محفوظ ہو گئی~savedMessage=رپورٹ اور ثبوت آلے کی سنک قطار میں ہیں اور فعال ورک اسپیس کے تحت اپلوڈ ہوں گے۔~backRegister=حادثہ رجسٹر واپس جائیں~reportTitle=حادثہ رپورٹ کریں~reportSubtitle=آف لائن محفوظ ثبوت~firstResponse=پہلا ردعمل~captureFacts=موقع پر حقائق درج کریں~captureFactsMessage=پہلے اثاثہ منتخب کریں تاکہ PMV ماسٹر سائٹ اور شناخت بھرے۔ کم از کم ایک ثبوت تصویر لازمی ہے۔~assetLocation=1. اثاثہ اور مقام~assetLocationHint=دستیاب ہونے پر فلیٹ ماسٹر مستند ہے~fleetUnavailable=فلیٹ تلاش دستیاب نہیں۔ دستی اندراج دستیاب ہے۔~assetNo=اثاثہ نمبر~site=سائٹ~exactLocation=حادثے کا درست مقام~classification=2. درجہ بندی~classificationHint=ابتدائی میدانی درجہ بندی بعد میں دیکھی جا سکتی ہے~minor=معمولی~moderate=درمیانہ~severe=شدید~fatal=جان لیوا~collision=تصادم~rollover=الٹنا~propertyDamage=املاک نقصان~other=دیگر~whatHappened=کیا ہوا؟~notes=فوری نوٹس~evidence=3. ثبوت~evidenceAttached=ثبوت تصاویر منسلک • کم از کم 1~camera=کیمرہ~gallery=گیلری~evidencePhoto=ثبوت تصویر~removePhoto=تصویر ہٹائیں~saveReport=حادثہ رپورٹ محفوظ کریں';
+
+  @override
+  String get washEvidenceTitle => 'چیک لسٹ اور کیمیکل';
+
+  @override
+  String get washEnteredByLabel => 'اندراج کرنے والا';
+
+  @override
+  String get washChemicalUseLabel => 'استعمال شدہ کیمیکل';
+
+  @override
+  String get washNotRecorded => 'درج نہیں';
+
+  @override
+  String get washNoChemical => 'کوئی کیمیکل استعمال نہیں ہوا';
+
+  @override
+  String get washChemicalUsed => 'کیمیکل استعمال ہوا';
+
+  @override
+  String get washProductName => 'پروڈکٹ کا نام';
+
+  @override
+  String get washManufacturer => 'بنانے والی کمپنی';
+
+  @override
+  String get washQuantity => 'مقدار اور اکائی';
+
+  @override
+  String get washDilution => 'استعمال شدہ محلول (لیبل کے مطابق)';
+
+  @override
+  String get washAddProduct => 'پروڈکٹ شامل کریں';
+
+  @override
+  String get washRemoveProduct => 'پروڈکٹ ہٹائیں';
+
+  @override
+  String get washChecklistTitle => 'دھلائی کی چیک لسٹ';
+
+  @override
+  String get washCheckExterior => 'بیرونی سطحیں';
+
+  @override
+  String get washCheckGlass => 'شیشے، آئینے اور لائٹس';
+
+  @override
+  String get washCheckWheels => 'پہیے اور پہیوں کے خانے';
+
+  @override
+  String get washCheckCab => 'کیبن کا اندرونی حصہ';
+
+  @override
+  String get washCheckRinse => 'آخری دھلائی اور نظر آنے والی باقیات';
+
+  @override
+  String get washNotChecked => 'چیک نہیں کیا';
+
+  @override
+  String get washChecked => 'چیک کیا';
+
+  @override
+  String get washIssueFound => 'مسئلہ ملا';
+
+  @override
+  String get washNotApplicable => 'لاگو نہیں';
+
+  @override
+  String get washIssueNote => 'مسئلے کی تفصیل / تبصرہ';
+
+  @override
+  String get washEvidenceRequired =>
+      'پروڈکٹ کے نام اور چیک لسٹ کے مسائل کی تفصیل درج کریں۔';
+
+  @override
+  String get washViewRecord => 'دھلائی کا ریکارڈ دیکھیں';
+
+  @override
+  String get washReceivedAt => 'وصول ہونے کا وقت';
+
+  @override
+  String get washSearchHistory => 'گاڑی، شخص یا مقام تلاش کریں';
+
+  @override
+  String get washMyEntries => 'میرے اندراجات';
+
+  @override
+  String get washAllEntries => 'تمام اندراجات';
+
+  @override
+  String get washSavedOnDevice =>
+      'اس ڈیوائس پر محفوظ ہے۔ اپ لوڈ کی حالت سنک میں دیکھیں۔';
+
+  @override
+  String get washHistoryLimit =>
+      'مکمل تاریخ لوڈ کرنے کے لیے بہت بڑی ہے۔ ویب رپورٹ استعمال کریں۔';
 }

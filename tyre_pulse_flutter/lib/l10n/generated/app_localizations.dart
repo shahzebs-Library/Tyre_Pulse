@@ -4965,6 +4965,192 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'loadFailed=The accident record could not be loaded. Try again.~notRecorded=Not recorded~dashboardTitle=Accident command centre~dashboardSubtitle=Live register • permission-scoped~reportAction=Report accident~reportShort=Report~loadingRegister=Loading accident register…~dashboardEyebrow=PMV incident control~dashboardHeroTitle=Every case, one accountable trail~dashboardHeroMessage=Fleet, insurance, workshop, QC, handover and recovery remain visible without invented KPIs.~searchHint=Search asset, reference, site or location~allCases=All cases~reportedByMe=Reported by me~anyStatus=Any status~open=Open~closed=Closed~noMatches=No matching cases~noMatchesMessage=Change the filters or create a new accident report.~loadMore=Load more cases~loading=Loading…~detailTitle=Accident detail~loadingFacts=Loading case facts…~notFound=Accident not found~notFoundMessage=This record is outside your access scope or no longer exists.~openFlow=Open accountable case flow~incidentFacts=Incident facts~incidentFactsHint=Reporter evidence and vehicle identity~liability=Liability & payment~liabilityHint=Who was at fault, liable and expected to pay~insurance=Insurance & recovery~insuranceHint=Claim and recovery remain distinct from closure~workshopRelease=Workshop & release~workshopReleaseHint=Assessment, repair, QC and vehicle return~closure=Closure controls~closureHint=Legacy approval and modern case status remain separate~vehicleType=Vehicle type~plate=Plate / fleet number~type=Accident type~severity=Severity~reporter=Reporter~evidenceFiles=Evidence files~description=Description~damage=Damage~fault=Fault status~responsible=Responsible party~liable=Liable party~payer=Payer~insurer=Insurer~policy=Policy~claimNo=Claim number~claimStatus=Claim status~claimed=Claimed amount~approved=Approved amount~recoveryStatus=Recovery status~recovered=Recovered amount~repairType=Repair type~workshop=Workshop~repairCost=Repair cost~expectedRelease=Expected release~actualRelease=Actual release~nextAction=Next action~workflowStage=Workflow stage~caseStatus=Case status~closureRequest=Closure request~closureLevel=Closure level~caseTitle=Case accountability~caseId=Case ID~incidentDateLabel=Incident date~damageMapTitle=Damage map~damageMapHint=Tap a zone to mark damage~damageMapZonesLabel=zone(s) marked~damageMapNoneMarked=No zones marked yet~damageViewFront=Front~damageViewRear=Rear~damageViewLeft=Left side~damageViewRight=Right side~damageViewTop=Top~zoneFrontBumper=Front bumper~zoneHood=Hood~zoneWindshield=Windshield~zoneLeftHeadlight=Left headlight~zoneRightHeadlight=Right headlight~zoneRearBumper=Rear bumper~zoneTailgate=Tailgate~zoneRearWindshield=Rear glass~zoneLeftTailLight=Left tail light~zoneRightTailLight=Right tail light~zoneFrontFender=Front fender~zoneFrontDoor=Front door~zoneRearDoor=Rear door~zoneRearFender=Rear fender~zoneMirror=Side mirror~zoneRoof=Roof~damageMarkSeverityLabel=Severity~damageMarkNoteLabel=Note (optional)~damageMarkSave=Save mark~damageMarkRemove=Remove mark~loadingWorkstreams=Loading case workstreams…~caseNotFound=Case not found~caseNotFoundMessage=This accident is outside your permission scope or no longer exists.~endToEnd=End-to-end case flow~notActivated=Case workflow not activated~notActivatedMessage=The incident exists, but the workstream model is not provisioned. No progress was inferred.~noWorkstreams=No workstreams assigned~noWorkstreamsMessage=The case model is available, but this accident has no routed workstreams yet.~timeline=Accountable timeline~timelineHint=Read-only truth from the case workstream ledger~boundary=Control boundary~boundaryHint=Actions are intentionally not fabricated~boundaryMessage=Insurance, assessment, repair, QC, handover, closure and recovery decisions require verified server actions. This view offers no unsafe direct edits.~done=Done~inProgress=In progress~pending=Pending~notRequired=Not required~reason=Reason~wsIncident=Incident & evidence~wsFleet=Fleet validation~wsLiability=Liability & safety~wsInsurance=Insurance claim~wsAssessment=Workshop assessment~wsRepair=Repair execution~wsQc=Workshop QC~wsHandover=Vehicle handover~wsFinance=Recovery & finance~wsCorrective=Corrective actions~selectAsset=Select fleet asset~changeAsset=Change fleet asset~assetSearch=Asset, fleet number, plate or model~unrecordedAsset=Unrecorded asset~photoFailed=The evidence photo could not be saved. Try again.~workspaceLoading=Your workspace is still loading. Try again.~required=Asset, site, description and at least one evidence photo are required.~fieldsDropped=The report could not preserve every field. Nothing was presented as submitted.~saveFailed=The report could not be saved on this device. Try again.~saved=Report saved~savedTitle=Accident report saved safely~savedMessage=The report and evidence are in the device sync queue and will upload under the active workspace.~backRegister=Back to accident register~reportTitle=Report an accident~reportSubtitle=Offline-safe evidence capture~firstResponse=First response~captureFacts=Capture facts at the scene~captureFactsMessage=Select the asset first so PMV master data can fill its site and identity. At least one evidence photo is mandatory.~assetLocation=1. Asset & location~assetLocationHint=Fleet master is authoritative when available~fleetUnavailable=Fleet lookup is unavailable. Manual entry remains available.~assetNo=Asset number~site=Site~exactLocation=Exact incident location~classification=2. Classification~classificationHint=Initial field classification can be reviewed later~minor=Minor~moderate=Moderate~severe=Severe~fatal=Fatal~collision=Collision~rollover=Rollover~propertyDamage=Property damage~other=Other~whatHappened=What happened?~notes=Immediate notes~evidence=3. Evidence~evidenceAttached=evidence photo(s) attached • minimum 1~camera=Camera~gallery=Gallery~evidencePhoto=Evidence photo~removePhoto=Remove photo~saveReport=Save accident report'**
   String get accidentCopyCatalog;
+
+  /// No description provided for @washEvidenceTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Checklist and chemicals'**
+  String get washEvidenceTitle;
+
+  /// No description provided for @washEnteredByLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Entered by'**
+  String get washEnteredByLabel;
+
+  /// No description provided for @washChemicalUseLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Chemicals used'**
+  String get washChemicalUseLabel;
+
+  /// No description provided for @washNotRecorded.
+  ///
+  /// In en, this message translates to:
+  /// **'Not recorded'**
+  String get washNotRecorded;
+
+  /// No description provided for @washNoChemical.
+  ///
+  /// In en, this message translates to:
+  /// **'No chemical used'**
+  String get washNoChemical;
+
+  /// No description provided for @washChemicalUsed.
+  ///
+  /// In en, this message translates to:
+  /// **'Chemical used'**
+  String get washChemicalUsed;
+
+  /// No description provided for @washProductName.
+  ///
+  /// In en, this message translates to:
+  /// **'Product name'**
+  String get washProductName;
+
+  /// No description provided for @washManufacturer.
+  ///
+  /// In en, this message translates to:
+  /// **'Manufacturer'**
+  String get washManufacturer;
+
+  /// No description provided for @washQuantity.
+  ///
+  /// In en, this message translates to:
+  /// **'Quantity and unit'**
+  String get washQuantity;
+
+  /// No description provided for @washDilution.
+  ///
+  /// In en, this message translates to:
+  /// **'Dilution used (per product label)'**
+  String get washDilution;
+
+  /// No description provided for @washAddProduct.
+  ///
+  /// In en, this message translates to:
+  /// **'Add product'**
+  String get washAddProduct;
+
+  /// No description provided for @washRemoveProduct.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove product'**
+  String get washRemoveProduct;
+
+  /// No description provided for @washChecklistTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Wash checklist'**
+  String get washChecklistTitle;
+
+  /// No description provided for @washCheckExterior.
+  ///
+  /// In en, this message translates to:
+  /// **'Exterior surfaces'**
+  String get washCheckExterior;
+
+  /// No description provided for @washCheckGlass.
+  ///
+  /// In en, this message translates to:
+  /// **'Windows, mirrors and lights'**
+  String get washCheckGlass;
+
+  /// No description provided for @washCheckWheels.
+  ///
+  /// In en, this message translates to:
+  /// **'Wheels and wheel arches'**
+  String get washCheckWheels;
+
+  /// No description provided for @washCheckCab.
+  ///
+  /// In en, this message translates to:
+  /// **'Cab interior'**
+  String get washCheckCab;
+
+  /// No description provided for @washCheckRinse.
+  ///
+  /// In en, this message translates to:
+  /// **'Final rinse and visible residue'**
+  String get washCheckRinse;
+
+  /// No description provided for @washNotChecked.
+  ///
+  /// In en, this message translates to:
+  /// **'Not checked'**
+  String get washNotChecked;
+
+  /// No description provided for @washChecked.
+  ///
+  /// In en, this message translates to:
+  /// **'Checked'**
+  String get washChecked;
+
+  /// No description provided for @washIssueFound.
+  ///
+  /// In en, this message translates to:
+  /// **'Issue found'**
+  String get washIssueFound;
+
+  /// No description provided for @washNotApplicable.
+  ///
+  /// In en, this message translates to:
+  /// **'Not applicable'**
+  String get washNotApplicable;
+
+  /// No description provided for @washIssueNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Issue details / comment'**
+  String get washIssueNote;
+
+  /// No description provided for @washEvidenceRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter product names and describe any checklist issues.'**
+  String get washEvidenceRequired;
+
+  /// No description provided for @washViewRecord.
+  ///
+  /// In en, this message translates to:
+  /// **'View wash record'**
+  String get washViewRecord;
+
+  /// No description provided for @washReceivedAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Received at'**
+  String get washReceivedAt;
+
+  /// No description provided for @washSearchHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'Search vehicle, person or site'**
+  String get washSearchHistory;
+
+  /// No description provided for @washMyEntries.
+  ///
+  /// In en, this message translates to:
+  /// **'My entries'**
+  String get washMyEntries;
+
+  /// No description provided for @washAllEntries.
+  ///
+  /// In en, this message translates to:
+  /// **'All entries'**
+  String get washAllEntries;
+
+  /// No description provided for @washSavedOnDevice.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved on this device. Upload status is available in Sync.'**
+  String get washSavedOnDevice;
+
+  /// No description provided for @washHistoryLimit.
+  ///
+  /// In en, this message translates to:
+  /// **'History is too large to load completely. Use the web report.'**
+  String get washHistoryLimit;
 }
 
 class _AppLocalizationsDelegate

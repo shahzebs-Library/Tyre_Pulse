@@ -7,6 +7,11 @@ import { exportVehicleWashPdf, groupVehicleWashes, washFilterLabel, washDateLabe
 const row = { id: 'r1', organisation_id: 'org1', asset_no: 'TM651', country: 'KSA', site: 'JEDDAH', vehicle_type: 'TR-MIXER', wash_date: '2026-09-10', wash_type: 'Full', status: 'Completed', photos: [] }
 beforeEach(() => { h.policy.mockImplementation(rows => rows); h.header.mockClear(); h.footer.mockClear() })
 describe('vehicle washing PDFs', () => {
+  it('includes entry attribution, chemical details and checklist issues in the downloadable record', async () => {
+    const {doc}=await exportVehicleWashPdf([{...row,created_by:'creator',entry_name:'Recorder',created_at:'2026-09-21T08:00:00Z',wash_details:{chemical_status:'used',chemicals:[{name:'Recorded product',quantity:'10',unit:'ml',dilution:'As labelled'}],checklist:[{label:'Cab interior',result:'fail',note:'Dust remains'}]}}],{save:false})
+    const text=Object.values(doc.internal.pages).flat().join(' ')
+    expect(text).toContain('Recorder');expect(text).toContain('Recorded product');expect(text).toContain('Dust remains')
+  })
   it('uses one page for a single wash with three attachments and short notes', async () => {
     const result = await exportVehicleWashPdf([{ ...row, notes: 'Wash complete', photos: ['a', 'b', 'c'] }], { save: false, filters: { assetNo: 'TM651', site: 'JEDDAH' }, loadPhoto: async () => { throw new Error('Unavailable') } })
     expect(result.doc.internal.getNumberOfPages()).toBe(1)

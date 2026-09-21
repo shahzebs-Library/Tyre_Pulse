@@ -4,6 +4,24 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer components {
+  .tp-card {
+    --tp-card-border: var(--tp-card-tone, var(--border-brand));
+    --tp-card-shadow: var(--shadow-card);
+    color: var(--card-text);
+    transition: border-color 0.2s var(--ease-smooth), box-shadow 0.2s var(--ease-smooth);
+  }
+  .tp-card--interactive { cursor: pointer; }
+  .tp-card--interactive:hover {
+    --tp-card-border: var(--border-bright);
+    --tp-card-shadow: var(--shadow-glow);
+  }
+  .tp-card--interactive:focus-visible {
+    outline: 2px solid var(--accent-ring);
+    outline-offset: 2px;
+  }
+}
+
 /* ─── RTL / Arabic ───────────────────────────────────────────────────────────
    Arabic switches the document to dir="rtl" + .rtl on <html>. The whole layout
    mirrors via `dir`; the rules below flip the few places that use physical

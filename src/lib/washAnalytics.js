@@ -125,7 +125,7 @@ export function filterWashes(rows, filters = {}) {
 
   return rows.filter((r) => {
     if (!r) return false
-    const d = dayOf(r)
+    const d = filters.dateBasis === 'received' ? String(r.created_at || '').slice(0, 10) : dayOf(r)
     if (hasFrom) {
       if (!d || d < String(from).slice(0, 10)) return false
     }
@@ -137,6 +137,19 @@ export function filterWashes(rows, filters = {}) {
     if (wantType && String(r.wash_type || '') !== wantType) return false
     if (wantStatus && String(r.status || '') !== wantStatus) return false
     if (wantAsset && String(r.asset_no || '').trim().toUpperCase() !== wantAsset) return false
+    for (const [filter, field] of Object.entries({ enteredBy: 'created_by', country: 'country', region: 'region', vehicleType: 'vehicle_type', bay: 'bay', washedBy: 'washed_by' })) {
+      const wanted = filters[filter]
+      if (wanted && wanted !== 'All' && (r[field] || 'unknown') !== wanted) return false
+    }
+    if (filters.registration && !String(r.registration_no || '').toLowerCase().includes(filters.registration.toLowerCase())) return false
+    if (filters.photos === 'yes' && !r.photos?.length) return false
+    if (filters.correctedBy && filters.correctedBy !== 'All' && !r.corrected_by_ids?.includes(filters.correctedBy)) return false
+    if (filters.corrections === 'yes' && !r.corrected_by_ids?.length) return false
+    if (filters.corrections === 'no' && r.corrected_by_ids?.length) return false
+    if (filters.photos === 'no' && r.photos?.length) return false
+    if (filters.chemicals && filters.chemicals !== 'All' && (r.wash_details?.chemical_status || 'not_recorded') !== filters.chemicals) return false
+    if (filters.checklist === 'issues' && !r.wash_details?.checklist?.some(c => c.result === 'fail')) return false
+    if (filters.checklist === 'missing' && r.wash_details?.checklist?.some(c => c.result !== 'not_checked')) return false
     return true
   })
 }

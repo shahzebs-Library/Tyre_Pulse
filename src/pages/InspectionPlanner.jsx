@@ -20,6 +20,7 @@ import { loadAutoTable } from '../lib/pdfEngine'
 import PageHeader from '../components/ui/PageHeader'
 import Modal from '../components/ui/Modal'
 import PlannerWorkQueue from '../components/inspection-planner/PlannerWorkQueue'
+import PlanAdherencePanel from '../components/inspection-planner/PlanAdherencePanel'
 import { ScheduleModal, BulkModal } from '../components/inspection-planner/PlannerDialogs'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
@@ -215,7 +216,7 @@ function PlannerWorkspace({ country, permissions }) {
     ['No History', copy('Never inspected', 'لم يتم فحصها'), workQueue.filter(row => row.status === 'No History').length],
     ['Unassigned', copy('Unassigned', 'غير مسند'), workQueue.filter(row => row.nextSchedule && !row.nextSchedule.inspector_name).length],
   ]
-  const navigation = [['queue', copy('Work queue', 'قائمة الأعمال')], ['agenda', copy('Agenda', 'جدول المواعيد')], ['inspectors', copy('Inspectors', 'الفاحصون')], ['analytics', copy('Analytics', 'التحليلات')]]
+  const navigation = [['queue', copy('Work queue', 'قائمة الأعمال')], ['plan', copy('Plan & adherence', 'الخطة والالتزام')], ['agenda', copy('Agenda', 'جدول المواعيد')], ['inspectors', copy('Inspectors', 'الفاحصون')], ['analytics', copy('Analytics', 'التحليلات')]]
   return <div className="space-y-6 text-[var(--text-primary)]" dir={isRTL ? 'rtl' : 'ltr'}>
     <PageHeader title={copy('Inspection Planner', 'مخطط الفحص')} icon={ClipboardList}
       subtitle={copy(`${country || 'All'} · ${loading || dataError ? 'Asset data unavailable' : `${distinctAssets.length} known assets`}`, `${country || 'الكل'} · ${loading || dataError ? 'بيانات المركبات غير متاحة' : `${distinctAssets.length} مركبة معروفة`}`)}
@@ -233,6 +234,7 @@ function PlannerWorkspace({ country, permissions }) {
     {tab === 'queue' && <PlannerWorkQueue rows={workQueue} today={today} filterStatus={filterStatus} onFilterStatusChange={setFilterStatus} selectedBulk={selectedBulk} onSelectionChange={setSelectedBulk}
       onSchedule={row => { setNotice(''); setTarget(row); setModal('schedule') }} onBulkSchedule={() => setModal('bulk')} copy={copy} loading={loading} error={dataError} onRetry={fetchData} canSchedule={canSchedule}
       canViewAsset={countrySelected && vehicleFeature} scheduleAvailable={!scheduleError} />}
+    {tab === 'plan' && <PlanAdherencePanel country={country} profileId={profile?.id} canCreate={canCreate} canEdit={canEdit} canExport={canExport} />}
     {tab === 'agenda' && <section className="card p-4 space-y-4"><div className="flex flex-wrap justify-between gap-3"><div><h2 className="font-semibold">{copy('Scheduled inspection agenda', 'جدول الفحوصات المجدولة')}</h2><p className="text-sm text-[var(--text-secondary)]"><bdi>{calendarStart} — {calendarEnd}</bdi></p></div><div className="flex gap-2"><button className="btn-secondary" aria-label={copy('Previous week', 'الأسبوع السابق')} onClick={() => setCalendarPeriod(value => value - 1)}><ChevronLeft size={16} className="rtl:rotate-180" /></button><button className="btn-secondary" onClick={() => setCalendarPeriod(0)}>{copy('Today', 'اليوم')}</button><button className="btn-secondary" aria-label={copy('Next week', 'الأسبوع التالي')} onClick={() => setCalendarPeriod(value => value + 1)}><ChevronRight size={16} className="rtl:rotate-180" /></button></div></div>
       <p className="text-sm text-[var(--text-secondary)]">{copy('Appointment status is recorded on the schedule. Inspection readings are summarized separately in Analytics.', 'حالة الموعد مسجلة في الجدول. تلخص قراءات الفحص بشكل منفصل في التحليلات.')}</p>
       <div className="flex flex-wrap gap-3">

@@ -12,6 +12,7 @@ import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { Save, User, Settings2, Bell, BellRing, Database, Info, Target, Clock, Mail, Phone, Calendar, Trash2, Plus, Play, Lock, Shield, ShieldCheck, ShieldOff, AlertTriangle, Sparkles, Moon } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
+import Card, { CardHeader, CardBody } from '../components/ui/Card'
 import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import { sendReportEmail } from '../lib/emailService'
 import TwoFactorSetup from '../components/TwoFactorSetup'
@@ -568,8 +569,13 @@ export default function Settings() {
         <UpdateHistory />
 
         {/* Profile */}
-        <div className="card space-y-4">
-          <h2 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2"><User size={16} /> Profile</h2>
+        {/* The content sits in CardBody rather than directly on the Card: Card is
+            flex-col with align-items:stretch, so a bare control as a direct child
+            would silently span the full width. CardBody is an ordinary block, so
+            everything inside lays out exactly as it did under .card. */}
+        <Card>
+          <CardHeader level={2} title="Profile" icon={User} />
+          <CardBody className="space-y-4">
           <div className="flex items-center gap-4 py-2">
             <div
               className="w-14 h-14 rounded-full flex items-center justify-center text-xl font-bold text-[var(--text-primary)] flex-shrink-0"
@@ -618,13 +624,13 @@ export default function Settings() {
               )}
             </div>
           </form>
-        </div>
+          </CardBody>
+        </Card>
 
         {/* Change Password */}
-        <div className="card space-y-4">
-          <h2 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2">
-            <Lock size={16} className="text-green-400" /> Change Password
-          </h2>
+        <Card>
+          <CardHeader level={2} title="Change Password" icon={Lock} iconTone="good" />
+          <CardBody className="space-y-4">
           <form onSubmit={handlePasswordChange} className="space-y-3">
             <div>
               <label className="label">New Password</label>
@@ -667,7 +673,8 @@ export default function Settings() {
               )}
             </div>
           </form>
-        </div>
+          </CardBody>
+        </Card>
 
         {/* 2FA */}
         <RecoveryContactsCard />
@@ -684,14 +691,14 @@ export default function Settings() {
         />
 
         {/* About */}
-        <div className="card">
-          <h2 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2 mb-3"><Info size={16} /> About</h2>
-          <div className="space-y-1 text-sm text-[var(--text-secondary)]">
+        <Card>
+          <CardHeader level={2} title="About" icon={Info} />
+          <CardBody className="space-y-1 text-sm text-[var(--text-secondary)]">
             <p><span className="text-[var(--text-muted)]">App:</span> <span className="text-[var(--text-primary)] font-medium">TyrePulse</span></p>
             <p><span className="text-[var(--text-muted)]">Version:</span> <span className="text-[var(--text-primary)] font-medium">v2.5.0</span></p>
             <p><span className="text-[var(--text-muted)]">Support:</span> Contact your tyre planning engineer</p>
-          </div>
-        </div>
+          </CardBody>
+        </Card>
 
         {/* Delete My Account (in-app deletion request) */}
         <AccountDeletionCard userEmail={user?.email} />
@@ -719,8 +726,9 @@ export default function Settings() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
 
         {/* Column 1 - Profile */}
-        <div className="card space-y-4">
-          <h2 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2"><User size={16} /> Profile</h2>
+        <Card>
+          <CardHeader level={2} title="Profile" icon={User} />
+          <CardBody className="space-y-4">
 
           {/* Avatar */}
           <div className="flex flex-col items-center gap-3 py-2">
@@ -786,7 +794,8 @@ export default function Settings() {
               )}
             </div>
           </form>
-        </div>
+          </CardBody>
+        </Card>
 
         {/* Column 2 - Appearance (personal theme/accent/density/motion) */}
         <AppearancePanel />
@@ -802,8 +811,9 @@ export default function Settings() {
             "Reports & Executive" > "Report Sharing" (/report-sharing). */}
 
         {/* App Preferences */}
-        <div className="card space-y-4">
-          <h2 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2"><Settings2 size={16} /> App Preferences</h2>
+        <Card>
+          <CardHeader level={2} title="App Preferences" icon={Settings2} />
+          <CardBody className="space-y-4">
 
           {/* Language */}
           <div>
@@ -891,15 +901,19 @@ export default function Settings() {
               {appMsg && <span role="status" className={`text-sm ${appMsg === 'Settings saved' ? 'text-green-400' : 'text-red-400'}`}>{appMsg}</span>}
             </div>
           </form>
-        </div>
+          </CardBody>
+        </Card>
 
         {/* Column 3 - Alert Thresholds */}
-        <div className="card space-y-4">
-          <h2 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2"><Bell size={16} /> Alert Thresholds</h2>
-          <p className="text-xs text-[var(--text-muted)]">
-            Controls when risk alerts are triggered. Legacy fields stored locally; extended thresholds synced to database.
-          </p>
-
+        <Card>
+          <CardHeader
+            level={2}
+            title="Alert Thresholds"
+            icon={Bell}
+            description="Controls when risk alerts are triggered. Legacy fields stored locally; extended thresholds synced to database."
+          />
+          <CardBody className="space-y-4">
+          {/* The admin gate is unchanged: admins edit, everyone else reads. */}
           {isAdmin ? (
             <form onSubmit={saveThresholds} className="space-y-3">
               <p className="text-xs text-[var(--text-secondary)] font-medium uppercase tracking-wide">Legacy Thresholds</p>
@@ -1005,25 +1019,28 @@ export default function Settings() {
               </table>
             </div>
           )}
-        </div>
+          </CardBody>
+        </Card>
       </div>
 
       {/* Notification Preferences (per-user; §11 Notification engine slice) */}
-      <div className="card space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2">
-            <BellRing size={16} className="text-emerald-400" /> Notifications
-          </h2>
-          {!loadingNotif && (
+      <Card>
+        {/* ONE element in `actions`, which is what that slot is for - it is
+            flex-shrink-0 and cannot wrap, so a multi-button row would push the
+            card wider on a phone. */}
+        <CardHeader
+          level={2}
+          title="Notifications"
+          icon={BellRing}
+          iconTone="good"
+          description="Choose how and when TyrePulse notifies you. These are personal preferences and apply only to your account."
+          actions={!loadingNotif ? (
             <span className="text-xs text-[var(--text-muted)]">
               {summarisePrefs(notifPrefs).channelCount} channel{summarisePrefs(notifPrefs).channelCount === 1 ? '' : 's'} on
             </span>
-          )}
-        </div>
-        <p className="text-xs text-[var(--text-muted)]">
-          Choose how and when TyrePulse notifies you. These are personal preferences and apply only to your account.
-        </p>
-
+          ) : null}
+        />
+        <CardBody className="space-y-4">
         {notifError && (
           <p className="text-sm text-red-300 bg-red-900/30 border border-red-700 rounded-lg p-2.5">{notifError}</p>
         )}
@@ -1127,15 +1144,16 @@ export default function Settings() {
             </div>
           </form>
         )}
-      </div>
+        </CardBody>
+      </Card>
 
       {/* KPI Targets Editor */}
-      <div className="card">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2">
-            <Target size={16} /> KPI Targets - {currentYear}
-          </h2>
-          {isAdmin && !editingKpi && (
+      <Card>
+        <CardHeader
+          level={2}
+          title={`KPI Targets - ${currentYear}`}
+          icon={Target}
+          actions={isAdmin && !editingKpi ? (
             <button
               type="button"
               onClick={() => { setDraftKpiTargets(kpiTargets); setEditingKpi(true) }}
@@ -1143,9 +1161,9 @@ export default function Settings() {
             >
               Edit Targets
             </button>
-          )}
-        </div>
-
+          ) : null}
+        />
+        <CardBody>
         {isAdmin && editingKpi ? (
           <form onSubmit={saveKpiTargets} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1204,11 +1222,13 @@ export default function Settings() {
             </div>
           </div>
         )}
-      </div>
+        </CardBody>
+      </Card>
 
       {/* Data Management */}
-      <div className="card">
-        <h2 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2 mb-4"><Database size={16} /> Data Management</h2>
+      <Card>
+        <CardHeader level={2} title="Data Management" icon={Database} />
+        <CardBody>
         <p className="text-xs text-[var(--text-muted)] mb-3">Last 3 data uploads</p>
         {uploadHistory.length === 0 ? (
           <p className="text-[var(--text-muted)] text-sm">No uploads yet</p>
@@ -1233,23 +1253,26 @@ export default function Settings() {
             View Full History
           </Link>
         </div>
-      </div>
+        </CardBody>
+      </Card>
 
       {/* Scheduled Reports */}
-      <div className="card">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2">
-            <Clock size={16} /> Scheduled Reports
-          </h2>
-          <button
-            type="button"
-            onClick={() => { setShowAddForm(v => !v); setNewSchedule({ ...EMPTY_SCHEDULE }) }}
-            className="btn-primary text-sm flex items-center gap-2"
-          >
-            <Plus size={14} /> Add Schedule
-          </button>
-        </div>
-
+      <Card>
+        <CardHeader
+          level={2}
+          title="Scheduled Reports"
+          icon={Clock}
+          actions={(
+            <button
+              type="button"
+              onClick={() => { setShowAddForm(v => !v); setNewSchedule({ ...EMPTY_SCHEDULE }) }}
+              className="btn-primary text-sm flex items-center gap-2"
+            >
+              <Plus size={14} /> Add Schedule
+            </button>
+          )}
+        />
+        <CardBody>
         {scheduleError && (
           <p className="text-sm text-red-300 bg-red-900/30 border border-red-700 rounded-lg p-2.5 mb-4">{scheduleError}</p>
         )}
@@ -1436,7 +1459,8 @@ export default function Settings() {
             <TablePagination {...schedulesPager} />
           </div>
         )}
-      </div>
+        </CardBody>
+      </Card>
 
       <RecoveryContactsCard />
 
@@ -1452,13 +1476,13 @@ export default function Settings() {
       />
 
       {/* About */}
-      <div className="card">
-        <h2 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2 mb-3"><Info size={16} /> About</h2>
-        <div className="space-y-1 text-sm text-[var(--text-secondary)]">
+      <Card>
+        <CardHeader level={2} title="About" icon={Info} />
+        <CardBody className="space-y-1 text-sm text-[var(--text-secondary)]">
           <p><span className="text-[var(--text-muted)]">Version:</span> <span className="text-[var(--text-primary)] font-medium">v2.5.0</span></p>
           <p><span className="text-[var(--text-muted)]">Support:</span> Report an issue via the help menu</p>
-        </div>
-      </div>
+        </CardBody>
+      </Card>
 
       {/* Delete My Account (in-app deletion request) */}
       <AccountDeletionCard userEmail={user?.email} />
@@ -1537,15 +1561,15 @@ function RecoveryContactsCard() {
   }
 
   return (
-    <div className="card space-y-4">
-      <div>
-        <h2 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2">
-          <Lock size={16} className="text-green-400" /> Password recovery
-        </h2>
-        <p className="text-xs text-[var(--text-muted)] mt-1">
-          Verify at least one contact before you need it. Your login email may be a non-routable system address, so only contacts verified here can recover your account.
-        </p>
-      </div>
+    <Card>
+      <CardHeader
+        level={2}
+        title="Password recovery"
+        icon={Lock}
+        iconTone="good"
+        description="Verify at least one contact before you need it. Your login email may be a non-routable system address, so only contacts verified here can recover your account."
+      />
+      <CardBody className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {[
           { channel: 'email', Icon: Mail, label: 'Recovery email', value: contacts.recovery_email, verified: contacts.recovery_email_verified_at, placeholder: 'you@company.com', type: 'email' },
@@ -1588,18 +1612,23 @@ function RecoveryContactsCard() {
       </div>
       {message && <p role="status" className={`text-sm ${/could not|invalid|failed|enter|use international/i.test(message) ? 'text-red-400' : 'text-green-400'}`}>{message}</p>}
       <p className="text-xs text-amber-300 flex gap-2"><AlertTriangle size={14} className="shrink-0 mt-0.5"/>{RECOVERY_SMS_ENABLED ? 'Keep two methods when possible. Mobile numbers can be recycled; enable two-factor authentication as an additional protection.' : 'Email recovery is available. SMS recovery will appear after the messaging service is provisioned; enable two-factor authentication as additional protection.'}</p>
-    </div>
+      </CardBody>
+    </Card>
   )
 }
 
 function TwoFactorCard({ mfaEnabled, onEnable, confirmRemoveMfa, setConfirmRemoveMfa, onRemove, removing, msg }) {
   return (
-    <div className="card space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2">
-          <Shield size={16} className="text-orange-400" /> Two-Factor Authentication
-        </h2>
-        {mfaEnabled ? (
+    <Card>
+      {/* The enabled/disabled pill is a single status element, so it belongs in
+          the non-wrapping `actions` slot. */}
+      <CardHeader
+        level={2}
+        title="Two-Factor Authentication"
+        icon={Shield}
+        iconTone="warn"
+        description="Two-factor authentication adds an extra layer of security. After entering your password, you will be asked for a code from your authenticator app."
+        actions={mfaEnabled ? (
           <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-green-900/40 text-green-400 border border-green-700/40 font-semibold">
             <ShieldCheck size={12} /> Enabled
           </span>
@@ -1608,12 +1637,8 @@ function TwoFactorCard({ mfaEnabled, onEnable, confirmRemoveMfa, setConfirmRemov
             <ShieldOff size={12} /> Disabled
           </span>
         )}
-      </div>
-
-      <p className="text-[var(--text-secondary)] text-xs leading-relaxed">
-        Two-factor authentication adds an extra layer of security. After entering your password, you will be asked for a code from your authenticator app.
-      </p>
-
+      />
+      <CardBody className="space-y-4">
       {mfaEnabled ? (
         <div className="space-y-3">
           <div className="flex items-center gap-3 px-4 py-3 bg-green-950/30 border border-green-800/30 rounded-xl">
@@ -1684,7 +1709,8 @@ function TwoFactorCard({ mfaEnabled, onEnable, confirmRemoveMfa, setConfirmRemov
       {msg && (
         <p className={`text-sm ${msg.startsWith('Failed') ? 'text-red-400' : 'text-green-400'}`}>{msg}</p>
       )}
-    </div>
+      </CardBody>
+    </Card>
   )
 }
 
@@ -1735,11 +1761,12 @@ function AccountDeletionCard({ userEmail }) {
   }
 
   return (
-    <div className="card space-y-4 border border-red-900/40">
-      <h2 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2">
-        <Trash2 size={16} className="text-red-400" /> Delete My Account
-      </h2>
-
+    // tone="crit" is the red edge this card used to get from
+    // `border border-red-900/40` - a border utility on a Card is dead, because
+    // Card sets its border inline.
+    <Card tone="crit">
+      <CardHeader level={2} title="Delete My Account" icon={Trash2} iconTone="crit" />
+      <CardBody className="space-y-4">
       <p className="text-[var(--text-secondary)] text-sm leading-relaxed">
         Request permanent deletion of your account and the personal data associated with it. This
         submits a request for our team to verify and action; it does not delete anything immediately.
@@ -1824,6 +1851,7 @@ function AccountDeletionCard({ userEmail }) {
           <span className="text-xs text-[var(--text-muted)]">This records a request; it does not delete data instantly.</span>
         </div>
       </form>
-    </div>
+      </CardBody>
+    </Card>
   )
 }

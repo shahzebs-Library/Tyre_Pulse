@@ -452,10 +452,12 @@ void main() {
     // action label across all three catalogs.
     // 807 + 4 = 811. Vehicle details add equipment serial, engine number,
     // capacity and operational status (commit 56b0107f).
-    test('en, ar and ur each carry exactly 811 translatable keys today', () {
-      expect(_translatableKeys(en).length, 811);
-      expect(_translatableKeys(ar).length, 811);
-      expect(_translatableKeys(ur).length, 811);
+    // 811 + 31 = 842. Washing adds entry attribution, chemical details,
+    // checklist results and record-viewer labels in all three locales.
+    test('en, ar and ur each carry exactly 842 translatable keys today', () {
+      expect(_translatableKeys(en).length, 842);
+      expect(_translatableKeys(ar).length, 842);
+      expect(_translatableKeys(ur).length, 842);
     });
   });
 

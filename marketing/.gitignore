@@ -4,3 +4,7 @@ out
 .env*
 !.env.example
 .DS_Store
+
+# TypeScript incremental build cache. Regenerated on every build, never source.
+*.tsbuildinfo
+next-env.d.ts

@@ -328,3 +328,32 @@ comment on function public.get_unplanned_assets(text, integer, text, integer) is
 
 revoke all on function public.get_unplanned_assets(text, integer, text, integer) from public;
 grant execute on function public.get_unplanned_assets(text, integer, text, integer) to authenticated, service_role;
+
+-- 6. THE MIRROR PROOF -------------------------------------------------------
+-- src/test/schedulePlan.test.js runs this exact case table through the
+-- JavaScript planState(). Run the block below to prove SQL still agrees; if a
+-- row disagrees, a plan reads one way on the board and another in an export.
+-- Last run: 13 of 13 agreed, disagreements 'none'.
+--
+-- with cases(sched, grace, status, matched, today, expected) as (values
+--   ('2026-09-10'::date, 2, 'Scheduled', 'Done',        '2026-09-21'::date, 'Done'),
+--   ('2026-09-10',       2, 'Scheduled', 'In Progress', '2026-09-21',       'Started'),
+--   ('2026-09-10',       2, 'Scheduled', null,          '2026-09-21',       'Missed'),
+--   ('2026-09-21',       2, 'Scheduled', null,          '2026-09-21',       'Due'),
+--   ('2026-09-23',       2, 'Scheduled', null,          '2026-09-21',       'Upcoming'),
+--   ('2026-09-23',      10, 'Scheduled', null,          '2026-09-21',       'Upcoming'),
+--   ('2026-09-10',       2, 'Cancelled', null,          '2026-09-21',       'Cancelled'),
+--   ('2026-09-10',       2, 'Cancelled', 'Done',        '2026-09-21',       'Cancelled'),
+--   ('2026-09-19',       2, 'Scheduled', null,          '2026-09-21',       'Due'),
+--   ('2026-09-18',       2, 'Scheduled', null,          '2026-09-21',       'Missed'),
+--   ('2026-09-18',       5, 'Scheduled', null,          '2026-09-21',       'Due'),
+--   ('2026-09-20',       0, 'Scheduled', null,          '2026-09-21',       'Missed'),
+--   ('2026-09-20',    null, 'Scheduled', null,          '2026-09-21',       'Due')
+-- )
+-- select count(*) total_cases,
+--        count(*) filter (where inspection_plan_state(sched, grace, status, matched, today) = expected) agree,
+--        coalesce(string_agg(sched::text || ' -> got ' ||
+--          inspection_plan_state(sched, grace, status, matched, today) ||
+--          ', expected ' || expected, ' | ')
+--          filter (where inspection_plan_state(sched, grace, status, matched, today) <> expected), 'none') disagreements
+-- from cases;

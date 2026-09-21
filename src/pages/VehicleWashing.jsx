@@ -68,6 +68,7 @@ import {
 import { colorAt, categorical, withAlpha } from '../lib/reportColors'
 import { applyExportPolicy, exportToExcel, reportFileName, reportDateLabel } from '../lib/exportUtils'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { resolveStorageUrl } from '../lib/storageRefs'
 import { washVehicleKey } from '../lib/washReportPdf'
 import { safeImageSrc } from '../lib/safeUrl'
@@ -89,7 +90,7 @@ const WASH_FILTER_DEFAULTS = Object.freeze({
   search: '', status: 'all', site: 'all', area: 'all', type: 'all',
   region: 'all', vehicleType: 'all', enteredBy: 'all', correctedBy: 'all',
   washedBy: 'all', bay: 'all', photos: 'all', chemicals: 'all',
-  checklist: 'all', corrections: 'all', dateBasis: 'wash', from: '', to: '',
+  corrections: 'all', dateBasis: 'wash', from: '', to: '',
 })
 
 const TABS = [
@@ -291,7 +292,6 @@ export default function VehicleWashing() {
   const regCost = useMemo(() => costBasis(regRows), [regRows])
   // Paged, not capped. The register used to render regRows.slice(0, 500), so
   // wash 501 was unreachable. The downloads still cover the whole filtered set.
-  const regPager = usePagedRows(regRows)
 
   // Schedule + due lists. `washDue` is fed the WHOLE record set, not the
   // reporting filter, because "this vehicle has not been washed for 12 days" is
@@ -634,6 +634,48 @@ export default function VehicleWashing() {
   }
   const exportVehiclePdf = row => exportPdf(regRows.filter(r => washVehicleKey(r) === washVehicleKey(row)), `Vehicle Washing ${row.asset_no}`, { ...regFilters, assetNo: row.asset_no })
 
+  // Keep the washing register on the shared SaaS table. The final View column
+  // is fixed so opening the operational record is always in the same place.
+  const washRecordColumns = [
+    { id: 'wash_date', header: 'Date', accessorFn: (row) => row.wash_date || '', size: 110,
+      cell: ({ row }) => <span className="text-[var(--text-secondary)]">{fmtDate(row.original.wash_date)}</span> },
+    { id: 'asset_no', header: 'Asset', accessorFn: (row) => row.asset_no || '', size: 120,
+      cell: ({ row }) => row.original.asset_no ? (
+        <Link onClick={(event) => event.stopPropagation()} to={`/asset-management/${encodeURIComponent(row.original.asset_no)}`} className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300">
+          {row.original.asset_no} <ExternalLink size={11} className="opacity-70" />
+        </Link>
+      ) : <span className="text-[var(--text-muted)]">N/A</span> },
+    { id: 'wash_type', header: 'Wash type', accessorFn: (row) => row.wash_type || '', size: 140,
+      cell: ({ getValue }) => getValue() || 'N/A' },
+    { id: 'site', header: 'Site', accessorFn: (row) => row.site || '', size: 140,
+      cell: ({ getValue }) => getValue() || 'N/A' },
+    { id: 'area', header: 'Area', accessorFn: (row) => row.area || '', size: 130,
+      cell: ({ getValue }) => getValue() || 'N/A' },
+    { id: 'bay', header: 'Bay', accessorFn: (row) => row.bay || '', size: 100,
+      cell: ({ getValue }) => getValue() || 'N/A' },
+    { id: 'washed_by', header: 'Washed by', accessorFn: (row) => row.washed_by || '', size: 140,
+      cell: ({ getValue }) => getValue() || 'N/A' },
+    { id: 'entered_by', header: 'Entered by', accessorFn: (row) => entryPerson(row), size: 170,
+      cell: ({ row }) => <span>{entryPerson(row.original)}<span className="block text-xs text-[var(--text-muted)]">{fmtStamp(row.original.created_at)}</span></span> },
+    { id: 'checklist', header: 'Wash checks', accessorFn: (row) => checklistSummary(row), size: 130,
+      cell: ({ getValue }) => getValue() },
+    { id: 'cost', header: 'Cost', accessorFn: (row) => Number(row.cost || 0), size: 110,
+      cell: ({ row }) => formatWashCost(row.original.cost), meta: { align: 'right' } },
+    { id: 'photos', header: 'Photos', accessorFn: (row) => Array.isArray(row.photos) ? row.photos.length : 0, size: 90,
+      cell: ({ getValue }) => getValue() > 0 ? <span className="inline-flex items-center gap-1"><ImageIcon size={13} className="opacity-70" /> {getValue()}</span> : <span className="text-[var(--text-muted)]">-</span>, meta: { align: 'center' } },
+    { id: 'status', header: 'Status', accessorFn: (row) => row.status || '', size: 110,
+      cell: ({ row }) => <span className={`inline-block text-[11px] px-2 py-0.5 rounded-full border ${STATUS_TONE[row.original.status] || STATUS_TONE.Cancelled}`}>{row.original.status || 'N/A'}</span> },
+    { id: 'vehicle_pdf', header: 'Report', size: 120, enableSorting: false, enableHiding: false,
+      cell: ({ row }) => <button className="btn-secondary text-xs" disabled={pdfBusy || !row.original.asset_no} onClick={(event) => { event.stopPropagation(); exportVehiclePdf(row.original) }} aria-label={`Download PDF for ${row.original.asset_no}`}>PDF + photos</button>, meta: { export: false, pinnable: false } },
+    ...(canWrite ? [{ id: 'actions', header: 'Actions', size: 90, enableSorting: false, enableHiding: false,
+      cell: ({ row }) => <div className="flex items-center justify-end whitespace-nowrap">
+        <button onClick={(event) => { event.stopPropagation(); openEdit(row.original) }} className="p-1.5 rounded hover:bg-blue-500/10 text-[var(--text-muted)] hover:text-blue-300" title="Edit or correct" aria-label={`Edit wash ${row.original.asset_no}`}><Pencil size={14} /></button>
+        <button onClick={(event) => { event.stopPropagation(); setConfirmDelete(row.original) }} className="p-1.5 rounded hover:bg-red-500/10 text-[var(--text-muted)] hover:text-red-300" title="Delete" aria-label={`Delete wash ${row.original.asset_no}`}><Trash2 size={14} /></button>
+      </div>, meta: { export: false, align: 'right', pinnable: false } }] : []),
+    { id: 'view', header: 'View', size: 110, enableSorting: false, enableHiding: false,
+      cell: ({ row }) => <button className="btn-secondary text-xs whitespace-nowrap" onClick={(event) => { event.stopPropagation(); setViewRow(row.original) }} aria-label={`View wash ${row.original.asset_no}`}>View record</button>, meta: { export: false, pinnable: false } },
+  ]
+
 
   const kpis = [
     { label: 'Washes performed', value: fmtNum(summary.totalWashes), icon: Droplets, hint: 'Completed washes only. Plans are not counted.' },
@@ -867,96 +909,30 @@ export default function VehicleWashing() {
             <p className="text-xs text-[var(--text-muted)]">{regCost.note}</p>
           )}
 
-          <Card>
-            {/* One short span is what `actions` is for; it cannot wrap, so a row of
-                buttons would belong on its own row instead. */}
-            <CardHeader
-              icon={ClipboardList}
-              title="Wash records"
-              actions={<span className="text-[11px] text-[var(--text-muted)]">{regRows.length} matched</span>}
+          <section className="space-y-2" aria-labelledby="wash-records-heading">
+            <div className="flex flex-wrap items-center gap-2 px-1">
+              <h2 id="wash-records-heading" className="font-semibold inline-flex items-center gap-2"><ClipboardList size={16} /> Wash records</h2>
+              <span className="text-[11px] text-[var(--text-muted)]">{regRows.length} matched</span>
+            </div>
+            <EnterpriseTable
+              className="tp-register-pro"
+              reportMeta={reportMeta}
+              columns={washRecordColumns}
+              data={regRows}
+              getRowId={(row) => String(row.id)}
+              loading={loading}
+              error={error}
+              onRetry={load}
+              enableGlobalFilter={false}
+              enableSorting
+              enableExport={false}
+              enableColumnVisibility
+              initialPageSize={50}
+              pageSizeOptions={[25, 50, 100, 200]}
+              emptyIcon={<Droplets size={28} className="opacity-50" aria-hidden="true" />}
+              emptyMessage={rows.length === 0 ? 'No wash has been recorded yet. The first one will appear here.' : 'No wash records match the selected filters.'}
             />
-            {loading ? (
-              <div className="space-y-2">{[0, 1, 2, 3].map((i) => <div key={i} className="h-9 bg-[var(--input-bg)] rounded animate-pulse" />)}</div>
-            ) : regRows.length === 0 ? (
-              <div className="py-10 text-center text-[var(--text-muted)]">
-                <Droplets size={28} className="mx-auto mb-2 opacity-50" />
-                <p className="text-sm">
-                  {rows.length === 0
-                    ? 'No wash has been recorded yet. The first one will appear here.'
-                    : 'No wash records match the selected filters.'}
-                </p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-[var(--text-muted)] border-b border-[var(--input-border)]">
-                      <th className="py-2 pr-3 font-medium">Date</th>
-                      <th className="py-2 pr-3 font-medium">Asset</th>
-                      <th className="py-2 pr-3 font-medium">Type</th>
-                      <th className="py-2 pr-3 font-medium">Site</th>
-                      <th className="py-2 pr-3 font-medium">Area</th>
-                      <th className="py-2 pr-3 font-medium">Bay</th>
-                      <th className="py-2 pr-3 font-medium">Operator</th>
-                      <th className="py-2 pr-3 font-medium">Entered by</th>
-                      <th className="py-2 pr-3 font-medium">Checklist</th>
-                      <th className="py-2 pr-3 font-medium">View</th>
-                      <th className="py-2 pr-3 font-medium">Cost</th>
-                      <th className="py-2 pr-3 font-medium text-center">Photos</th>
-                      <th className="py-2 pr-3 font-medium">Status</th>
-                      <th className="py-2 font-medium">Vehicle PDF</th>
-                      {canWrite && <th className="py-2 font-medium text-right">Actions</th>}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {regPager.pageRows.map((r) => (
-                      <tr key={r.id} className="border-b border-[var(--input-border)]/60 hover:bg-[var(--input-bg)]/50">
-                        <td className="py-2 pr-3 text-[var(--text-secondary)]">{fmtDate(r.wash_date)}</td>
-                        <td className="py-2 pr-3">
-                          {r.asset_no ? (
-                            <Link to={`/asset-management/${encodeURIComponent(r.asset_no)}`} className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300">
-                              {r.asset_no} <ExternalLink size={11} className="opacity-70" />
-                            </Link>
-                          ) : <span className="text-[var(--text-muted)]">N/A</span>}
-                        </td>
-                        <td className="py-2 pr-3 text-[var(--text-secondary)]">{r.wash_type || 'N/A'}</td>
-                        <td className="py-2 pr-3 text-[var(--text-secondary)]">{r.site || 'N/A'}</td>
-                        <td className="py-2 pr-3 text-[var(--text-secondary)]">{r.area || 'N/A'}</td>
-                        <td className="py-2 pr-3 text-[var(--text-secondary)]">{r.bay || 'N/A'}</td>
-                        <td className="py-2 pr-3 text-[var(--text-secondary)]">{r.washed_by || 'N/A'}</td>
-                        <td className="py-2 pr-3 text-[var(--text-secondary)]">{entryPerson(r)}<span className="block text-xs">{fmtStamp(r.created_at)}</span></td>
-                        <td className="py-2 pr-3">{checklistSummary(r)}</td>
-                        <td className="py-2 pr-3"><button className="btn-secondary text-xs" onClick={() => setViewRow(r)} aria-label={`View wash ${r.asset_no}`}>View record</button></td>
-                        <td className="py-2 pr-3 text-[var(--text-secondary)]">{formatWashCost(r.cost)}</td>
-                        <td className="py-2 pr-3 text-center text-[var(--text-secondary)]">
-                          {Array.isArray(r.photos) && r.photos.length > 0 ? (
-                            <span className="inline-flex items-center gap-1 text-[var(--text-secondary)]">
-                              <ImageIcon size={13} className="opacity-70" /> {r.photos.length}
-                            </span>
-                          ) : <span className="text-[var(--text-muted)]">-</span>}
-                        </td>
-                        <td className="py-2 pr-3">
-                          <span className={`inline-block text-[11px] px-2 py-0.5 rounded-full border ${STATUS_TONE[r.status] || STATUS_TONE.Cancelled}`}>{r.status || 'N/A'}</span>
-                        </td>
-                        <td className="py-2 pr-3"><button className="btn-secondary text-xs" disabled={pdfBusy || !r.asset_no} onClick={() => exportVehiclePdf(r)} aria-label={`Download PDF for ${r.asset_no}`}>PDF + photos</button></td>
-                        {canWrite && (
-                          <td className="py-2 text-right whitespace-nowrap">
-                            <button onClick={() => openEdit(r)} className="p-1.5 rounded hover:bg-blue-500/10 text-[var(--text-muted)] hover:text-blue-300" title="Edit or correct">
-                              <Pencil size={14} />
-                            </button>
-                            <button onClick={() => setConfirmDelete(r)} className="p-1.5 rounded hover:bg-red-500/10 text-[var(--text-muted)] hover:text-red-300" title="Delete">
-                              <Trash2 size={14} />
-                            </button>
-                          </td>
-                        )}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                <TablePagination {...regPager} />
-              </div>
-            )}
-          </Card>
+          </section>
         </div>
       )}
 

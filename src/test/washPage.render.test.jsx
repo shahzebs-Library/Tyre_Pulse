@@ -19,6 +19,8 @@ it('opens staff drill-down and the saved checklist from the register',async()=>{
   fireEvent.click(screen.getByRole('button',{name:'Staff activity'}))
   fireEvent.click(await screen.findByRole('button',{name:'First recorder'}))
   expect(screen.queryByRole('button',{name:'View wash TEST-2'})).not.toBeInTheDocument()
+  const headers=within(screen.getByRole('table')).getAllByRole('columnheader')
+  expect(headers.at(-1)).toHaveTextContent('View')
   fireEvent.click(screen.getByRole('button',{name:'View wash TEST-1'}))
   expect(await screen.findByRole('dialog')).toBeInTheDocument()
   expect(screen.getByText('Dust remains')).toBeInTheDocument()

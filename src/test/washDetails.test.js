@@ -25,4 +25,28 @@ describe('wash evidence and staff activity', () => {
     expect(filterWashes([row],{...filters,dateBasis:'wash'})).toEqual([])
     expect(filterWashes([row],{...filters,enteredBy:'u2'})).toEqual([])
   })
+  it('supports tyre-inspection-style multi-select and broad search', () => {
+    const rows = [
+      { id: '1', asset_no: 'TM-1', registration_no: 'ABC 123', site: 'North Yard', wash_type: 'Full', vehicle_type: 'tr-mixer', entry_name: 'Aisha' },
+      { id: '2', asset_no: 'TM-2', registration_no: 'XYZ 789', site: 'South Yard', wash_type: 'Exterior', vehicle_type: 'PUMP', entry_name: 'Omar' },
+      { id: '3', asset_no: 'TM-3', site: 'West Yard', wash_type: 'Full', vehicle_type: 'LOADER', entry_name: 'Aisha' },
+    ]
+    expect(filterWashes(rows, { site: 'North Yard,South Yard' })).toEqual(rows.slice(0, 2))
+    expect(filterWashes(rows, { site: 'North Yard,South Yard', type: 'Full' })).toEqual([rows[0]])
+    expect(filterWashes(rows, { vehicleType: 'TR-MIXER,pump' })).toEqual(rows.slice(0, 2))
+    expect(filterWashes(rows, { search: 'aisha' })).toEqual([rows[0], rows[2]])
+    expect(filterWashes(rows, { site: [] })).toEqual(rows)
+  })
+  it('treats a partially unanswered checklist as incomplete', () => {
+    const partial = { id: '1', wash_details: { checklist: [{ result: 'pass' }, { result: 'not_checked' }] } }
+    const complete = { id: '2', wash_details: { checklist: [{ result: 'pass' }, { result: 'na' }] } }
+    const missing = { id: '3' }
+    expect(filterWashes([partial, complete, missing], { checklist: 'missing' })).toEqual([partial, missing])
+    expect(filterWashes([partial, complete, missing], { checklist: 'complete' })).toEqual([complete])
+  })
+  it('counts legacy blank-status work as completed staff activity', () => {
+    const legacy = { id: '1', created_by: 'u1', asset_no: 'A', status: '' }
+    expect(staffWashActivity([legacy])[0].completed).toBe(1)
+    expect(filterWashes([legacy], { status: 'Completed' })).toEqual([legacy])
+  })
 })

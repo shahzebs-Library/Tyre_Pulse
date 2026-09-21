@@ -1,3 +1,5 @@
+import { isCompletedWash } from './washAnalytics'
+
 export const CHECK_RESULTS = { not_checked: 'Not checked', pass: 'Checked', fail: 'Issue found', na: 'Not applicable' }
 export const WASH_CHECKS = ['Exterior surfaces', 'Windows, mirrors and lights', 'Wheels and wheel arches', 'Cab interior', 'Final rinse and visible residue']
 export const emptyWashDetails = () => ({ version: 1, chemical_status: 'not_recorded', chemicals: [], checklist: WASH_CHECKS.map(label => ({ label, result: 'not_checked', note: '' })) })
@@ -38,7 +40,7 @@ export function staffWashActivity(rows) {
     const id = row.created_by || 'unknown'
     const p = people.get(id) || { id, name: entryPerson(row), entries: 0, completed: 0, scheduled: 0, assets: new Set(), last: '' }
     p.entries++
-    if (row.status === 'Completed') p.completed++
+    if (isCompletedWash(row)) p.completed++
     if (row.status === 'Scheduled') p.scheduled++
     p.assets.add(JSON.stringify([row.organisation_id, row.country, row.asset_no]))
     if (row.created_at > p.last) p.last = row.created_at

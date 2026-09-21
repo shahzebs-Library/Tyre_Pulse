@@ -15,7 +15,7 @@ import VehicleWashing from '../pages/VehicleWashing'
 
 it('opens staff drill-down and the saved checklist from the register',async()=>{
   render(<MemoryRouter><VehicleWashing/></MemoryRouter>)
-  await waitFor(()=>expect(screen.getByRole('option',{name:'First recorder'})).toBeInTheDocument())
+  await waitFor(()=>expect(screen.getByRole('button',{name:'Staff activity'})).toBeInTheDocument())
   fireEvent.click(screen.getByRole('button',{name:'Staff activity'}))
   fireEvent.click(await screen.findByRole('button',{name:'First recorder'}))
   expect(screen.queryByRole('button',{name:'View wash TEST-2'})).not.toBeInTheDocument()

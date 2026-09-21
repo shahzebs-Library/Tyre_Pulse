@@ -27,7 +27,8 @@ import { selectionValues, toggleSelection } from '../../lib/filterSelection'
  *   label        string    what the control filters, for the accessible name ("Region")
  *   allLabel     string    trigger text when nothing is picked ("All regions")
  *   pluralLabel  string    noun for the "3 regions" summary (defaults to label lowercased)
- *   options      string[]  the selectable values (derive them from the rows on screen)
+ *   options      string[] | {value,label}[]  selectable values. Object options
+ *                let identity filters keep stable IDs while showing real names.
  *   value        'all' | string | string[]
  *   onChange     (string[]) => void
  *   disabled     boolean
@@ -46,12 +47,20 @@ export default function MultiSelectFilter({
   const [open, setOpen] = useState(false)
   const rootRef = useRef(null)
   const popRef = useRef(null)
-  const list = useMemo(() => (Array.isArray(options) ? options.filter(Boolean) : []), [options])
+  const list = useMemo(() => (Array.isArray(options) ? options.filter(Boolean).map((option) => (
+    option && typeof option === 'object'
+      ? { value: String(option.value ?? ''), label: String(option.label ?? option.value ?? '') }
+      : { value: String(option), label: String(option) }
+  )).filter((option) => option.value) : []), [options])
   const chosen = useMemo(() => selectionValues(value), [value])
   // Only values that are actually on offer count towards the summary, so a
   // stale pick left over from another country cannot claim to be narrowing
   // anything the reader can see.
-  const live = useMemo(() => chosen.filter((v) => list.includes(v)), [chosen, list])
+  const live = useMemo(() => chosen.filter((v) => list.some((option) => option.value === v)), [chosen, list])
+  const liveLabels = useMemo(
+    () => live.map((value) => list.find((option) => option.value === value)?.label || value),
+    [live, list],
+  )
 
   const { triggerRef, panelRef, coords } = useAnchoredPopover(open, {
     width: 236,
@@ -80,7 +89,7 @@ export default function MultiSelectFilter({
   const summary = live.length === 0
     ? (allLabel || `All ${noun}`)
     : live.length === 1
-      ? live[0]
+      ? liveLabels[0]
       : `${live.length} ${noun}`
 
   function toggle(option) {
@@ -98,8 +107,8 @@ export default function MultiSelectFilter({
         aria-expanded={open}
         // The chosen values are read out as part of the name, so a screen-reader
         // user learns what the filter is doing without opening it.
-        aria-label={`${label}: ${live.length ? live.join(', ') : 'all'}`}
-        title={live.length > 1 ? live.join(', ') : undefined}
+        aria-label={`${label}: ${live.length ? liveLabels.join(', ') : 'all'}`}
+        title={live.length > 1 ? liveLabels.join(', ') : undefined}
         className={`rounded-md border border-[var(--border-subtle)] bg-transparent px-2 py-1.5 text-xs flex items-center gap-1.5 disabled:opacity-40 ${className}`}
         style={{ color: 'var(--text-primary)' }}
       >
@@ -140,14 +149,14 @@ export default function MultiSelectFilter({
             )}
           </div>
           {list.map((option) => {
-            const on = live.includes(option)
+            const on = live.includes(option.value)
             return (
               <button
-                key={option}
+                key={option.value}
                 type="button"
                 role="menuitemcheckbox"
                 aria-checked={on}
-                onClick={() => toggle(option)}
+                onClick={() => toggle(option.value)}
                 className="w-full flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-left hover:bg-[var(--input-bg)]"
                 style={{ color: on ? 'var(--text-primary)' : 'var(--text-secondary)' }}
               >
@@ -161,7 +170,7 @@ export default function MultiSelectFilter({
                 >
                   {on && <Check size={10} color="#fff" />}
                 </span>
-                <span className="truncate">{option}</span>
+                <span className="truncate">{option.label}</span>
               </button>
             )
           })}

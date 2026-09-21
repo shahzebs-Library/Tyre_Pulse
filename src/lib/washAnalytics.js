@@ -21,7 +21,16 @@
  * to show plans and cancellations too.
  */
 
+import { normVehicleType, selectionMatches, selectionValues } from './filterSelection'
+
 const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/** URL-backed multi-selects use a compact comma-separated representation. */
+function decodedSelection(value) {
+  return typeof value === 'string' && value.includes(',')
+    ? value.split(',').map((part) => part.trim()).filter(Boolean)
+    : value
+}
 
 /**
  * Statuses that are NOT a wash performed. Mirrors the wash_records CHECK.
@@ -113,15 +122,13 @@ function dayOf(row) {
 export function filterWashes(rows, filters = {}) {
   if (!Array.isArray(rows)) return []
   const { from, to, site, area, type, status, assetNo } = filters || {}
-  const wantStatus = status && status !== 'All' ? String(status) : null
+  const wantStatus = status && !['All', 'all'].includes(status) ? status : null
   const wantAsset = assetNo && String(assetNo).trim() !== ''
     ? String(assetNo).trim().toUpperCase()
     : null
   const hasFrom = from && String(from).trim() !== ''
   const hasTo = to && String(to).trim() !== ''
-  const wantSite = site && site !== 'All' ? String(site) : null
-  const wantArea = area && area !== 'All' ? String(area) : null
-  const wantType = type && type !== 'All' ? String(type) : null
+  const search = String(filters.search || '').trim().toLowerCase()
 
   return rows.filter((r) => {
     if (!r) return false
@@ -132,24 +139,34 @@ export function filterWashes(rows, filters = {}) {
     if (hasTo) {
       if (!d || d > String(to).slice(0, 10)) return false
     }
-    if (wantSite && String(r.site || '') !== wantSite) return false
-    if (wantArea && String(r.area || '') !== wantArea) return false
-    if (wantType && String(r.wash_type || '') !== wantType) return false
-    if (wantStatus && String(r.status || '') !== wantStatus) return false
+    if (!selectionMatches(decodedSelection(site), r.site)) return false
+    if (!selectionMatches(decodedSelection(area), r.area)) return false
+    if (!selectionMatches(decodedSelection(type), r.wash_type)) return false
+    if (wantStatus && !(String(wantStatus).toLowerCase() === 'completed'
+      ? isCompletedWash(r)
+      : selectionMatches(wantStatus, r.status))) return false
     if (wantAsset && String(r.asset_no || '').trim().toUpperCase() !== wantAsset) return false
     for (const [filter, field] of Object.entries({ enteredBy: 'created_by', country: 'country', region: 'region', vehicleType: 'vehicle_type', bay: 'bay', washedBy: 'washed_by' })) {
       const wanted = filters[filter]
-      if (wanted && wanted !== 'All' && (r[field] || 'unknown') !== wanted) return false
+      if (!selectionMatches(decodedSelection(wanted), r[field], filter === 'vehicleType' ? normVehicleType : null)) return false
     }
+    if (search && ![
+      r.asset_no, r.registration_no, r.entry_name, r.entry_username,
+      r.created_by, r.washed_by, r.site, r.area, r.bay, r.wash_type,
+    ].some((part) => String(part || '').toLowerCase().includes(search))) return false
     if (filters.registration && !String(r.registration_no || '').toLowerCase().includes(filters.registration.toLowerCase())) return false
     if (filters.photos === 'yes' && !r.photos?.length) return false
-    if (filters.correctedBy && filters.correctedBy !== 'All' && !r.corrected_by_ids?.includes(filters.correctedBy)) return false
+    const correctedBy = selectionValues(decodedSelection(filters.correctedBy))
+    if (correctedBy.length && !correctedBy.some((id) => r.corrected_by_ids?.includes(id))) return false
     if (filters.corrections === 'yes' && !r.corrected_by_ids?.length) return false
     if (filters.corrections === 'no' && r.corrected_by_ids?.length) return false
     if (filters.photos === 'no' && r.photos?.length) return false
-    if (filters.chemicals && filters.chemicals !== 'All' && (r.wash_details?.chemical_status || 'not_recorded') !== filters.chemicals) return false
+    if (filters.chemicals && String(filters.chemicals).toLowerCase() !== 'all'
+      && (r.wash_details?.chemical_status || 'not_recorded') !== filters.chemicals) return false
     if (filters.checklist === 'issues' && !r.wash_details?.checklist?.some(c => c.result === 'fail')) return false
-    if (filters.checklist === 'missing' && r.wash_details?.checklist?.some(c => c.result !== 'not_checked')) return false
+    const checklist = r.wash_details?.checklist
+    if (filters.checklist === 'missing' && Array.isArray(checklist) && checklist.length > 0 && !checklist.some(c => c.result === 'not_checked')) return false
+    if (filters.checklist === 'complete' && (!Array.isArray(checklist) || !checklist.length || checklist.some(c => c.result === 'not_checked'))) return false
     return true
   })
 }

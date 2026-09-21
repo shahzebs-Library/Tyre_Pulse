@@ -7,7 +7,7 @@ import { filterWashes } from '../lib/washAnalytics'
 const defaults = {
   search: '', status: 'all', site: 'all', area: 'all', type: 'all', region: 'all',
   vehicleType: 'all', enteredBy: 'all', correctedBy: 'all', washedBy: 'all',
-  bay: 'all', photos: 'all', chemicals: 'all', checklist: 'all', corrections: 'all',
+  bay: 'all', photos: 'all', chemicals: 'all', corrections: 'all',
   dateBasis: 'wash', from: '', to: '',
 }
 const rows = [
@@ -30,6 +30,9 @@ describe('washing filter bar', () => {
     fireEvent.change(screen.getByLabelText('Search washing records'), { target: { value: 'Aisha' } })
     expect(screen.getByText('2 of 3 shown')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Filters' }))
+    expect(screen.queryByLabelText('Checklist')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Chemicals')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Entered by: all' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Site: all' }))
     fireEvent.click(within(screen.getByRole('menu', { name: 'Site' })).getByRole('menuitemcheckbox', { name: 'North' }))
     expect(screen.getByRole('button', { name: /Filters \(1\)/ })).toBeInTheDocument()

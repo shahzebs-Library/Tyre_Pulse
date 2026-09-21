@@ -1,5 +1,13 @@
 [
   {
+    "id": "2026.09.21.4",
+    "date": "2026-09-21",
+    "changes": [{
+      "modules": ["vehicle_washing"],
+      "text": {"en": "The washing log now uses the standard sortable SaaS table, keeps View record in the final column and limits the advanced filter choices to washing-specific record fields."}
+    }]
+  },
+  {
     "id": "2026.09.21.3",
     "date": "2026-09-21",
     "changes": [{

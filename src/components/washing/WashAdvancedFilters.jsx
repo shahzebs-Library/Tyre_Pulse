@@ -8,20 +8,19 @@ import { isSelectionActive } from '../../lib/filterSelection'
 
 const ADVANCED_KEYS = [
   'site', 'area', 'type', 'region', 'vehicleType', 'enteredBy', 'correctedBy',
-  'washedBy', 'bay', 'photos', 'chemicals', 'checklist', 'corrections',
+  'washedBy', 'bay', 'photos', 'chemicals', 'corrections',
   'dateBasis', 'from', 'to',
 ]
 const LABELS = {
   site: 'Site', area: 'Area', type: 'Wash type', region: 'Region',
   vehicleType: 'Vehicle type', enteredBy: 'Entered by', correctedBy: 'Corrected by',
   washedBy: 'Washed by', bay: 'Wash bay', photos: 'Photos', chemicals: 'Chemicals',
-  checklist: 'Checklist', corrections: 'Corrections', dateBasis: 'Date basis',
+  corrections: 'Corrections', dateBasis: 'Date basis',
   from: 'From', to: 'To',
 }
 const SINGLE_LABELS = {
   photos: { yes: 'With photos', no: 'Without photos' },
   chemicals: { used: 'Chemical used', none: 'No chemical used', not_recorded: 'Not recorded' },
-  checklist: { issues: 'Issues found', missing: 'Incomplete / not recorded', complete: 'Completed checklist' },
   corrections: { yes: 'Corrected records', no: 'No corrections' },
   dateBasis: { wash: 'Wash date', received: 'Received date' },
 }
@@ -64,7 +63,7 @@ export default function WashAdvancedFilters({
   const [savedName, setSavedName] = useState('')
   const [message, setMessage] = useState('')
   const [revision, setRevision] = useState(0)
-  const storageKey = `wash-filters-v2:${scope}`
+  const storageKey = `wash-filters-v3:${scope}`
   const set = (key, next) => onChange({ ...value, [key]: next })
   const setMulti = (key, next) => set(key, washSelectionParam(next))
 
@@ -169,7 +168,6 @@ export default function WashAdvancedFilters({
           {correctors.length > 0 && <MultiSelectFilter className="w-48" label="Corrected by" allLabel="All correction users" options={correctors} value={washSelectionValues(value.correctedBy)} onChange={(next) => setMulti('correctedBy', next)} />}
           <SelectFilter name="photos" label="Photos" value={value.photos} onChange={set} options={Object.entries(SINGLE_LABELS.photos)} />
           <SelectFilter name="chemicals" label="Chemicals" value={value.chemicals} onChange={set} options={Object.entries(SINGLE_LABELS.chemicals)} />
-          <SelectFilter name="checklist" label="Checklist" value={value.checklist} onChange={set} options={Object.entries(SINGLE_LABELS.checklist)} />
           <SelectFilter name="corrections" label="Corrections" value={value.corrections} onChange={set} options={Object.entries(SINGLE_LABELS.corrections)} />
           <SelectFilter name="dateBasis" label="Date basis" value={value.dateBasis || 'wash'} onChange={set} options={Object.entries(SINGLE_LABELS.dateBasis)} />
           <div className="text-xs text-[var(--text-muted)] space-y-1 w-40"><span>From</span><DateField className="text-sm" value={value.from || ''} onChange={(next) => set('from', next)} placeholder="From date" ariaLabel="Wash filter from date" /></div>

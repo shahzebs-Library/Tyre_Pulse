@@ -76,7 +76,8 @@ Acceptance: changing a published template creates a new version; it never change
 - [x] Surface a rolling 30-day assignment monitor in Checklist Insights with an explicit no-denominator state.
 - [ ] Approve the active asset population by site and vehicle class.
 - [ ] Approve cadence rules by checklist and operating risk.
-- [ ] Configure a one-site pilot without bulk-generating historical obligations.
+- [x] Add a controlled one-site pilot boundary with configurable country, site, start and end dates.
+- [x] Reject schedules without an explicit site or asset scope and keep generation forward-only.
 - [x] Require an immutable skip reason, actor and server timestamp.
 - [ ] Add a governed reschedule flow with reason, actor and original due date.
 - [ ] Reconcile assignment generation against the active fleet daily.
@@ -86,10 +87,11 @@ Acceptance: for a selected day/site, active scope, expected assignments, generat
 ### C. Findings and corrective closure
 
 - [ ] Define critical, major and observation classifications for each mark.
-- [ ] Require note/photo evidence for configured exception marks.
+- [x] Measure note/photo evidence for each configured exception mark and support tenant-controlled blocking enforcement.
 - [ ] Create one structured finding per actionable response.
 - [ ] Link repair-required findings to work orders.
-- [ ] Require accountable owner, due date, correction evidence and independent verification.
+- [x] Default missing corrective-action due dates from configurable critical/high/medium/low SLAs.
+- [ ] Require accountable owner, correction evidence and independent verification.
 - [ ] Prevent operational release when a critical finding remains unresolved.
 
 Acceptance: every blocking answer has either an open controlled action or verified closure; no orphan finding is hidden in free text.
@@ -100,7 +102,7 @@ Acceptance: every blocking answer has either an open controlled action or verifi
 - [ ] Publish the checklist policy through independent second-admin review.
 - [ ] Configure backup reviewers, delegation and escalation.
 - [ ] Verify supervisor, area-manager, return, rejection, correction and reapproval journeys on web and installed mobile.
-- [ ] Set and report approval-stage SLA targets.
+- [x] Set tenant-configurable supervisor and area-manager SLA targets and report breached queues.
 
 Acceptance: the same user cannot bypass separation of duties, stale/mobile retries cannot duplicate decisions, and every decision has actor, role, stage, revision, time and signature.
 
@@ -109,8 +111,9 @@ Acceptance: the same user cannot bypass separation of duties, stale/mobile retri
 - [ ] Replace browser-wide raw-row aggregation with scoped server aggregates.
 - [ ] Add operator, supervisor, area-manager, enterprise and audit views.
 - [ ] Add finding recurrence and corrective-action aging drill-downs.
-- [x] Add approval-stage aging from recorded workflow events without assuming an SLA.
+- [x] Add approval-stage aging and breach counts from recorded workflow events and configured SLA targets.
 - [x] Add assignment and evidence-integrity drill-down by template/site.
+- [x] Add configurable submission/evidence/audit retention periods, legal holds and a review-only disposition monitor.
 - [ ] Produce controlled CSV/Excel analysis exports and signed PDF audit packs.
 - [ ] Add scheduled monthly reconciliation with export metadata/checksum.
 
@@ -143,19 +146,19 @@ Acceptance: dashboard, export and sampled source rows produce the same totals un
 
 Freeze country, region, site, asset class, template version and business-date basis. Reconcile fleet scope → assignments → submissions → findings → actions/work orders → approvals → exported report. Sample records from every participating site and reproduce their PDFs. The reviewer must be independent of the person who configured the reporting period or approval policy.
 
-## Decisions still required from operations
+## Tenant rollout values still required from operations
 
 - Pilot site and start date.
 - Applicable asset population and exclusions.
 - Checklist cadence by asset class and operating condition.
 - Critical/major/observation mapping.
-- Required evidence for each exception mark.
+- Whether evidence gaps remain monitored or become blocking after the pilot.
 - Supervisor and final approver routes, including backups.
-- Approval and corrective-action SLAs.
-- Retention period and external audit format.
+- Any tenant-specific change to the baseline approval/corrective SLAs.
+- Any tenant-specific change to the seven-year retention baseline and external audit format.
 
-No production schedule, policy or historical backfill should be created until these inputs are approved. Values must not be inferred from template suggestions or current submission counts.
+The product now stores and enforces these choices per tenant. Pilot activation and schedule creation still require an administrator to select real sites/assets; the system never infers them from submission counts or rewrites historical evidence.
 
 ## Implemented foundation
 
-The implementation lives in migration `20260921075921_checklist_enterprise_evidence_and_compliance.sql`. Its contract is covered by `supabase/tests/checklist_enterprise_evidence.test.mjs`; web snapshot reading and compliance API calls have focused Vitest coverage. Applying the migration preserves existing submissions as `legacy_unavailable`, seeds only the currently knowable published revisions, and begins exact evidence capture for subsequent submissions.
+Evidence history and compliance are implemented in `20260921075921_checklist_enterprise_evidence_and_compliance.sql`. Tenant governance is implemented in `20260921113000_checklist_governance_policy.sql`, with focused database coverage in `checklist_governance_policy.test.mjs`. The web schedule workspace exposes the policy controls, rejects unscoped schedules, and reports approval SLA breaches. Existing submissions remain `legacy_unavailable`; no historical evidence is reconstructed.

@@ -3,7 +3,7 @@ import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import { Link } from 'react-router-dom'
 import {
   CalendarClock, Plus, RefreshCw, AlertTriangle, Trash2, Zap, Loader2,
-  CheckCircle2, X, Power, PowerOff, MapPin, Truck, Layers, ArrowLeft,
+  CheckCircle2, X, Power, PowerOff, MapPin, Truck, ArrowLeft,
   CalendarDays, Users, ListChecks,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
@@ -15,6 +15,7 @@ import { listTemplates } from '../lib/api/checklists'
 import { useSites } from '../hooks/useSites'
 import { toUserMessage } from '../lib/safeError'
 import { listAssignableRoles, ASSIGNABLE_BUILTIN_ROLES } from '../lib/api/customRoles'
+import ChecklistGovernancePanel from '../components/checklists/ChecklistGovernancePanel'
 
 // The friendly "tables not deployed yet" heuristic — mirrors Billing.jsx / Checklists.jsx.
 function isMissingRelation(err) {
@@ -106,7 +107,7 @@ export default function ChecklistSchedules() {
   const emptyForm = useMemo(() => ({
     template_id: '', name: '', cadence: 'weekly',
     targetMode: 'sites', sites: [], asset_nos: [],
-    assignee_role: '', start_date: todayISO(),
+    assignee_role: '', start_date: todayISO(), end_date: '', pilot: false,
   }), [])
   const [form, setForm] = useState(emptyForm)
   const [assetInput, setAssetInput] = useState('')
@@ -184,6 +185,10 @@ export default function ChecklistSchedules() {
       ? Array.from(new Set([...(form.asset_nos || []), ...typed]))
       : []
     const sites = form.targetMode === 'sites' ? (form.sites || []) : []
+    if (!sites.length && !assetNos.length) {
+      setFormError('Choose at least one site or asset. Unscoped schedules are not allowed.')
+      return
+    }
 
     setSaving(true)
     try {
@@ -196,7 +201,9 @@ export default function ChecklistSchedules() {
         assignee_role: form.assignee_role || null,
         country: activeCountry && activeCountry !== 'All' ? activeCountry : null,
         start_date: form.start_date,
+        end_date: form.end_date || null,
         next_due: form.start_date,
+        pilot: Boolean(form.pilot),
         active: true,
       })
       resetForm()
@@ -286,6 +293,8 @@ export default function ChecklistSchedules() {
         refreshing={loading}
         updatedAt={updatedAt}
       />
+
+      <ChecklistGovernancePanel activeCountry={activeCountry} siteOptions={siteOptions} />
 
       {/* Toast */}
       {toast && (
@@ -429,7 +438,6 @@ export default function ChecklistSchedules() {
                   {[
                     { key: 'sites', label: 'Sites', icon: MapPin },
                     { key: 'assets', label: 'Assets', icon: Truck },
-                    { key: 'general', label: 'General', icon: Layers },
                   ].map(({ key, label, icon: Icon }) => (
                     <button
                       type="button"
@@ -487,11 +495,6 @@ export default function ChecklistSchedules() {
                   </div>
                 )}
 
-                {form.targetMode === 'general' && (
-                  <p className="text-xs text-[var(--text-muted)] px-1">
-                    One general assignment is created per cadence — not tied to a specific site or asset.
-                  </p>
-                )}
               </div>
 
               <div>
@@ -516,6 +519,26 @@ export default function ChecklistSchedules() {
                   onChange={(e) => setField('start_date', e.target.value)}
                 />
               </div>
+
+              <div>
+                <label className="label">End date <span className="text-[var(--text-dim)]">(optional)</span></label>
+                <input
+                  type="date"
+                  className="input"
+                  value={form.end_date}
+                  min={form.start_date || todayISO()}
+                  onChange={(e) => setField('end_date', e.target.value)}
+                />
+              </div>
+
+              <label className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
+                <input
+                  type="checkbox"
+                  checked={form.pilot}
+                  onChange={(e) => setField('pilot', e.target.checked)}
+                />
+                Pilot schedule (must match the configured pilot site and dates)
+              </label>
 
               {formError && (
                 <div className="rounded-lg border border-red-800/50 bg-red-900/15 px-3 py-2 text-xs text-red-300 flex items-start gap-2">

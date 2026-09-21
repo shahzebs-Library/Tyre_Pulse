@@ -601,7 +601,7 @@ export default function ChecklistInsights() {
       <div className="card p-0 overflow-hidden">
         <div className="px-4 py-3 border-b border-[var(--border-dim)]">
           <h3 className="text-sm font-medium text-[var(--text-primary)]">Pending approval age</h3>
-          <p className="text-xs text-[var(--text-muted)] mt-1">Measured from submission or supervisor sign-off. No unapproved SLA threshold is applied.</p>
+          <p className="text-xs text-[var(--text-muted)] mt-1">Measured from submission or supervisor sign-off against the organisation's configured stage SLA.</p>
         </div>
         {approvalAges.length === 0 ? (
           <div className="px-4 py-8 text-center text-sm text-[var(--text-muted)]">No pending checklist approvals in this scope.</div>
@@ -613,6 +613,7 @@ export default function ChecklistInsights() {
               <th className="px-4 py-2 font-medium text-right">Pending</th>
               <th className="px-4 py-2 font-medium text-right">Oldest age</th>
               <th className="px-4 py-2 font-medium text-right">Average age</th>
+              <th className="px-4 py-2 font-medium text-right">SLA / breached</th>
             </tr></thead>
             <tbody>{approvalAges.map((row) => (
               <tr key={`${row.template_id}:${row.country}:${row.site}:${row.approval_stage}`} className="border-b border-[var(--border-dim)] last:border-0">
@@ -621,6 +622,9 @@ export default function ChecklistInsights() {
                 <td className="px-4 py-2.5 text-right">{Number(row.pending_count).toLocaleString()}</td>
                 <td className="px-4 py-2.5 text-right">{Number(row.oldest_age_hours).toFixed(1)} h</td>
                 <td className="px-4 py-2.5 text-right">{Number(row.average_age_hours).toFixed(1)} h</td>
+                <td className={`px-4 py-2.5 text-right ${Number(row.breached_count) > 0 ? 'text-red-400 font-medium' : 'text-green-400'}`}>
+                  {Number(row.target_hours).toLocaleString()} h / {Number(row.breached_count).toLocaleString()}
+                </td>
               </tr>
             ))}</tbody>
           </table></div>

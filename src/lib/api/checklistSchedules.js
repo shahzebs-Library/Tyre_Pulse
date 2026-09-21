@@ -7,7 +7,7 @@
 import { supabase, unwrap, applyCountry } from './_client'
 
 const SCHED_COLS =
-  'id,organisation_id,country,template_id,name,cadence,sites,asset_nos,assignee_role,start_date,next_due,active,created_by,created_at,updated_at'
+  'id,organisation_id,country,template_id,name,cadence,sites,asset_nos,assignee_role,start_date,end_date,next_due,pilot,active,created_by,created_at,updated_at'
 const ASSIGN_COLS =
   'id,country,schedule_id,template_id,template_name,site,asset_no,assignee_role,due_date,status,submission_id,completed_at,skip_reason,skipped_by,skipped_at,created_at,updated_at'
 
@@ -34,7 +34,9 @@ export async function createSchedule(values) {
     assignee_role: values.assignee_role ?? null,
     country: values.country ?? null,
     start_date: values.start_date ?? undefined,
+    end_date: values.end_date ?? null,
     next_due: values.next_due ?? values.start_date ?? undefined,
+    pilot: values.pilot ?? false,
     active: values.active ?? true,
   }
   Object.keys(payload).forEach((k) => payload[k] === undefined && delete payload[k])
@@ -73,9 +75,32 @@ export async function getComplianceMonitor({ from, to, country, site, templateId
 
 /** Pending approval age by current stage. SLA thresholds are configured elsewhere. */
 export async function getApprovalAgeMonitor({ country, templateId } = {}) {
-  return unwrap(await supabase.rpc('checklist_approval_age_monitor', {
+  return unwrap(await supabase.rpc('checklist_approval_sla_monitor', {
     p_country: country ?? null,
     p_template_id: templateId ?? null,
+  })) || []
+}
+
+/** Tenant-owned pilot, SLA, evidence and retention controls. */
+export async function getChecklistGovernancePolicy() {
+  return unwrap(await supabase.rpc('get_checklist_governance_policy')) || {}
+}
+
+export async function saveChecklistGovernancePolicy(policy) {
+  return unwrap(await supabase.rpc('save_checklist_governance_policy', {
+    p_policy: policy || {},
+  }))
+}
+
+export async function getChecklistRetentionMonitor() {
+  const rows = unwrap(await supabase.rpc('checklist_retention_monitor')) || []
+  return Array.isArray(rows) ? (rows[0] || null) : rows
+}
+
+export async function getChecklistEvidencePolicyMonitor({ from, to } = {}) {
+  return unwrap(await supabase.rpc('checklist_evidence_policy_monitor', {
+    p_from: from ?? null,
+    p_to: to ?? null,
   })) || []
 }
 

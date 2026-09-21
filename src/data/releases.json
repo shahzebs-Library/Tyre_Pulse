@@ -1,5 +1,13 @@
 [
   {
+    "id": "2026.09.21.2",
+    "date": "2026-09-21",
+    "changes": [{
+      "modules": ["checklists", "approvals", "corrective_actions"],
+      "text": {"en": "Checklist governance now supports controlled pilot sites and dates, scoped schedules, configurable approval and corrective-action SLAs, evidence requirements, legal holds and retention review. Approval monitoring shows target hours and breached queues."}
+    }]
+  },
+  {
     "id": "2026.09.21.1",
     "date": "2026-09-21",
     "changes": [{

@@ -69,14 +69,28 @@ describe('checklist schedules service', () => {
     expect(rows).toEqual([{ due_count: 4 }])
   })
 
-  it('requests approval age without inventing an SLA threshold', async () => {
-    h.state.result = { data: [{ approval_stage: 'supervisor', pending_count: 2 }], error: null }
+  it('requests approval age with the tenant-configured SLA threshold', async () => {
+    h.state.result = { data: [{ approval_stage: 'supervisor', pending_count: 2, target_hours: 24 }], error: null }
     const rpc = vi.spyOn(h.supabase, 'rpc').mockResolvedValueOnce(h.state.result)
     const rows = await cs.getApprovalAgeMonitor({ country: 'KSA', templateId: 't1' })
-    expect(rpc).toHaveBeenCalledWith('checklist_approval_age_monitor', {
+    expect(rpc).toHaveBeenCalledWith('checklist_approval_sla_monitor', {
       p_country: 'KSA', p_template_id: 't1',
     })
     expect(rows[0].pending_count).toBe(2)
+  })
+
+  it('loads and saves tenant checklist governance through validated RPCs', async () => {
+    const rpc = vi.spyOn(h.supabase, 'rpc')
+      .mockResolvedValueOnce({ data: { industry_profile: 'mining' }, error: null })
+      .mockResolvedValueOnce({ data: { industry_profile: 'logistics' }, error: null })
+    rpc.mockClear()
+    expect(await cs.getChecklistGovernancePolicy()).toEqual({ industry_profile: 'mining' })
+    expect(await cs.saveChecklistGovernancePolicy({ industry_profile: 'logistics' }))
+      .toEqual({ industry_profile: 'logistics' })
+    expect(rpc).toHaveBeenNthCalledWith(1, 'get_checklist_governance_policy')
+    expect(rpc).toHaveBeenNthCalledWith(2, 'save_checklist_governance_policy', {
+      p_policy: { industry_profile: 'logistics' },
+    })
   })
 
   it('listAssignments filters by status + template', async () => {

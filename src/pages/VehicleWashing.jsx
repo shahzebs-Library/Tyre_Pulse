@@ -37,7 +37,7 @@ import {
 } from 'chart.js'
 import { Bar, Doughnut, Line } from 'react-chartjs-2'
 import {
-  Droplets, LayoutDashboard, ClipboardList, Plus, X, Filter,
+  Droplets, LayoutDashboard, ClipboardList, Plus, X,
   MapPin, Layers, Car, TrendingUp, PieChart, BarChart3, CheckCircle2,
   AlertTriangle, Loader2, Save, FileSpreadsheet, FileText, Trash2, ExternalLink,
   ImagePlus, Image as ImageIcon, Pencil, CalendarClock, CalendarPlus, History,
@@ -54,10 +54,11 @@ import ReferencePicker from '../components/checklist/ReferencePicker'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useReportMeta } from '../hooks/useReportMeta'
+import { useFilterState } from '../hooks/useFilterState'
 import {
   listWashRecords, washExportFleet, createWashRecord, deleteWashRecord, uploadWashPhoto,
   correctWashRecord, listWashCorrections, scheduleWash,
-  distinctSites, distinctAreas, WASH_TYPES, WASH_STATUSES, WASH_STATUS_CHOICES,
+  WASH_TYPES, WASH_STATUSES, WASH_STATUS_CHOICES,
 } from '../lib/api/washRecords'
 import { getAssetByNo } from '../lib/api/assets'
 import {
@@ -83,6 +84,13 @@ ChartJS.register(
 )
 
 const WRITE_ROLES = new Set(['Admin', 'Manager', 'Director'])
+
+const WASH_FILTER_DEFAULTS = Object.freeze({
+  search: '', status: 'all', site: 'all', area: 'all', type: 'all',
+  region: 'all', vehicleType: 'all', enteredBy: 'all', correctedBy: 'all',
+  washedBy: 'all', bay: 'all', photos: 'all', chemicals: 'all',
+  checklist: 'all', corrections: 'all', dateBasis: 'wash', from: '', to: '',
+})
 
 const TABS = [
   { id: 'reporting', label: 'Reporting', icon: LayoutDashboard },
@@ -203,10 +211,10 @@ export default function VehicleWashing() {
   const [missing, setMissing] = useState(false)
   const [updatedAt, setUpdatedAt] = useState(null)
 
-  // Reporting filters.
-  const [filters, setFilters] = useState({ from: '', to: '', site: 'All', area: 'All', type: 'All' })
-  const setFilter = (k, v) => setFilters((f) => ({ ...f, [k]: v }))
-  const clearFilters = () => setFilters({ from: '', to: '', site: 'All', area: 'All', type: 'All' })
+  // Reporting, Log and Staff use one URL-backed filter state. A drill-down or
+  // browser Back action therefore cannot leave a hidden filter behind on a
+  // different tab, and a filtered washing view can be shared like Inspections.
+  const [filters, setFilter, clearFilters, , setFilters] = useFilterState(WASH_FILTER_DEFAULTS)
 
   // Quick-log form.
   const [form, setForm] = useState(() => ({ ...EMPTY_FORM, client_uuid: crypto.randomUUID(), wash_date: todayISO(), wash_details: emptyWashDetails() }))
@@ -226,11 +234,8 @@ export default function VehicleWashing() {
   const [photoError, setPhotoError] = useState('')
   const photoInputRef = useRef(null)
 
-  // Log (register) tab has its OWN filters: setting status=Scheduled there must
-  // not silently empty the reporting KPIs on the other tab.
-  const [regFilters, setRegFilters] = useState({ from: '', to: '', site: 'All', status: 'All', type: 'All', assetNo: '' })
-  const setRegFilter = (k, v) => setRegFilters((f) => ({ ...f, [k]: v }))
-  const clearRegFilters = () => setRegFilters({ from: '', to: '', site: 'All', status: 'All', type: 'All', assetNo: '' })
+  const regFilters = filters
+  const setRegFilter = setFilter
 
   // Schedule form.
   const [sched, setSched] = useState({ ...EMPTY_SCHEDULE })
@@ -277,10 +282,6 @@ export default function VehicleWashing() {
   }, [activeCountry, canReadFleet])
 
   useEffect(() => { setLoading(true); setRows([]); setViewRow(null); load() }, [load, profile?.id, profile?.organisation_id])
-
-  // Filter option lists derived from the loaded rows.
-  const siteOptions = useMemo(() => distinctSites(rows), [rows])
-  const areaOptions = useMemo(() => distinctAreas(rows), [rows])
 
   // Reporting KPI / chart summary (single pure pass over the reporting filters).
   const summary = useMemo(() => summarizeWashes(rows, filters), [rows, filters])
@@ -701,7 +702,7 @@ export default function VehicleWashing() {
           return (
             <button
               key={t.id}
-              onClick={() => { setTab(t.id); if(t.id === 'staff') setRegFilter('dateBasis','received') }}
+              onClick={() => setTab(t.id)}
               className={`inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${on ? 'border-blue-500 text-[var(--text-primary)]' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}
             >
               <Icon size={15} /> {t.label}
@@ -711,78 +712,30 @@ export default function VehicleWashing() {
       </div>
 
       {/* ─────────────── REPORTING ─────────────── */}
-      {['reporting','register','staff'].includes(tab) && <WashAdvancedFilters
-        rows={rows} value={tab === 'reporting' ? filters : regFilters}
-        onChange={tab === 'reporting' ? setFilters : setRegFilters} userId={profile?.id}
-        scope={`${profile?.organisation_id}:${profile?.id}:${activeCountry}`} includeArea={tab !== 'reporting'} includeBasic={tab === 'staff'} />}
+      {['reporting','register','staff'].includes(tab) && <Card>
+        <WashAdvancedFilters
+          rows={rows}
+          value={filters}
+          onChange={setFilters}
+          onClear={clearFilters}
+          userId={profile?.id}
+          scope={`${profile?.organisation_id}:${profile?.id}:${activeCountry}`}
+          statuses={WASH_STATUSES}
+          resultCount={regRows.length}
+          quickRanges={quickRanges}
+          canUseFleetFields={canReadFleet}
+        />
+      </Card>}
 
       {tab === 'staff' && <div className="card space-y-4">
         <h2 className="font-semibold">Entries by person</h2>
         <p className="text-sm text-[var(--text-muted)]">Each received record counts once. Edits and upload retries do not add entries. These filters are shared with the Log tab.</p>
-        <div className="flex flex-wrap gap-3"><label>From<DateField value={regFilters.from} onChange={v => setRegFilter('from',v)} ariaLabel="Staff activity from" /></label><label>To<DateField value={regFilters.to} onChange={v => setRegFilter('to',v)} ariaLabel="Staff activity to" /></label><button className="btn-secondary" onClick={clearRegFilters}>Reset filters</button><button className="btn-secondary" disabled={!regRows.length || pdfBusy} onClick={() => exportExcel(regRows,'Wash staff activity records')}>Export matching entries</button></div>
+        <div><button className="btn-secondary" disabled={!regRows.length || pdfBusy} onClick={() => exportExcel(regRows,'Wash staff activity records')}>Export matching entries</button></div>
         {loading ? <p>Loading…</p> : error ? <p role="alert">{error}</p> : <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr>{['Person','Entries submitted','Distinct vehicles','Completed records','Scheduled records','Last received'].map(label => <th className="text-start p-2" key={label}>{label}</th>)}</tr></thead><tbody>{staffWashActivity(regRows).map(p => <tr className="border-t border-[var(--input-border)]" key={p.id}><td className="p-2"><button className="text-blue-400 underline" onClick={() => { setRegFilter('enteredBy',p.id); setTab('register') }}>{p.name}</button></td><td className="p-2">{p.entries}</td><td className="p-2">{p.vehicles}</td><td className="p-2">{p.completed}</td><td className="p-2">{p.scheduled}</td><td className="p-2">{fmtStamp(p.last)}</td></tr>)}</tbody></table>{!regRows.length && <p>No entries match these filters.</p>}</div>}
       </div>}
 
       {tab === 'reporting' && (
         <div className="space-y-4">
-          {/* Filter bar. The quick ranges stay on this own wrapping row rather than
-              moving into CardHeader's `actions`, which is flex-shrink-0 and cannot
-              wrap: four buttons in a non-shrinking box push a phone-width card into
-              horizontal page scroll. Card is deliberately NOT clipped here either -
-              DateField renders a real calendar panel. */}
-          <Card className="space-y-3">
-            <div className="flex items-center gap-2 text-[var(--text-secondary)]">
-              <Filter size={15} /> <span className="text-sm font-medium">Filters</span>
-              <div className="ml-auto flex flex-wrap gap-1.5">
-                {quickRanges.map((q) => (
-                  <button
-                    key={q.id}
-                    onClick={() => setFilters((f) => ({ ...f, from: q.from, to: q.to }))}
-                    className="text-[11px] px-2.5 py-1 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] hover:border-blue-600/50 text-[var(--text-secondary)]"
-                  >
-                    {q.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
-              <div className="text-xs text-[var(--text-muted)] space-y-1">
-                <span>From</span>
-                <DateField className="text-sm" value={filters.from} onChange={(v) => setFilter('from', v)} placeholder="From date" ariaLabel="From date" />
-              </div>
-              <div className="text-xs text-[var(--text-muted)] space-y-1">
-                <span>To</span>
-                <DateField className="text-sm" value={filters.to} onChange={(v) => setFilter('to', v)} placeholder="To date" ariaLabel="To date" min={filters.from || undefined} />
-              </div>
-              <label className="text-xs text-[var(--text-muted)] space-y-1">
-                <span>Site</span>
-                <select value={filters.site} onChange={(e) => setFilter('site', e.target.value)} className={inputCls}>
-                  <option value="All">All sites</option>
-                  {siteOptions.map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </label>
-              <label className="text-xs text-[var(--text-muted)] space-y-1">
-                <span>Area</span>
-                <select value={filters.area} onChange={(e) => setFilter('area', e.target.value)} className={inputCls}>
-                  <option value="All">All areas</option>
-                  {areaOptions.map((a) => <option key={a} value={a}>{a}</option>)}
-                </select>
-              </label>
-              <label className="text-xs text-[var(--text-muted)] space-y-1">
-                <span>Wash type</span>
-                <select value={filters.type} onChange={(e) => setFilter('type', e.target.value)} className={inputCls}>
-                  <option value="All">All types</option>
-                  {WASH_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                </select>
-              </label>
-              <div className="flex items-end">
-                <button onClick={clearFilters} className="inline-flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
-                  <X size={14} /> Reset
-                </button>
-              </div>
-            </div>
-          </Card>
-
           {/* KPI tiles */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {kpis.map((k) => {
@@ -900,61 +853,13 @@ export default function VehicleWashing() {
       {/* ─────────────── LOG (register) ─────────────── */}
       {tab === 'register' && (
         <div className="space-y-4">
-          <Card className="space-y-3">
-            <div className="flex items-center gap-2 text-[var(--text-secondary)]">
-              <Filter size={15} /> <span className="text-sm font-medium">Filters</span>
-              <span className="text-[11px] text-[var(--text-muted)]">every record, plans included</span>
-              <div className="ml-auto flex items-center gap-2">
-                <button onClick={() => exportExcel(regRows, 'Vehicle Washing Log')} disabled={pdfBusy || regRows.length === 0} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-50">
-                  <FileSpreadsheet size={14} /> Excel
-                </button>
-                <button onClick={() => exportPdf(regRows, 'Vehicle Washing Log')} disabled={pdfBusy || regRows.length === 0} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-50">
-                  <FileText size={14} /> PDF
-                </button>
-              </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-[var(--text-muted)]">Every matching record is exported, including plans.</span>
+            <div className="ms-auto flex flex-wrap gap-2">
+              <button onClick={() => exportExcel(regRows, 'Vehicle Washing Log')} disabled={pdfBusy || regRows.length === 0} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-50"><FileSpreadsheet size={14} /> Excel</button>
+              <button onClick={() => exportPdf(regRows, 'Vehicle Washing Log')} disabled={pdfBusy || regRows.length === 0} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-50"><FileText size={14} /> PDF</button>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
-              <div className="text-xs text-[var(--text-muted)] space-y-1">
-                <span>From</span>
-                <DateField className="text-sm" value={regFilters.from} onChange={(v) => setRegFilter('from', v)} placeholder="From date" ariaLabel="Log from date" />
-              </div>
-              <div className="text-xs text-[var(--text-muted)] space-y-1">
-                <span>To</span>
-                <DateField className="text-sm" value={regFilters.to} onChange={(v) => setRegFilter('to', v)} placeholder="To date" ariaLabel="Log to date" min={regFilters.from || undefined} />
-              </div>
-              <label className="text-xs text-[var(--text-muted)] space-y-1">
-                <span>Asset</span>
-                <input value={regFilters.assetNo} onChange={(e) => setRegFilter('assetNo', e.target.value)} className={inputCls} placeholder="exact asset number" />
-              </label>
-              <label className="text-xs text-[var(--text-muted)] space-y-1">
-                <span>Site</span>
-                <select value={regFilters.site} onChange={(e) => setRegFilter('site', e.target.value)} className={inputCls}>
-                  <option value="All">All sites</option>
-                  {siteOptions.map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </label>
-              <label className="text-xs text-[var(--text-muted)] space-y-1">
-                <span>Status</span>
-                <select value={regFilters.status} onChange={(e) => setRegFilter('status', e.target.value)} className={inputCls}>
-                  <option value="All">All statuses</option>
-                  {WASH_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </label>
-              <label className="text-xs text-[var(--text-muted)] space-y-1">
-                <span>Wash type</span>
-                <select value={regFilters.type} onChange={(e) => setRegFilter('type', e.target.value)} className={inputCls}>
-                  <option value="All">All types</option>
-                  {WASH_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                </select>
-              </label>
-            </div>
-            <div className="flex items-center gap-3">
-              <button onClick={clearRegFilters} className="inline-flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
-                <X size={14} /> Reset
-              </button>
-              <span className="text-xs text-[var(--text-muted)]">{regRows.length} record(s) match. The download carries exactly these rows.</span>
-            </div>
-          </Card>
+          </div>
 
           {/* What the cost column on these records actually says. Washing is not
               reported as a cost driver anywhere; this is a per-record fact. */}

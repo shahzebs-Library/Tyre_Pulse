@@ -1,12 +1,13 @@
-﻿import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react'
-const h = vi.hoisted(() => ({ country: 'KSA', language: 'en', profile: {}, load: vi.fn(), people: vi.fn(), sites: vi.fn(), roles: vi.fn(), save: vi.fn(), publish: vi.fn(), retire: vi.fn(), simulate: vi.fn(), events: vi.fn() }))
+const h = vi.hoisted(() => ({ country: 'KSA', language: 'en', profile: {}, load: vi.fn(), people: vi.fn(), sites: vi.fn(), roles: vi.fn(), save: vi.fn(), publish: vi.fn(), retire: vi.fn(), simulate: vi.fn(), events: vi.fn(), coverage: vi.fn() }))
 vi.mock('../contexts/SettingsContext', () => ({ useSettings: () => ({ activeCountry: h.country }), COUNTRIES: ['KSA', 'UAE'] }))
 vi.mock('../contexts/LanguageContext', () => ({ useLanguage: () => ({ language: h.language, isRTL: h.language === 'ar' }) }))
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ profile: h.profile }) }))
 vi.mock('../components/ui/PageHeader', () => ({ default: ({ title, actions }) => <header><h1>{title}</h1>{actions}</header> }))
 vi.mock('../components/ui/TablePagination', () => ({ default: () => null, usePagedRows: rows => ({ pageRows: rows }) }))
-vi.mock('../lib/api/approvalMatrix', () => ({ listApprovalPolicies: h.load, listApprovalPeople: h.people, listApprovalRoles: h.roles, saveApprovalPolicy: h.save, publishApprovalPolicy: h.publish, retireApprovalPolicy: h.retire, simulateApprovalPolicy: h.simulate, listApprovalPolicyEvents: h.events }))
+vi.mock('../lib/api/approvalMatrix', () => ({ listApprovalPolicies: h.load, listApprovalPeople: h.people, listApprovalRoles: h.roles, saveApprovalPolicy: h.save, publishApprovalPolicy: h.publish, retireApprovalPolicy: h.retire, simulateApprovalPolicy: h.simulate, listApprovalPolicyEvents: h.events, getApprovalRegionCoverage: h.coverage }))
+vi.mock('react-router-dom', () => ({ Link: ({ to, children }) => <a href={to}>{children}</a> }))
 vi.mock('../lib/api/sites', () => ({ listSites: h.sites }))
 import ApprovalMatrix from '../pages/ApprovalMatrix'
 const draft = { id: 'p1', name: 'Inspection approval', entity_type: 'inspection', priority: 0, version: 1, state: 'draft', updated_at: 'stamp', match_country: 'KSA', stages: [{ name: 'Supervisor', approver_role: 'Manager', require_signature: true, prevent_self_approval: true, distinct_reviewer: true }], change_reason: 'New governance' }
@@ -14,6 +15,7 @@ beforeEach(() => {
   vi.clearAllMocks(); h.country = 'KSA'; h.language = 'en'
   h.profile = { id: 'admin', org_id: 'org', role: 'Admin' }
   h.load.mockResolvedValue([draft]); h.people.mockResolvedValue([{ id: 'u1', full_name: 'Reviewer One', role: 'Manager', countries: ['KSA'], sites: ['West'] }]); h.sites.mockResolvedValue([{ id: 's1', name: 'West', country: 'KSA' }, { id: 's2', name: 'East', country: 'UAE' }]); h.roles.mockResolvedValue(['Manager']); h.events.mockResolvedValue([])
+  h.coverage.mockResolvedValue({ regions: [], unmapped_sites: [] })
 })
 describe('governed Approval Matrix', () => {
   it('clears administration state and stops reading when administrator permission is revoked', async () => {
@@ -127,5 +129,25 @@ describe('governed Approval Matrix', () => {
     await screen.findByRole('button', { name: 'تعديل المسودة' })
     expect(screen.getByRole('heading', { name: 'مصفوفة الموافقات' })).toBeTruthy()
     expect(container.firstChild).toHaveAttribute('dir', 'rtl')
+  })
+  it('shows which route each region of vehicles gets and names base locations with no region', async () => {
+    h.coverage.mockResolvedValue({ regions: [
+      { country: 'KSA', region: 'CENTRAL', vehicles: 491, sites: ['NHC'], route: 'KSA Central - Sajid', route_status: 'matched' },
+      { country: 'KSA', region: 'WESTERN', vehicles: 118, sites: ['JEDDAH'], route: null, route_status: 'no_route' },
+    ], unmapped_sites: [{ country: 'KSA', site: 'GULF OF AQABA', vehicles: 6 }] })
+    render(<ApprovalMatrix />)
+    const card = await screen.findByRole('region', { name: 'Regional coverage' })
+    expect(within(card).getByText('KSA Central - Sajid')).toBeInTheDocument()
+    expect(within(card).getByText('No published route')).toBeInTheDocument()
+    expect(within(card).getByRole('alert')).toHaveTextContent('GULF OF AQABA (6)')
+  })
+  it('tests a real vehicle and says the region came from its base location', async () => {
+    h.simulate.mockResolvedValue({ mode: 'legacy', status: 'no_route', region: 'CENTRAL', region_basis: 'vehicle_base_site', vehicle_base_site: 'NHC', policy: null, candidates: [] })
+    render(<ApprovalMatrix />)
+    const sim = await screen.findByRole('region', { name: 'Routing simulation' })
+    fireEvent.change(within(sim).getByLabelText(/Vehicle/), { target: { value: 'TM372' } })
+    fireEvent.click(within(sim).getByRole('button', { name: 'Simulate' }))
+    await waitFor(() => expect(h.simulate).toHaveBeenCalledWith(expect.objectContaining({ asset_no: 'TM372' }), null))
+    expect(await within(sim).findByText(/CENTRAL \(from vehicle base NHC\)/)).toBeInTheDocument()
   })
 })

@@ -448,6 +448,7 @@ export default function BrandPerformance() {
         ]
         return (
           <EnterpriseTable
+            viewKey="brand-performance"
             reportMeta={reportMeta}
             columns={brandColumns}
             data={metrics}

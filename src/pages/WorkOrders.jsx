@@ -22,6 +22,8 @@ import useLatestRequest from '../lib/useLatestRequest'
 import { logAudit } from '../lib/audit'
 import { publish } from '../lib/events'
 import PageHeader from '../components/ui/PageHeader'
+import Card, { CardBody, CardHeader } from '../components/ui/Card'
+import Modal from '../components/ui/Modal'
 import DateField from '../components/ui/DateField'
 import StatusBadge from '../components/ui/StatusBadge'
 import CustomFieldsPanel from '../components/CustomFieldsPanel'
@@ -356,6 +358,18 @@ export default function WorkOrders() {
     if (sortField !== field) return <ChevronDown size={14} className="text-[var(--text-dim)]" />
     return sortDir === 'asc' ? <ChevronUp size={14} className="text-blue-400" /> : <ChevronDown size={14} className="text-blue-400" />
   }
+
+  // ── Dialog close handlers ─────────────────────────────────────────────────
+  // Stable identities on purpose. Modal's behaviour hook lists `onClose` in its
+  // dependency array, so an inline arrow re-runs the effect on EVERY render of
+  // this page: the panel re-takes focus and the cleanup hands focus back to
+  // whatever opened the dialog, which steals focus from a field mid-typing.
+  const closeForm = useCallback(() => setShowForm(false), [])
+  const closeDelete = useCallback(() => { setDeleteTarget(null); setDeleteError('') }, [])
+  const closeBulkDelete = useCallback(() => {
+    if (saving) return
+    setBulkDeleteOpen(false); setDeleteError('')
+  }, [saving])
 
   // ── Form helpers ──────────────────────────────────────────────────────────
   function openNew() {
@@ -703,7 +717,7 @@ export default function WorkOrders() {
       )}
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-[var(--gap-grid)]">
         {[
           { label: t('workorders.kpi.open'), value: stats.open, color: 'blue', icon: Clock },
           { label: t('workorders.kpi.inProgress'), value: stats.inProgress, color: 'yellow', icon: Play },
@@ -713,49 +727,53 @@ export default function WorkOrders() {
           { label: t('workorders.kpi.avgDaysOpen'), value: stats.avgDaysOpen, color: 'purple', icon: Calendar },
           { label: t('workorders.kpi.totalCostAll'), value: `${activeCurrency} ${(stats.totalCost / 1000).toFixed(1)}k`, color: 'teal', icon: DollarSign },
         ].map(({ label, value, color, icon: Icon }) => (
-          <div key={label} className="card p-4">
-            <div className={`flex items-center gap-2 mb-2`}>
+          <Card key={label} pad="tight">
+            <div className="flex items-center gap-[var(--space-2)] mb-[var(--space-2)]">
               <Icon size={16} className={KPI_TEXT_COLOR[color]} />
               <span className="text-[var(--text-secondary)] text-xs">{label}</span>
             </div>
             <div className={`text-2xl font-bold tabular-nums ${KPI_TEXT_COLOR[color]}`}>{value}</div>
-          </div>
+          </Card>
         ))}
       </div>
 
       {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="card p-5">
-          <h3 className="text-[var(--text-primary)] font-semibold mb-4">{t('workorders.charts.byType')}</h3>
-          {typeChartData.labels.length > 0 ? (
-            <div className="h-52">
-              <Bar data={typeChartData} options={{ ...CHART_OPTS, plugins: { ...CHART_OPTS.plugins, legend: { display: false } } }} />
-            </div>
-          ) : (
-            <div className="h-52 flex flex-col items-center justify-center gap-2 text-[var(--text-muted)]">
-              <Wrench size={28} className="opacity-30" />
-              <p className="text-sm">{t('workorders.charts.noWorkOrders')}</p>
-            </div>
-          )}
-        </div>
-        <div className="card p-5">
-          <h3 className="text-[var(--text-primary)] font-semibold mb-4">{t('workorders.charts.statusDistribution')}</h3>
-          {statusChartData.labels.length > 0 ? (
-            <div className="h-52">
-              <Doughnut data={statusChartData} options={{ ...CHART_OPTS, scales: undefined, plugins: { ...CHART_OPTS.plugins, legend: { position: 'right', labels: { color: '#9ca3af', boxWidth: 12, font: { size: 11 } } } } }} />
-            </div>
-          ) : (
-            <div className="h-52 flex flex-col items-center justify-center gap-2 text-[var(--text-muted)]">
-              <CheckCircle size={28} className="opacity-30" />
-              <p className="text-sm">{t('workorders.charts.noStatusData')}</p>
-            </div>
-          )}
-        </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-[var(--space-6)]">
+        <Card>
+          <CardHeader level={2} title={t('workorders.charts.byType')} />
+          <CardBody>
+            {typeChartData.labels.length > 0 ? (
+              <div className="h-52">
+                <Bar data={typeChartData} options={{ ...CHART_OPTS, plugins: { ...CHART_OPTS.plugins, legend: { display: false } } }} />
+              </div>
+            ) : (
+              <div className="h-52 flex flex-col items-center justify-center gap-[var(--space-2)] text-[var(--text-muted)]">
+                <Wrench size={28} className="opacity-30" />
+                <p className="text-sm">{t('workorders.charts.noWorkOrders')}</p>
+              </div>
+            )}
+          </CardBody>
+        </Card>
+        <Card>
+          <CardHeader level={2} title={t('workorders.charts.statusDistribution')} />
+          <CardBody>
+            {statusChartData.labels.length > 0 ? (
+              <div className="h-52">
+                <Doughnut data={statusChartData} options={{ ...CHART_OPTS, scales: undefined, plugins: { ...CHART_OPTS.plugins, legend: { position: 'right', labels: { color: '#9ca3af', boxWidth: 12, font: { size: 11 } } } } }} />
+              </div>
+            ) : (
+              <div className="h-52 flex flex-col items-center justify-center gap-[var(--space-2)] text-[var(--text-muted)]">
+                <CheckCircle size={28} className="opacity-30" />
+                <p className="text-sm">{t('workorders.charts.noStatusData')}</p>
+              </div>
+            )}
+          </CardBody>
+        </Card>
       </div>
 
       {/* Filters */}
-      <div className="card p-4">
-        <div className="flex flex-wrap gap-3">
+      <Card pad="tight">
+        <div className="flex flex-wrap gap-[var(--space-3)]">
           <div className="relative flex-1 min-w-48">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
             <input
@@ -793,7 +811,7 @@ export default function WorkOrders() {
           )}
           <span className="ml-auto self-center text-[var(--text-secondary)] text-sm">{t('workorders.filters.results', { count: total })}</span>
         </div>
-      </div>
+      </Card>
 
       {/* Table */}
       {isAdmin && selectedIds.size > 0 && (
@@ -809,7 +827,7 @@ export default function WorkOrders() {
         </div>
       )}
 
-      <div className="card p-0 overflow-hidden">
+      <Card pad="none" clip>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -920,91 +938,95 @@ export default function WorkOrders() {
             </div>
           </div>
         )}
-      </div>
+      </Card>
 
       {/* ── Create / Edit Modal ─────────────────────────────────────────────── */}
-      <AnimatePresence>
-        {showForm && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-            <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }}
-              className="bg-[var(--surface-1)] border border-[var(--border-bright)] rounded-2xl w-full max-w-3xl max-h-[92vh] overflow-y-auto shadow-2xl">
-              <div className="sticky top-0 bg-[var(--surface-1)] border-b border-[var(--border-dim)] px-6 py-4 flex items-center justify-between z-10">
-                <h2 className="text-[var(--text-primary)] font-bold text-lg">{editOrder ? t('workorders.form.editTitle') : t('workorders.form.newTitle')}</h2>
-                <button onClick={() => setShowForm(false)} className="p-2 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] transition-colors"><X size={18} /></button>
-              </div>
-              <div className="p-6">
-                <JobCardForm
-                  value={formData}
-                  onChange={(k, v) => setFormData(f => ({ ...f, [k]: v }))}
-                  row={editOrder}
-                  mode={editOrder ? 'edit' : 'create'}
-                  locked={!!(editOrder && wfLocked)}
-                  onSave={handleSave}
-                  onCancel={() => setShowForm(false)}
-                  saving={saving}
-                  assetLookup={lookupAsset}
-                  siteOptions={siteOptions}
-                  currency={activeCurrency}
-                />
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* closeOnBackdrop is FALSE on purpose: the hand-rolled panel this replaced
+          had no backdrop handler at all, and a stray click behind a part-filled
+          job card must not discard it. */}
+      <Modal
+        open={showForm}
+        onClose={closeForm}
+        title={editOrder ? t('workorders.form.editTitle') : t('workorders.form.newTitle')}
+        size="lg"
+        closeOnBackdrop={false}
+      >
+        <JobCardForm
+          value={formData}
+          onChange={(k, v) => setFormData(f => ({ ...f, [k]: v }))}
+          row={editOrder}
+          mode={editOrder ? 'edit' : 'create'}
+          locked={!!(editOrder && wfLocked)}
+          onSave={handleSave}
+          onCancel={closeForm}
+          saving={saving}
+          assetLookup={lookupAsset}
+          siteOptions={siteOptions}
+          currency={activeCurrency}
+        />
+      </Modal>
 
       {/* ── Delete confirmation (Admin only) ─────────────────────────────────── */}
       {deleteTarget && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-          onClick={() => { setDeleteTarget(null); setDeleteError('') }}>
-          <div className="bg-[var(--surface-1)] border border-red-800/50 rounded-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
-            <div className="flex gap-3 mb-4">
-              <AlertTriangle size={20} className="text-red-400 shrink-0 mt-0.5" />
-              <div>
-                <p className="text-[var(--text-primary)] font-semibold">{t('workorders.delete.title', { no: deleteTarget.work_order_no })}</p>
-                <p className="text-[var(--text-secondary)] text-sm mt-1">{t('workorders.delete.warning')}</p>
-              </div>
-            </div>
-            {deleteError && (
-              <p className="text-sm text-red-300 bg-red-900/30 border border-red-700 rounded-lg p-2.5 mb-4">{deleteError}</p>
-            )}
-            <div className="flex gap-3">
+        <Modal
+          open
+          onClose={closeDelete}
+          size="sm"
+          title={
+            <span className="flex items-center gap-[var(--space-2)]">
+              <AlertTriangle size={18} className="text-red-400 shrink-0" />
+              {t('workorders.delete.title', { no: deleteTarget.work_order_no })}
+            </span>
+          }
+          subtitle={t('workorders.delete.warning')}
+          footer={
+            <div className="flex gap-[var(--space-3)] w-full">
               <button onClick={confirmDelete} disabled={saving}
                 className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-semibold disabled:opacity-50 transition-colors">
                 {saving ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
                 {saving ? t('workorders.delete.deleting') : t('workorders.delete.confirm')}
               </button>
-              <button onClick={() => { setDeleteTarget(null); setDeleteError('') }} className="btn-secondary">{t('workorders.delete.cancel')}</button>
+              <button onClick={closeDelete} className="btn-secondary">{t('workorders.delete.cancel')}</button>
             </div>
-          </div>
-        </div>
+          }
+        >
+          {deleteError
+            ? <p className="text-sm text-red-300 bg-red-900/30 border border-red-700 rounded-lg p-2.5">{deleteError}</p>
+            : null}
+        </Modal>
       )}
 
       {/* ── Bulk delete confirmation (Admin only) ────────────────────────────── */}
+      {/* The backdrop stayed inert while a delete was in flight; closeBulkDelete
+          keeps that guard, and closeOnBackdrop mirrors it. */}
       {bulkDeleteOpen && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-          onClick={() => { if (!saving) { setBulkDeleteOpen(false); setDeleteError('') } }}>
-          <div className="bg-[var(--surface-1)] border border-red-800/50 rounded-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
-            <div className="flex gap-3 mb-4">
-              <AlertTriangle size={20} className="text-red-400 shrink-0 mt-0.5" />
-              <div>
-                <p className="text-[var(--text-primary)] font-semibold">{t('workorders.bulkDelete.question', { count: selectedIds.size })}</p>
-                <p className="text-[var(--text-secondary)] text-sm mt-1">{t('workorders.bulkDelete.warning')}</p>
-              </div>
-            </div>
-            {deleteError && (
-              <p className="text-sm text-red-300 bg-red-900/30 border border-red-700 rounded-lg p-2.5 mb-4">{deleteError}</p>
-            )}
-            <div className="flex gap-3">
+        <Modal
+          open
+          onClose={closeBulkDelete}
+          closeOnBackdrop={!saving}
+          size="sm"
+          title={
+            <span className="flex items-center gap-[var(--space-2)]">
+              <AlertTriangle size={18} className="text-red-400 shrink-0" />
+              {t('workorders.bulkDelete.question', { count: selectedIds.size })}
+            </span>
+          }
+          subtitle={t('workorders.bulkDelete.warning')}
+          footer={
+            <div className="flex gap-[var(--space-3)] w-full">
               <button onClick={confirmBulkDelete} disabled={saving}
                 className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-semibold disabled:opacity-50 transition-colors">
                 {saving ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
                 {saving ? t('workorders.bulkDelete.deleting') : t('workorders.bulkDelete.confirm', { count: selectedIds.size })}
               </button>
-              <button onClick={() => { setBulkDeleteOpen(false); setDeleteError('') }} disabled={saving} className="btn-secondary">{t('workorders.bulkDelete.cancel')}</button>
+              <button onClick={closeBulkDelete} disabled={saving} className="btn-secondary">{t('workorders.bulkDelete.cancel')}</button>
             </div>
-          </div>
-        </div>
+          }
+        >
+          {deleteError
+            ? <p className="text-sm text-red-300 bg-red-900/30 border border-red-700 rounded-lg p-2.5">{deleteError}</p>
+            : null}
+        </Modal>
       )}
 
       {/* ── Detail Drawer ────────────────────────────────────────────────────── */}

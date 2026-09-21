@@ -626,6 +626,7 @@ export default function FleetMaster() {
               from, so returning from a vehicle lands back on the same row. */}
           <div ref={listRef}>
           <EnterpriseTable
+            viewKey="fleet-master"
             reportMeta={reportMeta}
             columns={tableColumns}
             data={loading ? [] : records}

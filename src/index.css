@@ -105,11 +105,54 @@ html.rtl .rtl-flip { transform: scaleX(-1); }
   --surface:        var(--surface-1);
   --border:         var(--border-dim);
 
-  /* Spacing */
+  /* Radius */
   --radius-sm:      8px;
   --radius-card:    16px;
   --radius-lg:      20px;
   --radius-xl:      24px;
+
+  /* ── Spacing scale (4pt rhythm) ──────────────────────────────────────────
+     One ladder for every gap, pad and stack in the kit. Do NOT invent a new
+     increment in a component — pick the nearest step. `--pad-card` and
+     `--gap-grid` are the two density-aware aliases; they are re-pointed under
+     html[data-density='compact'] so one attribute retightens the whole app. */
+  --space-0:        0;
+  --space-1:        0.25rem;  /*  4px */
+  --space-2:        0.5rem;   /*  8px */
+  --space-3:        0.75rem;  /* 12px */
+  --space-4:        1rem;     /* 16px */
+  --space-5:        1.25rem;  /* 20px */
+  --space-6:        1.5rem;   /* 24px */
+  --space-8:        2rem;     /* 32px */
+  --space-10:       2.5rem;   /* 40px */
+  --space-12:       3rem;     /* 48px */
+
+  --pad-card:       var(--space-5);
+  --pad-card-tight: var(--space-4);
+  --gap-grid:       var(--space-4);
+  --gap-section:    var(--space-6);
+
+  /* ── Type scale ──────────────────────────────────────────────────────────
+     Six steps, no more. `--fs-body` is 0.9375rem (15px at the 16px root) which
+     is the density enterprise tables need while staying above the 12px floor.
+     Line heights are paired to the step so vertical rhythm survives wrapping. */
+  --fs-xs:          0.75rem;    /* 12px - table meta, badges */
+  --fs-sm:          0.8125rem;  /* 13px - secondary, captions */
+  --fs-body:        0.9375rem;  /* 15px - body, table cells */
+  --fs-md:          1rem;       /* 16px - card titles */
+  --fs-lg:          1.25rem;    /* 20px - section headings */
+  --fs-xl:          1.75rem;    /* 28px - KPI values, page titles */
+
+  --lh-tight:       1.25;
+  --lh-snug:        1.4;
+  --lh-body:        1.55;
+
+  --fw-regular:     400;
+  --fw-medium:      500;
+  --fw-semibold:    600;
+
+  /* Tabular figures for any column of numbers - stops KPI/table jitter. */
+  --num-tabular:    "tnum" 1, "lnum" 1;
 
   /* Shadows */
   --shadow-card:    0 1px 2px rgba(0,0,0,0.6), 0 8px 32px rgba(0,0,0,0.45);
@@ -248,6 +291,14 @@ html.rtl .rtl-flip { transform: scaleX(-1); }
    want more on screen. Comfortable is the default. Driven by data-density on
    <html> from ThemeContext. */
 html[data-density='compact'] { font-size: 15px; }              /* vs 16px default */
+/* Re-point the density-aware aliases once, and every kit component that reads
+   them retightens together. Components must never read a raw increment. */
+html[data-density='compact'] {
+  --pad-card:       var(--space-4);
+  --pad-card-tight: var(--space-3);
+  --gap-grid:       var(--space-3);
+  --gap-section:    var(--space-5);
+}
 html[data-density='compact'] .card { padding: 1rem; }
 html[data-density='compact'] table th,
 html[data-density='compact'] table td { padding-top: 0.4rem; padding-bottom: 0.4rem; }
@@ -374,6 +425,53 @@ html.reduce-motion *::after {
     box-shadow: var(--shadow-card);
     transform: translateY(-1px);
   }
+
+  /* ── Card primitive (src/components/ui/Card.jsx) ───────────────────────────
+     Distinct from the legacy `.card` class on purpose: no overflow:hidden (so a
+     popover or menu inside is never clipped) and no backdrop-filter (nothing to
+     blur behind an opaque surface). Only transitions what is cheap to animate:
+     border-color and box-shadow, never layout. */
+  /* TWO-VARIABLE INDIRECTION, AND BOTH HALVES ARE LOAD-BEARING.
+     Card sets `border` and `box-shadow` INLINE so that stray `border-*` utility
+     classes stay inert and `tone` remains the single sanctioned route. But an
+     inline declaration also beats the :hover rule below, which silently killed
+     the hover cue on every interactive card - the tell was that `cursor` and the
+     focus ring still worked, because those are the two Card never sets inline.
+     Resolving them through variables fixes that without giving utilities a way
+     back in: the component writes `--tp-card-tone` (its own, never overridden),
+     while `--tp-card-border` and `--tp-card-shadow` are owned HERE, so a rule
+     can re-point them on hover even though the inline declaration still wins.
+     Keep the two names distinct - collapsing them puts the tone back inline and
+     the hover cue dies again. */
+  .tp-card {
+    --tp-card-border: var(--tp-card-tone, var(--border-brand));
+    --tp-card-shadow: var(--shadow-card);
+    /* Default text colour lives HERE, not inline. Padding, background and
+       border are inline on purpose - `pad` and `tone` are the API and a stray
+       utility must not fight them - but colour has no such API, and setting it
+       inline silently killed every `text-*` class an author put on a Card.
+       From the utilities layer a `text-*` class now wins, as intended. */
+    color: var(--card-text);
+    transition: border-color 0.2s var(--ease-smooth),
+                box-shadow   0.2s var(--ease-smooth);
+  }
+  .tp-card--interactive {
+    cursor: pointer;
+  }
+  /* Re-points the VARIABLES, not border-color/box-shadow directly: the inline
+     declarations on the component win for those two properties, but they
+     resolve through these, so this is what actually reaches the screen. */
+  .tp-card--interactive:hover {
+    --tp-card-border: var(--border-bright);
+    --tp-card-shadow: var(--shadow-glow);
+  }
+  .tp-card--interactive:focus-visible {
+    outline: 2px solid var(--accent-ring);
+    outline-offset: 2px;
+  }
+  /* A non-interactive card must not imply it is clickable. Re-points the
+     variable for the same reason as the rule above. */
+  .tp-card:not(.tp-card--interactive):hover { --tp-card-shadow: var(--shadow-card); }
 
   /* ── Buttons ───────────────────────────────────────────────────────────── */
   .btn-primary {
@@ -967,6 +1065,14 @@ html.light .card {
   border-color: #e6e9ee;
   box-shadow: var(--shadow-card);
   color: #101828;
+  /* The base rule sets backdrop-filter + will-change for the dark glass look.
+     Over an OPAQUE white card both render nothing, yet each one still forces
+     its own compositor layer - measured 1,712 `.card` instances across the
+     pages, so this was 1,712 needless layers on the light default. Unsetting
+     them is invisible in light mode and costs nothing in dark (scoped here). */
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  will-change: auto;
 }
 /* No accent hairline in light — keep it clean and flat. */
 html.light .card::before { background: transparent; }

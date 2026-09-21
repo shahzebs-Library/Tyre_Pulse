@@ -332,6 +332,7 @@ const ReportBuilder          = lazy(() => import('./pages/ReportBuilder'))
 const SystemHealth           = lazy(() => import('./pages/SystemHealth'))
 const SecurityCenter         = lazy(() => import('./pages/SecurityCenter'))
 const DashboardBuilder       = lazy(() => import('./pages/DashboardBuilder'))
+const DesignSystem           = lazy(() => import('./pages/DesignSystem'))
 const TenantHealth           = lazy(() => import('./pages/TenantHealth'))
 const ExecutiveAnalytics     = lazy(() => import('./pages/ExecutiveAnalytics'))
 const PermissionMatrix       = lazy(() => import('./pages/PermissionMatrix'))
@@ -833,6 +834,9 @@ function MainApp() {
                       <Route path="/rfid-registry" element={<Safe><ModuleRoute moduleKey="tyre_records"><RfidRegistry /></ModuleRoute></Safe>} />
                       <Route path="/report-builder"      element={<Safe><RoleRoute allowed={['Admin']}><ReportBuilder /></RoleRoute></Safe>} />
                       <Route path="/dashboard-builder"   element={<Safe><RoleRoute allowed={['Admin']}><DashboardBuilder /></RoleRoute></Safe>} />
+                      {/* Internal reference for the shared UI kit. Admin-only: it is a
+                          developer surface, not a customer one. */}
+                      <Route path="/design-system"       element={<Safe><RoleRoute allowed={['Admin']}><DesignSystem /></RoleRoute></Safe>} />
                       <Route path="/executive-analytics" element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ExecutiveAnalytics /></RoleRoute></Safe>} />
                       <Route path="/security-center"     element={<Navigate to="/console/access?tab=security" replace />} />
                       <Route path="/system-health"       element={<Safe><RoleRoute allowed={['Admin']}><SystemHealth /></RoleRoute></Safe>} />

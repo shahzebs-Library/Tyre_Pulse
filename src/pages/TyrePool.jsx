@@ -30,6 +30,7 @@ import {
   Lightbulb, MapPin, Warehouse, Gauge, Truck, Wrench, CheckCircle2, Package,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import Card, { CardBody, CardHeader } from '../components/ui/Card'
 import NotInUseNotice from '../components/ui/NotInUseNotice'
 import { useSettings } from '../contexts/SettingsContext'
 import {
@@ -380,7 +381,10 @@ export default function TyrePool() {
       {tab === 'manager' && (
         <div className="space-y-6">
           {notProvisioned && (
-            <div className="card border border-amber-800/50 flex items-start gap-3">
+            // Card is `flex flex-col`; Tailwind emits .flex-col after .flex-row,
+            // so a `flex-row` class here would silently lose. Direction goes in
+            // `style`, which Card spreads last.
+            <Card tone="warn" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
               <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
               <div>
                 <p className="text-amber-300 font-medium">The hot-spare Pool Manager isn’t enabled on this database yet.</p>
@@ -388,35 +392,46 @@ export default function TyrePool() {
                   Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V209_TYRE_POOL.sql</span>, then reload. The Pool analytics tab works without it.
                 </p>
               </div>
-            </div>
+            </Card>
           )}
 
           {mgrError && (
-            <div className="card border border-red-800/50 flex items-start gap-3">
+            <Card tone="crit" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
               <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
               <div><p className="text-red-300 font-medium">Couldn’t load the tyre pool.</p><p className="text-[var(--text-muted)] text-sm mt-1">{mgrError}</p></div>
-            </div>
+            </Card>
           )}
 
           {/* Stat cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-[var(--gap-grid)]">
             {mgrKpis.map((k) => {
               const Icon = k.icon
               return (
-                <div key={k.label} className="card">
+                <Card key={k.label}>
                   <div className="flex items-center justify-between">
                     <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                     <Icon size={16} className={k.tone} />
                   </div>
                   <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{entries === null ? '—' : k.value}</p>
-                </div>
+                </Card>
               )
             })}
           </div>
 
           {/* Replenishment banner */}
           {entries !== null && replen.gap > 0 && (
-            <div className={`card flex items-start gap-3 border-l-4 ${replen.status === 'critical' ? 'border-l-red-500 border-red-800/40' : 'border-l-amber-400 border-amber-800/40'}`}>
+            <Card
+              tone={replen.status === 'critical' ? 'crit' : 'warn'}
+              className="items-start gap-[var(--space-3)]"
+              style={{
+                flexDirection: 'row',
+                // `border-l-4` / `border-l-*` from a class are dead against Card's
+                // inline `border` and `borderColor`, so the left accent bar is set
+                // as longhands here — Card spreads `style` last, so these win.
+                borderLeftWidth: '4px',
+                borderLeftColor: replen.status === 'critical' ? '#ef4444' : '#fbbf24',
+              }}
+            >
               <Lightbulb size={18} className={`mt-0.5 shrink-0 ${replen.status === 'critical' ? 'text-red-400' : 'text-amber-400'}`} />
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-[var(--text-primary)]">Pool replenishment recommended</p>
@@ -428,22 +443,34 @@ export default function TyrePool() {
               <span className={`ml-auto shrink-0 inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${replen.status === 'critical' ? 'bg-red-500/15 text-red-300 border-red-500/30' : 'bg-amber-500/15 text-amber-300 border-amber-500/30'}`}>
                 {replen.status}
               </span>
-            </div>
+            </Card>
           )}
           {entries !== null && !notProvisioned && replen.gap === 0 && stats.total > 0 && (
-            <div className="card flex items-center gap-3 border-l-4 border-l-emerald-500 border-emerald-800/40">
+            <Card
+              tone="good"
+              className="items-center gap-[var(--space-3)]"
+              style={{ flexDirection: 'row', borderLeftWidth: '4px', borderLeftColor: '#10b981' }}
+            >
               <CheckCircle2 size={18} className="text-emerald-400 shrink-0" />
               <p className="text-sm text-[var(--text-secondary)]">{replen.advice} <span className="text-[var(--text-muted)]">({replen.current} available of {replen.recommended} recommended)</span></p>
-            </div>
+            </Card>
           )}
 
           {/* Add form */}
           {showAdd && !notProvisioned && (
-            <div className="card">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2"><Plus size={15} /> Add tyre to pool</h3>
-                <button onClick={() => setShowAdd(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={16} /></button>
-              </div>
+            // Stays an INLINE panel, not a Modal. It is disclosed in place by the
+            // header toggle and sits in the page flow above the entry list; moving
+            // it into a dialog would change the interaction, not just the styling.
+            // No `clip` either — it holds a native <select>.
+            <Card>
+              <CardHeader
+                level={2}
+                icon={Plus}
+                title="Add tyre to pool"
+                actions={
+                  <button type="button" onClick={() => setShowAdd(false)} aria-label="Close add form" className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={16} /></button>
+                }
+              />
               <form onSubmit={submitAdd} className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div>
@@ -481,7 +508,7 @@ export default function TyrePool() {
                   </button>
                 </div>
               </form>
-            </div>
+            </Card>
           )}
 
           {/* Status filter pills */}
@@ -513,18 +540,26 @@ export default function TyrePool() {
               {[0, 1, 2].map((i) => <div key={i} className="h-24 bg-[var(--input-bg)] rounded-xl animate-pulse" />)}
             </div>
           ) : entries.length === 0 ? (
-            <div className="card py-16 text-center text-[var(--text-muted)]">
-              <Package size={26} className="mx-auto mb-2 opacity-60" />
-              <p className="font-semibold text-[var(--text-secondary)]">{notProvisioned ? 'Enable the module to start managing spares.' : (statusFilter ? `No ${STATUS_META[statusFilter]?.label.toLowerCase()} entries.` : 'No pool entries yet.')}</p>
-              {!notProvisioned && !statusFilter && <p className="text-sm mt-1">Add a tyre to the hot-spare pool to get started.</p>}
-            </div>
+            // `py-16` as a utility would be DEAD here — Card sets `padding`
+            // inline and inline beats a class, so the empty state would silently
+            // collapse. The vertical room is a token on an inner element instead.
+            <Card className="text-center text-[var(--text-muted)]">
+              <div style={{ paddingTop: 'var(--space-10)', paddingBottom: 'var(--space-10)' }}>
+                <Package size={26} className="mx-auto mb-2 opacity-60" />
+                <p className="font-semibold text-[var(--text-secondary)]">{notProvisioned ? 'Enable the module to start managing spares.' : (statusFilter ? `No ${STATUS_META[statusFilter]?.label.toLowerCase()} entries.` : 'No pool entries yet.')}</p>
+                {!notProvisioned && !statusFilter && <p className="text-sm mt-1">Add a tyre to the hot-spare pool to get started.</p>}
+              </div>
+            </Card>
           ) : (
             <div className="space-y-3">
               {entries.map((e) => {
                 const act = action[e.id]
                 const busy = rowBusy === e.id
                 return (
-                  <div key={e.id} className="card">
+                  // Deliberately NOT `clip`: the Return panel below holds a native
+                  // <select>, and overflow:hidden on its container is the exact
+                  // clipping bug the Card primitive exists to end.
+                  <Card key={e.id}>
                     <div className="flex items-start justify-between gap-4 flex-wrap">
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -601,7 +636,7 @@ export default function TyrePool() {
                         </div>
                       </div>
                     )}
-                  </div>
+                  </Card>
                 )
               })}
             </div>
@@ -613,13 +648,13 @@ export default function TyrePool() {
       {tab === 'location' && (
         <div className="space-y-4">
           {notProvisioned ? (
-            <div className="card border border-amber-800/50 flex items-start gap-3">
+            <Card tone="warn" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
               <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
               <div>
                 <p className="text-amber-300 font-medium">The hot-spare Pool Manager isn’t enabled on this database yet.</p>
                 <p className="text-[var(--text-muted)] text-sm mt-1">Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V209_TYRE_POOL.sql</span>, then reload.</p>
               </div>
-            </div>
+            </Card>
           ) : (
             <>
               <p className="text-sm text-[var(--text-muted)]">Available spares by holding location — where deployable stock currently sits.</p>
@@ -628,22 +663,24 @@ export default function TyrePool() {
                   {[0, 1, 2].map((i) => <div key={i} className="h-28 bg-[var(--input-bg)] rounded-xl animate-pulse" />)}
                 </div>
               ) : locations.length === 0 ? (
-                <div className="card py-16 text-center text-[var(--text-muted)]">
-                  <Warehouse size={26} className="mx-auto mb-2 opacity-60" />
-                  <p className="font-semibold text-[var(--text-secondary)]">No available spares to locate.</p>
-                  <p className="text-sm mt-1">Available pool tyres appear here grouped by their holding location.</p>
-                </div>
+                <Card className="text-center text-[var(--text-muted)]">
+                  <div style={{ paddingTop: 'var(--space-10)', paddingBottom: 'var(--space-10)' }}>
+                    <Warehouse size={26} className="mx-auto mb-2 opacity-60" />
+                    <p className="font-semibold text-[var(--text-secondary)]">No available spares to locate.</p>
+                    <p className="text-sm mt-1">Available pool tyres appear here grouped by their holding location.</p>
+                  </div>
+                </Card>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-[var(--gap-grid)]">
                   {locations.map((loc) => (
-                    <div key={loc.location} className="card">
+                    <Card key={loc.location}>
                       <div className="flex items-center gap-2">
                         <Warehouse size={16} className="text-blue-400" />
                         <p className="text-sm font-semibold text-[var(--text-primary)] truncate">{loc.location}</p>
                       </div>
                       <p className="text-3xl font-black text-blue-400 mt-2">{loc.count}</p>
                       <p className="text-xs text-[var(--text-muted)] mt-0.5">available spare{loc.count === 1 ? '' : 's'}</p>
-                    </div>
+                    </Card>
                   ))}
                 </div>
               )}
@@ -656,42 +693,46 @@ export default function TyrePool() {
       {tab === 'analytics' && (
         <div className="space-y-6">
           {error && (
-            <div className="card border border-red-800/50 flex items-start gap-3">
+            <Card tone="crit" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
               <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
               <div><p className="text-red-300 font-medium">Couldn’t load tyre records.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
-            </div>
+            </Card>
           )}
 
           {/* KPI tiles */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-[var(--gap-grid)]">
             {kpis.map((k) => {
               const Icon = k.icon
               return (
-                <div key={k.label} className="card">
+                <Card key={k.label}>
                   <div className="flex items-center justify-between">
                     <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                     <Icon size={16} className={k.tone} />
                   </div>
                   <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
-                </div>
+                </Card>
               )
             })}
           </div>
 
           {/* Charts */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className="card">
-              <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Pool by brand</h3>
-              <div className="h-64">{pool.length ? <Doughnut data={donut(byBrand)} options={donutOpts} /> : <EmptyChart loading={rows === null} empty="No pool tyres." />}</div>
-            </div>
-            <div className="card">
-              <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Pool by size</h3>
-              <div className="h-64">{pool.length ? <Doughnut data={donut(bySize)} options={donutOpts} /> : <EmptyChart loading={rows === null} empty="No pool tyres." />}</div>
-            </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-[var(--gap-grid)]">
+            <Card>
+              <CardHeader level={2} title="Pool by brand" />
+              <CardBody style={{ height: '16rem' }}>
+                {pool.length ? <Doughnut data={donut(byBrand)} options={donutOpts} /> : <EmptyChart loading={rows === null} empty="No pool tyres." />}
+              </CardBody>
+            </Card>
+            <Card>
+              <CardHeader level={2} title="Pool by size" />
+              <CardBody style={{ height: '16rem' }}>
+                {pool.length ? <Doughnut data={donut(bySize)} options={donutOpts} /> : <EmptyChart loading={rows === null} empty="No pool tyres." />}
+              </CardBody>
+            </Card>
           </div>
 
-          {/* Filters */}
-          <div className="card space-y-3">
+          {/* Filters. No `clip` — three native <select> dropdowns live here. */}
+          <Card>
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative flex-1 min-w-[200px]">
                 <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
@@ -714,10 +755,12 @@ export default function TyrePool() {
                 {filtered.length} of {totalTyres} · {formatCurrencyCompact(filteredValue, activeCurrency)}
               </span>
             </div>
-          </div>
+          </Card>
 
-          {/* Table */}
-          <div className="card overflow-hidden !p-0">
+          {/* Pool register. Kept as raw table markup on purpose: composite cells
+              (brand · size, status badge, compact currency), its own
+              TablePagination and the page-level Excel/PDF export. */}
+          <Card pad="none" clip>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -754,7 +797,7 @@ export default function TyrePool() {
               </table>
             </div>
             <TablePagination {...pager} />
-          </div>
+          </Card>
         </div>
       )}
     </div>

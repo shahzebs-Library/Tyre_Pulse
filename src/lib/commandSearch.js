@@ -122,6 +122,7 @@ export const NAV_COMMANDS = [
   { id: 'scan',           label: 'Tyre Scan (QR)',       path: '/scan',         icon: 'QrCode' },
   // Platform (roadmap tranche)
   { id: 'report-builder',    label: 'Report Builder',      path: '/report-builder',    icon: 'FileText',   keywords: ['custom report', 'export', 'build'] },
+  { id: 'design-system',     label: 'Design System',       path: '/design-system',     icon: 'Layers',     keywords: ['ui kit', 'components', 'card', 'modal', 'tokens', 'style guide', 'storybook'] },
   { id: 'dashboard-builder', label: 'Dashboard Builder',   path: '/dashboard-builder', icon: 'LayoutGrid', keywords: ['widgets', 'layout', 'custom dashboard'] },
   { id: 'executive-analytics', label: 'Executive Analytics', path: '/executive-analytics', icon: 'BarChart2', roles: ANALYTICS_ROLES, keywords: ['echarts', 'heatmap', 'sankey', 'treemap'] },
   { id: 'tv-display',        label: 'TV Display Mode',     path: '/display',           icon: 'Radio',      adminOnly: true, keywords: ['tv', 'board', 'screen', 'wall'] },

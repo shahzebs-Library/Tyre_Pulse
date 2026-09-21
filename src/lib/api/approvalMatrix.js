@@ -73,7 +73,7 @@ export async function previewApprovers({ entityType, country, site, role, userId
 }
 
 // Governed policy contract. Missing migrations are errors, never empty policies.
-const POLICY_COLS = 'id,organisation_id,name,entity_type,version,state,priority,match_country,match_site,match_role,match_user_id,stages,created_by,created_at,updated_at,published_by,published_at,effective_at,change_reason'
+const POLICY_COLS = 'id,organisation_id,name,entity_type,version,state,priority,match_country,match_region,match_site,match_role,match_user_id,stages,created_by,created_at,updated_at,published_by,published_at,effective_at,change_reason'
 export async function listApprovalPolicies() {
   return unwrap(await fetchAllPages((from, to) => supabase.from('approval_policies')
     .select(POLICY_COLS).order('updated_at', { ascending: false }).order('id').range(from, to)))
@@ -89,7 +89,7 @@ async function policyRpc(name, args) {
       ? data && ['legacy', 'enforced'].includes(data.mode) && ['matched', 'no_route', 'ambiguous'].includes(data.status) && Array.isArray(data.candidates)
         && (data.status === 'matched' ? routePolicy(data.policy) : data.policy == null)
         && data.candidates.every(candidate => routePolicy(candidate) && Number.isInteger(candidate.rank) && candidate.rank >= 1
-          && Number.isInteger(candidate.specificity) && candidate.specificity >= 0 && candidate.specificity <= 4 && Number.isInteger(candidate.priority))
+          && Number.isInteger(candidate.specificity) && candidate.specificity >= 0 && candidate.specificity <= 5 && Number.isInteger(candidate.priority))
       : data && !Array.isArray(data) && typeof data.id === 'string' && typeof data.updated_at === 'string'
   if (!valid) throw new ServiceError('The server did not confirm the operation.', 'invalid_response')
   return data
@@ -102,7 +102,7 @@ export async function listApprovalRoles() {
   return [...new Set([...ASSIGNABLE_BUILTIN_ROLES, ...custom.map(role => role.name)].filter(Boolean))]
 }
 export const saveApprovalPolicy = (policy, expectedUpdatedAt = null) => {
-  const fields = ['id', 'name', 'entity_type', 'priority', 'match_country', 'match_site', 'match_role', 'match_user_id', 'stages', 'change_reason']
+  const fields = ['id', 'name', 'entity_type', 'priority', 'match_country', 'match_region', 'match_site', 'match_role', 'match_user_id', 'stages', 'change_reason']
   return policyRpc('approval_policy_save', {
     p_policy: Object.fromEntries(fields.filter(key => policy[key] !== undefined).map(key => [key, policy[key]])),
     p_expected_updated_at: expectedUpdatedAt,
@@ -119,7 +119,17 @@ export const simulateApprovalPolicy = (context, draftId = null) => policyRpc('ap
   p_entity_type: context.entity_type, p_country: context.country || null,
   p_site: context.site || null, p_role: context.role || null,
   p_user_id: context.user_id || null, p_draft_id: draftId,
+  // Sent only when chosen, so a server without regional routing still answers.
+  ...(context.region ? { p_region: context.region } : {}),
+  // A vehicle's base site decides its region, exactly as a real submission would.
+  ...(context.asset_no ? { p_asset_no: String(context.asset_no).trim() } : {}),
 })
+/** Vehicles per region and the published route each region currently gets. */
+export async function getApprovalRegionCoverage(entityType = 'inspection') {
+  const data = unwrap(await supabase.rpc('approval_region_coverage', { p_entity_type: entityType }))
+  if (!data || !Array.isArray(data.regions)) throw new ServiceError('The server did not confirm the operation.', 'invalid_response')
+  return data
+}
 export async function listApprovalPolicyEvents(policyId) {
   return unwrap(await fetchAllPages((from, to) => supabase.from('approval_policy_events')
     .select('id,policy_id,action,actor_id,reason,created_at,snapshot')

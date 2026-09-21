@@ -64,3 +64,21 @@ it('keeps the server-selected priority order for valid routing candidates', asyn
   h.rpc.mockResolvedValue({ data, error: null })
   await expect(simulateApprovalPolicy({ entity_type: 'inspection' })).resolves.toEqual(data)
 })
+it('sends a chosen region to the simulation and omits it otherwise', async () => {
+  h.rpc.mockResolvedValue({ data: { mode: 'enforced', status: 'no_route', region: 'CENTRAL', policy: null, candidates: [] }, error: null })
+  await simulateApprovalPolicy({ entity_type: 'inspection', country: 'KSA', region: 'CENTRAL' })
+  expect(h.rpc).toHaveBeenLastCalledWith('approval_policy_simulate', expect.objectContaining({ p_region: 'CENTRAL', p_site: null }))
+  await simulateApprovalPolicy({ entity_type: 'inspection', country: 'KSA' })
+  expect(h.rpc.mock.calls.at(-1)[1]).not.toHaveProperty('p_region')
+})
+it('accepts a five-field regional match strength from the server', async () => {
+  const policy = { id: 'p', name: 'Central', stages: [{ name: 'Area review' }] }
+  const data = { mode: 'enforced', status: 'matched', region: 'CENTRAL', policy, candidates: [{ ...policy, rank: 1, specificity: 5, priority: 0 }] }
+  h.rpc.mockResolvedValue({ data, error: null })
+  await expect(simulateApprovalPolicy({ entity_type: 'inspection' })).resolves.toEqual(data)
+})
+it('saves the region with the policy', async () => {
+  h.rpc.mockResolvedValue({ data: { id: 'p', updated_at: 'now' }, error: null })
+  await saveApprovalPolicy({ name: 'Central', entity_type: 'inspection', match_country: 'KSA', match_region: 'CENTRAL', stages: [] })
+  expect(h.rpc).toHaveBeenLastCalledWith('approval_policy_save', expect.objectContaining({ p_policy: expect.objectContaining({ match_region: 'CENTRAL' }) }))
+})

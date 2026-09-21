@@ -436,6 +436,7 @@ export default function Budgets() {
           ) : (
             <div className="card p-0 overflow-hidden">
               <EnterpriseTable
+                viewKey="budgets"
                 reportMeta={reportMeta}
                 columns={monthlyColumns}
                 data={budgets}

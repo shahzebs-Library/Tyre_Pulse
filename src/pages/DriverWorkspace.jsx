@@ -117,8 +117,9 @@ export default function DriverWorkspace() {
   const [params, setParams] = useSearchParams(); const driverId = params.get('driver')
   const { isRTL, language } = useLanguage()
   const tr = value => driverCopy(value, language)
-  const [data, setData] = useState(null); const [error, setError] = useState(''); const [loading, setLoading] = useState(true); const [action, setAction] = useState(null); const [search, setSearch] = useState('')
-  const load = useCallback(async (isActive = () => true) => { setLoading(true); setError(''); setData(null); try { const result = await loadDriverWorkspace(driverId); if (isActive()) setData(result) } catch (e) { if (isActive()) setError(toUserMessage(e, 'Driver workspace unavailable. Check access and backend configuration.')) } finally { if (isActive()) setLoading(false) } }, [driverId])
+  const [workspace, setWorkspace] = useState(null); const [error, setError] = useState(''); const [loading, setLoading] = useState(true); const [action, setAction] = useState(null); const [search, setSearch] = useState('')
+  const data = workspace?.driverId === driverId ? workspace.data : null
+  const load = useCallback(async (isActive = () => true) => { setLoading(true); setError(''); setWorkspace(null); try { const result = await loadDriverWorkspace(driverId); if (isActive()) setWorkspace({ driverId, data: result }) } catch (e) { if (isActive()) setError(toUserMessage(e, 'Driver workspace unavailable. Check access and backend configuration.')) } finally { if (isActive()) setLoading(false) } }, [driverId])
   useEffect(() => { let active = true; load(() => active); return () => { active = false } }, [load])
   async function exportReport() {
     try {

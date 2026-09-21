@@ -1,13 +1,22 @@
 import { supabase, unwrap } from './_client'
 
+function workspacePage(value, driverId) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Driver workspace returned an invalid response.')
+  if (driverId && (!value.driver || typeof value.driver !== 'object' || Array.isArray(value.driver))) throw new Error('Driver details are unavailable.')
+  return value
+}
+
 export async function loadDriverWorkspace(driverId = null) {
   const keys = driverId ? ['fines', 'assignments', 'records', 'events', 'work'] : ['drivers']
   let result
   for (let offset = 0; offset < 10000; offset += 100) {
-    const page = unwrap(await supabase.rpc('driver_workspace', { p_driver_id: driverId, p_offset: offset }))
-    if (!result) result = { ...page, ...Object.fromEntries(keys.map(k => [k, []])) }
-    for (const key of keys) result[key].push(...(page[key] || []).slice(0, 100))
-    if (keys.every(key => (page[key] || []).length <= 100)) return { ...result, truncated: false }
+    const page = workspacePage(unwrap(await supabase.rpc('driver_workspace', { p_driver_id: driverId, p_offset: offset })), driverId)
+    if (!result) result = { ...page, ...Object.fromEntries(keys.map(k => [k, []])), ...(driverId ? { balances: Array.isArray(page.balances) ? page.balances : [] } : {}) }
+    for (const key of keys) {
+      if (!Array.isArray(page[key])) throw new Error(`Driver workspace field ${key} is unavailable.`)
+      result[key].push(...page[key].slice(0, 100))
+    }
+    if (keys.every(key => page[key].length <= 100)) return { ...result, truncated: false }
   }
   return { ...result, truncated: true }
 }

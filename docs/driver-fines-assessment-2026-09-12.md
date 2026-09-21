@@ -8,14 +8,14 @@ The production web module is named **Driver Workspace** and is available at `/dr
 
 | Area | Delivered now | Still pending |
 |---|---|---|
-| Driver web experience | Own fines, notice details, evidence, balances, work records, assignments, acknowledgment, resolution request, exact notice version, statement version and signature. | Native mobile screens and offline drafts. |
+| Driver web experience | Own fines, notice details, evidence, balances, work records, assignments, acknowledgment, resolution request, exact notice version, statement version and signature. | Operational acceptance with real linked-driver accounts and real fine data. |
 | Supervisor web experience | Assigned-driver roster, workflow counts, fine issue, evidence, signed response review, return/cancel actions, and team/vehicle history. | Operational user acceptance with real supervisor accounts. |
 | Manager web experience | All supervisor functions plus driver/login/team/work-record administration, fine correction and driver reassignment with preserved lineage. | Real roster and fine data onboarding. |
 | Finance web experience | Separate finance queue and approval after supervisor approval, verified partial/full payment recording, payment reference and balance history. | Configure the intended Finance users or `driver_workspace:finance` capability in each tenant. |
 | Reporting | Scoped fine register, search/status/stage/overdue filters, complete filtered Excel/PDF export, individual case PDF with signed responses, signatures, reviews, payments, evidence, reminders and events. | Business dashboards beyond the delivered queue counts and register. |
 | Notifications | Driver, supervisor, manager and finance notifications; daily due-in-seven-days, due-today and overdue reminder job; idempotent reminder log. | Confirm notification delivery preferences and any external push provider policy. |
-| Expo app (`mobile/`) | Existing app remains unchanged by this delivery, as explicitly required. | My Fines UI and notification routing if a later Expo release is authorized. |
-| Flutter app (`tyre_pulse_flutter/`) | Existing app remains unchanged by this delivery. | Equivalent My Fines flow, offline queue, localization, Android/iOS gates and release. |
+| Expo app (`mobile/`) | A basic Driver Workspace implementation exists in source. | Enterprise workflow parity and release verification are deferred at the user's direction. No Expo source is changed by the current web repair. |
+| Flutter app (`tyre_pulse_flutter/`) | A basic Driver Workspace implementation exists in source. | Enterprise workflow parity, Android/iOS gates and release are deferred at the user's direction. No Flutter source is changed by the current web repair. |
 
 ## End-to-end workflow
 
@@ -58,21 +58,25 @@ The scheduled `driver-fine-daily-reminders` job runs at 05:15 UTC. The server us
 ## Verification completed
 
 - Database workflow test: 12 passed. It covers same-name separation, tenant/team scope, duplicate protection, private evidence, signed version binding, idempotent retry, supervisor/finance separation, verified payment, signed correction, reassignment lineage, reminders, staff register, locked users and anonymous denial.
-- Web component tests: 9 passed. They cover driver controls, solid shared dialogs, exact-version signed submission, correction, finance-stage choices, filter application, case navigation and reminder results.
+- Production error `ERR-3I2FD0VO` was traced to roster/detail state crossing during Back navigation. The web response is now bound to the requested driver context and malformed response collections fail at the API boundary.
+- Focused Driver Workspace component test: 8 passed, including the exact driver-detail-to-roster transition that caused `ERR-3I2FD0VO`.
 - Focused ESLint: passed for the changed web files.
-- Production web build: passed.
+- The enterprise web release build passed before deployment. The later isolated navigation repair was verified with its focused test and lint; no broad rebuild was repeated.
 - Production database migration: applied as `20260921134725_driver_fine_enterprise_workflows`.
 - Live database verification: register RPC, reminder RPC, workflow stage column and scheduled reminder job are present.
 - Supabase advisors were checked after migration. The new tables have RLS policies and the new security-definer functions pin an empty search path. The project still reports pre-existing repository-wide advisor items outside this module.
 
 ## Operational work before staff rollout
 
-1. Populate and verify driver-to-login links and current supervisor/manager assignments.
-2. Assign Finance users or grant the `driver_workspace:finance` capability.
-3. Confirm which resolution options are permitted by company policy and document who may approve recovery or instalments.
-4. Validate the 05:15 UTC reminder time for each operating region.
-5. Run acceptance with one driver, one supervisor, one different finance reviewer and one manager using real scoped accounts.
-6. Authorize a separate mobile release when native Expo and Flutter delivery is required. No mobile production source was changed in this web release.
+Live readiness was checked on 21 September 2026: 674 drivers exist, 88 have login links, all 674 have no recorded site, and there are no current team assignments, fines, fine responses, reviews, evidence records, reminders or configured Finance users/grants. The daily reminder job is active but has no cases to process.
+
+1. Correct driver sites from an authorized operational source; do not infer or fabricate them.
+2. Populate and verify driver-to-login links and current supervisor/manager/vehicle assignments.
+3. Assign Finance users or grant the `driver_workspace:finance` capability.
+4. Confirm which resolution options are permitted by company policy and document who may approve recovery or instalments.
+5. Validate the 05:15 UTC reminder time for each operating region.
+6. Run acceptance with one driver, one supervisor, one different finance reviewer and one manager using real scoped accounts.
+7. Authorize a separate mobile phase when Expo and Flutter enterprise parity is required.
 
 ## Main implementation references
 

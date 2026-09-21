@@ -47,6 +47,18 @@ describe('driver workspace', () => {
     expect(await screen.findByRole('alert')).toBeInTheDocument()
     expect(screen.queryByText('No fines recorded for this driver.')).not.toBeInTheDocument()
   })
+  it('does not render driver details as a roster while returning to drivers', async () => {
+    let resolveRoster
+    api.loadDriverWorkspace
+      .mockResolvedValueOnce(data)
+      .mockReturnValueOnce(new Promise(resolve => { resolveRoster = resolve }))
+    render(<MemoryRouter initialEntries={['/driver-workspace?driver=driver-1']}><DriverWorkspace /></MemoryRouter>)
+    fireEvent.click(await screen.findByText('Back to drivers'))
+    expect(screen.queryByText('No linked driver or assigned team is available. An authorized manager must verify the driver record, login and team assignment.')).not.toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('Loading driver workspace')
+    resolveRoster({ can_manage: false, can_finance: false, drivers: [], truncated: false })
+    expect(await screen.findByText('No linked driver or assigned team is available. An authorized manager must verify the driver record, login and team assignment.')).toBeInTheDocument()
+  })
   it('submits a correction against the exact notice version', async () => {
     api.loadDriverWorkspace.mockResolvedValue({ ...data, can_manage: true })
     render(<MemoryRouter initialEntries={['/driver-workspace?driver=driver-1']}><DriverWorkspace /></MemoryRouter>)

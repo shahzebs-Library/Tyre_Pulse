@@ -34,6 +34,7 @@ import {
   PieChart, Link2, CalendarRange,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import Card, { CardHeader } from '../components/ui/Card'
 import EChart from '../components/charts/EChart'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 import { useSettings } from '../contexts/SettingsContext'
@@ -120,34 +121,39 @@ function EmptyChart({ label = 'Nothing to chart for this window.' }) {
 }
 
 function Notice({ tone = 'info', icon: Icon = Info, title, children, action }) {
-  const border = tone === 'warn' ? 'border-amber-800/50'
-    : tone === 'error' ? 'border-red-800/50' : 'border-[var(--input-border)]'
+  // The old `border border-X` classes are DEAD against Card, which sets both
+  // `border` and `borderColor` as inline styles that a plain class cannot beat.
+  // The edge tint is now the `tone` prop, which is the only place it can live.
+  const cardTone = tone === 'warn' ? 'warn' : tone === 'error' ? 'crit' : 'default'
   const ink = tone === 'warn' ? 'text-amber-400'
     : tone === 'error' ? 'text-red-400' : 'text-[var(--text-secondary)]'
   const head = tone === 'warn' ? 'text-amber-300'
     : tone === 'error' ? 'text-red-300' : 'text-[var(--text-primary)]'
   return (
-    <div className={`card border ${border} flex items-start gap-3`}>
+    // Card is `flex flex-col` and Tailwind emits .flex-col after .flex-row, so
+    // a `flex-row` class here could never win; the direction goes in `style`,
+    // which Card spreads last.
+    <Card tone={cardTone} className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
       <Icon size={18} className={`${ink} mt-0.5 shrink-0`} />
       <div className="flex-1 min-w-0">
         {title && <p className={`${head} font-medium`}>{title}</p>}
         <div className="text-[var(--text-muted)] text-sm mt-1 space-y-1">{children}</div>
       </div>
       {action}
-    </div>
+    </Card>
   )
 }
 
 function Kpi({ label, value, sub, icon: Icon, tone }) {
   return (
-    <div className="card">
+    <Card>
       <div className="flex items-center justify-between">
         <p className="text-xs text-[var(--text-muted)]">{label}</p>
         {Icon && <Icon size={15} className="text-[var(--text-muted)]" />}
       </div>
       <p className={`text-xl font-bold mt-1 ${tone || 'text-[var(--text-primary)]'}`}>{value}</p>
       {sub && <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{sub}</p>}
-    </div>
+    </Card>
   )
 }
 
@@ -316,15 +322,16 @@ export default function StoreMaterialIssue() {
         </p>
       </Notice>
 
-      {/* Window + filters */}
-      <div className="card space-y-3">
-        <div className="flex items-center gap-2 text-[var(--text-secondary)]">
-          <CalendarRange size={15} />
-          <span className="text-sm font-medium">Window and filters</span>
-          <span className="text-[11px] text-[var(--text-muted)]">
-            Country scope follows the app scope: {txt(activeCountry)}
-          </span>
-        </div>
+      {/* Window + filters. No `clip`: every control here is a native <select> or
+          <input type="date">, whose popups the browser paints outside the
+          page's overflow context, so there is nothing to crop. */}
+      <Card className="gap-[var(--space-3)]">
+        <CardHeader
+          className="!mb-0"
+          icon={CalendarRange}
+          title="Window and filters"
+          description={`Country scope follows the app scope: ${txt(activeCountry)}`}
+        />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
           <label className="text-xs text-[var(--text-muted)] space-y-1">
             <span>From</span>
@@ -370,9 +377,9 @@ export default function StoreMaterialIssue() {
           </label>
         </div>
         {hasFilters && (
-          <button onClick={clearFilters} className={btnCls}><X size={13} /> Clear filters</button>
+          <button onClick={clearFilters} className={`${btnCls} self-start`}><X size={13} /> Clear filters</button>
         )}
-      </div>
+      </Card>
 
       {truncated && (
         <Notice tone="warn" icon={AlertTriangle} title="This is a capped view.">
@@ -473,14 +480,12 @@ function CountryMoney({ summary }) {
   if (!summary.byCountry.length) return null
   if (summary.byCountry.length === 1) return null
   return (
-    <div className="card">
-      <div className="flex items-center gap-2 mb-3">
-        <Layers size={16} className="text-[var(--text-secondary)]" />
-        <h3 className="font-semibold text-[var(--text-primary)]">Value by country</h3>
-        <span className="text-[11px] text-[var(--text-muted)]">
-          Each country reports in its own currency. These are never added together.
-        </span>
-      </div>
+    <Card>
+      <CardHeader
+        icon={Layers}
+        title="Value by country"
+        description="Each country reports in its own currency. These are never added together."
+      />
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -509,7 +514,7 @@ function CountryMoney({ summary }) {
           </tbody>
         </table>
       </div>
-    </div>
+    </Card>
   )
 }
 
@@ -547,22 +552,24 @@ function RegisterTab({
 
       <CountryMoney summary={summary} />
 
-      <div className="card">
-        <div className="flex items-center gap-2 mb-3 flex-wrap">
-          <ClipboardList size={16} className="text-[var(--text-secondary)]" />
-          <h3 className="font-semibold text-[var(--text-primary)]">Issue register</h3>
-          <span className="text-[11px] text-[var(--text-muted)]">
-            {nOr(filtered.length)} of {nOr(slips.length)} shown
-          </span>
-          <div className="ml-auto flex items-center gap-2">
-            <button onClick={onExcel} disabled={filtered.length === 0} className={btnCls}>
-              <FileSpreadsheet size={14} /> Excel
-            </button>
-            <button onClick={onPdf} disabled={filtered.length === 0} className={btnCls}>
-              <FileText size={14} /> PDF
-            </button>
-          </div>
-        </div>
+      <Card>
+        {/* Two export buttons only, so `actions` (flex-shrink-0, cannot wrap) is
+            the right slot; a wider control group would need its own row. */}
+        <CardHeader
+          icon={ClipboardList}
+          title="Issue register"
+          description={`${nOr(filtered.length)} of ${nOr(slips.length)} shown`}
+          actions={
+            <>
+              <button onClick={onExcel} disabled={filtered.length === 0} className={btnCls}>
+                <FileSpreadsheet size={14} /> Excel
+              </button>
+              <button onClick={onPdf} disabled={filtered.length === 0} className={btnCls}>
+                <FileText size={14} /> PDF
+              </button>
+            </>
+          }
+        />
 
         {loading ? (
           <div className="space-y-2">
@@ -615,7 +622,7 @@ function RegisterTab({
             <TablePagination {...paged} />
           </>
         )}
-      </div>
+      </Card>
     </div>
   )
 }
@@ -775,20 +782,22 @@ function ReturnsTab({ loading, returns, summary, singleCurrency, onExcel, onPdf 
 
       <CountryMoney summary={summary} />
 
-      <div className="card">
-        <div className="flex items-center gap-2 mb-3 flex-wrap">
-          <Undo2 size={16} className="text-[var(--text-secondary)]" />
-          <h3 className="font-semibold text-[var(--text-primary)]">Return register</h3>
-          <span className="text-[11px] text-[var(--text-muted)]">{nOr(returns.length)} shown</span>
-          <div className="ml-auto flex items-center gap-2">
-            <button onClick={onExcel} disabled={returns.length === 0} className={btnCls}>
-              <FileSpreadsheet size={14} /> Excel
-            </button>
-            <button onClick={onPdf} disabled={returns.length === 0} className={btnCls}>
-              <FileText size={14} /> PDF
-            </button>
-          </div>
-        </div>
+      <Card>
+        <CardHeader
+          icon={Undo2}
+          title="Return register"
+          description={`${nOr(returns.length)} shown`}
+          actions={
+            <>
+              <button onClick={onExcel} disabled={returns.length === 0} className={btnCls}>
+                <FileSpreadsheet size={14} /> Excel
+              </button>
+              <button onClick={onPdf} disabled={returns.length === 0} className={btnCls}>
+                <FileText size={14} /> PDF
+              </button>
+            </>
+          }
+        />
 
         {loading ? (
           <div className="space-y-2">
@@ -841,7 +850,7 @@ function ReturnsTab({ loading, returns, summary, singleCurrency, onExcel, onPdf 
             </table>
           </div>
         )}
-      </div>
+      </Card>
     </div>
   )
 }
@@ -976,9 +985,11 @@ function RaiseTab({ canWrite, activeCountry, profileName, onSaved }) {
 
   if (checking) {
     return (
-      <div className="card flex items-center gap-2 text-[var(--text-muted)] text-sm">
+      // Row direction in `style`: Card is flex-col and Tailwind's .flex-col is
+      // emitted after .flex-row, so a class could not win here.
+      <Card className="items-center gap-[var(--space-2)] text-[var(--text-muted)] text-sm" style={{ flexDirection: 'row' }}>
         <Loader2 size={15} className="animate-spin" /> Checking whether slips can be raised here...
-      </div>
+      </Card>
     )
   }
 
@@ -1029,8 +1040,11 @@ function RaiseTab({ canWrite, activeCountry, profileName, onSaved }) {
         </Notice>
       )}
 
-      <div className="card space-y-3">
-        <h3 className="font-semibold text-[var(--text-primary)]">Slip details</h3>
+      {/* Slip details. No `clip`: the job-card and item pickers below render a
+          real in-flow results list inside this card, and the country/document
+          controls are native <select>, so nothing here wants cropping. */}
+      <Card>
+        <CardHeader title="Slip details" />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <label className="text-xs text-[var(--text-muted)] space-y-1">
             <span>Document type</span>
@@ -1140,14 +1154,15 @@ function RaiseTab({ canWrite, activeCountry, profileName, onSaved }) {
             />
           </label>
         </div>
-      </div>
+      </Card>
 
-      <div className="card space-y-3">
-        <div className="flex items-center gap-2">
-          <Layers size={16} className="text-[var(--text-secondary)]" />
-          <h3 className="font-semibold text-[var(--text-primary)]">Items</h3>
-          <button onClick={addLine} className={`${btnCls} ml-auto`}><Plus size={13} /> Add item</button>
-        </div>
+      <Card className="gap-[var(--space-3)]">
+        <CardHeader
+          className="!mb-0"
+          icon={Layers}
+          title="Items"
+          actions={<button onClick={addLine} className={btnCls}><Plus size={13} /> Add item</button>}
+        />
 
         {!header.country && (
           <p className="text-xs text-[var(--text-muted)]">Pick a country to search the item master.</p>
@@ -1264,14 +1279,14 @@ function RaiseTab({ canWrite, activeCountry, profileName, onSaved }) {
             {check.errors.map((e) => <li key={e}>{e}</li>)}
           </ul>
         )}
-      </div>
+      </Card>
 
-      <div className="card">
-        <div className="flex items-center gap-2 mb-3">
-          <Hash size={16} className="text-[var(--text-secondary)]" />
-          <h3 className="font-semibold text-[var(--text-primary)]">Slips raised in this app</h3>
-          <span className="text-[11px] text-[var(--text-muted)]">{nOr(recent.length)} shown</span>
-        </div>
+      <Card>
+        <CardHeader
+          icon={Hash}
+          title="Slips raised in this app"
+          description={`${nOr(recent.length)} shown`}
+        />
         {recent.length === 0 ? (
           <p className="py-6 text-center text-sm text-[var(--text-muted)]">
             No slips have been raised in this app yet. The historical register on the
@@ -1307,7 +1322,7 @@ function RaiseTab({ canWrite, activeCountry, profileName, onSaved }) {
             </table>
           </div>
         )}
-      </div>
+      </Card>
     </div>
   )
 }
@@ -1425,66 +1440,55 @@ function AnalyticsTab({ loading, filtered, summary, singleCurrency, onExcel, onP
         </button>
       </div>
 
-      <div className="card">
-        <div className="flex items-center gap-2 mb-3">
-          <TrendingUp size={16} className="text-[var(--text-secondary)]" />
-          <h3 className="font-semibold text-[var(--text-primary)]">Issues per month</h3>
-        </div>
+      <Card>
+        <CardHeader icon={TrendingUp} title="Issues per month" />
         <div className="h-[280px]">
           {loading ? <EmptyChart label="Loading..." />
             : trend.length === 0 ? <EmptyChart />
               : <EChart option={trendOption} className="h-full" ariaLabel="Issues per month" />}
         </div>
-      </div>
+      </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="card">
-          <div className="flex items-center gap-2 mb-3">
-            <BarChart3 size={16} className="text-[var(--text-secondary)]" />
-            <h3 className="font-semibold text-[var(--text-primary)]">Value by store</h3>
-            {summary.byCountry.length > 1 && (
-              <span className="text-[11px] text-[var(--text-muted)]">
-                {txt(country?.country)} only, to keep one currency
-              </span>
-            )}
-          </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-[var(--gap-grid)]">
+        <Card>
+          <CardHeader
+            icon={BarChart3}
+            title="Value by store"
+            description={summary.byCountry.length > 1
+              ? `${txt(country?.country)} only, to keep one currency`
+              : undefined}
+          />
           <div className="h-[260px]">
             {topStores.length === 0
               ? <EmptyChart label="No store is recorded on these slips." />
               : <EChart option={storeOption} className="h-full" ariaLabel="Value by store" />}
           </div>
-        </div>
+        </Card>
 
-        <div className="card">
-          <div className="flex items-center gap-2 mb-3">
-            <PieChart size={16} className="text-[var(--text-secondary)]" />
-            <h3 className="font-semibold text-[var(--text-primary)]">By category</h3>
-            <span className="text-[11px] text-[var(--text-muted)]">Tyre, spare and oil split</span>
-          </div>
+        <Card>
+          <CardHeader
+            icon={PieChart}
+            title="By category"
+            description="Tyre, spare and oil split"
+          />
           <div className="h-[260px]">
             {bucketsUnavailable
               ? <EmptyChart label="No category split is recorded on these lines." />
               : <EChart option={bucketOption} className="h-full" ariaLabel="Value by category" />}
           </div>
-        </div>
+        </Card>
 
-        <div className="card">
-          <div className="flex items-center gap-2 mb-3">
-            <PieChart size={16} className="text-[var(--text-secondary)]" />
-            <h3 className="font-semibold text-[var(--text-primary)]">Issues against returns</h3>
-          </div>
+        <Card>
+          <CardHeader icon={PieChart} title="Issues against returns" />
           <div className="h-[260px]">
             {summary.slips === 0
               ? <EmptyChart />
               : <EChart option={docOption} className="h-full" ariaLabel="Issues against returns" />}
           </div>
-        </div>
+        </Card>
 
-        <div className="card">
-          <div className="flex items-center gap-2 mb-3">
-            <Layers size={16} className="text-[var(--text-secondary)]" />
-            <h3 className="font-semibold text-[var(--text-primary)]">Most issued items</h3>
-          </div>
+        <Card>
+          <CardHeader icon={Layers} title="Most issued items" />
           {topItems.length === 0 ? (
             <div className="h-[260px]"><EmptyChart label="No item codes on these slips." /></div>
           ) : (
@@ -1518,7 +1522,7 @@ function AnalyticsTab({ loading, filtered, summary, singleCurrency, onExcel, onP
               </table>
             </div>
           )}
-        </div>
+        </Card>
       </div>
     </div>
   )

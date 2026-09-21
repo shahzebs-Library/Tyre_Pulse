@@ -13,12 +13,13 @@ import {
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   AlertTriangle, ChevronDown, ChevronLeft, ChevronRight, ChevronUp,
-  ChevronsUpDown, Columns, RotateCcw, Search, X,
+  ChevronsUpDown, Columns, Pin, PinOff, RotateCcw, Rows, Search, X,
 } from 'lucide-react'
 import { cn } from '../../lib/cn'
 import Skeleton from './Skeleton'
 import ExportMenu from './ExportMenu'
 import useAnchoredPopover from './useAnchoredPopover'
+import useRegisterView from './useRegisterView'
 
 /**
  * EnterpriseTable - reusable data table built on @tanstack/react-table v8.
@@ -87,6 +88,18 @@ export default function EnterpriseTable({
 
   // column visibility
   enableColumnVisibility = true,
+
+  // ── Level 2: operator-grade layout, all OPT-IN via `viewKey` ──────────────
+  // Passing `viewKey` (a stable module key, e.g. 'work-orders') turns on column
+  // pinning, resizing and density, and REMEMBERS them per person per register.
+  // Every caller that omits it behaves exactly as before — that backward
+  // compatibility is deliberate: this component is shared by many pages and a
+  // change in default behaviour would land on all of them at once.
+  viewKey = null,
+  enableColumnPinning = true,
+  enableColumnResize = true,
+  enableDensity = true,
+  enableKeyboard = true,
 
   // selection
   enableRowSelection = false,
@@ -161,6 +174,36 @@ export default function EnterpriseTable({
     return [selectColumn, ...columns]
   }, [columns, enableRowSelection])
 
+  // ── saved view (Level 2) ───────────────────────────────────────────────────
+  // The catalog is DERIVED from the column defs rather than declared separately,
+  // so a column added to a page is automatically offered in the picker and
+  // automatically appended to every existing saved view. A hand-maintained
+  // second list is exactly how a newly shipped column stays invisible to the
+  // operators who already have a saved layout.
+  const columnCatalog = useMemo(
+    () =>
+      columns
+        .map((c) => {
+          const key = c.id || c.accessorKey
+          if (!key) return null
+          return {
+            key: String(key),
+            label: typeof c.header === 'string' ? c.header : String(key),
+            defaultHidden: c.meta?.defaultHidden === true,
+            pinnable: c.meta?.pinnable !== false,
+            width: typeof c.size === 'number' ? c.size : undefined,
+          }
+        })
+        .filter(Boolean),
+    [columns]
+  )
+
+  const rv = useRegisterView(viewKey, columnCatalog, { enabled: !!viewKey })
+  const viewActive = rv.active
+  const density = viewActive && enableDensity ? rv.tableState.density : 'comfortable'
+  const pinningOn = viewActive && enableColumnPinning
+  const resizingOn = viewActive && enableColumnResize
+
   // ── table instance ─────────────────────────────────────────────────────────
   const usePaginationModel = !virtual && !manualPagination
   const table = useReactTable({
@@ -171,7 +214,16 @@ export default function EnterpriseTable({
       sorting,
       columnFilters,
       globalFilter,
-      columnVisibility,
+      // A saved view OWNS visibility/order/pinning/sizing when one is active;
+      // the local state is the fallback for every caller without a `viewKey`.
+      columnVisibility: viewActive ? rv.tableState.columnVisibility : columnVisibility,
+      ...(viewActive
+        ? {
+            columnOrder: rv.tableState.columnOrder,
+            columnSizing: rv.tableState.columnSizing,
+            ...(enableColumnPinning ? { columnPinning: rv.tableState.columnPinning } : {}),
+          }
+        : {}),
       rowSelection: selectionState,
       ...(usePaginationModel ? { pagination } : {}),
     },
@@ -179,6 +231,8 @@ export default function EnterpriseTable({
     enableMultiSort: true,
     enableRowSelection,
     enableColumnFilters,
+    columnResizeMode: 'onChange',
+    enableColumnResizing: viewActive && enableColumnResize,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onGlobalFilterChange: setGlobalFilter,
@@ -195,8 +249,60 @@ export default function EnterpriseTable({
     manualPagination: manualPagination || virtual,
   })
 
+  // PERSIST A RESIZE ONLY WHEN THE DRAG ENDS. `columnResizeMode: 'onChange'`
+  // fires on every mouse move, so writing from the change handler would post a
+  // preference row per pixel. The engine clamps the value; this only decides
+  // WHEN to hand it over.
+  const resizingCol = table.getState().columnSizingInfo?.isResizingColumn || null
+  const wasResizing = useRef(null)
+  useEffect(() => {
+    if (resizingCol) { wasResizing.current = resizingCol; return }
+    const finished = wasResizing.current
+    wasResizing.current = null
+    if (!finished || !resizingOn) return
+    const size = table.getState().columnSizing?.[finished]
+    if (typeof size === 'number') rv.onWidthChange(finished, size)
+  }, [resizingCol, resizingOn, table, rv])
+
   const rows = table.getRowModel().rows
   const visibleLeafColumns = table.getVisibleLeafColumns()
+
+  // ── keyboard path ─────────────────────────────────────────────────────────
+  // `/` search · j/k or arrows move · Enter opens · Esc clears. An operator
+  // working a queue all day should not have to reach for the mouse.
+  const searchRef = useRef(null)
+  const [cursor, setCursor] = useState(-1)
+  const rowCount = rows.length
+  useEffect(() => { if (cursor >= rowCount) setCursor(rowCount - 1) }, [rowCount, cursor])
+  useEffect(() => {
+    if (!enableKeyboard) return
+    function onKey(e) {
+      // Never hijack a key the person is typing into a field, and never fight a
+      // browser/OS shortcut.
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      const t = e.target
+      const typing =
+        t instanceof HTMLElement &&
+        (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)
+      if (e.key === 'Escape') {
+        if (typing) return            // let the field or a dialog own Escape
+        setCursor(-1)
+        return
+      }
+      if (typing) return
+      if (e.key === '/') { e.preventDefault(); searchRef.current?.focus(); return }
+      if (rowCount === 0) return
+      if (e.key === 'j' || e.key === 'ArrowDown') {
+        e.preventDefault(); setCursor((c) => Math.min(rowCount - 1, c + 1))
+      } else if (e.key === 'k' || e.key === 'ArrowUp') {
+        e.preventDefault(); setCursor((c) => Math.max(0, c - 1))
+      } else if (e.key === 'Enter' && cursor >= 0 && onRowClick) {
+        e.preventDefault(); onRowClick(rows[cursor]?.original)
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [enableKeyboard, rowCount, cursor, onRowClick, rows])
   const colCount = visibleLeafColumns.length
   const selectedRows = table.getSelectedRowModel().rows
   const hasFilterRow =
@@ -256,6 +362,7 @@ export default function EnterpriseTable({
             <div className="relative flex-1 min-w-48 max-w-sm">
               <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
               <input
+                ref={searchRef}
                 className="input pl-9 pr-8 py-2"
                 placeholder={searchPlaceholder}
                 value={searchText}
@@ -284,7 +391,38 @@ export default function EnterpriseTable({
 
           <div className="flex items-center gap-2 ml-auto">
             {toolbarExtras}
-            {enableColumnVisibility && <ColumnVisibilityMenu table={table} />}
+            {viewActive && enableDensity && (
+              <button
+                type="button"
+                onClick={() => rv.onDensityChange(density === 'compact' ? 'comfortable' : 'compact')}
+                className="btn-ghost text-xs inline-flex items-center gap-1.5"
+                aria-pressed={density === 'compact'}
+                title={density === 'compact' ? 'Switch to comfortable rows' : 'Switch to compact rows'}
+              >
+                <Rows size={13} /> {density === 'compact' ? 'Compact' : 'Comfortable'}
+              </button>
+            )}
+            {viewActive && rv.customised && (
+              /* Only offered once the layout actually differs from the default,
+                 so the control cannot imply a customisation that is not there. */
+              <button
+                type="button"
+                onClick={rv.reset}
+                className="btn-ghost text-xs inline-flex items-center gap-1.5"
+                title="Reset columns, widths and density to the page default"
+              >
+                <RotateCcw size={13} /> Reset view
+              </button>
+            )}
+            {enableColumnVisibility && (
+              <ColumnVisibilityMenu
+                table={table}
+                pinningOn={pinningOn}
+                onTogglePin={rv.onPinChange}
+                onToggleVisibility={viewActive ? rv.onVisibilityChange : undefined}
+                maxPinned={rv.limits.maxPinned}
+              />
+            )}
             {enableExport && !error && (
               <ExportMenu
                 table={table}
@@ -326,16 +464,28 @@ export default function EnterpriseTable({
                       const canSort = enableSorting && header.column.getCanSort()
                       const sortDir = header.column.getIsSorted()
                       const sortIndex = header.column.getSortIndex()
+                      const pinned = pinningOn ? header.column.getIsPinned() : false
+                      const canResize = resizingOn && header.column.getCanResize()
                       return (
                         <th
                           key={header.id}
                           colSpan={header.colSpan}
-                          style={header.column.columnDef.size ? { width: header.column.columnDef.size } : undefined}
+                          style={{
+                            ...(header.column.columnDef.size || (viewActive && header.getSize())
+                              ? { width: viewActive ? header.getSize() : header.column.columnDef.size }
+                              : null),
+                            ...pinnedStyle(header.column, pinned),
+                          }}
                           className={cn(
                             'table-header bg-surface-2 whitespace-nowrap',
                             stickyHeader && 'sticky top-0 z-10',
-                            stickyFirstColumn && colIdx === 0 && 'sticky left-0 z-20',
+                            // A pinned column outranks the legacy stickyFirstColumn
+                            // flag; honouring both would give two columns the same
+                            // left offset and overlap them.
+                            pinned === 'left' ? 'sticky z-20'
+                              : stickyFirstColumn && colIdx === 0 && 'sticky left-0 z-20',
                             canSort && 'cursor-pointer select-none',
+                            canResize && 'relative',
                           )}
                           onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
                           aria-sort={sortDir === 'asc' ? 'ascending' : sortDir === 'desc' ? 'descending' : undefined}
@@ -353,7 +503,25 @@ export default function EnterpriseTable({
                             {sortDir && sorting.length > 1 && sortIndex > -1 && (
                               <span className="text-[9px] font-bold text-[var(--accent)]">{sortIndex + 1}</span>
                             )}
+                            {pinned === 'left' && <Pin size={10} className="text-[var(--accent)] opacity-70" />}
                           </span>
+                          {canResize && (
+                            /* stopPropagation, or every drag also toggles the sort. */
+                            <span
+                              role="separator"
+                              aria-orientation="vertical"
+                              aria-label={`Resize column`}
+                              onMouseDown={(e) => { e.stopPropagation(); header.getResizeHandler()(e) }}
+                              onTouchStart={(e) => { e.stopPropagation(); header.getResizeHandler()(e) }}
+                              onClick={(e) => e.stopPropagation()}
+                              onDoubleClick={(e) => { e.stopPropagation(); header.column.resetSize() }}
+                              className={cn(
+                                'absolute top-0 right-0 h-full w-1 cursor-col-resize select-none touch-none',
+                                'hover:bg-[var(--accent)] opacity-0 hover:opacity-60',
+                                header.column.getIsResizing() && 'bg-[var(--accent)] opacity-100',
+                              )}
+                            />
+                          )}
                         </th>
                       )
                     })
@@ -413,6 +581,9 @@ export default function EnterpriseTable({
                           row={row}
                           onRowClick={onRowClick}
                           stickyFirstColumn={stickyFirstColumn}
+                          pinningOn={pinningOn}
+                          density={density}
+                          focused={enableKeyboard && cursor === vRow.index}
                           measureRef={virtualizer.measureElement}
                           dataIndex={vRow.index}
                         />
@@ -423,12 +594,15 @@ export default function EnterpriseTable({
                     )}
                   </>
                 ) : (
-                  rows.map(row => (
+                  rows.map((row, i) => (
                     <TableRow
                       key={row.id}
                       row={row}
                       onRowClick={onRowClick}
                       stickyFirstColumn={stickyFirstColumn}
+                      pinningOn={pinningOn}
+                      density={density}
+                      focused={enableKeyboard && cursor === i}
                     />
                   ))
                 )}
@@ -491,8 +665,18 @@ export default function EnterpriseTable({
   )
 }
 
+/**
+ * Left offset for a pinned column. TanStack knows each column's measured start,
+ * so a run of pinned columns stacks correctly instead of every one sitting at
+ * left:0 on top of the others.
+ */
+function pinnedStyle(column, pinned) {
+  if (pinned !== 'left') return null
+  return { left: column.getStart('left') }
+}
+
 // ── Row ────────────────────────────────────────────────────────────────────────
-function TableRow({ row, onRowClick, stickyFirstColumn, measureRef, dataIndex }) {
+function TableRow({ row, onRowClick, stickyFirstColumn, measureRef, dataIndex, pinningOn, density, focused = false }) {
   return (
     <tr
       ref={measureRef}
@@ -502,18 +686,29 @@ function TableRow({ row, onRowClick, stickyFirstColumn, measureRef, dataIndex })
         'transition-colors',
         onRowClick && 'cursor-pointer',
         row.getIsSelected() && 'bg-[var(--brand-subtle)]',
+        // Keyboard cursor. Distinct from SELECTION on purpose: "where I am" and
+        // "what I ticked" are different facts and must not look the same.
+        focused && 'outline outline-2 -outline-offset-2 outline-[var(--accent)]',
       )}
     >
       {row.getVisibleCells().map((cell, colIdx) => {
         const align = cell.column.columnDef.meta?.align
+        const pinned = pinningOn ? cell.column.getIsPinned() : false
         return (
           <td
             key={cell.id}
+            style={pinnedStyle(cell.column, pinned)}
             className={cn(
               'table-cell',
+              // Compact retightens the row without changing the type scale, so
+              // the table gets denser without becoming less readable.
+              density === 'compact' && '!py-1',
               align === 'right' && 'text-right',
               align === 'center' && 'text-center',
-              stickyFirstColumn && colIdx === 0 && 'sticky left-0 z-[1] bg-surface-1',
+              // A pinned cell MUST carry an opaque background or the scrolled
+              // columns show through it.
+              pinned === 'left' ? 'sticky z-[1] bg-surface-1'
+                : stickyFirstColumn && colIdx === 0 && 'sticky left-0 z-[1] bg-surface-1',
             )}
           >
             {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -562,7 +757,7 @@ function ColumnFilter({ column }) {
 }
 
 // ── Column visibility dropdown ─────────────────────────────────────────────────
-function ColumnVisibilityMenu({ table }) {
+function ColumnVisibilityMenu({ table, pinningOn = false, onTogglePin, onToggleVisibility, maxPinned = 4 }) {
   const [open, setOpen] = useState(false)
   const menuRef = useRef(null)
   const popRef = useRef(null)
@@ -608,22 +803,61 @@ function ColumnVisibilityMenu({ table }) {
           className="tp-popover min-w-44 p-1.5"
           style={{ top: coords.top, left: coords.left, maxHeight: coords.maxHeight }}
         >
+          {pinningOn && (
+            <p className="px-2.5 pt-1 pb-1.5 text-[10px] text-[var(--text-dim)]">
+              Tick to show. Use the pin to keep a column in view while scrolling.
+            </p>
+          )}
           {hideableColumns.map(col => {
             const header = col.columnDef.meta?.exportHeader
               ?? (typeof col.columnDef.header === 'string' ? col.columnDef.header : col.id)
+            const isPinned = pinningOn && col.getIsPinned() === 'left'
+            const pinnedCount = pinningOn ? (table.getState().columnPinning?.left?.length || 0) : 0
+            const pinBlocked = pinningOn && !isPinned && pinnedCount >= maxPinned
             return (
-              <label
+              <div
                 key={col.id}
-                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-[var(--text-secondary)] hover:bg-surface-3 cursor-pointer"
+                className="flex items-center gap-1 pr-1 rounded-lg hover:bg-surface-3"
               >
-                <input
-                  type="checkbox"
-                  checked={col.getIsVisible()}
-                  onChange={col.getToggleVisibilityHandler()}
-                  className="w-3.5 h-3.5 accent-[var(--accent)] cursor-pointer"
-                />
-                <span className="truncate">{header || col.id}</span>
-              </label>
+                <label className="flex items-center gap-2 px-2.5 py-1.5 text-xs text-[var(--text-secondary)] cursor-pointer flex-1 min-w-0">
+                  <input
+                    type="checkbox"
+                    checked={col.getIsVisible()}
+                    // With a saved view active the ENGINE owns visibility: it is
+                    // what refuses to hide the last remaining column and what
+                    // unpins a column on hide. Writing TanStack's own local state
+                    // here would be overwritten on the next render, so the tick
+                    // would appear to do nothing.
+                    onChange={
+                      onToggleVisibility
+                        ? () => onToggleVisibility(col.id)
+                        : col.getToggleVisibilityHandler()
+                    }
+                    className="w-3.5 h-3.5 accent-[var(--accent)] cursor-pointer"
+                  />
+                  <span className="truncate">{header || col.id}</span>
+                </label>
+                {pinningOn && col.getIsVisible() && (
+                  <button
+                    type="button"
+                    onClick={() => onTogglePin?.(col.id)}
+                    disabled={pinBlocked}
+                    className={cn(
+                      'p-1 rounded transition-colors',
+                      isPinned ? 'text-[var(--accent)]' : 'text-[var(--text-dim)] hover:text-[var(--text-secondary)]',
+                      pinBlocked && 'opacity-30 cursor-not-allowed',
+                    )}
+                    aria-pressed={isPinned}
+                    title={
+                      pinBlocked
+                        ? `At most ${maxPinned} columns can be pinned`
+                        : isPinned ? 'Unpin this column' : 'Pin this column'
+                    }
+                  >
+                    {isPinned ? <Pin size={12} /> : <PinOff size={12} />}
+                  </button>
+                )}
+              </div>
             )
           })}
         </div>,

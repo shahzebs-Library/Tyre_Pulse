@@ -34,8 +34,16 @@ const PAGES_DIR = resolve(process.cwd(), 'src/pages')
 /**
  * Current, measured debt. LOWER these as pages migrate. Never raise them.
  *
- * rawOverlay 130 -> 128 -> 125 on 2026-09-21. Wave 1 moved StockManagement and
- * PmPrograms; wave 2 moved Combinations, HeatIntelligence and SerialTracker.
+ * rawOverlay 130 -> 128 -> 125 -> 122 on 2026-09-21. Wave 1 moved StockManagement
+ * and PmPrograms; wave 2 Combinations, HeatIntelligence and SerialTracker; wave 3
+ * FleetRenewal, TechnicianScorecard and FitmentValidation.
+ *
+ * THIS NUMBER IS FOR THE COMMITTED TREE, WHICH IS NOT ALWAYS THE WORKING TREE.
+ * While parallel migrations are in flight the working tree reads LOWER than what
+ * is committed. Taking the working-tree number would make a fresh checkout count
+ * MORE overlays than the baseline and fail with "a page started hand-rolling an
+ * overlay" - a phantom regression pointing the next person at nothing. Count
+ * against what you are actually committing.
  *
  * TWO FILES CONVERTED OVERLAYS AND STILL SIT ON THIS LIST, WHICH IS CORRECT.
  * WorkOrders converted 3 of 4 and RepairRequests 3 of 4; the one each keeps is
@@ -53,7 +61,7 @@ const PAGES_DIR = resolve(process.cwd(), 'src/pages')
  */
 const BASELINE = {
   rawTable: 194,
-  rawOverlay: 125,
+  rawOverlay: 122,
 }
 
 function readAllPages() {
@@ -135,6 +143,15 @@ describe('design-system ratchet', () => {
       // Attributes of one <Card ...> tag: stop at the first '>' that is not
       // inside a brace expression, which is enough for real-world JSX here.
       for (const m of p.src.matchAll(/<Card[\s]([^>]*?)\/?>/g)) {
+        // SKIP A MATCH INSIDE A STRING LITERAL. This scans raw source, so it
+        // cannot tell a JSX element from a string that looks like one - and the
+        // design-system page documents this very anti-pattern in a <code>
+        // block, so it tripped its own guard. Exempting that FILE was the wrong
+        // fix: it would blind the rule to a real dead utility on the one page
+        // whose job is to model the kit correctly. A quote immediately before
+        // `<Card` means the text is quoted, not rendered.
+        const before = p.src[m.index - 1]
+        if (before === "'" || before === '"' || before === '`') continue
         const attrs = m[1]
         const cls = attrs.match(/className=(?:"([^"]*)"|\{`([^`]*)`\})/)
         if (!cls) continue

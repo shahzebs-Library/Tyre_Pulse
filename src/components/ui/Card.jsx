@@ -26,6 +26,14 @@
  *    inside the card and positioned out of flow: `useAnchoredPopover` panels,
  *    `MultiSelectFilter`, a SearchBox result list, a custom date picker.
  *
+ *    A THIRD DIFFERENCE, FOUND DURING MIGRATION: `.card` sets no `display`, so
+ *    it is a BLOCK; `Card` is `flex flex-col`, which brings `align-items:
+ *    stretch`. Any DIRECT child that used to be shrink-to-fit — a lone button,
+ *    a chip, an inline badge — now spans the full width. It is a silent visual
+ *    change, not an error. Give such a child `self-start` (or wrap it), and
+ *    check the direct children whenever converting a card that held a single
+ *    control.
+ *
  * 2. NO `backdrop-filter`. `.card` blurs its backdrop for the dark glass look.
  *    Over an opaque white light-mode card that renders nothing while still
  *    forcing a compositor layer, so it was pure cost on the light default.
@@ -86,11 +94,18 @@ const Card = forwardRef(function Card(
         padding: PAD[pad] ?? PAD.default,
         background: 'var(--card-from)',
         color: 'var(--card-text)',
-        border: '1px solid',
-        borderColor: TONE_BORDER[tone] ?? TONE_BORDER.default,
+        // `border` and `box-shadow` STAY INLINE so stray `border-*` utility
+        // classes remain inert and `tone` is the one route - but they resolve
+        // through variables that `.tp-card` owns, so :hover can still re-point
+        // them. Writing the tone straight into `borderColor` was the bug: the
+        // hover cue was dead on every interactive card, while `cursor` and the
+        // focus ring worked, because those two are never set inline.
+        // The component writes ONLY `--tp-card-tone`; see index.css.
+        '--tp-card-tone': TONE_BORDER[tone] ?? TONE_BORDER.default,
+        border: '1px solid var(--tp-card-border)',
+        boxShadow: 'var(--tp-card-shadow)',
         borderTop: accent ? '2px solid var(--accent)' : undefined,
         borderRadius: 'var(--radius-card)',
-        boxShadow: 'var(--shadow-card)',
         ...style,
       }}
       {...rest}

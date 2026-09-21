@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import * as inspIntelApi from '../lib/api/inspectionIntelligence'
 import PageHeader from '../components/ui/PageHeader'
+import Card from '../components/ui/Card'
 import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import EmailPdfButton from '../components/EmailPdfButton'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
@@ -104,12 +105,6 @@ function complianceColor(val) {
   if (v >= 60) return 'text-yellow-400'
   return 'text-red-400'
 }
-function complianceBg(val) {
-  const v = parseFloat(val)
-  if (v >= 85) return 'bg-green-900/20 border-green-700/40'
-  if (v >= 60) return 'bg-yellow-900/20 border-yellow-700/40'
-  return 'bg-red-900/20 border-red-700/40'
-}
 function coverageColor(val) {
   const v = parseFloat(val)
   if (v >= 75) return 'text-green-400'
@@ -127,6 +122,23 @@ function dqColor(val) {
   if (v >= 60) return 'text-yellow-400'
   return 'text-red-400'
 }
+
+/**
+ * The stat tiles used to carry a background and border wash per threshold. Card sets
+ * background and borderColor as INLINE styles, so those classes are dead on it;
+ * the kit tints the BORDER instead, through `tone`.
+ *
+ * Deriving the tone from the tile's own colour function rather than repeating
+ * the thresholds means the border tint can never drift from the number it is
+ * describing. The four old background ternaries used exactly these cutoffs, so
+ * every tile keeps the band it had.
+ */
+const TONE_BY_COLOR = {
+  'text-green-400': 'good',
+  'text-yellow-400': 'warn',
+  'text-red-400': 'crit',
+}
+const toneFor = cls => TONE_BY_COLOR[cls] || 'default'
 
 const DONUT_COLORS = [
   '#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
@@ -671,11 +683,13 @@ export default function InspectionIntelligence() {
   if (error) {
     return (
       <div className="flex items-center justify-center h-80">
-        <div className="card p-8 text-center max-w-sm">
+        {/* `p-8` would be dead on a Card, which sets padding inline - the extra
+            room for an error state has to come through `style`. */}
+        <Card className="text-center max-w-sm" style={{ padding: 'var(--space-8)' }}>
           <XCircle className="mx-auto mb-3 text-red-400" size={32} />
           <p className="text-red-400 font-semibold">Failed to load data</p>
           <p className="text-[var(--panel-ink-4)] text-sm mt-1">{error}</p>
-        </div>
+        </Card>
       </div>
     )
   }
@@ -683,13 +697,14 @@ export default function InspectionIntelligence() {
   if (inspections.length === 0 && fleet.length === 0) {
     return (
       <div className="flex items-center justify-center h-80">
-        <div className="card p-10 text-center max-w-md">
+        {/* Same trap as the error state: `p-10` cannot beat Card's inline padding. */}
+        <Card className="text-center max-w-md" style={{ padding: 'var(--space-10)' }}>
           <ClipboardCheck className="mx-auto mb-4 text-gray-600" size={40} />
           <p className="text-[var(--panel-ink-2)] font-semibold text-lg">No inspection records found</p>
           <p className="text-[var(--panel-ink-4)] text-sm mt-2">
             Schedule inspections to enable intelligence monitoring.
           </p>
-        </div>
+        </Card>
       </div>
     )
   }
@@ -722,7 +737,8 @@ export default function InspectionIntelligence() {
       />
 
       {/* ── Filters ── */}
-      <div className="card p-4">
+      {/* `p-4` is dead on a Card; `pad="tight"` is that step, density-aware. */}
+      <Card pad="tight">
         <div className="flex flex-wrap items-center gap-3">
           {/* Country chips */}
           <div className="flex items-center gap-1.5 flex-wrap">
@@ -785,12 +801,12 @@ export default function InspectionIntelligence() {
             {filtered.length} inspection{filtered.length !== 1 ? 's' : ''} in view
           </span>
         </div>
-      </div>
+      </Card>
 
       {/* ── Section 1: Compliance Overview stat cards ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         {/* Inspection Compliance */}
-        <div className={`card p-5 border ${complianceBg(complianceMetrics.compliancePct)}`}>
+        <Card tone={toneFor(complianceColor(complianceMetrics.compliancePct))}>
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs text-[var(--panel-ink-3)] uppercase tracking-wider font-medium">Inspection Compliance</span>
             <CheckCircle size={16} className={complianceColor(complianceMetrics.compliancePct)} />
@@ -807,10 +823,10 @@ export default function InspectionIntelligence() {
               style={{ width: `${Math.min(100, parseFloat(complianceMetrics.compliancePct))}%` }}
             />
           </div>
-        </div>
+        </Card>
 
         {/* Pressure Data Coverage */}
-        <div className={`card p-5 border ${parseFloat(complianceMetrics.pressureCovPct) >= 75 ? 'bg-green-900/10 border-green-700/30' : parseFloat(complianceMetrics.pressureCovPct) >= 50 ? 'bg-yellow-900/10 border-yellow-700/30' : 'bg-red-900/10 border-red-700/30'}`}>
+        <Card tone={toneFor(coverageColor(complianceMetrics.pressureCovPct))}>
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs text-[var(--panel-ink-3)] uppercase tracking-wider font-medium">Pressure Coverage</span>
             <BarChart2 size={16} className={coverageColor(complianceMetrics.pressureCovPct)} />
@@ -825,10 +841,10 @@ export default function InspectionIntelligence() {
               style={{ width: `${Math.min(100, parseFloat(complianceMetrics.pressureCovPct))}%` }}
             />
           </div>
-        </div>
+        </Card>
 
         {/* Missing Inspections */}
-        <div className={`card p-5 border ${missingInspections.length === 0 ? 'bg-green-900/10 border-green-700/30' : missingInspections.length <= 5 ? 'bg-yellow-900/10 border-yellow-700/30' : 'bg-red-900/10 border-red-700/30'}`}>
+        <Card tone={toneFor(missingColor(missingInspections.length))}>
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs text-[var(--panel-ink-3)] uppercase tracking-wider font-medium">Missing Inspections</span>
             <AlertTriangle size={16} className={missingColor(missingInspections.length)} />
@@ -842,10 +858,10 @@ export default function InspectionIntelligence() {
             {' · '}
             <span className="text-orange-400">{missingInspections.filter(v => v.severity === 'high').length} high</span>
           </p>
-        </div>
+        </Card>
 
         {/* Data Quality Score */}
-        <div className={`card p-5 border ${parseFloat(complianceMetrics.dqScore) >= 80 ? 'bg-green-900/10 border-green-700/30' : parseFloat(complianceMetrics.dqScore) >= 60 ? 'bg-yellow-900/10 border-yellow-700/30' : 'bg-red-900/10 border-red-700/30'}`}>
+        <Card tone={toneFor(dqColor(complianceMetrics.dqScore))}>
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs text-[var(--panel-ink-3)] uppercase tracking-wider font-medium">Data Quality Score</span>
             <ShieldCheck size={16} className={dqColor(complianceMetrics.dqScore)} />
@@ -860,11 +876,15 @@ export default function InspectionIntelligence() {
               style={{ width: `${Math.min(100, parseFloat(complianceMetrics.dqScore))}%` }}
             />
           </div>
-        </div>
+        </Card>
       </div>
 
       {/* ── Section 1b: Tyre man activity ── */}
-      <div className="card overflow-hidden">
+      {/* A full-bleed panel: `pad="none"` keeps the table edge to edge under its
+          own header rule, and `clip` crops those edges to the card radius. The
+          only out-of-flow DOM in here is none - native selects paint outside the
+          page's overflow context, so clipping is safe. */}
+      <Card pad="none" clip>
         <div className="px-5 py-4 border-b border-white/5 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Users size={16} className="text-blue-400" />
@@ -945,12 +965,12 @@ export default function InspectionIntelligence() {
           </div>
         )}
         <TablePagination {...activityPager} />
-      </div>
+      </Card>
 
       {/* ── Section 2: Charts ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Compliance by Site */}
-        <div className="card p-4">
+        <Card pad="tight">
           <p className="text-sm font-semibold text-[var(--panel-ink-2)] mb-3">Compliance % by Site</p>
           {complianceBySite.length === 0 ? (
             <div className="flex items-center justify-center h-[260px] text-gray-600 text-sm">No site data</div>
@@ -959,18 +979,18 @@ export default function InspectionIntelligence() {
               <Bar data={siteChartData} options={CHART_OPTS_BAR} />
             </div>
           )}
-        </div>
+        </Card>
 
         {/* Monthly Trend */}
-        <div className="card p-4">
+        <Card pad="tight">
           <p className="text-sm font-semibold text-[var(--panel-ink-2)] mb-3">Monthly Compliance Trend</p>
           <div style={{ height: 260 }}>
             <Line data={trendChartData} options={CHART_OPTS_LINE} />
           </div>
-        </div>
+        </Card>
 
         {/* Inspection Type Distribution */}
-        <div className="card p-4">
+        <Card pad="tight">
           <p className="text-sm font-semibold text-[var(--panel-ink-2)] mb-3">Inspection Type Distribution</p>
           {typeDistribution.length === 0 ? (
             <div className="flex items-center justify-center h-[240px] text-gray-600 text-sm">No data</div>
@@ -979,11 +999,11 @@ export default function InspectionIntelligence() {
               <Doughnut data={donutChartData} options={DONUT_OPTS} />
             </div>
           )}
-        </div>
+        </Card>
       </div>
 
       {/* ── Section 3: Duplicate Detection ── */}
-      <div className="card overflow-hidden">
+      <Card pad="none" clip>
         <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <AlertCircle size={16} className="text-yellow-400" />
@@ -1039,10 +1059,11 @@ export default function InspectionIntelligence() {
           </div>
         )}
         <TablePagination {...duplicatePager} />
-      </div>
+      </Card>
 
       {/* ── Section 4: Data Quality Issues ── */}
-      <div className="card p-5">
+      {/* `p-5` is exactly --pad-card (20px), so the default pad reproduces it. */}
+      <Card>
         <div className="flex items-center gap-2 mb-4">
           <ShieldCheck size={16} className="text-indigo-400" />
           <p className="font-semibold text-gray-200">Data Quality Issues</p>
@@ -1131,11 +1152,11 @@ export default function InspectionIntelligence() {
             )}
           </div>
         </div>
-      </div>
+      </Card>
 
       {/* ── Section 4b: Inconsistent Inspections ── */}
       {inconsistentInspections.length > 0 && (
-        <div className="card overflow-hidden">
+        <Card pad="none" clip>
           <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <TrendingUp size={16} className="text-purple-400" />
@@ -1160,11 +1181,11 @@ export default function InspectionIntelligence() {
               </div>
             ))}
           </div>
-        </div>
+        </Card>
       )}
 
       {/* ── Section 5: Recommendations ── */}
-      <div className="card p-5">
+      <Card>
         <div className="flex items-center gap-2 mb-4">
           <AlertCircle size={16} className="text-yellow-400" />
           <p className="font-semibold text-gray-200">Automated Recommendations</p>
@@ -1183,10 +1204,13 @@ export default function InspectionIntelligence() {
             ))}
           </div>
         )}
-      </div>
+      </Card>
 
       {/* ── Section 6: Inspection coverage by vehicle (every asset, done or not) ── */}
-      <div className="card overflow-hidden">
+      {/* Clipping is safe even though this header carries a <select>: a browser
+          paints an option list as an OS-level popup, outside any page overflow
+          context. Nothing here renders an out-of-flow popover as real DOM. */}
+      <Card pad="none" clip>
         <div className="px-5 py-4 border-b border-white/5 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <ClipboardCheck size={16} className="text-orange-400" />
@@ -1306,7 +1330,7 @@ export default function InspectionIntelligence() {
             </div>
           </>
         )}
-      </div>
+      </Card>
 
     </div>
   )

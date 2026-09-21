@@ -560,6 +560,7 @@ export default function AuditTrail() {
           {/* EnterpriseTable */}
           <div className="card p-0 overflow-hidden">
             <EnterpriseTable
+              viewKey="audit-trail"
               reportMeta={reportMeta}
               columns={auditColumns}
               data={visibleAuditRows}

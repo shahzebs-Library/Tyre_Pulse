@@ -30,6 +30,8 @@ import {
   ChevronRight, BadgeCheck, Star, AlertCircle, Loader2,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import Card, { CardHeader } from '../components/ui/Card'
+import Modal from '../components/ui/Modal'
 import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import { useSettings } from '../contexts/SettingsContext'
 import { formatCurrencyCompact, formatDate } from '../lib/formatters'
@@ -352,10 +354,15 @@ export default function TechnicianScorecard() {
       />
 
       {error && (
-        <div className="card border border-red-800/50 flex items-start gap-3">
+        /* `border border-red-800/50` would be DEAD on a Card - Card sets
+           `border`/`borderColor` inline and inline beats a plain utility - so
+           the red edge comes from `tone`. Card is also `flex flex-col` and
+           Tailwind emits .flex-col AFTER .flex-row, so the row direction has to
+           go in `style`, which Card spreads last. */
+        <Card tone="crit" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
           <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
           <div><p className="text-red-300 font-medium">Couldn't load work orders.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
-        </div>
+        </Card>
       )}
 
       {/* Tabs */}
@@ -384,19 +391,19 @@ export default function TechnicianScorecard() {
             {kpis.map((k) => {
               const Icon = k.icon
               return (
-                <div key={k.label} className="card">
+                <Card key={k.label}>
                   <div className="flex items-center justify-between">
                     <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                     <Icon size={16} className={k.tone} />
                   </div>
                   <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{orders === null ? '—' : k.value}</p>
-                </div>
+                </Card>
               )
             })}
           </div>
 
-          <div className="card">
-            <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Composite ranking (top {topRanked.length || 0})</h3>
+          <Card>
+            <CardHeader title={`Composite ranking (top ${topRanked.length || 0})`} />
             <div style={{ height: Math.max(240, topRanked.length * 30) }}>
               {orders === null ? (
                 <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" />
@@ -408,9 +415,9 @@ export default function TechnicianScorecard() {
                 </div>
               )}
             </div>
-          </div>
+          </Card>
 
-          <div className="card space-y-3">
+          <Card className="space-y-3">
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative flex-1 min-w-[200px]">
                 <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
@@ -425,9 +432,14 @@ export default function TechnicianScorecard() {
               {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
               <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {ranked.length}</span>
             </div>
-          </div>
+          </Card>
 
-          <div className="card overflow-hidden !p-0">
+          {/* `!p-0` becomes pad="none" and `overflow-hidden` becomes `clip`, so
+              the table still crops to the card radius. TablePagination's
+              rows-per-page control is a NATIVE <select>, which the browser paints
+              as an OS-level popup outside the page's overflow context, so
+              clipping cannot reach it. */}
+          <Card pad="none" clip>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -490,14 +502,14 @@ export default function TechnicianScorecard() {
               </table>
             </div>
             <TablePagination {...leaderboardPager} />
-          </div>
+          </Card>
         </>
       )}
 
       {/* ══════════════════ TECHNICIANS ══════════════════ */}
       {tab === 'technicians' && (
         <>
-          <div className="card space-y-3">
+          <Card className="space-y-3">
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative flex-1 min-w-[200px]">
                 <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
@@ -509,22 +521,29 @@ export default function TechnicianScorecard() {
               </label>
               <span className="text-xs text-[var(--text-muted)] ml-auto">{techCards.length} {allRoles ? 'users' : 'technicians'}</span>
             </div>
-          </div>
+          </Card>
 
           {loadingCompetency ? (
-            <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="card h-16 animate-pulse" />)}</div>
+            <div className="space-y-2">{[0, 1, 2].map((i) => <Card key={i} className="h-16 animate-pulse" />)}</div>
           ) : techCards.length === 0 ? (
-            <div className="card text-center py-12 space-y-2">
+            /* `py-12` would be DEAD on a Card - Card sets `padding` inline and
+               an inline declaration beats a plain utility, so the empty state
+               would silently collapse to --pad-card. The roominess goes in
+               `style`, which Card spreads last. */
+            <Card className="text-center space-y-2" style={{ paddingBlock: 'var(--space-12)' }}>
               <Users size={30} className="mx-auto text-[var(--text-muted)]" />
               <p className="text-[var(--text-primary)] font-semibold">No technicians found.</p>
               <p className="text-sm text-[var(--text-muted)]">{allRoles ? 'No users in this scope.' : 'No users with a workshop/technician role. Toggle “Show all roles” to include everyone.'}</p>
-            </div>
+            </Card>
           ) : (
             <div className="space-y-2">
               {techCards.map(({ profile: p, skills: uSkills, certs: uCerts, life, perf, expiring }) => {
                 const open = expanded === p.id
                 return (
-                  <div key={p.id} className="card !p-0 overflow-hidden">
+                  /* `clip` keeps the row button's hover fill inside the card
+                     radius, exactly as the old `overflow-hidden` did. Nothing
+                     inside renders out of flow, so nothing can be clipped. */
+                  <Card key={p.id} pad="none" clip>
                     <button onClick={() => setExpanded(open ? null : p.id)} className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-[var(--input-bg)]/40">
                       <ChevronRight size={16} className={`text-[var(--text-muted)] transition-transform ${open ? 'rotate-90' : ''}`} />
                       <div className="w-9 h-9 rounded-full bg-[var(--input-bg)] flex items-center justify-center text-sm font-bold text-[var(--text-secondary)] shrink-0">
@@ -608,7 +627,7 @@ export default function TechnicianScorecard() {
                         </div>
                       </div>
                     )}
-                  </div>
+                  </Card>
                 )
               })}
             </div>
@@ -628,18 +647,18 @@ export default function TechnicianScorecard() {
             ].map((k) => {
               const Icon = k.icon
               return (
-                <div key={k.label} className="card">
+                <Card key={k.label}>
                   <div className="flex items-center justify-between">
                     <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                     <Icon size={16} className={k.tone} />
                   </div>
                   <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{loadingCompetency ? '—' : k.value}</p>
-                </div>
+                </Card>
               )
             })}
           </div>
 
-          <div className="card overflow-hidden !p-0">
+          <Card pad="none" clip>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -672,7 +691,7 @@ export default function TechnicianScorecard() {
                 </tbody>
               </table>
             </div>
-          </div>
+          </Card>
         </>
       )}
 
@@ -680,13 +699,16 @@ export default function TechnicianScorecard() {
       {tab === 'certs' && (
         <>
           {!loadingCompetency && expiringSoon.length > 0 && (
-            <div className="card border border-amber-700/50 bg-amber-900/10 flex items-start gap-3">
+            /* `border border-amber-700/50 bg-amber-900/10` would all be DEAD -
+               Card sets border, borderColor AND background inline - so the amber
+               edge comes from `tone` and the row direction from `style`. */
+            <Card tone="warn" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
               <AlertCircle size={18} className="text-amber-400 mt-0.5 shrink-0" />
               <div>
                 <p className="text-amber-200 font-medium">{expiringSoon.length} certification{expiringSoon.length === 1 ? '' : 's'} expired or expiring within 60 days.</p>
                 <p className="text-[var(--text-muted)] text-sm mt-0.5">Schedule renewals to keep the workshop compliant.</p>
               </div>
-            </div>
+            </Card>
           )}
 
           <div className="flex items-center justify-end">
@@ -707,7 +729,7 @@ export default function TechnicianScorecard() {
             </button>
           </div>
 
-          <div className="card overflow-hidden !p-0">
+          <Card pad="none" clip>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -750,7 +772,7 @@ export default function TechnicianScorecard() {
               </table>
             </div>
             <TablePagination {...certPager} />
-          </div>
+          </Card>
         </>
       )}
 
@@ -797,42 +819,39 @@ function SkillModal({ userId, userName, country, onClose, onSaved }) {
     }
   }
 
+  // The submit button stays INSIDE the <form> rather than moving to Modal's
+  // footer: hoisting it would need a `form="id"` association, which is a
+  // behaviour change, not a migration.
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
-      <div className="card w-full max-w-md" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-1">
-          <h3 className="text-lg font-bold text-[var(--text-primary)]">Add / update skill</h3>
-          <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
+    <Modal open onClose={onClose} size="md" title="Add / update skill">
+      <p className="text-xs text-[var(--text-muted)] mb-4 inline-flex items-center gap-1.5"><Users size={12} className="opacity-60" /> {userName}</p>
+      <form onSubmit={submit} className="space-y-4">
+        <div>
+          <label className="label">Skill</label>
+          <select className="input w-full" value={skillId} onChange={(e) => setSkillId(e.target.value)}>
+            <option value="">— Select a skill —</option>
+            {SKILL_CATALOGUE.map((s) => <option key={s.skill_id} value={s.skill_id}>{s.name}</option>)}
+          </select>
         </div>
-        <p className="text-xs text-[var(--text-muted)] mb-4 inline-flex items-center gap-1.5"><Users size={12} className="opacity-60" /> {userName}</p>
-        <form onSubmit={submit} className="space-y-4">
-          <div>
-            <label className="label">Skill</label>
-            <select className="input w-full" value={skillId} onChange={(e) => setSkillId(e.target.value)}>
-              <option value="">— Select a skill —</option>
-              {SKILL_CATALOGUE.map((s) => <option key={s.skill_id} value={s.skill_id}>{s.name}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="label">Proficiency level</label>
-            <select className="input w-full" value={level} onChange={(e) => setLevel(Number(e.target.value))}>
-              {[1, 2, 3].map((n) => <option key={n} value={n}>{n} — {LEVEL_LABELS[n]}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="label">Notes (optional)</label>
-            <textarea className="input w-full" rows={2} maxLength={2000} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Assessment notes…" />
-          </div>
-          {err && <div className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2"><AlertTriangle size={15} className="mt-0.5 shrink-0" /> {err}</div>}
-          <div className="flex items-center justify-end gap-2 pt-1">
-            <button type="button" onClick={onClose} className="btn-secondary text-sm" disabled={saving}>Cancel</button>
-            <button type="submit" className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={saving || !skillId}>
-              {saving ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : 'Save skill'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div>
+          <label className="label">Proficiency level</label>
+          <select className="input w-full" value={level} onChange={(e) => setLevel(Number(e.target.value))}>
+            {[1, 2, 3].map((n) => <option key={n} value={n}>{n} — {LEVEL_LABELS[n]}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="label">Notes (optional)</label>
+          <textarea className="input w-full" rows={2} maxLength={2000} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Assessment notes…" />
+        </div>
+        {err && <div className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2"><AlertTriangle size={15} className="mt-0.5 shrink-0" /> {err}</div>}
+        <div className="flex items-center justify-end gap-2 pt-1">
+          <button type="button" onClick={onClose} className="btn-secondary text-sm" disabled={saving}>Cancel</button>
+          <button type="submit" className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={saving || !skillId}>
+            {saving ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : 'Save skill'}
+          </button>
+        </div>
+      </form>
+    </Modal>
   )
 }
 
@@ -882,55 +901,52 @@ function CertModal({ userId, userName, country, onClose, onSaved }) {
     }
   }
 
+  // `max-h-[90vh] overflow-y-auto` is dropped on purpose: Modal already caps the
+  // panel to the viewport and scrolls the BODY only, so the header and the
+  // action row stay reachable instead of scrolling away.
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
-      <div className="card w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-1">
-          <h3 className="text-lg font-bold text-[var(--text-primary)]">Add certification</h3>
-          <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
+    <Modal open onClose={onClose} size="md" title="Add certification">
+      <p className="text-xs text-[var(--text-muted)] mb-4 inline-flex items-center gap-1.5"><Users size={12} className="opacity-60" /> {userName}</p>
+      <form onSubmit={submit} className="space-y-4">
+        <div>
+          <label className="label">Certification</label>
+          <select className="input w-full" value={certId} onChange={(e) => onPickCert(e.target.value)}>
+            <option value="">— Select a certification —</option>
+            {CERT_CATALOGUE.map((c) => <option key={c.cert_id} value={c.cert_id}>{c.name}</option>)}
+          </select>
         </div>
-        <p className="text-xs text-[var(--text-muted)] mb-4 inline-flex items-center gap-1.5"><Users size={12} className="opacity-60" /> {userName}</p>
-        <form onSubmit={submit} className="space-y-4">
+        <div>
+          <label className="label">Issuer</label>
+          <input className="input w-full" value={issuer} maxLength={200} onChange={(e) => setIssuer(e.target.value)} placeholder="Issuing body" />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="label">Certification</label>
-            <select className="input w-full" value={certId} onChange={(e) => onPickCert(e.target.value)}>
-              <option value="">— Select a certification —</option>
-              {CERT_CATALOGUE.map((c) => <option key={c.cert_id} value={c.cert_id}>{c.name}</option>)}
-            </select>
+            <label className="label">Issue date</label>
+            <input className="input w-full" type="date" value={issueDate} onChange={(e) => onPickIssue(e.target.value)} />
           </div>
           <div>
-            <label className="label">Issuer</label>
-            <input className="input w-full" value={issuer} maxLength={200} onChange={(e) => setIssuer(e.target.value)} placeholder="Issuing body" />
+            <label className="label">Expiry date {certById(certId) ? <span className="text-[10px] text-[var(--text-muted)]">(auto)</span> : null}</label>
+            <input className="input w-full" type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="label">Issue date</label>
-              <input className="input w-full" type="date" value={issueDate} onChange={(e) => onPickIssue(e.target.value)} />
-            </div>
-            <div>
-              <label className="label">Expiry date {certById(certId) ? <span className="text-[10px] text-[var(--text-muted)]">(auto)</span> : null}</label>
-              <input className="input w-full" type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
-            </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="label">Certificate number (optional)</label>
+            <input className="input w-full" value={certNumber} maxLength={120} onChange={(e) => setCertNumber(e.target.value)} />
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="label">Certificate number (optional)</label>
-              <input className="input w-full" value={certNumber} maxLength={120} onChange={(e) => setCertNumber(e.target.value)} />
-            </div>
-            <div>
-              <label className="label">Document URL (optional)</label>
-              <input className="input w-full" value={documentUrl} maxLength={1000} onChange={(e) => setDocumentUrl(e.target.value)} placeholder="https://…" />
-            </div>
+          <div>
+            <label className="label">Document URL (optional)</label>
+            <input className="input w-full" value={documentUrl} maxLength={1000} onChange={(e) => setDocumentUrl(e.target.value)} placeholder="https://…" />
           </div>
-          {err && <div className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2"><AlertTriangle size={15} className="mt-0.5 shrink-0" /> {err}</div>}
-          <div className="flex items-center justify-end gap-2 pt-1">
-            <button type="button" onClick={onClose} className="btn-secondary text-sm" disabled={saving}>Cancel</button>
-            <button type="submit" className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={saving || !certId}>
-              {saving ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : 'Save certification'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        </div>
+        {err && <div className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2"><AlertTriangle size={15} className="mt-0.5 shrink-0" /> {err}</div>}
+        <div className="flex items-center justify-end gap-2 pt-1">
+          <button type="button" onClick={onClose} className="btn-secondary text-sm" disabled={saving}>Cancel</button>
+          <button type="submit" className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={saving || !certId}>
+            {saving ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : 'Save certification'}
+          </button>
+        </div>
+      </form>
+    </Modal>
   )
 }

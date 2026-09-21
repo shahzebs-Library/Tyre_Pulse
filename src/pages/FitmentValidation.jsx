@@ -30,6 +30,8 @@ import {
   History, ListChecks, Play, ScanLine, Layers, Gauge,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import Card, { CardHeader } from '../components/ui/Card'
+import Modal from '../components/ui/Modal'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   loadFitmentData, listRules, createRule, updateRule, deleteRule,
@@ -368,14 +370,19 @@ export default function FitmentValidation() {
       </div>
 
       {error && (
-        <div className="card border border-red-800/50 flex items-start gap-3">
+        /* `border border-red-800/50` would be DEAD on a Card - Card sets
+           `border`/`borderColor` inline and inline beats a plain utility - so
+           the red edge comes from `tone`. Card is also `flex flex-col` and
+           Tailwind emits .flex-col AFTER .flex-row, so the row direction has to
+           go in `style`, which Card spreads last. */
+        <Card tone="crit" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
           <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
           <div><p className="text-red-300 font-medium">Couldn't load fitment data.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
-        </div>
+        </Card>
       )}
 
       {notProvisioned && (tab === 'rules' || tab === 'history') && (
-        <div className="card border border-amber-800/50 flex items-start gap-3">
+        <Card tone="warn" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
           <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
           <div>
             <p className="text-amber-300 font-medium">The fitment rule engine isn't enabled on this database yet.</p>
@@ -383,16 +390,14 @@ export default function FitmentValidation() {
               Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V208_FITMENT_RULES.sql</span>, then reload. The Validate tab still runs against the built-in default policy.
             </p>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* ── VALIDATE TAB ─────────────────────────────────────────────────────── */}
       {tab === 'validate' && (
         <div className="space-y-4">
-          <div className="card">
-            <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
-              <Gauge size={15} /> Pre-installation check
-            </h3>
+          <Card>
+            <CardHeader icon={Gauge} title="Pre-installation check" />
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="label">Tyre serial</label>
@@ -407,6 +412,10 @@ export default function FitmentValidation() {
                 <input className="input w-full" placeholder="e.g. A2LO" value={vForm.position_code} maxLength={60} onChange={(e) => setV('position_code', e.target.value)} />
               </div>
             </div>
+            {/* This button group stays on its OWN wrapping row rather than in
+                CardHeader's `actions` slot: that slot is flex-shrink-0 and
+                cannot wrap, so a multi-button group there pushes a phone-width
+                card into horizontal page scroll. */}
             <div className="mt-4 flex flex-wrap gap-2">
               <button onClick={() => runValidation(false)} className="btn-secondary text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={busy}>
                 <FlaskConical size={14} /> {vSimulating ? 'Simulating…' : 'Simulate'}
@@ -418,17 +427,22 @@ export default function FitmentValidation() {
                 <Info size={12} /> Simulate previews only. Validate & record writes to the ledger.
               </span>
             </div>
-          </div>
+          </Card>
 
           {vError && (
-            <div className="card border border-red-800/50 flex items-start gap-3">
+            <Card tone="crit" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
               <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
               <p className="text-red-300 text-sm">{vError}</p>
-            </div>
+            </Card>
           )}
 
           {vResult && (
-            <div className={`card border-2 ${vResult.is_valid ? 'border-emerald-600/40' : 'border-red-600/40'}`}>
+            /* The old `border-2 border-emerald-600/40 | border-red-600/40` was a
+               DEAD utility on a Card - Card sets `border` AND `borderColor`
+               inline, so the pass/fail edge would have silently vanished on the
+               one card whose colour carries a safety verdict. `tone` is the live
+               equivalent. */
+            <Card tone={vResult.is_valid ? 'good' : 'crit'}>
               <div className="flex items-center gap-2 flex-wrap">
                 {vResult.is_valid
                   ? <CheckCircle2 size={20} className="text-emerald-400" />
@@ -512,7 +526,7 @@ export default function FitmentValidation() {
                   ))}
                 </ul>
               </div>
-            </div>
+            </Card>
           )}
         </div>
       )}
@@ -525,32 +539,35 @@ export default function FitmentValidation() {
             {kpis.map((k) => {
               const Icon = k.icon
               return (
-                <div key={k.label} className="card">
+                <Card key={k.label}>
                   <div className="flex items-center justify-between">
                     <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                     <Icon size={16} className={k.tone} />
                   </div>
                   <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{!loaded ? '—' : k.value}</p>
-                </div>
+                </Card>
               )
             })}
           </div>
 
           {/* Charts */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className="card">
-              <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Fitment breakdown</h3>
+            <Card>
+              <CardHeader title="Fitment breakdown" />
               <div className="h-64">{hasAny ? <Doughnut data={donutData} options={{ ...chartOpts, scales: undefined }} /> : <EmptyChart loading={!loaded} empty="No fleet assets in scope." />}</div>
               {compliancePct != null && <p className="text-xs text-[var(--text-muted)] mt-3 flex items-center gap-1.5"><Info size={12} /> Correct-size rate (of checkable assets): <span className="font-semibold text-[var(--text-secondary)]">{compliancePct}%</span></p>}
-            </div>
-            <div className="card">
-              <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Wrong-size assets by site (top 10)</h3>
+            </Card>
+            <Card>
+              <CardHeader title="Wrong-size assets by site (top 10)" />
               <div className="h-64">{bySiteMismatch.length ? <Bar data={barData} options={chartOpts} /> : <EmptyChart loading={!loaded} empty="No wrong-size fitments found." />}</div>
-            </div>
+            </Card>
           </div>
 
-          {/* Filters */}
-          <div className="card space-y-3">
+          {/* Filters — the two result/site pickers are NATIVE <select>s, which the
+              browser paints as OS-level popups outside the page's overflow
+              context, so this card needs no un-clipping treatment (and Card does
+              not clip by default anyway). */}
+          <Card className="space-y-3">
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative flex-1 min-w-[200px]">
                 <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
@@ -569,10 +586,11 @@ export default function FitmentValidation() {
               {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
               <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {counts.total}</span>
             </div>
-          </div>
+          </Card>
 
-          {/* Table */}
-          <div className="card overflow-hidden !p-0">
+          {/* Table. `!p-0` becomes pad="none" and `overflow-hidden` becomes
+              `clip`, so the table still crops to the card radius. */}
+          <Card pad="none" clip>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -609,7 +627,7 @@ export default function FitmentValidation() {
               </table>
             </div>
             <TablePagination {...pager} />
-          </div>
+          </Card>
         </div>
       )}
 
@@ -619,7 +637,11 @@ export default function FitmentValidation() {
           {rules === null ? (
             <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-20 bg-[var(--input-bg)] rounded animate-pulse" />)}</div>
           ) : rules.length === 0 ? (
-            <div className="card py-12 text-center text-[var(--text-muted)]">
+            /* `py-12` would be DEAD on a Card - Card sets `padding` inline and
+               an inline declaration beats a plain utility, so this empty state
+               would silently collapse to --pad-card. The roominess goes in
+               `style`, which Card spreads last. */
+            <Card className="text-center text-[var(--text-muted)]" style={{ paddingBlock: 'var(--space-12)' }}>
               <ListChecks size={26} className="mx-auto mb-2 opacity-60" />
               <p className="text-sm">{notProvisioned ? 'Enable the engine (apply V208) to configure rules.' : 'No fitment rules yet — the Validate tab uses a built-in default policy until you add one.'}</p>
               {!notProvisioned && (
@@ -627,11 +649,11 @@ export default function FitmentValidation() {
                   <Plus size={14} /> Create the first rule
                 </button>
               )}
-            </div>
+            </Card>
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
               {rules.map((r) => (
-                <div key={r.id} className="card">
+                <Card key={r.id}>
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <div className="flex items-center gap-2">
@@ -665,7 +687,7 @@ export default function FitmentValidation() {
                     </div>
                   )}
                   {r.notes && <p className="text-xs text-[var(--text-muted)] mt-2">{r.notes}</p>}
-                </div>
+                </Card>
               ))}
             </div>
           )}
@@ -674,7 +696,7 @@ export default function FitmentValidation() {
 
       {/* ── HISTORY TAB ──────────────────────────────────────────────────────── */}
       {tab === 'history' && (
-        <div className="card overflow-hidden !p-0">
+        <Card pad="none" clip>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -715,109 +737,119 @@ export default function FitmentValidation() {
               </tbody>
             </table>
           </div>
-        </div>
+        </Card>
       )}
 
-      {/* Rule create / edit modal */}
+      {/* Rule create / edit modal. `max-h-[90vh] overflow-y-auto` is dropped on
+          purpose: Modal already caps the panel to the viewport and scrolls the
+          BODY only, so the heading and the action row stay reachable. The submit
+          button stays INSIDE the <form> rather than moving to Modal's footer -
+          hoisting it would need a `form="id"` association, which is a behaviour
+          change, not a migration. */}
       {showRuleModal && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" onClick={closeRuleModal}>
-          <div className="card w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-[var(--text-primary)]">{editingRule ? 'Edit fitment rule' : 'New fitment rule'}</h3>
-              <button onClick={closeRuleModal} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
+        <Modal
+          open
+          onClose={closeRuleModal}
+          size="lg"
+          title={editingRule ? 'Edit fitment rule' : 'New fitment rule'}
+        >
+          <form onSubmit={submitRule} className="space-y-4">
+            <div>
+              <label className="label">Rule name</label>
+              <input className="input w-full" placeholder="e.g. Steer axle — highway tractors" value={ruleForm.rule_name} maxLength={200} onChange={(e) => setRule('rule_name', e.target.value)} />
             </div>
-            <form onSubmit={submitRule} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="label">Rule name</label>
-                <input className="input w-full" placeholder="e.g. Steer axle — highway tractors" value={ruleForm.rule_name} maxLength={200} onChange={(e) => setRule('rule_name', e.target.value)} />
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="label">Applies to vehicle types (comma-separated, blank = all)</label>
-                  <input className="input w-full" placeholder="e.g. tractor, rigid_truck" value={ruleForm.applies_to_vehicle_types} onChange={(e) => setRule('applies_to_vehicle_types', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Applies to axle roles (comma-separated, blank = all)</label>
-                  <input className="input w-full" placeholder="e.g. steer, drive" value={ruleForm.applies_to_axle_roles} onChange={(e) => setRule('applies_to_axle_roles', e.target.value)} />
-                </div>
+                <label className="label">Applies to vehicle types (comma-separated, blank = all)</label>
+                <input className="input w-full" placeholder="e.g. tractor, rigid_truck" value={ruleForm.applies_to_vehicle_types} onChange={(e) => setRule('applies_to_vehicle_types', e.target.value)} />
               </div>
               <div>
-                <label className="label">Approved sizes (comma-separated, blank = any)</label>
-                <input className="input w-full" placeholder="e.g. 315/80R22.5, 295/80R22.5" value={ruleForm.approved_sizes} onChange={(e) => setRule('approved_sizes', e.target.value)} />
+                <label className="label">Applies to axle roles (comma-separated, blank = all)</label>
+                <input className="input w-full" placeholder="e.g. steer, drive" value={ruleForm.applies_to_axle_roles} onChange={(e) => setRule('applies_to_axle_roles', e.target.value)} />
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <div>
-                  <label className="label">Min tread (mm)</label>
-                  <input className="input w-full" type="number" step="0.1" min="0" value={ruleForm.min_tread_depth_mm} onChange={(e) => setRule('min_tread_depth_mm', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Max age (years)</label>
-                  <input className="input w-full" type="number" step="0.5" min="0" value={ruleForm.max_tyre_age_years} onChange={(e) => setRule('max_tyre_age_years', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Max retreads</label>
-                  <input className="input w-full" type="number" step="1" min="0" value={ruleForm.max_retread_count} onChange={(e) => setRule('max_retread_count', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Max dual Δ (mm)</label>
-                  <input className="input w-full" type="number" step="0.1" min="0" value={ruleForm.max_tread_delta_dual_mm} onChange={(e) => setRule('max_tread_delta_dual_mm', e.target.value)} />
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-4">
-                <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer">
-                  <input type="checkbox" className="accent-indigo-500" checked={ruleForm.allow_retread} onChange={(e) => setRule('allow_retread', e.target.checked)} /> Allow retread
-                </label>
-                <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer">
-                  <input type="checkbox" className="accent-indigo-500" checked={ruleForm.require_matching_pair} onChange={(e) => setRule('require_matching_pair', e.target.checked)} /> Require matching pair
-                </label>
-                <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer">
-                  <input type="checkbox" className="accent-indigo-500" checked={ruleForm.is_active} onChange={(e) => setRule('is_active', e.target.checked)} /> Active
-                </label>
+            </div>
+            <div>
+              <label className="label">Approved sizes (comma-separated, blank = any)</label>
+              <input className="input w-full" placeholder="e.g. 315/80R22.5, 295/80R22.5" value={ruleForm.approved_sizes} onChange={(e) => setRule('approved_sizes', e.target.value)} />
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div>
+                <label className="label">Min tread (mm)</label>
+                <input className="input w-full" type="number" step="0.1" min="0" value={ruleForm.min_tread_depth_mm} onChange={(e) => setRule('min_tread_depth_mm', e.target.value)} />
               </div>
               <div>
-                <label className="label">Notes (optional)</label>
-                <textarea className="input w-full min-h-[60px] resize-y" placeholder="e.g. GCC steer-axle policy" value={ruleForm.notes} maxLength={8000} onChange={(e) => setRule('notes', e.target.value)} />
+                <label className="label">Max age (years)</label>
+                <input className="input w-full" type="number" step="0.5" min="0" value={ruleForm.max_tyre_age_years} onChange={(e) => setRule('max_tyre_age_years', e.target.value)} />
               </div>
-
-              <p className="text-[11px] text-[var(--text-muted)] flex items-start gap-1.5">
-                <Info size={12} className="mt-0.5 shrink-0" />
-                Age, retread and dual-pair fields are stored for policy completeness but are not evaluated on this dataset (source data absent). Size, tread and lifecycle checks are enforced.
-              </p>
-
-              {ruleFormError && (
-                <div className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
-                  <AlertTriangle size={15} className="mt-0.5 shrink-0" /> {ruleFormError}
-                </div>
-              )}
-
-              <div className="flex items-center justify-end gap-2 pt-1">
-                <button type="button" onClick={closeRuleModal} className="btn-secondary text-sm" disabled={ruleSaving}>Cancel</button>
-                <button type="submit" className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={ruleSaving}>
-                  {ruleSaving ? 'Saving…' : editingRule ? 'Save changes' : 'Create rule'}
-                </button>
+              <div>
+                <label className="label">Max retreads</label>
+                <input className="input w-full" type="number" step="1" min="0" value={ruleForm.max_retread_count} onChange={(e) => setRule('max_retread_count', e.target.value)} />
               </div>
-            </form>
-          </div>
-        </div>
+              <div>
+                <label className="label">Max dual Δ (mm)</label>
+                <input className="input w-full" type="number" step="0.1" min="0" value={ruleForm.max_tread_delta_dual_mm} onChange={(e) => setRule('max_tread_delta_dual_mm', e.target.value)} />
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-4">
+              <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer">
+                <input type="checkbox" className="accent-indigo-500" checked={ruleForm.allow_retread} onChange={(e) => setRule('allow_retread', e.target.checked)} /> Allow retread
+              </label>
+              <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer">
+                <input type="checkbox" className="accent-indigo-500" checked={ruleForm.require_matching_pair} onChange={(e) => setRule('require_matching_pair', e.target.checked)} /> Require matching pair
+              </label>
+              <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer">
+                <input type="checkbox" className="accent-indigo-500" checked={ruleForm.is_active} onChange={(e) => setRule('is_active', e.target.checked)} /> Active
+              </label>
+            </div>
+            <div>
+              <label className="label">Notes (optional)</label>
+              <textarea className="input w-full min-h-[60px] resize-y" placeholder="e.g. GCC steer-axle policy" value={ruleForm.notes} maxLength={8000} onChange={(e) => setRule('notes', e.target.value)} />
+            </div>
+
+            <p className="text-[11px] text-[var(--text-muted)] flex items-start gap-1.5">
+              <Info size={12} className="mt-0.5 shrink-0" />
+              Age, retread and dual-pair fields are stored for policy completeness but are not evaluated on this dataset (source data absent). Size, tread and lifecycle checks are enforced.
+            </p>
+
+            {ruleFormError && (
+              <div className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
+                <AlertTriangle size={15} className="mt-0.5 shrink-0" /> {ruleFormError}
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button type="button" onClick={closeRuleModal} className="btn-secondary text-sm" disabled={ruleSaving}>Cancel</button>
+              <button type="submit" className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={ruleSaving}>
+                {ruleSaving ? 'Saving…' : editingRule ? 'Save changes' : 'Create rule'}
+              </button>
+            </div>
+          </form>
+        </Modal>
       )}
 
-      {/* Delete rule confirm */}
+      {/* Delete rule confirm. No <form> here, so the actions belong in Modal's
+          footer. The in-flight guard from the old backdrop handler is preserved
+          on onClose, so Escape and the backdrop still cannot close mid-delete. */}
       {confirmDeleteRule && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" onClick={() => !deletingRule && setConfirmDeleteRule(null)}>
-          <div className="card w-full max-w-md" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center gap-2 mb-3">
-              <Trash2 size={18} className="text-red-400" />
-              <h3 className="text-base font-bold text-[var(--text-primary)]">Delete fitment rule</h3>
-            </div>
-            <p className="text-sm text-[var(--text-secondary)]">Delete <span className="font-semibold text-[var(--text-primary)]">{confirmDeleteRule.rule_name}</span>? This cannot be undone.</p>
-            <div className="flex items-center justify-end gap-2 mt-4">
+        <Modal
+          open
+          onClose={() => { if (!deletingRule) setConfirmDeleteRule(null) }}
+          size="sm"
+          title="Delete fitment rule"
+          footer={(
+            <>
               <button onClick={() => setConfirmDeleteRule(null)} className="btn-secondary text-sm" disabled={deletingRule}>Cancel</button>
               <button onClick={doDeleteRule} className="btn-danger text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={deletingRule}>
                 {deletingRule ? 'Deleting…' : 'Delete rule'}
               </button>
-            </div>
+            </>
+          )}
+        >
+          <div className="flex items-start gap-3">
+            <Trash2 size={18} className="text-red-400 mt-0.5 shrink-0" />
+            <p className="text-sm text-[var(--text-secondary)]">Delete <span className="font-semibold text-[var(--text-primary)]">{confirmDeleteRule.rule_name}</span>? This cannot be undone.</p>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   )

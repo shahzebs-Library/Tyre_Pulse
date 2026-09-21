@@ -1,7 +1,7 @@
 /**
  * Register views service — persistence for the operator-grade register layouts.
  *
- * The RULES live in the pure engine `src/lib/savedViews.js`; this module only
+ * The RULES live in the pure engine `src/lib/registerViews.js`; this module only
  * reads and writes the blob. Every function here DEGRADES GRACEFULLY:
  *
  *   - The `user_view_prefs` table ships behind an UNAPPLIED migration

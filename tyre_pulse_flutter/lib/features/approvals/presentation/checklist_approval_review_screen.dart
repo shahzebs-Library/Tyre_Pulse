@@ -162,9 +162,7 @@ class _ChecklistApprovalReviewScreenState
           item.templateSnapshot,
         );
       }
-      if (templateInfo == null &&
-          templateId != null &&
-          templateId.isNotEmpty) {
+      if (templateInfo == null && templateId != null && templateId.isNotEmpty) {
         // Best-effort - see the library comment: labels degrade to field
         // ids and the ladder is treated as single-stage when this fails.
         templateInfo = await ref
@@ -248,18 +246,19 @@ class _ChecklistApprovalReviewScreenState
       _busy = approved ? _DecisionBusy.approving : _DecisionBusy.rejecting;
     });
     try {
-      final ChecklistApprovalDecisionResult result =
-          await ref.read(checklistApprovalSyncEngineProvider).decideNow(
-                submissionId: item.id,
-                stage: stage!,
-                priorApprovalStatus: priorStatus,
-                targetStatus: targetStatus,
-                approved: approved,
-                approverName: trimmedName.isEmpty ? null : trimmedName,
-                approverSignature: _approverSignature?.dataUrl,
-                approverId: approverId,
-                reviewNote: trimmedNote.isEmpty ? null : trimmedNote,
-              );
+      final ChecklistApprovalDecisionResult result = await ref
+          .read(checklistApprovalSyncEngineProvider)
+          .decideNow(
+            submissionId: item.id,
+            stage: stage!,
+            priorApprovalStatus: priorStatus,
+            targetStatus: targetStatus,
+            approved: approved,
+            approverName: trimmedName.isEmpty ? null : trimmedName,
+            approverSignature: _approverSignature?.dataUrl,
+            approverId: approverId,
+            reviewNote: trimmedNote.isEmpty ? null : trimmedNote,
+          );
       if (!mounted) return;
 
       switch (result.outcome) {
@@ -305,7 +304,8 @@ class _ChecklistApprovalReviewScreenState
           await _showInfoDialog(
             context,
             title: l10n.checklistApprovalSaveFailedTitle,
-            message: result.error?.message ??
+            message:
+                result.error?.message ??
                 l10n.checklistApprovalDecideGenericError,
           );
           break;
@@ -380,8 +380,10 @@ class _ChecklistApprovalReviewScreenState
 
     final workspace = ref.watch(workspaceContextProvider);
     final ApprovalStage? stage = _stage;
-    final ApprovalStatusSummary summary =
-        statusSummary(_templateLike, item.asSubmissionLike);
+    final ApprovalStatusSummary summary = statusSummary(
+      _templateLike,
+      item.asSubmissionLike,
+    );
     final bool myTurn = canDecide(
       _templateLike,
       item.asSubmissionLike,
@@ -438,7 +440,7 @@ class _ChecklistApprovalReviewScreenState
             l10n: l10n,
             closing:
                 nextStatusFor(_templateLike, item.asSubmissionLike, true) ==
-                    'approved',
+                'approved',
             approverSignature: _approverSignature,
             onSignatureChanged: (capture) =>
                 setState(() => _approverSignature = capture),
@@ -638,11 +640,7 @@ class _ApprovalVehicleImage extends StatelessWidget {
       ),
       clipBehavior: Clip.antiAlias,
       child: photo == null
-          ? Icon(
-              vehicleFallbackIcon(asset),
-              color: palette.textMuted,
-              size: 44,
-            )
+          ? Icon(vehicleFallbackIcon(asset), color: palette.textMuted, size: 44)
           : Image.asset(
               photo!,
               fit: BoxFit.contain,
@@ -669,26 +667,20 @@ class _ApprovalSummaryDetails extends StatelessWidget {
           _submissionTitle(item, l10n.checklistApprovalFallbackTitle),
           maxLines: 3,
           overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
+          style: Theme.of(context).textTheme.titleMedium
+              ?.copyWith(fontWeight: FontWeight.w800),
         ),
         if (item.documentNo != null) ...<Widget>[
           const SizedBox(height: 2),
           Text(
             item.documentNo!,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: palette.primary,
-                  fontWeight: FontWeight.w700,
-                ),
+            style: Theme.of(context).textTheme.bodySmall
+                ?.copyWith(color: palette.primary, fontWeight: FontWeight.w700),
           ),
         ],
         const SizedBox(height: TpSpace.xs),
         if (item.assetNo != null)
-          _SummaryRow(
-            icon: Icons.local_shipping_outlined,
-            text: item.assetNo!,
-          ),
+          _SummaryRow(icon: Icons.local_shipping_outlined, text: item.assetNo!),
         if (item.site != null)
           _SummaryRow(icon: Icons.place_outlined, text: item.site!),
         _SummaryRow(
@@ -738,8 +730,8 @@ class _ApprovalStatusPanel extends StatelessWidget {
             summary.tone == ApprovalStatusTone.warn
                 ? Icons.hourglass_top_rounded
                 : summary.tone == ApprovalStatusTone.good
-                    ? Icons.check_circle_outline_rounded
-                    : Icons.info_outline_rounded,
+                ? Icons.check_circle_outline_rounded
+                : Icons.info_outline_rounded,
             size: TpSizing.iconMd,
             color: colors.onSoft,
           ),
@@ -747,10 +739,8 @@ class _ApprovalStatusPanel extends StatelessWidget {
           Expanded(
             child: Text(
               checklistApprovalStatusLabel(l10n, summary),
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: colors.onSoft,
-                    fontWeight: FontWeight.w700,
-                  ),
+              style: Theme.of(context).textTheme.labelMedium
+                  ?.copyWith(color: colors.onSoft, fontWeight: FontWeight.w700),
             ),
           ),
         ],
@@ -803,9 +793,7 @@ class _ApprovalOutcomeCard extends StatelessWidget {
                         const SizedBox(height: TpSpace.xs),
                         Text(
                           '${item.scorePct}%',
-                          style: Theme.of(context)
-                              .textTheme
-                              .headlineMedium
+                          style: Theme.of(context).textTheme.headlineMedium
                               ?.copyWith(
                                 color: item.scorePassed == false
                                     ? palette.critical.base
@@ -881,29 +869,24 @@ class _OutcomeStat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Icon(
-            icon,
-            size: TpSizing.iconLg,
-            color: TpPalette.of(context).primary,
-          ),
-          const SizedBox(height: TpSpace.xs),
-          Text(
-            value,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
-          ),
-          Text(
-            label,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.labelSmall,
-          ),
-        ],
-      );
+    mainAxisSize: MainAxisSize.min,
+    children: <Widget>[
+      Icon(icon, size: TpSizing.iconLg, color: TpPalette.of(context).primary),
+      const SizedBox(height: TpSpace.xs),
+      Text(
+        value,
+        style: Theme.of(context).textTheme.titleMedium
+            ?.copyWith(fontWeight: FontWeight.w800),
+      ),
+      Text(
+        label,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        textAlign: TextAlign.center,
+        style: Theme.of(context).textTheme.labelSmall,
+      ),
+    ],
+  );
 }
 
 class _VerticalDivider extends StatelessWidget {
@@ -913,11 +896,11 @@ class _VerticalDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        width: 1,
-        height: 56,
-        margin: const EdgeInsets.symmetric(horizontal: TpSpace.xs),
-        color: color,
-      );
+    width: 1,
+    height: 56,
+    margin: const EdgeInsets.symmetric(horizontal: TpSpace.xs),
+    color: color,
+  );
 }
 
 class _SummaryRow extends StatelessWidget {
@@ -982,8 +965,8 @@ class _SignOffLadder extends StatelessWidget {
           label: progress[i].key == ApprovalStage.areaManager
               ? l10n.checklistApprovalStageAreaManager
               : twoStage
-                  ? l10n.checklistApprovalStageSupervisor
-                  : l10n.checklistApprovalStageApproval,
+              ? l10n.checklistApprovalStageSupervisor
+              : l10n.checklistApprovalStageApproval,
           name: progress[i].name,
           at: progress[i].at,
           done: progress[i].done,
@@ -1060,28 +1043,25 @@ class _HorizontalSignOffLadder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          for (int index = 0; index < rungs.length; index++) ...<Widget>[
-            Expanded(
-              flex: 3,
-              child: _HorizontalRung(rung: rungs[index]),
-            ),
-            if (index < rungs.length - 1)
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 16),
-                  child: Container(
-                    height: TpBorderWidth.strong,
-                    color: rungs[index].done
-                        ? TpPalette.of(context).ok.base
-                        : TpPalette.of(context).borderStrong,
-                  ),
-                ),
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: <Widget>[
+      for (int index = 0; index < rungs.length; index++) ...<Widget>[
+        Expanded(flex: 3, child: _HorizontalRung(rung: rungs[index])),
+        if (index < rungs.length - 1)
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 16),
+              child: Container(
+                height: TpBorderWidth.strong,
+                color: rungs[index].done
+                    ? TpPalette.of(context).ok.base
+                    : TpPalette.of(context).borderStrong,
               ),
-          ],
-        ],
-      );
+            ),
+          ),
+      ],
+    ],
+  );
 }
 
 class _HorizontalRung extends StatelessWidget {
@@ -1096,8 +1076,8 @@ class _HorizontalRung extends StatelessWidget {
     final Color color = rung.done
         ? palette.ok.base
         : rung.current
-            ? palette.primary
-            : palette.textMuted;
+        ? palette.primary
+        : palette.textMuted;
     final bool hasSignature = rung.signature?.trim().isNotEmpty ?? false;
     final String? whenText = _formatDateTime(rung.at);
     final String? isolatedName = rung.name?.trim().isNotEmpty ?? false
@@ -1132,9 +1112,9 @@ class _HorizontalRung extends StatelessWidget {
                   : Text(
                       '${rung.index}',
                       style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                            color: rung.current ? palette.onPrimary : color,
-                            fontWeight: FontWeight.w800,
-                          ),
+                        color: rung.current ? palette.onPrimary : color,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
             ),
           ),
@@ -1145,9 +1125,9 @@ class _HorizontalRung extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: rung.done || rung.current ? color : palette.text,
-                  fontWeight: FontWeight.w700,
-                ),
+              color: rung.done || rung.current ? color : palette.text,
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const SizedBox(height: 2),
           Text(
@@ -1156,8 +1136,8 @@ class _HorizontalRung extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: rung.current ? palette.primary : palette.textMuted,
-                ),
+              color: rung.current ? palette.primary : palette.textMuted,
+            ),
           ),
           if (hasSignature) ...<Widget>[
             const SizedBox(height: TpSpace.xs),
@@ -1258,9 +1238,7 @@ class _RungRow extends StatelessWidget {
                 Text(label, style: Theme.of(context).textTheme.labelLarge),
                 Text(
                   metaText,
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
+                  style: Theme.of(context).textTheme.bodySmall
                       ?.copyWith(color: palette.textMuted),
                 ),
               ],
@@ -1311,9 +1289,7 @@ class _RungRow extends StatelessWidget {
                 height: 190,
                 child: ApprovalSignaturePreview(
                   value: dataUrl,
-                  fallback: Text(
-                    l10n.checklistApprovalSignatureSavedLabel,
-                  ),
+                  fallback: Text(l10n.checklistApprovalSignatureSavedLabel),
                 ),
               ),
               if (name != null && name.trim().isNotEmpty) ...<Widget>[
@@ -1413,7 +1389,8 @@ class _ResponsesSection extends StatelessWidget {
     // AND no other field's signature is recorded either - see the library
     // comment on why a stronger reconstruction is not possible from the
     // read side alone.
-    final String? fieldSignature = item.signatures[field.id] ??
+    final String? fieldSignature =
+        item.signatures[field.id] ??
         (item.signatures.isEmpty ? item.signatureData : null);
 
     return ChecklistFieldAnswerTile(
@@ -1429,7 +1406,7 @@ class _ResponsesSection extends StatelessWidget {
       photos: photos,
       signatureBuilder: field.type == 'signature'
           ? (BuildContext context) =>
-              _ReadOnlySignature(dataUrl: fieldSignature)
+                _ReadOnlySignature(dataUrl: fieldSignature)
           : null,
     );
   }

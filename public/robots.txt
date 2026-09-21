@@ -1,6 +1,31 @@
-User-agent: *
-Disallow: /api/
-Disallow: /admin/
-Allow: /
+# Tyre Pulse application host.
+#
+# THIS HOST SERVES THE SIGNED-IN APPLICATION, NOT THE PUBLIC WEBSITE.
+# Every route here renders behind authentication and the document head carries
+# <meta name="robots" content="noindex, nofollow">, so nothing on this host
+# belongs in a search index or in an AI training or answer corpus.
+#
+# The public, crawlable product information lives on the marketing site:
+#   https://www.tyrepulse.app
+#   https://www.tyrepulse.app/llms.txt
+#
+# WHY THIS FILE CHANGED. It previously said "Allow: /" and advertised
+# https://tyrepulse.app/sitemap.xml, which has never existed and returns 404.
+# So the host sent three contradictory signals at once: crawl everything, here
+# is a sitemap, and also do not index any of it. The share routes below are
+# secret-token links to customer accident, report and workshop boards; inviting
+# a crawler onto them was the most serious part of that, because a token that
+# reaches a crawler by any route is a token that can be followed.
 
-Sitemap: https://tyrepulse.app/sitemap.xml
+User-agent: *
+Disallow: /
+
+# Token-gated customer share links. Never crawl these, under any user agent.
+Disallow: /report/
+Disallow: /workshop-tv/
+Disallow: /accident-portal/
+Disallow: /display/
+
+# Account and data deletion, kept reachable because Google Play policy requires
+# a publicly accessible deletion route. It stays noindex like every other route.
+Allow: /data-deletion

@@ -22,6 +22,39 @@ export default defineConfig(({ mode }) => {
       // WAITS; the "New version available" toast appears so a user finishes their
       // work first. Hidden tabs never activate a waiting update. Previously 'autoUpdate' + skipWaiting force
       // reloaded the page mid-work and bypassed the toast entirely.
+      /**
+       * SERVICE WORKER RETIREMENT, STAGE 1 OF 2.
+       *
+       * WHY. Measured 2026-09-21: 19 people have ever created an inspection and
+       * 18 of them carry the Android app, 1,342 of 1,348 inspections were signed
+       * through the mobile capture path, and 127 devices are active. Field work
+       * moved to the store app, so the browser service worker was precaching
+       * 56 MB per user (37 MB of it vehicle artwork swept in by the png glob)
+       * to serve a workflow almost nobody performs in a browser any more.
+       *
+       * WHAT IS NOT LOST. Offline inspection capture survives this. The queue in
+       * src/lib/offlineQueue.js is IndexedDB backed and already guards its
+       * Background Sync registration behind a feature test; Layout.jsx flushes it
+       * on mount, on the window 'online' event, and on reopen. Only background
+       * retry while the tab is CLOSED goes away, which was Chromium only and
+       * never worked on iOS at all.
+       *
+       * WHY SELF DESTROYING RATHER THAN DELETING THE PLUGIN. A service worker
+       * already installed in someone's browser keeps running and keeps serving
+       * its old precached build; removing the plugin never reaches those
+       * browsers. This ships a worker whose only job is to unregister itself and
+       * drop every cache. Leave it in place for a release, then delete the plugin
+       * block, PwaUpdatePrompt and the service worker half of chunkRecovery.
+       *
+       * ORDER MATTERS: this must go out BEFORE the app moves to
+       * app.tyrepulse.app. If the marketing site takes www while workers are
+       * still installed there, they are torn down only when /sw.js starts
+       * 404ing, which is uncontrolled and hard to diagnose from a bug report.
+       *
+       * The web app manifest is deliberately KEPT. It costs nothing, and it is
+       * what lets an already installed icon keep opening the app.
+       */
+      selfDestroying: true,
       registerType: 'prompt',
       injectRegister: 'auto',
       includeAssets: [

@@ -193,7 +193,8 @@ void main() {
         expect(item.isWaiting, isTrue);
       });
 
-      test('pending_area_manager is ALSO waiting - the second rung must '
+      test(
+          'pending_area_manager is ALSO waiting - the second rung must '
           'never vanish from a queue that only checked the first', () {
         final ChecklistApprovalItem item = ChecklistApprovalItem.fromRow(
           <String, Object?>{
@@ -227,7 +228,8 @@ void main() {
     });
 
     group('asSubmissionLike', () {
-      test('carries exactly the fields checklist_approval.dart needs, '
+      test(
+          'carries exactly the fields checklist_approval.dart needs, '
           'nothing else', () {
         final ChecklistApprovalItem item = ChecklistApprovalItem.fromRow(
           <String, Object?>{

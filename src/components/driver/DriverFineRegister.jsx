@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { loadDriverFineRegister, runDriverFineReminders } from '../../lib/api/driverWorkspace'
 import { exportDriverFineRegisterExcel, exportDriverFineRegisterPdf } from '../../lib/driverFineReports'
 import { toUserMessage } from '../../lib/safeError'
@@ -14,18 +14,16 @@ export default function DriverFineRegister({ canRunReminders, onOpenDriver }) {
   const [loading, setLoading] = useState(true)
   const [exporting, setExporting] = useState(false)
   const [message, setMessage] = useState('')
-  const sequence = useRef(0)
-  const load = useCallback(async () => {
-    const current = ++sequence.current
+  const load = useCallback(async (isActive = () => true) => {
     setLoading(true); setMessage('')
     try {
       const result = await loadDriverFineRegister(applied, offset)
-      if (current === sequence.current) setRows(result?.rows || [])
+      if (isActive()) setRows(result?.rows || [])
     } catch (error) {
-      if (current === sequence.current) { setRows([]); setMessage(toUserMessage(error, 'The fine register could not be loaded.')) }
-    } finally { if (current === sequence.current) setLoading(false) }
+      if (isActive()) { setRows([]); setMessage(toUserMessage(error, 'The fine register could not be loaded.')) }
+    } finally { if (isActive()) setLoading(false) }
   }, [applied, offset])
-  useEffect(() => { load(); const activeSequence = sequence.current; return () => { if (sequence.current === activeSequence) sequence.current++ } }, [load])
+  useEffect(() => { let active = true; load(() => active); return () => { active = false } }, [load])
   const visibleRows = rows.slice(0, PAGE_SIZE)
   async function exportRows(format) {
     setMessage(''); setExporting(true)

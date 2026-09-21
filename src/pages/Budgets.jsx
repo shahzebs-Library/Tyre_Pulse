@@ -2,9 +2,12 @@ import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
-import { Plus, Save, X, Download, FileText, PiggyBank } from 'lucide-react'
+// `X` left with the hand-rolled overlay: Modal renders its own close control.
+import { Plus, Save, Download, FileText, PiggyBank } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
+import Card, { CardBody, CardHeader } from '../components/ui/Card'
+import Modal from '../components/ui/Modal'
 import BudgetTabs from '../components/budgets/BudgetTabs'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { formatCurrencyCompact } from '../lib/formatters'
@@ -39,10 +42,10 @@ function KpiSkeletons() {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
       {Array.from({ length: 4 }).map((_, i) => (
-        <div key={i} className="card animate-pulse">
+        <Card key={i} className="animate-pulse">
           <div className="h-3 w-24 bg-[var(--input-bg)]/40 rounded mb-3" />
           <div className="h-7 w-32 bg-[var(--input-bg)]/40 rounded" />
-        </div>
+        </Card>
       ))}
     </div>
   )
@@ -120,16 +123,28 @@ export default function Budgets() {
     e.preventDefault()
     setSaving(true)
     setError('')
-    const { error: err } = await budgetsApi.upsertBudget({
-      ...form,
-      region:     profile?.region ?? 'KSA',
-      created_by: profile?.id,
-    })
-    if (err) { setError(toUserMessage(err)); setSaving(false); return }
-    setShowForm(false)
-    load()
-    setSaving(false)
+    // `finally` is load-bearing now that every close path is gated on `saving`:
+    // an unexpected throw used to leave the flag set but the dialog was still
+    // dismissable, whereas a stuck flag would now make it unclosable.
+    try {
+      const { error: err } = await budgetsApi.upsertBudget({
+        ...form,
+        region:     profile?.region ?? 'KSA',
+        created_by: profile?.id,
+      })
+      if (err) { setError(toUserMessage(err)); return }
+      setShowForm(false)
+      load()
+    } finally {
+      setSaving(false)
+    }
   }
+
+  // One guarded close for the form dialog. The hand-rolled overlay let the
+  // backdrop, the X and Cancel all dismiss a save that was still in flight, so
+  // the user could lose the dialog without ever learning whether the row was
+  // written; only the submit button was disabled.
+  const closeForm = () => { if (!saving) setShowForm(false) }
 
   async function savePlannerEdits() {
     if (!Object.keys(plannerEdits).length) return
@@ -174,8 +189,18 @@ export default function Budgets() {
   const totalSpend = useMemo(() =>
     budgets.reduce((s, b) => s + getSpend(b.site, filterMonth), 0), [budgets, filterMonth, getSpend])
 
-  const utilPct = totalBudget > 0 ? Math.round((totalSpend / totalBudget) * 100) : 0
-  const utilColor = utilPct >= 100 ? 'text-red-400' : utilPct >= 80 ? 'text-yellow-400' : 'text-green-400'
+  // NULL, NEVER 0. With no budget set there is nothing to be a percentage OF,
+  // and a green "0%" reads as "using none of the budget" - the most flattering
+  // possible reading of a figure that does not exist. This is reachable: the
+  // form accepts min=0, so rows can exist with every monthly_budget at zero
+  // while real spend accumulates. The page also contradicted itself, because
+  // the Remaining tile beside it already renders that same case in red.
+  const utilPct = totalBudget > 0 ? Math.round((totalSpend / totalBudget) * 100) : null
+  const utilColor =
+    utilPct == null ? 'text-[var(--text-muted)]'
+      : utilPct >= 100 ? 'text-red-400'
+      : utilPct >= 80 ? 'text-yellow-400'
+      : 'text-green-400'
 
   // Monthly budget vs spend bar chart (per-site)
   const monthlyChartData = useMemo(() => {
@@ -386,36 +411,38 @@ export default function Budgets() {
             <KpiSkeletons />
           ) : budgets.length > 0 && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <div className="card">
+              <Card>
                 <p className="text-[var(--text-muted)] text-sm">{t('budgets.kpi.totalBudget')}</p>
                 <p className="text-2xl font-bold text-[var(--text-primary)] mt-1">{formatCurrencyCompact(totalBudget, activeCurrency)}</p>
-              </div>
-              <div className="card">
+              </Card>
+              <Card>
                 <p className="text-[var(--text-muted)] text-sm">{t('budgets.kpi.totalSpent')}</p>
                 <p className={`text-2xl font-bold mt-1 ${totalSpend > totalBudget ? 'text-red-400' : 'text-green-400'}`}>
                   {formatCurrencyCompact(totalSpend, activeCurrency)}
                 </p>
-              </div>
-              <div className="card">
+              </Card>
+              <Card>
                 <p className="text-[var(--text-muted)] text-sm">{t('budgets.kpi.remaining')}</p>
                 <p className={`text-2xl font-bold mt-1 ${totalBudget - totalSpend < 0 ? 'text-red-400' : 'text-blue-400'}`}>
                   {formatCurrencyCompact(totalBudget - totalSpend, activeCurrency)}
                 </p>
-              </div>
-              <div className="card">
+              </Card>
+              <Card>
                 <p className="text-[var(--text-muted)] text-sm">{t('budgets.kpi.utilization')}</p>
-                <p className={`text-2xl font-bold mt-1 ${utilColor}`}>{utilPct}%</p>
-              </div>
+                <p className={`text-2xl font-bold mt-1 ${utilColor}`}>{utilPct == null ? 'N/A' : `${utilPct}%`}</p>
+              </Card>
             </div>
           )}
 
           {/* Budget vs Spend bar chart */}
           {!loading && monthlyChartData && (
-            <div className="card">
-              <h3 className="text-sm font-medium text-[var(--text-muted)] mb-4">
-                {t('budgets.columns.budget', { currency: activeCurrency })} vs {t('budgets.columns.spent', { currency: activeCurrency })}
-              </h3>
-              <div style={{ height: 280 }}>
+            <Card>
+              <CardHeader
+                title={`${t('budgets.columns.budget', { currency: activeCurrency })} vs ${t('budgets.columns.spent', { currency: activeCurrency })}`}
+              />
+              {/* Chart wells keep a DEFINITE height: maintainAspectRatio:false
+                  sizes chart.js from its parent. */}
+              <CardBody style={{ height: 280 }}>
                 <Bar
                   data={monthlyChartData}
                   options={{
@@ -427,14 +454,18 @@ export default function Budgets() {
                     },
                   }}
                 />
-              </div>
-            </div>
+              </CardBody>
+            </Card>
           )}
 
           {loading ? (
-            <div className="card animate-pulse h-64" />
+            <Card className="animate-pulse h-64" />
           ) : (
-            <div className="card p-0 overflow-hidden">
+            // `clip` reproduces the legacy `.card` overflow:hidden this table
+            // card already had. Safe: EnterpriseTable PORTALS its column menu
+            // (see its own note), and its rows-per-page control is a native
+            // <select>, which the browser paints outside the page's overflow.
+            <Card pad="none" clip>
               <EnterpriseTable
                 viewKey="budgets"
                 reportMeta={reportMeta}
@@ -450,7 +481,7 @@ export default function Budgets() {
                 pageSizeOptions={[10, 25, 50]}
                 emptyMessage={t('budgets.states.noBudgetsPeriod')}
               />
-            </div>
+            </Card>
           )}
         </>
       )}
@@ -471,9 +502,9 @@ export default function Budgets() {
 
           {/* Budget vs Actuals chart */}
           {cumulativeChartData && (
-            <div className="card">
-              <h3 className="text-sm font-medium text-[var(--text-muted)] mb-4">{t('budgets.annual.chartTitle', { year: plannerYear })}</h3>
-              <div style={{ height: 280 }}>
+            <Card>
+              <CardHeader title={t('budgets.annual.chartTitle', { year: plannerYear })} />
+              <CardBody style={{ height: 280 }}>
                 <Line
                   data={cumulativeChartData}
                   options={{
@@ -485,26 +516,29 @@ export default function Budgets() {
                     },
                   }}
                 />
-              </div>
-            </div>
+              </CardBody>
+            </Card>
           )}
 
           {/* 12-month grid */}
           {loading ? (
-            <div className="card overflow-x-auto animate-pulse">
+            <Card className="overflow-x-auto animate-pulse">
               <div className="h-3 w-48 bg-[var(--input-bg)]/40 rounded mb-4" />
               <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(13, minmax(0, 1fr))' }}>
                 {Array.from({ length: 5 * 13 }).map((_, i) => (
                   <div key={i} className="h-7 rounded bg-[var(--input-bg)]/40" />
                 ))}
               </div>
-            </div>
+            </Card>
           ) : annualSites.length === 0 ? (
-            <div className="card text-center py-12 text-[var(--text-muted)]">
+            // `py-12` as a class would be DEAD - Card sets padding inline and
+            // wins. The block padding moves into Card's own style, which spreads
+            // last, so the roomy empty state survives.
+            <Card className="text-center text-[var(--text-muted)]" style={{ paddingBlock: 'var(--space-12)' }}>
               {t('budgets.states.noBudgetsYear', { year: plannerYear, action: t('budgets.actions.setBudget') })}
-            </div>
+            </Card>
           ) : (
-            <div className="card overflow-x-auto">
+            <Card className="overflow-x-auto">
               <p className="text-xs text-[var(--text-muted)] mb-3">{t('budgets.annual.hint')}</p>
               <table className="w-full text-xs" style={{ minWidth: 900 }}>
                 <thead>
@@ -565,47 +599,44 @@ export default function Budgets() {
                   })}
                 </tbody>
               </table>
-            </div>
+            </Card>
           )}
         </>
       )}
 
-      {/* Form modal */}
-      {showForm && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowForm(false)}>
-          <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-[var(--text-primary)]">{t('budgets.form.title')}</h2>
-              <button onClick={() => setShowForm(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
+      {/* Form modal. Submit stays INSIDE the <form>, so no `footer` slot. */}
+      <Modal
+        open={showForm}
+        onClose={closeForm}
+        title={t('budgets.form.title')}
+        size="md"
+      >
+        {error && <div className="bg-red-900/30 border border-red-700 text-red-300 rounded-lg px-4 py-2 mb-4 text-sm">{error}</div>}
+        <form onSubmit={save} className="space-y-3">
+          <div><label className="label">{t('budgets.form.site')}</label><input className="input" value={form.site} onChange={e => setForm(f => ({ ...f, site: e.target.value }))} required /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">{t('budgets.form.year')}</label>
+              <select className="input" value={form.year} onChange={e => setForm(f => ({ ...f, year: +e.target.value }))}>
+                {[CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1].map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
             </div>
-            {error && <div className="bg-red-900/30 border border-red-700 text-red-300 rounded-lg px-4 py-2 mb-4 text-sm">{error}</div>}
-            <form onSubmit={save} className="space-y-3">
-              <div><label className="label">{t('budgets.form.site')}</label><input className="input" value={form.site} onChange={e => setForm(f => ({ ...f, site: e.target.value }))} required /></div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="label">{t('budgets.form.year')}</label>
-                  <select className="input" value={form.year} onChange={e => setForm(f => ({ ...f, year: +e.target.value }))}>
-                    {[CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1].map(y => <option key={y} value={y}>{y}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="label">{t('budgets.form.month')}</label>
-                  <select className="input" value={form.month} onChange={e => setForm(f => ({ ...f, month: +e.target.value }))}>
-                    {monthLabels.map((m, i) => <option key={i + 1} value={i + 1}>{m}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div><label className="label">{t('budgets.form.monthlyBudget', { currency: activeCurrency })}</label><input type="number" className="input" value={form.monthly_budget} onChange={e => setForm(f => ({ ...f, monthly_budget: +e.target.value }))} min={0} step={500} required /></div>
-              <div className="flex gap-3 pt-2">
-                <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
-                  <Save size={16} /> {saving ? t('budgets.form.saving') : t('budgets.form.save')}
-                </button>
-                <button type="button" onClick={() => setShowForm(false)} className="btn-secondary">{t('budgets.form.cancel')}</button>
-              </div>
-            </form>
+            <div>
+              <label className="label">{t('budgets.form.month')}</label>
+              <select className="input" value={form.month} onChange={e => setForm(f => ({ ...f, month: +e.target.value }))}>
+                {monthLabels.map((m, i) => <option key={i + 1} value={i + 1}>{m}</option>)}
+              </select>
+            </div>
           </div>
-        </div>
-      )}
+          <div><label className="label">{t('budgets.form.monthlyBudget', { currency: activeCurrency })}</label><input type="number" className="input" value={form.monthly_budget} onChange={e => setForm(f => ({ ...f, monthly_budget: +e.target.value }))} min={0} step={500} required /></div>
+          <div className="flex gap-3 pt-2">
+            <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
+              <Save size={16} /> {saving ? t('budgets.form.saving') : t('budgets.form.save')}
+            </button>
+            <button type="button" onClick={closeForm} disabled={saving} className="btn-secondary disabled:opacity-50">{t('budgets.form.cancel')}</button>
+          </div>
+        </form>
+      </Modal>
     </div>
   )
 }

@@ -14,6 +14,11 @@ import {
   Rocket, Info, Zap, Search, Database, Clock,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+// No CardHeader here: every card on this page has a compound header (icon +
+// heading + a scope note) or an action that must be free to wrap, and
+// CardHeader truncates its title and cannot wrap its actions.
+import Card from '../components/ui/Card'
+import Modal from '../components/ui/Modal'
 import { toUserMessage } from '../lib/safeError'
 import { duplicateComparable, isExactSuppliedRow } from '../lib/import/exactDuplicate'
 
@@ -1238,24 +1243,33 @@ export default function UploadData() {
                 }
                 const c = colorMap[opt.color]
                 return (
-                  <motion.button
+                  // The active tint stays in `style`, never in className: Card
+                  // sets background/border/box-shadow INLINE, so a `bg-*` or
+                  // `border-*` class here would be dead. `style` spreads last
+                  // inside Card, so these four types keep their own colour.
+                  <Card
+                    as={motion.button}
                     key={opt.val}
+                    interactive
                     onClick={() => setUploadType(opt.val)}
                     whileHover={{ y: -2 }}
                     whileTap={{ scale: 0.98 }}
-                    className="card text-left transition-all duration-150 cursor-pointer"
+                    className="text-left transition-all duration-150"
                     style={active ? { borderColor: c.border, background: c.bg, boxShadow: `0 0 20px ${c.border}` } : {}}
                   >
                     <Icon size={22} className={`mb-2 ${active ? c.icon : 'text-gray-600'}`} />
                     <p className={`text-sm font-semibold ${active ? c.text : 'text-[var(--panel-ink-2)]'}`}>{opt.label}</p>
                     <p className="text-xs text-[var(--panel-ink-4)] mt-0.5 leading-snug">{opt.desc}</p>
-                  </motion.button>
+                  </Card>
                 )
               })}
             </div>
 
             {uploadType === 'fleet' ? (
-              <motion.div initial={{ opacity:0, scale:0.98 }} animate={{ opacity:1, scale:1 }} className="card border-yellow-700/40 bg-yellow-900/10 mb-6">
+              // `border-yellow-700/40 bg-yellow-900/10` would be DEAD here -
+              // Card sets border and background inline. `tone="warn"` is the
+              // sanctioned route to the amber edge this banner needs.
+              <Card as={motion.div} tone="warn" initial={{ opacity:0, scale:0.98 }} animate={{ opacity:1, scale:1 }} className="mb-6">
                 <div className="flex items-start gap-3">
                   <AlertTriangle size={20} className="text-yellow-400 flex-shrink-0 mt-0.5" />
                   <div>
@@ -1264,11 +1278,12 @@ export default function UploadData() {
                     <a href="/fleet-master" className="inline-block mt-2 text-sm text-green-400 underline hover:text-green-300">{t('uploaddata.idle.fleetBanner.link')}</a>
                   </div>
                 </div>
-              </motion.div>
+              </Card>
             ) : (
               <>
-                {/* Accepted columns reference */}
-                <div className="card mb-4 border-green-900/40 bg-green-900/5">
+                {/* Accepted columns reference. `border-green-900/40 bg-green-900/5`
+                    would be dead on a Card; `tone="good"` carries the green edge. */}
+                <Card tone="good" className="mb-4">
                   <div className="flex items-center gap-2 mb-3">
                     <Info size={15} className="text-green-400" />
                     <span className="text-sm font-semibold text-green-300">Your columns don't need to match exactly</span>
@@ -1288,7 +1303,7 @@ export default function UploadData() {
                       </div>
                     ))}
                   </div>
-                </div>
+                </Card>
 
                 <motion.div
                   className="relative overflow-hidden rounded-2xl cursor-pointer transition-all duration-200"
@@ -1325,7 +1340,7 @@ export default function UploadData() {
 
         {/* ── Sheets picker ── */}
         {step === 'sheets' && (
-          <div className="card space-y-4">
+          <Card className="space-y-4">
             <h2 className="text-base font-semibold text-white">Select Sheets to Import</h2>
             <p className="text-sm text-[var(--panel-ink-3)]">This workbook has {sheetOptions.length} sheets. Choose which to include. Pivot and summary sheets are suggested to skip.</p>
             <div className="space-y-2">
@@ -1362,7 +1377,7 @@ export default function UploadData() {
               </button>
               <button onClick={reset} className="btn-secondary">Cancel</button>
             </div>
-          </div>
+          </Card>
         )}
 
         {/* ── Mapping ── */}
@@ -1387,7 +1402,11 @@ export default function UploadData() {
 
             {/* Raw file preview + header-row override - see exactly what was read */}
             {rawAoa.length > 0 && (
-              <div className="card">
+              // Header stays hand-rolled: CardHeader's actions slot is
+              // flex-shrink-0 and cannot wrap, and the header-row <select>
+              // sizes to its widest option, so on a phone it would widen the
+              // card instead of dropping onto a second line as it does here.
+              <Card>
                 <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
                   <div>
                     <h2 className="text-base font-semibold text-white">File Preview</h2>
@@ -1426,7 +1445,7 @@ export default function UploadData() {
                 {rows.length === 0 && (
                   <p className="text-xs text-yellow-400 mt-2">No data rows detected below the current header row. Try selecting a different header row above.</p>
                 )}
-              </div>
+              </Card>
             )}
 
             {/* Completeness indicator */}
@@ -1461,7 +1480,9 @@ export default function UploadData() {
               </div>
             )}
 
-            <div className="card">
+            {/* Header stays hand-rolled for the same reason as the File
+                Preview card: the filter box must be free to wrap. */}
+            <Card>
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h2 className="text-base font-semibold text-white">Column Mapping</h2>
@@ -1555,7 +1576,7 @@ export default function UploadData() {
                 </button>
                 <button onClick={reset} className="btn-secondary">Cancel</button>
               </div>
-            </div>
+            </Card>
           </div>
         )}
 
@@ -1564,7 +1585,10 @@ export default function UploadData() {
           <div className="space-y-4">
             {/* Smart dup check */}
             {dupCheck && (
-              <div className="card border-yellow-600/40">
+              // `border-yellow-600/40` would be dead on a Card. This is the
+              // re-import warning, so the amber edge is not decoration -
+              // `tone="warn"` keeps it.
+              <Card tone="warn">
                 <div className="flex items-center gap-2 mb-3">
                   <AlertTriangle size={18} className="text-yellow-400" />
                   <span className="font-semibold text-yellow-300">Exact Copy Check</span>
@@ -1579,33 +1603,35 @@ export default function UploadData() {
                   <button className="px-3 py-1.5 text-sm rounded-lg border border-gray-600 text-[var(--panel-ink-2)] hover:text-white" onClick={() => setDupReview(true)}>Review matches</button>
                 </div>
                 {skipIds.size > 0 && <p className="text-xs text-green-400 mt-2">{skipIds.size} verified exact row{skipIds.size !== 1 ? 's' : ''} will be dropped automatically. All changed rows continue.</p>}
-              </div>
+              </Card>
             )}
 
-            {/* Per-row review modal */}
-            {dupReview && dupCheck && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
-                <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-2xl max-h-[80vh] overflow-y-auto p-6">
-                  <h3 className="text-lg font-bold text-white mb-4">Review Row Matches</h3>
-                  <div className="space-y-3 mb-4">
-                    {[...dupCheck.exact, ...(dupCheck.changed || []), ...dupCheck.conflicts].map(({ idx, row, existing }) => (
-                      <div key={idx} className={`rounded-lg p-3 border ${skipIds.has(idx) ? 'border-red-800/50 bg-red-900/10 opacity-60' : 'border-gray-700 bg-gray-800/50'}`}>
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="text-xs space-y-0.5">
-                            <p className="text-white font-mono font-semibold">Row {idx + 1}: {row.serial_no}</p>
-                            <p className="text-[var(--panel-ink-3)]">File: {row.asset_no} · {row.issue_date} | DB: {existing.asset_no} · {existing.issue_date}</p>
-                          </div>
-                          <span className={`text-xs px-2 py-1 rounded border flex-shrink-0 ${skipIds.has(idx) ? 'bg-sky-900/30 text-sky-300 border-sky-800/50' : 'bg-green-900/30 text-green-300 border-green-800/50'}`}>
-                            {skipIds.has(idx) ? 'Exact copy: drop' : 'Changed row: import'}
-                          </span>
-                        </div>
+            {/* Per-row review modal. Read-only - it reports which rows will be
+                dropped as exact copies and which will import, and writes
+                nothing - so a single unguarded close is correct here. */}
+            <Modal
+              open={dupReview && !!dupCheck}
+              onClose={() => setDupReview(false)}
+              title="Review Row Matches"
+              size="lg"
+              footer={<button onClick={() => setDupReview(false)} className="btn-primary w-full">Done</button>}
+            >
+              <div className="space-y-3">
+                {[...(dupCheck?.exact ?? []), ...(dupCheck?.changed ?? []), ...(dupCheck?.conflicts ?? [])].map(({ idx, row, existing }) => (
+                  <div key={idx} className={`rounded-lg p-3 border ${skipIds.has(idx) ? 'border-red-800/50 bg-red-900/10 opacity-60' : 'border-gray-700 bg-gray-800/50'}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="text-xs space-y-0.5">
+                        <p className="text-white font-mono font-semibold">Row {idx + 1}: {row.serial_no}</p>
+                        <p className="text-[var(--panel-ink-3)]">File: {row.asset_no} · {row.issue_date} | DB: {existing.asset_no} · {existing.issue_date}</p>
                       </div>
-                    ))}
+                      <span className={`text-xs px-2 py-1 rounded border flex-shrink-0 ${skipIds.has(idx) ? 'bg-sky-900/30 text-sky-300 border-sky-800/50' : 'bg-green-900/30 text-green-300 border-green-800/50'}`}>
+                        {skipIds.has(idx) ? 'Exact copy: drop' : 'Changed row: import'}
+                      </span>
+                    </div>
                   </div>
-                  <button onClick={() => setDupReview(false)} className="btn-primary w-full">Done</button>
-                </div>
+                ))}
               </div>
-            )}
+            </Modal>
 
             {dupes.length > 0 && (
               <div className="bg-yellow-900/20 border border-yellow-700/50 rounded-xl p-4">
@@ -1626,7 +1652,10 @@ export default function UploadData() {
 
             {/* Data-quality report */}
             {quality.length > 0 && (
-              <div className="card">
+              // Compound title (icon + heading + the "N rows analysed" scope
+              // note) - CardHeader truncates its title, which would cut the
+              // row count off, so this header stays hand-rolled.
+              <Card>
                 <div className="flex items-center gap-2 mb-3">
                   <Database size={15} className="text-green-400" />
                   <h2 className="text-base font-semibold text-white">Data Quality</h2>
@@ -1659,12 +1688,16 @@ export default function UploadData() {
                 {quality.some(qf => qf.required && qf.fillPct < 50) && (
                   <p className="text-xs text-red-400 mt-2">⚠ A required field is under 50% filled. Check the column mapping or header row before uploading.</p>
                 )}
-              </div>
+              </Card>
             )}
 
             {/* Cleaning preview + optional AI model */}
             {cleanPreview && (
-              <div className="card">
+              // Header stays hand-rolled to keep the purple Wand2, which pairs
+              // with the purple AI opt-in below it. ICON_TONE has no purple,
+              // and quietly recolouring it to the brand accent would break
+              // that pairing.
+              <Card>
                 <div className="flex items-center gap-2 mb-3">
                   <Wand2 size={15} className="text-purple-400" />
                   <h2 className="text-base font-semibold text-white">Cleaning Preview</h2>
@@ -1694,10 +1727,10 @@ export default function UploadData() {
                     <span className="text-xs text-[var(--panel-ink-4)] block">Routes the {cleanPreview.review.toLocaleString()} "need review" rows through the secure AI cleaning function for better category/risk. Uses AI tokens, off by default.</span>
                   </span>
                 </label>
-              </div>
+              </Card>
             )}
 
-            <div className="card">
+            <Card>
               <h2 className="text-base font-semibold text-white mb-4">Preview (first 5 rows)</h2>
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
@@ -1737,13 +1770,24 @@ export default function UploadData() {
                 <button onClick={() => setStep('mapping')} className="btn-secondary">Back</button>
                 <button onClick={reset} className="btn-secondary">Cancel</button>
               </div>
-            </div>
+            </Card>
           </div>
         )}
 
         {/* ── Uploading ── */}
         {step === 'uploading' && (
-          <motion.div key="uploading" initial={{ opacity:0 }} animate={{ opacity:1 }} className="card text-center py-20">
+          // `py-20` as a class would be DEAD. The block padding moves into
+          // Card's own style, which spreads last and beats the inline
+          // `padding`. --space-12 (3rem) is the top of the spacing scale, so
+          // this progress panel is a little less tall than the old 5rem.
+          <Card
+            as={motion.div}
+            key="uploading"
+            initial={{ opacity:0 }}
+            animate={{ opacity:1 }}
+            className="text-center"
+            style={{ paddingBlock: 'var(--space-12)' }}
+          >
             <div className="relative w-16 h-16 mx-auto mb-6">
               <div className="absolute inset-0 rounded-full border-2 border-gray-700" />
               <div className="absolute inset-0 rounded-full border-2 border-green-500 border-t-transparent animate-spin" />
@@ -1764,12 +1808,12 @@ export default function UploadData() {
                 <p className="text-gray-600 text-xs mt-2">{progress.total.toLocaleString()} total records</p>
               </div>
             )}
-          </motion.div>
+          </Card>
         )}
 
         {/* ── Done ── */}
         {step === 'done' && result && (
-          <motion.div key="done" initial={{ opacity:0, scale:0.97 }} animate={{ opacity:1, scale:1 }} className="card">
+          <Card as={motion.div} key="done" initial={{ opacity:0, scale:0.97 }} animate={{ opacity:1, scale:1 }}>
             <div className="flex items-center gap-3 mb-6">
               <motion.div initial={{ scale:0 }} animate={{ scale:1 }} transition={{ type:'spring', stiffness:300, delay:0.1 }}>
                 {result.pending
@@ -1827,8 +1871,10 @@ export default function UploadData() {
                 <pre className="mt-2 bg-gray-800 rounded p-3 text-xs overflow-auto">{JSON.stringify(result.skipLog, null, 2)}</pre>
               </details>
             )}
-            <button onClick={reset} className="btn-secondary">Upload Another File</button>
-          </motion.div>
+            {/* `self-start`: Card is flex-col, so a lone button as a direct
+                child would stretch to the full card width. */}
+            <button onClick={reset} className="btn-secondary self-start">Upload Another File</button>
+          </Card>
         )}
 
       </AnimatePresence>

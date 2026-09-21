@@ -877,8 +877,11 @@ class _OutcomeStat extends StatelessWidget {
   Widget build(BuildContext context) => Column(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Icon(icon,
-              size: TpSizing.iconLg, color: TpPalette.of(context).primary),
+          Icon(
+            icon,
+            size: TpSizing.iconLg,
+            color: TpPalette.of(context).primary,
+          ),
           const SizedBox(height: TpSpace.xs),
           Text(
             value,

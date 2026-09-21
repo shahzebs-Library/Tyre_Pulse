@@ -93,7 +93,6 @@ const Card = forwardRef(function Card(
       style={{
         padding: PAD[pad] ?? PAD.default,
         background: 'var(--card-from)',
-        color: 'var(--card-text)',
         // `border` and `box-shadow` STAY INLINE so stray `border-*` utility
         // classes remain inert and `tone` is the one route - but they resolve
         // through variables that `.tp-card` owns, so :hover can still re-point

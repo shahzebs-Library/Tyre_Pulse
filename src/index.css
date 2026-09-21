@@ -413,23 +413,47 @@ html.reduce-motion *::after {
      popover or menu inside is never clipped) and no backdrop-filter (nothing to
      blur behind an opaque surface). Only transitions what is cheap to animate:
      border-color and box-shadow, never layout. */
+  /* TWO-VARIABLE INDIRECTION, AND BOTH HALVES ARE LOAD-BEARING.
+     Card sets `border` and `box-shadow` INLINE so that stray `border-*` utility
+     classes stay inert and `tone` remains the single sanctioned route. But an
+     inline declaration also beats the :hover rule below, which silently killed
+     the hover cue on every interactive card - the tell was that `cursor` and the
+     focus ring still worked, because those are the two Card never sets inline.
+     Resolving them through variables fixes that without giving utilities a way
+     back in: the component writes `--tp-card-tone` (its own, never overridden),
+     while `--tp-card-border` and `--tp-card-shadow` are owned HERE, so a rule
+     can re-point them on hover even though the inline declaration still wins.
+     Keep the two names distinct - collapsing them puts the tone back inline and
+     the hover cue dies again. */
   .tp-card {
+    --tp-card-border: var(--tp-card-tone, var(--border-brand));
+    --tp-card-shadow: var(--shadow-card);
+    /* Default text colour lives HERE, not inline. Padding, background and
+       border are inline on purpose - `pad` and `tone` are the API and a stray
+       utility must not fight them - but colour has no such API, and setting it
+       inline silently killed every `text-*` class an author put on a Card.
+       From the utilities layer a `text-*` class now wins, as intended. */
+    color: var(--card-text);
     transition: border-color 0.2s var(--ease-smooth),
                 box-shadow   0.2s var(--ease-smooth);
   }
   .tp-card--interactive {
     cursor: pointer;
   }
+  /* Re-points the VARIABLES, not border-color/box-shadow directly: the inline
+     declarations on the component win for those two properties, but they
+     resolve through these, so this is what actually reaches the screen. */
   .tp-card--interactive:hover {
-    border-color: var(--border-bright);
-    box-shadow: var(--shadow-glow);
+    --tp-card-border: var(--border-bright);
+    --tp-card-shadow: var(--shadow-glow);
   }
   .tp-card--interactive:focus-visible {
     outline: 2px solid var(--accent-ring);
     outline-offset: 2px;
   }
-  /* A non-interactive card must not imply it is clickable. */
-  .tp-card:not(.tp-card--interactive):hover { box-shadow: var(--shadow-card); }
+  /* A non-interactive card must not imply it is clickable. Re-points the
+     variable for the same reason as the rule above. */
+  .tp-card:not(.tp-card--interactive):hover { --tp-card-shadow: var(--shadow-card); }
 
   /* ── Buttons ───────────────────────────────────────────────────────────── */
   .btn-primary {

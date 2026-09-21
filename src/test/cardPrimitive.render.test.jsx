@@ -96,8 +96,49 @@ describe('Card primitive', () => {
   it('tints only the border for a tone, never the whole surface', () => {
     const { container } = render(<Card tone="crit">alert</Card>)
     const el = container.querySelector('.tp-card')
-    expect(el.style.borderColor).toContain('#f26161')
+    // The tone reaches the border THROUGH a custom property - see the hover
+    // regression test below for why it must not be a resolved borderColor.
+    expect(el.style.getPropertyValue('--tp-card-tone')).toContain('#f26161')
+    expect(el.style.border).toBe('1px solid var(--tp-card-border)')
     // A wall of tiles must stay scannable: the fill stays neutral.
     expect(el.style.background).toBe('var(--card-from)')
+  })
+
+  describe('the hover cue must survive (regression)', () => {
+    /**
+     * Card sets `border` and `box-shadow` inline so stray `border-*` utilities
+     * stay inert and `tone` remains the single route. But an inline declaration
+     * also beats `.tp-card--interactive:hover`, so writing the tone straight
+     * into `borderColor` silently killed the hover cue on EVERY interactive
+     * card. The tell was that `cursor` and the focus ring still worked - the two
+     * properties Card never sets inline.
+     *
+     * jsdom does not apply the stylesheet, so this pins the MECHANISM: the two
+     * properties must resolve through variables the stylesheet owns.
+     */
+    it('does not pin border-color or box-shadow to a resolved value inline', () => {
+      const { container } = render(<Card interactive tone="good">x</Card>)
+      const el = container.querySelector('.tp-card')
+      // If either of these becomes a literal colour/shadow again, :hover dies.
+      expect(el.style.border).toBe('1px solid var(--tp-card-border)')
+      expect(el.style.boxShadow).toBe('var(--tp-card-shadow)')
+      expect(el.style.borderColor).toBe('')
+    })
+
+    it('writes the tone to its OWN variable, not the one hover re-points', () => {
+      // Collapsing the two names puts the tone back inline and the cue dies.
+      const { container } = render(<Card tone="warn">x</Card>)
+      const el = container.querySelector('.tp-card')
+      expect(el.style.getPropertyValue('--tp-card-tone')).not.toBe('')
+      expect(el.style.getPropertyValue('--tp-card-border')).toBe('')
+      expect(el.style.getPropertyValue('--tp-card-shadow')).toBe('')
+    })
+
+    it('leaves text colour to the stylesheet so a text-* class can win', () => {
+      // `color` was inline, which killed every text colour class on a Card.
+      // Unlike pad/tone there is no API reason for it to be inline.
+      const { container } = render(<Card className="text-red-300">x</Card>)
+      expect(container.querySelector('.tp-card').style.color).toBe('')
+    })
   })
 })

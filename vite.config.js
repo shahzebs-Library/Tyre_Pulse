@@ -265,7 +265,19 @@ export default defineConfig(({ mode }) => {
     setupFiles: ['./src/test/setup.js'],
     // Heavy jsdom render tests (e.g. the workflow panels) can exceed the 5s
     // default under parallel CPU load — give them headroom to avoid flakiness.
-    testTimeout: 20000,
+    //
+    // Raised 20s -> 45s on 2026-09-21. The suite is now 693 files, and a full
+    // run reported 9 failures of which every one passed in isolation: 5 were
+    // "Test timed out in 20000ms", 2 were waitFor render tests failing to find
+    // an element they do find when run alone, and 1 was a worker that could not
+    // start at all under the load. Measured on that run, jsdom environment
+    // setup alone cost 4,389s across the suite, so a render test can genuinely
+    // wait tens of seconds for CPU before its own work begins.
+    //
+    // This is headroom for contention, NOT permission to write slow tests. A
+    // real hang still fails, just 25s later. If a single test needs more, pass
+    // a per-test timeout rather than raising this again.
+    testTimeout: 45000,
     // services/** has its own Node (node:test) suite, and mobile/** has its own
     // jest project (both run as separate CI jobs) — keep them out of vitest.
     // mobile tests use jest.mock to stub react-native at the module boundary,

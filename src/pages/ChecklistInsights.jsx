@@ -15,6 +15,7 @@ import PageHeader from '../components/ui/PageHeader'
 import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import { useSettings } from '../contexts/SettingsContext'
 import { listSubmissions, listTemplates } from '../lib/api/checklists'
+import { getComplianceMonitor } from '../lib/api/checklistSchedules'
 import { isValueField, fieldTypeDef } from '../lib/checklist/fieldTypes'
 import { toUserMessage } from '../lib/safeError'
 
@@ -144,6 +145,8 @@ export default function ChecklistInsights() {
 
   const [templates, setTemplates] = useState([])
   const [submissions, setSubmissions] = useState([])
+  const [complianceRows, setComplianceRows] = useState([])
+  const [complianceError, setComplianceError] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -159,19 +162,44 @@ export default function ChecklistInsights() {
     setLoading(true)
     setError(null)
     try {
-      const [tpls, subs] = await Promise.all([
+      const today = new Date()
+      const from = new Date(today)
+      from.setDate(from.getDate() - 29)
+      const isoDay = (date) => date.toISOString().slice(0, 10)
+      const [tpls, subs, compliance] = await Promise.all([
         listTemplates({ country }),
         listSubmissions({ country }),
+        getComplianceMonitor({ from: isoDay(from), to: isoDay(today), country })
+          .then((rows) => ({ rows, error: null }))
+          .catch((monitorError) => ({ rows: [], error: monitorError })),
       ])
       if (myReq !== reqIdRef.current) return
       setTemplates(Array.isArray(tpls) ? tpls : [])
       setSubmissions(Array.isArray(subs) ? subs : [])
+      setComplianceRows(Array.isArray(compliance.rows) ? compliance.rows : [])
+      setComplianceError(compliance.error)
     } catch (err) {
       if (myReq === reqIdRef.current) setError(err)
     } finally {
       if (myReq === reqIdRef.current) setLoading(false)
     }
   }, [country])
+
+  const compliance = useMemo(() => {
+    const rows = complianceRows.filter((row) => templateFilter === 'all'
+      || String(row.template_id) === String(templateFilter))
+    const total = (key) => rows.reduce((sum, row) => sum + Number(row[key] || 0), 0)
+    const due = total('due_count')
+    const completed = total('completed_count')
+    const completedOnTime = total('completed_on_time_count')
+    return {
+      rows, due, completed,
+      overdue: total('overdue_count'),
+      evidenceGaps: total('evidence_gap_count'),
+      compliancePct: pct(completed, due - total('skipped_count')),
+      onTimePct: pct(completedOnTime, completed),
+    }
+  }, [complianceRows, templateFilter])
 
   useEffect(() => { loadData() }, [loadData])
 
@@ -507,6 +535,31 @@ export default function ChecklistInsights() {
           accent={metrics.approvalPassRate == null ? 'text-[var(--text-primary)]'
             : metrics.approvalPassRate >= 85 ? 'text-green-400'
             : metrics.approvalPassRate >= 60 ? 'text-amber-400' : 'text-red-400'} />
+      </div>
+
+      <div className="card space-y-3">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h3 className="text-sm font-medium text-[var(--text-primary)]">Scheduled compliance · last 30 days</h3>
+            <p className="text-xs text-[var(--text-muted)] mt-1">Calculated from due assignments, with skipped work excluded from the denominator.</p>
+          </div>
+          <span className="text-xs text-[var(--text-muted)]">{compliance.rows.length} template/site group{compliance.rows.length === 1 ? '' : 's'}</span>
+        </div>
+        {complianceError ? (
+          <p className="text-sm text-amber-400">The compliance monitor is unavailable until its database migration is applied.</p>
+        ) : compliance.due === 0 ? (
+          <p className="text-sm text-[var(--text-muted)]">No scheduled assignments exist in this period, so a compliance percentage cannot be reported yet.</p>
+        ) : (
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+            <KpiCard title="Due" value={compliance.due.toLocaleString()} icon={CalendarClock} />
+            <KpiCard title="Completed" value={compliance.completed.toLocaleString()} icon={CheckCircle2} />
+            <KpiCard title="Compliance" value={fmtPct(compliance.compliancePct)} icon={ShieldCheck} />
+            <KpiCard title="On time" value={fmtPct(compliance.onTimePct)} icon={TrendingUp} />
+            <KpiCard title="Evidence gaps" value={compliance.evidenceGaps.toLocaleString()}
+              sub={`${compliance.overdue} overdue`} icon={AlertTriangle}
+              accent={compliance.evidenceGaps ? 'text-amber-400' : 'text-green-400'} />
+          </div>
+        )}
       </div>
 
       {/* Charts */}

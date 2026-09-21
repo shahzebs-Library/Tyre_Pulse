@@ -60,6 +60,17 @@ export async function generateNow() {
   return unwrap(await supabase.rpc('generate_checklist_assignments'))
 }
 
+/** Assignment-based compliance. An empty result means no schedule denominator exists. */
+export async function getComplianceMonitor({ from, to, country, site, templateId } = {}) {
+  return unwrap(await supabase.rpc('checklist_compliance_monitor', {
+    p_from: from ?? null,
+    p_to: to ?? null,
+    p_country: country ?? null,
+    p_site: site ?? null,
+    p_template_id: templateId ?? null,
+  })) || []
+}
+
 // ── Assignments ─────────────────────────────────────────────────────────────
 
 export async function listAssignments({ country, status, templateId, scheduleId, limit = 300 } = {}) {

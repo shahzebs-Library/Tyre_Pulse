@@ -110,6 +110,25 @@ describe('checklists service layer', () => {
     expect(h.state.storage.signed.path).toBe('checklists/s1_f10/1.jpg')
   })
 
+  it('getSubmission renders the immutable template snapshot without reading the live template', async () => {
+    h.state.result = {
+      data: {
+        id: 's1', template_id: 't1', photos: {}, template_snapshot_status: 'exact',
+        template_snapshot: {
+          fields: [{ id: 'old-field', type: 'text', label: 'Recorded label' }],
+          option_sets: { result: ['Pass', 'Fail'] },
+          require_area_manager: true, doc_prefix: 'WS', min_interval_days: 1,
+        },
+      },
+      error: null,
+    }
+    const out = await cl.getSubmission('s1')
+    expect(out.template_fields[0].label).toBe('Recorded label')
+    expect(out.template_settings).toEqual({ require_area_manager: true, doc_prefix: 'WS', min_interval_days: 1 })
+    expect(out.template_i18n.option_sets).toEqual({ result: ['Pass', 'Fail'] })
+    expect(h.state.last._table).toBe('checklist_submissions')
+  })
+
   it('signChecklistPhotoUrl leaves data URLs untouched and signs paths', async () => {
     expect(await cl.signChecklistPhotoUrl('data:image/png;base64,AAAA')).toBe('data:image/png;base64,AAAA')
     expect(await cl.signChecklistPhotoUrl('tp-storage://tyre-photos/checklists/a.jpg'))

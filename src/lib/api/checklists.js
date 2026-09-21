@@ -28,7 +28,7 @@ const TEMPLATE_COLS =
 // was rejected, or is still waiting for a signature, reads very differently from
 // one that was accepted, and leaving them out made every submission look final.
 const SUBMISSION_COLS =
-  'id,template_id,template_name,template_version,country,site,asset_no,title,status,answers,photos,signature_data,printed_name,score_pct,score_passed,submitted_by,submitted_at,created_at,updated_at,'
+  'id,template_id,template_name,template_version,template_revision_id,template_snapshot,template_snapshot_status,template_snapshot_captured_at,country,site,asset_no,title,status,answers,photos,signature_data,printed_name,score_pct,score_passed,submitted_by,submitted_at,created_at,updated_at,'
   + 'approval_status,approver_name,approved_at,review_note,locked,'
   // `signatures` holds EVERY captured signature keyed by field id (a workshop
   // sheet is signed by three trades); `signature_data` stays the primary
@@ -287,10 +287,26 @@ export async function listMonthlySubmissions({ country, templateId, fields, year
 
 export async function getSubmission(id) {
   const row = unwrap(await supabase.from('checklist_submissions').select(SUBMISSION_COLS).eq('id', id).maybeSingle())
+  const snapshot = row?.template_snapshot && typeof row.template_snapshot === 'object'
+    ? row.template_snapshot
+    : null
+  if (snapshot && Array.isArray(snapshot.fields)) {
+    row.template_fields = snapshot.fields
+    row.template_settings = {
+      require_area_manager: !!snapshot.require_area_manager,
+      doc_prefix: snapshot.doc_prefix ?? null,
+      min_interval_days: snapshot.min_interval_days ?? null,
+    }
+    row.template_i18n = {
+      option_sets: snapshot.option_sets || {},
+      name_i18n: snapshot.name_i18n || {},
+      description_i18n: snapshot.description_i18n || {},
+    }
+  }
   // Attach the template's field definitions so the detail page / PDF can render
   // human labels, section grouping, and conditional visibility instead of raw
   // answer keys. Best-effort: a submission still renders if the template is gone.
-  if (row && row.template_id) {
+  if (row && row.template_id && !snapshot) {
     try {
       const tpl = unwrap(await supabase.from('checklist_templates')
         .select('fields,option_sets,name_i18n,description_i18n,require_area_manager,doc_prefix,min_interval_days')

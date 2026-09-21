@@ -57,6 +57,18 @@ describe('checklist schedules service', () => {
     expect(n).toBe(5)
   })
 
+  it('requests assignment-based compliance with explicit filters', async () => {
+    h.state.result = { data: [{ due_count: 4 }], error: null }
+    const rpc = vi.spyOn(h.supabase, 'rpc').mockResolvedValueOnce(h.state.result)
+    const rows = await cs.getComplianceMonitor({
+      from: '2026-09-01', to: '2026-09-30', country: 'KSA', site: 'Riyadh', templateId: 't1',
+    })
+    expect(rpc).toHaveBeenCalledWith('checklist_compliance_monitor', {
+      p_from: '2026-09-01', p_to: '2026-09-30', p_country: 'KSA', p_site: 'Riyadh', p_template_id: 't1',
+    })
+    expect(rows).toEqual([{ due_count: 4 }])
+  })
+
   it('listAssignments filters by status + template', async () => {
     await cs.listAssignments({ status: 'overdue', templateId: 't1', country: 'KSA' })
     expect(h.state.last._table).toBe('checklist_assignments')

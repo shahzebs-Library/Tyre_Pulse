@@ -35,7 +35,7 @@ export const FAQS = [
     id: 'cl-interval',
     category: 'Checklists',
     q: 'Why do only some checklist items appear when I fill one in?',
-    a: 'Predictive-maintenance checklists use conditional visibility. Items are shown based on the Inspection interval you pick (Monthly, Quarterly, Annual, …) and, where applicable, the Vehicle type. Choose the interval/vehicle at the top and only the checks due for it appear — this keeps the form and the PDF report focused on what applies.',
+    a: 'Predictive-maintenance checklists use conditional visibility. Items are shown based on the Inspection interval you pick (Monthly, Quarterly, Annual, …) and, where applicable, the Vehicle type. Choose the interval/vehicle at the top and only the checks due for it appear. This keeps the form and the PDF report focused on what applies.',
     keywords: ['interval', 'monthly', 'annual', 'conditional', 'hidden', 'vehicle type', 'filter'],
   },
   {
@@ -56,7 +56,7 @@ export const FAQS = [
     id: 'cl-approval',
     category: 'Checklists',
     q: 'Who approves a submitted checklist?',
-    a: 'If the template requires approval, submissions route through the approval chain — typically Inspector → Manager. Approvers see pending items under Approvals and can approve, return or reject with comments.',
+    a: 'If the template requires approval, submissions route through the approval chain, typically Inspector → Manager. Approvers see pending items under Approvals and can approve, return or reject with comments.',
     keywords: ['approval', 'approve', 'manager', 'review', 'sign-off'],
   },
   {
@@ -91,7 +91,7 @@ export const FAQS = [
     id: 'da-import',
     category: 'Data & Imports',
     q: 'How do I import data from Excel or my ERP?',
-    a: 'Use Data Intake Center / Upload Data for spreadsheets — columns are auto-mapped and validated before commit. For live systems, ERP Sync connects a read-only feed. Large files are chunked and de-duplicated automatically.',
+    a: 'Use Data Intake Center / Upload Data for spreadsheets: columns are auto-mapped and validated before commit. For live systems, ERP Sync connects a read-only feed. Large files are chunked and de-duplicated automatically.',
     keywords: ['import', 'excel', 'upload', 'erp', 'csv', 'data'],
   },
   {
@@ -112,7 +112,7 @@ export const FAQS = [
     id: 'ro-checklist-only',
     category: 'Roles & Access',
     q: 'What is the Maintenance Supervisor (checklist-only) role?',
-    a: 'It is a restricted role that can use ONLY the checklists area — build, schedule, fill and review checklists — plus Help and their profile. Everything else is hidden and redirected. Assign it under User Management.',
+    a: 'It is a restricted role that can use ONLY the checklists area (build, schedule, fill and review checklists) plus Help and their profile. Everything else is hidden and redirected. Assign it under User Management.',
     keywords: ['maintenance supervisor', 'checklist only', 'restricted', 'role'],
   },
   {
@@ -126,7 +126,7 @@ export const FAQS = [
     id: 'ac-support',
     category: 'Account',
     q: 'How do I report a problem or request a feature?',
-    a: 'Use the Report an issue tab on this Help page. Describe the problem, pick a category and severity, and submit — your administrator receives the ticket and can respond. You can track status under My tickets.',
+    a: 'Use the Report an issue tab on this Help page. Describe the problem, pick a category and severity, and submit. Your administrator receives the ticket and can respond. You can track status under My tickets.',
     keywords: ['support', 'help', 'issue', 'bug', 'ticket', 'contact', 'feature request'],
   },
 ]

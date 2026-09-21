@@ -374,9 +374,9 @@ export default function MaintenanceCostBoard() {
                         <tr key={r.id} className="border-b border-[var(--hairline)]/50">
                           <td className="py-1.5 px-4 text-[var(--text-dim)] capitalize">{r.type}</td>
                           <td className="py-1.5 pr-3 text-[var(--text-secondary)]">{r.name}</td>
-                          <td className="py-1.5 pr-3 text-right text-[var(--text-primary)]">{r.jobs == null ? '—' : num(r.jobs)}</td>
-                          <td className="py-1.5 pr-3 text-right text-[var(--text-primary)]">{r.occurrences == null ? '—' : num(r.occurrences)}</td>
-                          <td className="py-1.5 pr-4 text-right text-[var(--text-primary)]">{r.spend == null ? '—' : money0(r.spend)}</td>
+                          <td className="py-1.5 pr-3 text-right text-[var(--text-primary)]">{r.jobs == null ? 'N/A' : num(r.jobs)}</td>
+                          <td className="py-1.5 pr-3 text-right text-[var(--text-primary)]">{r.occurrences == null ? 'N/A' : num(r.occurrences)}</td>
+                          <td className="py-1.5 pr-4 text-right text-[var(--text-primary)]">{r.spend == null ? 'N/A' : money0(r.spend)}</td>
                         </tr>
                       ))}
                     </tbody>

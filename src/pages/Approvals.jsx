@@ -121,7 +121,7 @@ function currentStepOf(instance) {
 
 function entityLabelOf(i) {
   return i?.entity_label
-    || (i?.entity_type ? `${i.entity_type}${i.entity_id ? ` #${i.entity_id}` : ''}` : '—')
+    || (i?.entity_type ? `${i.entity_type}${i.entity_id ? ` #${i.entity_id}` : ''}` : 'N/A')
 }
 
 /** SLA state for a pending-style instance from its current step's sla_hours. */
@@ -147,7 +147,7 @@ function toClosureItem(a) {
   return {
     source: SOURCE.accident_closure,
     id: a.id,
-    title: `Closure request — ${label}`,
+    title: `Closure request: ${label}`,
     subtitle: [
       a.driver_name && `Driver ${a.driver_name}`,
       a.incident_date && `Incident ${a.incident_date}`,
@@ -338,7 +338,7 @@ function InstanceRow({ instance, bucketKey, onOpen }) {
       <div className="hidden md:flex flex-col items-end gap-1 shrink-0">
         <span className={`text-xs whitespace-nowrap ${overdue ? 'text-red-400 font-semibold' : 'text-[var(--text-muted)]'}`}>
           {overdue && <AlertTriangle className="w-3 h-3 inline mr-1 -mt-0.5" />}
-          {sla?.dueLabel || relTime(timeRef) || '—'}
+          {sla?.dueLabel || relTime(timeRef) || 'N/A'}
         </span>
       </div>
 
@@ -924,7 +924,7 @@ function EngineUnavailable({ message, onRetry, retrying }) {
         <p className="text-[var(--text-primary)] text-sm font-semibold">Approval services unavailable</p>
         <p className="text-[var(--text-muted)] text-xs mt-1 max-w-md">
           None of the approval sources could be reached. This usually means a
-          connectivity issue or that the workflow engine migrations (V116–V118)
+          connectivity issue or that the workflow engine migrations (V116 to V118)
           have not been applied to this environment yet.
         </p>
         {message && (
@@ -1227,7 +1227,7 @@ export default function Approvals() {
     <div className="text-[var(--text-primary)] space-y-6">
       <PageHeader
         title="Approval Dashboard"
-        subtitle="Every pending approval across your organisation — workflows, accident closures, checklist and inspection sign-offs"
+        subtitle="Every pending approval across your organisation: workflows, accident closures, checklist and inspection sign-offs"
         icon={CheckSquare}
         badge={loading ? undefined : (metrics.total_pending ? `${metrics.total_pending} pending` : undefined)}
         onRefresh={load}

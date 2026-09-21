@@ -69,14 +69,14 @@ function Badge({ children, className }) {
 }
 
 function fmtDate(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString()
 }
 function fmtDateTime(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleString()
 }
 
 function isMissingRelation(err) {
@@ -364,7 +364,7 @@ export default function DeveloperPortal() {
             >
               <Icon size={15} /> {t.label}
               <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[11px] ${active ? 'bg-indigo-900/40 text-indigo-300' : 'bg-[var(--input-bg)] text-[var(--text-muted)]'}`}>
-                {loaded === null ? '—' : t.count}
+                {loaded === null ? 'N/A' : t.count}
               </span>
             </button>
           )
@@ -381,7 +381,7 @@ export default function DeveloperPortal() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{loaded === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{loaded === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -394,7 +394,7 @@ export default function DeveloperPortal() {
             <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
               <Activity size={15} /> Delivery health
             </h3>
-            <span className="text-sm font-semibold text-[var(--text-primary)]">{hooks === null ? '—' : `${hookHealth}%`}</span>
+            <span className="text-sm font-semibold text-[var(--text-primary)]">{hooks === null ? 'N/A' : `${hookHealth}%`}</span>
           </div>
           <div className="h-2.5 w-full rounded-full bg-[var(--input-bg)] overflow-hidden">
             <div
@@ -445,7 +445,7 @@ export default function DeveloperPortal() {
                 ) : filteredKeys.length === 0 ? (
                   <tr><td colSpan={8} className="px-4 py-12 text-center text-[var(--text-muted)]">
                     <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                    {keys.length === 0 && !notProvisioned ? 'No API keys issued yet — create your first key.' : 'No keys match these filters.'}
+                    {keys.length === 0 && !notProvisioned ? 'No API keys issued yet. Create your first key.' : 'No keys match these filters.'}
                   </td></tr>
                 ) : (
                   keysPager.pageRows.map((r) => {
@@ -453,11 +453,11 @@ export default function DeveloperPortal() {
                     const effStatus = expired ? 'expired' : String(r.status || '').toLowerCase()
                     return (
                       <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                        <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.key_name || '—'}</td>
+                        <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.key_name || 'N/A'}</td>
                         <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)] whitespace-nowrap">{maskKey(r.key_prefix)}</td>
-                        <td className="px-4 py-2.5"><Badge className={ENV_STYLE[r.environment] || ''}>{r.environment || '—'}</Badge></td>
-                        <td className="px-4 py-2.5"><Badge className={KEY_STATUS_STYLE[effStatus] || ''}>{effStatus || '—'}</Badge></td>
-                        <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.rate_limit != null ? `${Number(r.rate_limit).toLocaleString()}/min` : '—'}</td>
+                        <td className="px-4 py-2.5"><Badge className={ENV_STYLE[r.environment] || ''}>{r.environment || 'N/A'}</Badge></td>
+                        <td className="px-4 py-2.5"><Badge className={KEY_STATUS_STYLE[effStatus] || ''}>{effStatus || 'N/A'}</Badge></td>
+                        <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.rate_limit != null ? `${Number(r.rate_limit).toLocaleString()}/min` : 'N/A'}</td>
                         <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDate(r.expires_at)}</td>
                         <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDate(r.last_used_at)}</td>
                         <td className="px-4 py-2.5">
@@ -485,17 +485,17 @@ export default function DeveloperPortal() {
                 ) : filteredHooks.length === 0 ? (
                   <tr><td colSpan={8} className="px-4 py-12 text-center text-[var(--text-muted)]">
                     <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                    {hooks.length === 0 && !notProvisioned ? 'No webhook endpoints yet — register your first endpoint.' : 'No endpoints match these filters.'}
+                    {hooks.length === 0 && !notProvisioned ? 'No webhook endpoints yet. Register your first endpoint.' : 'No endpoints match these filters.'}
                   </td></tr>
                 ) : (
                   hooksPager.pageRows.map((r) => {
                     const status = String(r.status || '').toLowerCase()
                     return (
                       <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                        <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.endpoint_name || '—'}</td>
-                        <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)] max-w-[280px] truncate" title={r.url || ''}>{r.url || '—'}</td>
-                        <td className="px-4 py-2.5"><Badge className={HOOK_STATUS_STYLE[status] || ''}>{status || '—'}</Badge></td>
-                        <td className="px-4 py-2.5 text-[var(--text-secondary)] max-w-[200px] truncate" title={r.event_types || ''}>{r.event_types || '—'}</td>
+                        <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.endpoint_name || 'N/A'}</td>
+                        <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)] max-w-[280px] truncate" title={r.url || ''}>{r.url || 'N/A'}</td>
+                        <td className="px-4 py-2.5"><Badge className={HOOK_STATUS_STYLE[status] || ''}>{status || 'N/A'}</Badge></td>
+                        <td className="px-4 py-2.5 text-[var(--text-secondary)] max-w-[200px] truncate" title={r.event_types || ''}>{r.event_types || 'N/A'}</td>
                         <td className="px-4 py-2.5">
                           <span className={(Number(r.failure_count) || 0) > 0 ? 'text-red-400 font-semibold' : 'text-[var(--text-secondary)]'}>
                             {r.failure_count != null ? Number(r.failure_count).toLocaleString() : '0'}
@@ -547,7 +547,7 @@ export default function DeveloperPortal() {
                     <div>
                       <label className="label">Key prefix (display hint)</label>
                       <input className="input w-full font-mono" placeholder="tp_live_9f3c" value={keyForm.key_prefix} maxLength={60} onChange={(e) => setKey('key_prefix', e.target.value)} />
-                      <p className="text-[11px] text-[var(--text-muted)] mt-1">Never store the full secret — only a recognisable prefix.</p>
+                      <p className="text-[11px] text-[var(--text-muted)] mt-1">Never store the full secret, only a recognisable prefix.</p>
                     </div>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -663,7 +663,7 @@ export default function DeveloperPortal() {
                 <p className="text-sm text-[var(--text-muted)] mt-1">
                   {confirmDelete._kind === 'key'
                     ? <>{confirmDelete.key_name || 'Key'} · {maskKey(confirmDelete.key_prefix)}. This removes the saved reference. Revoke the actual credential in the service that issued it.</>
-                    : <>{confirmDelete.endpoint_name || 'Endpoint'} · {confirmDelete.url || '—'}. This can’t be undone.</>}
+                    : <>{confirmDelete.endpoint_name || 'Endpoint'} · {confirmDelete.url || 'N/A'}. This can’t be undone.</>}
                 </p>
               </div>
             </div>

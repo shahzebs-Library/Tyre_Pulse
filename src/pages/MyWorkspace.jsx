@@ -43,7 +43,7 @@ function Workspace({ modules, summaries, profile, country }) {
       const Icon = item.icon
       return <Link key={item.to} to={item.to} className="card block hover:border-green-500 focus-visible:outline focus-visible:outline-green-500">
         <div className="flex items-center gap-3">{Icon && <Icon size={21} aria-hidden="true" />}<h2 className="font-semibold">{t(item.label)}</h2></div>
-        {summaries && metric && <p className="text-sm mt-3 text-[var(--text-secondary)]">{metric.label}: {result?.error ? 'Unavailable — open module to retry' : result ? result.count.toLocaleString() : 'Loading...'}</p>}
+        {summaries && metric && <p className="text-sm mt-3 text-[var(--text-secondary)]">{metric.label}: {result?.error ? 'Unavailable, open module to retry' : result ? result.count.toLocaleString() : 'Loading...'}</p>}
       </Link>
     })}</div>
     <Link to="/settings" className="btn-secondary inline-block">Settings</Link>

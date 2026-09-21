@@ -11,7 +11,7 @@
  * - Grouped card grids (Organization, Identity & Access, Workflow & Automation,
  *   Master Data, Data & Integrations, Platform Ops) — responsive 1/2/3 columns.
  * - A few live counts (users, customers) fetched from real services; each is
- *   isolated in its own try/catch so a failure degrades to "—", never an error,
+ *   isolated in its own try/catch so a failure degrades to "N/A", never an error,
  *   and numbers are never fabricated.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -149,7 +149,7 @@ const SECTIONS = [
 const ADMIN_ROLES = new Set(['Admin'])
 
 // ── Live counts ─────────────────────────────────────────────────────────────
-// Each count is fully isolated: a failure resolves to null (rendered as "—"),
+// Each count is fully isolated: a failure resolves to null (rendered as "N/A"),
 // never an exception that could blank the page. No fabricated fallbacks.
 async function fetchCount(build) {
   try {
@@ -179,7 +179,7 @@ async function loadCounts(country) {
 
 // ── Presentation ─────────────────────────────────────────────────────────────
 function formatStat(v) {
-  if (v == null) return '—'
+  if (v == null) return 'N/A'
   return Number(v).toLocaleString()
 }
 
@@ -324,7 +324,7 @@ export default function AdminConsole() {
     <div className="space-y-6">
       <PageHeader
         title="Admin Console"
-        subtitle={`One place for every administration area — ${totalAreas} tools across ${SECTIONS.length} groups`}
+        subtitle={`One place for every administration area: ${totalAreas} tools across ${SECTIONS.length} groups`}
         icon={LayoutGrid}
         badge="Admin"
       />
@@ -375,7 +375,7 @@ export default function AdminConsole() {
 
       <p className="text-[11px] text-muted">
         Every tool above opens its dedicated, existing module. Live counts reflect
-        the active country scope and degrade to “—” if a metric is temporarily
+        the active country scope and degrade to “N/A” if a metric is temporarily
         unavailable.
       </p>
     </div>

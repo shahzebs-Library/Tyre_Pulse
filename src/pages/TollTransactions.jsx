@@ -43,17 +43,17 @@ const STATUS_TONE = {
 const titleCase = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '')
 
 const fmtAmount = (v, currency) => {
-  if (v == null || v === '') return '—'
+  if (v == null || v === '') return 'N/A'
   const n = Number(v)
-  if (!Number.isFinite(n)) return '—'
+  if (!Number.isFinite(n)) return 'N/A'
   const num = n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   return currency ? `${currency} ${num}` : num
 }
 
 function fmtDateTime(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleString()
 }
 
 /** Local <input type="datetime-local"> value (YYYY-MM-DDTHH:mm) from an ISO/date. */
@@ -226,7 +226,7 @@ export default function TollTransactions() {
     <div className="space-y-6">
       <PageHeader
         title="Toll Transactions"
-        subtitle="Capture toll-road charges per asset — tag, cash, card, or on-account — for reconciliation, dispute handling, and per-trip cost visibility."
+        subtitle="Capture toll-road charges per asset (tag, cash, card, or on-account) for reconciliation, dispute handling, and per-trip cost visibility."
         icon={Receipt}
         onRefresh={load}
         refreshing={refreshing}
@@ -275,7 +275,7 @@ export default function TollTransactions() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -366,24 +366,24 @@ export default function TollTransactions() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={7} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {rows.length === 0 && !notProvisioned ? 'No toll transactions recorded yet — add your first transaction.' : 'No transactions match these filters.'}
+                  {rows.length === 0 && !notProvisioned ? 'No toll transactions recorded yet. Add your first transaction.' : 'No transactions match these filters.'}
                 </td></tr>
               ) : (
                 pager.pageRows.map((r) => (
                   <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                    <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.asset_no || '—'}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.plaza_name || '—'}</td>
+                    <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.asset_no || 'N/A'}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.plaza_name || 'N/A'}</td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDateTime(r.transaction_at)}</td>
                     <td className="px-4 py-2.5 font-semibold text-[var(--text-primary)] whitespace-nowrap">{fmtAmount(r.amount, r.currency)}</td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">
-                      <span className="inline-flex items-center gap-1"><CreditCard size={13} className="opacity-70" /> {r.payment_method ? titleCase(r.payment_method) : '—'}</span>
+                      <span className="inline-flex items-center gap-1"><CreditCard size={13} className="opacity-70" /> {r.payment_method ? titleCase(r.payment_method) : 'N/A'}</span>
                     </td>
                     <td className="px-4 py-2.5">
                       {r.status ? (
                         <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${STATUS_TONE[r.status] || 'text-[var(--text-secondary)] bg-[var(--input-bg)] border-[var(--input-border)]'}`}>
                           {titleCase(r.status)}
                         </span>
-                      ) : '—'}
+                      ) : 'N/A'}
                     </td>
                     <td className="px-4 py-2.5">
                       <div className="flex items-center justify-end gap-1">
@@ -451,7 +451,7 @@ export default function TollTransactions() {
                 <div>
                   <label className="label">Payment method</label>
                   <select className="input w-full" value={form.payment_method} onChange={(e) => set('payment_method', e.target.value)}>
-                    <option value="">—</option>
+                    <option value="">None</option>
                     {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{titleCase(m)}</option>)}
                   </select>
                 </div>
@@ -460,14 +460,14 @@ export default function TollTransactions() {
                 <div>
                   <label className="label">Status</label>
                   <select className="input w-full" value={form.status} onChange={(e) => set('status', e.target.value)}>
-                    <option value="">—</option>
+                    <option value="">None</option>
                     {STATUSES.map((s) => <option key={s} value={s}>{titleCase(s)}</option>)}
                   </select>
                 </div>
               </div>
               <div>
                 <label className="label">Notes (optional)</label>
-                <textarea className="input w-full min-h-[80px] resize-y" placeholder="e.g. disputed — duplicate charge on same trip" value={form.notes} maxLength={8000} onChange={(e) => set('notes', e.target.value)} />
+                <textarea className="input w-full min-h-[80px] resize-y" placeholder="e.g. disputed, duplicate charge on same trip" value={form.notes} maxLength={8000} onChange={(e) => set('notes', e.target.value)} />
               </div>
 
               {formError && (

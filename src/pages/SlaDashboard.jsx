@@ -64,17 +64,17 @@ const PRIORITY_META = {
   low: { label: 'Low', cls: 'bg-slate-700/40 text-slate-300 border border-slate-600/50' },
 }
 
-const TITLE_CASE = (v) => (v ? String(v).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : '—')
+const TITLE_CASE = (v) => (v ? String(v).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : 'N/A')
 
 function fmtDateTime(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
 }
 
 /** Human countdown string from signed hours-remaining. */
 function fmtCountdown(hrs) {
-  if (hrs == null) return '—'
+  if (hrs == null) return 'N/A'
   const overdue = hrs < 0
   let mins = Math.round(Math.abs(hrs) * 60)
   const d = Math.floor(mins / 1440); mins -= d * 1440
@@ -89,7 +89,7 @@ function fmtCountdown(hrs) {
 }
 
 function fmtHours(v) {
-  if (v == null) return '—'
+  if (v == null) return 'N/A'
   return `${Number(v).toLocaleString(undefined, { maximumFractionDigits: 1 })} h`
 }
 
@@ -193,7 +193,7 @@ export default function SlaDashboard() {
     { label: 'Breached', value: summary.breachedCount, icon: AlertOctagon, tone: 'text-red-400' },
     { label: 'At risk', value: summary.atRiskCount, icon: Timer, tone: 'text-amber-400' },
     { label: 'Compliance', value: `${summary.complianceRate}%`, icon: Percent, tone: 'text-sky-400' },
-    { label: 'Avg resolution', value: summary.avgResolutionHours == null ? '—' : fmtHours(summary.avgResolutionHours), icon: Hourglass, tone: 'text-violet-400' },
+    { label: 'Avg resolution', value: summary.avgResolutionHours == null ? 'N/A' : fmtHours(summary.avgResolutionHours), icon: Hourglass, tone: 'text-violet-400' },
   ]
 
   // ── Export ───────────────────────────────────────────────────────────────
@@ -285,7 +285,7 @@ export default function SlaDashboard() {
     <div className="space-y-6">
       <PageHeader
         title="SLA Dashboard"
-        subtitle="Track service-level agreements across work orders, breakdowns, deliveries, inspections, procurement and support — catch at-risk commitments before they breach and report compliance."
+        subtitle="Track service-level agreements across work orders, breakdowns, deliveries, inspections, procurement and support. Catch at-risk commitments before they breach and report compliance."
         icon={ShieldCheck}
         onRefresh={load}
         refreshing={refreshing}
@@ -334,7 +334,7 @@ export default function SlaDashboard() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -440,7 +440,7 @@ export default function SlaDashboard() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={9} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {rows.length === 0 && !notProvisioned ? 'No SLA records yet — create your first tracked SLA.' : 'No records match these filters.'}
+                  {rows.length === 0 && !notProvisioned ? 'No SLA records yet. Create your first tracked SLA.' : 'No records match these filters.'}
                 </td></tr>
               ) : (
                 pager.pageRows.map((r) => {
@@ -449,9 +449,9 @@ export default function SlaDashboard() {
                   const open = r._status !== 'met' && r._status !== 'unknown'
                   return (
                     <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                      <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.reference || '—'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{TYPE_LABEL[r.sla_type] || '—'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.asset_no || '—'}</td>
+                      <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.reference || 'N/A'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{TYPE_LABEL[r.sla_type] || 'N/A'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.asset_no || 'N/A'}</td>
                       <td className="px-4 py-2.5"><span className={`text-[11px] px-2 py-0.5 rounded-full whitespace-nowrap ${pMeta.cls}`}>{pMeta.label}</span></td>
                       <td className="px-4 py-2.5"><span className={`text-[11px] px-2 py-0.5 rounded-full whitespace-nowrap ${sMeta.cls}`}>{sMeta.label}</span></td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDateTime(r.due_at)}</td>
@@ -460,9 +460,9 @@ export default function SlaDashboard() {
                           <span className="text-green-400">{r._resolution == null ? 'Met' : `Met in ${fmtHours(r._resolution)}`}</span>
                         ) : open && r._remaining != null ? (
                           <span className={r._remaining < 0 ? 'text-red-400 font-medium' : r._status === 'at_risk' ? 'text-amber-400' : 'text-[var(--text-secondary)]'}>{fmtCountdown(r._remaining)}</span>
-                        ) : <span className="text-[var(--text-muted)]">—</span>}
+                        ) : <span className="text-[var(--text-muted)]">N/A</span>}
                       </td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.owner || '—'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.owner || 'N/A'}</td>
                       <td className="px-4 py-2.5">
                         <div className="flex items-center justify-end gap-1">
                           <button onClick={() => openEdit(r)} className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Edit"><Pencil size={14} /></button>

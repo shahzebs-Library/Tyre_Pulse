@@ -44,7 +44,7 @@ const TYPE_META = {
   custom:      { label: 'Custom',      cls: 'bg-slate-500/15 text-slate-300 border-slate-500/30' },
 }
 
-const fmtInt = (v) => (v == null || v === '' ? '—' : Number(v).toLocaleString())
+const fmtInt = (v) => (v == null || v === '' ? 'N/A' : Number(v).toLocaleString())
 
 function isMissingRelation(err) {
   const m = String(err?.message || '').toLowerCase()
@@ -54,7 +54,7 @@ function isMissingRelation(err) {
 
 function TypeBadge({ type }) {
   const meta = TYPE_META[type]
-  if (!meta) return <span className="text-[var(--text-muted)]">—</span>
+  if (!meta) return <span className="text-[var(--text-muted)]">N/A</span>
   return (
     <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${meta.cls}`}>
       {meta.label}
@@ -195,7 +195,7 @@ export default function FleetGroups() {
     { label: 'Active groups', value: summary.activeGroups, icon: Building2, tone: 'text-emerald-400' },
     { label: 'Root entities', value: summary.rootGroups, icon: Network, tone: 'text-sky-400' },
     { label: 'Assets grouped', value: summary.totalAssets.toLocaleString(), icon: Layers, tone: 'text-violet-400' },
-    { label: 'Total budget', value: summary.totalBudget > 0 ? formatCurrencyCompact(summary.totalBudget, currency) : '—', icon: Wallet, tone: 'text-amber-400' },
+    { label: 'Total budget', value: summary.totalBudget > 0 ? formatCurrencyCompact(summary.totalBudget, currency) : 'N/A', icon: Wallet, tone: 'text-amber-400' },
   ]
 
   // ── Export ───────────────────────────────────────────────────────────────
@@ -281,7 +281,7 @@ export default function FleetGroups() {
     <div className="space-y-6">
       <PageHeader
         title="Fleet Groups"
-        subtitle="Model your holding-company hierarchy — subsidiaries, divisions, depots, and cost centres — and roll up assets, budget, and utilisation across every level."
+        subtitle="Model your holding-company hierarchy (subsidiaries, divisions, depots, and cost centres) and roll up assets, budget, and utilisation across every level."
         icon={Network}
         onRefresh={load}
         refreshing={refreshing}
@@ -330,7 +330,7 @@ export default function FleetGroups() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -353,7 +353,7 @@ export default function FleetGroups() {
         ) : tree.length === 0 ? (
           <div className="py-10 text-center text-[var(--text-muted)]">
             <Network size={26} className="mx-auto mb-2 opacity-60" />
-            <p className="text-sm">{notProvisioned ? 'Enable the module to start building your hierarchy.' : 'No groups yet — create a holding company or division to begin.'}</p>
+            <p className="text-sm">{notProvisioned ? 'Enable the module to start building your hierarchy.' : 'No groups yet. Create a holding company or division to begin.'}</p>
           </div>
         ) : (
           <div className="-mx-1">
@@ -400,7 +400,7 @@ export default function FleetGroups() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={8} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {rows.length === 0 && !notProvisioned ? 'No groups yet — create your first group.' : 'No groups match these filters.'}
+                  {rows.length === 0 && !notProvisioned ? 'No groups yet. Create your first group.' : 'No groups match these filters.'}
                 </td></tr>
               ) : (
                 pager.pageRows.map((r) => {
@@ -409,20 +409,20 @@ export default function FleetGroups() {
                     <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
                       <td className="px-4 py-2.5">
                         <div className="flex items-center gap-2">
-                          <span className="font-medium text-[var(--text-primary)]">{r.group_name || '—'}</span>
+                          <span className="font-medium text-[var(--text-primary)]">{r.group_name || 'N/A'}</span>
                           {r.group_code && <span className="text-[11px] text-[var(--text-muted)] font-mono">#{r.group_code}</span>}
                           {r.active === false && <span className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">inactive</span>}
                         </div>
                       </td>
                       <td className="px-4 py-2.5"><TypeBadge type={r.group_type} /></td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.parent_group || <span className="text-[var(--text-muted)]">root</span>}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.manager ? <span className="inline-flex items-center gap-1"><User size={12} className="opacity-60" />{r.manager}</span> : '—'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.region ? <span className="inline-flex items-center gap-1"><MapPin size={12} className="opacity-60" />{r.region}</span> : '—'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.manager ? <span className="inline-flex items-center gap-1"><User size={12} className="opacity-60" />{r.manager}</span> : 'N/A'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.region ? <span className="inline-flex items-center gap-1"><MapPin size={12} className="opacity-60" />{r.region}</span> : 'N/A'}</td>
                       <td className="px-4 py-2.5 font-semibold text-[var(--text-primary)]">
                         {rolled.toLocaleString()}
                         {r.asset_count != null && Number(r.asset_count) !== rolled && <span className="text-xs text-[var(--text-muted)] font-normal"> / {fmtInt(r.asset_count)} own</span>}
                       </td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{r.budget == null ? '—' : formatCurrencyCompact(Number(r.budget) || 0, r.currency || currency)}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{r.budget == null ? 'N/A' : formatCurrencyCompact(Number(r.budget) || 0, r.currency || currency)}</td>
                       <td className="px-4 py-2.5">
                         <div className="flex items-center justify-end gap-1">
                           <button onClick={() => openEdit(r)} className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Edit"><Pencil size={14} /></button>
@@ -462,14 +462,14 @@ export default function FleetGroups() {
                 <div>
                   <label className="label">Type</label>
                   <select className="input w-full" value={form.group_type} onChange={(e) => set('group_type', e.target.value)}>
-                    <option value="">— Select type —</option>
+                    <option value="">Select type</option>
                     {GROUP_TYPES.map((t) => <option key={t} value={t}>{TYPE_META[t]?.label || t}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="label">Parent group (optional)</label>
                   <select className="input w-full" value={form.parent_group} onChange={(e) => set('parent_group', e.target.value)}>
-                    <option value="">— None (top level) —</option>
+                    <option value="">None (top level)</option>
                     {parentOptions
                       .filter((name) => !editing || name !== editing.group_name)
                       .map((name) => <option key={name} value={name}>{name}</option>)}

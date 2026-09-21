@@ -64,7 +64,7 @@ export default function MappingProfilesManager({ moduleLabels = {}, onApply }) {
   const groups = {}
   for (const p of profiles || []) (groups[p.module] ||= []).push(p)
 
-  const fmtDate = (d) => (d ? new Date(d).toLocaleDateString() : '—')
+  const fmtDate = (d) => (d ? new Date(d).toLocaleDateString() : 'N/A')
 
   return (
     <div className="card p-0 overflow-hidden">
@@ -117,7 +117,7 @@ export default function MappingProfilesManager({ moduleLabels = {}, onApply }) {
                         <span className="text-sm text-[var(--text-primary)] truncate">{p.name}</span>
                         {!p.active && <span className="text-[10px] text-gray-500 border border-gray-700 rounded px-1">{t('intake.panels.profiles.inactive')}</span>}
                       </button>
-                      <span className="hidden sm:block text-xs text-[var(--text-muted)] shrink-0">{p.source_system || '—'}</span>
+                      <span className="hidden sm:block text-xs text-[var(--text-muted)] shrink-0">{p.source_system || 'N/A'}</span>
                       <span className="text-xs text-[var(--text-muted)] shrink-0" title={t('intake.panels.profiles.colsSuffix')}>{p.rule_count} {t('intake.panels.profiles.colsSuffix')}</span>
                       <span className="hidden md:block text-xs text-[var(--text-muted)] shrink-0" title={fmtDate(p.last_used_at)}>{fmtDate(p.last_used_at)}</span>
                       <div className="flex items-center gap-1 shrink-0">

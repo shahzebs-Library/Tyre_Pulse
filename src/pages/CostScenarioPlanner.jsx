@@ -119,7 +119,7 @@ export default function CostScenarioPlanner() {
   const headline = [
     {
       label: 'Best strategy',
-      value: r.bestName ?? '—',
+      value: r.bestName ?? 'N/A',
       icon: Trophy,
       tone: 'text-green-400',
     },
@@ -132,7 +132,7 @@ export default function CostScenarioPlanner() {
     },
     {
       label: 'Best CPK',
-      value: bestRow ? bestRow.cpk.toFixed(4) : '—',
+      value: bestRow ? bestRow.cpk.toFixed(4) : 'N/A',
       icon: Gauge,
       tone: 'text-sky-400',
     },
@@ -148,7 +148,7 @@ export default function CostScenarioPlanner() {
     <div className="space-y-6">
       <PageHeader
         title="Cost Scenario Planner"
-        subtitle="Compare tyre strategies side by side — annual cost, CPK and savings vs a baseline over your planning horizon."
+        subtitle="Compare tyre strategies side by side: annual cost, CPK and savings vs a baseline over your planning horizon."
         icon={SlidersHorizontal}
         actions={
           <button
@@ -344,7 +344,7 @@ export default function CostScenarioPlanner() {
                           : 'text-[var(--text-muted)]'
                       }`}
                     >
-                      {row.isBaseline ? '—' : money(row.savingsVsBaselineHorizon)}
+                      {row.isBaseline ? 'N/A' : money(row.savingsVsBaselineHorizon)}
                     </td>
                   </tr>
                 ))}

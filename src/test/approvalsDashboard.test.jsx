@@ -195,7 +195,7 @@ describe('Unified approval dashboard', () => {
   it('merges workflow, accident-closure and checklist items into the pending queue', async () => {
     renderPage()
     await waitFor(() => expect(screen.getByText('Vehicle ABC-123 · Tyre Replacement')).toBeInTheDocument())
-    expect(screen.getByText(/Closure request — TRK-01 · Collision/)).toBeInTheDocument()
+    expect(screen.getByText(/Closure request: TRK-01 · Collision/)).toBeInTheDocument()
     expect(screen.getByText('Daily Safety Check')).toBeInTheDocument()
   })
 
@@ -214,7 +214,7 @@ describe('Unified approval dashboard', () => {
 
     await waitFor(() => expect(screen.queryByText('Vehicle ABC-123 · Tyre Replacement')).not.toBeInTheDocument())
     expect(screen.queryByText('Daily Safety Check')).not.toBeInTheDocument()
-    expect(screen.getByText(/Closure request — TRK-01 · Collision/)).toBeInTheDocument()
+    expect(screen.getByText(/Closure request: TRK-01 · Collision/)).toBeInTheDocument()
   })
 
   it('switches to workflow-only lifecycle buckets', async () => {
@@ -241,9 +241,9 @@ describe('Unified approval dashboard', () => {
 
   it('approves an accident closure through the RLS-enforced RPC', async () => {
     renderPage()
-    await waitFor(() => expect(screen.getByText(/Closure request — TRK-01/)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText(/Closure request: TRK-01/)).toBeInTheDocument())
 
-    fireEvent.click(screen.getByText(/Closure request — TRK-01/))
+    fireEvent.click(screen.getByText(/Closure request: TRK-01/))
     const dialog = await screen.findByRole('dialog')
     fireEvent.click(within(dialog).getByRole('button', { name: /Approve/i }))
 
@@ -329,7 +329,7 @@ describe('Unified approval dashboard', () => {
 
     // Non-workflow sources still render, with a degraded banner (not a dead page).
     await waitFor(() => expect(screen.getByText(/Workflow engine is unavailable/i)).toBeInTheDocument())
-    expect(screen.getByText(/Closure request — TRK-01/)).toBeInTheDocument()
+    expect(screen.getByText(/Closure request: TRK-01/)).toBeInTheDocument()
     expect(screen.getByText('Select all 1')).toBeInTheDocument()
     expect(screen.queryByRole('checkbox', { name: /Daily Safety Check/ })).not.toBeInTheDocument()
   })

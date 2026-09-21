@@ -202,8 +202,8 @@ function LifecycleEsgView() {
   return (
     <>
       <PageHeader
-        title="Carbon Tracker — Lifecycle ESG"
-        subtitle="Embedded tyre-lifecycle CO₂, retread savings & ESG score — GCC sustainability reporting."
+        title="Carbon Tracker: Lifecycle ESG"
+        subtitle="Embedded tyre-lifecycle CO₂, retread savings & ESG score: GCC sustainability reporting."
         icon={Leaf}
         onRefresh={load}
         refreshing={refreshing}
@@ -280,7 +280,7 @@ function LifecycleEsgView() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-2xl font-bold mt-1 truncate ${k.tone}`}>{loading ? '—' : k.value}</p>
+              <p className={`text-2xl font-bold mt-1 truncate ${k.tone}`}>{loading ? 'N/A' : k.value}</p>
               <p className="text-xs text-[var(--text-muted)] mt-0.5">{loading ? '' : k.sub}</p>
             </Card>
           )
@@ -296,7 +296,7 @@ function LifecycleEsgView() {
             <Award size={16} className={esgTone} />
           </div>
           <div className="mt-1">
-            <p className={`text-4xl font-bold ${esgTone}`}>{loading ? '—' : s.esgScore}<span className="text-lg text-[var(--text-muted)]">/100</span></p>
+            <p className={`text-4xl font-bold ${esgTone}`}>{loading ? 'N/A' : s.esgScore}<span className="text-lg text-[var(--text-muted)]">/100</span></p>
             <div className="mt-2 h-2 rounded-full bg-[var(--input-bg)] overflow-hidden">
               <div className={`h-full rounded-full ${s.esgScore >= 70 ? 'bg-green-500' : s.esgScore >= 50 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${Math.max(0, Math.min(100, s.esgScore))}%` }} />
             </div>
@@ -312,14 +312,14 @@ function LifecycleEsgView() {
           <p className="text-xs text-[var(--text-muted)] mb-2">ESG components</p>
           <ComponentRow label="Retread rate" value={`${s.retreadRatePct}%`} band={carbon.retreadBand.label} tone={bandTone(carbon.retreadBand.urgency)} icon={Recycle} />
           <ComponentRow label="Pressure compliance" value={`${s.pressureCompliancePct}%`} icon={Gauge} />
-          <ComponentRow label="Fleet intensity" value={carbon.intensity.fleetIntensityKgPerKm != null ? `${carbon.intensity.fleetIntensityKgPerKm} kg/km` : '—'} band={carbon.intensity.band.band !== 'unknown' ? carbon.intensity.band.label : 'No fleet-km data'} tone={bandTone(carbon.intensity.band.urgency)} icon={Activity} last />
+          <ComponentRow label="Fleet intensity" value={carbon.intensity.fleetIntensityKgPerKm != null ? `${carbon.intensity.fleetIntensityKgPerKm} kg/km` : 'N/A'} band={carbon.intensity.band.band !== 'unknown' ? carbon.intensity.band.label : 'No fleet-km data'} tone={bandTone(carbon.intensity.band.urgency)} icon={Activity} last />
         </Card>
 
         <Card>
           <p className="text-xs text-[var(--text-muted)] mb-2">Reduction vs prior period</p>
           <div className="flex items-center gap-2">
             <TrendingDown size={22} className={carbon.reductionVsPriorPct != null && carbon.reductionVsPriorPct > 0 ? 'text-green-400' : 'text-[var(--text-muted)]'} />
-            <p className="text-3xl font-bold text-[var(--text-primary)]">{carbon.reductionVsPriorPct != null ? `${carbon.reductionVsPriorPct}%` : '—'}</p>
+            <p className="text-3xl font-bold text-[var(--text-primary)]">{carbon.reductionVsPriorPct != null ? `${carbon.reductionVsPriorPct}%` : 'N/A'}</p>
           </div>
           <p className="text-xs text-[var(--text-muted)] mt-1">Last 6 months vs prior 6 months (new-tyre embedded CO₂).</p>
           <div className="mt-3 pt-3 border-t border-[var(--input-border)] grid grid-cols-3 gap-2 text-center">
@@ -604,7 +604,7 @@ function InitiativesPanel({ initiatives, canWrite, activeCountry, onChange }) {
               </div>
               {i.description && <p className="mt-1 text-xs text-[var(--text-muted)] line-clamp-2">{i.description}</p>}
               <div className="mt-2 flex items-center justify-between text-xs">
-                <span className="text-[var(--text-muted)]">{i.owner ? `Owner: ${i.owner}` : '—'}</span>
+                <span className="text-[var(--text-muted)]">{i.owner ? `Owner: ${i.owner}` : 'N/A'}</span>
                 <div className="flex items-center gap-2">
                   {i.claimed_savings_kg != null && <span className="font-bold text-green-400 tabular-nums">{asTonnes(i.claimed_savings_kg)} t</span>}
                   {canWrite && (
@@ -692,7 +692,7 @@ function FuelEmissionsView() {
     { label: 'Total CO₂', value: `${asTonnes(carbon.totalCo2)} t`, sub: `${fmt(carbon.totalCo2)} kg`, icon: Leaf, tone: 'text-red-400' },
     { label: 'CO₂ / vehicle', value: `${asTonnes(co2PerVehicle)} t`, sub: `${carbon.vehicleCount} vehicles`, icon: Gauge, tone: 'text-amber-400' },
     { label: 'Total diesel', value: `${fmt(carbon.totalLitres)} L`, sub: `${fmt(carbon.totalDistanceKm)} km driven`, icon: Fuel, tone: 'text-blue-400' },
-    { label: 'Top-emitting site', value: topSite ? topSite.site : '—', sub: topSite ? `${asTonnes(topSite.co2)} t CO₂` : 'No sites', icon: Building2, tone: 'text-green-400' },
+    { label: 'Top-emitting site', value: topSite ? topSite.site : 'N/A', sub: topSite ? `${asTonnes(topSite.co2)} t CO₂` : 'No sites', icon: Building2, tone: 'text-green-400' },
   ]
 
   // ── Charts ───────────────────────────────────────────────────────────────
@@ -757,8 +757,8 @@ function FuelEmissionsView() {
   return (
     <>
       <PageHeader
-        title="Carbon Tracker — Fuel emissions"
-        subtitle="Fleet CO₂ emissions from real fuel usage — IPCC diesel factor, aggregated by month, site and vehicle."
+        title="Carbon Tracker: Fuel emissions"
+        subtitle="Fleet CO₂ emissions from real fuel usage: IPCC diesel factor, aggregated by month, site and vehicle."
         icon={Fuel}
         onRefresh={load}
         refreshing={refreshing}
@@ -820,7 +820,7 @@ function FuelEmissionsView() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-2xl font-bold mt-1 truncate ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-2xl font-bold mt-1 truncate ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
               <p className="text-xs text-[var(--text-muted)] mt-0.5">{rows === null ? '' : k.sub}</p>
             </Card>
           )

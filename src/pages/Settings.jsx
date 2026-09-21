@@ -127,7 +127,7 @@ const NOTIFICATION_CHANNELS = [
 ]
 
 const PRIORITY_LABELS = {
-  low: 'Low — everything',
+  low: 'Low: everything',
   normal: 'Normal and above',
   high: 'High and above',
   critical: 'Critical only',

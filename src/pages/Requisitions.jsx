@@ -47,9 +47,9 @@ function isMissingRelation(err) {
   return m.includes('does not exist') || m.includes('could not find the table') || m.includes('schema cache')
 }
 function fmtDate(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString()
 }
 const cap = (s) => (s ? String(s).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : '')
 
@@ -343,7 +343,7 @@ export default function Requisitions() {
     <div className="space-y-6">
       <PageHeader
         title="Requisitions"
-        subtitle="Raise and track internal purchase requests before they become POs — with approval status and export."
+        subtitle="Raise and track internal purchase requests before they become POs, with approval status and export."
         icon={ClipboardList}
         onRefresh={load}
         refreshing={refreshing}
@@ -398,7 +398,7 @@ export default function Requisitions() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -453,12 +453,12 @@ export default function Requisitions() {
                   return (
                     <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
                       <td className="px-4 py-2.5 text-[var(--text-primary)] font-medium">
-                        <span className="inline-flex items-center gap-2"><ClipboardList size={13} className="text-[var(--text-muted)]" />{r.item || '—'}</span>
+                        <span className="inline-flex items-center gap-2"><ClipboardList size={13} className="text-[var(--text-muted)]" />{r.item || 'N/A'}</span>
                       </td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] font-mono text-xs">{r.requisition_no || '—'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{cap(r.category) || '—'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.quantity == null || r.quantity === '' ? '—' : r.quantity}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] font-medium">{r.est_cost == null || r.est_cost === '' ? '—' : fmtMoney(r.est_cost)}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)] font-mono text-xs">{r.requisition_no || 'N/A'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{cap(r.category) || 'N/A'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.quantity == null || r.quantity === '' ? 'N/A' : r.quantity}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)] font-medium">{r.est_cost == null || r.est_cost === '' ? 'N/A' : fmtMoney(r.est_cost)}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtDate(r.needed_by)}</td>
                       <td className="px-4 py-2.5"><span className={`badge text-[11px] px-2 py-0.5 rounded ${st.cls}`}>{st.label}</span></td>
                       <td className="px-4 py-2.5">

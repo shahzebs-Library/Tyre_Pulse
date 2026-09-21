@@ -57,20 +57,20 @@ const fmtHm = (min) => {
   return `${h}h ${String(m).padStart(2, '0')}m`
 }
 
-const fmtMin = (v) => (v == null || v === '' ? '—' : `${Number(v).toLocaleString()} min`)
-const fmtKm = (v) => (v == null || v === '' ? '—' : `${Number(v).toLocaleString()} km`)
+const fmtMin = (v) => (v == null || v === '' ? 'N/A' : `${Number(v).toLocaleString()} min`)
+const fmtKm = (v) => (v == null || v === '' ? 'N/A' : `${Number(v).toLocaleString()} km`)
 
 function fmtDate(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString()
 }
 
 function fmtTime(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
   return Number.isNaN(d.getTime())
-    ? '—'
+    ? 'N/A'
     : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
@@ -86,7 +86,7 @@ function toLocalInput(v) {
 
 function dutyBadge(status) {
   const meta = DUTY_META[status]
-  if (!meta) return <span className="text-[var(--text-muted)]">—</span>
+  if (!meta) return <span className="text-[var(--text-muted)]">N/A</span>
   return (
     <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${meta.cls}`}>
       {meta.label}
@@ -256,7 +256,7 @@ export default function HoursOfService() {
     <div className="space-y-6">
       <PageHeader
         title="Hours of Service"
-        subtitle="Capture and track driver duty-status logs (ELD) per driver over time — the compliance basis for fatigue-risk, safety, and HOS reporting."
+        subtitle="Capture and track driver duty-status logs (ELD) per driver over time: the compliance basis for fatigue-risk, safety, and HOS reporting."
         icon={Clock}
         onRefresh={load}
         refreshing={refreshing}
@@ -305,7 +305,7 @@ export default function HoursOfService() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -353,7 +353,7 @@ export default function HoursOfService() {
                 ))}
               </tbody>
             </table>
-            {compliance.length > 50 && <p className="px-1 py-2 text-xs text-[var(--text-muted)]">Showing worst 50 driver-days — refine filters or export for the full set.</p>}
+            {compliance.length > 50 && <p className="px-1 py-2 text-xs text-[var(--text-muted)]">Showing worst 50 driver-days. Refine filters or export for the full set.</p>}
           </div>
         )}
       </div>
@@ -393,25 +393,25 @@ export default function HoursOfService() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={9} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {rows.length === 0 && !notProvisioned ? 'No duty-status logs yet — log your first entry.' : 'No logs match these filters.'}
+                  {rows.length === 0 && !notProvisioned ? 'No duty-status logs yet. Log your first entry.' : 'No logs match these filters.'}
                 </td></tr>
               ) : (
                 pager.pageRows.map((r) => (
                   <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                    <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.driver_name || '—'}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.asset_no || '—'}</td>
+                    <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.driver_name || 'N/A'}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.asset_no || 'N/A'}</td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDate(r.log_date)}</td>
                     <td className="px-4 py-2.5">{dutyBadge(r.duty_status)}</td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtMin(r.duration_min)}</td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtKm(r.distance_km)}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.location || '—'}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.location || 'N/A'}</td>
                     <td className="px-4 py-2.5">
                       {r.violation ? (
                         <span className="inline-flex items-center gap-1 rounded-full border border-red-700/50 bg-red-900/30 px-2 py-0.5 text-xs font-medium text-red-300" title={r.violation_type || 'Violation'}>
                           <ShieldAlert size={12} /> {r.violation_type ? String(r.violation_type).slice(0, 18) : 'Violation'}
                         </span>
                       ) : (
-                        <span className="text-[var(--text-muted)]">—</span>
+                        <span className="text-[var(--text-muted)]">N/A</span>
                       )}
                     </td>
                     <td className="px-4 py-2.5">
@@ -483,7 +483,7 @@ export default function HoursOfService() {
               </div>
               <div>
                 <label className="label">Location (optional)</label>
-                <input className="input w-full" placeholder="e.g. Riyadh — Dammam corridor" value={form.location} maxLength={200} onChange={(e) => set('location', e.target.value)} />
+                <input className="input w-full" placeholder="e.g. Riyadh to Dammam corridor" value={form.location} maxLength={200} onChange={(e) => set('location', e.target.value)} />
               </div>
               <div>
                 <label className="label">Remarks (optional)</label>
@@ -534,7 +534,7 @@ export default function HoursOfService() {
               <div>
                 <h3 className="text-[var(--text-primary)] font-semibold">Delete this log?</h3>
                 <p className="text-sm text-[var(--text-muted)] mt-1">
-                  {confirmDelete.driver_name || 'Log'} · {DUTY_META[confirmDelete.duty_status]?.label || '—'} · {fmtDate(confirmDelete.log_date)}. This can’t be undone.
+                  {confirmDelete.driver_name || 'Log'} · {DUTY_META[confirmDelete.duty_status]?.label || 'N/A'} · {fmtDate(confirmDelete.log_date)}. This can’t be undone.
                 </p>
               </div>
             </div>

@@ -149,7 +149,7 @@ export function generateSwaps(tyres) {
         expected_benefit_km: benefit,
         reason:
           `Relocate ${labelSerial(w.serial)} (${round1(w.tread)}mm) from ${labelPos(w.position)} to ` +
-          `${labelPos(f.position)} (${round1(f.tread)}mm) — evens a ${delta}mm tread gap (~${km(benefit)} km recovered).`,
+          `${labelPos(f.position)} (${round1(f.tread)}mm): evens a ${delta}mm tread gap (~${km(benefit)} km recovered).`,
       })
       used.add(w._idx)
       used.add(f._idx)
@@ -182,7 +182,7 @@ export function detectViolations(tyres) {
         position: t.position || null,
         tread_mm: round1(tread),
         heuristic: false,
-        message: `Tyre ${labelSerial(t.serial)} at ${labelPos(t.position)} is ${round1(tread)}mm — below the ${LEGAL_MIN_TREAD_MM}mm legal minimum.`,
+        message: `Tyre ${labelSerial(t.serial)} at ${labelPos(t.position)} is ${round1(tread)}mm, below the ${LEGAL_MIN_TREAD_MM}mm legal minimum.`,
       })
     }
   }
@@ -195,7 +195,7 @@ export function detectViolations(tyres) {
         severity: 'critical',
         heuristic: true,
         gap_mm: gap,
-        message: `Steer-labelled tyres differ by ${gap}mm (heuristic — axle role inferred from position text; no axle/side data). Steer tyres should be closely matched.`,
+        message: `Steer-labelled tyres differ by ${gap}mm (heuristic: axle role inferred from position text; no axle/side data). Steer tyres should be closely matched.`,
       })
     }
   }
@@ -350,7 +350,7 @@ export function analyzeAsset(tyresOnAsset, opts = {}) {
   }
 
   if (!eligible) {
-    result.reason = `Tread spread ${spread}mm is within the ${threshold}mm balance threshold — wear is even.`
+    result.reason = `Tread spread ${spread}mm is within the ${threshold}mm balance threshold, wear is even.`
     result.priority = null
     return result
   }
@@ -363,7 +363,7 @@ export function analyzeAsset(tyresOnAsset, opts = {}) {
 
   recs.push(
     `Swap tyre ${labelSerial(worn.serial)} (${round1(worn.tread)}mm, most worn) at ${labelPos(worn.position)} ` +
-      `with tyre ${labelSerial(fresh.serial)} (${round1(fresh.tread)}mm, freshest) at ${labelPos(fresh.position)} — ` +
+      `with tyre ${labelSerial(fresh.serial)} (${round1(fresh.tread)}mm, freshest) at ${labelPos(fresh.position)}. It ` +
       `evens out a ${spread}mm tread spread across the axle set.`,
   )
 

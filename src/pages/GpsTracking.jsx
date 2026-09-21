@@ -33,19 +33,19 @@ const EMPTY_FORM = {
 }
 
 const fmtSpeed = (v) =>
-  v == null || v === '' ? '—' : `${Number(v).toLocaleString()} km/h`
+  v == null || v === '' ? 'N/A' : `${Number(v).toLocaleString()} km/h`
 
 const fmtLatLng = (r) => {
   const lat = toFiniteNumber(r?.latitude)
   const lng = toFiniteNumber(r?.longitude)
-  if (lat == null || lng == null) return '—'
+  if (lat == null || lng == null) return 'N/A'
   return `${lat.toFixed(5)}, ${lng.toFixed(5)}`
 }
 
 function fmtDateTime(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleString()
 }
 
 /** Motion state of a single ping: moving | idle | stopped. */
@@ -220,7 +220,7 @@ export default function GpsTracking() {
     <div className="space-y-6">
       <PageHeader
         title="GPS Tracking"
-        subtitle="Capture and track GPS position history per asset over time — the location, speed and idle basis for utilisation, idle-cost and route analytics."
+        subtitle="Capture and track GPS position history per asset over time: the location, speed and idle basis for utilisation, idle-cost and route analytics."
         icon={MapPin}
         onRefresh={load}
         refreshing={refreshing}
@@ -230,7 +230,7 @@ export default function GpsTracking() {
             <button onClick={async () => { try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'gps_positions') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileSpreadsheet size={14} /> Excel
             </button>
-            <button onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'GPS Tracking — Position History', 'gps_positions', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'GPS Tracking: Position History', 'gps_positions', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileText size={14} /> PDF
             </button>
             <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5" disabled={notProvisioned}>
@@ -269,7 +269,7 @@ export default function GpsTracking() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -297,8 +297,8 @@ export default function GpsTracking() {
                     const m = motionOf(r)
                     return (
                       <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                        <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.asset_no || '—'}</td>
-                        <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.driver_name || '—'}</td>
+                        <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.asset_no || 'N/A'}</td>
+                        <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.driver_name || 'N/A'}</td>
                         <td className="px-4 py-2.5">
                           <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${MOTION_BADGE[m]}`}>{MOTION_LABEL[m]}</span>
                         </td>
@@ -351,21 +351,21 @@ export default function GpsTracking() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={8} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {rows.length === 0 && !notProvisioned ? 'No positions logged yet — log your first position.' : 'No positions match these filters.'}
+                  {rows.length === 0 && !notProvisioned ? 'No positions logged yet. Log your first position.' : 'No positions match these filters.'}
                 </td></tr>
               ) : (
                 pager.pageRows.map((r) => {
                   const m = motionOf(r)
                   return (
                     <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                      <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.asset_no || '—'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.driver_name || '—'}</td>
+                      <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.asset_no || 'N/A'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.driver_name || 'N/A'}</td>
                       <td className="px-4 py-2.5">
                         <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${MOTION_BADGE[m]}`}>{MOTION_LABEL[m]}</span>
                       </td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtSpeed(r.speed_kmh)}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap font-mono text-xs">{fmtLatLng(r)}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{r.heading == null || r.heading === '' ? '—' : `${Number(r.heading).toFixed(0)}°`}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{r.heading == null || r.heading === '' ? 'N/A' : `${Number(r.heading).toFixed(0)}°`}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDateTime(r.recorded_at)}</td>
                       <td className="px-4 py-2.5">
                         <div className="flex items-center justify-end gap-1">

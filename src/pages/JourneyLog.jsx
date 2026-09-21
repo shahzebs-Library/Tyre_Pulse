@@ -79,9 +79,9 @@ function isMissingRelation(err) {
   return m.includes('does not exist') || m.includes('relation') || m.includes('schema cache') || m.includes('could not find the table')
 }
 function fmtDateTime(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleString()
 }
 // A timestamptz → the value an <input type="datetime-local"> expects (local, no tz).
 function toLocalInput(v) {
@@ -321,7 +321,7 @@ export default function JourneyLog() {
     <div className="space-y-6">
       <PageHeader
         title="Journey Log"
-        subtitle="Record and track vehicle journeys — asset, driver, route, timing, distance and purpose."
+        subtitle="Record and track vehicle journeys: asset, driver, route, timing, distance and purpose."
         icon={Navigation}
         onRefresh={load}
         refreshing={refreshing}
@@ -554,13 +554,13 @@ export default function JourneyLog() {
                   const dur = journeyDurationHours(r)
                   return (
                     <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{r.asset_no || '—'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.driver_name || '—'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{r.origin || '—'} <span className="text-[var(--text-muted)]">→</span> {r.destination || '—'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.purpose || '—'}</td>
+                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{r.asset_no || 'N/A'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.driver_name || 'N/A'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{r.origin || 'N/A'} <span className="text-[var(--text-muted)]">→</span> {r.destination || 'N/A'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.purpose || 'N/A'}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDateTime(r.start_time)}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.distance_km == null ? '—' : `${r.distance_km} km`}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{dur == null ? '—' : `${dur} h`}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.distance_km == null ? 'N/A' : `${r.distance_km} km`}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{dur == null ? 'N/A' : `${dur} h`}</td>
                       <td className="px-4 py-2.5"><span className={`badge text-[11px] px-2 py-0.5 rounded ${STATUS_BADGE[r.status] || STATUS_BADGE.planned}`}>{JOURNEY_STATUS_META[r.status]?.label || r.status}</span></td>
                       <td className="px-4 py-2.5">
                         <div className="flex items-center gap-1">
@@ -662,7 +662,7 @@ export default function JourneyLog() {
                 <h3 className="font-bold text-[var(--text-primary)]">Delete journey?</h3>
                 <p className="text-sm text-[var(--text-muted)] mt-1">
                   This permanently removes the journey for <span className="font-mono text-[var(--text-secondary)]">{confirmDelete.asset_no || 'this asset'}</span>
-                  {confirmDelete.origin || confirmDelete.destination ? ` (${confirmDelete.origin || '—'} → ${confirmDelete.destination || '—'})` : ''}. This cannot be undone.
+                  {confirmDelete.origin || confirmDelete.destination ? ` (${confirmDelete.origin || 'N/A'} → ${confirmDelete.destination || 'N/A'})` : ''}. This cannot be undone.
                 </p>
               </div>
             </div>

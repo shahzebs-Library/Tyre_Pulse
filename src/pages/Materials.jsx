@@ -59,9 +59,9 @@ const STOCK_BADGE = {
 const STOCK_LABEL = { active: 'In stock', low: 'Low', out_of_stock: 'Out of stock' }
 
 const fmtQty = (v, unit) => {
-  if (v == null || v === '') return '—'
+  if (v == null || v === '') return 'N/A'
   const n = Number(v)
-  if (!Number.isFinite(n)) return '—'
+  if (!Number.isFinite(n)) return 'N/A'
   return `${n.toLocaleString()}${unit ? ` ${unit}` : ''}`
 }
 
@@ -228,7 +228,7 @@ export default function Materials() {
     <div className="space-y-6">
       <PageHeader
         title="Materials Management"
-        subtitle="Track workshop consumable inventory — oils, filters, valves, sealants, greases and shop supplies — with on-hand quantities, reorder thresholds, unit costs and live stock value."
+        subtitle="Track workshop consumable inventory (oils, filters, valves, sealants, greases and shop supplies) with on-hand quantities, reorder thresholds, unit costs and live stock value."
         icon={Boxes}
         onRefresh={load}
         refreshing={refreshing}
@@ -277,7 +277,7 @@ export default function Materials() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-2xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-2xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -294,7 +294,7 @@ export default function Materials() {
           {rows === null ? (
             <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-9 bg-[var(--input-bg)] rounded animate-pulse" />)}</div>
           ) : reorder.length === 0 ? (
-            <p className="text-sm text-[var(--text-muted)]">Nothing to reorder — every item is above its reorder point.</p>
+            <p className="text-sm text-[var(--text-muted)]">Nothing to reorder. Every item is above its reorder point.</p>
           ) : (
             <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
               {reorder.slice(0, 30).map((it, idx) => (
@@ -309,7 +309,7 @@ export default function Materials() {
                   </div>
                 </div>
               ))}
-              {reorder.length > 30 && <p className="text-xs text-[var(--text-muted)] pt-1">+{reorder.length - 30} more — export for the full list.</p>}
+              {reorder.length > 30 && <p className="text-xs text-[var(--text-muted)] pt-1">+{reorder.length - 30} more. Export for the full list.</p>}
             </div>
           )}
         </div>
@@ -384,7 +384,7 @@ export default function Materials() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={9} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {rows.length === 0 && !notProvisioned ? 'No materials recorded yet — add your first item.' : 'No materials match these filters.'}
+                  {rows.length === 0 && !notProvisioned ? 'No materials recorded yet. Add your first item.' : 'No materials match these filters.'}
                 </td></tr>
               ) : (
                 pager.pageRows.map((r) => {
@@ -392,18 +392,18 @@ export default function Materials() {
                   return (
                     <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
                       <td className="px-4 py-2.5">
-                        <div className="font-medium text-[var(--text-primary)]">{r.name || '—'}</div>
+                        <div className="font-medium text-[var(--text-primary)]">{r.name || 'N/A'}</div>
                         {r.sku && <div className="text-[11px] text-[var(--text-muted)] font-mono">{r.sku}</div>}
                       </td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{CATEGORY_LABEL[r.category] || r.category || '—'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{CATEGORY_LABEL[r.category] || r.category || 'N/A'}</td>
                       <td className="px-4 py-2.5 font-semibold text-[var(--text-primary)]">{fmtQty(r.quantity_on_hand, r.unit)}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtQty(r.reorder_point, r.unit)}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{r.unit_cost == null || r.unit_cost === '' ? '—' : money(r.unit_cost)}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{r.unit_cost == null || r.unit_cost === '' ? 'N/A' : money(r.unit_cost)}</td>
                       <td className="px-4 py-2.5 font-semibold text-amber-400 whitespace-nowrap">{money(stockValue(r))}</td>
                       <td className="px-4 py-2.5">
                         <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-medium ${STOCK_BADGE[st]}`}>{STOCK_LABEL[st]}</span>
                       </td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.supplier || '—'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.supplier || 'N/A'}</td>
                       <td className="px-4 py-2.5">
                         <div className="flex items-center justify-end gap-1">
                           <button onClick={() => openEdit(r)} className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Edit"><Pencil size={14} /></button>
@@ -443,7 +443,7 @@ export default function Materials() {
                 <div>
                   <label className="label">Category</label>
                   <select className="input w-full" value={form.category} onChange={(e) => set('category', e.target.value)}>
-                    <option value="">— Select —</option>
+                    <option value="">Select</option>
                     {CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_LABEL[c]}</option>)}
                   </select>
                 </div>
@@ -454,7 +454,7 @@ export default function Materials() {
                 <div>
                   <label className="label">Status</label>
                   <select className="input w-full" value={form.status} onChange={(e) => set('status', e.target.value)}>
-                    <option value="">— Auto —</option>
+                    <option value="">Auto</option>
                     {STATUSES.map((s) => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
                   </select>
                 </div>

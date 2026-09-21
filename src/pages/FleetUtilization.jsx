@@ -261,7 +261,7 @@ export default function FleetUtilization() {
                     <td className="px-3 py-2">
                       <div className="font-medium text-slate-100">{r.asset_no}</div>
                       <div className="text-xs text-slate-500">
-                        {[r.make, r.model].filter(Boolean).join(' ') || '—'}
+                        {[r.make, r.model].filter(Boolean).join(' ') || 'N/A'}
                         {r.country ? ` · ${r.country}` : ''}
                         {!r.linked_to_fleet && <span className="text-amber-400"> · unregistered</span>}
                       </div>

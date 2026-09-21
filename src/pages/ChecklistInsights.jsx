@@ -275,7 +275,7 @@ export default function ChecklistInsights() {
   const byTemplate = useMemo(() => {
     const map = new Map()
     for (const s of filteredSubs) {
-      const id = s?.template_id ?? '—'
+      const id = s?.template_id ?? 'N/A'
       let row = map.get(id)
       if (!row) {
         row = {

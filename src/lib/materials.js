@@ -181,7 +181,7 @@ export function reorderList(rows = []) {
       configuredQty != null && configuredQty > 0 ? configuredQty : shortfall
     const name = m?.name != null && String(m.name).trim()
       ? String(m.name).trim()
-      : (m?.sku != null && String(m.sku).trim() ? String(m.sku).trim() : '—')
+      : (m?.sku != null && String(m.sku).trim() ? String(m.sku).trim() : 'N/A')
     const sku = m?.sku != null && String(m.sku).trim() ? String(m.sku).trim() : null
     out.push({ name, sku, shortfall, reorder_qty })
   }

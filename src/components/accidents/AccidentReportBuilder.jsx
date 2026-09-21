@@ -258,7 +258,7 @@ function AccidentReportBuilderInner({ records = [], company = 'TyrePulse', curre
     setOrientation(item.orientation || 'portrait')
     setTplId(''); setTplName(item.name); setDirty(true)
     setLibraryOpen(false)
-    setToast({ t: 'ok', m: `“${item.name}” applied — save it to make it schedulable.` })
+    setToast({ t: 'ok', m: `“${item.name}” applied. Save it to make it schedulable.` })
   }
   const loadTemplate = (row) => {
     const cfg = normalizeConfig(row.config)
@@ -289,7 +289,7 @@ function AccidentReportBuilderInner({ records = [], company = 'TyrePulse', curre
         setTemplates((ts) => [row, ...ts]); setTplId(row.id)
       }
       setDirty(false)
-      setToast({ t: 'ok', m: `Layout “${name}” saved — you can now schedule it in Scheduled Reports.` })
+      setToast({ t: 'ok', m: `Layout “${name}” saved. You can now schedule it in Scheduled Reports.` })
     } catch (e) {
       setToast({ t: 'err', m: toUserMessage(e, 'Could not save layout (draft kept locally).') })
     } finally { setSaving(false) }
@@ -538,7 +538,7 @@ function LibraryModal({ templates, onApplyLibrary, onLoad, onDelete, onClose }) 
             <div className="text-center py-10">
               <FolderOpen size={28} className="mx-auto mb-2 text-[var(--text-muted)] opacity-60" />
               <p className="text-sm text-[var(--text-secondary)]">{templates.length === 0 ? 'No saved layouts yet.' : 'No layouts match the search.'}</p>
-              {templates.length === 0 && <p className="text-xs text-[var(--text-muted)] mt-1">Design a report, name it, and press Save — it lands here and in Scheduled Reports.</p>}
+              {templates.length === 0 && <p className="text-xs text-[var(--text-muted)] mt-1">Design a report, name it, and press Save. It lands here and in Scheduled Reports.</p>}
             </div>
           ) : (
             <div className="space-y-2">
@@ -909,7 +909,7 @@ function BlockPreview({ block: b, ctx, records, money, company, chartRefs, orien
   }
   if (b.type === 'kpis') {
     const items = (b.items || []).filter((k) => KPIS[k])
-    if (!items.length) return <Placeholder>No KPIs selected — configure this block.</Placeholder>
+    if (!items.length) return <Placeholder>No KPIs selected. Configure this block.</Placeholder>
     return (
       <div className={`grid gap-3 ${landscape ? 'grid-cols-3 sm:grid-cols-6' : 'grid-cols-2 sm:grid-cols-3'}`}>
         {items.map((k) => { const def = KPIS[k]; const raw = def.get(ctx); return (
@@ -950,7 +950,7 @@ function BlockPreview({ block: b, ctx, records, money, company, chartRefs, orien
       <div>
         <h3 className="text-base font-bold text-slate-900 mb-2">{b.title || 'Key findings'}</h3>
         {lines.length === 0 ? (
-          <p className="text-sm text-slate-400">No incidents in scope — findings appear automatically once there is data.</p>
+          <p className="text-sm text-slate-400">No incidents in scope. Findings appear automatically once there is data.</p>
         ) : (
           <ul className="space-y-1.5">
             {lines.map((ln, i) => (
@@ -967,7 +967,7 @@ function BlockPreview({ block: b, ctx, records, money, company, chartRefs, orien
     return (
       <div>
         {b.title && <h3 className="text-base font-bold text-slate-900 mb-1">{b.title}</h3>}
-        <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{b.body || <span className="text-slate-400">Empty text block — add commentary in its config.</span>}</p>
+        <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{b.body || <span className="text-slate-400">Empty text block. Add commentary in its config.</span>}</p>
       </div>
     )
   }

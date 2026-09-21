@@ -76,18 +76,18 @@ const STATUS_META = {
 }
 
 const fmtConf = (v) =>
-  v == null || v === '' ? '—' : `${Math.round(Number(v) * 100)}%`
+  v == null || v === '' ? 'N/A' : `${Math.round(Number(v) * 100)}%`
 
 function fmtDate(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString()
 }
 
 function fieldsPreview(fields) {
-  if (!fields || typeof fields !== 'object') return '—'
+  if (!fields || typeof fields !== 'object') return 'N/A'
   const keys = Object.keys(fields)
-  if (!keys.length) return '—'
+  if (!keys.length) return 'N/A'
   return keys.slice(0, 3).map((k) => `${k}: ${String(fields[k]).slice(0, 24)}`).join(' · ')
     + (keys.length > 3 ? ` +${keys.length - 3}` : '')
 }
@@ -190,7 +190,7 @@ export default function OcrScanner() {
     { label: 'Total scans', value: summary.totalScans, icon: FileScan, tone: 'text-[var(--text-primary)]' },
     { label: 'Confirmed', value: summary.confirmedCount, icon: CheckCircle2, tone: 'text-green-400' },
     { label: 'Needs review', value: summary.needsReviewCount, icon: ClipboardCheck, tone: 'text-amber-400' },
-    { label: 'Avg confidence', value: summary.avgConfidence == null ? '—' : fmtConf(summary.avgConfidence), icon: Percent, tone: 'text-sky-400' },
+    { label: 'Avg confidence', value: summary.avgConfidence == null ? 'N/A' : fmtConf(summary.avgConfidence), icon: Percent, tone: 'text-sky-400' },
     { label: 'Auto-extracted', value: summary.autoExtractedCount, icon: Sparkles, tone: 'text-violet-400' },
   ]
 
@@ -290,7 +290,7 @@ export default function OcrScanner() {
     <div className="space-y-6">
       <PageHeader
         title="CV Inspection / OCR Scanner"
-        subtitle="Upload tyre-sidewall and document images, review the fields an OCR/CV provider extracts, and confirm or correct each reading — the audited bridge between camera capture and structured fleet data."
+        subtitle="Upload tyre-sidewall and document images, review the fields an OCR/CV provider extracts, and confirm or correct each reading: the audited bridge between camera capture and structured fleet data."
         icon={ScanLine}
         onRefresh={load}
         refreshing={refreshing}
@@ -317,7 +317,7 @@ export default function OcrScanner() {
           <p className="text-sky-200 font-medium">OCR/CV extraction provider not connected yet.</p>
           <p className="text-[var(--text-muted)] text-sm mt-1">
             This module records scans and drives the human review workflow today. Connecting an OCR/CV
-            provider auto-populates extracted text, fields, and a confidence score — flipping new scans
+            provider auto-populates extracted text, fields, and a confidence score, flipping new scans
             to <span className="font-medium text-[var(--text-secondary)]">Auto-extracted</span> for a reviewer
             to confirm or correct. No extraction is fabricated: records created now stay in
             <span className="font-medium text-[var(--text-secondary)]"> Pending</span> until a provider or a
@@ -355,7 +355,7 @@ export default function OcrScanner() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -494,13 +494,13 @@ export default function OcrScanner() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={8} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {rows.length === 0 && !notProvisioned ? 'No scans recorded yet — add your first scan.' : 'No scans match these filters.'}
+                  {rows.length === 0 && !notProvisioned ? 'No scans recorded yet. Add your first scan.' : 'No scans match these filters.'}
                 </td></tr>
               ) : (
                 pager.pageRows.map((r) => (
                   <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                    <td className="px-4 py-2.5 font-medium text-[var(--text-primary)] whitespace-nowrap">{TYPE_LABEL[r.scan_type] || r.scan_type || '—'}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.asset_no || '—'}</td>
+                    <td className="px-4 py-2.5 font-medium text-[var(--text-primary)] whitespace-nowrap">{TYPE_LABEL[r.scan_type] || r.scan_type || 'N/A'}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.asset_no || 'N/A'}</td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)] max-w-[240px]">
                       <div className="truncate">{r.corrected_value || r.extracted_text || fieldsPreview(r.extracted_fields)}</div>
                     </td>
@@ -511,7 +511,7 @@ export default function OcrScanner() {
                         ? <a href={safeHref(r.image_url)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sky-400 hover:text-sky-300 text-xs"><ImageIcon size={13} /> View</a>
                         : r.image_url
                           ? <span className="inline-flex items-center gap-1 text-[var(--text-muted)] text-xs"><ImageIcon size={13} /> View</span>
-                          : <span className="text-[var(--text-muted)] text-xs">—</span>}
+                          : <span className="text-[var(--text-muted)] text-xs">N/A</span>}
                     </td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDate(r.created_at)}</td>
                     <td className="px-4 py-2.5">
@@ -556,7 +556,7 @@ export default function OcrScanner() {
               </div>
               <div>
                 <label className="label">Extracted text (optional)</label>
-                <textarea className="input w-full min-h-[70px] resize-y font-mono text-xs" placeholder="Populated by the OCR/CV provider once connected — or paste a manual reading." value={form.extracted_text} maxLength={20000} onChange={(e) => set('extracted_text', e.target.value)} />
+                <textarea className="input w-full min-h-[70px] resize-y font-mono text-xs" placeholder="Populated by the OCR/CV provider once connected, or paste a manual reading." value={form.extracted_text} maxLength={20000} onChange={(e) => set('extracted_text', e.target.value)} />
               </div>
               <div>
                 <label className="label">Extracted fields (JSON, optional)</label>
@@ -565,7 +565,7 @@ export default function OcrScanner() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="label">Confidence (0–1, optional)</label>
+                  <label className="label">Confidence (0 to 1, optional)</label>
                   <input className="input w-full" type="number" step="0.01" min="0" max="1" placeholder="0.92" value={form.confidence} onChange={(e) => set('confidence', e.target.value)} />
                   <p className="text-[11px] text-[var(--text-muted)] mt-1">Provider score. Blank = not yet scored.</p>
                 </div>

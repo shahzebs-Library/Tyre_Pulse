@@ -126,10 +126,10 @@ export function lifecycleBand(score) {
   const r = round1(s)
   const n = Math.trunc(s)
   if (s < 30) return { band: 'disqualified', label: 'Disqualified', urgency: 'critical', score: r }
-  if (s < 50) return { band: 'probation', label: `Probation — ${n}/100`, urgency: 'high', score: r }
-  if (s < 65) return { band: 'watch', label: `Watch — ${n}/100`, urgency: 'medium', score: r }
-  if (s < 80) return { band: 'approved', label: `Approved — ${n}/100`, urgency: 'none', score: r }
-  return { band: 'preferred', label: `Preferred — ${n}/100`, urgency: 'none', score: r }
+  if (s < 50) return { band: 'probation', label: `Probation: ${n}/100`, urgency: 'high', score: r }
+  if (s < 65) return { band: 'watch', label: `Watch: ${n}/100`, urgency: 'medium', score: r }
+  if (s < 80) return { band: 'approved', label: `Approved: ${n}/100`, urgency: 'none', score: r }
+  return { band: 'preferred', label: `Preferred: ${n}/100`, urgency: 'none', score: r }
 }
 
 /**

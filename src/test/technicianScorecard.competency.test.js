@@ -79,7 +79,7 @@ describe('lifecycleScore (bands + unrated)', () => {
     const top = lifecycleScore({ completed: 500, passRate: 100, certCount: 5 })
     expect(top.score).toBe(100)
     expect(top.band).toBe('expert')
-    expect(top.label).toBe('Expert — 100/100')
+    expect(top.label).toBe('Expert: 100/100')
     // caps: 1000 jobs still 40, 10 certs still 10
     expect(lifecycleScore({ completed: 1000, passRate: 100, certCount: 10 }).score).toBe(100)
     // developing band

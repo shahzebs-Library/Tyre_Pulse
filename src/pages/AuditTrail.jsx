@@ -36,7 +36,7 @@ function hasExpandable(row) {
 }
 
 function fmtVal(v) {
-  if (v === null || v === undefined || v === '') return '—'
+  if (v === null || v === undefined || v === '') return 'N/A'
   if (typeof v === 'object') { try { return JSON.stringify(v) } catch { return String(v) } }
   return String(v)
 }

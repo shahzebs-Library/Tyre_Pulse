@@ -1562,7 +1562,7 @@ export default function DisplayDashboard() {
                     : compliance.pct >= 90 ? 'accent' : compliance.pct >= 70 ? 'warn' : 'crit'}
                   icon={ShieldCheck}
                   sub={compliance.pct == null ? 'No pressures recorded' : 'Rolling 90 days'} />
-                <StatTile label="Overdue Today" value={inspections.error ? '—' : todayInsp.overdue}
+                <StatTile label="Overdue Today" value={inspections.error ? 'N/A' : todayInsp.overdue}
                   tone={todayInsp.overdue > 0 ? 'crit' : 'accent'} icon={ClipboardList}
                   sub="Inspections past due" />
               </div>

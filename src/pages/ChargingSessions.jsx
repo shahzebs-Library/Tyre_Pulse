@@ -44,20 +44,20 @@ const STATUS_TONE = {
   interrupted: 'text-amber-400',
   failed: 'text-red-400',
 }
-const statusLabel = (v) => STATUS_OPTIONS.find((s) => s.value === v)?.label || (v || '—')
+const statusLabel = (v) => STATUS_OPTIONS.find((s) => s.value === v)?.label || (v || 'N/A')
 
 const fmtKwh = (v) =>
-  v == null || v === '' ? '—' : `${Number(v).toLocaleString(undefined, { maximumFractionDigits: 1 })} kWh`
+  v == null || v === '' ? 'N/A' : `${Number(v).toLocaleString(undefined, { maximumFractionDigits: 1 })} kWh`
 
 const fmtMoney = (v, currency) =>
-  v == null || v === '' ? '—' : `${currency ? `${currency} ` : ''}${Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+  v == null || v === '' ? 'N/A' : `${currency ? `${currency} ` : ''}${Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
 
-const fmtSoc = (v) => (v == null || v === '' ? '—' : `${Number(v)}%`)
+const fmtSoc = (v) => (v == null || v === '' ? 'N/A' : `${Number(v)}%`)
 
 function fmtDateTime(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleString()
 }
 
 function isMissingRelation(err) {
@@ -133,8 +133,8 @@ export default function ChargingSessions() {
   const kpis = [
     { label: 'Sessions logged', value: summary.totalSessions, icon: BatteryCharging, tone: 'text-[var(--text-primary)]' },
     { label: 'Total energy', value: `${Math.round(summary.totalKwh).toLocaleString()} kWh`, icon: Zap, tone: 'text-sky-400' },
-    { label: 'Total cost', value: summary.totalCost > 0 ? fmtMoney(summary.totalCost, currency) : '—', icon: DollarSign, tone: 'text-amber-400' },
-    { label: 'Avg cost / kWh', value: summary.avgCostPerKwh == null ? '—' : fmtMoney(summary.avgCostPerKwh, currency), icon: TrendingUp, tone: 'text-green-400' },
+    { label: 'Total cost', value: summary.totalCost > 0 ? fmtMoney(summary.totalCost, currency) : 'N/A', icon: DollarSign, tone: 'text-amber-400' },
+    { label: 'Avg cost / kWh', value: summary.avgCostPerKwh == null ? 'N/A' : fmtMoney(summary.avgCostPerKwh, currency), icon: TrendingUp, tone: 'text-green-400' },
   ]
 
   // ── Export ───────────────────────────────────────────────────────────────
@@ -220,7 +220,7 @@ export default function ChargingSessions() {
     <div className="space-y-6">
       <PageHeader
         title="EV Charging Sessions"
-        subtitle="Log and track EV charging sessions — energy (kWh), cost, state-of-charge, and duration per asset. The energy-cost basis for EV cost-per-km and utilisation analytics."
+        subtitle="Log and track EV charging sessions: energy (kWh), cost, state-of-charge, and duration per asset. The energy-cost basis for EV cost-per-km and utilisation analytics."
         icon={BatteryCharging}
         onRefresh={load}
         refreshing={refreshing}
@@ -269,7 +269,7 @@ export default function ChargingSessions() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -280,19 +280,19 @@ export default function ChargingSessions() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <div>
             <p className="text-xs text-[var(--text-muted)]">Assets charged</p>
-            <p className="text-lg font-semibold text-[var(--text-primary)]">{rows === null ? '—' : summary.distinctAssets}</p>
+            <p className="text-lg font-semibold text-[var(--text-primary)]">{rows === null ? 'N/A' : summary.distinctAssets}</p>
           </div>
           <div>
             <p className="text-xs text-[var(--text-muted)]">Completed</p>
-            <p className="text-lg font-semibold text-green-400">{rows === null ? '—' : summary.completedCount}</p>
+            <p className="text-lg font-semibold text-green-400">{rows === null ? 'N/A' : summary.completedCount}</p>
           </div>
           <div>
             <p className="text-xs text-[var(--text-muted)]">Avg SoC gain</p>
-            <p className="text-lg font-semibold text-sky-400">{rows === null || summary.avgSocGainPct == null ? '—' : `${Math.round(summary.avgSocGainPct)}%`}</p>
+            <p className="text-lg font-semibold text-sky-400">{rows === null || summary.avgSocGainPct == null ? 'N/A' : `${Math.round(summary.avgSocGainPct)}%`}</p>
           </div>
           <div>
             <p className="text-xs text-[var(--text-muted)]">Total energy</p>
-            <p className="text-lg font-semibold text-[var(--text-primary)]">{rows === null ? '—' : `${Math.round(summary.totalKwh).toLocaleString()} kWh`}</p>
+            <p className="text-lg font-semibold text-[var(--text-primary)]">{rows === null ? 'N/A' : `${Math.round(summary.totalKwh).toLocaleString()} kWh`}</p>
           </div>
         </div>
       </div>
@@ -332,24 +332,24 @@ export default function ChargingSessions() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={9} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {rows.length === 0 && !notProvisioned ? 'No charging sessions logged yet — log your first session.' : 'No sessions match these filters.'}
+                  {rows.length === 0 && !notProvisioned ? 'No charging sessions logged yet. Log your first session.' : 'No sessions match these filters.'}
                 </td></tr>
               ) : (
                 pager.pageRows.map((r) => {
                   const cpk = costPerKwh(r)
                   return (
                     <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                      <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.asset_no || '—'}</td>
+                      <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.asset_no || 'N/A'}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)]">
                         <span className="inline-flex items-center gap-1.5">
                           {r.connector_type ? <Plug size={13} className="text-[var(--text-muted)]" /> : null}
-                          {r.station_name || '—'}
+                          {r.station_name || 'N/A'}
                         </span>
                       </td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDateTime(r.started_at)}</td>
                       <td className="px-4 py-2.5 font-semibold text-[var(--text-primary)]">{fmtKwh(r.energy_kwh)}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtMoney(r.cost, r.currency || currency)}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{cpk == null ? '—' : fmtMoney(cpk, r.currency || currency)}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{cpk == null ? 'N/A' : fmtMoney(cpk, r.currency || currency)}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtSoc(r.start_soc)} → {fmtSoc(r.end_soc)}</td>
                       <td className="px-4 py-2.5 whitespace-nowrap">
                         <span className={`text-xs font-medium ${STATUS_TONE[r.status] || 'text-[var(--text-muted)]'}`}>{statusLabel(r.status)}</span>
@@ -387,7 +387,7 @@ export default function ChargingSessions() {
                 <div>
                   <label className="label">Status</label>
                   <select className="input w-full" value={form.status} onChange={(e) => set('status', e.target.value)}>
-                    <option value="">—</option>
+                    <option value="">None</option>
                     {STATUS_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
                   </select>
                 </div>

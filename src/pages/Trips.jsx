@@ -46,12 +46,12 @@ const STATUS_STYLES = {
 }
 
 const fmtKm = (v) =>
-  v == null || v === '' ? '—' : `${Number(v).toLocaleString()} km`
+  v == null || v === '' ? 'N/A' : `${Number(v).toLocaleString()} km`
 
 const fmtMin = (v) => {
-  if (v == null || v === '') return '—'
+  if (v == null || v === '') return 'N/A'
   const n = Number(v)
-  if (!Number.isFinite(n)) return '—'
+  if (!Number.isFinite(n)) return 'N/A'
   if (n < 60) return `${Math.round(n)} min`
   const h = Math.floor(n / 60)
   const m = Math.round(n % 60)
@@ -59,16 +59,16 @@ const fmtMin = (v) => {
 }
 
 const fmtSpeed = (v) =>
-  v == null || v === '' ? '—' : `${Number(v).toLocaleString()} km/h`
+  v == null || v === '' ? 'N/A' : `${Number(v).toLocaleString()} km/h`
 
 function fmtDateTime(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleString()
 }
 
 function statusLabel(v) {
-  return STATUS_OPTIONS.find((s) => s.value === v)?.label || (v || '—')
+  return STATUS_OPTIONS.find((s) => s.value === v)?.label || (v || 'N/A')
 }
 
 function isMissingRelation(err) {
@@ -229,7 +229,7 @@ export default function Trips() {
     <div className="space-y-6">
       <PageHeader
         title="Trip History"
-        subtitle="Record and replay journeys per asset — origin, destination, distance, timing, and speed. The basis for utilisation, driver-behaviour, and CPK analytics."
+        subtitle="Record and replay journeys per asset: origin, destination, distance, timing, and speed. The basis for utilisation, driver-behaviour, and CPK analytics."
         icon={Navigation}
         onRefresh={load}
         refreshing={refreshing}
@@ -278,7 +278,7 @@ export default function Trips() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -341,16 +341,16 @@ export default function Trips() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={8} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {rows.length === 0 && !notProvisioned ? 'No trips logged yet — log your first trip.' : 'No trips match these filters.'}
+                  {rows.length === 0 && !notProvisioned ? 'No trips logged yet. Log your first trip.' : 'No trips match these filters.'}
                 </td></tr>
               ) : (
                 pager.pageRows.map((r) => (
                   <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                    <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.asset_no || '—'}</td>
+                    <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.asset_no || 'N/A'}</td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)]">
                       <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
                         <MapPin size={13} className="text-[var(--text-muted)]" />
-                        {(r.origin || '—')}<span className="text-[var(--text-muted)]">→</span>{(r.destination || '—')}
+                        {(r.origin || 'N/A')}<span className="text-[var(--text-muted)]">→</span>{(r.destination || 'N/A')}
                       </span>
                     </td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDateTime(r.started_at)}</td>
@@ -362,7 +362,7 @@ export default function Trips() {
                         <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${STATUS_STYLES[r.status] || 'bg-slate-500/15 text-slate-300 border-slate-500/30'}`}>
                           {statusLabel(r.status)}
                         </span>
-                      ) : <span className="text-[var(--text-muted)]">—</span>}
+                      ) : <span className="text-[var(--text-muted)]">N/A</span>}
                     </td>
                     <td className="px-4 py-2.5">
                       <div className="flex items-center justify-end gap-1">
@@ -442,7 +442,7 @@ export default function Trips() {
                 <div>
                   <label className="label">Status</label>
                   <select className="input w-full" value={form.status} onChange={(e) => set('status', e.target.value)}>
-                    <option value="">—</option>
+                    <option value="">None</option>
                     {STATUS_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
                   </select>
                 </div>
@@ -478,7 +478,7 @@ export default function Trips() {
               <div>
                 <h3 className="text-[var(--text-primary)] font-semibold">Delete this trip?</h3>
                 <p className="text-sm text-[var(--text-muted)] mt-1">
-                  {confirmDelete.asset_no || 'Trip'} · {(confirmDelete.origin || '—')} → {(confirmDelete.destination || '—')} · {fmtKm(confirmDelete.distance_km)}. This can’t be undone.
+                  {confirmDelete.asset_no || 'Trip'} · {(confirmDelete.origin || 'N/A')} → {(confirmDelete.destination || 'N/A')} · {fmtKm(confirmDelete.distance_km)}. This can’t be undone.
                 </p>
               </div>
             </div>

@@ -273,7 +273,7 @@ export default function SiteManagement() {
       <div className="max-w-[1800px] mx-auto px-4 sm:px-6 py-6 space-y-6">
         <PageHeader
           title="Site Management"
-          subtitle="Every operational site — governed master + sites derived from live fleet data"
+          subtitle="Every operational site: governed master + sites derived from live fleet data"
           icon={MapPin}
           actions={<>
             <button onClick={() => setRefreshKey(k => k + 1)}
@@ -371,7 +371,7 @@ export default function SiteManagement() {
                         {!s.active && <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[var(--surface-2)] text-[var(--text-muted)]">Inactive</span>}
                       </div>
                       <p className="text-xs text-[var(--text-muted)] mt-0.5 truncate">
-                        {[s.country, s.region, s.city, s.siteType].filter(Boolean).join(' · ') || '—'}
+                        {[s.country, s.region, s.city, s.siteType].filter(Boolean).join(' · ') || 'N/A'}
                       </p>
                     </div>
                     <div className="flex items-center gap-5 shrink-0">

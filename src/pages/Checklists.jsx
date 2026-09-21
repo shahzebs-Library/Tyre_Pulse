@@ -215,7 +215,7 @@ export default function Checklists() {
     <div className="space-y-6">
       <PageHeader
         title="Checklists"
-        subtitle="Published inspection and compliance checklists — fill, submit, and route for approval."
+        subtitle="Published inspection and compliance checklists: fill, submit, and route for approval."
         icon={ClipboardList}
         actions={headerActions}
         onRefresh={load}

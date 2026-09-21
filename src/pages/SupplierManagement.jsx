@@ -1516,7 +1516,7 @@ export default function SupplierManagement() {
                       <td className="px-3 py-2 text-right text-[var(--text-secondary)]">{s.avgCpk == null ? '-' : s.avgCpk.toFixed(3)}</td>
                       <td className="px-3 py-2 text-right text-[var(--text-secondary)]">{s.failureRate == null ? '-' : `${(s.failureRate * 100).toFixed(1)}%`}</td>
                       <td className={`px-3 py-2 text-right font-medium ${s.warrantyClaims === 0 ? 'text-[var(--text-muted)]' : s.warrantyAcceptanceRate * 100 < 80 ? 'text-red-400' : 'text-emerald-400'}`}>
-                        {s.warrantyClaims === 0 ? '—' : `${(s.warrantyAcceptanceRate * 100).toFixed(0)}%`}
+                        {s.warrantyClaims === 0 ? 'N/A' : `${(s.warrantyAcceptanceRate * 100).toFixed(0)}%`}
                       </td>
                       <td className={`px-3 py-2 text-right font-medium ${s.priceCompetitiveness >= 50 ? 'text-emerald-400' : 'text-amber-400'}`}>{s.priceCompetitiveness}</td>
                       <td className="px-3 py-2 text-right text-[var(--text-secondary)]">{s.onTimeRate == null ? '-' : `${(s.onTimeRate * 100).toFixed(0)}%`}</td>

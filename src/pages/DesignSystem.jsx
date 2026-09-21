@@ -134,26 +134,26 @@ export default function DesignSystem() {
             <strong>Card sets padding, border, borderColor and background INLINE.</strong> A plain
             Tailwind class is a normal declaration and loses to an inline one, so
             <code className="mx-1">{'<Card className="py-12 border bg-amber-900/10">'}</code>
-            is entirely dead — and it fails silently, collapsing to <code>--pad-card</code> with no
+            is entirely dead, and it fails silently, collapsing to <code>--pad-card</code> with no
             tint. Put spacing on an inner element and use <code>tone</code> for the tint. Never
             reach for <code>!important</code> on a layout utility.
           </Trap>
           <Trap>
             <strong>Card is <code>flex flex-col</code>, and Tailwind emits <code>.flex-col</code> after
-            <code className="mx-1">.flex-row</code></strong> — so a <code>flex-row</code> class can never win.
+            <code className="mx-1">.flex-row</code></strong>, so a <code>flex-row</code> class can never win.
             Row direction needs <code>{'style={{ flexDirection: \'row\' }}'}</code>.
           </Trap>
           <Trap>
             <strong>Pass <code>clip</code> only for media that must crop to the radius.</strong> The
             hazard is DOM-rendered overlays inside the card (anchored popovers, a search result
-            list, a custom date picker). A native <code>&lt;select&gt;</code> is safe — the browser
+            list, a custom date picker). A native <code>&lt;select&gt;</code> is safe: the browser
             paints its option list outside the page&apos;s overflow context entirely.
           </Trap>
           <Trap>
             <strong><code>CardHeader</code>&apos;s <code>actions</code> slot is <code>flex-shrink-0</code>
             and cannot wrap.</strong> Right for one or two controls, wrong for a row of filter
             buttons: an inner <code>flex-wrap</code> inside a non-shrinking box has nothing to wrap
-            against, so a phone-width card pushes the page into horizontal scroll — invisible at
+            against, so a phone-width card pushes the page into horizontal scroll, invisible at
             desktop width.
           </Trap>
         </CardBody>
@@ -259,7 +259,7 @@ export default function DesignSystem() {
         >
           <label className="block">
             <span className="block text-xs text-dim mb-1">A field</span>
-            <input className="input w-full" placeholder="Type here — focus must not jump" />
+            <input className="input w-full" placeholder="Type here, focus must not jump" />
           </label>
           <p className="text-xs text-dim">
             Typing here is the regression test for <code>useDialogBehavior</code>: focus used to be
@@ -285,7 +285,7 @@ export default function DesignSystem() {
         }
       >
         <p className="text-sm text-dim">
-          A destructive action names what it will remove and cannot be the default focus — the panel
+          A destructive action names what it will remove and cannot be the default focus: the panel
           is focused, not its first control, so Enter never deletes by accident.
         </p>
       </Modal>
@@ -295,7 +295,7 @@ export default function DesignSystem() {
         <div style={{ padding: 'var(--pad-card)', paddingBottom: 0 }}>
           <CardHeader
             title="EnterpriseTable"
-            description="Search, filters, multi-sort, selection, export — and with a viewKey: pin, resize, density and a keyboard path."
+            description="Search, filters, multi-sort, selection, export, and with a viewKey: pin, resize, density and a keyboard path."
             icon={Table2}
             level={2}
           />
@@ -311,7 +311,7 @@ export default function DesignSystem() {
         <div style={{ padding: 'var(--pad-card)', paddingTop: 0 }}>
           <Trap>
             <strong>Do not convert a table that already owns its pagination and export.</strong> All
-            19 examined during the migration were correctly refused — EnterpriseTable would have
+            19 examined during the migration were correctly refused. EnterpriseTable would have
             added a second search box and a competing export beside the ones already there.
           </Trap>
           <Trap>
@@ -331,7 +331,7 @@ export default function DesignSystem() {
               <p className="text-xs font-medium">Not measurable</p>
               <p className="text-lg" style={{ fontVariantNumeric: 'tabular-nums' }}>N/A</p>
               <p className="text-xs text-dim mt-1">
-                A rate with no denominator. Never render 0 — zero reads as perfect.
+                A rate with no denominator. Never render 0. Zero reads as perfect.
               </p>
             </Card>
             <Card pad="tight">
@@ -358,7 +358,7 @@ export default function DesignSystem() {
           </CardGrid>
           <Trap>
             These four look alike on screen and mean opposite things. Collapsing them is the most
-            common defect in this codebase&apos;s history — a fabricated zero has previously made a
+            common defect in this codebase&apos;s history: a fabricated zero has previously made a
             fleet look perfectly compliant when nothing had been measured at all.
           </Trap>
         </CardBody>

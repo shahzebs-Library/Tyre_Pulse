@@ -985,7 +985,7 @@ function WorkflowStageSection({ acc, elevated, isAdmin, locked, reload, setErr }
             >
               <option value="">{isAdmin ? 'Select a stage...' : 'Select next step...'}</option>
               {options.map((k) => (
-                <option key={k} value={k}>{stageLabel(k)}{stageDept(k) ? ` — ${stageDept(k)}` : ''}</option>
+                <option key={k} value={k}>{stageLabel(k)}{stageDept(k) ? ` (${stageDept(k)})` : ''}</option>
               ))}
             </select>
           </div>
@@ -1131,7 +1131,7 @@ function CaseTimelineSection({ acc }) {
           {loadErr && <p className="text-xs text-red-400 mt-2">{loadErr}</p>}
           {rows.length === 0 && !loadErr && (
             <p className="text-xs text-gray-500 mt-2">
-              No status changes recorded yet — durations start tracking from the next update.
+              No status changes recorded yet. Durations start tracking from the next update.
             </p>
           )}
           {steps.length > 0 && (

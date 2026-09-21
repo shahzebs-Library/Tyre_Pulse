@@ -252,7 +252,7 @@ export default function FitmentValidation() {
       setVResult({ ...result, preview: !persist })
 
       if (persist) {
-        if (!tyre) { setVError(`No tyre matched serial "${serial}" — nothing was saved.`); return }
+        if (!tyre) { setVError(`No tyre matched serial "${serial}". Nothing was saved.`); return }
         await createValidation({
           tyre_serial: serial,
           asset_no: asset || null,
@@ -452,7 +452,7 @@ export default function FitmentValidation() {
                 </span>
                 {vResult.preview && (
                   <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
-                    Preview — not saved
+                    Preview, not saved
                   </span>
                 )}
                 {vContext?.rule?._default && (
@@ -464,14 +464,14 @@ export default function FitmentValidation() {
 
               {/* Resolved context */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4 text-sm">
-                <div><span className="text-[var(--text-muted)] block text-xs">Serial</span><span className="font-mono text-[var(--text-primary)]">{vForm.tyre_serial || '—'}</span></div>
-                <div><span className="text-[var(--text-muted)] block text-xs">Size</span><span className="font-mono text-[var(--text-secondary)]">{vContext?.tyre?.size || '—'}</span></div>
-                <div><span className="text-[var(--text-muted)] block text-xs">Tread</span><span className="text-[var(--text-secondary)]">{vContext?.tyre?.tread_depth != null ? `${vContext.tyre.tread_depth} mm` : '—'}</span></div>
-                <div><span className="text-[var(--text-muted)] block text-xs">Status</span><span className="text-[var(--text-secondary)]">{vContext?.tyre?.status || '—'}</span></div>
-                <div><span className="text-[var(--text-muted)] block text-xs">Target asset</span><span className="font-mono text-[var(--text-secondary)]">{vForm.asset_no || '—'}</span></div>
-                <div><span className="text-[var(--text-muted)] block text-xs">Vehicle type</span><span className="text-[var(--text-secondary)]">{vContext?.vehicle?.vehicle_type || '—'}</span></div>
-                <div><span className="text-[var(--text-muted)] block text-xs">Spec size</span><span className="font-mono text-[var(--text-secondary)]">{vContext?.vehicle?.tyre_size || '—'}</span></div>
-                <div><span className="text-[var(--text-muted)] block text-xs">Rule</span><span className="text-[var(--text-secondary)]">{vContext?.rule?.rule_name || '—'}</span></div>
+                <div><span className="text-[var(--text-muted)] block text-xs">Serial</span><span className="font-mono text-[var(--text-primary)]">{vForm.tyre_serial || 'N/A'}</span></div>
+                <div><span className="text-[var(--text-muted)] block text-xs">Size</span><span className="font-mono text-[var(--text-secondary)]">{vContext?.tyre?.size || 'N/A'}</span></div>
+                <div><span className="text-[var(--text-muted)] block text-xs">Tread</span><span className="text-[var(--text-secondary)]">{vContext?.tyre?.tread_depth != null ? `${vContext.tyre.tread_depth} mm` : 'N/A'}</span></div>
+                <div><span className="text-[var(--text-muted)] block text-xs">Status</span><span className="text-[var(--text-secondary)]">{vContext?.tyre?.status || 'N/A'}</span></div>
+                <div><span className="text-[var(--text-muted)] block text-xs">Target asset</span><span className="font-mono text-[var(--text-secondary)]">{vForm.asset_no || 'N/A'}</span></div>
+                <div><span className="text-[var(--text-muted)] block text-xs">Vehicle type</span><span className="text-[var(--text-secondary)]">{vContext?.vehicle?.vehicle_type || 'N/A'}</span></div>
+                <div><span className="text-[var(--text-muted)] block text-xs">Spec size</span><span className="font-mono text-[var(--text-secondary)]">{vContext?.vehicle?.tyre_size || 'N/A'}</span></div>
+                <div><span className="text-[var(--text-muted)] block text-xs">Rule</span><span className="text-[var(--text-secondary)]">{vContext?.rule?.rule_name || 'N/A'}</span></div>
               </div>
 
               {/* Violations */}
@@ -508,7 +508,7 @@ export default function FitmentValidation() {
 
               {vResult.is_valid && !vResult.violations?.length && !vResult.warnings?.length && (
                 <div className="mt-4 text-emerald-300 text-sm flex items-center gap-2">
-                  <CheckCircle2 size={16} /> All available checks passed — safe to install.
+                  <CheckCircle2 size={16} /> All available checks passed. Safe to install.
                 </div>
               )}
 
@@ -544,7 +544,7 @@ export default function FitmentValidation() {
                     <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                     <Icon size={16} className={k.tone} />
                   </div>
-                  <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{!loaded ? '—' : k.value}</p>
+                  <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{!loaded ? 'N/A' : k.value}</p>
                 </Card>
               )
             })}
@@ -606,14 +606,14 @@ export default function FitmentValidation() {
                   ) : (
                     pager.pageRows.map((r) => (
                       <tr key={r.asset_no || Math.random()} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                        <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{r.asset_no || '—'}</td>
-                        <td className="px-4 py-2.5 text-[var(--text-secondary)]">{[r.make, r.model].filter(Boolean).join(' ') || r.vehicle_type || '—'}</td>
-                        <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.site || '—'}</td>
-                        <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)]">{r.spec || '—'}</td>
+                        <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{r.asset_no || 'N/A'}</td>
+                        <td className="px-4 py-2.5 text-[var(--text-secondary)]">{[r.make, r.model].filter(Boolean).join(' ') || r.vehicle_type || 'N/A'}</td>
+                        <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.site || 'N/A'}</td>
+                        <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)]">{r.spec || 'N/A'}</td>
                         <td className="px-4 py-2.5 font-mono text-xs">
                           {r.fittedSizes.length ? (
                             <span className={r.band === 'mismatch' ? 'text-red-300' : 'text-[var(--text-secondary)]'}>{r.fittedSizes.join(', ')}</span>
-                          ) : <span className="text-[var(--text-muted)]">—</span>}
+                          ) : <span className="text-[var(--text-muted)]">N/A</span>}
                           {r.band === 'mismatch' && r.mismatchSizes.length > 0 && (
                             <span className="block text-[10px] text-red-400/80 mt-0.5">≠ spec: {r.mismatchSizes.join(', ')}</span>
                           )}
@@ -643,7 +643,7 @@ export default function FitmentValidation() {
                `style`, which Card spreads last. */
             <Card className="text-center text-[var(--text-muted)]" style={{ paddingBlock: 'var(--space-12)' }}>
               <ListChecks size={26} className="mx-auto mb-2 opacity-60" />
-              <p className="text-sm">{notProvisioned ? 'Enable the engine (apply V208) to configure rules.' : 'No fitment rules yet — the Validate tab uses a built-in default policy until you add one.'}</p>
+              <p className="text-sm">{notProvisioned ? 'Enable the engine (apply V208) to configure rules.' : 'No fitment rules yet. The Validate tab uses a built-in default policy until you add one.'}</p>
               {!notProvisioned && (
                 <button onClick={openRuleCreate} className="btn-primary text-sm inline-flex items-center gap-1.5 mt-4">
                   <Plus size={14} /> Create the first rule
@@ -708,7 +708,7 @@ export default function FitmentValidation() {
                 {validations === null ? (
                   [0, 1, 2, 3].map((i) => <tr key={i} className="border-b border-[var(--input-border)]/50"><td colSpan={6} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>)
                 ) : validations.length === 0 ? (
-                  <tr><td colSpan={6} className="px-4 py-12 text-center text-[var(--text-muted)]"><History size={22} className="mx-auto mb-2 opacity-60" />{notProvisioned ? 'Enable the engine (apply V208) to record validations.' : 'No validations recorded yet — run a check on the Validate tab.'}</td></tr>
+                  <tr><td colSpan={6} className="px-4 py-12 text-center text-[var(--text-muted)]"><History size={22} className="mx-auto mb-2 opacity-60" />{notProvisioned ? 'Enable the engine (apply V208) to record validations.' : 'No validations recorded yet. Run a check on the Validate tab.'}</td></tr>
                 ) : (
                   validations.map((h) => {
                     const vCount = Array.isArray(h.violations) ? h.violations.length : 0
@@ -721,15 +721,15 @@ export default function FitmentValidation() {
                             {h.is_valid ? 'Approved' : 'Rejected'}
                           </span>
                         </td>
-                        <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{h.tyre_serial || '—'}</td>
-                        <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)]">{h.asset_no || '—'}</td>
-                        <td className="px-4 py-2.5 text-[var(--text-secondary)]">{h.position_code || '—'}</td>
+                        <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{h.tyre_serial || 'N/A'}</td>
+                        <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)]">{h.asset_no || 'N/A'}</td>
+                        <td className="px-4 py-2.5 text-[var(--text-secondary)]">{h.position_code || 'N/A'}</td>
                         <td className="px-4 py-2.5 text-xs">
                           {vCount > 0 && <span className="text-red-400 mr-2">{vCount} violation{vCount === 1 ? '' : 's'}</span>}
                           {wCount > 0 && <span className="text-amber-400">{wCount} warning{wCount === 1 ? '' : 's'}</span>}
                           {vCount === 0 && wCount === 0 && <span className="text-[var(--text-muted)]">Clean</span>}
                         </td>
-                        <td className="px-4 py-2.5 text-xs text-[var(--text-muted)] whitespace-nowrap">{h.validated_at ? new Date(h.validated_at).toLocaleString() : '—'}</td>
+                        <td className="px-4 py-2.5 text-xs text-[var(--text-muted)] whitespace-nowrap">{h.validated_at ? new Date(h.validated_at).toLocaleString() : 'N/A'}</td>
                       </tr>
                     )
                   })
@@ -756,7 +756,7 @@ export default function FitmentValidation() {
           <form onSubmit={submitRule} className="space-y-4">
             <div>
               <label className="label">Rule name</label>
-              <input className="input w-full" placeholder="e.g. Steer axle — highway tractors" value={ruleForm.rule_name} maxLength={200} onChange={(e) => setRule('rule_name', e.target.value)} />
+              <input className="input w-full" placeholder="e.g. Steer axle, highway tractors" value={ruleForm.rule_name} maxLength={200} onChange={(e) => setRule('rule_name', e.target.value)} />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>

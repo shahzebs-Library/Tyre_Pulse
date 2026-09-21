@@ -33,7 +33,7 @@ const TYPE_META = {
   theft: { label: 'Theft' },
   other: { label: 'Other' },
 }
-const typeLabel = (t) => TYPE_META[t]?.label || (t ? t.replace(/_/g, ' ') : '—')
+const typeLabel = (t) => TYPE_META[t]?.label || (t ? t.replace(/_/g, ' ') : 'N/A')
 
 const SEVERITY_META = {
   low: { label: 'Low', cls: 'bg-slate-700/40 text-slate-300 border border-slate-600/50', color: '#64748b' },
@@ -49,9 +49,9 @@ const STATUS_META = {
 }
 
 function fmtDate(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString()
 }
 function isMissingRelation(err) {
   const m = String(err?.message || '').toLowerCase()
@@ -224,7 +224,7 @@ export default function IncidentReports() {
     <div className="space-y-6">
       <PageHeader
         title="Incident Reports"
-        subtitle="Operational incident log — near-miss, damage, breakdown, safety, theft — tracked from report to resolution."
+        subtitle="Operational incident log (near-miss, damage, breakdown, safety, theft), tracked from report to resolution."
         icon={AlertOctagon}
         onRefresh={load}
         refreshing={refreshing}
@@ -273,7 +273,7 @@ export default function IncidentReports() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -286,7 +286,7 @@ export default function IncidentReports() {
           {INCIDENT_STATUSES.map((s) => (
             <div key={s} className="rounded-lg border border-[var(--input-border)] p-4 text-center">
               <p className={`text-2xl font-bold ${s === 'open' ? 'text-sky-400' : s === 'investigating' ? 'text-amber-400' : s === 'resolved' ? 'text-green-400' : 'text-[var(--text-muted)]'}`}>
-                {rows === null ? '—' : summary.byStatus[s]}
+                {rows === null ? 'N/A' : summary.byStatus[s]}
               </p>
               <p className="text-xs text-[var(--text-muted)] mt-1">{STATUS_META[s].label}</p>
             </div>
@@ -350,14 +350,14 @@ export default function IncidentReports() {
                   const age = incidentAgeDays(r, Date.now())
                   return (
                     <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{r.incident_no || '—'}</td>
+                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{r.incident_no || 'N/A'}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)] capitalize">{typeLabel(r.incident_type)}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.asset_no || '—'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.site || '—'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.asset_no || 'N/A'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.site || 'N/A'}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDate(r.incident_date)}</td>
                       <td className="px-4 py-2.5"><span className={`badge text-[11px] px-2 py-0.5 rounded ${SEVERITY_META[r.severity]?.cls || SEVERITY_META.medium.cls}`}>{SEVERITY_META[r.severity]?.label || r.severity}</span></td>
                       <td className="px-4 py-2.5"><span className={`badge text-[11px] px-2 py-0.5 rounded ${STATUS_META[r.status]?.cls || STATUS_META.open.cls}`}>{STATUS_META[r.status]?.label || r.status}</span></td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{age == null ? '—' : `${age}d`}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{age == null ? 'N/A' : `${age}d`}</td>
                       <td className="px-4 py-2.5">
                         <div className="flex items-center gap-1 justify-end">
                           <button onClick={() => openEdit(r)} className="p-1.5 rounded-lg hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Edit"><Pencil size={14} /></button>

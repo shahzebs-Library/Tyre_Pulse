@@ -52,9 +52,9 @@ const EMPTY_FORM = {
 }
 
 function fmtDate(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const s = String(v).slice(0, 10)
-  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : '—'
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : 'N/A'
 }
 
 // ─── Create / edit modal ──────────────────────────────────────────────────────
@@ -117,7 +117,7 @@ function FuelCardModal({ open, initial, currency, onClose, onSaved }) {
             <input className="input w-full" placeholder="e.g. 4321 1234 5678 9012" autoComplete="off"
               value={form.card_number} maxLength={64} onChange={(e) => set('card_number', e.target.value)} />
             {form.card_number.trim() && (
-              <p className="text-xs text-[var(--text-muted)] mt-1">Stored securely — shown as <span className="font-mono">{maskCardNumber(form.card_number)}</span></p>
+              <p className="text-xs text-[var(--text-muted)] mt-1">Stored securely, shown as <span className="font-mono">{maskCardNumber(form.card_number)}</span></p>
             )}
           </div>
 
@@ -341,7 +341,7 @@ export default function FuelCards() {
                   <div className="flex flex-wrap gap-2 mt-2">
                     {soon.slice(0, 6).map((c) => (
                       <span key={c.id} className="text-xs bg-amber-900/40 text-amber-300 border border-amber-700/50 px-2 py-0.5 rounded-full font-mono">
-                        {maskCardNumber(c.card_number)} — {c._expiryDays}d left
+                        {maskCardNumber(c.card_number)}, {c._expiryDays}d left
                       </span>
                     ))}
                   </div>
@@ -360,7 +360,7 @@ export default function FuelCards() {
                     <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                     <Icon size={16} className={k.tone} />
                   </div>
-                  <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+                  <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
                 </div>
               )
             })}
@@ -422,7 +422,7 @@ export default function FuelCards() {
                             <p className="text-[var(--text-primary)] font-medium font-mono">{maskCardNumber(r.card_number)}</p>
                             {r.notes && <p className="text-xs text-[var(--text-muted)] truncate max-w-[240px]">{r.notes}</p>}
                           </td>
-                          <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.provider || '—'}</td>
+                          <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.provider || 'N/A'}</td>
                           <td className="px-4 py-2.5">
                             {r.asset_no || r.driver_name ? (
                               <div className="min-w-0">
@@ -432,7 +432,7 @@ export default function FuelCards() {
                             ) : <span className="text-[var(--text-dim)]">Unassigned</span>}
                           </td>
                           <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">
-                            {r.monthly_limit == null ? '—' : formatCurrencyCompact(r.monthly_limit, activeCurrency)}
+                            {r.monthly_limit == null ? 'N/A' : formatCurrencyCompact(r.monthly_limit, activeCurrency)}
                           </td>
                           <td className="px-4 py-2.5">
                             <span className={`badge text-[11px] px-2 py-0.5 rounded inline-flex items-center gap-1 ${meta.cls}`}>

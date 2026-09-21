@@ -130,7 +130,7 @@ export function buildExceptions({ tyres = [], workOrders = [] } = {}, opts = {})
         id: `aged:${serial || asset || r.id}`,
         category: 'aged_tyre',
         severity: 'high',
-        title: `Aged tyre — ${label}`,
+        title: `Aged tyre: ${label}`,
         asset_no: asset,
         site,
         serial,
@@ -138,7 +138,7 @@ export function buildExceptions({ tyres = [], workOrders = [] } = {}, opts = {})
         cpk: null,
         detail: `In service ${yrs == null ? 'over the age limit' : `${yrs} yrs`}${
           r.brand ? ` · ${r.brand}` : ''
-        }${r.size ? ` ${r.size}` : ''} — exceeds the fleet age limit.`,
+        }${r.size ? ` ${r.size}` : ''}. Exceeds the fleet age limit.`,
         link: tyreLink(serial),
       })
     }
@@ -151,7 +151,7 @@ export function buildExceptions({ tyres = [], workOrders = [] } = {}, opts = {})
         id: `tread:${serial || asset || r.id}`,
         category: 'low_tread',
         severity: high ? 'high' : 'medium',
-        title: `Low tread ${round(tread, 1)}mm — ${label}`,
+        title: `Low tread ${round(tread, 1)}mm: ${label}`,
         asset_no: asset,
         site,
         serial,
@@ -173,7 +173,7 @@ export function buildExceptions({ tyres = [], workOrders = [] } = {}, opts = {})
         id: `cpk:${serial || asset || r.id}`,
         category: 'high_cpk',
         severity: 'medium',
-        title: `High CPK — ${label}`,
+        title: `High CPK: ${label}`,
         asset_no: asset,
         site,
         serial,
@@ -200,7 +200,7 @@ export function buildExceptions({ tyres = [], workOrders = [] } = {}, opts = {})
       id: `failure:${serial || asset || r.id}`,
       category: 'recent_failure',
       severity: 'medium',
-      title: `Tyre removed — ${label}`,
+      title: `Tyre removed: ${label}`,
       asset_no: asset,
       site: r.site || null,
       serial,
@@ -226,7 +226,7 @@ export function buildExceptions({ tyres = [], workOrders = [] } = {}, opts = {})
       id: `wo:${woNo}`,
       category: 'open_work_order',
       severity: 'high',
-      title: `${priority === 'critical' ? 'Critical' : 'High-priority'} work order — ${woNo}`,
+      title: `${priority === 'critical' ? 'Critical' : 'High-priority'} work order: ${woNo}`,
       asset_no: w.asset_no || null,
       site: w.site || null,
       serial: null,
@@ -389,13 +389,13 @@ export function lowPressureAnomalies(tyres = [], opts = {}) {
     out.push({
       type: 'low_pressure',
       severity: 'warning',
-      title: `Low pressure — ${label}`,
+      title: `Low pressure: ${label}`,
       asset_no: r.asset_no || null,
       serial: serialOf(r),
       detail: `Pressure ${round(p, 0)} PSI is below the ${t.pressureLow} PSI minimum${
         r.asset_no ? ` on asset ${r.asset_no}` : ''
       }.`,
-      action: 'Inflate to spec — under-inflation accelerates wear and raises blowout risk.',
+      action: 'Inflate to spec. Under-inflation accelerates wear and raises blowout risk.',
     })
   }
   return out
@@ -422,14 +422,14 @@ export function pressureImbalanceAnomalies(tyres = [], opts = {}) {
     out.push({
       type: 'pressure_imbalance',
       severity: 'warning',
-      title: `Pressure imbalance — ${asset}`,
+      title: `Pressure imbalance: ${asset}`,
       asset_no: asset,
       serial: null,
-      detail: `Pressure varies ${round(mx - mn, 0)} PSI across the asset (${round(mn, 0)}–${round(
+      detail: `Pressure varies ${round(mx - mn, 0)} PSI across the asset (${round(mn, 0)} to ${round(
         mx,
         0,
       )} PSI).`,
-      action: 'Equalise pressures — imbalance causes uneven wear and vehicle pull.',
+      action: 'Equalise pressures. Imbalance causes uneven wear and vehicle pull.',
     })
   }
   return out
@@ -450,13 +450,13 @@ export function costOutlierAnomalies(tyres = [], opts = {}) {
     out.push({
       type: 'cost_outlier',
       severity: 'warning',
-      title: `High cost tyre — ${label}`,
+      title: `High cost tyre: ${label}`,
       asset_no: r.asset_no || null,
       serial: serialOf(r),
       cpk: round(cpk, 4),
       multiple: mult,
-      detail: `Net CPK ${round(cpk, 4)} — ${mult}× the fleet mean (${round(mean, 4)}).`,
-      action: 'Review usage pattern — consider early replacement.',
+      detail: `Net CPK ${round(cpk, 4)}, ${mult}× the fleet mean (${round(mean, 4)}).`,
+      action: 'Review usage pattern. Consider early replacement.',
     })
   }
   return out
@@ -479,13 +479,13 @@ export function inspectionGapAnomalies(tyres = [], inspections = [], opts = {}) 
     out.push({
       type: 'inspection_gap',
       severity: 'warning',
-      title: `Inspection gap — ${asset}`,
+      title: `Inspection gap: ${asset}`,
       asset_no: asset,
       serial: null,
       detail:
         last == null
-          ? `No inspection on record — compliance requires inspection within ${t.overdueInspectionDays} days.`
-          : `No inspection for ${days}d — exceeds the ${t.inspectionGapDays}-day review window.`,
+          ? `No inspection on record. Compliance requires inspection within ${t.overdueInspectionDays} days.`
+          : `No inspection for ${days}d. Exceeds the ${t.inspectionGapDays}-day review window.`,
       action: 'Schedule inspection immediately.',
     })
   }
@@ -706,7 +706,7 @@ export function buildFinancials({ budgets = [], tyres = [] } = {}, opts = {}) {
 export function buildExecutiveSummary({ pulse, anomalies = [], financials } = {}, opts = {}) {
   const currency = opts.currency || 'AED'
   const fmt = (n) =>
-    n == null ? '—' : Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 })
+    n == null ? 'N/A' : Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 })
   const c = pulse?.counts || {}
   const anomSummary = summarizeAnomalies(anomalies)
 

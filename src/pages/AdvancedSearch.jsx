@@ -43,25 +43,25 @@ const RESULT_GROUPS = [
   {
     key: 'assets', entity: 'assets', icon: Truck, tone: 'text-sky-400',
     title: (r) => r.asset_no || r.fleet_number || 'Asset',
-    sub: (r) => [r.make, r.model].filter(Boolean).join(' ') || r.vehicle_type || '—',
+    sub: (r) => [r.make, r.model].filter(Boolean).join(' ') || r.vehicle_type || 'N/A',
     tags: (r) => [r.site, r.status].filter(Boolean),
   },
   {
     key: 'tyres', entity: 'tyres', icon: Package, tone: 'text-amber-400',
     title: (r) => r.serial_no || 'Tyre',
-    sub: (r) => [r.brand, r.size].filter(Boolean).join(' · ') || '—',
+    sub: (r) => [r.brand, r.size].filter(Boolean).join(' · ') || 'N/A',
     tags: (r) => [r.asset_no, r.position, r.risk_level].filter(Boolean),
   },
   {
     key: 'workOrders', entity: 'work_orders', icon: Wrench, tone: 'text-violet-400',
     title: (r) => r.work_order_no || 'Work order',
-    sub: (r) => [r.work_type, r.workshop_name].filter(Boolean).join(' · ') || '—',
+    sub: (r) => [r.work_type, r.workshop_name].filter(Boolean).join(' · ') || 'N/A',
     tags: (r) => [r.asset_no, r.status, r.priority].filter(Boolean),
   },
   {
     key: 'inspections', entity: 'inspections', icon: ClipboardCheck, tone: 'text-green-400',
     title: (r) => r.title || 'Inspection',
-    sub: (r) => [r.inspection_type, r.inspector].filter(Boolean).join(' · ') || '—',
+    sub: (r) => [r.inspection_type, r.inspector].filter(Boolean).join(' · ') || 'N/A',
     tags: (r) => [r.asset_no, r.status, r.severity].filter(Boolean),
   },
 ]
@@ -69,9 +69,9 @@ const RESULT_GROUPS = [
 const EMPTY_FORM = { name: '', entity: 'all', query_text: '', notes: '' }
 
 function fmtDateTime(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleString()
 }
 
 function isMissingRelation(err) {
@@ -282,7 +282,7 @@ export default function AdvancedSearch() {
     <div className="space-y-6">
       <PageHeader
         title="Advanced Search"
-        subtitle="Search assets, tyres, work orders and inspections from one place — then save the queries you run often and re-run them on demand."
+        subtitle="Search assets, tyres, work orders and inspections from one place, then save the queries you run often and re-run them on demand."
         icon={Search}
         onRefresh={load}
         refreshing={refreshing}
@@ -446,7 +446,7 @@ export default function AdvancedSearch() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{saved === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{saved === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -512,7 +512,7 @@ export default function AdvancedSearch() {
               ) : filteredSaved.length === 0 ? (
                 <tr><td colSpan={7} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {error ? 'Saved searches could not be loaded. Refresh to retry.' : (saved.length === 0 && !notProvisioned) ? 'No saved searches yet — run a search above and save it.' : notProvisioned ? 'Enable saved searches to build a reusable library.' : 'No saved searches match these filters.'}
+                  {error ? 'Saved searches could not be loaded. Refresh to retry.' : (saved.length === 0 && !notProvisioned) ? 'No saved searches yet. Run a search above and save it.' : notProvisioned ? 'Enable saved searches to build a reusable library.' : 'No saved searches match these filters.'}
                 </td></tr>
               ) : (
                 savedPager.pageRows.map((r) => {
@@ -531,8 +531,8 @@ export default function AdvancedSearch() {
                           <Icon size={13} className={meta.tone} /> {meta.short}
                         </span>
                       </td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] max-w-[240px] truncate">{r.query_text || <span className="text-[var(--text-muted)]">—</span>}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{r.result_count == null ? '—' : Number(r.result_count).toLocaleString()}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)] max-w-[240px] truncate">{r.query_text || <span className="text-[var(--text-muted)]">N/A</span>}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{r.result_count == null ? 'N/A' : Number(r.result_count).toLocaleString()}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDateTime(r.last_run_at)}</td>
                       <td className="px-4 py-2.5">
                         <div className="flex items-center justify-end gap-1">

@@ -433,7 +433,7 @@ export default function Dashboard() {
       .filter(isHigh)
       .map(r => ({
         id: r.id ?? `${r.asset_no}-${r.serial_no}`,
-        asset: r.asset_no || '—',
+        asset: r.asset_no || 'N/A',
         detail: [r.brand, r.site].filter(Boolean).join(' · ') || (r.category || ''),
         cost: recordCost(r),
       }))

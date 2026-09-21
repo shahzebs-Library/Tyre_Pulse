@@ -48,9 +48,9 @@ const EMPTY_FORM = {
 }
 
 function fmtDate(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = v instanceof Date ? v : new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toISOString().slice(0, 10)
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toISOString().slice(0, 10)
 }
 function isMissingRelation(err) {
   const m = String(err?.message || '').toLowerCase()
@@ -157,7 +157,7 @@ export default function Batteries() {
     { label: 'Total batteries', value: summary.total, icon: BatteryCharging, tone: 'text-[var(--text-primary)]' },
     { label: 'Healthy', value: summary.byStatus.healthy, icon: Battery, tone: 'text-green-400' },
     { label: 'Needs attention', value: summary.needingAttention, icon: AlertTriangle, tone: 'text-red-400' },
-    { label: 'Avg health', value: summary.avgHealth == null ? '—' : `${summary.avgHealth}%`, icon: HeartPulse, tone: 'text-sky-400' },
+    { label: 'Avg health', value: summary.avgHealth == null ? 'N/A' : `${summary.avgHealth}%`, icon: HeartPulse, tone: 'text-sky-400' },
   ]
 
   // Export
@@ -283,7 +283,7 @@ export default function Batteries() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -316,11 +316,11 @@ export default function Batteries() {
               {enriched.filter((r) => r._needsAttention).slice(0, 30).map((r) => (
                 <div key={r.id} className="flex items-center justify-between gap-3 py-2">
                   <div className="min-w-0">
-                    <p className="text-sm text-[var(--text-primary)] truncate">{r.asset_no || r.serial_no || '—'}</p>
+                    <p className="text-sm text-[var(--text-primary)] truncate">{r.asset_no || r.serial_no || 'N/A'}</p>
                     <p className="text-xs text-[var(--text-muted)] truncate">{r.brand || 'Unknown'}{r.site ? ` · ${r.site}` : ''}</p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className={`text-sm font-semibold ${healthTone(r._health)}`}>{r._health == null ? '—' : `${r._health}%`}</span>
+                    <span className={`text-sm font-semibold ${healthTone(r._health)}`}>{r._health == null ? 'N/A' : `${r._health}%`}</span>
                     <span className={`badge text-[11px] px-2 py-0.5 rounded ${STATUS_BADGE[r.status]}`}>{BATTERY_STATUS_META[r.status]?.label || r.status}</span>
                   </div>
                 </div>
@@ -379,12 +379,12 @@ export default function Batteries() {
               ) : (
                 pager.pageRows.map((r) => (
                   <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                    <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{r.serial_no || '—'}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.asset_no || '—'}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.brand || '—'}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.site || '—'}</td>
+                    <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{r.serial_no || 'N/A'}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.asset_no || 'N/A'}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.brand || 'N/A'}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.site || 'N/A'}</td>
                     <td className="px-4 py-2.5">
-                      {r._health == null ? <span className="text-[var(--text-muted)]">—</span> : (
+                      {r._health == null ? <span className="text-[var(--text-muted)]">N/A</span> : (
                         <div className="flex items-center gap-2">
                           <span className={`font-semibold ${healthTone(r._health)}`}>{r._health}%</span>
                           <div className="w-16 bg-[var(--input-bg)] rounded-full h-1.5">
@@ -393,9 +393,9 @@ export default function Batteries() {
                         </div>
                       )}
                     </td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.voltage == null || r.voltage === '' ? '—' : `${r.voltage}V`}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.voltage == null || r.voltage === '' ? 'N/A' : `${r.voltage}V`}</td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtDate(r.install_date)}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r._expiry ? fmtDate(r._expiry) : '—'}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r._expiry ? fmtDate(r._expiry) : 'N/A'}</td>
                     <td className="px-4 py-2.5"><span className={`badge text-[11px] px-2 py-0.5 rounded ${STATUS_BADGE[r.status]}`}>{BATTERY_STATUS_META[r.status]?.label || r.status}</span></td>
                     <td className="px-4 py-2.5">
                       <div className="flex items-center gap-1 justify-end">

@@ -360,10 +360,10 @@ export default function ReportCenter() {
               <tbody>
                 {history.map(r => (
                   <tr key={r.id}>
-                    <td className="table-cell text-gray-400 text-xs whitespace-nowrap">{r.sent_at ? new Date(r.sent_at).toLocaleString() : '—'}</td>
-                    <td className="table-cell text-gray-200 text-sm">{r.schedule_name || '—'}</td>
-                    <td className="table-cell text-gray-400 text-xs">{r.report_type || '—'}</td>
-                    <td className="table-cell text-gray-400 text-xs">{Array.isArray(r.recipients) ? t('reportcenter.history.recipientsCount', { count: r.recipients.length }) : '—'}</td>
+                    <td className="table-cell text-gray-400 text-xs whitespace-nowrap">{r.sent_at ? new Date(r.sent_at).toLocaleString() : 'N/A'}</td>
+                    <td className="table-cell text-gray-200 text-sm">{r.schedule_name || 'N/A'}</td>
+                    <td className="table-cell text-gray-400 text-xs">{r.report_type || 'N/A'}</td>
+                    <td className="table-cell text-gray-400 text-xs">{Array.isArray(r.recipients) ? t('reportcenter.history.recipientsCount', { count: r.recipients.length }) : 'N/A'}</td>
                     <td className="table-cell">
                       <span className={`text-xs font-medium ${STATUS_TINT[String(r.status || '').toLowerCase()] || 'text-gray-400'}`}>
                         {r.status || t('reportcenter.history.statusUnknown')}

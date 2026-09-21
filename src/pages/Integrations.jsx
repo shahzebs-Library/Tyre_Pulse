@@ -275,7 +275,7 @@ function ApiKeysTab({ search }) {
                         )}
                       </td>
                       <td className="px-3 py-2.5 text-gray-500 text-xs whitespace-nowrap">{k.last_used_at ? relativeTime(k.last_used_at) : 'Never'}</td>
-                      <td className="px-3 py-2.5 text-gray-500 text-xs whitespace-nowrap">{k.expires_at ? formatDateTime(k.expires_at) : '—'}</td>
+                      <td className="px-3 py-2.5 text-gray-500 text-xs whitespace-nowrap">{k.expires_at ? formatDateTime(k.expires_at) : 'N/A'}</td>
                       <td className="px-3 py-2.5 text-right">
                         {k.active && (
                           <button
@@ -681,7 +681,7 @@ function DeliveriesTab({ search }) {
 
   useEffect(() => { fetch() }, [fetch])
 
-  const subName = id => subs.find(s => s.id === id)?.name || '—'
+  const subName = id => subs.find(s => s.id === id)?.name || 'N/A'
   const q = search.trim().toLowerCase()
   const visible = rows.filter(d => {
     const matchStatus = status === 'all' || d.status === status
@@ -761,14 +761,14 @@ function DeliveriesTab({ search }) {
                       <td className="px-3 py-2.5">
                         {d.response_status
                           ? <span className={`text-xs font-semibold ${d.response_status < 300 ? 'text-green-400' : 'text-red-400'}`}>{d.response_status}</span>
-                          : <span className="text-gray-600 text-xs">—</span>}
+                          : <span className="text-gray-600 text-xs">N/A</span>}
                       </td>
                       <td className="px-3 py-2.5 max-w-[260px]">
                         {d.last_error && <p className="text-red-300 text-[11px] truncate" title={d.last_error}>{d.last_error}</p>}
                         {d.status === 'pending' && d.next_attempt_at && (
                           <p className="text-gray-500 text-[10px]">retries {relativeTime(d.next_attempt_at)}</p>
                         )}
-                        {!d.last_error && d.status !== 'pending' && <span className="text-gray-600 text-xs">—</span>}
+                        {!d.last_error && d.status !== 'pending' && <span className="text-gray-600 text-xs">N/A</span>}
                       </td>
                     </tr>
                   )

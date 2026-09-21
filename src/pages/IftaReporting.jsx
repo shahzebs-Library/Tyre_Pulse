@@ -34,17 +34,17 @@ const EMPTY_FORM = {
 }
 
 const fmtNum = (v, unit) =>
-  v == null || v === '' ? '—' : `${Number(v).toLocaleString()}${unit ? ` ${unit}` : ''}`
+  v == null || v === '' ? 'N/A' : `${Number(v).toLocaleString()}${unit ? ` ${unit}` : ''}`
 
 function fmtMoney(v, currency) {
-  if (v == null || v === '') return '—'
+  if (v == null || v === '') return 'N/A'
   return `${currency ? `${currency} ` : ''}${Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
 }
 
 function fmtDate(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString()
 }
 
 function isMissingRelation(err) {
@@ -206,7 +206,7 @@ export default function IftaReporting() {
     <div className="space-y-6">
       <PageHeader
         title="IFTA Fuel Tax Reporting"
-        subtitle="Capture jurisdiction-by-jurisdiction distance and fuel for quarterly IFTA fuel-tax filing — the basis for net taxable distance and tax-due settlements."
+        subtitle="Capture jurisdiction-by-jurisdiction distance and fuel for quarterly IFTA fuel-tax filing: the basis for net taxable distance and tax-due settlements."
         icon={Fuel}
         onRefresh={load}
         refreshing={refreshing}
@@ -255,7 +255,7 @@ export default function IftaReporting() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -292,9 +292,9 @@ export default function IftaReporting() {
                       <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{j.jurisdiction}</td>
                       <td className="px-4 py-2.5 text-right text-[var(--text-secondary)]">{Math.round(j.distanceKm).toLocaleString()}</td>
                       <td className="px-4 py-2.5 text-right text-[var(--text-secondary)]">{Math.round(j.fuelLitres).toLocaleString()}</td>
-                      <td className="px-4 py-2.5 text-right text-[var(--text-secondary)]">{j.fuelCost > 0 ? j.fuelCost.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—'}</td>
+                      <td className="px-4 py-2.5 text-right text-[var(--text-secondary)]">{j.fuelCost > 0 ? j.fuelCost.toLocaleString(undefined, { maximumFractionDigits: 0 }) : 'N/A'}</td>
                       <td className="px-4 py-2.5 text-right text-[var(--text-secondary)]">{Math.round(j.taxableKm).toLocaleString()}</td>
-                      <td className="px-4 py-2.5 text-right font-semibold text-[var(--text-primary)]">{kmPerL == null ? '—' : kmPerL.toFixed(2)}</td>
+                      <td className="px-4 py-2.5 text-right font-semibold text-[var(--text-primary)]">{kmPerL == null ? 'N/A' : kmPerL.toFixed(2)}</td>
                     </tr>
                   )
                 })}
@@ -343,21 +343,21 @@ export default function IftaReporting() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={9} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {rows.length === 0 && !notProvisioned ? 'No IFTA records yet — add your first record.' : 'No records match these filters.'}
+                  {rows.length === 0 && !notProvisioned ? 'No IFTA records yet. Add your first record.' : 'No records match these filters.'}
                 </td></tr>
               ) : (
                 pager.pageRows.map((r) => {
                   const kmPerL = fuelEconomyKmPerL(r)
                   return (
                     <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                      <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.asset_no || '—'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.jurisdiction || '—'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.quarter || '—'}</td>
+                      <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.asset_no || 'N/A'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.jurisdiction || 'N/A'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.quarter || 'N/A'}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDate(r.travel_date)}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtNum(r.distance_km, 'km')}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtNum(r.fuel_litres, 'L')}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtMoney(r.fuel_cost, r.currency)}</td>
-                      <td className="px-4 py-2.5 font-semibold text-[var(--text-primary)]">{kmPerL == null ? '—' : kmPerL.toFixed(2)}</td>
+                      <td className="px-4 py-2.5 font-semibold text-[var(--text-primary)]">{kmPerL == null ? 'N/A' : kmPerL.toFixed(2)}</td>
                       <td className="px-4 py-2.5">
                         <div className="flex items-center justify-end gap-1">
                           <button onClick={() => openEdit(r)} className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Edit"><Pencil size={14} /></button>
@@ -467,7 +467,7 @@ export default function IftaReporting() {
               <div>
                 <h3 className="text-[var(--text-primary)] font-semibold">Delete this record?</h3>
                 <p className="text-sm text-[var(--text-muted)] mt-1">
-                  {confirmDelete.asset_no || 'Record'} · {confirmDelete.jurisdiction || '—'} · {fmtDate(confirmDelete.travel_date)}. This can’t be undone.
+                  {confirmDelete.asset_no || 'Record'} · {confirmDelete.jurisdiction || 'N/A'} · {fmtDate(confirmDelete.travel_date)}. This can’t be undone.
                 </p>
               </div>
             </div>

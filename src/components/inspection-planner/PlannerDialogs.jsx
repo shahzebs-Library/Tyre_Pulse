@@ -18,7 +18,7 @@ function ConflictNotice({ conflicts, accepted, onAccept, t }) {
   if (!conflicts.length) return null
   return <div className="rounded-lg border border-amber-600/40 bg-amber-500/10 p-3 space-y-2 text-sm text-[var(--text-primary)]">
     <p className="font-medium">{t('Review possible scheduling conflicts', 'راجع تعارضات الجدولة المحتملة')}</p>
-    <ul className="list-disc ps-5 max-h-32 overflow-auto">{conflicts.map((c, i) => <li key={i}>{c.item.asset_no} · {c.item.inspection_date} · {c.type === 'asset' ? t('Vehicle already scheduled', 'المركبة مجدولة بالفعل') : t('Inspector has another appointment', 'لدى المفتش موعد آخر')} ({c.existing.inspection_time?.slice(0, 5) || '—'})</li>)}</ul>
+    <ul className="list-disc ps-5 max-h-32 overflow-auto">{conflicts.map((c, i) => <li key={i}>{c.item.asset_no} · {c.item.inspection_date} · {c.type === 'asset' ? t('Vehicle already scheduled', 'المركبة مجدولة بالفعل') : t('Inspector has another appointment', 'لدى المفتش موعد آخر')} ({c.existing.inspection_time?.slice(0, 5) || 'N/A'})</li>)}</ul>
     <label className="flex items-start gap-2"><input type="checkbox" checked={accepted} onChange={e => onAccept(e.target.checked)} className="mt-1" />{t('I reviewed these appointments and want to continue.', 'راجعت هذه المواعيد وأريد المتابعة.')}</label>
   </div>
 }

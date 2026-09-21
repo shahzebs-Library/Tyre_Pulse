@@ -358,7 +358,7 @@ const isOpenClaim = (r) => hasClaim(r) && !isClaimClosed(r)
 // ── Case age ("Days open") ──────────────────────────────────────────────────
 // Whole days (>= 0) from the incident date to closure (release_date, when the
 // case is closed and a release date exists) or to now for open cases. Returns
-// null when incident_date is missing/unparseable — callers render "—" then;
+// null when incident_date is missing/unparseable — callers render "N/A" then;
 // the value is NEVER fabricated.
 const CASE_AGE_GREEN_DAYS = 15
 const CASE_AGE_AMBER_DAYS = 30
@@ -717,7 +717,7 @@ export default function Accidents() {
           ext?.forEach(e => byId.set(e.id, e))
         }
         if (byId.size) rows = rows.map(r => ({ ...r, ...(byId.get(r.id) || {}) }))
-      } catch { /* new columns not present yet — honest empty states */ }
+      } catch { /* new columns not present yet. Honest empty states */ }
     }
     // Canonicalise the DB's lowercase status/severity to display labels once, so
     // every label-based consumer (status/severity counts, funnel filters, charts,
@@ -1148,7 +1148,7 @@ export default function Accidents() {
       recs.push({ level: 'medium', icon: 'site', text: `${siteHotspots[0].site} concentrates ${siteHotspots[0].pct}% of accident cost (${fmtCurrency(siteHotspots[0].cost)}). Audit yard layout, speed limits and manoeuvring space at this site.` })
     }
     if (stats.atFaultDenom >= 5 && stats.atFaultPct >= 50) {
-      recs.push({ level: 'medium', icon: 'fault', text: `${stats.atFaultPct}% of liability-tagged incidents are at-fault. High controllable-loss ratio — prioritise driver training and supervision.` })
+      recs.push({ level: 'medium', icon: 'fault', text: `${stats.atFaultPct}% of liability-tagged incidents are at-fault. High controllable-loss ratio. Prioritise driver training and supervision.` })
     }
     if (uncategorised >= Math.max(3, records.length * 0.2)) {
       recs.push({ level: 'low', icon: 'data', text: `${uncategorised} incidents have no accident type / damage condition. Enforce cause capture at intake so root-cause analytics stay reliable.` })
@@ -2245,7 +2245,7 @@ export default function Accidents() {
       // How long the case has been running: incident_date → now for OPEN cases
       // (traffic-light coded), incident_date → release_date for CLOSED ones
       // (muted "total duration" tone). Sorts numerically; missing dates render
-      // "—" and sort last (accessor -1).
+      // "N/A" and sort last (accessor -1).
       { id: 'days_open', header: 'Days Open', accessorFn: r => caseAgeDays(r) ?? -1, size: 110,
         cell: ({ row }) => {
           const r = row.original
@@ -2443,7 +2443,7 @@ export default function Accidents() {
                   {toggleCounts.delayed} case{toggleCounts.delayed > 1 ? 's' : ''} delayed &gt; {DELAY_THRESHOLD_DAYS} days
                 </p>
                 <p className="text-xs text-red-500/80">
-                  Open with no status movement in over {DELAY_THRESHOLD_DAYS} days — tap to {filterDelayed ? 'show all incidents' : 'review stalled cases'}
+                  Open with no status movement in over {DELAY_THRESHOLD_DAYS} days. Tap to {filterDelayed ? 'show all incidents' : 'review stalled cases'}
                 </p>
               </div>
               {filterDelayed && <X size={14} className="text-red-400" />}
@@ -2961,7 +2961,7 @@ export default function Accidents() {
               <ShieldAlert size={16} className="text-orange-400" />
               <p className="text-sm font-semibold text-[var(--text-primary)]">Engineering & Ops Intelligence</p>
             </div>
-            <p className="text-xs text-[var(--text-muted)] mb-4">Repeat offenders, cost hotspots, root causes and recommended actions — derived live from {stats.total} incident{stats.total !== 1 ? 's' : ''}.</p>
+            <p className="text-xs text-[var(--text-muted)] mb-4">Repeat offenders, cost hotspots, root causes and recommended actions, derived live from {stats.total} incident{stats.total !== 1 ? 's' : ''}.</p>
 
             {/* Recommendations */}
             {opsIntel.recs.length > 0 && (
@@ -2987,7 +2987,7 @@ export default function Accidents() {
               <div>
                 <p className="text-xs font-semibold text-[var(--text-dim)] flex items-center gap-1.5 mb-2"><TrendingUp size={13} className="text-red-400" /> Repeat-Offender Assets (2+ incidents)</p>
                 {opsIntel.repeatAssets.length === 0 ? (
-                  <p className="text-xs text-[var(--text-muted)] py-3">No asset has more than one incident — good fleet dispersion.</p>
+                  <p className="text-xs text-[var(--text-muted)] py-3">No asset has more than one incident. Good fleet dispersion.</p>
                 ) : (
                   <div className="space-y-1.5">
                     {opsIntel.repeatAssets.map(a => (
@@ -3069,7 +3069,7 @@ export default function Accidents() {
                       </div>
                     ))}
                     {opsIntel.uncategorised > 0 && (
-                      <p className="text-[11px] text-yellow-500/80 pt-1">{opsIntel.uncategorised} incident{opsIntel.uncategorised !== 1 ? 's' : ''} lack a cause — capture accident type at intake.</p>
+                      <p className="text-[11px] text-yellow-500/80 pt-1">{opsIntel.uncategorised} incident{opsIntel.uncategorised !== 1 ? 's' : ''} lack a cause. Capture accident type at intake.</p>
                     )}
                   </div>
                 )}
@@ -3143,7 +3143,7 @@ export default function Accidents() {
                   <ArrowLeft size={18} />
                 </button>
                 <h2 className="text-lg font-semibold text-[var(--text-primary)] truncate">
-                  {editId ? `Edit Incident${form.asset_no ? ` — ${form.asset_no}` : ''}` : 'New Incident'}
+                  {editId ? `Edit Incident${form.asset_no ? `: ${form.asset_no}` : ''}` : 'New Incident'}
                 </h2>
               </div>
               <div className="flex items-center gap-2">

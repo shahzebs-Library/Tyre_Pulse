@@ -38,9 +38,9 @@ const EMPTY_FORM = {
 }
 
 function fmtDateTime(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleString()
 }
 function toLocalInput(v) {
   const d = v ? new Date(v) : new Date()
@@ -205,7 +205,7 @@ export default function VehicleCheckInOut() {
     <div className="space-y-6">
       <PageHeader
         title="Vehicle Check In/Out"
-        subtitle="Log vehicle handovers — odometer, fuel level and condition on every check-out and return."
+        subtitle="Log vehicle handovers: odometer, fuel level and condition on every check-out and return."
         icon={ArrowRightLeft}
         onRefresh={load}
         refreshing={refreshing}
@@ -257,7 +257,7 @@ export default function VehicleCheckInOut() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -319,15 +319,15 @@ export default function VehicleCheckInOut() {
                           <DirIcon size={11} /> {dir.label}
                         </span>
                       </td>
-                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{r.asset_no || '—'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.driver_name || '—'}</td>
+                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{r.asset_no || 'N/A'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.driver_name || 'N/A'}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">
-                        {r.odometer_km == null ? '—' : (
+                        {r.odometer_km == null ? 'N/A' : (
                           <span className="inline-flex items-center gap-1"><Gauge size={12} className="text-[var(--text-muted)]" />{Number(r.odometer_km).toLocaleString()} km</span>
                         )}
                       </td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.fuel_level || '—'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.site || '—'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.fuel_level || 'N/A'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.site || 'N/A'}</td>
                       <td className="px-4 py-2.5"><span className={`badge text-[11px] px-2 py-0.5 rounded ${st.cls}`}>{st.label}</span></td>
                       <td className="px-4 py-2.5">
                         <div className="flex items-center justify-end gap-1">

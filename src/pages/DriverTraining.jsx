@@ -54,9 +54,9 @@ const RESULT_OPTIONS = [
 ]
 
 function fmtDate(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString()
 }
 
 const RESULT_BADGE = {
@@ -253,7 +253,7 @@ export default function DriverTraining() {
     <div className="space-y-6">
       <PageHeader
         title="Driver Training Records"
-        subtitle="Track driver training courses and certifications — completion, scores, results, and expiry dates that drive renewal planning and compliance."
+        subtitle="Track driver training courses and certifications: completion, scores, results, and expiry dates that drive renewal planning and compliance."
         icon={GraduationCap}
         onRefresh={load}
         refreshing={refreshing}
@@ -302,7 +302,7 @@ export default function DriverTraining() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -322,7 +322,7 @@ export default function DriverTraining() {
                 onClick={() => openEdit(r)}
                 className={`rounded-lg border px-3 py-2 text-left transition-colors ${EXPIRY_BADGE[status]}`}
               >
-                <p className="text-xs font-semibold">{r.driver_name || '—'}</p>
+                <p className="text-xs font-semibold">{r.driver_name || 'N/A'}</p>
                 <p className="text-[11px] opacity-90">{CATEGORY_LABEL[r.category] || r.course_name || 'Training'}</p>
                 <p className="text-[11px] font-medium mt-0.5">{expiryLabel(status, days)} · {fmtDate(r.expiry_date)}</p>
               </button>
@@ -393,7 +393,7 @@ export default function DriverTraining() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={7} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {rows.length === 0 && !notProvisioned ? 'No training records yet — add your first record.' : 'No records match these filters.'}
+                  {rows.length === 0 && !notProvisioned ? 'No training records yet. Add your first record.' : 'No records match these filters.'}
                 </td></tr>
               ) : (
                 pager.pageRows.map((r) => {
@@ -401,9 +401,9 @@ export default function DriverTraining() {
                   const days = daysUntilExpiry(r, nowMs)
                   return (
                     <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                      <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.driver_name || '—'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.course_name || '—'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{CATEGORY_LABEL[r.category] || '—'}</td>
+                      <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.driver_name || 'N/A'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.course_name || 'N/A'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{CATEGORY_LABEL[r.category] || 'N/A'}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDate(r.completed_date)}</td>
                       <td className="px-4 py-2.5 whitespace-nowrap">
                         <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${EXPIRY_BADGE[status]}`}>
@@ -416,7 +416,7 @@ export default function DriverTraining() {
                           <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium capitalize ${RESULT_BADGE[r.result] || RESULT_BADGE.pending}`}>
                             {r.result}
                           </span>
-                        ) : <span className="text-[var(--text-muted)]">—</span>}
+                        ) : <span className="text-[var(--text-muted)]">N/A</span>}
                       </td>
                       <td className="px-4 py-2.5">
                         <div className="flex items-center justify-end gap-1">
@@ -481,7 +481,7 @@ export default function DriverTraining() {
                 <div>
                   <label className="label">Result</label>
                   <select className="input w-full" value={form.result} onChange={(e) => set('result', e.target.value)}>
-                    <option value="">—</option>
+                    <option value="">None</option>
                     {RESULT_OPTIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
                   </select>
                 </div>

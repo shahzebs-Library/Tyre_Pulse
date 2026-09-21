@@ -46,9 +46,9 @@ const STATUS_META = {
 const STATUS_OPTIONS = Object.keys(STATUS_META)
 
 function fmtDate(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString()
 }
 
 function isMissingRelation(err) {
@@ -252,7 +252,7 @@ export default function OnboardingWizard() {
     <div className="space-y-6">
       <PageHeader
         title="Onboarding Wizard"
-        subtitle="Guide your organisation through tenant setup — track every activation task by phase and go live with confidence."
+        subtitle="Guide your organisation through tenant setup: track every activation task by phase and go live with confidence."
         icon={Rocket}
         onRefresh={load}
         refreshing={refreshing}
@@ -313,7 +313,7 @@ export default function OnboardingWizard() {
             <div>
               <div className="flex items-center justify-between text-xs text-[var(--text-muted)] mb-1">
                 <span>Required tasks completed</span>
-                <span className="font-semibold text-[var(--text-primary)]">{rows === null ? '—' : `${reqPct}%`}</span>
+                <span className="font-semibold text-[var(--text-primary)]">{rows === null ? 'N/A' : `${reqPct}%`}</span>
               </div>
               <Bar pct={rows === null ? 0 : reqPct} tone={summary.readyForGoLive ? 'bg-green-500' : 'bg-amber-500'} />
             </div>
@@ -326,7 +326,7 @@ export default function OnboardingWizard() {
                       <p className="text-[11px] text-[var(--text-muted)]">{k.label}</p>
                       <Icon size={14} className={k.tone} />
                     </div>
-                    <p className={`text-2xl font-bold mt-0.5 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+                    <p className={`text-2xl font-bold mt-0.5 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
                   </div>
                 )
               })}
@@ -365,7 +365,7 @@ export default function OnboardingWizard() {
           {rows === null ? (
             <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-10 bg-[var(--input-bg)] rounded animate-pulse" />)}</div>
           ) : queue.length === 0 ? (
-            <p className="text-sm text-[var(--text-muted)]">{summary.totalTasks === 0 ? 'No tasks yet — add your first setup task.' : 'Nothing open — every task is completed or resolved.'}</p>
+            <p className="text-sm text-[var(--text-muted)]">{summary.totalTasks === 0 ? 'No tasks yet. Add your first setup task.' : 'Nothing open. Every task is completed or resolved.'}</p>
           ) : (
             <ul className="space-y-2">
               {queue.map((t) => {
@@ -418,7 +418,7 @@ export default function OnboardingWizard() {
       ) : grouped.length === 0 ? (
         <div className="card text-center py-12 text-[var(--text-muted)]">
           <Filter size={22} className="mx-auto mb-2 opacity-60" />
-          {summary.totalTasks === 0 && !notProvisioned ? 'No onboarding tasks yet — add your first setup task.' : 'No tasks match these filters.'}
+          {summary.totalTasks === 0 && !notProvisioned ? 'No onboarding tasks yet. Add your first setup task.' : 'No tasks match these filters.'}
         </div>
       ) : (
         <div className="space-y-4">

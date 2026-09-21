@@ -101,7 +101,7 @@ function HealthRing({ score, size = 132, stroke = 12 }) {
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-3xl font-bold text-[var(--text-primary)]">{score == null ? '—' : score}</span>
+        <span className="text-3xl font-bold text-[var(--text-primary)]">{score == null ? 'N/A' : score}</span>
         <span className="text-[11px] uppercase tracking-wider" style={{ color }}>{band.label}</span>
       </div>
     </div>
@@ -130,20 +130,20 @@ function PositionCard({ p, money }) {
           <p className="text-sm font-semibold text-[var(--text-primary)] truncate">{p.position || 'Unlabelled position'}</p>
           <p className="text-xs font-mono text-[var(--text-muted)] truncate">{p.serial || 'No serial'}</p>
         </div>
-        <span className="text-xl font-bold shrink-0" style={{ color }}>{p.health == null ? '—' : p.health}</span>
+        <span className="text-xl font-bold shrink-0" style={{ color }}>{p.health == null ? 'N/A' : p.health}</span>
       </div>
 
       <TreadBar health={p.health} />
 
       <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
         <span className="flex items-center gap-1.5 text-[var(--text-muted)]"><Gauge size={12} /> Tread</span>
-        <span className="text-right text-[var(--text-secondary)]">{p.tread == null ? '—' : `${p.tread} mm`}</span>
+        <span className="text-right text-[var(--text-secondary)]">{p.tread == null ? 'N/A' : `${p.tread} mm`}</span>
         <span className="flex items-center gap-1.5 text-[var(--text-muted)]"><Wind size={12} /> Pressure</span>
-        <span className="text-right text-[var(--text-secondary)]">{p.pressure == null ? '—' : `${p.pressure} bar`}</span>
+        <span className="text-right text-[var(--text-secondary)]">{p.pressure == null ? 'N/A' : `${p.pressure} bar`}</span>
         <span className="flex items-center gap-1.5 text-[var(--text-muted)]"><Clock size={12} /> Age</span>
-        <span className="text-right text-[var(--text-secondary)]">{p.ageYears == null ? '—' : `${p.ageYears} yr`}</span>
+        <span className="text-right text-[var(--text-secondary)]">{p.ageYears == null ? 'N/A' : `${p.ageYears} yr`}</span>
         <span className="flex items-center gap-1.5 text-[var(--text-muted)]"><DollarSign size={12} /> CPK</span>
-        <span className="text-right text-[var(--text-secondary)]">{p.cpk == null ? '—' : money(p.cpk)}</span>
+        <span className="text-right text-[var(--text-secondary)]">{p.cpk == null ? 'N/A' : money(p.cpk)}</span>
       </div>
 
       <span className={`badge inline-block text-[10px] px-2 py-0.5 rounded ${AGE_BADGE[p.ageBand] || AGE_BADGE.unknown}`}>{ageMeta.label}</span>
@@ -176,7 +176,7 @@ export default function DigitalTwin() {
     [records],
   )
   // CPK is a small per-km figure — show 3 decimals rather than compact rounding.
-  const money = (v) => (v == null ? '—' : `${activeCurrency} ${Number(v).toFixed(3)}`)
+  const money = (v) => (v == null ? 'N/A' : `${activeCurrency} ${Number(v).toFixed(3)}`)
 
   const avgCpk = useMemo(() => {
     if (!twin) return null
@@ -190,7 +190,7 @@ export default function DigitalTwin() {
     <div className="space-y-6">
       <PageHeader
         title="Digital Twin"
-        subtitle="Look up any vehicle to see its live tyre twin — per-position health, tread, pressure, age and CPK, with an overall vehicle health score."
+        subtitle="Look up any vehicle to see its live tyre twin: per-position health, tread, pressure, age and CPK, with an overall vehicle health score."
         icon={Cpu}
         actions={assetNo ? <button onClick={() => navigate('/digital-twin')} className="btn-secondary text-sm inline-flex items-center gap-1.5"><ArrowLeft size={14} /> New search</button> : null}
       />
@@ -239,9 +239,9 @@ export default function DigitalTwin() {
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     {[
                       { label: 'Fitted tyres', value: twin.tyreCount, icon: CircleDot },
-                      { label: 'Health score', value: twin.healthScore == null ? '—' : `${twin.healthScore}/100`, icon: ShieldCheck },
-                      { label: 'Worst position', value: twin.worstPosition || '—', icon: MapPin },
-                      { label: 'Avg CPK', value: avgCpk == null ? '—' : money(avgCpk), icon: Activity },
+                      { label: 'Health score', value: twin.healthScore == null ? 'N/A' : `${twin.healthScore}/100`, icon: ShieldCheck },
+                      { label: 'Worst position', value: twin.worstPosition || 'N/A', icon: MapPin },
+                      { label: 'Avg CPK', value: avgCpk == null ? 'N/A' : money(avgCpk), icon: Activity },
                     ].map((k) => {
                       const Icon = k.icon
                       return (

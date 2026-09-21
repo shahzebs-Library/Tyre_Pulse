@@ -34,7 +34,7 @@ const PAGES_DIR = resolve(process.cwd(), 'src/pages')
 /**
  * Current, measured debt. LOWER these as pages migrate. Never raise them.
  *
- * rawOverlay 130 -> 128 -> 125 -> 121 -> 115 on 2026-09-21. Wave 1 moved
+ * rawOverlay 130 -> 128 -> 125 -> 121 -> 115 -> 114 on 2026-09-21. Wave 1 moved
  * StockManagement and PmPrograms; wave 2 Combinations, HeatIntelligence and
  * SerialTracker; wave 3 FleetRenewal, TechnicianScorecard, FitmentValidation and
  * DtcDiagnostics; wave 4 DriverSafety, EngineHours, HoldingCompany, RfidRegistry,
@@ -70,7 +70,7 @@ const PAGES_DIR = resolve(process.cwd(), 'src/pages')
  */
 const BASELINE = {
   rawTable: 194,
-  rawOverlay: 115,
+  rawOverlay: 114,
 }
 
 function readAllPages() {

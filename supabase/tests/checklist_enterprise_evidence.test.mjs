@@ -5,6 +5,7 @@ import { PGlite } from '@electric-sql/pglite'
 
 const migrationUrl = new URL('../migrations/20260921075921_checklist_enterprise_evidence_and_compliance.sql', import.meta.url)
 const skipMigrationUrl = new URL('../migrations/20260921083057_checklist_assignment_skip_audit.sql', import.meta.url)
+const approvalAgeMigrationUrl = new URL('../migrations/20260921085147_checklist_approval_age_monitor.sql', import.meta.url)
 const ORG = '11111111-1111-4111-8111-111111111111'
 const TEMPLATE = '22222222-2222-4222-8222-222222222222'
 
@@ -27,7 +28,9 @@ async function database() {
     create table public.checklist_submissions (
       id uuid primary key default gen_random_uuid(), organisation_id uuid,
       template_id uuid references public.checklist_templates(id), template_name text,
-      template_version integer, submitted_at timestamptz default now()
+      template_version integer, country text, site text, approval_status text,
+      supervisor_at timestamptz, submitted_at timestamptz default now(),
+      created_at timestamptz default now()
     );
     create table public.checklist_assignments (
       id uuid primary key default gen_random_uuid(), template_id uuid, template_name text,
@@ -102,5 +105,28 @@ test('assignment skips require an immutable reason and server timestamp', async 
     db.exec(`update public.checklist_assignments set skip_reason = 'Changed later'`),
     /skip evidence is immutable/,
   )
+  await db.close()
+})
+
+test('approval age uses the event that began each current stage', async () => {
+  const db = await database()
+  await db.exec(await readFile(approvalAgeMigrationUrl, 'utf8'))
+  await db.exec(`
+    insert into public.checklist_templates (id, organisation_id, name, status, fields)
+      values ('${TEMPLATE}', '${ORG}', 'Workshop', 'published', '[]');
+    insert into public.checklist_submissions
+      (organisation_id, template_id, template_name, country, site, approval_status, submitted_at, supervisor_at)
+    values
+      ('${ORG}', '${TEMPLATE}', 'Workshop', 'KSA', 'Riyadh', 'pending', now() - interval '10 hours', null),
+      ('${ORG}', '${TEMPLATE}', 'Workshop', 'KSA', 'Riyadh', 'pending_area_manager', now() - interval '30 hours', now() - interval '4 hours');
+  `)
+  const result = await db.query(`select approval_stage, pending_count, oldest_age_hours
+    from public.checklist_approval_age_monitor('KSA', '${TEMPLATE}') order by approval_stage`)
+  assert.equal(result.rows.length, 2)
+  assert.equal(result.rows[0].approval_stage, 'area_manager')
+  assert.equal(result.rows[0].pending_count, 1)
+  assert.ok(Number(result.rows[0].oldest_age_hours) >= 4)
+  assert.equal(result.rows[1].approval_stage, 'supervisor')
+  assert.ok(Number(result.rows[1].oldest_age_hours) >= 10)
   await db.close()
 })

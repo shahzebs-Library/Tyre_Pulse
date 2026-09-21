@@ -69,6 +69,16 @@ describe('checklist schedules service', () => {
     expect(rows).toEqual([{ due_count: 4 }])
   })
 
+  it('requests approval age without inventing an SLA threshold', async () => {
+    h.state.result = { data: [{ approval_stage: 'supervisor', pending_count: 2 }], error: null }
+    const rpc = vi.spyOn(h.supabase, 'rpc').mockResolvedValueOnce(h.state.result)
+    const rows = await cs.getApprovalAgeMonitor({ country: 'KSA', templateId: 't1' })
+    expect(rpc).toHaveBeenCalledWith('checklist_approval_age_monitor', {
+      p_country: 'KSA', p_template_id: 't1',
+    })
+    expect(rows[0].pending_count).toBe(2)
+  })
+
   it('listAssignments filters by status + template', async () => {
     await cs.listAssignments({ status: 'overdue', templateId: 't1', country: 'KSA' })
     expect(h.state.last._table).toBe('checklist_assignments')

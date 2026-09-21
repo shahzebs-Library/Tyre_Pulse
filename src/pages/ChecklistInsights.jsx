@@ -15,7 +15,7 @@ import PageHeader from '../components/ui/PageHeader'
 import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import { useSettings } from '../contexts/SettingsContext'
 import { listSubmissions, listTemplates } from '../lib/api/checklists'
-import { getComplianceMonitor } from '../lib/api/checklistSchedules'
+import { getApprovalAgeMonitor, getComplianceMonitor } from '../lib/api/checklistSchedules'
 import { isValueField, fieldTypeDef } from '../lib/checklist/fieldTypes'
 import { toUserMessage } from '../lib/safeError'
 
@@ -138,6 +138,9 @@ function pct(n, d) {
 function fmtPct(v) {
   return v == null ? 'N/A' : `${v.toFixed(1)}%`
 }
+function prettyToken(value) {
+  return String(value || '').replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
+}
 
 export default function ChecklistInsights() {
   const { activeCountry } = useSettings()
@@ -147,6 +150,7 @@ export default function ChecklistInsights() {
   const [submissions, setSubmissions] = useState([])
   const [complianceRows, setComplianceRows] = useState([])
   const [complianceError, setComplianceError] = useState(null)
+  const [approvalAgeRows, setApprovalAgeRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -166,10 +170,13 @@ export default function ChecklistInsights() {
       const from = new Date(today)
       from.setDate(from.getDate() - 29)
       const isoDay = (date) => date.toISOString().slice(0, 10)
-      const [tpls, subs, compliance] = await Promise.all([
+      const [tpls, subs, compliance, approvalAges] = await Promise.all([
         listTemplates({ country }),
         listSubmissions({ country }),
         getComplianceMonitor({ from: isoDay(from), to: isoDay(today), country })
+          .then((rows) => ({ rows, error: null }))
+          .catch((monitorError) => ({ rows: [], error: monitorError })),
+        getApprovalAgeMonitor({ country })
           .then((rows) => ({ rows, error: null }))
           .catch((monitorError) => ({ rows: [], error: monitorError })),
       ])
@@ -178,6 +185,7 @@ export default function ChecklistInsights() {
       setSubmissions(Array.isArray(subs) ? subs : [])
       setComplianceRows(Array.isArray(compliance.rows) ? compliance.rows : [])
       setComplianceError(compliance.error)
+      setApprovalAgeRows(Array.isArray(approvalAges.rows) ? approvalAges.rows : [])
     } catch (err) {
       if (myReq === reqIdRef.current) setError(err)
     } finally {
@@ -200,6 +208,10 @@ export default function ChecklistInsights() {
       onTimePct: pct(completedOnTime, completed),
     }
   }, [complianceRows, templateFilter])
+
+  const approvalAges = useMemo(() => approvalAgeRows.filter((row) =>
+    templateFilter === 'all' || String(row.template_id) === String(templateFilter)),
+  [approvalAgeRows, templateFilter])
 
   useEffect(() => { loadData() }, [loadData])
 
@@ -583,6 +595,35 @@ export default function ChecklistInsights() {
               </table>
             </div>
           </>
+        )}
+      </div>
+
+      <div className="card p-0 overflow-hidden">
+        <div className="px-4 py-3 border-b border-[var(--border-dim)]">
+          <h3 className="text-sm font-medium text-[var(--text-primary)]">Pending approval age</h3>
+          <p className="text-xs text-[var(--text-muted)] mt-1">Measured from submission or supervisor sign-off. No unapproved SLA threshold is applied.</p>
+        </div>
+        {approvalAges.length === 0 ? (
+          <div className="px-4 py-8 text-center text-sm text-[var(--text-muted)]">No pending checklist approvals in this scope.</div>
+        ) : (
+          <div className="overflow-x-auto"><table className="w-full text-sm">
+            <thead><tr className="text-left text-xs text-[var(--text-muted)] border-b border-[var(--border-dim)]">
+              <th className="px-4 py-2 font-medium">Template / site</th>
+              <th className="px-4 py-2 font-medium">Stage</th>
+              <th className="px-4 py-2 font-medium text-right">Pending</th>
+              <th className="px-4 py-2 font-medium text-right">Oldest age</th>
+              <th className="px-4 py-2 font-medium text-right">Average age</th>
+            </tr></thead>
+            <tbody>{approvalAges.map((row) => (
+              <tr key={`${row.template_id}:${row.country}:${row.site}:${row.approval_stage}`} className="border-b border-[var(--border-dim)] last:border-0">
+                <td className="px-4 py-2.5"><div className="text-[var(--text-primary)]">{row.template_name}</div><div className="text-xs text-[var(--text-muted)]">{[row.site, row.country].filter(Boolean).join(' · ')}</div></td>
+                <td className="px-4 py-2.5 text-[var(--text-muted)]">{prettyToken(row.approval_stage)}</td>
+                <td className="px-4 py-2.5 text-right">{Number(row.pending_count).toLocaleString()}</td>
+                <td className="px-4 py-2.5 text-right">{Number(row.oldest_age_hours).toFixed(1)} h</td>
+                <td className="px-4 py-2.5 text-right">{Number(row.average_age_hours).toFixed(1)} h</td>
+              </tr>
+            ))}</tbody>
+          </table></div>
         )}
       </div>
 

@@ -108,7 +108,8 @@ Acceptance: the same user cannot bypass separation of duties, stale/mobile retri
 
 - [ ] Replace browser-wide raw-row aggregation with scoped server aggregates.
 - [ ] Add operator, supervisor, area-manager, enterprise and audit views.
-- [ ] Add finding recurrence, action aging and approval aging drill-downs.
+- [ ] Add finding recurrence and corrective-action aging drill-downs.
+- [x] Add approval-stage aging from recorded workflow events without assuming an SLA.
 - [x] Add assignment and evidence-integrity drill-down by template/site.
 - [ ] Produce controlled CSV/Excel analysis exports and signed PDF audit packs.
 - [ ] Add scheduled monthly reconciliation with export metadata/checksum.

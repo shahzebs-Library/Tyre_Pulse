@@ -71,6 +71,14 @@ export async function getComplianceMonitor({ from, to, country, site, templateId
   })) || []
 }
 
+/** Pending approval age by current stage. SLA thresholds are configured elsewhere. */
+export async function getApprovalAgeMonitor({ country, templateId } = {}) {
+  return unwrap(await supabase.rpc('checklist_approval_age_monitor', {
+    p_country: country ?? null,
+    p_template_id: templateId ?? null,
+  })) || []
+}
+
 // ── Assignments ─────────────────────────────────────────────────────────────
 
 export async function listAssignments({ country, status, templateId, scheduleId, limit = 300 } = {}) {

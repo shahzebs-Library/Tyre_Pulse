@@ -20,6 +20,15 @@ describe('driver workspace', () => {
     expect(screen.queryByText('Issue traffic fine')).not.toBeInTheDocument()
     expect(screen.queryByText('Review / record payment')).not.toBeInTheDocument()
   })
+  it('opens the link-work form inside the shared solid dialog panel', async () => {
+    api.loadDriverWorkspace.mockResolvedValue({ ...data, can_manage: true })
+    render(<MemoryRouter initialEntries={['/driver-workspace?driver=driver-1']}><DriverWorkspace /></MemoryRouter>)
+    fireEvent.click(await screen.findByText('Link work record'))
+    const dialog = screen.getByRole('dialog', { name: 'Link work record' })
+    expect(dialog).toHaveClass('tp-dialog-panel')
+    expect(dialog.closest('.tp-dialog-overlay')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Submit' })).toHaveAttribute('form', 'driver-workspace-link_record-form')
+  })
   it('submits the signed resolution against the exact notice version', async () => {
     render(<MemoryRouter initialEntries={['/driver-workspace?driver=driver-1']}><DriverWorkspace /></MemoryRouter>)
     fireEvent.click(await screen.findByText('Acknowledge and respond'))

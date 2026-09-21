@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
 import { useLanguage } from '../contexts/LanguageContext'
 import PageHeader from '../components/ui/PageHeader'
+import Modal from '../components/ui/Modal'
 import SignaturePad from '../components/SignaturePad'
 import { loadDriverWorkspace, driverWorkspaceCommand, driverWorkspaceOptions, fineSignature, evidenceUrl, uploadFineEvidence } from '../lib/api/driverWorkspace'
 import { RECEIPT_STATEMENT, RECORD_TYPES, RESOLUTIONS, recordLabel, signatureImage, validateFineResponse } from '../lib/driverWorkspace'
@@ -55,17 +56,18 @@ function ActionForm({ action, driverId, fine, onClose, onSaved }) {
       await driverWorkspaceCommand(action, payload, requestId.current); onSaved()
     } catch (e) { setError(toUserMessage(e, 'Could not save. Refresh if the case changed.')) } finally { setSaving(false) }
   }
-  return <div className="fixed inset-0 z-50 bg-black/60 overflow-y-auto p-4" role="dialog" aria-modal="true" aria-label={human(action)}><form onSubmit={submit} className="max-w-xl mx-auto p-6 rounded-xl bg-[var(--bg-secondary)] space-y-4">
-    <h2 className="text-xl font-semibold">{tr(human(action))}</h2>
+  const formId = `driver-workspace-${action}-form`
+  const footer = <><button form={formId} type="submit" disabled={saving} className="btn-primary">{tr(saving ? 'Saving…' : 'Submit')}</button><button type="button" disabled={saving} className="btn-secondary" onClick={onClose}>{tr('Cancel')}</button></>
+  return <Modal open onClose={saving ? undefined : onClose} title={tr(human(action))} size="md" footer={footer}><form id={formId} onSubmit={submit} className="space-y-4">
     {fields[action].map(([key, label, type]) => <div key={key}><label className="label" htmlFor={`dw-${key}`}>{tr(label)}</label>
       {['users', 'vehicles', 'records'].includes(type) ? <SearchPicker kind={type === 'records' ? values.source_type : type} value={values[key]} onChange={v => set(key, v)} label={label} />
         : ['resolution', 'decision', 'record_type'].includes(type) ? <select id={`dw-${key}`} className="input w-full" value={values[key] || ''} onChange={e => set(key, e.target.value)}>{(type === 'resolution' ? RESOLUTIONS : type === 'record_type' ? RECORD_TYPES : ['approve', 'return', 'payment', 'cancel', 'reopen']).map(v => <option key={v} value={v}>{tr(human(v))}</option>)}</select>
           : <input id={`dw-${key}`} className="input w-full" type={type || 'text'} step={type === 'number' ? '0.01' : undefined} maxLength={4000} value={values[key] || ''} onChange={e => set(key, e.target.value)} />}</div>)}
     {action === 'respond_fine' && <><label className="flex gap-3"><input type="checkbox" checked={!!values.acknowledged} onChange={e => set('acknowledged', e.target.checked)} /><span>{tr(RECEIPT_STATEMENT)}</span></label><button type="button" className="btn-secondary" onClick={() => setPad(true)}>{tr('Draw signature')}</button>{values.signature && <img className="max-h-32 bg-white" src={signatureImage(values.signature)} alt="Your signature" />}</>}
     {action === 'review_fine' && <p>Approval records the reviewed arrangement. It does not execute a payment or payroll deduction. Record only verified payments.</p>}
-    {error && <p role="alert" className="text-red-500">{error}</p>}<div className="flex gap-3"><button disabled={saving} className="btn-primary">{tr(saving ? 'Saving…' : 'Submit')}</button><button type="button" disabled={saving} className="btn-secondary" onClick={onClose}>{tr('Cancel')}</button></div>
+    {error && <p role="alert" className="text-red-500">{error}</p>}
     {pad && <SignaturePad label="Driver acknowledgment" onSave={signature => { set('signature', signature); setPad(false) }} onClose={() => setPad(false)} />}
-  </form></div>
+  </form></Modal>
 }
 
 function FineCard({ fine, data, onAction, refresh }) {

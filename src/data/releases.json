@@ -1,5 +1,13 @@
 [
   {
+    "id": "2026.09.21.3",
+    "date": "2026-09-21",
+    "changes": [{
+      "modules": ["checklists"],
+      "text": {"en": "Checklist history now identifies legacy sheets by the asset and site recorded inside them. Same-day checklist and receipt dates are shown once, while late-arriving sheets retain both dates."}
+    }]
+  },
+  {
     "id": "2026.09.21.2",
     "date": "2026-09-21",
     "changes": [{

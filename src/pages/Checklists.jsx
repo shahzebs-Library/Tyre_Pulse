@@ -13,7 +13,7 @@ import { isValueField } from '../lib/checklist/fieldTypes'
 import { CHECKLIST_LANGS } from '../lib/checklist/checklistI18n'
 import { resolveChecklistIcon, checklistIconComponent } from '../lib/checklist/checklistIcons'
 import { roleTargetLabel } from '../lib/checklist/checklistRoles'
-import { gridFields, submissionDate } from '../lib/checklistMonthly'
+import { gridFields, submissionDate, submissionTarget } from '../lib/checklistMonthly'
 import { renderChecklistPdf } from '../lib/checklistPdf'
 import { toUserMessage } from '../lib/safeError'
 import { useTenant } from '../contexts/TenantContext'
@@ -72,9 +72,15 @@ function ChecklistDates({ submission, template }) {
   const sheetDate = date.basis === 'sheet_date'
     ? `${date.year}-${String(date.month).padStart(2, '0')}-${String(date.day).padStart(2, '0')}`
     : null
+  const receivedValue = submission.submitted_at || submission.created_at
+  const receivedDate = receivedValue ? String(receivedValue).slice(0, 10) : null
+  if (!sheetDate) return <div>Received: {fmtDate(receivedValue)}</div>
+  if (sheetDate === receivedDate) {
+    return <div className="text-[var(--text-primary)]">Checklist date: {fmtDate(`${sheetDate}T12:00:00`)}</div>
+  }
   return <>
-    {sheetDate && <div className="text-[var(--text-primary)]">Checklist: {fmtDate(`${sheetDate}T12:00:00`)}</div>}
-    <div>Received: {fmtDate(submission.submitted_at || submission.created_at)}</div>
+    <div className="text-[var(--text-primary)]">Checklist date: {fmtDate(`${sheetDate}T12:00:00`)}</div>
+    <div>Received: {fmtDate(receivedValue)}</div>
   </>
 }
 
@@ -163,9 +169,13 @@ export default function Checklists() {
         ? byTemplate.filter((s) => s.template_snapshot_status !== 'exact')
         : byTemplate.filter((s) => s.template_snapshot_status === evidenceFilter)
     if (!q) return byEvidence
-    return byEvidence.filter((s) =>
-      [s.template_name, s.title, s.asset_no, s.site, s.status].filter(Boolean).some((v) => String(v).toLowerCase().includes(q)))
-  }, [submissions, search, templateParam, evidenceFilter])
+    return byEvidence.filter((s) => {
+      const template = templates.find((t) => String(t.id) === String(s.template_id))
+      const target = submissionTarget(s, template?.fields)
+      return [s.template_name, s.title, target.assetNo, target.site, s.status]
+        .filter(Boolean).some((v) => String(v).toLowerCase().includes(q))
+    })
+  }, [submissions, templates, search, templateParam, evidenceFilter])
   const submissionsPager = usePagedRows(filteredSubmissions)
 
   // Name the template we were sent to look at, so a filtered-to-nothing list
@@ -479,7 +489,10 @@ export default function Checklists() {
                 </tr>
               </thead>
               <tbody>
-                {submissionsPager.pageRows.map((s) => (
+                {submissionsPager.pageRows.map((s) => {
+                  const template = templates.find((t) => String(t.id) === String(s.template_id))
+                  const target = submissionTarget(s, template?.fields)
+                  return (
                   <tr
                     key={s.id}
                     // Opens in place rather than navigating away. Reading a
@@ -495,8 +508,8 @@ export default function Checklists() {
                       )}
                     </td>
                     <td className="table-cell">
-                      <div className="text-[var(--text-primary)]">{s.asset_no || '-'}</div>
-                      <div className="text-xs text-[var(--text-muted)]">{[s.site, s.country].filter(Boolean).join(' · ') || '-'}</div>
+                      <div className="text-[var(--text-primary)]">{target.assetNo || '-'}</div>
+                      <div className="text-xs text-[var(--text-muted)]">{[target.site, s.country].filter(Boolean).join(' · ') || '-'}</div>
                     </td>
                     <td className="table-cell">
                       <span className={`badge text-xs ${statusBadge(s.status)}`}>{prettyStatus(s.status)}</span>
@@ -507,7 +520,7 @@ export default function Checklists() {
                       </div>
                     </td>
                     <td className="table-cell whitespace-nowrap text-[var(--text-muted)]">
-                      <ChecklistDates submission={s} template={templates.find(t => t.id === s.template_id)} />
+                      <ChecklistDates submission={s} template={template} />
                     </td>
                     <td className="table-cell text-right whitespace-nowrap">
                       <button
@@ -522,7 +535,8 @@ export default function Checklists() {
                       <ChevronRight size={16} className="text-[var(--text-muted)] inline" />
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
             <TablePagination {...submissionsPager} />

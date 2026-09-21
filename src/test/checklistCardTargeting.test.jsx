@@ -43,7 +43,10 @@ vi.mock('../contexts/AuthContext', () => ({
 vi.mock('../contexts/TenantContext', () => ({ useTenant: () => ({ branding: null }) }))
 vi.mock('../lib/api/checklists', () => ({
   listTemplates: () => Promise.resolve(TEMPLATES),
-  listSubmissions: () => Promise.resolve([{ id: 'late-sheet', template_id: 't-lucide', template_name: 'Workshop Electrical Sheet', answers: { date: '2026-08-23' }, submitted_at: '2026-09-12T12:00:00Z' }]),
+  listSubmissions: () => Promise.resolve([
+    { id: 'late-sheet', template_id: 't-lucide', template_name: 'Workshop Electrical Sheet', answers: { date: '2026-08-23' }, submitted_at: '2026-09-12T12:00:00Z' },
+    { id: 'same-day-sheet', template_id: 't-lucide', template_name: 'Workshop Electrical Sheet', answers: { date: '2026-09-13' }, submitted_at: '2026-09-13T12:00:00Z' },
+  ]),
   getSubmission: vi.fn(),
 }))
 vi.mock('../lib/checklistPdf', () => ({ renderChecklistPdf: vi.fn() }))
@@ -57,8 +60,10 @@ describe('Checklists template cards', () => {
     render(<Checklists />)
     await screen.findByText('Workshop Electrical Sheet')
     fireEvent.click(screen.getByRole('button', { name: /Recent Submissions/ }))
-    expect(await screen.findByText(/Checklist: .*23.*2026/)).toBeInTheDocument()
+    expect(await screen.findByText(/Checklist date: .*23.*2026/)).toBeInTheDocument()
     expect(screen.getByText(/Received: .*12.*2026/)).toBeInTheDocument()
+    expect(screen.getByText(/Checklist date: .*13.*2026/)).toBeInTheDocument()
+    expect(screen.queryAllByText(/Received: .*13.*2026/)).toHaveLength(0)
   })
   it('never prints a raw icon name as text', async () => {
     render(<Checklists />)

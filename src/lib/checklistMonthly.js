@@ -56,6 +56,21 @@ export function submissionDate(sub, fields) {
   return { ...parsed, basis }
 }
 
+/** Resolve target metadata from current columns or legacy embedded answers. */
+export function submissionTarget(sub, fields) {
+  const list = Array.isArray(fields) ? fields : []
+  const answers = sub?.answers && typeof sub.answers === 'object' ? sub.answers : {}
+  const answerFor = (type) => {
+    const field = list.find((f) => f && f.type === type && f.id && answers[f.id] != null)
+    const value = field ? String(answers[field.id]).trim() : ''
+    return value || null
+  }
+  return {
+    assetNo: String(sub?.asset_no ?? '').trim() || answerFor('asset'),
+    site: String(sub?.site ?? '').trim() || answerFor('site'),
+  }
+}
+
 export function submissionDay(sub, fields, { year, month } = {}) {
   const parsed = submissionDate(sub, fields)
   const { basis } = parsed

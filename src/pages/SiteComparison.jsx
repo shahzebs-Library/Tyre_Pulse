@@ -10,6 +10,7 @@ import { toUserMessage } from '../lib/safeError'
 import { Download, FileText, Maximize2, GitMerge, AlertTriangle, RefreshCw } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
+import Card, { CardHeader } from '../components/ui/Card'
 import EmailPdfButton from '../components/EmailPdfButton'
 import PeriodFilter, { filterByPeriodValue } from '../components/ui/PeriodFilter'
 import SegmentedControl from '../components/ui/SegmentedControl'
@@ -75,7 +76,7 @@ function SkeletonBar({ className = '' }) {
 
 function FilterCardSkeleton() {
   return (
-    <div className="card space-y-4">
+    <Card className="space-y-4">
       <div className="flex flex-wrap gap-3">
         <SkeletonBar className="h-8 w-36" />
         <SkeletonBar className="h-8 w-36" />
@@ -84,13 +85,17 @@ function FilterCardSkeleton() {
       <div className="flex flex-wrap gap-2">
         {[1, 2, 3, 4].map(i => <SkeletonBar key={i} className="h-7 w-20 rounded-full" />)}
       </div>
-    </div>
+    </Card>
   )
 }
 
 function KpiCardSkeleton() {
   return (
-    <div className="card border-t-2 border-gray-700">
+    // The real KPI card it stands in for carries a 2px coloured top edge. As
+    // CLASSES (`border-t-2 border-gray-700`) that would be dead - Card sets
+    // `border` inline and inline beats a plain class - so the edge is expressed
+    // through `style`, which Card spreads last and which therefore wins.
+    <Card style={{ borderColor: 'var(--border-dim)', borderTopWidth: '2px' }}>
       <SkeletonBar className="h-4 w-24 mb-3" />
       <div className="space-y-2">
         {[1, 2, 3, 4, 5].map(i => (
@@ -100,16 +105,16 @@ function KpiCardSkeleton() {
           </div>
         ))}
       </div>
-    </div>
+    </Card>
   )
 }
 
 function ChartCardSkeleton() {
   return (
-    <div className="card">
+    <Card>
       <SkeletonBar className="h-4 w-48 mb-4" />
       <SkeletonBar className="h-64 w-full" />
-    </div>
+    </Card>
   )
 }
 
@@ -291,34 +296,42 @@ export default function SiteComparison() {
           </div>
         </>
       ) : error ? (
-        <div className="card flex flex-col items-center justify-center py-16 text-center">
+        // `py-16` as a CLASS would be dead: Card sets `padding` inline and wins,
+        // so the roominess this empty state depends on moves into `style` on the
+        // nearest spacing step. `items-center justify-center text-center` stay
+        // as classes - Card sets none of those inline. Card is already
+        // `flex flex-col`, so that pair of classes is dropped as redundant.
+        <Card className="items-center justify-center text-center" style={{ paddingTop: 'var(--space-12)', paddingBottom: 'var(--space-12)' }}>
           <AlertTriangle size={40} className="text-red-400 mb-4" />
           <p className="text-red-300 font-medium text-lg">{t('sitecomparison.states.loadError')}</p>
           <p className="text-gray-500 text-sm mt-1">{error}</p>
           <button onClick={load} className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors">
             <RefreshCw size={16} /> {t('sitecomparison.states.retry')}
           </button>
-        </div>
+        </Card>
       ) : allSites.length === 0 ? (
         <>
-          <div className="card space-y-4">
+          <Card className="space-y-4">
             <div className="flex flex-wrap gap-3 items-end">
               <div className="flex flex-col gap-1">
                 <label className="label text-xs">{t('sitecomparison.filters.period')}</label>
                 <PeriodFilter records={records} value={period} onChange={setPeriod} />
               </div>
             </div>
-          </div>
-          <div className="card flex flex-col items-center justify-center py-16 text-center">
+          </Card>
+          <Card className="items-center justify-center text-center" style={{ paddingTop: 'var(--space-12)', paddingBottom: 'var(--space-12)' }}>
             <GitMerge size={40} className="text-gray-700 mb-4" />
             <p className="text-gray-400 font-medium text-lg">{t('sitecomparison.states.noSiteData')}</p>
             <p className="text-gray-600 text-sm mt-1">{t('sitecomparison.states.noSiteDataHint')}</p>
-          </div>
+          </Card>
         </>
       ) : (
         <>
-          {/* Filter bar + site selector */}
-          <div className="card space-y-4">
+          {/* Filter bar + site selector. Not clipped, and nothing here needs it
+              to be: PeriodFilter and SegmentedControl are a native <select> and
+              a row of buttons, and a browser paints a select's option list as
+              an OS-level popup outside the page's overflow context anyway. */}
+          <Card className="space-y-4">
             <div className="flex flex-wrap gap-3 items-end">
               <div className="flex flex-col gap-1">
                 <label className="label text-xs">{t('sitecomparison.filters.period')}</label>
@@ -359,7 +372,7 @@ export default function SiteComparison() {
                 })}
               </div>
             </div>
-          </div>
+          </Card>
 
           {truncated && (
             <div className="flex items-center gap-2 text-amber-400 text-xs bg-amber-400/10 border border-amber-400/20 rounded-xl px-4 py-2.5">
@@ -374,17 +387,26 @@ export default function SiteComparison() {
           )}
 
           {filteredMetrics.length === 0 ? (
-            <div className="card flex flex-col items-center justify-center py-16 text-center">
+            <Card className="items-center justify-center text-center" style={{ paddingTop: 'var(--space-12)', paddingBottom: 'var(--space-12)' }}>
               <GitMerge size={40} className="text-gray-700 mb-4" />
               <p className="text-gray-400 font-medium">{t('sitecomparison.states.selectSite')}</p>
               <p className="text-gray-600 text-sm mt-1">{t('sitecomparison.states.selectSiteHint')}</p>
-            </div>
+            </Card>
           ) : (
             <>
               {/* KPI comparison cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {filteredMetrics.map((s, i) => (
-                  <div key={s.site} className="card border-t-2" style={{ borderColor: SITE_COLORS[i % SITE_COLORS.length] }}>
+                  // The per-site identity colour is the whole point of this
+                  // card, so it must not go through `tone`: it is one of ten
+                  // SITE_COLORS matched to the charts, not a status. Both
+                  // longhands live in `style` because Card sets the `border`
+                  // shorthand inline - `border-t-2` as a class would be dead
+                  // and the 2px top edge would silently flatten to 1px.
+                  <Card
+                    key={s.site}
+                    style={{ borderColor: SITE_COLORS[i % SITE_COLORS.length], borderTopWidth: '2px' }}
+                  >
                     <p className="text-white font-semibold text-sm">{s.site}</p>
                     <div className="mt-3 space-y-2">
                       <KpiRow label={t('sitecomparison.kpi.records')} value={s.count} />
@@ -394,39 +416,43 @@ export default function SiteComparison() {
                       <KpiRow label={t('sitecomparison.kpi.topBrand')} value={s.topBrand} />
                       <KpiRow label={t('sitecomparison.kpi.topCategory')} value={s.topCategory} />
                     </div>
-                  </div>
+                  </Card>
                 ))}
               </div>
 
-              {/* Charts */}
+              {/* Charts. The chart wells keep their explicit pixel heights:
+                  maintainAspectRatio is false, so a well with no definite height
+                  collapses to nothing. */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="card">
-                  <h3 className="text-sm font-medium text-gray-400 mb-4">{t('sitecomparison.chart.totalCostComparison')}</h3>
+                <Card>
+                  <CardHeader title={t('sitecomparison.chart.totalCostComparison')} />
                   <div style={{ height: 260 }}>
                     <Bar data={costChart} options={BAR_OPTS} />
                   </div>
-                </div>
-                <div className="card">
-                  <h3 className="text-sm font-medium text-gray-400 mb-4">{t('sitecomparison.chart.highRiskComparison')}</h3>
+                </Card>
+                <Card>
+                  <CardHeader title={t('sitecomparison.chart.highRiskComparison')} />
                   <div style={{ height: 260 }}>
                     <Bar data={riskChart} options={BAR_OPTS} />
                   </div>
-                </div>
+                </Card>
               </div>
 
               {/* Radar */}
               {filteredMetrics.length >= 2 && (
-                <div className="card">
-                  <h3 className="text-sm font-medium text-gray-400 mb-4">
-                    {t('sitecomparison.chart.radarTitle')}
-                  </h3>
-                  <div className="max-w-xl mx-auto" style={{ height: 380 }}>
+                <Card>
+                  <CardHeader title={t('sitecomparison.chart.radarTitle')} />
+                  {/* `w-full` is explicit because this well is now a flex item:
+                      `mx-auto` disables the stretch Card brings, which would
+                      otherwise leave the width to resolve against a responsive
+                      canvas that sizes itself from its parent. */}
+                  <div className="max-w-xl mx-auto w-full" style={{ height: 380 }}>
                     <Radar data={radarData} options={RADAR_OPTS} />
                   </div>
                   <p className="text-xs text-gray-600 text-center mt-2">
                     {t('sitecomparison.chart.radarLegend')}
                   </p>
-                </div>
+                </Card>
               )}
 
               {/* Trend comparison with granularity */}
@@ -482,23 +508,27 @@ function TrendComparison({ records, selectedSites, defaultCost = 1200, granulari
   if (allPeriods.length < 2) return null
 
   return (
-    <div className="card relative">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-medium text-gray-400">
-          {t('sitecomparison.trend.title', { granularity: t(`sitecomparison.granularity.${granularity}`), period: t(`sitecomparison.periodLabel.${granularity}`) })}
-        </h3>
-        <button
-          onClick={onMaximize}
-          className="text-gray-500 hover:text-white transition-colors p-1 rounded hover:bg-gray-700"
-          title={t('sitecomparison.trend.fullscreen')}
-        >
-          <Maximize2 size={15} />
-        </button>
-      </div>
+    // `relative` is dropped: Card already sets it. The fullscreen control is a
+    // single button, which is exactly what CardHeader's `actions` slot is for -
+    // it is flex-shrink-0, so it is the wrong home for a multi-button filter
+    // row, but right for one icon beside a long title.
+    <Card>
+      <CardHeader
+        title={t('sitecomparison.trend.title', { granularity: t(`sitecomparison.granularity.${granularity}`), period: t(`sitecomparison.periodLabel.${granularity}`) })}
+        actions={(
+          <button
+            onClick={onMaximize}
+            className="text-gray-500 hover:text-white transition-colors p-1 rounded hover:bg-gray-700"
+            title={t('sitecomparison.trend.fullscreen')}
+          >
+            <Maximize2 size={15} />
+          </button>
+        )}
+      />
       <div style={{ height: 300 }}>
         <Line ref={chartRef} data={chartData} options={opts} />
       </div>
-    </div>
+    </Card>
   )
 }
 

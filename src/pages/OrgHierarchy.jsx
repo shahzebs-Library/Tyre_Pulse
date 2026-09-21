@@ -18,6 +18,8 @@ import {
   ChevronRight, ChevronDown, MapPin, Users, UserPlus, Star, Calendar,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import Card, { CardHeader } from '../components/ui/Card'
+import Modal from '../components/ui/Modal'
 import {
   listUnits, createUnit, updateUnit, deleteUnit, UNIT_TYPES,
   listAssignments, createAssignment, updateAssignment, deleteAssignment,
@@ -469,8 +471,14 @@ export default function OrgHierarchy() {
         }
       />
 
+      {/* Both banners carried `border border-amber-800/50` / `border-red-800/50`,
+          which is DEAD on a Card - Card writes `border` inline and a plain
+          utility loses to it, so the tint would have vanished silently. It comes
+          from `tone` instead. Card is `flex flex-col` and `.flex-col` is emitted
+          after `.flex-row`, so the row direction has to go in `style`, which
+          Card spreads last. */}
       {notProvisioned && (
-        <div className="card border border-amber-800/50 flex items-start gap-3">
+        <Card tone="warn" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
           <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
           <div>
             <p className="text-amber-300 font-medium">Organization Hierarchy isn’t enabled on this database yet.</p>
@@ -478,14 +486,14 @@ export default function OrgHierarchy() {
               Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V206_ORG_HIERARCHY.sql</span>, then reload.
             </p>
           </div>
-        </div>
+        </Card>
       )}
 
       {error && (
-        <div className="card border border-red-800/50 flex items-start gap-3">
+        <Card tone="crit" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
           <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
           <div><p className="text-red-300 font-medium">Couldn’t load organisation units.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
-        </div>
+        </Card>
       )}
 
       {/* KPI tiles */}
@@ -493,27 +501,30 @@ export default function OrgHierarchy() {
         {kpis.map((k) => {
           const Icon = k.icon
           return (
-            <div key={k.label} className="card">
+            <Card key={k.label}>
               <div className="flex items-center justify-between">
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
+              {/* An em dash while `rows` is still null, never 0 - a fabricated
+                  zero on a unit count reads as "the hierarchy is empty". */}
               <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
-            </div>
+            </Card>
           )
         })}
       </div>
 
-      {/* Hierarchy tree */}
-      <div className="card">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
-            <Network size={15} /> Organisation tree
-          </h3>
-          {rows !== null && rows.length > 0 && (
+      {/* Hierarchy tree. CardHeader takes the heading so the page keeps one
+          h3 contract; its `actions` slot holds a single span, which is what
+          that non-shrinking slot is for. */}
+      <Card>
+        <CardHeader
+          title="Organisation tree"
+          icon={Network}
+          actions={rows !== null && rows.length > 0 ? (
             <span className="text-xs text-[var(--text-muted)]">Depth {summary.maxDepth} · {summary.rootCount} root{summary.rootCount === 1 ? '' : 's'}</span>
-          )}
-        </div>
+          ) : null}
+        />
         {rows === null ? (
           <div className="space-y-2">
             {[0, 1, 2].map((i) => <div key={i} className="h-8 bg-[var(--input-bg)] rounded animate-pulse" />)}
@@ -539,11 +550,15 @@ export default function OrgHierarchy() {
             <Users size={12} className="opacity-60" /> Select a unit to manage its members.
           </p>
         )}
-      </div>
+      </Card>
 
-      {/* Members panel for the selected unit */}
+      {/* Members panel for the selected unit. CardHeader is REFUSED here: the
+          heading is compound ("Members of <name>" plus an inline TypeBadge) and
+          CardHeader renders its title inside a `truncate` element, which would
+          clip the badge on a phone instead of letting the row wrap. The header
+          row below keeps its own flex-wrap. */}
       {selectedUnit && (
-        <div className="card">
+        <Card>
           <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
             <div className="min-w-0">
               <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
@@ -567,12 +582,19 @@ export default function OrgHierarchy() {
             </div>
           </div>
 
+          {/* "No users assigned" stays an explicit statement rather than an
+              empty grid - an absent member list and an unread one look the
+              same otherwise. */}
           {unitMembers.length === 0 ? (
             <div className="py-8 text-center text-[var(--text-muted)]">
               <UserPlus size={22} className="mx-auto mb-2 opacity-60" />
               <p className="text-sm">Assign a user to give them a place in this unit.</p>
             </div>
           ) : (
+            /* EnterpriseTable REFUSED: every row here is a composite cell - the
+               name carries a Primary badge, the window renders a date range,
+               the status is a derived pill and the last column is a pair of
+               icon actions. A generic table would flatten all four. */
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -623,21 +645,25 @@ export default function OrgHierarchy() {
               </table>
             </div>
           )}
-        </div>
+        </Card>
       )}
 
-      {/* User coverage (read-only §3 P3 groundwork) */}
+      {/* User coverage (read-only §3 P3 groundwork). The "preview only" line is
+          an honesty affordance - it is what stops a reader taking this table as
+          enforced scoping - so it moves verbatim into CardHeader's description
+          rather than being dropped or reworded. */}
       {rows !== null && coverage.length > 0 && (
-        <div className="card">
-          <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
-            <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
-              <Users size={15} /> User coverage
-            </h3>
-            <span className="text-xs text-[var(--text-muted)]">{coverage.length} user{coverage.length === 1 ? '' : 's'} with active assignments</span>
-          </div>
-          <p className="text-xs text-[var(--text-muted)] mb-3">
-            Effective reach = units a user is assigned to, plus every unit beneath them. This is a preview only — no access is scoped by unit yet.
-          </p>
+        <Card>
+          <CardHeader
+            title="User coverage"
+            icon={Users}
+            description="Effective reach = units a user is assigned to, plus every unit beneath them. This is a preview only — no access is scoped by unit yet."
+            actions={<span className="text-xs text-[var(--text-muted)]">{coverage.length} user{coverage.length === 1 ? '' : 's'} with active assignments</span>}
+          />
+          {/* EnterpriseTable REFUSED: composite cells again (a starred primary
+              unit, an "+N inherited" derived chip) and the list is deliberately
+              capped at the 100 widest-reaching users with a stated note, which
+              a generic pager would replace with silent paging. */}
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -676,11 +702,13 @@ export default function OrgHierarchy() {
             </table>
           </div>
           {coverage.length > 100 && <p className="text-[11px] text-[var(--text-muted)] mt-2">Showing the 100 widest-reaching users.</p>}
-        </div>
+        </Card>
       )}
 
-      {/* Filters */}
-      <div className="card space-y-3">
+      {/* Filters. The two controls are native <select>s, whose option lists the
+          browser paints outside the page's overflow context, so this card needs
+          no `clip` opt-out. */}
+      <Card className="space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[200px]">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
@@ -698,10 +726,19 @@ export default function OrgHierarchy() {
           {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
           <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {summary.total}</span>
         </div>
-      </div>
+      </Card>
 
-      {/* Table */}
-      <div className="card overflow-hidden !p-0">
+      {/* Edge-to-edge register, so this is one of the rare cards that genuinely
+          must clip: `pad="none" clip` replaces the old `overflow-hidden !p-0`
+          and stops relying on an !important layout utility. TablePagination's
+          rows-per-page control is a native <select> and is unaffected by the
+          clip.
+          EnterpriseTable REFUSED for the register itself: it is already wired
+          to usePagedRows + TablePagination and to the page's own Excel/PDF
+          export, which walk the FULL `filtered` set while the grid shows one
+          page. EnterpriseTable would add a second search box beside the filter
+          bar above and a competing export beside the two in the page header. */}
+      <Card pad="none" clip>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -755,198 +792,211 @@ export default function OrgHierarchy() {
           </table>
         </div>
         <TablePagination {...pager} />
-      </div>
+      </Card>
 
-      {/* Create / Edit modal */}
+      {/* Create / Edit modal. The submit button STAYS inside its <form> rather
+          than moving to Modal's footer: the footer sits outside the form
+          element, so the button would need a `form="…"` association - a
+          behaviour change, not a migration. The old backdrop handler's
+          in-flight guard already lives inside `closeModal`, so Escape, the
+          backdrop and the X now share one guarded close and cannot diverge. */}
       {showModal && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" onClick={closeModal}>
-          <div className="card w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-[var(--text-primary)]">{editing ? 'Edit unit' : 'New organisation unit'}</h3>
-              <button onClick={closeModal} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
-            </div>
-            <form onSubmit={submit} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="label">Unit name</label>
-                  <input className="input w-full" placeholder="e.g. Eastern Region" value={form.name} maxLength={200} onChange={(e) => set('name', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Type</label>
-                  <select className="input w-full" value={form.unit_type} onChange={(e) => set('unit_type', e.target.value)}>
-                    <option value="">— Select type —</option>
-                    {UNIT_TYPES.map((t) => <option key={t} value={t}>{TYPE_META[t]?.label || t}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="label">Parent unit (optional)</label>
-                  <select className="input w-full" value={form.parent_id} onChange={(e) => set('parent_id', e.target.value)}>
-                    <option value="">— None (top level) —</option>
-                    {parentOptions.map((o) => (
-                      <option key={o.id} value={o.id}>{o.name}{o.type ? ` · ${TYPE_META[o.type]?.label || o.type}` : ''}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="label">Code (optional)</label>
-                  <input className="input w-full" placeholder="e.g. ER-01" value={form.code} maxLength={60} onChange={(e) => set('code', e.target.value)} />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                  <label className="label">Country (optional)</label>
-                  <input className="input w-full" placeholder="e.g. Saudi Arabia" value={form.country} maxLength={120} onChange={(e) => set('country', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Site ref (optional)</label>
-                  <input className="input w-full" placeholder="e.g. SITE-204" value={form.site_ref} maxLength={200} onChange={(e) => set('site_ref', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Sort order (optional)</label>
-                  <input className="input w-full" type="number" step="1" placeholder="0" value={form.sort_order} onChange={(e) => set('sort_order', e.target.value)} />
-                </div>
+        <Modal
+          open
+          onClose={closeModal}
+          size="lg"
+          title={editing ? 'Edit unit' : 'New organisation unit'}
+        >
+          <form onSubmit={submit} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="label">Unit name</label>
+                <input className="input w-full" placeholder="e.g. Eastern Region" value={form.name} maxLength={200} onChange={(e) => set('name', e.target.value)} />
               </div>
               <div>
-                <label className="label">Notes (optional)</label>
-                <textarea className="input w-full min-h-[70px] resize-y" placeholder="e.g. covers all eastern-province depots" value={form.notes} maxLength={8000} onChange={(e) => set('notes', e.target.value)} />
+                <label className="label">Type</label>
+                <select className="input w-full" value={form.unit_type} onChange={(e) => set('unit_type', e.target.value)}>
+                  <option value="">— Select type —</option>
+                  {UNIT_TYPES.map((t) => <option key={t} value={t}>{TYPE_META[t]?.label || t}</option>)}
+                </select>
               </div>
-              <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer">
-                <input type="checkbox" className="accent-indigo-500" checked={form.active} onChange={(e) => set('active', e.target.checked)} />
-                Active unit
-              </label>
-
-              {formError && (
-                <div className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
-                  <AlertTriangle size={15} className="mt-0.5 shrink-0" /> {formError}
-                </div>
-              )}
-
-              <div className="flex items-center justify-end gap-2 pt-1">
-                <button type="button" onClick={closeModal} className="btn-secondary text-sm" disabled={saving}>Cancel</button>
-                <button type="submit" className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={saving}>
-                  {saving ? 'Saving…' : editing ? 'Save changes' : 'Create unit'}
-                </button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="label">Parent unit (optional)</label>
+                <select className="input w-full" value={form.parent_id} onChange={(e) => set('parent_id', e.target.value)}>
+                  <option value="">— None (top level) —</option>
+                  {parentOptions.map((o) => (
+                    <option key={o.id} value={o.id}>{o.name}{o.type ? ` · ${TYPE_META[o.type]?.label || o.type}` : ''}</option>
+                  ))}
+                </select>
               </div>
-            </form>
-          </div>
-        </div>
+              <div>
+                <label className="label">Code (optional)</label>
+                <input className="input w-full" placeholder="e.g. ER-01" value={form.code} maxLength={60} onChange={(e) => set('code', e.target.value)} />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="label">Country (optional)</label>
+                <input className="input w-full" placeholder="e.g. Saudi Arabia" value={form.country} maxLength={120} onChange={(e) => set('country', e.target.value)} />
+              </div>
+              <div>
+                <label className="label">Site ref (optional)</label>
+                <input className="input w-full" placeholder="e.g. SITE-204" value={form.site_ref} maxLength={200} onChange={(e) => set('site_ref', e.target.value)} />
+              </div>
+              <div>
+                <label className="label">Sort order (optional)</label>
+                <input className="input w-full" type="number" step="1" placeholder="0" value={form.sort_order} onChange={(e) => set('sort_order', e.target.value)} />
+              </div>
+            </div>
+            <div>
+              <label className="label">Notes (optional)</label>
+              <textarea className="input w-full min-h-[70px] resize-y" placeholder="e.g. covers all eastern-province depots" value={form.notes} maxLength={8000} onChange={(e) => set('notes', e.target.value)} />
+            </div>
+            <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer">
+              <input type="checkbox" className="accent-indigo-500" checked={form.active} onChange={(e) => set('active', e.target.checked)} />
+              Active unit
+            </label>
+
+            {formError && (
+              <div className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
+                <AlertTriangle size={15} className="mt-0.5 shrink-0" /> {formError}
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button type="button" onClick={closeModal} className="btn-secondary text-sm" disabled={saving}>Cancel</button>
+              <button type="submit" className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={saving}>
+                {saving ? 'Saving…' : editing ? 'Save changes' : 'Create unit'}
+              </button>
+            </div>
+          </form>
+        </Modal>
       )}
 
-      {/* Assign / edit member modal */}
+      {/* Assign / edit member modal. Same in-flight guard, now shared by all
+          three close paths through `closeAssignModal`; the unit name keeps its
+          icon by riding Modal's `subtitle` slot. */}
       {showAssignModal && assignForm && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" onClick={closeAssignModal}>
-          <div className="card w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-1">
-              <h3 className="text-lg font-bold text-[var(--text-primary)]">{editingAssignment ? 'Edit assignment' : 'Assign user'}</h3>
-              <button onClick={closeAssignModal} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
-            </div>
-            <p className="text-xs text-[var(--text-muted)] mb-4 inline-flex items-center gap-1.5">
-              <Network size={12} className="opacity-60" /> {selectedUnit?.name}
-            </p>
-            <form onSubmit={submitAssignment} className="space-y-4">
-              <div>
-                <label className="label">User</label>
-                {editingAssignment ? (
-                  <div className="input w-full flex items-center gap-2 !cursor-default">
-                    <span className="font-medium text-[var(--text-primary)]">{userLabel(assignForm.user_id).name}</span>
-                    {userLabel(assignForm.user_id).sub && <span className="text-[11px] text-[var(--text-muted)]">{userLabel(assignForm.user_id).sub}</span>}
-                  </div>
-                ) : (
-                  <select className="input w-full" value={assignForm.user_id} onChange={(e) => setAssign('user_id', e.target.value)}>
-                    <option value="">— Select a user —</option>
-                    {assignableProfiles.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {(p.full_name || p.username || p.email || 'Unnamed user')}{p.email ? ` · ${p.email}` : (p.role ? ` · ${p.role}` : '')}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                {!editingAssignment && assignableProfiles.length === 0 && (
-                  <p className="text-[11px] text-[var(--text-muted)] mt-1">Every known user is already assigned to this unit.</p>
-                )}
-              </div>
-              <div>
-                <label className="label">Role at this unit (optional)</label>
-                <input className="input w-full" placeholder="e.g. Branch Manager" value={assignForm.role} maxLength={80} onChange={(e) => setAssign('role', e.target.value)} />
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="label">Starts (optional)</label>
-                  <input className="input w-full" type="date" value={assignForm.starts_at} onChange={(e) => setAssign('starts_at', e.target.value)} />
+        <Modal
+          open
+          onClose={closeAssignModal}
+          size="md"
+          title={editingAssignment ? 'Edit assignment' : 'Assign user'}
+          subtitle={<span className="inline-flex items-center gap-1.5"><Network size={12} className="opacity-60" /> {selectedUnit?.name}</span>}
+        >
+          <form onSubmit={submitAssignment} className="space-y-4">
+            <div>
+              <label className="label">User</label>
+              {editingAssignment ? (
+                <div className="input w-full flex items-center gap-2 !cursor-default">
+                  <span className="font-medium text-[var(--text-primary)]">{userLabel(assignForm.user_id).name}</span>
+                  {userLabel(assignForm.user_id).sub && <span className="text-[11px] text-[var(--text-muted)]">{userLabel(assignForm.user_id).sub}</span>}
                 </div>
-                <div>
-                  <label className="label">Ends (optional)</label>
-                  <input className="input w-full" type="date" value={assignForm.ends_at} onChange={(e) => setAssign('ends_at', e.target.value)} />
-                </div>
-              </div>
-              <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer">
-                <input type="checkbox" className="accent-amber-500" checked={assignForm.is_primary} onChange={(e) => setAssign('is_primary', e.target.checked)} />
-                <Star size={13} className="text-amber-400" /> Primary unit for this user
-              </label>
-
-              {assignError && (
-                <div className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
-                  <AlertTriangle size={15} className="mt-0.5 shrink-0" /> {assignError}
-                </div>
+              ) : (
+                <select className="input w-full" value={assignForm.user_id} onChange={(e) => setAssign('user_id', e.target.value)}>
+                  <option value="">— Select a user —</option>
+                  {assignableProfiles.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {(p.full_name || p.username || p.email || 'Unnamed user')}{p.email ? ` · ${p.email}` : (p.role ? ` · ${p.role}` : '')}
+                    </option>
+                  ))}
+                </select>
               )}
-
-              <div className="flex items-center justify-end gap-2 pt-1">
-                <button type="button" onClick={closeAssignModal} className="btn-secondary text-sm" disabled={assignSaving}>Cancel</button>
-                <button type="submit" className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={assignSaving || (!editingAssignment && !assignForm.user_id)}>
-                  {assignSaving ? 'Saving…' : editingAssignment ? 'Save changes' : 'Assign user'}
-                </button>
+              {!editingAssignment && assignableProfiles.length === 0 && (
+                <p className="text-[11px] text-[var(--text-muted)] mt-1">Every known user is already assigned to this unit.</p>
+              )}
+            </div>
+            <div>
+              <label className="label">Role at this unit (optional)</label>
+              <input className="input w-full" placeholder="e.g. Branch Manager" value={assignForm.role} maxLength={80} onChange={(e) => setAssign('role', e.target.value)} />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="label">Starts (optional)</label>
+                <input className="input w-full" type="date" value={assignForm.starts_at} onChange={(e) => setAssign('starts_at', e.target.value)} />
               </div>
-            </form>
-          </div>
-        </div>
+              <div>
+                <label className="label">Ends (optional)</label>
+                <input className="input w-full" type="date" value={assignForm.ends_at} onChange={(e) => setAssign('ends_at', e.target.value)} />
+              </div>
+            </div>
+            <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer">
+              <input type="checkbox" className="accent-amber-500" checked={assignForm.is_primary} onChange={(e) => setAssign('is_primary', e.target.checked)} />
+              <Star size={13} className="text-amber-400" /> Primary unit for this user
+            </label>
+
+            {assignError && (
+              <div className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
+                <AlertTriangle size={15} className="mt-0.5 shrink-0" /> {assignError}
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button type="button" onClick={closeAssignModal} className="btn-secondary text-sm" disabled={assignSaving}>Cancel</button>
+              <button type="submit" className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={assignSaving || (!editingAssignment && !assignForm.user_id)}>
+                {assignSaving ? 'Saving…' : editingAssignment ? 'Save changes' : 'Assign user'}
+              </button>
+            </div>
+          </form>
+        </Modal>
       )}
 
-      {/* Remove assignment confirm */}
+      {/* Remove assignment confirm. No form here, so the actions belong in
+          Modal's pinned footer. The backdrop's `!removing` guard moves onto
+          `onClose`, which now also governs Escape and the X - the old markup
+          had no close button at all, so a keyboard user could only leave by
+          pressing one of the two buttons. */}
       {confirmRemove && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" onClick={() => !removing && setConfirmRemove(null)}>
-          <div className="card w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-full bg-red-900/30 flex items-center justify-center shrink-0"><Trash2 size={18} className="text-red-400" /></div>
-              <div>
-                <h3 className="text-[var(--text-primary)] font-semibold">Remove this assignment?</h3>
-                <p className="text-sm text-[var(--text-muted)] mt-1">
-                  {userLabel(confirmRemove.user_id).name} will no longer be a member of {selectedUnit?.name}. This can’t be undone.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center justify-end gap-2 mt-5">
+        <Modal
+          open
+          onClose={() => { if (!removing) setConfirmRemove(null) }}
+          size="sm"
+          title="Remove this assignment?"
+          footer={(
+            <>
               <button onClick={() => setConfirmRemove(null)} className="btn-secondary text-sm" disabled={removing}>Cancel</button>
               <button onClick={doRemoveAssignment} className="btn-danger text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={removing}>
                 <Trash2 size={14} /> {removing ? 'Removing…' : 'Remove'}
               </button>
-            </div>
+            </>
+          )}
+        >
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-full bg-red-900/30 flex items-center justify-center shrink-0"><Trash2 size={18} className="text-red-400" /></div>
+            <p className="text-sm text-[var(--text-muted)]">
+              {userLabel(confirmRemove.user_id).name} will no longer be a member of {selectedUnit?.name}. This can’t be undone.
+            </p>
           </div>
-        </div>
+        </Modal>
       )}
 
-      {/* Delete confirm */}
+      {/* Delete confirm. The consequence line is the affordance that makes this
+          dialog honest - child units are re-parented and their assignments are
+          removed - so it is carried over word for word. */}
       {confirmDelete && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" onClick={() => !deleting && setConfirmDelete(null)}>
-          <div className="card w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-full bg-red-900/30 flex items-center justify-center shrink-0"><Trash2 size={18} className="text-red-400" /></div>
-              <div>
-                <h3 className="text-[var(--text-primary)] font-semibold">Delete this unit?</h3>
-                <p className="text-sm text-[var(--text-muted)] mt-1">
-                  {confirmDelete.name || 'Unit'}{confirmDelete.code ? ` · #${confirmDelete.code}` : ''}. Child units become root-level; their user assignments are removed. This can’t be undone.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center justify-end gap-2 mt-5">
+        <Modal
+          open
+          onClose={() => { if (!deleting) setConfirmDelete(null) }}
+          size="sm"
+          title="Delete this unit?"
+          footer={(
+            <>
               <button onClick={() => setConfirmDelete(null)} className="btn-secondary text-sm" disabled={deleting}>Cancel</button>
               <button onClick={doDelete} className="btn-danger text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={deleting}>
                 <Trash2 size={14} /> {deleting ? 'Deleting…' : 'Delete'}
               </button>
-            </div>
+            </>
+          )}
+        >
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-full bg-red-900/30 flex items-center justify-center shrink-0"><Trash2 size={18} className="text-red-400" /></div>
+            <p className="text-sm text-[var(--text-muted)]">
+              {confirmDelete.name || 'Unit'}{confirmDelete.code ? ` · #${confirmDelete.code}` : ''}. Child units become root-level; their user assignments are removed. This can’t be undone.
+            </p>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   )

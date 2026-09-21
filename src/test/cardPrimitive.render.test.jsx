@@ -104,6 +104,22 @@ describe('Card primitive', () => {
     expect(el.style.background).toBe('var(--card-from)')
   })
 
+  it('lets a semantic header icon keep its colour, defaulting to muted', () => {
+    // TWO migrations refused CardHeader rather than lose an amber Trophy or a
+    // green Wallet. A kit that costs you meaning on the pages whose icons carry
+    // meaning is the worse choice, so it loses - that is why iconTone exists.
+    const Dot = (props) => <svg {...props} data-testid="ic" />
+    const muted = render(<CardHeader title="Plain" icon={Dot} />)
+    expect(muted.getByTestId('ic').style.color).toBe('var(--text-muted)')
+
+    const warn = render(<CardHeader title="League" icon={Dot} iconTone="warn" />)
+    expect(warn.getAllByTestId('ic').at(-1).style.color).toBe('rgb(245, 165, 36)')
+
+    // An unknown tone must fall back, never render an invalid colour.
+    const junk = render(<CardHeader title="Odd" icon={Dot} iconTone="banana" />)
+    expect(junk.getAllByTestId('ic').at(-1).style.color).toBe('var(--text-muted)')
+  })
+
   describe('the hover cue must survive (regression)', () => {
     /**
      * Card sets `border` and `box-shadow` inline so stray `border-*` utilities

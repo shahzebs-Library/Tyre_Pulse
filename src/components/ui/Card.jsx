@@ -58,6 +58,21 @@ const TONE_BORDER = {
 }
 
 /**
+ * Icon colour for CardHeader. The BORDER tones above are deliberately mixed
+ * toward the card edge so a wall of cards stays calm; an ICON is a small mark
+ * on a neutral surface and needs the colour at full strength to read at 16px.
+ * Same hues, different job - do not collapse the two maps.
+ */
+const ICON_TONE = {
+  muted: 'var(--text-muted)',
+  info: '#38bdf8',
+  good: '#22c55e',
+  warn: '#f5a524',
+  crit: '#f26161',
+  accent: 'var(--accent)',
+}
+
+/**
  * @param {'default'|'tight'|'none'} pad     padding step (density-aware)
  * @param {'default'|'info'|'good'|'warn'|'crit'} tone  border tint only — never
  *        the whole surface, so a wall of cards stays scannable
@@ -127,6 +142,12 @@ const Card = forwardRef(function Card(
  * as a defect, and which is invisible at desktop width. Put a multi-button
  * group on its own wrapping row beneath the header instead.
  *
+ * `iconTone` exists because TWO separate migrations refused to adopt CardHeader
+ * rather than lose a semantic icon colour - an amber Trophy, a green Wallet.
+ * Forcing every icon to muted made the kit the WORSE choice on exactly the
+ * pages whose icons carry meaning, so the kit lost. Default stays muted: an
+ * icon that is pure decoration must not compete with the title.
+ *
  * Note the padding asymmetry with `Card`: CardHeader sets NO inline padding, so
  * `px-*`/`py-*` classes work here. It does set `marginBottom` inline, which is
  * why overriding that needs `!mb-0`.
@@ -137,6 +158,7 @@ export function CardHeader({
   actions,
   level = 3,
   icon: Icon,
+  iconTone = 'muted',
   className = '',
   children,
 }) {
@@ -148,7 +170,7 @@ export function CardHeader({
     >
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-[var(--space-2)] min-w-0">
-          {Icon && <Icon size={16} aria-hidden="true" style={{ color: 'var(--text-muted)', flexShrink: 0 }} />}
+          {Icon && <Icon size={16} aria-hidden="true" style={{ color: ICON_TONE[iconTone] ?? ICON_TONE.muted, flexShrink: 0 }} />}
           {title && (
             <H
               className="truncate"

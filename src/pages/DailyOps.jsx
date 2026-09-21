@@ -20,6 +20,8 @@ import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
 import { exportDailyOpsBriefingPdf } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
+import Card from '../components/ui/Card'
+import Modal from '../components/ui/Modal'
 import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import { useLanguage } from '../contexts/LanguageContext'
 import { isOverdueWorkOrder } from '../lib/dailyOpsPriority'
@@ -431,7 +433,9 @@ export default function DailyOps() {
   function WeekTrend({ curr, prev, label, prefix = '' }) {
     const { val, pct } = weekDelta(curr, prev)
     return (
-      <div className="card p-4">
+      // `p-4` as a class would be DEAD here: Card sets padding inline and wins.
+      // Its default `--pad-card` is density-aware, which is the point.
+      <Card>
         <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">{label}</p>
         <p className="text-2xl font-bold text-[var(--text-primary)] tabular-nums">{prefix}{typeof curr === 'number' ? curr.toLocaleString() : curr}</p>
         <div className={`flex items-center gap-1 mt-1 text-xs font-semibold ${val > 0 ? 'text-red-400' : val < 0 ? 'text-green-400' : 'text-gray-500'}`}>
@@ -444,7 +448,7 @@ export default function DailyOps() {
             pct,
           }) : t('dailyops.weekSummary.sameAsLastWeek')}
         </div>
-      </div>
+      </Card>
     )
   }
 
@@ -668,7 +672,7 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
           )}
 
           {/* Owned operational work: the writable system-of-record queue. */}
-          <section className="card space-y-3" aria-labelledby="daily-work-heading">
+          <Card as="section" className="space-y-3" aria-labelledby="daily-work-heading">
             <div className="flex flex-col lg:flex-row lg:items-center gap-3">
               <div className="mr-auto">
                 <h2 id="daily-work-heading" className="text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider">Operational work</h2>
@@ -729,9 +733,9 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
                 ))}
               </div>
             )}
-          </section>
+          </Card>
 
-          <section className="card space-y-3" aria-labelledby="shift-handover-heading">
+          <Card as="section" className="space-y-3" aria-labelledby="shift-handover-heading">
             <div className="flex flex-col md:flex-row md:items-start gap-3">
               <div className="flex-1"><h2 id="shift-handover-heading" className="text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider">Shift handover</h2><p className="text-xs text-[var(--text-muted)] mt-1">Submit the filtered open work with an accountable handover note.</p></div>
               <span className="text-xs text-[var(--text-muted)]">{visibleActions.filter((item) => !['resolved', 'dismissed'].includes(item.status)).length} open items included</span>
@@ -744,7 +748,7 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
                 {handover.status === 'submitted' && (isSuperAdmin || ['Admin', 'Manager', 'Supervisor'].includes(profile?.role)) && <button type="button" className="btn-primary text-xs" onClick={async () => { try { const row = await reviewShiftHandover(handover.id, true); setHandovers((all) => all.map((h) => h.id === handover.id ? { ...h, ...row } : h)) } catch (err) { setActionError(err?.message || 'Could not accept handover.') } }}>Accept handover</button>}
               </div>)}
             </div>}
-          </section>
+          </Card>
 
           {/* Priority Action Queue */}
           <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
@@ -773,14 +777,17 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
             </div>
 
             {priorityQueue.length === 0 ? (
-              <div className="card p-6 flex items-center gap-3 text-green-400">
+              // `flex-row` cannot win against Card's own `flex-col` (Tailwind emits
+              // .flex-col last), so row direction is set inline. `p-6` is dropped:
+              // Card's padding is inline and a class would be dead.
+              <Card className="items-center gap-[var(--space-3)] text-green-400" style={{ flexDirection: 'row' }}>
                 <CheckCircle2 size={20} />
                 <span className="text-sm font-medium">{t('dailyops.priorityQueue.allClear')}</span>
-              </div>
+              </Card>
             ) : visibleQueue.length === 0 ? (
-              <div className="card p-6 text-center text-sm text-[var(--text-muted)]">
+              <Card className="text-center text-sm text-[var(--text-muted)]">
                 No {queueSeverity.toLowerCase()} priority actions for this date.
-              </div>
+              </Card>
             ) : (
               <div className="space-y-2">
                 <AnimatePresence>
@@ -830,19 +837,25 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
               <Activity size={14} className="text-green-400" /> {t('dailyops.stats.title')}
             </h2>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              {/* The per-tile `bg-*` and `border-*` classes these tiles used to carry
+                  were dead the moment they moved onto Card, which sets background and
+                  border inline. The tint is carried by `tone` instead, which tints the
+                  EDGE only so a wall of tiles stays scannable. Work Orders keeps the
+                  default edge because the kit has no purple tone; its identity still
+                  reads from the icon and number colour, which are unchanged. */}
               {[
-                { label: t('dailyops.stats.tyreChanges'), value: todayRecs.length, icon: CircleDot, color: 'text-green-400', bg: 'bg-green-900/20', border: 'border-green-800/40' },
-                { label: t('dailyops.stats.inspections'), value: todayIns.length, icon: ClipboardList, color: 'text-blue-400', bg: 'bg-blue-900/20', border: 'border-blue-800/40' },
-                { label: t('dailyops.stats.workOrders'), value: todayWO.length, icon: Wrench, color: 'text-purple-400', bg: 'bg-purple-900/20', border: 'border-purple-800/40' },
-                { label: t('dailyops.stats.alertsRaised'), value: todayAlerts.length, icon: Bell, color: 'text-red-400', bg: 'bg-red-900/20', border: 'border-red-800/40' },
-              ].map(({ label, value, icon: Icon, color, bg, border }) => (
-                <motion.div key={label} whileHover={{ y: -2 }} className={`card p-4 ${bg} border ${border}`}>
+                { label: t('dailyops.stats.tyreChanges'), value: todayRecs.length, icon: CircleDot, color: 'text-green-400', tone: 'good' },
+                { label: t('dailyops.stats.inspections'), value: todayIns.length, icon: ClipboardList, color: 'text-blue-400', tone: 'info' },
+                { label: t('dailyops.stats.workOrders'), value: todayWO.length, icon: Wrench, color: 'text-purple-400', tone: 'default' },
+                { label: t('dailyops.stats.alertsRaised'), value: todayAlerts.length, icon: Bell, color: 'text-red-400', tone: 'crit' },
+              ].map(({ label, value, icon: Icon, color, tone }) => (
+                <Card as={motion.div} key={label} tone={tone} whileHover={{ y: -2 }}>
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-[11px] font-bold uppercase tracking-widest text-gray-500">{label}</p>
                     <Icon size={14} className={color} />
                   </div>
                   <p className={`text-3xl font-bold tabular-nums ${color}`}>{value.toLocaleString()}</p>
-                </motion.div>
+                </Card>
               ))}
             </div>
           </motion.section>
@@ -856,7 +869,9 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
               <h2 className="text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider mb-3 flex items-center gap-2">
                 <Activity size={14} className="text-green-400" /> {t('dailyops.activityFeed.title')}
               </h2>
-              <div className="card p-0 overflow-hidden">
+              {/* `clip` is opt-in on Card. It is right here: the feed is a scroller
+                  with no popover in it, so cropping to the radius is safe. */}
+              <Card pad="none" clip>
                 {activityFeed.length === 0 ? (
                   <div className="p-8 text-center text-gray-500 text-sm">{t('dailyops.activityFeed.empty')}</div>
                 ) : (
@@ -878,7 +893,7 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
                     ))}
                   </div>
                 )}
-              </div>
+              </Card>
             </motion.section>
 
             {/* Fleet Status Snapshot */}
@@ -886,7 +901,7 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
               <h2 className="text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider mb-3 flex items-center gap-2">
                 <Truck size={14} className="text-green-400" /> {t('dailyops.fleetStatus.title')}
               </h2>
-              <div className="card p-4 space-y-4">
+              <Card className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   {[
                     { label: t('dailyops.fleetStatus.activeToday'), value: vehiclesActiveToday, color: 'text-green-400' },
@@ -902,7 +917,7 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
                 <div className="h-48">
                   <Doughnut data={fleetStatusData} options={DOUGHNUT_OPTS} />
                 </div>
-              </div>
+              </Card>
             </motion.section>
           </div>
 
@@ -912,7 +927,7 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
               <h2 className="text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider mb-3 flex items-center gap-2">
                 <Building2 size={14} className="text-green-400" /> {t('dailyops.siteActivity.title')}
               </h2>
-              <div className="card p-4">
+              <Card>
                 {siteActivity.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-48 text-gray-500 text-sm gap-2">
                     <ZapOff size={22} />
@@ -923,14 +938,15 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
                     <Bar data={sitesChartData} options={CHART_OPTS} />
                   </div>
                 )}
-              </div>
+              </Card>
             </motion.section>
 
             <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28 }}>
               <h2 className="text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider mb-3 flex items-center gap-2">
                 <DollarSign size={14} className="text-green-400" /> {t('dailyops.costTracker.title')}
               </h2>
-              <div className="card p-4 flex flex-col gap-3">
+              {/* Card is already `flex flex-col`; only the gap is left as a class. */}
+              <Card className="gap-[var(--space-3)]">
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="text-[11px] text-gray-500 uppercase tracking-wider">{t('dailyops.costTracker.todaysSpend')}</p>
@@ -948,7 +964,7 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
                   <Doughnut data={costDoughnutData} options={DOUGHNUT_OPTS} />
                 </div>
                 {dailyBudget === 0 && <p className="text-xs text-gray-500 text-center">{t('dailyops.costTracker.noBudgetHint')}</p>}
-              </div>
+              </Card>
             </motion.section>
           </div>
 
@@ -983,11 +999,14 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
               <span className="text-xs text-gray-500 normal-case font-normal">(next 7 days)</span>
             </h2>
             {upcomingWOs.length === 0 ? (
-              <div className="card p-5 text-center text-gray-500 text-sm">
+              <Card className="text-center text-gray-500 text-sm">
                 No upcoming work orders in the next 7 days.
-              </div>
+              </Card>
             ) : (
-              <div className="card p-0 overflow-hidden">
+              // Safe to `clip`: the only control inside is TablePagination's native
+              // <select>, whose option list the browser paints outside this overflow
+              // context entirely.
+              <Card pad="none" clip>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
@@ -1017,29 +1036,46 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
                   </table>
                 </div>
                 <TablePagination {...upcomingPager} />
-              </div>
+              </Card>
             )}
           </motion.section>
         </>
       )}
 
+      {/* Both dialogs are Modal now: it owns the focus trap, escape-to-close, the
+          scroll lock, focus return and the viewport height cap that these
+          hand-rolled panels each re-implemented, or skipped. Neither dialog wraps
+          its controls in a <form>, so the buttons move to the pinned footer with
+          no change to how they submit. */}
       {workflowDialog && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="workflow-dialog-title">
-          <div className="card w-full max-w-lg space-y-4">
-            <div><h2 id="workflow-dialog-title" className="font-semibold text-[var(--text-primary)]">{workflowDialog.label}</h2><p className="text-sm text-[var(--text-muted)] mt-1">{workflowDialog.item.title}</p></div>
-            <label className="block text-sm text-[var(--text-secondary)]">Reason / evidence<textarea autoFocus className="input w-full min-h-[100px] mt-1" maxLength={4000} value={workflowReason} onChange={(e) => setWorkflowReason(e.target.value)} required /></label>
-            <div className="flex justify-end gap-2"><button type="button" className="btn-secondary" onClick={() => setWorkflowDialog(null)}>Cancel</button><button type="button" className="btn-primary" disabled={!workflowReason.trim() || actionSaving === workflowDialog.item.id} onClick={confirmTransition}>{actionSaving === workflowDialog.item.id ? 'Saving…' : 'Confirm'}</button></div>
-          </div>
-        </div>
+        <Modal
+          open
+          onClose={() => setWorkflowDialog(null)}
+          size="md"
+          title={workflowDialog.label}
+          subtitle={workflowDialog.item.title}
+          footer={(
+            <>
+              <button type="button" className="btn-secondary" onClick={() => setWorkflowDialog(null)}>Cancel</button>
+              <button type="button" className="btn-primary" disabled={!workflowReason.trim() || actionSaving === workflowDialog.item.id} onClick={confirmTransition}>{actionSaving === workflowDialog.item.id ? 'Saving…' : 'Confirm'}</button>
+            </>
+          )}
+        >
+          <label className="block text-sm text-[var(--text-secondary)]">Reason / evidence<textarea autoFocus className="input w-full min-h-[100px] mt-1" maxLength={4000} value={workflowReason} onChange={(e) => setWorkflowReason(e.target.value)} required /></label>
+        </Modal>
       )}
 
       {historyFor && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="history-dialog-title">
-          <div className="card w-full max-w-2xl max-h-[80vh] overflow-y-auto space-y-4">
-            <div className="flex gap-3"><div className="flex-1"><h2 id="history-dialog-title" className="font-semibold text-[var(--text-primary)]">Action history</h2><p className="text-sm text-[var(--text-muted)]">{historyFor.title}</p></div><button type="button" className="btn-secondary" onClick={() => setHistoryFor(null)}>Close</button></div>
-            {historyLoading ? <p className="text-sm text-[var(--text-muted)]">Loading history…</p> : historyRows.length === 0 ? <p className="text-sm text-[var(--text-muted)]">No recorded transitions yet.</p> : <ol className="border-l border-[var(--input-border)] ml-2 space-y-4">{historyRows.map((event) => <li key={event.id} className="pl-4"><p className="text-sm text-[var(--text-primary)]">{event.event_type?.replaceAll('_', ' ') || 'Updated'}{event.from_status || event.to_status ? ` · ${event.from_status || 'new'} → ${event.to_status || 'updated'}` : ''}</p>{event.reason && <p className="text-sm text-[var(--text-muted)] mt-1">{event.reason}</p>}<time className="text-xs text-[var(--text-muted)]">{new Date(event.created_at).toLocaleString()}</time></li>)}</ol>}
-          </div>
-        </div>
+        <Modal
+          open
+          onClose={() => setHistoryFor(null)}
+          size="lg"
+          title="Action history"
+          subtitle={historyFor.title}
+          footer={<button type="button" className="btn-secondary" onClick={() => setHistoryFor(null)}>Close</button>}
+        >
+          {historyLoading ? <p className="text-sm text-[var(--text-muted)]">Loading history…</p> : historyRows.length === 0 ? <p className="text-sm text-[var(--text-muted)]">No recorded transitions yet.</p> : <ol className="border-l border-[var(--input-border)] ml-2 space-y-4">{historyRows.map((event) => <li key={event.id} className="pl-4"><p className="text-sm text-[var(--text-primary)]">{event.event_type?.replaceAll('_', ' ') || 'Updated'}{event.from_status || event.to_status ? ` · ${event.from_status || 'new'} → ${event.to_status || 'updated'}` : ''}</p>{event.reason && <p className="text-sm text-[var(--text-muted)] mt-1">{event.reason}</p>}<time className="text-xs text-[var(--text-muted)]">{new Date(event.created_at).toLocaleString()}</time></li>)}</ol>}
+        </Modal>
       )}
     </div>
   )

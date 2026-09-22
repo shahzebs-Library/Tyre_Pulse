@@ -179,7 +179,8 @@ void main() {
     _expectNoStateWidget();
   });
 
-  testWidgets('vehicle detail passes authoritative make and model to tyre art', (
+  testWidgets('vehicle detail passes authoritative make and model to tyre art',
+      (
     WidgetTester tester,
   ) async {
     const String busAssetNo = 'BH021';

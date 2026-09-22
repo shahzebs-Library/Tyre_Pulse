@@ -138,7 +138,8 @@ void main() {
     },
   );
 
-  testWidgets('tyre step uses only an exact cached fleet hit for bus identity', (
+  testWidgets('tyre step uses only an exact cached fleet hit for bus identity',
+      (
     WidgetTester tester,
   ) async {
     final List<String> positions = diagramPositions('Bus', 'BH021');

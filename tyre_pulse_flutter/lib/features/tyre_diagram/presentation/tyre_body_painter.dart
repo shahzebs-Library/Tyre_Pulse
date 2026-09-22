@@ -67,6 +67,25 @@ String tyreDiagramBodyAsset(TyreDiagramBodyKey bodyKey) {
   };
 }
 
+/// Presentation instructions for an approved orthographic vehicle photograph.
+///
+/// The five-view top assets are square source plates whose vehicles fill the
+/// vertical axis. [BoxFit.cover] crops their empty side gutters inside the
+/// tall tyre stage, while [quarterTurns] aligns their photographed front with
+/// the map's canonical FRONT-at-top direction. The source pixels stay intact.
+@immutable
+class TyreDiagramPhotoSpec {
+  const TyreDiagramPhotoSpec({
+    required this.asset,
+    this.fit = BoxFit.contain,
+    this.quarterTurns = 0,
+  });
+
+  final String asset;
+  final BoxFit fit;
+  final int quarterTurns;
+}
+
 /// Returns the approved orthographic vehicle photograph used by the focused
 /// inspection map. These are deliberately separate from the three-quarter
 /// fleet-card photos resolved by `vehicle_photo_resolver.dart`: putting a
@@ -75,25 +94,51 @@ String tyreDiagramBodyAsset(TyreDiagramBodyKey bodyKey) {
 ///
 /// The tyre controls remain native widgets and retain their canonical
 /// position ids; this asset replaces only the visual body layer.
-String? tyreDiagramVehiclePhotoAsset(TyreDiagramBodyKey bodyKey) {
+TyreDiagramPhotoSpec? tyreDiagramVehiclePhotoSpec(
+  TyreDiagramBodyKey bodyKey,
+) {
   return switch (bodyKey) {
-    TyreDiagramBodyKey.pickup => 'assets/vehicle_photos/pickup.png',
-    TyreDiagramBodyKey.wheelLoader => 'assets/vehicle_photos/wheel_loader.png',
+    TyreDiagramBodyKey.pickup =>
+      const TyreDiagramPhotoSpec(asset: 'assets/vehicle_photos/pickup.png'),
+    TyreDiagramBodyKey.wheelLoader => const TyreDiagramPhotoSpec(
+        asset: 'assets/vehicle_photos/wheel_loader.png',
+      ),
     TyreDiagramBodyKey.skidLoader =>
-      'assets/vehicle_photos/skid_loader_top_down_v2.png',
+      const TyreDiagramPhotoSpec(
+        asset: 'assets/vehicle_photos/skid_loader_top_down_v2.png',
+      ),
     TyreDiagramBodyKey.triMixer =>
-      'assets/vehicle_photos/tri_mixer_top_down.webp',
+      const TyreDiagramPhotoSpec(
+        asset: 'assets/vehicle_photos/tri_mixer_top_down.webp',
+      ),
     TyreDiagramBodyKey.linePump =>
-      'assets/vehicle_photos/line_pump_top_down_v2.png',
+      const TyreDiagramPhotoSpec(
+        asset: 'assets/vehicle_photos/line_pump_top_down_v2.png',
+      ),
     TyreDiagramBodyKey.concretePump =>
-      'assets/vehicle_photos/concrete_pump_top_down.webp',
+      const TyreDiagramPhotoSpec(
+        asset: 'assets/vehicle_photos/concrete_pump_top_down.webp',
+      ),
+    TyreDiagramBodyKey.bus => const TyreDiagramPhotoSpec(
+        asset:
+            'assets/vehicle_multiview_views/generic_staff_bus_five_view_v1_top.png',
+        fit: BoxFit.cover,
+        quarterTurns: 2,
+      ),
+    // The canter body key is also shared by Truck 6x4, Tanker and Trailer.
+    // No truthful top-down photograph exists for that group. The available
+    // Tata and Ashok Leyland top views are staff buses, while these two body
+    // keys represent heavy trucks. Keep the exact production SVGs instead of
+    // substituting visually plausible but physically wrong vehicles.
     TyreDiagramBodyKey.canter ||
-    TyreDiagramBodyKey.bus ||
     TyreDiagramBodyKey.tata ||
     TyreDiagramBodyKey.ashokLeyland =>
       null,
   };
 }
+
+String? tyreDiagramVehiclePhotoAsset(TyreDiagramBodyKey bodyKey) =>
+    tyreDiagramVehiclePhotoSpec(bodyKey)?.asset;
 
 /// Renders [bodyKey]'s real artwork, sized to exactly fill [viewport].
 class TyreDiagramBody extends StatefulWidget {
@@ -126,26 +171,31 @@ class _TyreDiagramBodyState extends State<TyreDiagramBody>
   @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
-    final String? photoAsset = tyreDiagramVehiclePhotoAsset(widget.bodyKey);
+    final TyreDiagramPhotoSpec? photo = tyreDiagramVehiclePhotoSpec(
+      widget.bodyKey,
+    );
     return SizedBox(
       width: widget.viewport.width,
       height: widget.viewport.height,
       child: Stack(
         fit: StackFit.expand,
         children: <Widget>[
-          if (photoAsset != null)
-            Image.asset(
-              photoAsset,
-              key: ValueKey<String>('diagram.body.$photoAsset'),
-              fit: BoxFit.contain,
-              filterQuality: FilterQuality.high,
-              excludeFromSemantics: true,
-              errorBuilder: (
-                BuildContext context,
-                Object error,
-                StackTrace? stack,
-              ) =>
-                  const SizedBox.shrink(),
+          if (photo != null)
+            RotatedBox(
+              quarterTurns: photo.quarterTurns,
+              child: Image.asset(
+                photo.asset,
+                key: ValueKey<String>('diagram.body.${photo.asset}'),
+                fit: photo.fit,
+                filterQuality: FilterQuality.high,
+                excludeFromSemantics: true,
+                errorBuilder: (
+                  BuildContext context,
+                  Object error,
+                  StackTrace? stack,
+                ) =>
+                    const SizedBox.shrink(),
+              ),
             )
           else
             SvgPicture.asset(

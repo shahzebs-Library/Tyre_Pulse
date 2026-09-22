@@ -1,0 +1,39 @@
+name: Codex Dart Format Capture
+
+on:
+  pull_request:
+    paths:
+      - "tyre_pulse_flutter/**"
+      - ".github/workflows/codex-dart-format-capture.yml"
+
+jobs:
+  format_capture:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: tyre_pulse_flutter
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.2
+          cache: true
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Format changed Dart files and emit exact bytes
+        run: |
+          dart format lib/features/tyre_diagram/presentation/tyre_body_painter.dart lib/features/tyre_diagram/presentation/vehicle_tyre_diagram.dart test/features/tyre_diagram/presentation/vehicle_tyre_diagram_test.dart
+          Write-Output "BODY_B64_START"
+          Write-Output ([Convert]::ToBase64String([IO.File]::ReadAllBytes("lib/features/tyre_diagram/presentation/tyre_body_painter.dart")))
+          Write-Output "BODY_B64_END"
+          Write-Output "DIAGRAM_B64_START"
+          Write-Output ([Convert]::ToBase64String([IO.File]::ReadAllBytes("lib/features/tyre_diagram/presentation/vehicle_tyre_diagram.dart")))
+          Write-Output "DIAGRAM_B64_END"
+          Write-Output "TEST_B64_START"
+          Write-Output ([Convert]::ToBase64String([IO.File]::ReadAllBytes("test/features/tyre_diagram/presentation/vehicle_tyre_diagram_test.dart")))
+          Write-Output "TEST_B64_END"

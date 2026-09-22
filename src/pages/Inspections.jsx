@@ -58,10 +58,10 @@ import { formatDate } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
 import * as userSignatureApi from '../lib/api/userSignature'
 import { normaliseSignature } from '../lib/savedSignature'
+import { canSignInspection } from '../lib/inspectionApproval'
 // The role set that already reaches the app's Approvals surface (mirrored from
 // Layout.jsx nav + the /approvals route). Reused so inspection sign-off does not
 // introduce a second, drifting idea of who may approve.
-import { ANALYTICS_ROLES } from '../lib/commandSearch'
 import { loadAutoTable } from '../lib/pdfEngine'
 import { resolveStorageUrl } from '../lib/storageRefs'
 import { getTyreRunningLife } from '../lib/api/tyreRunningLife'
@@ -787,7 +787,7 @@ function buildApprovalEmailHtml({ assetNo, inspector, date, site, odometer, hour
 }
 
 export default function Inspections() {
-  const { profile, loading: authLoading, isSuperAdmin, hasCapability } = useAuth()
+  const { profile, loading: authLoading, isSuperAdmin } = useAuth()
   const { activeCountry, appSettings } = useSettings()
   const { branding } = useTenant()
   const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
@@ -806,22 +806,17 @@ export default function Inspections() {
    *
    * The set is deliberately the SAME shape on both sides: a screen that refuses
    * someone the server allows is just as broken as one that offers a control the
-   * server will reject. ANALYTICS_ROLES is reused (it is the app's existing
-   * Admin/Manager/Director set, mirrored from Layout.jsx nav and the /approvals
-   * route) plus the checklist-only Maintenance Supervisor the RPC also admits.
+   * server will reject. It is therefore read from `canSignInspection`, the one
+   * mirror of the RPC's own role list, rather than assembled here.
    *
-   * Super admin passes as everywhere, and an explicit per-user 'approve' grant on the
-   * inspections module still opens it - the documented way an admin extends an action
-   * to one person. NOTE that a grant only changes what this SCREEN offers: if the RPC
-   * does not recognise that person's role it will still refuse, and the refusal is
-   * shown rather than swallowed.
+   * THE LIST THAT USED TO SIT HERE WAS WRONG IN BOTH DIRECTIONS, and the comment
+   * describing it was stale: it reused ANALYTICS_ROLES (Admin/Manager/Director)
+   * plus Maintenance Supervisor, none of which the RPC has admitted since V600,
+   * while omitting PMV Manager and both area-manager roles, which it does. A
+   * per-user 'approve' capability is no longer consulted either - the RPC is a
+   * bare role test, so a grant could only ever produce a button that fails.
    */
-  const APPROVER_ROLES = [...ANALYTICS_ROLES, 'Maintenance Supervisor', 'Tyre Data Collector']
-  const canApproveInspection = Boolean(
-    isSuperAdmin
-    || APPROVER_ROLES.includes(profile?.role)
-    || hasCapability?.('inspections', 'approve'),
-  )
+  const canApproveInspection = canSignInspection(profile?.role, { isSuperAdmin })
   const { rows: inspectionRows, loading, error: loadError, reload: load } = useInspectionRegister({
     country: activeCountry,
     actorId: profile?.id,

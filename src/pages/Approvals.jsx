@@ -29,6 +29,7 @@ import {
   canDecide, stageFor, stageLabel, statusSummary, isTwoStage, STAGE_SUPERVISOR,
 } from '../lib/checklist/checklistApproval'
 import { canClose } from '../lib/checklist/checklistMarks'
+import { canSignInspection } from '../lib/inspectionApproval'
 import { getMySignature } from '../lib/api/userSignature'
 import { isUsableSignature } from '../lib/savedSignature'
 import { templateFromSubmission, submissionAnswers } from '../lib/checklistView'
@@ -565,7 +566,16 @@ function LegacySimpleApprovalDrawer({ item, canAct, onClose, onActed }) {
     profile?.role,
     { isSuperAdmin: !!profile?.is_super_admin },
   )
-  const mayAct = isChecklistish ? mayDecideChecklist : canAct
+  // An inspection has its own signer list in the RPC, which is NOT the
+  // Admin/Manager/Director set `canAct` carries: a Manager or Director is
+  // refused, and a PMV manager, either area manager or a Tyre Data Collector is
+  // accepted. Asking the shared predicate keeps this button in step with the
+  // database instead of hiding it from the people who can actually sign.
+  const mayDecideInspection = item.source === SOURCE.inspection
+    && canSignInspection(profile?.role, { isSuperAdmin: !!profile?.is_super_admin })
+  const mayAct = isChecklistish
+    ? mayDecideChecklist
+    : (item.source === SOURCE.inspection ? mayDecideInspection : canAct)
 
   // An inspection sign-off is a signature too. The register has always refused
   // to approve one without a mark; the queue silently stored an approval with

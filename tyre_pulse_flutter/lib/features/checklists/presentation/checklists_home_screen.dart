@@ -7,13 +7,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:tyre_pulse/app/localization/tp_direction.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
-import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
 import 'package:tyre_pulse/core/permissions/module_registry.dart';
 import 'package:tyre_pulse/core/permissions/permission_providers.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
@@ -948,15 +948,14 @@ class _SelectedChecklistAssetCard extends StatelessWidget {
 }
 
 class _AssetFact extends StatelessWidget {
-  const _AssetFact({required this.icon, required this.value, this.color});
+  const _AssetFact({required this.icon, required this.value});
 
   final IconData icon;
   final String value;
-  final Color? color;
 
   @override
   Widget build(BuildContext context) {
-    final Color ink = color ?? TpPalette.of(context).textSecondary;
+    final Color ink = TpPalette.of(context).textSecondary;
     return Row(
       children: <Widget>[
         Icon(icon, size: TpSizing.iconMd, color: ink),

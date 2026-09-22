@@ -48,6 +48,26 @@ abstract final class SupabaseTables {
   /// approvals queue a QUERY rather than an endpoint.
   static const String inspections = 'inspections';
 
+  /// Planned inspections - what a crew is SUPPOSED to do, as opposed to
+  /// [inspections], which is what they did.
+  ///
+  /// VERIFIED 2026-09-21 against the live database, not transcribed from an
+  /// artifact: the table already existed, and migration
+  /// `20260921074351_inspection_plan_adherence.sql` (applied and recorded in
+  /// `supabase_migrations`) added `assigned_to`, `team`, `plan_ref` and
+  /// `grace_days` to it. 244 real plans were loaded under
+  /// `plan_ref = 'PLAN-20260921-BACKLOG-KSA'`. RLS was read directly: SELECT is
+  /// open to any approved member and then narrowed by RESTRICTIVE org and
+  /// country isolation, so a plain `.eq('assigned_to', me)` read is already
+  /// scoped to this user's own tenant without the client asserting anything.
+  ///
+  /// Adherence (done / missed / due) is DERIVED server-side by
+  /// `get_schedule_adherence()` and is deliberately NOT stored on this table -
+  /// a stored state goes stale the moment an inspection lands. The phone reads
+  /// the plan rows and computes the same states locally through
+  /// `InspectionPlanState`, which is a MIRROR of that SQL.
+  static const String inspectionSchedules = 'inspection_schedules';
+
   static const String accidents = 'accidents';
 
   /// User profile. `country` and `sites` are `text[]`, NOT scalars - the type
@@ -150,6 +170,7 @@ abstract final class SupabaseTables {
   static const Set<String> all = <String>{
     vehicleFleet,
     inspections,
+    inspectionSchedules,
     accidents,
     profiles,
     tyreRecords,
@@ -286,6 +307,24 @@ abstract final class SupabaseRpcs {
   /// paged every tyre record into device memory.
   static const String getMobileAnalytics = 'get_mobile_analytics';
 
+  /// Inspection plans in a window, each already joined to the inspection that
+  /// fulfilled it, with the resulting state.
+  ///
+  /// VERIFIED 2026-09-21: created by migration
+  /// `20260921074351_inspection_plan_adherence.sql`, SECURITY INVOKER, granted
+  /// to `authenticated`, anon revoked by `20260921084516`. Signature
+  /// `(p_country text, p_from date, p_to date)`.
+  ///
+  /// THE PHONE CALLS THIS RATHER THAN COMPUTING STATE ITSELF, and that is the
+  /// whole point: done / started / missed / due is already defined ONCE in SQL
+  /// `inspection_plan_state()` and mirrored ONCE in the web engine
+  /// (`src/lib/schedulePlan.js`). A third copy in Dart would be a third thing
+  /// to keep in step, and the matching rule it would have to reproduce (an
+  /// inspection on that vehicle inside the plan's grace window) is exactly the
+  /// kind of rule that drifts silently. The phone parses `plan_state`; it does
+  /// not re-derive it.
+  static const String getScheduleAdherence = 'get_schedule_adherence';
+
   static const String getReportSnapshotAuthed = 'get_report_snapshot_authed';
   static const String getAccidentAudit = 'get_accident_audit';
 
@@ -317,6 +356,7 @@ abstract final class SupabaseRpcs {
     referenceAssetOptions,
     referenceSiteOptions,
     getMobileAnalytics,
+    getScheduleAdherence,
     getReportSnapshotAuthed,
     getAccidentAudit,
   };
@@ -330,6 +370,14 @@ abstract final class SupabaseRpcs {
   static const Set<String> setReturning = <String>{
     referenceAssetOptions,
     referenceSiteOptions,
+
+    /// Returns one row per PLAN in the requested window, so it is capped at
+    /// 1000 like any other read. The phone bounds it by asking for a short
+    /// window (see `InspectionPlanRepository.myPlans`) rather than paging,
+    /// because one crew member's few weeks of work is tens of rows, not
+    /// thousands - but the ceiling is real and the repository reports when a
+    /// result touches it rather than quietly showing a short list.
+    getScheduleAdherence,
   };
 }
 

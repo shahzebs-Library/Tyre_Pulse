@@ -11,10 +11,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tyre_pulse/core/database/app_database.dart';
 import 'package:tyre_pulse/core/database/app_database_provider.dart';
 import 'package:tyre_pulse/core/network/supabase_client_provider.dart';
+import 'package:tyre_pulse/core/workspace/workspace_context.dart';
+import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_draft_repository.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_gps_source.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_photo_capture.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_photo_uploader.dart';
+import 'package:tyre_pulse/features/inspections/data/inspection_plan_repository.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_remote_repository.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_submission_queue.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_sync_engine.dart';
@@ -69,3 +72,39 @@ final Provider<InspectionGpsSource> inspectionGpsSourceProvider =
 final FutureProvider<int> inspectionPendingCountProvider = FutureProvider<int>(
   (ref) => ref.watch(inspectionSubmissionQueueProvider).pendingCount(),
 );
+
+// --- Planned work ------------------------------------------------------------
+
+final Provider<InspectionPlanRepository> inspectionPlanRepositoryProvider =
+    Provider<InspectionPlanRepository>(
+  (ref) => SupabaseInspectionPlanRepository(ref.watch(supabaseClientProvider)),
+);
+
+/// The signed-in person's own planned inspections.
+///
+/// Returns an EMPTY page - not an error - when there is no session yet, so the
+/// screen shows "nothing planned" during sign-in rather than a failure the
+/// user cannot act on. A genuine read failure still propagates, because a crew
+/// member being told they have no work when the server could not be reached is
+/// the one outcome worse than an error message.
+final FutureProvider<InspectionPlanPage> myInspectionPlansProvider =
+    FutureProvider<InspectionPlanPage>((ref) async {
+  final WorkspaceContext? context = ref.watch(workspaceContextProvider);
+  final String userId = context?.userId ?? '';
+  if (userId.isEmpty) return const InspectionPlanPage.empty();
+  return ref.watch(inspectionPlanRepositoryProvider).myPlans(
+        assignedTo: userId,
+        country: context?.activeCountry,
+      );
+});
+
+/// Outstanding planned work (missed + due) for the home badge.
+///
+/// Deliberately NOT total plans: a badge showing next month's work reads as
+/// something needing attention today and stops being looked at.
+final Provider<AsyncValue<int>> outstandingPlanCountProvider =
+    Provider<AsyncValue<int>>((ref) {
+  return ref.watch(myInspectionPlansProvider).whenData(
+        (InspectionPlanPage page) => page.summary.outstanding,
+      );
+});

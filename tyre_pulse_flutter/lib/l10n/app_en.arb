@@ -916,6 +916,60 @@
 
   "checklistHistoryTitle": "Checklist history",
   "@checklistHistoryTitle": {},
+  "myPlansNavTitle": "My plans",
+  "@myPlansNavTitle": {},
+  "myPlansSubtitle": "Inspections assigned to you",
+  "@myPlansSubtitle": {},
+  "myPlansLoadingMessage": "Loading your plans",
+  "@myPlansLoadingMessage": {},
+  "myPlansEmptyTitle": "Nothing planned for you",
+  "@myPlansEmptyTitle": {},
+  "myPlansEmptyMessage": "When a supervisor schedules an inspection for you, it will appear here. You can still start an inspection at any time without a plan.",
+  "@myPlansEmptyMessage": {},
+  "myPlansTruncatedNotice": "This list may not be complete. The server returned as many plans as it will send at once, so some may be missing. Check with your supervisor before treating this as your full workload.",
+  "@myPlansTruncatedNotice": {},
+  "myPlansStateMissed": "Missed",
+  "@myPlansStateMissed": {},
+  "myPlansStateDue": "Due now",
+  "@myPlansStateDue": {},
+  "myPlansStateStarted": "Started",
+  "@myPlansStateStarted": {},
+  "myPlansStateUpcoming": "Upcoming",
+  "@myPlansStateUpcoming": {},
+  "myPlansStateDone": "Done",
+  "@myPlansStateDone": {},
+  "myPlansStateCancelled": "Cancelled",
+  "@myPlansStateCancelled": {},
+  "myPlansStateUnknown": "Not recognised",
+  "@myPlansStateUnknown": {},
+  "myPlansNoLocation": "No location recorded",
+  "@myPlansNoLocation": {},
+  "myPlansCoveredBy": "Covered by {name}",
+  "@myPlansCoveredBy": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "myPlansCompleted": "Completed",
+  "@myPlansCompleted": {},
+  "myPlansCompletedOn": "Completed {date}",
+  "@myPlansCompletedOn": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "myPlansOverdue": "{days, plural, =1{1 day overdue - it still needs doing} other{{days} days overdue - it still needs doing}}",
+  "@myPlansOverdue": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
   "checklistHistoryLoadErrorMessage": "Your checklist history could not be loaded. Pull down to try again.",
   "@checklistHistoryLoadErrorMessage": {},
   "checklistHistorySearchHint": "Search by document, template, asset or site",
@@ -1040,6 +1094,8 @@
   "@inspectionApprovalsReturnedTab": {},
   "dateGroupToday": "Today",
   "@dateGroupToday": {},
+  "dateGroupTomorrow": "Tomorrow",
+  "@dateGroupTomorrow": {},
   "dateGroupYesterday": "Yesterday",
   "@dateGroupYesterday": {},
   "inspectionApprovalFallbackTitle": "Inspection",

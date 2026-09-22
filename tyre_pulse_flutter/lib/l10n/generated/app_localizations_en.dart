@@ -1063,6 +1063,74 @@ class AppLocalizationsEn extends AppLocalizations {
   String get checklistHistoryTitle => 'Checklist history';
 
   @override
+  String get myPlansNavTitle => 'My plans';
+
+  @override
+  String get myPlansSubtitle => 'Inspections assigned to you';
+
+  @override
+  String get myPlansLoadingMessage => 'Loading your plans';
+
+  @override
+  String get myPlansEmptyTitle => 'Nothing planned for you';
+
+  @override
+  String get myPlansEmptyMessage =>
+      'When a supervisor schedules an inspection for you, it will appear here. You can still start an inspection at any time without a plan.';
+
+  @override
+  String get myPlansTruncatedNotice =>
+      'This list may not be complete. The server returned as many plans as it will send at once, so some may be missing. Check with your supervisor before treating this as your full workload.';
+
+  @override
+  String get myPlansStateMissed => 'Missed';
+
+  @override
+  String get myPlansStateDue => 'Due now';
+
+  @override
+  String get myPlansStateStarted => 'Started';
+
+  @override
+  String get myPlansStateUpcoming => 'Upcoming';
+
+  @override
+  String get myPlansStateDone => 'Done';
+
+  @override
+  String get myPlansStateCancelled => 'Cancelled';
+
+  @override
+  String get myPlansStateUnknown => 'Not recognised';
+
+  @override
+  String get myPlansNoLocation => 'No location recorded';
+
+  @override
+  String myPlansCoveredBy(String name) {
+    return 'Covered by $name';
+  }
+
+  @override
+  String get myPlansCompleted => 'Completed';
+
+  @override
+  String myPlansCompletedOn(String date) {
+    return 'Completed $date';
+  }
+
+  @override
+  String myPlansOverdue(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: '$days days overdue - it still needs doing',
+      one: '1 day overdue - it still needs doing',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get checklistHistoryLoadErrorMessage =>
       'Your checklist history could not be loaded. Pull down to try again.';
 
@@ -1209,6 +1277,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get dateGroupToday => 'Today';
+
+  @override
+  String get dateGroupTomorrow => 'Tomorrow';
 
   @override
   String get dateGroupYesterday => 'Yesterday';

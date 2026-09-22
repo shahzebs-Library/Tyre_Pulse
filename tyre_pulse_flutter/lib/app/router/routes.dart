@@ -212,6 +212,12 @@ abstract final class TpRouteId {
   static const String profile = 'profile';
 
   static const String activityHistory = 'activityHistory';
+
+  /// The inspections this user has been PLANNED to do. Distinct from
+  /// [activityHistory], which is what they have already done, and from
+  /// [inspectionApprovals], which is somebody else's work awaiting their
+  /// signature.
+  static const String myPlans = 'myPlans';
   static const String inspectionDetail = 'inspectionDetail';
 
   static const String checklists = 'checklists';
@@ -274,6 +280,10 @@ abstract final class TpRoutePaths {
   static const String profile = '/profile';
 
   static const String activityHistory = '/history';
+
+  /// Sits under `/inspect` rather than `/history` because a plan is work still
+  /// to do, not a record of work done.
+  static const String myPlans = '/inspect/plans';
 
   static const String checklists = '/checklists';
   static const String checklistHistory = '/checklists/history';
@@ -1157,6 +1167,23 @@ final class InspectionApprovalsRoute extends TpRoute {
 
   @override
   String get location => TpRoutePaths.inspectionApprovals;
+}
+
+/// This user's own planned inspections.
+///
+/// Deliberately takes no id. A plan assignment notification names an
+/// `inspection_schedules` row, and a plan id is NOT an inspection id - opening
+/// an inspection detail with one would find nothing. The list is the honest
+/// landing, and it is also the only place the whole week can be seen at once,
+/// which is what a crew actually needs before leaving the yard.
+final class MyPlansRoute extends TpRoute {
+  const MyPlansRoute();
+
+  @override
+  String get routeId => TpRouteId.myPlans;
+
+  @override
+  String get location => TpRoutePaths.myPlans;
 }
 
 /// Review one inspection for sign off.

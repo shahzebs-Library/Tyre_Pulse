@@ -1936,6 +1936,114 @@ abstract class AppLocalizations {
   /// **'Checklist history'**
   String get checklistHistoryTitle;
 
+  /// No description provided for @myPlansNavTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'My plans'**
+  String get myPlansNavTitle;
+
+  /// No description provided for @myPlansSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Inspections assigned to you'**
+  String get myPlansSubtitle;
+
+  /// No description provided for @myPlansLoadingMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading your plans'**
+  String get myPlansLoadingMessage;
+
+  /// No description provided for @myPlansEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing planned for you'**
+  String get myPlansEmptyTitle;
+
+  /// No description provided for @myPlansEmptyMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'When a supervisor schedules an inspection for you, it will appear here. You can still start an inspection at any time without a plan.'**
+  String get myPlansEmptyMessage;
+
+  /// No description provided for @myPlansTruncatedNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'This list may not be complete. The server returned as many plans as it will send at once, so some may be missing. Check with your supervisor before treating this as your full workload.'**
+  String get myPlansTruncatedNotice;
+
+  /// No description provided for @myPlansStateMissed.
+  ///
+  /// In en, this message translates to:
+  /// **'Missed'**
+  String get myPlansStateMissed;
+
+  /// No description provided for @myPlansStateDue.
+  ///
+  /// In en, this message translates to:
+  /// **'Due now'**
+  String get myPlansStateDue;
+
+  /// No description provided for @myPlansStateStarted.
+  ///
+  /// In en, this message translates to:
+  /// **'Started'**
+  String get myPlansStateStarted;
+
+  /// No description provided for @myPlansStateUpcoming.
+  ///
+  /// In en, this message translates to:
+  /// **'Upcoming'**
+  String get myPlansStateUpcoming;
+
+  /// No description provided for @myPlansStateDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get myPlansStateDone;
+
+  /// No description provided for @myPlansStateCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get myPlansStateCancelled;
+
+  /// No description provided for @myPlansStateUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Not recognised'**
+  String get myPlansStateUnknown;
+
+  /// No description provided for @myPlansNoLocation.
+  ///
+  /// In en, this message translates to:
+  /// **'No location recorded'**
+  String get myPlansNoLocation;
+
+  /// No description provided for @myPlansCoveredBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Covered by {name}'**
+  String myPlansCoveredBy(String name);
+
+  /// No description provided for @myPlansCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get myPlansCompleted;
+
+  /// No description provided for @myPlansCompletedOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed {date}'**
+  String myPlansCompletedOn(String date);
+
+  /// No description provided for @myPlansOverdue.
+  ///
+  /// In en, this message translates to:
+  /// **'{days, plural, =1{1 day overdue - it still needs doing} other{{days} days overdue - it still needs doing}}'**
+  String myPlansOverdue(int days);
+
   /// No description provided for @checklistHistoryLoadErrorMessage.
   ///
   /// In en, this message translates to:
@@ -2187,6 +2295,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Today'**
   String get dateGroupToday;
+
+  /// No description provided for @dateGroupTomorrow.
+  ///
+  /// In en, this message translates to:
+  /// **'Tomorrow'**
+  String get dateGroupTomorrow;
 
   /// No description provided for @dateGroupYesterday.
   ///

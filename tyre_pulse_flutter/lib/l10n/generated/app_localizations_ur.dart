@@ -1065,6 +1065,74 @@ class AppLocalizationsUr extends AppLocalizations {
   String get checklistHistoryTitle => 'چیک لسٹ کی تاریخ';
 
   @override
+  String get myPlansNavTitle => 'میرے شیڈول شدہ معائنے';
+
+  @override
+  String get myPlansSubtitle => 'آپ کو تفویض کیے گئے معائنے';
+
+  @override
+  String get myPlansLoadingMessage => 'آپ کے منصوبے لوڈ ہو رہے ہیں';
+
+  @override
+  String get myPlansEmptyTitle => 'آپ کے لیے کوئی معائنہ شیڈول نہیں';
+
+  @override
+  String get myPlansEmptyMessage =>
+      'جب سپروائزر آپ کے لیے معائنہ شیڈول کرے گا تو وہ یہاں نظر آئے گا۔ آپ منصوبے کے بغیر بھی کسی بھی وقت معائنہ شروع کر سکتے ہیں۔';
+
+  @override
+  String get myPlansTruncatedNotice =>
+      'یہ فہرست مکمل نہیں ہو سکتی۔ سرور نے ایک بار میں جتنے منصوبے بھیج سکتا تھا بھیج دیے، اس لیے کچھ رہ سکتے ہیں۔ اسے اپنا مکمل کام سمجھنے سے پہلے اپنے سپروائزر سے تصدیق کریں۔';
+
+  @override
+  String get myPlansStateMissed => 'رہ گیا';
+
+  @override
+  String get myPlansStateDue => 'ابھی واجب';
+
+  @override
+  String get myPlansStateStarted => 'شروع ہو چکا';
+
+  @override
+  String get myPlansStateUpcoming => 'آنے والا';
+
+  @override
+  String get myPlansStateDone => 'مکمل';
+
+  @override
+  String get myPlansStateCancelled => 'منسوخ';
+
+  @override
+  String get myPlansStateUnknown => 'ناقابلِ شناخت';
+
+  @override
+  String get myPlansNoLocation => 'کوئی مقام درج نہیں';
+
+  @override
+  String myPlansCoveredBy(String name) {
+    return '$name نے مکمل کیا';
+  }
+
+  @override
+  String get myPlansCompleted => 'مکمل';
+
+  @override
+  String myPlansCompletedOn(String date) {
+    return '$date کو مکمل ہوا';
+  }
+
+  @override
+  String myPlansOverdue(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: '$days دن تاخیر - یہ اب بھی کرنا ہے',
+      one: 'ایک دن تاخیر - یہ اب بھی کرنا ہے',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get checklistHistoryLoadErrorMessage =>
       'آپ کی چیک لسٹ ہسٹری لوڈ نہیں ہو سکی۔ دوبارہ کوشش کے لیے نیچے کھینچیں۔';
 
@@ -1211,6 +1279,9 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get dateGroupToday => 'آج';
+
+  @override
+  String get dateGroupTomorrow => 'آنے والا کل';
 
   @override
   String get dateGroupYesterday => 'کل';

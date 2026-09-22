@@ -103,6 +103,10 @@ const List<HomeSectionSpec> _kHomeSections = <HomeSectionSpec>[
   HomeSectionSpec(
     id: 'field',
     tiles: <HomeTileSpec>[
+      // First in the field section deliberately: "what am I supposed to do
+      // today" is the question a crew opens the app with, and until this tile
+      // existed the answer was only visible to whoever planned the work.
+      HomeTileSpec(id: 'myPlans', module: ModuleKey.inspect),
       HomeTileSpec(id: 'scanner', module: ModuleKey.scan),
       HomeTileSpec(id: 'serial', module: ModuleKey.serial),
       HomeTileSpec(id: 'meter', module: ModuleKey.meter),
@@ -3071,6 +3075,15 @@ class _QuickActionTile extends StatelessWidget {
         icon: Icons.history,
         approve: false,
       );
+    case 'myPlans':
+      return (
+        label: l10n.myPlansNavTitle,
+        icon: Icons.event_available_outlined,
+        // Not an approval queue: this is the crew's OWN work to do, so it must
+        // not borrow the approve styling that marks somebody else's work
+        // awaiting a signature.
+        approve: false,
+      );
     case 'reportIssue':
       return (
         label: l10n.homeReportIssueAction,
@@ -3292,6 +3305,9 @@ void _openHomeTile(BuildContext context, String id) {
       return;
     case 'checklistHistory':
       context.go(const ChecklistHistoryRoute().location);
+      return;
+    case 'myPlans':
+      context.go(const MyPlansRoute().location);
       return;
     case 'inspectionApprovals':
       context.go(const InspectionApprovalsRoute().location);

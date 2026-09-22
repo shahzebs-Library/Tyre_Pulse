@@ -24,6 +24,8 @@ import 'package:tyre_pulse/features/inspections/presentation/'
 import 'package:tyre_pulse/features/inspections/presentation/'
     'inspection_history_screen.dart';
 import 'package:tyre_pulse/features/inspections/presentation/'
+    'my_plans_screen.dart';
+import 'package:tyre_pulse/features/inspections/presentation/'
     'new_inspection_screen.dart';
 
 /// The routes this feature builds a screen for.
@@ -32,6 +34,7 @@ final Map<String, TpScreenBuilder> inspectionsScreenRegistrations =
   TpRouteId.newInspection: _buildNewInspectionScreen,
   TpRouteId.inspectionDetail: _buildInspectionDetailScreen,
   TpRouteId.activityHistory: _buildActivityHistoryScreen,
+  TpRouteId.myPlans: _buildMyPlansScreen,
 };
 
 /// Guards the cast from the router's typed [TpRoute] union down to
@@ -62,4 +65,12 @@ Widget _buildActivityHistoryScreen(BuildContext context, TpRoute route) {
     return TpScreenNotAvailable(route: route);
   }
   return const InspectionHistoryScreen();
+}
+
+/// See [_buildNewInspectionScreen] - the same guard, for [MyPlansRoute].
+Widget _buildMyPlansScreen(BuildContext context, TpRoute route) {
+  if (route is! MyPlansRoute) {
+    return TpScreenNotAvailable(route: route);
+  }
+  return const MyPlansScreen();
 }

@@ -454,10 +454,25 @@ void main() {
     // capacity and operational status (commit 56b0107f).
     // 811 + 31 = 842. Washing adds entry attribution, chemical details,
     // checklist results and record-viewer labels in all three locales.
-    test('en, ar and ur each carry exactly 842 translatable keys today', () {
-      expect(_translatableKeys(en).length, 842);
-      expect(_translatableKeys(ar).length, 842);
-      expect(_translatableKeys(ur).length, 842);
+    // 842 + 19 = 861. "My plans", the inspector-facing view of
+    // `inspection_schedules`: myPlansNavTitle through myPlansOverdue (18 -
+    // the app-bar title and subtitle, the loading and empty states, the
+    // truncation notice, the seven plan-state labels which the summary
+    // tallies REUSE rather than carrying a second vocabulary of their own,
+    // the no-location fallback, and the four footnote strings including a
+    // `{days}` plural for an overdue plan), plus `dateGroupTomorrow`, which
+    // is general date vocabulary sitting with dateGroupToday/Yesterday rather
+    // than a myPlans-local duplicate - and note Urdu's own `کل` already means
+    // YESTERDAY, so tomorrow is a distinct phrase there, not that word
+    // reused. `homeMyPlansAction` was RETIRED in the same change: a Home tile
+    // reuses its destination's own nav-title key (see this file's own
+    // 547-3+9 note on why the three stopgap home* tile keys were retired for
+    // exactly that reason), so the screen and the tile both read
+    // `myPlansNavTitle`.
+    test('en, ar and ur each carry exactly 861 translatable keys today', () {
+      expect(_translatableKeys(en).length, 861);
+      expect(_translatableKeys(ar).length, 861);
+      expect(_translatableKeys(ur).length, 861);
     });
   });
 

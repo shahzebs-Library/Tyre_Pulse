@@ -1080,6 +1080,74 @@ class AppLocalizationsAr extends AppLocalizations {
   String get checklistHistoryTitle => 'سجل قوائم التحقق';
 
   @override
+  String get myPlansNavTitle => 'فحوصاتي المجدولة';
+
+  @override
+  String get myPlansSubtitle => 'فحوصات مُسندة إليك';
+
+  @override
+  String get myPlansLoadingMessage => 'جارٍ تحميل خططك';
+
+  @override
+  String get myPlansEmptyTitle => 'لا توجد فحوصات مجدولة لك';
+
+  @override
+  String get myPlansEmptyMessage =>
+      'عندما يجدول المشرف فحصًا لك، سيظهر هنا. ويمكنك بدء فحص في أي وقت بدون خطة.';
+
+  @override
+  String get myPlansTruncatedNotice =>
+      'قد تكون هذه القائمة غير مكتملة. أرسل الخادم أكبر عدد من الخطط يرسله دفعة واحدة، لذا قد ينقص بعضها. راجع مشرفك قبل اعتبارها كامل أعمالك.';
+
+  @override
+  String get myPlansStateMissed => 'فائت';
+
+  @override
+  String get myPlansStateDue => 'مستحق الآن';
+
+  @override
+  String get myPlansStateStarted => 'قيد التنفيذ';
+
+  @override
+  String get myPlansStateUpcoming => 'قادم';
+
+  @override
+  String get myPlansStateDone => 'مكتمل';
+
+  @override
+  String get myPlansStateCancelled => 'ملغى';
+
+  @override
+  String get myPlansStateUnknown => 'غير معروف';
+
+  @override
+  String get myPlansNoLocation => 'لم يُسجَّل موقع';
+
+  @override
+  String myPlansCoveredBy(String name) {
+    return 'نفّذه $name';
+  }
+
+  @override
+  String get myPlansCompleted => 'مكتمل';
+
+  @override
+  String myPlansCompletedOn(String date) {
+    return 'اكتمل في $date';
+  }
+
+  @override
+  String myPlansOverdue(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: 'متأخر بـ $days يومًا - ولا يزال مطلوبًا',
+      one: 'متأخر بيوم واحد - ولا يزال مطلوبًا',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get checklistHistoryLoadErrorMessage =>
       'تعذر تحميل سجل قوائم الفحص. اسحب لأسفل للمحاولة مرة أخرى.';
 
@@ -1226,6 +1294,9 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get dateGroupToday => 'اليوم';
+
+  @override
+  String get dateGroupTomorrow => 'غدًا';
 
   @override
   String get dateGroupYesterday => 'أمس';

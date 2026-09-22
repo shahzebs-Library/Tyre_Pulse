@@ -15,7 +15,9 @@ describe('wash evidence capture and viewing',()=>{
     fireEvent.change(screen.getByLabelText('Product name'),{target:{value:'Recorded product'}})
     const value=JSON.parse(screen.getByTestId('data').textContent)
     expect(value.chemicals[0].name).toBe('Recorded product')
-    expect(value).not.toHaveProperty('checklist')
+    // The key is carried for the server CHECK but no screen captures items, so
+    // it stays empty.
+    expect(value.checklist).toEqual([])
     expect(screen.queryByText('Wash checklist')).not.toBeInTheDocument()
   })
   it('opens recorded answers, creator and chemicals as a reading surface',async()=>{

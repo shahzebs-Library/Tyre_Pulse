@@ -9,7 +9,7 @@
  * surface an "apply MIGRATIONS_V270_WASH_MODULE.sql" hint instead of throwing.
  */
 import { supabase, unwrap, applyCountry, fetchAllPages, isMissingRelation } from './_client'
-import { validateWashDetails, canonicalWashValue } from '../washDetails'
+import { validateWashDetails, canonicalWashValue, comparableWashDetails } from '../washDetails'
 
 export const COLS =
   'id,organisation_id,country,site,area,asset_no,vehicle_type,wash_date,wash_time,' +
@@ -179,7 +179,12 @@ export async function createWashRecord(values = {}) {
     const created = unwrap(result)
     if (created) return created
     const existing = unwrap(await supabase.from('wash_records').select(COLS).eq('client_uuid', payload.client_uuid).single())
-    if (Object.entries(payload).some(([key,value]) => !['client_uuid','captured_at'].includes(key) && JSON.stringify(canonicalWashValue(value)) !== JSON.stringify(canonicalWashValue(existing[key])))) {
+    // wash_details is compared through comparableWashDetails so a stored row
+    // that predates the `checklist` key still matches an identical retry.
+    const compare = (key, value) => JSON.stringify(
+      key === 'wash_details' ? comparableWashDetails(value) : canonicalWashValue(value))
+    if (Object.entries(payload).some(([key, value]) =>
+      !['client_uuid', 'captured_at'].includes(key) && compare(key, value) !== compare(key, existing[key]))) {
       throw new Error('This wash was already saved with different details. Open its record to correct it.')
     }
     return existing

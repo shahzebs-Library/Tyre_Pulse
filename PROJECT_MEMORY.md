@@ -55,6 +55,56 @@ batching stops them being started at all.
 
 ---
 
+# ⚑ SESSION 2026-09-22 — EVERY NEW WASH LOG WAS REFUSED: "Some values are not valid."
+# Client fix shipped; migration `20260922090000_wash_details_optional_checklist.sql` AUTHORED, NOT APPLIED.
+
+### **THE THIRD OCCURRENCE OF THE CHECK-vs-CLIENT DRIFT CLASS, AND THE FIRST WHERE THE SERVER WAS THE NEW SIDE**
+`20260921085115_washing_activity_and_evidence.sql` (shipped the day before) added CHECK `wash_details_valid`
+over `valid_wash_details(jsonb)`, whose third guard is
+`jsonb_typeof(d->'checklist') is distinct from 'array' then return false`.
+**`d->'checklist'` on an object with no such key returns SQL NULL, and `jsonb_typeof(NULL)` is NULL, which IS
+distinct from 'array'** - so the guard fires. **NO client has ever written a `checklist` key**:
+`emptyWashDetails()` returned `{version, chemical_status, chemicals}` and `VehicleWashing.jsx` attaches it to
+EVERY new log (`submitForm` spreads `...form`). So **100% of new wash saves hit 23514**, mapped by
+`safeError.js` to the generic "Some values are not valid." Not intermittent - every single save.
+- **The migration's own header claims "Existing records and installed clients remain valid." It was false.**
+  `checklist` was the one part of the shape no client satisfied. Same family as V612 (`period='yesterday'`)
+  and V244 (`report_type`/`frequency`) - but those were a NEW CLIENT value against an OLD CHECK; this is a
+  **NEW CHECK against the SHAPE EVERY INSTALLED CLIENT ALREADY SENDS**, which is strictly worse because it
+  breaks retroactively with no client change. **RULE: a new CHECK on an existing column must be validated
+  against what the shipped clients actually write, not against the shape the new feature imagines.**
+- **THE TEST HAD ENCODED THE BROKEN CONTRACT AND WAS THE BUG'S ALIBI**: `washDetails.test.js` asserted
+  `expect(d).not.toHaveProperty('checklist')` and `washEvidence.render.test.jsx` the same - both green while
+  production refused every save, because neither exercises the SQL. A pure-JS test cannot see a CHECK.
+- **CLIENT FIX (ships now, works against the LIVE constraint with no DB change)**: `emptyWashDetails()` now
+  carries `checklist: []` and `validateWashDetails` NORMALISES a missing/non-array checklist to `[]` (an
+  absent list means nothing was recorded - an older draft loaded from a saved row must still be savable) and
+  validates items exactly as the SQL does (max 30, label 1-200, result in not_checked/pass/fail/na, note
+  <=1000, **a `fail` item requires a note**), rebuilding each item with String fields so a non-string can
+  never reach the CHECK's `jsonb_typeof(...) <> 'string'` guard. Mutation-tested: reverting the one-token
+  change fails 2 tests.
+- **A SECOND, REAL BUG THE FIX EXPOSED - the retry guard would have falsely refused an identical retry.**
+  `createWashRecord`'s dedupe compares the payload against the stored row via `canonicalWashValue`, which
+  sorts keys but fills no defaults. A row stored WITHOUT `checklist` vs a payload WITH `checklist: []`
+  compares unequal -> "This wash was already saved with different details." NEW `comparableWashDetails()`
+  fills the missing key before comparing, so the two shapes of "no checklist recorded" match. **Proven by the
+  existing dedupe test passing with its fixture UNCHANGED** - the fixture deliberately stores the old shape.
+- **SERVER FIX AUTHORED, NOT APPLIED - no DB access this session**: the Supabase MCP is unauthenticated AND
+  `npx supabase projects list` returned `LegacyPlatformAuthRequiredError` (**the CLI-authenticates-separately
+  trick recorded on 2026-09-13 did NOT work here - do not assume it**). The migration makes `checklist`
+  OPTIONAL (`d ? 'checklist' and jsonb_typeof(...) is distinct from 'array'` -> reject; absent -> `'[]'`),
+  every other rule byte-identical. It only ever ACCEPTS MORE, so no stored row can be invalidated, and
+  Postgres does not re-validate rows when a CHECK's function body is replaced. **It is what covers a browser
+  tab still running the OLD bundle** - prompt-mode PWA, `skipWaiting:false`, so an open tab keeps its build
+  until the update prompt is accepted. Header carries VERIFY (6 expressions, expect t,t,t,f,f,f) + rollback.
+- `supabase/tests/washing_activity.test.mjs` asserts a `fail` item with no note is refused with 23514 - that
+  rule is PRESERVED by both halves of the fix; do not relax it.
+- Verified: eslint 0 errors, `vite build` clean, **full suite 9,917/9,918**. The single failure is
+  `checklistIcons.test.js` reading `mobile/node_modules/@expo/vector-icons/.../Ionicons.json`, which is absent
+  because only the ROOT deps were installed - environmental, touches nothing in this change.
+
+---
+
 # ⚑ SESSION 2026-09-19 — WEB FILTER AUDIT (6 REAL DEFECTS) + THE ACCIDENT BRANCH MERGED TO MAIN.
 # No migration. Main went `ae0bfcf1` -> `763653a1` (filters) -> `9991aeff` (accident merge).
 

@@ -11,7 +11,11 @@
  *
  * The mocks show a rotatable, zoomable 3D model. The web has no 3D asset for
  * every fleet type, so this is the ORTHOGRAPHIC MULTI-VIEW MAPPER (the M10
- * title) - flat named views of the same vehicle - and the header says so.
+ * title) - the SAME five-view vehicle artwork the phone draws
+ * (src/lib/vehicleArtwork.js) with the SAME audited component rectangles on top
+ * (src/lib/vehicleDamageZones.js), one face at a time. A component tapped here
+ * is the component tapped there. An asset the artwork resolver will not vouch
+ * for gets an honest by-name fallback, never another vehicle's body.
  * Mobile-only chrome (Step 3 of 5, Continue to evidence) is not reproduced.
  *
  * Data: marks live in accident_damage_assessments.damage_areas (jsonb) via
@@ -29,10 +33,12 @@ import {
   MapPin, X, Trash2, Loader2, AlertTriangle, Check, Camera, ChevronRight, Pencil, Smartphone, Info,
 } from 'lucide-react'
 import {
-  familyForVehicleType, viewsForFamily, layoutFor, groupMarksByKey, markKey, viewLabel, numberMarks,
-  markPhotoCount, severityLabel, damageTypeLabel, clampNote, canonicalView, regionLabel,
+  familyForVehicleType, viewsForFamily, groupMarksByKey, markKey, viewLabel, numberMarks,
+  markPhotoCount, severityLabel, damageTypeLabel, clampNote, canonicalView, baseViewFor,
   SEVERITY_DOT_TONE,
 } from '../../lib/vehicleDamageViews'
+import { vehicleViewImage, damageZonesFor, zoneLabel } from '../../lib/vehicleArtwork'
+import VehicleDamageDiagram from './VehicleDamageDiagram'
 import { DAMAGE_TYPES, DAMAGE_LEVELS, DAMAGE_NOTE_MAX, canonDamageType } from '../../lib/accidentCaseVocab'
 import { readMarks, saveDamageAssessment, upsertDamageMark, removeDamageMark } from '../../lib/api/accidentDamageAssessment'
 import { uploadEvidenceFile } from '../../lib/api/accidentEvidence'
@@ -67,7 +73,7 @@ function Chip({ active, onClick, disabled, children, tone = 'green', testId }) {
   )
 }
 
-export default function DamageMapPanel({ accidentId, vehicleType, assetNo, elevated, onChanged }) {
+export default function DamageMapPanel({ accidentId, vehicleType, assetNo, make, model, elevated, onChanged }) {
   const [data, setData] = useState(EMPTY)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -87,6 +93,13 @@ export default function DamageMapPanel({ accidentId, vehicleType, assetNo, eleva
   const family = useMemo(() => familyForVehicleType(vehicleType, assetNo), [vehicleType, assetNo])
   const views = viewsForFamily(family)
   const [activeView, setActiveView] = useState(views[0])
+  // The asset as the artwork + geometry resolvers read it. make/model are
+  // optional: the incident snapshot may not carry them, and the resolvers
+  // already treat a missing brand as "not proven" rather than guessing.
+  const vehicle = useMemo(
+    () => ({ assetNo, vehicleType, make, model }),
+    [assetNo, vehicleType, make, model],
+  )
   useEffect(() => { setActiveView(views[0]); setSelectedKey(null); setEditing(null) }, [family]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const load = useCallback(async () => {
@@ -108,12 +121,46 @@ export default function DamageMapPanel({ accidentId, vehicleType, assetNo, eleva
   const assessmentAreas = useMemo(() => (Array.isArray(assessment?.damage_areas) ? assessment.damage_areas : []), [assessment])
   const marksMap = useMemo(() => groupMarksByKey(marks), [marks])
   const numbers = useMemo(() => numberMarks(marks), [marks])
-  const layout = layoutFor(family, activeView)
   const selected = selectedKey ? marksMap.get(selectedKey) : null
 
+  // The artwork face this chip is captured on: the mock's angled Front-left is
+  // a perspective on the FRONT board, and a legacy pump 'overview' is Top.
+  const baseView = baseViewFor(activeView)
+  const imageSrc = baseView ? vehicleViewImage(vehicle, baseView) : null
+  const zones = useMemo(
+    () => (baseView ? damageZonesFor(vehicle, baseView) : []).map((z) => ({ ...z, label: zoneLabel(z.id) || z.id })),
+    [vehicle, baseView],
+  )
+
   function labelFor(mark) {
-    return mark.region_label || mark.component_label || regionLabel(family, mark.view, mark.region_key) || mark.region_key
+    return mark.region_label || mark.component_label || zoneLabel(mark.region_key) || mark.region_key
   }
+
+  // zone id -> the badge the drawing paints on it, for THIS view only.
+  const zoneMarks = useMemo(() => {
+    const out = new Map()
+    for (const z of zones) {
+      const key = markKey(activeView, z.id)
+      const mark = marksMap.get(key)
+      if (!mark) continue
+      out.set(z.id, { number: numbers.get(key), severity: mark.severity, summary: markSummary(mark) })
+    }
+    return out
+  }, [zones, marksMap, numbers, activeView])
+
+  // Marks recorded on this view against a component this drawing does not
+  // carry (an older grid-era region key). They stay numbered and editable in
+  // the list below; saying so is more honest than a silently empty drawing.
+  const offDrawing = useMemo(() => {
+    const ids = new Set(zones.map((z) => z.id))
+    return marks.filter((m) => canonicalView(m.view) === canonicalView(activeView) && !ids.has(m.region_key))
+  }, [marks, zones, activeView])
+
+  const activeZoneId = editing && canonicalView(editing.view) === canonicalView(activeView)
+    ? editing.regionKey
+    : selected && canonicalView(selected.view) === canonicalView(activeView)
+      ? selected.region_key
+      : null
 
   function beginEdit(mark, fallback) {
     setEditing({
@@ -137,11 +184,11 @@ export default function DamageMapPanel({ accidentId, vehicleType, assetNo, eleva
     setSelectedKey(markKey(mark.view, mark.region_key))
   }
 
-  function clickRegion(region) {
-    const existing = marksMap.get(markKey(activeView, region.key))
+  function clickZone(zone) {
+    const existing = marksMap.get(markKey(activeView, zone.id))
     if (existing) { selectMark(existing); return }
     if (!elevated) return
-    beginEdit(null, { view: activeView, regionKey: region.key, label: region.label })
+    beginEdit(null, { view: activeView, regionKey: zone.id, label: zone.label })
   }
 
   async function attachPhotos(e) {
@@ -245,7 +292,7 @@ export default function DamageMapPanel({ accidentId, vehicleType, assetNo, eleva
         </div>
         <p className="text-[11px] text-[var(--text-muted)] flex items-start gap-1.5">
           <Info size={12} className="mt-0.5 shrink-0" />
-          The phone shows a rotatable 3D model. On the web the same vehicle is mapped as flat named views: pick a view, then tap the area or component.
+          The phone shows a rotatable 3D model. On the web the same vehicle is mapped as flat named views: pick a view, then tap the component on the drawing.
         </p>
 
         {/* View chip strip - every view is its own always-visible chip, in the mock's order. */}
@@ -269,44 +316,21 @@ export default function DamageMapPanel({ accidentId, vehicleType, assetNo, eleva
           ))}
         </div>
 
-        <div
-          data-testid="damage-surface"
-          className="grid gap-1.5 rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)]/40 p-2"
-          style={{ gridTemplateColumns: `repeat(${layout.cols}, 1fr)`, gridTemplateRows: `repeat(${layout.rows}, minmax(52px, 1fr))` }}
-        >
-          {layout.regions.map((r) => {
-            const key = markKey(activeView, r.key)
-            const mark = marksMap.get(key)
-            const n = mark ? numbers.get(key) : null
-            const isSelected = selectedKey === key || (editing && canonicalView(editing.view) === canonicalView(activeView) && editing.regionKey === r.key)
-            return (
-              <button
-                key={r.key}
-                type="button"
-                onClick={() => clickRegion(r)}
-                disabled={!elevated && !mark}
-                aria-label={mark ? `${n}. ${r.label}: ${markSummary(mark)}` : r.label}
-                style={{ gridColumn: `${r.col[0]} / ${r.col[1]}`, gridRow: `${r.row[0]} / ${r.row[1]}` }}
-                className={`relative rounded border text-[11px] px-1.5 py-1 flex items-center justify-center text-center leading-tight transition-colors disabled:cursor-default ${
-                  mark
-                    ? 'border-amber-500/60 bg-amber-900/10 text-amber-200'
-                    : 'border-[var(--input-border)] text-[var(--text-muted)] hover:border-[var(--text-muted)]'
-                } ${isSelected ? 'ring-2 ring-green-500' : ''}`}
-              >
-                {mark && (
-                  <span
-                    data-testid={`marker-${n}`}
-                    className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold text-black flex items-center justify-center"
-                    style={{ backgroundColor: SEVERITY_DOT_TONE[mark.severity] || SEVERITY_DOT_TONE.minor }}
-                  >
-                    {n}
-                  </span>
-                )}
-                {r.label}
-              </button>
-            )
-          })}
-        </div>
+        <VehicleDamageDiagram
+          imageSrc={imageSrc}
+          view={baseView}
+          viewName={viewLabel(activeView)}
+          zones={zones}
+          marks={zoneMarks}
+          selectedZoneId={activeZoneId}
+          onSelectZone={clickZone}
+          disabled={!elevated}
+        />
+        {offDrawing.length > 0 && (
+          <p className="text-[11px] text-[var(--text-muted)]" data-testid="off-drawing-note">
+            {offDrawing.length} marked area{offDrawing.length === 1 ? '' : 's'} on this view {offDrawing.length === 1 ? 'was' : 'were'} recorded against a component this drawing does not carry. {offDrawing.length === 1 ? 'It is' : 'They are'} listed under Marked areas below and can still be edited.
+          </p>
+        )}
         {selected && (
           <p className="text-xs text-[var(--text-secondary)]" data-testid="surface-caption">
             <span className="font-semibold text-[var(--text-primary)]">{selectedNumber}. {labelFor(selected)}</span>

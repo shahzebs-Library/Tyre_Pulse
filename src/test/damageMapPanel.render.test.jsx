@@ -18,8 +18,10 @@ import { DAMAGE_TYPES } from '../lib/accidentCaseVocab'
 const ASSESSMENT = {
   id: 'as1',
   damage_areas: [
-    { view: 'left', region_key: 'front_door', region_label: 'Front door', damage_type: 'dent', severity: 'severe', photo_refs: ['a.jpg', 'b.jpg'], note: 'deep crease' },
-    { view: 'front', region_key: 'grille', component_label: 'Grille / bonnet', damage_type: 'crack', severity: 'minor', photo_refs: [] },
+    { view: 'left', region_key: 'left_front_door', region_label: 'Front door', damage_type: 'dent', severity: 'severe', photo_refs: ['a.jpg', 'b.jpg'], note: 'deep crease' },
+    // A mark keeps the label it was RECORDED with, even where the catalog now
+    // words that component differently ('Hood') - a stored mark is never renamed.
+    { view: 'front', region_key: 'front_hood', component_label: 'Grille / bonnet', damage_type: 'crack', severity: 'minor', photo_refs: [] },
   ],
 }
 
@@ -67,16 +69,52 @@ describe('DamageMapPanel: view chips per family in the mock order', () => {
     await mount({ vehicleType: 'Concrete Pump', assetNo: 'MP093' })
     expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Top', 'Left', 'Right', 'Front', 'Rear'])
     expect(screen.getByText('Mark equipment damage')).toBeInTheDocument()
+    // No board is approved for a pump whose axle count is not proven, so the
+    // surface names its components instead of borrowing another body.
     const surface = screen.getByTestId('damage-surface')
-    expect(within(surface).getByText('Boom section 3')).toBeInTheDocument()
-    expect(within(surface).getByText('Hopper')).toBeInTheDocument()
-    expect(within(surface).getByText('Outrigger, front left')).toBeInTheDocument()
+    expect(surface).toHaveAttribute('data-surface', 'no-artwork')
+    expect(within(surface).getByTestId('no-artwork-note')).toBeInTheDocument()
+    expect(within(surface).getByText('Boom')).toBeInTheDocument()
+    expect(within(surface).getByText('Cab')).toBeInTheDocument()
+    expect(surface.querySelector('img')).toBeNull()
   })
 
   it('an unknown vehicle type gets the generic strip, never an invented body', async () => {
     mockRead({ marks: [], assessment: null })
     await mount({ vehicleType: 'HOVERCRAFT', assetNo: '' })
     expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Left', 'Right', 'Front', 'Rear', 'Top'])
+  })
+})
+
+describe('DamageMapPanel: the drawing surface is the vehicle artwork', () => {
+  it('a pickup is drawn on its own five-view board, and the chip switches the face', async () => {
+    mockRead({ marks: [], assessment: null })
+    await mount()
+    const surface = screen.getByTestId('damage-surface')
+    expect(surface).toHaveAttribute('data-surface', 'artwork')
+    expect(within(surface).getByRole('img')).toHaveAttribute('src', '/vehicle-views/generic_double_cab_five_view_v1_left.png')
+    expect(within(surface).getByRole('button', { name: 'Front door' })).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('view-chip-front'))
+    expect(within(screen.getByTestId('damage-surface')).getByRole('img'))
+      .toHaveAttribute('src', '/vehicle-views/generic_double_cab_five_view_v1_front.png')
+    expect(screen.getByRole('button', { name: 'Windshield' })).toBeInTheDocument()
+  })
+
+  it('the bus Front-left chip is an angle on the FRONT board, not a sixth image', async () => {
+    mockRead({ marks: [], assessment: null })
+    await mount({ vehicleType: 'Bus', assetNo: 'BS001' })
+    fireEvent.click(screen.getByTestId('view-chip-front_left'))
+    const surface = screen.getByTestId('damage-surface')
+    expect(within(surface).getByRole('img')).toHaveAttribute('src', '/vehicle-views/generic_staff_bus_five_view_v1_front.png')
+    expect(within(surface).getByRole('button', { name: 'Left headlight' })).toBeInTheDocument()
+  })
+
+  it('a mark recorded against a component this drawing does not carry is declared, not silently dropped', async () => {
+    mockRead({ marks: [{ view: 'left', region_key: 'mirror', region_label: 'Mirror', damage_type: 'broken', severity: 'minor', photo_refs: [], source: 'assessment' }] })
+    await mount()
+    expect(screen.getByTestId('off-drawing-note')).toHaveTextContent(/1 marked area on this view was recorded against a component this drawing does not carry/)
+    expect(within(screen.getByTestId('marked-list')).getByText('Mirror')).toBeInTheDocument()
+    expect(screen.getByText('Marked areas (1)')).toBeInTheDocument()
   })
 })
 
@@ -122,13 +160,13 @@ describe('DamageMapPanel: markers, selected card, marked list', () => {
     await mount()
     fireEvent.click(screen.getByRole('button', { name: /^1\. Front door/ }))
     fireEvent.click(within(screen.getByTestId('selected-card')).getByRole('button', { name: /Remove/ }))
-    await waitFor(() => expect(api.removeDamageMark).toHaveBeenCalledWith('as1', ASSESSMENT.damage_areas, 'left', 'front_door'))
+    await waitFor(() => expect(api.removeDamageMark).toHaveBeenCalledWith('as1', ASSESSMENT.damage_areas, 'left', 'left_front_door'))
     expect(api.readMarks).toHaveBeenCalledTimes(2)
   })
 
   it('a mark recorded on the phone is shown, numbered and editable, but Remove is disabled with the honest reason', async () => {
     mockRead({
-      marks: [{ view: 'left', region_key: 'rear_door', region_label: 'Rear door', damage_type: 'scratch', severity: 'minor', photo_refs: [], source: 'mobile' }],
+      marks: [{ view: 'left', region_key: 'left_rear_door', region_label: 'Rear door', damage_type: 'scratch', severity: 'minor', photo_refs: [], source: 'mobile' }],
     })
     await mount()
     expect(screen.getByText(/1 mark recorded on the phone/)).toBeInTheDocument()
@@ -139,7 +177,7 @@ describe('DamageMapPanel: markers, selected card, marked list', () => {
   })
 
   it('an old pump mark stored under overview lights the Top view component as mark 1', async () => {
-    mockRead({ marks: [{ view: 'overview', region_key: 'hopper', component_label: 'Hopper', damage_type: 'dent', severity: 'moderate', photo_refs: [], source: 'assessment' }] })
+    mockRead({ marks: [{ view: 'overview', region_key: 'top_boom', component_label: 'Boom', damage_type: 'dent', severity: 'moderate', photo_refs: [], source: 'assessment' }] })
     await mount({ vehicleType: 'Concrete Pump', assetNo: 'MP093' })
     expect(screen.getByTestId('view-chip-top')).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByTestId('marker-1')).toBeInTheDocument()
@@ -189,7 +227,7 @@ describe('DamageMapPanel: area sheet (type chips, level chips, photos, note 0/20
     expect(id).toBe('as1')
     expect(areas).toBe(ASSESSMENT.damage_areas)
     expect(mark).toMatchObject({
-      view: 'left', region_key: 'rear_fender', region_label: 'Rear fender', component_label: 'Rear fender',
+      view: 'left', region_key: 'left_rear_fender', region_label: 'Rear fender', component_label: 'Rear fender',
       damage_type: 'bent', severity: 'severe', note: 'bent inward', photo_refs: [],
     })
     expect(api.saveDamageAssessment).not.toHaveBeenCalled() // an assessment already existed
@@ -197,13 +235,13 @@ describe('DamageMapPanel: area sheet (type chips, level chips, photos, note 0/20
   })
 
   it('editing an old overview pump mark keeps its STORED view on the write so the edit never duplicates it under top', async () => {
-    mockRead({ marks: [{ view: 'overview', region_key: 'hopper', component_label: 'Hopper', damage_type: 'dent', severity: 'moderate', photo_refs: [], source: 'assessment' }] })
+    mockRead({ marks: [{ view: 'overview', region_key: 'top_boom', component_label: 'Boom', damage_type: 'dent', severity: 'moderate', photo_refs: [], source: 'assessment' }] })
     await mount({ vehicleType: 'Concrete Pump', assetNo: 'MP093' })
-    fireEvent.click(screen.getByRole('button', { name: /^1\. Hopper/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^1\. Boom/ }))
     fireEvent.click(within(screen.getByTestId('selected-card')).getByRole('button', { name: /Edit/ }))
     fireEvent.click(screen.getByText('Save marked area'))
     await waitFor(() => expect(api.upsertDamageMark).toHaveBeenCalledTimes(1))
-    expect(api.upsertDamageMark.mock.calls[0][2]).toMatchObject({ view: 'overview', region_key: 'hopper' })
+    expect(api.upsertDamageMark.mock.calls[0][2]).toMatchObject({ view: 'overview', region_key: 'top_boom' })
   })
 
   it('with no assessment yet, the first save creates a bare draft first and writes into it', async () => {

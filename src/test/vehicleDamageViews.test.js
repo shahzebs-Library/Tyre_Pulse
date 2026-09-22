@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import {
-  familyForVehicleType, FAMILY_VIEWS, viewsForFamily, layoutFor, groupMarksByKey, markKey, viewLabel,
+  familyForVehicleType, FAMILY_VIEWS, viewsForFamily, baseViewFor, groupMarksByKey, markKey, viewLabel,
   canonicalView, numberMarks, normalizeMark, parsePhoneMarks, mergeMarks, markPhotoCount, clampNote,
-  regionLabel, severityLabel, damageTypeLabel, MARK_SEVERITIES, UNPLACED_VIEW,
+  severityLabel, damageTypeLabel, MARK_SEVERITIES, UNPLACED_VIEW, ARTWORK_VIEWS,
 } from '../lib/vehicleDamageViews'
+import { damageAssetClassFor, damageZonesFor, zoneLabel } from '../lib/vehicleArtwork'
 import { FAMILY_VIEW_ORDER, VIEW_LABELS, DAMAGE_NOTE_MAX } from '../lib/accidentCaseVocab'
 
 describe('familyForVehicleType', () => {
@@ -60,78 +61,92 @@ describe('FAMILY_VIEWS follows the mock order (accidentCaseVocab.FAMILY_VIEW_ORD
   })
 })
 
-describe('layoutFor', () => {
-  it('returns a layout with cols/rows and a non-empty region list for every family+view combo', () => {
+// The drawing surface is no longer a CSS grid of boxes: it is the asset's own
+// five-view artwork with the audited component rectangles on top. These cases
+// keep the old grid block's intent, restated against that geometry - every
+// view offers components, they are unique and inside the picture, the angled
+// bus chip is a real view of the front, the pump is named components and not
+// body panels, and nothing is ever given an invented name.
+const FAMILY_SAMPLE = {
+  bus: { vehicleType: 'Bus', assetNo: 'BS001' },
+  pickup: { vehicleType: 'Pickup', assetNo: 'PL077' },
+  concrete_pump: { vehicleType: 'Concrete Pump', assetNo: 'MP093' },
+  generic: { vehicleType: 'HOVERCRAFT', assetNo: '' },
+}
+const idsOn = (vehicle, view) => damageZonesFor(vehicle, baseViewFor(view)).map((z) => z.id)
+
+describe('damage zones behind every view chip', () => {
+  it('every family+view chip resolves to an artwork face with components on it', () => {
     for (const family of Object.keys(FAMILY_VIEWS)) {
       for (const view of FAMILY_VIEWS[family]) {
-        const layout = layoutFor(family, view)
-        expect(layout.cols).toBeGreaterThan(0)
-        expect(layout.rows).toBeGreaterThan(0)
-        expect(Array.isArray(layout.regions)).toBe(true)
-        expect(layout.regions.length).toBeGreaterThan(0)
+        const base = baseViewFor(view)
+        expect(ARTWORK_VIEWS).toContain(base)
+        expect(idsOn(FAMILY_SAMPLE[family], view).length).toBeGreaterThan(0)
       }
     }
   })
 
-  it('every region key is unique within its own layout and every region fits inside the grid', () => {
+  it('every component id is unique within its own view and every rectangle sits inside the picture', () => {
     for (const family of Object.keys(FAMILY_VIEWS)) {
       for (const view of FAMILY_VIEWS[family]) {
-        const { cols, rows, regions } = layoutFor(family, view)
-        const keys = regions.map((r) => r.key)
-        expect(new Set(keys).size).toBe(keys.length)
-        for (const r of regions) {
-          expect(r.col[0]).toBeGreaterThanOrEqual(1)
-          expect(r.col[1]).toBeLessThanOrEqual(cols + 1)
-          expect(r.row[0]).toBeGreaterThanOrEqual(1)
-          expect(r.row[1]).toBeLessThanOrEqual(rows + 1)
-          expect(r.col[1]).toBeGreaterThan(r.col[0])
-          expect(r.row[1]).toBeGreaterThan(r.row[0])
+        const zones = damageZonesFor(FAMILY_SAMPLE[family], baseViewFor(view))
+        const ids = zones.map((z) => z.id)
+        expect(new Set(ids).size).toBe(ids.length)
+        for (const z of zones) {
+          expect(z.left).toBeGreaterThanOrEqual(0)
+          expect(z.top).toBeGreaterThanOrEqual(0)
+          expect(z.width).toBeGreaterThan(0)
+          expect(z.height).toBeGreaterThan(0)
+          expect(z.left + z.width).toBeLessThanOrEqual(1)
+          expect(z.top + z.height).toBeLessThanOrEqual(1)
         }
       }
     }
   })
 
-  it('bus front_left is a real 3/4 view: front parts AND left-side parts, with the mock\'s hatched corner', () => {
-    const keys = layoutFor('bus', 'front_left').regions.map((r) => r.key)
-    expect(keys).toContain('windshield')
-    expect(keys).toContain('left_headlight')
-    expect(keys).toContain('front_door')
-    expect(keys).toContain('front_left_bumper_corner')
-    expect(regionLabel('bus', 'front_left', 'front_left_bumper_corner')).toBe('Front-left bumper corner')
+  it("bus front_left is the mock's angled corner captured on the FRONT artwork, lights and bumper included", () => {
+    expect(baseViewFor('front_left')).toBe('front')
+    const keys = idsOn(FAMILY_SAMPLE.bus, 'front_left')
+    expect(keys).toEqual(idsOn(FAMILY_SAMPLE.bus, 'front'))
+    expect(keys).toContain('front_windshield')
+    expect(keys).toContain('front_left_light')
+    expect(keys).toContain('front_bumper')
+    expect(zoneLabel('front_left_light')).toBe('Left headlight')
   })
 
-  it('top views exist for bus, pickup and generic and are roof/bonnet plans, not side panels', () => {
-    expect(layoutFor('bus', 'top').regions.map((r) => r.key)).toContain('roof_hatch')
-    expect(layoutFor('pickup', 'top').regions.map((r) => r.key)).toContain('bonnet')
-    expect(layoutFor('generic', 'top').regions.map((r) => r.key)).toContain('load_bed')
-    expect(layoutFor('pickup', 'top').regions.map((r) => r.key)).not.toContain('front_door')
+  it('top views are roof/hood plans, not side panels', () => {
+    expect(idsOn(FAMILY_SAMPLE.bus, 'top')).toContain('top_passenger_body')
+    expect(idsOn(FAMILY_SAMPLE.pickup, 'top')).toContain('top_hood')
+    expect(idsOn(FAMILY_SAMPLE.generic, 'top')).toContain('top_roof')
+    expect(idsOn(FAMILY_SAMPLE.pickup, 'top')).not.toContain('left_front_door')
   })
 
-  it('the pump layouts are named components (Boom section 1..n, outriggers, hopper), not body-panel regions', () => {
-    const top = layoutFor('concrete_pump', 'top').regions.map((r) => r.key)
-    expect(top).toContain('boom_section_1')
-    expect(top).toContain('boom_section_3')
-    expect(top).toContain('outrigger_front_left')
-    expect(top).toContain('hopper')
-    expect(top).not.toContain('windshield')
-    expect(regionLabel('concrete_pump', 'top', 'boom_section_3')).toBe('Boom section 3')
-    expect(layoutFor('concrete_pump', 'left').regions.map((r) => r.key)).toContain('outrigger_front')
-    expect(layoutFor('concrete_pump', 'rear').regions.map((r) => r.key)).toContain('hopper')
+  it('the pump is named equipment components (boom, outrigger, cab), not car body panels', () => {
+    const top = idsOn(FAMILY_SAMPLE.concrete_pump, 'top')
+    expect(top).toContain('top_boom')
+    expect(top).toContain('top_cab')
+    expect(top).not.toContain('front_windshield')
+    expect(zoneLabel('top_boom')).toBe('Boom')
+    expect(idsOn(FAMILY_SAMPLE.concrete_pump, 'left')).toContain('left_outrigger')
+    expect(idsOn(FAMILY_SAMPLE.concrete_pump, 'rear')).toContain('rear_equipment')
   })
 
-  it("the pump's legacy 'overview' is an alias of 'top' so old marks still render", () => {
-    expect(layoutFor('concrete_pump', 'overview')).toBe(layoutFor('concrete_pump', 'top'))
+  it("the pump's legacy 'overview' still resolves to the Top artwork so old marks render", () => {
+    expect(baseViewFor('overview')).toBe('top')
+    expect(idsOn(FAMILY_SAMPLE.concrete_pump, 'overview')).toEqual(idsOn(FAMILY_SAMPLE.concrete_pump, 'top'))
     expect(canonicalView('overview')).toBe('top')
     expect(canonicalView('left')).toBe('left')
   })
 
-  it('degrades to the generic layout for an unrecognised family/view rather than throwing', () => {
-    expect(layoutFor('spaceship', 'front').regions.length).toBeGreaterThan(0)
-    expect(layoutFor('generic', 'underneath').regions.length).toBeGreaterThan(0)
+  it('an unrecognised asset falls to the legacy geometry, and a chip with no face says so instead of guessing', () => {
+    expect(damageAssetClassFor(FAMILY_SAMPLE.generic)).toBe('legacy')
+    expect(idsOn(FAMILY_SAMPLE.generic, 'front').length).toBeGreaterThan(0)
+    expect(baseViewFor('underneath')).toBeNull()
+    expect(baseViewFor(UNPLACED_VIEW)).toBeNull()
   })
 
-  it('regionLabel returns an empty string, never an invented label, for a region the layout does not have', () => {
-    expect(regionLabel('bus', 'front', 'no_such_part')).toBe('')
+  it('zoneLabel returns an empty string, never an invented label, for a component the catalog does not carry', () => {
+    expect(zoneLabel('no_such_part')).toBe('')
   })
 })
 

@@ -12,11 +12,13 @@
  * accidents.damage_description as JSON {"version":2,"marks":[...]}; that is
  * READ here as a fallback source (parsePhoneMarks) and never written to.
  *
- * DIAGRAMS ARE DELIBERATELY ABSTRACT, NOT PHOTOREALISTIC. Each view is a small
- * CSS-grid "floor plan" of named, clickable cells - honest about being a
- * functional diagram rather than a traced vehicle silhouette. The mocks show a
- * rotatable 3D model; the web equivalent is this orthographic multi-view mapper
- * (the M10 title), which is what the panel labels it as.
+ * THE DRAWING SURFACE IS THE ASSET'S OWN ARTWORK. The panel renders the same
+ * five-view vehicle board the phone shows (src/lib/vehicleArtwork.js) with the
+ * component rectangles from src/lib/vehicleDamageZones.js placed on top, so a
+ * component tapped here is the component tapped there. THIS FILE OWNS THE MARK
+ * MODEL ONLY - identity, merging, numbering, labels, vocabulary. It holds no
+ * geometry: asking it for a rectangle is how a second, drifting component
+ * catalog gets started.
  *
  * FAMILY RESOLUTION DELEGATES TO src/lib/vehicleTyreLayout.js - THE single,
  * fleet-owner-confirmed classifier the rest of the app already uses for "what
@@ -107,180 +109,26 @@ export function viewLabel(view) {
   return VIEW_LABELS[v] || VIEW_LABELS[view] || view
 }
 
-// Each region: {key, label, col:[start,end], row:[start,end]} - 1-indexed CSS
-// grid-line coordinates. `cols`/`rows` on the view entry size the grid itself.
-const FRONT_REGIONS = [
-  { key: 'windshield', label: 'Windshield', col: [1, 4], row: [1, 2] },
-  { key: 'left_headlight', label: 'Left headlight', col: [1, 2], row: [2, 3] },
-  { key: 'grille', label: 'Grille / bonnet', col: [2, 3], row: [2, 3] },
-  { key: 'right_headlight', label: 'Right headlight', col: [3, 4], row: [2, 3] },
-  { key: 'front_bumper', label: 'Front bumper', col: [1, 4], row: [3, 4] },
-]
-const REAR_REGIONS = [
-  { key: 'rear_window', label: 'Rear window', col: [1, 4], row: [1, 2] },
-  { key: 'left_taillight', label: 'Left taillight', col: [1, 2], row: [2, 3] },
-  { key: 'rear_panel', label: 'Rear panel / tailgate', col: [2, 3], row: [2, 3] },
-  { key: 'right_taillight', label: 'Right taillight', col: [3, 4], row: [2, 3] },
-  { key: 'rear_bumper', label: 'Rear bumper', col: [1, 4], row: [3, 4] },
-]
-// M10 side elevation: fender, door, bumper panels.
-const SIDE_REGIONS_GENERIC = [
-  { key: 'roof', label: 'Roof', col: [1, 5], row: [1, 2] },
-  { key: 'front_fender', label: 'Front fender', col: [1, 2], row: [2, 3] },
-  { key: 'front_door', label: 'Front door', col: [2, 3], row: [2, 3] },
-  { key: 'rear_door', label: 'Rear door', col: [3, 4], row: [2, 3] },
-  { key: 'rear_fender', label: 'Rear fender', col: [4, 5], row: [2, 3] },
-  { key: 'mirror', label: 'Mirror', col: [1, 5], row: [3, 4] },
-]
-// Top (plan) view of a pickup / generic on-road vehicle: bonnet, cab roof,
-// load bed, with the two bumpers at the ends.
-const TOP_REGIONS_GENERIC = [
-  { key: 'front_bumper_top', label: 'Front bumper', col: [1, 4], row: [1, 2] },
-  { key: 'bonnet', label: 'Bonnet', col: [1, 4], row: [2, 3] },
-  { key: 'left_pillar', label: 'Left pillar / rail', col: [1, 2], row: [3, 5] },
-  { key: 'cab_roof', label: 'Cab roof', col: [2, 3], row: [3, 4] },
-  { key: 'load_bed', label: 'Load bed / rear roof', col: [2, 3], row: [4, 5] },
-  { key: 'right_pillar', label: 'Right pillar / rail', col: [3, 4], row: [3, 5] },
-  { key: 'rear_bumper_top', label: 'Rear bumper', col: [1, 4], row: [5, 6] },
-]
-const SIDE_REGIONS_BUS = [
-  { key: 'roof', label: 'Roof', col: [1, 6], row: [1, 2] },
-  { key: 'windows', label: 'Window band', col: [1, 6], row: [2, 3] },
-  { key: 'front_panel', label: 'Front panel', col: [1, 2], row: [3, 4] },
-  { key: 'mid_panel_1', label: 'Mid panel 1', col: [2, 3], row: [3, 4] },
-  { key: 'mid_panel_2', label: 'Mid panel 2', col: [3, 4], row: [3, 4] },
-  { key: 'mid_panel_3', label: 'Mid panel 3', col: [4, 5], row: [3, 4] },
-  { key: 'rear_panel', label: 'Rear panel', col: [5, 6], row: [3, 4] },
-]
-// M8 Front-left 3/4 view: the front face (left column) meeting the left side
-// (right columns), with the "Front-left bumper corner" the mock hatches.
-const FRONT_LEFT_REGIONS_BUS = [
-  { key: 'windshield', label: 'Windshield', col: [1, 2], row: [1, 3] },
-  { key: 'left_a_pillar', label: 'Left A-pillar', col: [2, 3], row: [1, 3] },
-  { key: 'roof_left_edge', label: 'Roof, left edge', col: [3, 6], row: [1, 2] },
-  { key: 'left_windows_front', label: 'Left window band, front', col: [3, 6], row: [2, 3] },
-  { key: 'left_headlight', label: 'Left headlight', col: [1, 2], row: [3, 4] },
-  { key: 'left_mirror', label: 'Left mirror', col: [2, 3], row: [3, 4] },
-  { key: 'front_door', label: 'Front door', col: [3, 4], row: [3, 4] },
-  { key: 'left_front_panel', label: 'Left front panel', col: [4, 6], row: [3, 4] },
-  { key: 'front_left_bumper_corner', label: 'Front-left bumper corner', col: [1, 3], row: [4, 5] },
-  { key: 'left_front_wheel_arch', label: 'Left front wheel arch', col: [3, 6], row: [4, 5] },
-]
-// Bus top (plan) view: roof sections front to rear, hatches, AC unit.
-const TOP_REGIONS_BUS = [
-  { key: 'roof_front', label: 'Roof, front section', col: [1, 4], row: [1, 2] },
-  { key: 'roof_left_rail', label: 'Roof rail, left', col: [1, 2], row: [2, 5] },
-  { key: 'ac_unit', label: 'AC unit', col: [2, 3], row: [2, 3] },
-  { key: 'roof_hatch', label: 'Roof hatch', col: [2, 3], row: [3, 4] },
-  { key: 'roof_mid', label: 'Roof, mid section', col: [2, 3], row: [4, 5] },
-  { key: 'roof_right_rail', label: 'Roof rail, right', col: [3, 4], row: [2, 5] },
-  { key: 'roof_rear', label: 'Roof, rear section', col: [1, 4], row: [5, 6] },
-]
-
-// M9 blueprint-style TOP view of a truck-mounted concrete pump: boom sections
-// folded over the chassis, the pump unit and hopper at the rear, the four
-// outriggers at the corners. Components keep their NAMES (Boom section 1..n,
-// outriggers, hopper) - these are the numbered components the mock shows.
-const PUMP_COMPONENTS_TOP = [
-  { key: 'outrigger_front_left', label: 'Outrigger, front left', col: [1, 2], row: [1, 2] },
-  { key: 'boom_section_4', label: 'Boom section 4', col: [2, 3], row: [1, 2] },
-  { key: 'boom_section_3', label: 'Boom section 3', col: [3, 4], row: [1, 2] },
-  { key: 'boom_section_2', label: 'Boom section 2', col: [4, 5], row: [1, 2] },
-  { key: 'outrigger_rear_left', label: 'Outrigger, rear left', col: [5, 6], row: [1, 2] },
-  { key: 'chassis_cab', label: 'Chassis cab', col: [1, 2], row: [2, 3] },
-  { key: 'boom_section_1', label: 'Boom section 1', col: [2, 4], row: [2, 3] },
-  { key: 'boom_base', label: 'Boom base / turret', col: [4, 5], row: [2, 3] },
-  { key: 'hopper', label: 'Hopper', col: [5, 6], row: [2, 3] },
-  { key: 'outrigger_front_right', label: 'Outrigger, front right', col: [1, 2], row: [3, 4] },
-  { key: 'deck_left', label: 'Deck / walkway', col: [2, 4], row: [3, 4] },
-  { key: 'pump_unit', label: 'Pump unit', col: [4, 5], row: [3, 4] },
-  { key: 'outrigger_rear_right', label: 'Outrigger, rear right', col: [5, 6], row: [3, 4] },
-]
-// Pump side elevation (chassis cab at the front, boom folded above the deck,
-// pump unit and hopper at the rear, two outriggers on that side).
-const PUMP_COMPONENTS_SIDE = [
-  { key: 'boom_folded', label: 'Boom (folded)', col: [2, 6], row: [1, 2] },
-  { key: 'chassis_cab', label: 'Chassis cab', col: [1, 2], row: [1, 3] },
-  { key: 'boom_base', label: 'Boom base / turret', col: [2, 3], row: [2, 3] },
-  { key: 'deck', label: 'Deck / walkway', col: [3, 5], row: [2, 3] },
-  { key: 'hopper', label: 'Hopper', col: [5, 6], row: [2, 3] },
-  { key: 'cab_step', label: 'Cab step / fuel tank', col: [1, 2], row: [3, 4] },
-  { key: 'outrigger_front', label: 'Outrigger, front', col: [2, 3], row: [3, 4] },
-  { key: 'chassis_rail', label: 'Chassis rail', col: [3, 4], row: [3, 4] },
-  { key: 'outrigger_rear', label: 'Outrigger, rear', col: [4, 5], row: [3, 4] },
-  { key: 'pump_unit', label: 'Pump unit', col: [5, 6], row: [3, 4] },
-]
-const PUMP_COMPONENTS_FRONT = [
-  { key: 'boom_tip', label: 'Boom tip (over cab)', col: [1, 4], row: [1, 2] },
-  { key: 'windshield', label: 'Windshield', col: [1, 4], row: [2, 3] },
-  { key: 'left_headlight', label: 'Left headlight', col: [1, 2], row: [3, 4] },
-  { key: 'grille', label: 'Grille', col: [2, 3], row: [3, 4] },
-  { key: 'right_headlight', label: 'Right headlight', col: [3, 4], row: [3, 4] },
-  { key: 'front_bumper', label: 'Front bumper', col: [1, 4], row: [4, 5] },
-]
-const PUMP_COMPONENTS_REAR = [
-  { key: 'boom_base', label: 'Boom base / turret', col: [1, 4], row: [1, 2] },
-  { key: 'hopper', label: 'Hopper', col: [2, 3], row: [2, 3] },
-  { key: 'outrigger_rear_left', label: 'Outrigger, rear left', col: [1, 2], row: [2, 4] },
-  { key: 'outrigger_rear_right', label: 'Outrigger, rear right', col: [3, 4], row: [2, 4] },
-  { key: 'pump_unit', label: 'Pump unit', col: [2, 3], row: [3, 4] },
-  { key: 'rear_bumper', label: 'Rear bumper / lights', col: [1, 4], row: [4, 5] },
-]
-
-const PUMP_TOP = { cols: 5, rows: 3, regions: PUMP_COMPONENTS_TOP }
-const VIEW_LAYOUTS = {
-  generic: {
-    front: { cols: 3, rows: 3, regions: FRONT_REGIONS },
-    rear: { cols: 3, rows: 3, regions: REAR_REGIONS },
-    left: { cols: 4, rows: 3, regions: SIDE_REGIONS_GENERIC },
-    right: { cols: 4, rows: 3, regions: SIDE_REGIONS_GENERIC },
-    top: { cols: 3, rows: 5, regions: TOP_REGIONS_GENERIC },
-  },
-  pickup: {
-    front: { cols: 3, rows: 3, regions: FRONT_REGIONS },
-    rear: { cols: 3, rows: 3, regions: REAR_REGIONS },
-    left: { cols: 4, rows: 3, regions: SIDE_REGIONS_GENERIC },
-    right: { cols: 4, rows: 3, regions: SIDE_REGIONS_GENERIC },
-    top: { cols: 3, rows: 5, regions: TOP_REGIONS_GENERIC },
-  },
-  bus: {
-    front: { cols: 3, rows: 3, regions: FRONT_REGIONS },
-    rear: { cols: 3, rows: 3, regions: REAR_REGIONS },
-    left: { cols: 5, rows: 3, regions: SIDE_REGIONS_BUS },
-    right: { cols: 5, rows: 3, regions: SIDE_REGIONS_BUS },
-    front_left: { cols: 5, rows: 4, regions: FRONT_LEFT_REGIONS_BUS },
-    top: { cols: 3, rows: 5, regions: TOP_REGIONS_BUS },
-  },
-  concrete_pump: {
-    top: PUMP_TOP,
-    overview: PUMP_TOP, // legacy alias - old marks stored under 'overview'
-    left: { cols: 5, rows: 3, regions: PUMP_COMPONENTS_SIDE },
-    right: { cols: 5, rows: 3, regions: PUMP_COMPONENTS_SIDE },
-    front: { cols: 3, rows: 4, regions: PUMP_COMPONENTS_FRONT },
-    rear: { cols: 3, rows: 4, regions: PUMP_COMPONENTS_REAR },
-  },
-}
+/**
+ * The five artwork faces every catalog board ships. Mirrors the Dart
+ * `AccidentDamageView` enum, which is what the zone catalogs are keyed on.
+ */
+export const ARTWORK_VIEWS = Object.freeze(['front', 'rear', 'left', 'right', 'top'])
 
 /**
- * The grid layout (cols/rows/regions) for one family + view. Falls back to the
- * 'generic' family's layout for that view (or 'front' if the view itself is
- * unrecognised) so a bad combination never renders nothing.
- * @param {string} family
- * @param {string} view
+ * The artwork face a view chip is captured on. Mirrors the Dart
+ * `AccidentDamagePerspective.baseView`: the mock's angled "Front-left" chip is
+ * a perspective on the FRONT artwork, not a sixth image, and the legacy pump
+ * 'overview' is the Top face. A chip with no face of its own (an unplaced
+ * phone mark) returns null so the caller can say so instead of drawing it on a
+ * face it was never made on.
  */
-export function layoutFor(family, view) {
+export function baseViewFor(view) {
+  if (view === 'front_left') return 'front'
   const v = canonicalView(view)
-  const byFamily = VIEW_LAYOUTS[family] || VIEW_LAYOUTS.generic
-  return byFamily[v] || byFamily[view] || VIEW_LAYOUTS.generic[v] || VIEW_LAYOUTS.generic.front
+  return ARTWORK_VIEWS.includes(v) ? v : null
 }
 
-/** The label of one region in a family+view layout, or '' when the region is
- *  not part of that layout (a stored mark whose region no longer exists
- *  falls back to its own stored label - never an invented one). */
-export function regionLabel(family, view, regionKey) {
-  const r = layoutFor(family, view).regions.find((x) => x.key === regionKey)
-  return r ? r.label : ''
-}
 
 /** Damage level a mark carries - the accidentCaseVocab DAMAGE_LEVELS ladder,
  *  stored as the SAME lowercase tokens (minor/moderate/severe, 'severe'

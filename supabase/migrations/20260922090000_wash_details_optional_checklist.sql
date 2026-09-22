@@ -1,7 +1,10 @@
--- STATUS: AUTHORED, NOT YET APPLIED (no database access in the authoring
--- session - neither the Supabase MCP nor the CLI held a token). Apply with
+-- STATUS: AUTHORED, NOT YET APPLIED. The authoring session had no way to reach
+-- the database: `npx supabase projects list` returns LegacyPlatformAuthRequiredError
+-- (no access token), and while the Supabase MCP server connects, every call
+-- needs an interactive approval the session could not obtain. Apply with
 -- `supabase db query --linked --project-ref jhssdmeruxtrlqnwfksc --file <this>`
--- or the MCP apply tool, then run the VERIFY block below.
+-- (after `supabase login`), or by pasting the body into the Supabase SQL editor,
+-- or via the MCP apply tool from an interactive session. Then run VERIFY below.
 --
 -- WHY: 20260921085115_washing_activity_and_evidence.sql added the CHECK
 -- `wash_details_valid` over `valid_wash_details(wash_details)`, whose third
@@ -14,12 +17,16 @@
 -- fires and the row is refused with Postgres 23514, mapped by
 -- src/lib/safeError.js to the generic "Some values are not valid."
 --
--- No client has ever written a `checklist` key: `emptyWashDetails()` in
--- src/lib/washDetails.js returns {version, chemical_status, chemicals} and the
--- web wash form attaches it to EVERY new log, so every save failed. The
--- migration's own header claims "Existing records and installed clients remain
--- valid"; this restores that promise - it was the only part of the shape the
--- clients did not already satisfy.
+-- The client DID satisfy this when the CHECK was written - `emptyWashDetails()`
+-- returned a checklist item per WASH_CHECKS, so washing worked. PR #358 "Remove
+-- checklist from vehicle washing" (merge 127a72d2, in production from
+-- 2026-09-22) removed the feature from the client, leaving
+-- {version, chemical_status, chemicals}, and shipped NO migration. The web wash
+-- form attaches that object to EVERY new log, so from that deploy on 100% of
+-- wash saves failed. The 20260921085115 header claims "Existing records and
+-- installed clients remain valid" - true when written, falsified by PR #358.
+-- REMOVING a field from a client is also a constraint change: a missing key is
+-- not an empty one to Postgres.
 --
 -- FIX: `checklist` becomes OPTIONAL. Absent means nothing was recorded and is
 -- read as an empty list; present but not an array is still refused, and every

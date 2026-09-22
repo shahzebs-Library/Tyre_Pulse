@@ -431,7 +431,9 @@ class _FigmaTyreCaptureStage extends StatelessWidget {
         .clamp(width * 0.28, width * (tall ? 0.43 : 0.41))
         .toDouble();
     final double photoLeft = (width - photoWidth) / 2;
-    final String? photoAsset = tyreDiagramVehiclePhotoAsset(layout.bodyKey);
+    final TyreDiagramPhotoSpec? photo = tyreDiagramVehiclePhotoSpec(
+      layout.bodyKey,
+    );
 
     final List<_ResolvedWheel> left = <_ResolvedWheel>[];
     final List<_ResolvedWheel> right = <_ResolvedWheel>[];
@@ -489,13 +491,16 @@ class _FigmaTyreCaptureStage extends StatelessWidget {
                 height: stageHeight,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 3),
-                  child: photoAsset != null
-                      ? Image.asset(
-                          photoAsset,
-                          key: ValueKey<String>(photoAsset),
-                          fit: BoxFit.contain,
-                          filterQuality: FilterQuality.high,
-                          excludeFromSemantics: true,
+                  child: photo != null
+                      ? RotatedBox(
+                          quarterTurns: photo.quarterTurns,
+                          child: Image.asset(
+                            photo.asset,
+                            key: ValueKey<String>(photo.asset),
+                            fit: photo.fit,
+                            filterQuality: FilterQuality.high,
+                            excludeFromSemantics: true,
+                          ),
                         )
                       : SvgPicture.asset(
                           tyreDiagramBodyAsset(layout.bodyKey),

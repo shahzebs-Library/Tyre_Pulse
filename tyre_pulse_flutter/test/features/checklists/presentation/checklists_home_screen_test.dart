@@ -29,9 +29,7 @@ import 'package:tyre_pulse/features/checklists/presentation/checklists_home_scre
 const WorkspaceContext _workspace = WorkspaceContext(
   userId: 'operator-1',
   role: UserRole.known(RoleId.inspector),
-  effectivePermissions: AccessState(
-    role: UserRole.known(RoleId.inspector),
-  ),
+  effectivePermissions: AccessState(role: UserRole.known(RoleId.inspector)),
   countryScope: CountryScope.none,
   siteScope: SiteScope.none,
   tenantId: 'org-1',
@@ -85,8 +83,7 @@ final class _ChecklistRemoteFake implements ChecklistRemoteRepository {
     String? country,
     String? role,
     bool isSuperAdmin = false,
-  }) async =>
-      const <ChecklistTemplateRecord>[_template];
+  }) async => const <ChecklistTemplateRecord>[_template];
 
   @override
   Future<List<ChecklistAssignmentRecord>> listAssignments({
@@ -118,9 +115,7 @@ Future<ProviderContainer> _pump(
   Size size = const Size(360, 800),
   TextScaler textScaler = TextScaler.noScaling,
   ChecklistRemoteRepository remote = const _ChecklistRemoteFake(),
-  VehicleDetailOutcome vehicleOutcome = const VehicleDetailLoaded(
-    _pumpVehicle,
-  ),
+  VehicleDetailOutcome vehicleOutcome = const VehicleDetailLoaded(_pumpVehicle),
   int pendingSyncCount = 0,
   bool canScan = true,
   bool canInspect = true,
@@ -133,19 +128,14 @@ Future<ProviderContainer> _pump(
 
   final List<Override> overrides = <Override>[
     workspaceContextProvider.overrideWithValue(_workspace),
-    checklistRemoteRepositoryProvider.overrideWithValue(
-      remote,
-    ),
-    checklistDraftRepositoryProvider.overrideWithValue(
-      _ChecklistDraftFake(),
-    ),
+    checklistRemoteRepositoryProvider.overrideWithValue(remote),
+    checklistDraftRepositoryProvider.overrideWithValue(_ChecklistDraftFake()),
     vehicleDetailProvider('CP-045')
         .overrideWith((Ref ref) async => vehicleOutcome),
     checklistPendingSyncCountProvider.overrideWith(
       (Ref ref) async => pendingSyncCount,
     ),
-    canAccessModuleProvider(ModuleKey.scan)
-        .overrideWith((Ref ref) => canScan),
+    canAccessModuleProvider(ModuleKey.scan).overrideWith((Ref ref) => canScan),
     canAccessModuleProvider(ModuleKey.inspect)
         .overrideWith((Ref ref) => canInspect),
     canAccessModuleProvider(ModuleKey.vehicles)
@@ -176,21 +166,21 @@ Future<ProviderContainer> _pump(
 }
 
 void main() {
-  test('content language selection is independent and normalizes bad values',
-      () {
-    final ProviderContainer container = ProviderContainer();
-    addTearDown(container.dispose);
+  test(
+    'content language selection is independent and normalizes bad values',
+    () {
+      final ProviderContainer container = ProviderContainer();
+      addTearDown(container.dispose);
 
-    expect(container.read(checklistContentLanguageProvider), 'en');
-    container
-        .read(checklistContentLanguageProvider.notifier)
-        .select('ur');
-    expect(container.read(checklistContentLanguageProvider), 'ur');
-    container
-        .read(checklistContentLanguageProvider.notifier)
-        .select('unsupported');
-    expect(container.read(checklistContentLanguageProvider), 'en');
-  });
+      expect(container.read(checklistContentLanguageProvider), 'en');
+      container.read(checklistContentLanguageProvider.notifier).select('ur');
+      expect(container.read(checklistContentLanguageProvider), 'ur');
+      container
+          .read(checklistContentLanguageProvider.notifier)
+          .select('unsupported');
+      expect(container.read(checklistContentLanguageProvider), 'en');
+    },
+  );
 
   testWidgets(
     'compact hub matches the asset-first screenshot hierarchy with real '
@@ -202,7 +192,10 @@ void main() {
       expect(find.text('Checklists'), findsOneWidget);
       expect(find.text('Synced'), findsOneWidget);
       expect(find.text('Scan QR or enter asset number'), findsOneWidget);
-      expect(find.byKey(ChecklistsHomeScreenKeys.selectedAsset), findsOneWidget);
+      expect(
+        find.byKey(ChecklistsHomeScreenKeys.selectedAsset),
+        findsOneWidget,
+      );
       expect(find.textContaining('CP-045 · Concrete Pump'), findsOneWidget);
       expect(find.textContaining('Dubai Industrial City'), findsNWidgets(2));
       expect(find.text('68,420 km'), findsOneWidget);
@@ -236,11 +229,7 @@ void main() {
   testWidgets(
     'Arabic RTL and dark mode keep every hub section usable without overflow',
     (WidgetTester tester) async {
-      await _pump(
-        tester,
-        locale: const Locale('ar'),
-        theme: TpTheme.dark,
-      );
+      await _pump(tester, locale: const Locale('ar'), theme: TpTheme.dark);
 
       expect(tester.takeException(), isNull);
       expect(
@@ -274,12 +263,12 @@ void main() {
     (WidgetTester tester) async {
       const ChecklistAssignmentRecord globalAssignment =
           ChecklistAssignmentRecord(
-        id: 'assignment-global',
-        templateId: 'site-safety',
-        templateName: 'Site safety briefing',
-        site: 'Dubai Industrial City',
-        status: 'pending',
-      );
+            id: 'assignment-global',
+            templateId: 'site-safety',
+            templateName: 'Site safety briefing',
+            site: 'Dubai Industrial City',
+            status: 'pending',
+          );
       await _pump(
         tester,
         remote: const _ChecklistRemoteFake(
@@ -290,8 +279,10 @@ void main() {
         ),
       );
 
-      expect(find.text('CP-045 · Concrete Pump · SANY · SYG5360THB'),
-          findsOneWidget);
+      expect(
+        find.text('CP-045 · Concrete Pump · SANY · SYG5360THB'),
+        findsOneWidget,
+      );
       expect(find.text('Site safety briefing'), findsOneWidget);
       expect(find.text('Pending'), findsOneWidget);
       expect(tester.takeException(), isNull);
@@ -312,10 +303,7 @@ void main() {
       await _pump(
         tester,
         remote: const _ChecklistRemoteFake(
-          assignments: <ChecklistAssignmentRecord>[
-            _assignment,
-            secondAsset,
-          ],
+          assignments: <ChecklistAssignmentRecord>[_assignment, secondAsset],
         ),
       );
 
@@ -324,7 +312,10 @@ void main() {
       await tester.pump();
       await tester.tap(find.widgetWithText(ActionChip, 'CP-045'));
       await tester.pumpAndSettle();
-      expect(find.byKey(ChecklistsHomeScreenKeys.selectedAsset), findsOneWidget);
+      expect(
+        find.byKey(ChecklistsHomeScreenKeys.selectedAsset),
+        findsOneWidget,
+      );
 
       await tester.drag(find.byType(ListView), const Offset(0, 320));
       await tester.pumpAndSettle();
@@ -333,29 +324,27 @@ void main() {
     },
   );
 
-  testWidgets(
-    'cached asset data is labelled offline and never claims synced',
-    (WidgetTester tester) async {
-      await _pump(
-        tester,
-        vehicleOutcome: const VehicleDetailFromCache(asset: _pumpVehicle),
-      );
+  testWidgets('cached asset data is labelled offline and never claims synced', (
+    WidgetTester tester,
+  ) async {
+    await _pump(
+      tester,
+      vehicleOutcome: const VehicleDetailFromCache(asset: _pumpVehicle),
+    );
 
-      expect(find.byKey(TpStateKeys.offlineCached), findsOneWidget);
-      expect(find.text('Synced'), findsNothing);
-      expect(tester.takeException(), isNull);
-    },
-  );
+    expect(find.byKey(TpStateKeys.offlineCached), findsOneWidget);
+    expect(find.text('Synced'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 
-  testWidgets(
-    'pending offline work suppresses the synced claim',
-    (WidgetTester tester) async {
-      await _pump(tester, pendingSyncCount: 2);
+  testWidgets('pending offline work suppresses the synced claim', (
+    WidgetTester tester,
+  ) async {
+    await _pump(tester, pendingSyncCount: 2);
 
-      expect(find.text('Synced'), findsNothing);
-      expect(tester.takeException(), isNull);
-    },
-  );
+    expect(find.text('Synced'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets(
     'narrow large-text layout keeps permission-gated actions usable',
@@ -372,10 +361,7 @@ void main() {
       expect(find.byIcon(Icons.qr_code_scanner_rounded), findsNothing);
       await tester.drag(find.byType(ListView), const Offset(0, -900));
       await tester.pump();
-      expect(
-        find.byKey(ChecklistsHomeScreenKeys.tyreInspection),
-        findsNothing,
-      );
+      expect(find.byKey(ChecklistsHomeScreenKeys.tyreInspection), findsNothing);
       expect(find.byKey(ChecklistsHomeScreenKeys.history), findsOneWidget);
       expect(tester.takeException(), isNull);
     },

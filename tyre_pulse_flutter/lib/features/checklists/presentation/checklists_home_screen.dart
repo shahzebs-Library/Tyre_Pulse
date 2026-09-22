@@ -31,14 +31,18 @@ import 'package:tyre_pulse/features/scanning/presentation/asset_camera_scanner_d
 abstract final class ChecklistsHomeScreenKeys {
   static const Key brandHeader = ValueKey<String>('checklists.brand-header');
   static const Key searchField = ValueKey<String>('checklists.asset-search');
-  static const Key selectedAsset =
-      ValueKey<String>('checklists.selected-asset');
-  static const Key languageSelector =
-      ValueKey<String>('checklists.language-selector');
-  static const Key requiredForAsset =
-      ValueKey<String>('checklists.required-for-asset');
-  static const Key tyreInspection =
-      ValueKey<String>('checklists.tyre-inspection');
+  static const Key selectedAsset = ValueKey<String>(
+    'checklists.selected-asset',
+  );
+  static const Key languageSelector = ValueKey<String>(
+    'checklists.language-selector',
+  );
+  static const Key requiredForAsset = ValueKey<String>(
+    'checklists.required-for-asset',
+  );
+  static const Key tyreInspection = ValueKey<String>(
+    'checklists.tyre-inspection',
+  );
   static const Key history = ValueKey<String>('checklists.history');
 }
 
@@ -87,21 +91,22 @@ class _ChecklistsHomeScreenState extends ConsumerState<ChecklistsHomeScreen> {
     try {
       final remote = ref.read(checklistRemoteRepositoryProvider);
       final drafts = ref.read(checklistDraftRepositoryProvider);
-      final String? role =
-          workspace.role.rawValue.isEmpty ? null : workspace.role.rawValue;
+      final String? role = workspace.role.rawValue.isEmpty
+          ? null
+          : workspace.role.rawValue;
 
-      final List<ChecklistTemplateRecord> templates =
-          await remote.listTemplates(
-        country: workspace.activeCountry,
-        role: role,
-        isSuperAdmin: workspace.isSuperAdmin,
-      );
+      final List<ChecklistTemplateRecord> templates = await remote
+          .listTemplates(
+            country: workspace.activeCountry,
+            role: role,
+            isSuperAdmin: workspace.isSuperAdmin,
+          );
       final List<ChecklistAssignmentRecord> assignments =
           (await remote.listAssignments(
-        country: workspace.activeCountry,
-        role: role,
-        isSuperAdmin: workspace.isSuperAdmin,
-      ))
+                country: workspace.activeCountry,
+                role: role,
+                isSuperAdmin: workspace.isSuperAdmin,
+              ))
               .where((ChecklistAssignmentRecord a) => a.isOpen)
               .toList(growable: false);
       final List<ChecklistDraftHeader> allDrafts = await drafts.draftsForUser(
@@ -137,10 +142,7 @@ class _ChecklistsHomeScreenState extends ConsumerState<ChecklistsHomeScreen> {
     }
   }
 
-  void _openTemplate(
-    ChecklistTemplateRecord record, {
-    String? assetNo,
-  }) {
+  void _openTemplate(ChecklistTemplateRecord record, {String? assetNo}) {
     final String? id = record.template.id;
     if (id == null) return;
     GoRouter.of(context).push(
@@ -160,8 +162,9 @@ class _ChecklistsHomeScreenState extends ConsumerState<ChecklistsHomeScreen> {
         templateId: TemplateId(templateId),
         assignmentId: AssignmentId(assignment.id),
         siteName: assignment.site == null ? null : SiteName(assignment.site!),
-        assetNo:
-            assignment.assetNo == null ? null : AssetNo(assignment.assetNo!),
+        assetNo: assignment.assetNo == null
+            ? null
+            : AssetNo(assignment.assetNo!),
       ).location,
     );
   }
@@ -263,15 +266,18 @@ class _ChecklistsHomeScreenState extends ConsumerState<ChecklistsHomeScreen> {
 
     final AppLocalizations l10n = AppLocalizations.of(context);
     try {
-      final VehicleDetailOutcome outcome =
-          await ref.read(vehicleDetailProvider(query).future);
+      final VehicleDetailOutcome outcome = await ref.read(
+        vehicleDetailProvider(query).future,
+      );
       if (!mounted) return;
       switch (outcome) {
         case VehicleDetailLoaded(asset: final VehicleAsset asset):
         case VehicleDetailFromCache(asset: final VehicleAsset asset):
-          _selectAsset(asset.assetNo?.trim().isNotEmpty == true
-              ? asset.assetNo!.trim()
-              : query);
+          _selectAsset(
+            asset.assetNo?.trim().isNotEmpty == true
+                ? asset.assetNo!.trim()
+                : query,
+          );
           return;
         case VehicleDetailNotFound():
           _showLookupMessage(l10n.vehiclesNotFoundMessage);
@@ -287,9 +293,8 @@ class _ChecklistsHomeScreenState extends ConsumerState<ChecklistsHomeScreen> {
   }
 
   void _showLookupMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _selectAsset(String assetNo) {
@@ -314,14 +319,12 @@ class _ChecklistsHomeScreenState extends ConsumerState<ChecklistsHomeScreen> {
     final String? selectedAssetNo = _selectedAssetNo;
     final AsyncValue<VehicleDetailOutcome>? selectedVehicle =
         selectedAssetNo == null
-            ? null
-            : ref.watch(vehicleDetailProvider(selectedAssetNo));
+        ? null
+        : ref.watch(vehicleDetailProvider(selectedAssetNo));
     final AsyncValue<int> pendingSyncCount = ref.watch(
       checklistPendingSyncCountProvider,
     );
-    final bool canScan = ref.watch(
-      canAccessModuleProvider(ModuleKey.scan),
-    );
+    final bool canScan = ref.watch(canAccessModuleProvider(ModuleKey.scan));
     final bool canInspect = ref.watch(
       canAccessModuleProvider(ModuleKey.inspect),
     );
@@ -362,11 +365,11 @@ class _ChecklistsHomeScreenState extends ConsumerState<ChecklistsHomeScreen> {
     final List<String> searchMatches = _query.isEmpty
         ? const <String>[]
         : candidates
-            .where(
-              (String assetNo) =>
-                  assetNo.toLowerCase().contains(_query.toLowerCase()),
-            )
-            .toList(growable: false);
+              .where(
+                (String assetNo) =>
+                    assetNo.toLowerCase().contains(_query.toLowerCase()),
+              )
+              .toList(growable: false);
     VehicleAsset? selectedVehicleAsset;
     Widget? selectedVehicleState;
     bool selectedVehicleIsLive = selectedAssetNo == null;
@@ -395,16 +398,16 @@ class _ChecklistsHomeScreenState extends ConsumerState<ChecklistsHomeScreen> {
             selectedVehicleIsLive = true;
             break;
           case VehicleDetailFromCache(
-              asset: final VehicleAsset asset,
-              cachedAt: final DateTime? cachedAt,
-            ):
+            asset: final VehicleAsset asset,
+            cachedAt: final DateTime? cachedAt,
+          ):
             selectedVehicleAsset = asset;
             selectedVehicleState = TpOfflineCachedState(
               cachedAtLabel: _formatCachedAt(cachedAt),
               onRetry: selectedAssetNo == null
                   ? null
                   : () =>
-                      ref.invalidate(vehicleDetailProvider(selectedAssetNo)),
+                        ref.invalidate(vehicleDetailProvider(selectedAssetNo)),
             );
             break;
           case VehicleDetailNotFound():
@@ -443,15 +446,13 @@ class _ChecklistsHomeScreenState extends ConsumerState<ChecklistsHomeScreen> {
     ];
     final List<ChecklistAssignmentRecord> selectedAssignments =
         <ChecklistAssignmentRecord>[
-      for (final ChecklistAssignmentRecord assignment in _assignments)
-        if (assignment.assetNo?.trim().isEmpty != false ||
-            selectedAssetNo == null ||
-            _sameAsset(assignment.assetNo, selectedAssetNo))
-          assignment,
-    ];
-    final String selectedLanguage = ref.watch(
-      checklistContentLanguageProvider,
-    );
+          for (final ChecklistAssignmentRecord assignment in _assignments)
+            if (assignment.assetNo?.trim().isEmpty != false ||
+                selectedAssetNo == null ||
+                _sameAsset(assignment.assetNo, selectedAssetNo))
+              assignment,
+        ];
+    final String selectedLanguage = ref.watch(checklistContentLanguageProvider);
     final workspace = ref.watch(workspaceContextProvider);
     final bool queueIsClear = pendingSyncCount.maybeWhen(
       data: (int count) => count == 0,
@@ -645,13 +646,13 @@ bool _sameAsset(String? left, String? right) {
 
 Color _checklistAccent(TpPalette palette) =>
     palette.brightness == Brightness.light
-        ? const Color(0xFF0648D9)
-        : palette.primary;
+    ? const Color(0xFF0648D9)
+    : palette.primary;
 
 Color _checklistNavy(TpPalette palette) =>
     palette.brightness == Brightness.light
-        ? const Color(0xFF082B70)
-        : palette.text;
+    ? const Color(0xFF082B70)
+    : palette.text;
 
 String _initials(String? fullName) {
   final List<String> parts = (fullName ?? '')
@@ -710,12 +711,12 @@ class _ChecklistHubHeader extends StatelessWidget {
             Text(
               'TYRE\nPULSE',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: navy,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 18,
-                    height: 0.9,
-                    letterSpacing: 0.4,
-                  ),
+                color: navy,
+                fontWeight: FontWeight.w900,
+                fontSize: 18,
+                height: 0.9,
+                letterSpacing: 0.4,
+              ),
             ),
             const Spacer(),
             Semantics(
@@ -730,9 +731,9 @@ class _ChecklistHubHeader extends StatelessWidget {
                     child: Text(
                       _initials(fullName),
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: palette.onPrimary,
-                            fontWeight: FontWeight.w800,
-                          ),
+                        color: palette.onPrimary,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
                   PositionedDirectional(
@@ -761,12 +762,12 @@ class _ChecklistHubHeader extends StatelessWidget {
               child: Text(
                 title,
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      color: navy,
-                      fontSize: 32,
-                      height: 1.1,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.7,
-                    ),
+                  color: navy,
+                  fontSize: 32,
+                  height: 1.1,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.7,
+                ),
               ),
             ),
             if (isSynced)
@@ -778,9 +779,9 @@ class _ChecklistHubHeader extends StatelessWidget {
                   Text(
                     syncedLabel,
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: palette.ok.base,
-                          fontWeight: FontWeight.w700,
-                        ),
+                      color: palette.ok.base,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ],
               ),
@@ -919,9 +920,9 @@ class _SelectedChecklistAssetCard extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: _checklistNavy(palette),
-                            fontWeight: FontWeight.w800,
-                          ),
+                        color: _checklistNavy(palette),
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                     if (site != null && site.isNotEmpty) ...<Widget>[
                       const SizedBox(height: TpSpace.xs),
@@ -950,11 +951,7 @@ class _SelectedChecklistAssetCard extends StatelessWidget {
 }
 
 class _AssetFact extends StatelessWidget {
-  const _AssetFact({
-    required this.icon,
-    required this.value,
-    this.color,
-  });
+  const _AssetFact({required this.icon, required this.value, this.color});
 
   final IconData icon;
   final String value;
@@ -972,10 +969,8 @@ class _AssetFact extends StatelessWidget {
             value,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: ink,
-                  fontWeight: FontWeight.w500,
-                ),
+            style: Theme.of(context).textTheme.bodyMedium
+                ?.copyWith(color: ink, fontWeight: FontWeight.w500),
           ),
         ),
       ],
@@ -1074,10 +1069,9 @@ class _ChecklistLanguageOption extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: selected ? accent : palette.textSecondary,
-                        fontWeight:
-                            selected ? FontWeight.w800 : FontWeight.w500,
-                      ),
+                    color: selected ? accent : palette.textSecondary,
+                    fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
+                  ),
                 ),
               ),
             ],
@@ -1106,9 +1100,9 @@ class _LanguageStorageHint extends StatelessWidget {
             child: Text(
               message,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: palette.textSecondary,
-                    fontWeight: FontWeight.w500,
-                  ),
+                color: palette.textSecondary,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
         ],
@@ -1185,9 +1179,10 @@ String? _assignmentStatusLabel(AppLocalizations l10n, String? rawStatus) {
 }
 
 IconData _assignmentIcon(ChecklistAssignmentRecord assignment) {
-  final String searchable = '${assignment.templateName ?? ''} '
-          '${assignment.templateId ?? ''}'
-      .toLowerCase();
+  final String searchable =
+      '${assignment.templateName ?? ''} '
+              '${assignment.templateId ?? ''}'
+          .toLowerCase();
   if (searchable.contains('odometer') || searchable.contains('meter')) {
     return Icons.speed_outlined;
   }
@@ -1245,9 +1240,9 @@ class _RequiredChecklistRow extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: _checklistNavy(palette),
-                          fontWeight: FontWeight.w800,
-                        ),
+                      color: _checklistNavy(palette),
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                   if (subtitle.isNotEmpty) ...<Widget>[
                     const SizedBox(height: 2),
@@ -1255,9 +1250,8 @@ class _RequiredChecklistRow extends StatelessWidget {
                       subtitle,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: palette.textSecondary,
-                          ),
+                      style: Theme.of(context).textTheme.bodySmall
+                          ?.copyWith(color: palette.textSecondary),
                     ),
                   ],
                 ],
@@ -1275,9 +1269,9 @@ class _RequiredChecklistRow extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                            color: statusColor,
-                            fontWeight: FontWeight.w700,
-                          ),
+                        color: statusColor,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
@@ -1287,11 +1281,11 @@ class _RequiredChecklistRow extends StatelessWidget {
                           actionLabel,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style:
-                              Theme.of(context).textTheme.labelLarge?.copyWith(
-                                    color: accent,
-                                    fontWeight: FontWeight.w800,
-                                  ),
+                          style: Theme.of(context).textTheme.labelLarge
+                              ?.copyWith(
+                                color: accent,
+                                fontWeight: FontWeight.w800,
+                              ),
                         ),
                       ),
                       const SizedBox(width: TpSpace.xs),
@@ -1366,9 +1360,9 @@ class _ChecklistHubLink extends StatelessWidget {
                   Text(
                     title,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: _checklistNavy(palette),
-                          fontWeight: FontWeight.w800,
-                        ),
+                      color: _checklistNavy(palette),
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                   if (subtitle != null && subtitle!.isNotEmpty) ...<Widget>[
                     const SizedBox(height: 2),
@@ -1376,9 +1370,8 @@ class _ChecklistHubLink extends StatelessWidget {
                       subtitle!,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: palette.textSecondary,
-                          ),
+                      style: Theme.of(context).textTheme.bodySmall
+                          ?.copyWith(color: palette.textSecondary),
                     ),
                   ],
                 ],
@@ -1393,8 +1386,8 @@ class _ChecklistHubLink extends StatelessWidget {
               expanded
                   ? Icons.expand_less_rounded
                   : Directionality.of(context) == TextDirection.rtl
-                      ? Icons.chevron_left_rounded
-                      : Icons.chevron_right_rounded,
+                  ? Icons.chevron_left_rounded
+                  : Icons.chevron_right_rounded,
               color: accent,
             ),
           ],
@@ -1415,9 +1408,7 @@ class _SectionHeader extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: TpSpace.sm),
       child: Text(
         label,
-        style: Theme.of(context)
-            .textTheme
-            .labelLarge
+        style: Theme.of(context).textTheme.labelLarge
             ?.copyWith(color: TpPalette.of(context).textMuted),
       ),
     );
@@ -1433,8 +1424,8 @@ class _InlineWarning extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final TpStatusColors colors =
-        TpPalette.of(context).forStatus(TpStatus.warning);
+    final TpStatusColors colors = TpPalette.of(context)
+        .forStatus(TpStatus.warning);
     return Container(
       padding: const EdgeInsets.all(TpSpace.md),
       decoration: BoxDecoration(
@@ -1453,9 +1444,7 @@ class _InlineWarning extends StatelessWidget {
               Expanded(
                 child: Text(
                   message,
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
+                  style: Theme.of(context).textTheme.bodySmall
                       ?.copyWith(color: colors.onSoft),
                 ),
               ),
@@ -1486,8 +1475,9 @@ class _TemplateRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
-    final int count =
-        record.template.fields.where((field) => field.type != 'section').length;
+    final int count = record.template.fields
+        .where((field) => field.type != 'section')
+        .length;
     final String searchable = <String?>[
       record.template.name,
       record.category,
@@ -1500,13 +1490,14 @@ class _TemplateRow extends StatelessWidget {
     final TpStatus chipStatus = tyreWorkflow
         ? TpStatus.info
         : count > 24
-            ? TpStatus.warning
-            : count > 0
-                ? TpStatus.ok
-                : TpStatus.neutral;
+        ? TpStatus.warning
+        : count > 0
+        ? TpStatus.ok
+        : TpStatus.neutral;
     final String subtitle = record.description ?? record.category ?? '';
-    final String? footer =
-        usesPhotos ? l10n.checklistPhotosOnFailure : record.docPrefix;
+    final String? footer = usesPhotos
+        ? l10n.checklistPhotosOnFailure
+        : record.docPrefix;
 
     return TpCard(
       margin: const EdgeInsets.only(bottom: TpSpace.md),
@@ -1519,17 +1510,18 @@ class _TemplateRow extends StatelessWidget {
         icon: tyreWorkflow
             ? Icons.tire_repair_outlined
             : usesPhotos
-                ? Icons.photo_camera_outlined
-                : Icons.fact_check_outlined,
+            ? Icons.photo_camera_outlined
+            : Icons.fact_check_outlined,
         status: chipStatus,
         title: record.template.name ?? '',
         subtitle: subtitle,
         footer: footer,
         chip: _CountChip(
-          label: (tyreWorkflow
-                  ? l10n.checklistPositionCount(count)
-                  : l10n.checklistItemCount(count))
-              .toUpperCase(),
+          label:
+              (tyreWorkflow
+                      ? l10n.checklistPositionCount(count)
+                      : l10n.checklistItemCount(count))
+                  .toUpperCase(),
           status: chipStatus,
         ),
         actionLabel: l10n.checklistStartAction,
@@ -1598,10 +1590,10 @@ class _ChecklistRowLayout extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: palette.text,
-                          fontWeight: FontWeight.w700,
-                          height: 22 / 16,
-                        ),
+                      color: palette.text,
+                      fontWeight: FontWeight.w700,
+                      height: 22 / 16,
+                    ),
                   ),
                   if (subtitle.trim().isNotEmpty) ...<Widget>[
                     const SizedBox(height: 2),
@@ -1610,11 +1602,11 @@ class _ChecklistRowLayout extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: palette.textMuted,
-                            fontWeight: FontWeight.w600,
-                            height: 16 / 12,
-                            letterSpacing: 0.2,
-                          ),
+                        color: palette.textMuted,
+                        fontWeight: FontWeight.w600,
+                        height: 16 / 12,
+                        letterSpacing: 0.2,
+                      ),
                     ),
                   ],
                 ],
@@ -1633,19 +1625,18 @@ class _ChecklistRowLayout extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: palette.textSecondary,
-                      fontWeight: FontWeight.w600,
-                      height: 16 / 12,
-                      letterSpacing: 0.2,
-                    ),
+                  color: palette.textSecondary,
+                  fontWeight: FontWeight.w600,
+                  height: 16 / 12,
+                  letterSpacing: 0.2,
+                ),
               ),
             ),
             const SizedBox(width: TpSpace.sm),
             Theme(
               data: Theme.of(context).copyWith(
-                colorScheme: Theme.of(context).colorScheme.copyWith(
-                      primary: actionColor,
-                    ),
+                colorScheme: Theme.of(context).colorScheme
+                    .copyWith(primary: actionColor),
               ),
               child: TpButton(
                 label: actionLabel,
@@ -1693,11 +1684,11 @@ class _CountChip extends StatelessWidget {
         child: Text(
           label,
           style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: colors.onSoft,
-                fontWeight: FontWeight.w700,
-                height: 16 / 12,
-                letterSpacing: 0.2,
-              ),
+            color: colors.onSoft,
+            fontWeight: FontWeight.w700,
+            height: 16 / 12,
+            letterSpacing: 0.2,
+          ),
         ),
       ),
     );

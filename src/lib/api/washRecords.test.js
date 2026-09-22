@@ -73,11 +73,11 @@ describe('listWashRecords', () => {
 
 describe('createWashRecord', () => {
   it('recovers an identical retry but refuses to discard changed details after an earlier save', async () => {
-    const input={asset_no:'A',wash_date:'2026-09-21',client_uuid:'key',wash_details:{version:1,chemical_status:'none',chemicals:[],checklist:[]}}
+    const input={asset_no:'A',wash_date:'2026-09-21',client_uuid:'key',wash_details:{version:1,chemical_status:'none',chemicals:[]}}
     h.state.tables.wash_records={data:{id:'w1'}}
     await api.createWashRecord(input)
     const [payload]=opArgs(lastCall('wash_records'),'upsert')[0]
-    const existing={...payload,id:'w1',wash_details:{checklist:[],chemicals:[],chemical_status:'none',version:1}}
+    const existing={...payload,id:'w1',wash_details:{chemicals:[],chemical_status:'none',version:1}}
     h.state.tables.wash_records=[{data:null},{data:existing}]
     expect((await api.createWashRecord(input)).id).toBe('w1')
     h.state.tables.wash_records=[{data:null},{data:existing}]
@@ -85,7 +85,7 @@ describe('createWashRecord', () => {
   })
   it('uses a stable client key to ignore upload retries without overwriting evidence', async () => {
     h.state.tables.wash_records = { data: { id: 'w1' }, error: null }
-    await api.createWashRecord({ asset_no: 'A', client_uuid: 'stable-key', wash_details: {version:1,chemical_status:'none',chemicals:[],checklist:[]} })
+    await api.createWashRecord({ asset_no: 'A', client_uuid: 'stable-key', wash_details: {version:1,chemical_status:'none',chemicals:[]} })
     const [payload,options] = opArgs(lastCall('wash_records'),'upsert')[0]
     expect(payload.client_uuid).toBe('stable-key')
     expect(payload.wash_details.chemical_status).toBe('none')

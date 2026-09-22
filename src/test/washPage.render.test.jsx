@@ -13,7 +13,7 @@ vi.mock('../components/checklist/ReferencePicker',()=>({default:()=>null}))
 vi.mock('../lib/api/washRecords',async importOriginal=>({...await importOriginal(),listWashRecords:vi.fn(async()=>h.rows),enrichWashPeople:vi.fn(async rows=>rows),washExportFleet:vi.fn(async()=>[]),listWashCorrections:vi.fn(async()=>[])}))
 import VehicleWashing from '../pages/VehicleWashing'
 
-it('opens staff drill-down and the saved checklist from the register',async()=>{
+it('opens a wash record from the register without exposing legacy checklist data',async()=>{
   render(<MemoryRouter><VehicleWashing/></MemoryRouter>)
   await waitFor(()=>expect(screen.getByRole('button',{name:'Staff activity'})).toBeInTheDocument())
   fireEvent.click(screen.getByRole('button',{name:'Staff activity'}))
@@ -21,8 +21,10 @@ it('opens staff drill-down and the saved checklist from the register',async()=>{
   expect(screen.queryByRole('button',{name:'View wash TEST-2'})).not.toBeInTheDocument()
   const headers=within(screen.getByRole('table')).getAllByRole('columnheader')
   expect(headers.at(-1)).toHaveTextContent('View')
+  expect(headers.some(header => header.textContent === 'Wash checks')).toBe(false)
   fireEvent.click(screen.getByText('TEST-1').closest('tr'))
   expect(await screen.findByRole('dialog')).toBeInTheDocument()
-  expect(screen.getByText('Dust remains')).toBeInTheDocument()
+  expect(screen.queryByText('Dust remains')).not.toBeInTheDocument()
+  expect(screen.queryByText('Wash checklist')).not.toBeInTheDocument()
   expect(within(screen.getByRole('dialog')).getByText('No chemical used')).toBeInTheDocument()
 })

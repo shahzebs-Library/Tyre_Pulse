@@ -74,7 +74,7 @@ import { washVehicleKey } from '../lib/washReportPdf'
 import { safeImageSrc } from '../lib/safeUrl'
 import { toUserMessage } from '../lib/safeError'
 import { enrichWashPeople } from '../lib/api/washRecords'
-import { entryPerson, emptyWashDetails, checklistSummary, staffWashActivity } from '../lib/washDetails'
+import { entryPerson, emptyWashDetails, staffWashActivity } from '../lib/washDetails'
 import WashDetailsForm from '../components/washing/WashDetailsForm'
 import WashRecordViewer from '../components/washing/WashRecordViewer'
 import WashAdvancedFilters from '../components/washing/WashAdvancedFilters'
@@ -138,7 +138,7 @@ const EDIT_FIELDS = [
   { key: 'odometer_km', label: 'Odometer (km)', type: 'number' },
   { key: 'notes', label: 'Notes', type: 'text' },
 ]
-const EDIT_LABEL = { ...Object.fromEntries(EDIT_FIELDS.map((f) => [f.key, f.label])), wash_details: 'Chemicals / checklist' }
+const EDIT_LABEL = { ...Object.fromEntries(EDIT_FIELDS.map((f) => [f.key, f.label])), wash_details: 'Chemical details' }
 
 /** Current local time as HH:MM (auto-captured at save; not user-editable). */
 function nowHHMM() {
@@ -586,8 +586,8 @@ export default function VehicleWashing() {
   // Cost is carried as the same words the screen shows: "No charge" for a
   // recorded zero, "Not recorded" for a blank. A downloaded 0 in a money column
   // reads as a measurement failure in a spreadsheet, which it is not.
-  const EXPORT_COLS = ['wash_date', 'wash_time', 'asset_no', 'vehicle_type', 'wash_type', 'site', 'area', 'bay', 'washed_by', 'status', 'cost', 'entered_by', 'username', 'received_at', 'chemicals', 'checklist']
-  const EXPORT_HEADERS = ['Date', 'Time', 'Asset', 'Vehicle Type', 'Wash Type', 'Site', 'Area', 'Bay', 'Operator', 'Status', 'Cost', 'Entered by', 'Username', 'Received at', 'Chemicals used', 'Checklist']
+  const EXPORT_COLS = ['wash_date', 'wash_time', 'asset_no', 'vehicle_type', 'wash_type', 'site', 'area', 'bay', 'washed_by', 'status', 'cost', 'entered_by', 'username', 'received_at', 'chemicals']
+  const EXPORT_HEADERS = ['Date', 'Time', 'Asset', 'Vehicle Type', 'Wash Type', 'Site', 'Area', 'Bay', 'Operator', 'Status', 'Cost', 'Entered by', 'Username', 'Received at', 'Chemicals used']
   const exportRowsFrom = (list) => (Array.isArray(list) ? list : []).map((r) => ({
     wash_date: r.wash_date ? String(r.wash_date).slice(0, 10) : '',
     wash_time: r.wash_time || '',
@@ -602,7 +602,6 @@ export default function VehicleWashing() {
     cost: formatWashCost(r.cost),
     entered_by: entryPerson(r), username: r.entry_username || '', received_at: r.created_at || '',
     chemicals: r.wash_details?.chemical_status === 'none' ? 'No chemical used' : (r.wash_details?.chemicals || []).map(c => [c.name,c.manufacturer,c.quantity,c.unit,c.dilution,c.sds_url].filter(Boolean).join(' / ')).join('; ') || 'Not recorded',
-    checklist: (r.wash_details?.checklist || []).map(c => `${c.label}: ${c.result}${c.note ? ` (${c.note})` : ''}`).join('; ') || 'Not recorded',
   }))
   const exportExcel = async (list, label = 'Vehicle Washing') => {
     if (pdfLock.current) return
@@ -657,8 +656,6 @@ export default function VehicleWashing() {
       cell: ({ getValue }) => getValue() || 'N/A' },
     { id: 'entered_by', header: 'Entered by', accessorFn: (row) => entryPerson(row), size: 170,
       cell: ({ row }) => <span>{entryPerson(row.original)}<span className="block text-xs text-[var(--text-muted)]">{fmtStamp(row.original.created_at)}</span></span> },
-    { id: 'checklist', header: 'Wash checks', accessorFn: (row) => checklistSummary(row), size: 130,
-      cell: ({ getValue }) => getValue() },
     { id: 'cost', header: 'Cost', accessorFn: (row) => Number(row.cost || 0), size: 110,
       cell: ({ row }) => formatWashCost(row.original.cost), meta: { align: 'right' } },
     { id: 'photos', header: 'Photos', accessorFn: (row) => Array.isArray(row.photos) ? row.photos.length : 0, size: 90,

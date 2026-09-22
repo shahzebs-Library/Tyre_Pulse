@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import Modal from '../ui/Modal'
 import { listWashCorrections } from '../../lib/api/washRecords'
-import { CHECK_RESULTS, entryPerson } from '../../lib/washDetails'
+import { entryPerson } from '../../lib/washDetails'
 import { resolveStorageUrl } from '../../lib/storageRefs'
 import { safeImageSrc } from '../../lib/safeUrl'
 
@@ -25,7 +25,6 @@ export default function WashRecordViewer({ row, onClose }) {
         <p>{details?.chemical_status === 'none' ? 'No chemical used' : details?.chemical_status === 'used' ? '' : 'Not recorded'}</p>
         {(details?.chemicals || []).map((c,i) => <div key={i} className="border-b border-[var(--input-border)] py-2"><strong>{c.name}</strong><p className="text-sm">{[c.manufacturer, [c.quantity,c.unit].filter(Boolean).join(' '), c.dilution && `Dilution used: ${c.dilution}`].filter(Boolean).join(' · ')}</p>{/^https:\/\/\S+$/.test(c.sds_url || '') && <a className="text-blue-400 underline" href={c.sds_url} target="_blank" rel="noreferrer">Safety data sheet</a>}</div>)}
       </section>
-      <section><h3 className="font-semibold mb-2">Wash checklist</h3>{!details?.checklist?.length && <p>Not recorded</p>}{(details?.checklist || []).map((c,i) => <div key={i} className="border-b border-[var(--input-border)] py-2"><p>{c.label} — <strong>{CHECK_RESULTS[c.result] || 'Not checked'}</strong></p>{c.note && <p className="text-sm text-[var(--text-secondary)]">{c.note}</p>}</div>)}</section>
       <section><h3 className="font-semibold mb-2">Photos</h3>{!row.photos?.length && <p>No photos recorded.</p>}<div className="grid sm:grid-cols-2 gap-3">{photos.map((url,i) => url ? <a key={i} href={url} target="_blank" rel="noreferrer"><img src={url} alt={`Wash attachment ${i+1}`} className="w-full rounded object-contain max-h-72" /></a> : <p key={i}>Photo {i+1} unavailable</p>)}</div></section>
       {row.notes && <section><h3 className="font-semibold">Notes</h3><p className="whitespace-pre-wrap">{row.notes}</p></section>}
       <section><h3 className="font-semibold mb-2">Correction history</h3>{loading ? <p>Loading history…</p> : error ? <p role="alert">{error}</p> : !history.length ? <p>No corrections recorded.</p> : history.map(h => <div key={h.id} className="py-2 border-b border-[var(--input-border)] text-sm break-words"><p>{h.field}: {h.old_value || '(blank)'} → {h.new_value || '(blank)'}</p><p>{h.reason} · {h.corrected_at} · {h.corrected_by}</p></div>)}</section>

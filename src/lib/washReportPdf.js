@@ -3,7 +3,7 @@ import { applyExportPolicy, resolvePdfBrand, pdfFooter, pdfTableTheme } from './
 import { resolveStorageUrl } from './storageRefs'
 import { getCompanyLogo } from './api/brandLogo'
 import { formatWashCost } from './washAnalytics'
-import { CHECK_RESULTS, entryPerson } from './washDetails'
+import { entryPerson } from './washDetails'
 
 const shown = value => value == null || value === '' ? 'Not recorded' : String(value)
 export const washVehicleKey = row => JSON.stringify([row.organisation_id ?? null, row.country ?? null, String(row.asset_no || '').trim().toUpperCase()])
@@ -44,7 +44,7 @@ export function washDateLabel(value) {
   return Number.isNaN(date.getTime()) ? shown(value) : date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })
 }
 export function washFilterLabel(filters = {}) {
-  const labels = { from: 'From', to: 'To', dateBasis: 'Date basis', site: 'Site', area: 'Area', status: 'Status', type: 'Wash type', assetNo: 'Vehicle', enteredBy: 'Creator ID', correctedBy: 'Correction user ID', corrections: 'Corrections', country: 'Country', region: 'Current region', vehicleType: 'Vehicle type', bay: 'Bay', washedBy: 'Washed by', registration: 'Registration', photos: 'Photos', chemicals: 'Chemicals', checklist: 'Checklist' }
+  const labels = { from: 'From', to: 'To', dateBasis: 'Date basis', site: 'Site', area: 'Area', status: 'Status', type: 'Wash type', assetNo: 'Vehicle', enteredBy: 'Creator ID', correctedBy: 'Correction user ID', corrections: 'Corrections', country: 'Country', region: 'Current region', vehicleType: 'Vehicle type', bay: 'Bay', washedBy: 'Washed by', registration: 'Registration', photos: 'Photos', chemicals: 'Chemicals' }
   const parts = Object.entries(labels).filter(([k]) => filters[k] && filters[k] !== 'All').map(([k, label]) => `${label}: ${k === 'from' || k === 'to' ? washDateLabel(filters[k]) : filters[k]}`)
   return parts.length ? parts.join(' | ') : 'All accessible wash records'
 }
@@ -118,7 +118,6 @@ export async function exportVehicleWashPdf(rows, { company = '', branding, curre
         if (row.wash_details) {
           details.push(`Chemicals: ${row.wash_details.chemical_status === 'none' ? 'No chemical used' : row.wash_details.chemical_status === 'used' ? 'Recorded below' : 'Not recorded'}`)
           for (const c of row.wash_details.chemicals || []) details.push([c.name,c.manufacturer,[c.quantity,c.unit].filter(Boolean).join(' '),c.dilution && `Dilution: ${c.dilution}`,c.sds_url].filter(Boolean).join(' | '))
-          for (const c of row.wash_details.checklist || []) details.push(`${c.label}: ${CHECK_RESULTS[c.result] || 'Not checked'}${c.note ? ` - ${c.note}` : ''}`)
         }
         table({ startY: 170, head: [], body: [[washFilterLabel(filters)], ...details.map(d => [d])], didDrawPage: () => { header(`Vehicle Washing - ${shown(row.asset_no)}`, subtitle); pageRefs.set(doc.internal.getNumberOfPages(), row.id) } })
       }

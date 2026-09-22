@@ -27,6 +27,8 @@ class TyreReplacementPositionPicker extends StatelessWidget {
     required this.options,
     required this.selectedCode,
     required this.onSelected,
+    this.make,
+    this.model,
     super.key,
   });
 
@@ -35,6 +37,8 @@ class TyreReplacementPositionPicker extends StatelessWidget {
   final List<TyreReplacementPositionOption> options;
   final String selectedCode;
   final ValueChanged<String> onSelected;
+  final String? make;
+  final String? model;
 
   @override
   Widget build(BuildContext context) {
@@ -66,6 +70,8 @@ class TyreReplacementPositionPicker extends StatelessWidget {
               key: TyreReplacementPositionPickerKeys.diagram,
               vehicleType: vehicleType,
               assetNo: assetNo,
+              make: make,
+              model: model,
               positions: <String>[
                 for (final TyreReplacementPositionOption option
                     in diagramOptions)

@@ -138,6 +138,64 @@ void main() {
     },
   );
 
+  testWidgets('tyre step uses only an exact cached fleet hit for bus identity', (
+    WidgetTester tester,
+  ) async {
+    final List<String> positions = diagramPositions('Bus', 'BH021');
+    await _pumpScreen(
+      tester,
+      size: const Size(390, 900),
+      initialState: InspectionWizardState(
+        step: InspectionWizardStep.tyres,
+        selectedAssetNo: 'BH021',
+        selectedVehicleType: 'Bus',
+        selectedSite: 'Site A',
+        positions: positions,
+        tyreConditions: <String, TyrePositionReading>{
+          for (final String position in positions)
+            position: TyrePositionReading.seed(position),
+        },
+      ),
+      extraOverrides: <Override>[
+        vehicleFleetListProvider.overrideWith(
+          (ref) async => const VehicleFleetListFromCache(
+            assets: <VehicleAsset>[
+              VehicleAsset(
+                id: 'bus-1',
+                assetNo: 'BH021',
+                make: 'Tata',
+                model: '32 seater',
+                vehicleType: 'Bus',
+              ),
+              VehicleAsset(
+                id: 'other-bus',
+                assetNo: 'BH022',
+                make: 'Ashok Leyland',
+                model: '62 seater',
+                vehicleType: 'Bus',
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    final TyreDiagramBoard board = tester.widget<TyreDiagramBoard>(
+      find.byKey(NewInspectionScreenKeys.tyreDiagramBoard),
+    );
+    expect(board.make, 'Tata');
+    expect(board.model, '32 seater');
+    expect(
+      find.byKey(
+        const ValueKey<String>(
+          'assets/vehicle_multiview_views/'
+          'tata_staff_bus_five_view_v1_top.png',
+        ),
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets(
     'untouched TM749 is Not started and keeps its exact mixer topology',
     (WidgetTester tester) async {

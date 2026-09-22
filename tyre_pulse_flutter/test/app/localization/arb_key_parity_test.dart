@@ -469,10 +469,12 @@ void main() {
     // 547-3+9 note on why the three stopgap home* tile keys were retired for
     // exactly that reason), so the screen and the tile both read
     // `myPlansNavTitle`.
-    test('en, ar and ur each carry exactly 861 translatable keys today', () {
-      expect(_translatableKeys(en).length, 861);
-      expect(_translatableKeys(ar).length, 861);
-      expect(_translatableKeys(ur).length, 861);
+    // 861 + 9 = 870. The asset-first checklist hub adds shared labels for
+    // asset search, section headings, content language and checklist states.
+    test('en, ar and ur each carry exactly 870 translatable keys today', () {
+      expect(_translatableKeys(en).length, 870);
+      expect(_translatableKeys(ar).length, 870);
+      expect(_translatableKeys(ur).length, 870);
     });
   });
 

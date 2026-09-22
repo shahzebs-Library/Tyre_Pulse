@@ -314,6 +314,7 @@ class _ChecklistsHomeScreenState extends ConsumerState<ChecklistsHomeScreen> {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
+    final workspace = ref.watch(workspaceContextProvider);
     final String? selectedAssetNo = _selectedAssetNo;
     final AsyncValue<VehicleDetailOutcome>? selectedVehicle =
         selectedAssetNo == null
@@ -322,13 +323,12 @@ class _ChecklistsHomeScreenState extends ConsumerState<ChecklistsHomeScreen> {
     final AsyncValue<int> pendingSyncCount = ref.watch(
       checklistPendingSyncCountProvider,
     );
-    final bool canScan = ref.watch(canAccessModuleProvider(ModuleKey.scan));
-    final bool canInspect = ref.watch(
-      canAccessModuleProvider(ModuleKey.inspect),
-    );
-    final bool canOpenVehicles = ref.watch(
-      canAccessModuleProvider(ModuleKey.vehicles),
-    );
+    final bool canScan =
+        workspace != null && ref.watch(canAccessModuleProvider(ModuleKey.scan));
+    final bool canInspect = workspace != null &&
+        ref.watch(canAccessModuleProvider(ModuleKey.inspect));
+    final bool canOpenVehicles = workspace != null &&
+        ref.watch(canAccessModuleProvider(ModuleKey.vehicles));
 
     return TpScaffold(
       backFallback: TpRoutePaths.home,

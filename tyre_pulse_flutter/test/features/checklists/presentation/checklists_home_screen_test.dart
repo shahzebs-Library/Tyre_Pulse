@@ -219,8 +219,11 @@ void main() {
       await tester.pump();
       expect(container.read(checklistContentLanguageProvider), 'ar');
 
-      await tester.drag(find.byType(ListView), const Offset(0, -700));
-      await tester.pump();
+      await tester.scrollUntilVisible(
+        find.byKey(ChecklistsHomeScreenKeys.history),
+        400,
+        scrollable: find.byType(Scrollable).first,
+      );
       expect(find.text('General checklist library'), findsOneWidget);
       expect(find.text('Tyre inspection'), findsOneWidget);
       expect(find.text('Checklist history'), findsOneWidget);
@@ -249,8 +252,11 @@ void main() {
         find.byKey(ChecklistsHomeScreenKeys.requiredForAsset),
         findsOneWidget,
       );
-      await tester.drag(find.byType(ListView), const Offset(0, -700));
-      await tester.pump();
+      await tester.scrollUntilVisible(
+        find.byKey(ChecklistsHomeScreenKeys.history),
+        400,
+        scrollable: find.byType(Scrollable).first,
+      );
       expect(
         find.byKey(ChecklistsHomeScreenKeys.tyreInspection),
         findsOneWidget,
@@ -311,8 +317,6 @@ void main() {
 
       expect(find.byKey(ChecklistsHomeScreenKeys.selectedAsset), findsNothing);
       await tester.enterText(find.byType(TextField), 'CP-045');
-      await tester.pump();
-      await tester.tap(find.widgetWithText(ActionChip, 'CP-045'));
       await tester.pumpAndSettle();
       expect(
         find.byKey(ChecklistsHomeScreenKeys.selectedAsset),
@@ -361,8 +365,11 @@ void main() {
       );
 
       expect(find.byIcon(Icons.qr_code_scanner_rounded), findsNothing);
-      await tester.drag(find.byType(ListView), const Offset(0, -900));
-      await tester.pump();
+      await tester.scrollUntilVisible(
+        find.byKey(ChecklistsHomeScreenKeys.history),
+        400,
+        scrollable: find.byType(Scrollable).first,
+      );
       expect(find.byKey(ChecklistsHomeScreenKeys.tyreInspection), findsNothing);
       expect(find.byKey(ChecklistsHomeScreenKeys.history), findsOneWidget);
       expect(tester.takeException(), isNull);

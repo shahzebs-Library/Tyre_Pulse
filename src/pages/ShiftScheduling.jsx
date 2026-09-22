@@ -18,6 +18,7 @@ import { summarizeShifts } from '../lib/shifts'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 const STATUS_META = {
   scheduled: { label: 'Scheduled', cls: 'bg-sky-900/40 text-sky-300 border border-sky-700/50', icon: Calendar },
@@ -32,10 +33,6 @@ const EMPTY_FORM = {
   person_name: '', role: '', shift_date: '', start_time: '', end_time: '', site: '', status: 'scheduled', notes: '',
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') || m.includes('schema cache') || m.includes('could not find the table')
-}
 function fmtDate(v) {
   if (!v) return 'N/A'
   const d = new Date(v)

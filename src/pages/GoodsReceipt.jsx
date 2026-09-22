@@ -34,6 +34,7 @@ import {
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 ChartJS.register(ArcElement, Tooltip, Legend)
 
@@ -57,10 +58,6 @@ function fmtDate(v) {
   if (!v) return 'N/A'
   const d = v instanceof Date ? v : new Date(v)
   return Number.isNaN(d.getTime()) ? 'N/A' : d.toISOString().slice(0, 10)
-}
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') || m.includes('schema cache') || m.includes('could not find the table')
 }
 
 export default function GoodsReceipt() {

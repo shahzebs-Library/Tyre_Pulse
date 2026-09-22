@@ -29,6 +29,7 @@ import {
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 const EMPTY_FORM = {
   driver_name: '', period: '', safety_score: '', fuel_score: '', harsh_events: '',
@@ -72,11 +73,6 @@ const MEDAL = {
   3: { icon: Award, tone: 'text-orange-400' },
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') ||
-    m.includes('schema cache') || m.includes('could not find the table')
-}
 
 export default function DriverCoaching() {
   const { activeCountry } = useSettings()

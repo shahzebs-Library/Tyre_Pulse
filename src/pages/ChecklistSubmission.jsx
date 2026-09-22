@@ -24,6 +24,7 @@ import { useTenant } from '../contexts/TenantContext'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import { safeHref, safeImageSrc } from '../lib/safeUrl'
 import { toUserMessage } from '../lib/safeError'
+import { isMissingRelation } from '../lib/api/_client'
 
 const STATUS_BADGE = {
   submitted: 'bg-sky-900/40 text-sky-300 border border-sky-700/50',
@@ -43,10 +44,6 @@ function fmtDateTime(v) {
   if (!v) return '-'
   const d = new Date(v)
   return Number.isNaN(d.getTime()) ? '-' : d.toLocaleString()
-}
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') || m.includes('schema cache') || m.includes('could not find the table')
 }
 
 // Which points are shown, and what each answer reads as, is decided once in

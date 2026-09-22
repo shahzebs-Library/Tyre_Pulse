@@ -37,6 +37,7 @@ import {
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 ChartJS.register(ArcElement, CategoryScale, LinearScale, BarElement, Tooltip, Legend)
 
@@ -57,10 +58,6 @@ const BADGE_STYLES = {
   other:       'bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]',
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') || m.includes('schema cache') || m.includes('could not find the table')
-}
 const num = (v) => (v == null || v === '' ? 'N/A' : v)
 const fmtDate = (v) => (v ? String(v).slice(0, 10) : 'N/A')
 const cssVar = (name, fallback) => {

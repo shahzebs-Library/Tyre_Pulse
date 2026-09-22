@@ -16,14 +16,9 @@ import { useSites } from '../hooks/useSites'
 import { toUserMessage } from '../lib/safeError'
 import { listAssignableRoles, ASSIGNABLE_BUILTIN_ROLES } from '../lib/api/customRoles'
 import ChecklistGovernancePanel from '../components/checklists/ChecklistGovernancePanel'
+import { isMissingRelation } from '../lib/api/_client'
 
 // The friendly "tables not deployed yet" heuristic — mirrors Billing.jsx / Checklists.jsx.
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') ||
-    m.includes('schema cache') || m.includes('could not find the table') ||
-    m.includes('generate_checklist_assignments')
-}
 
 const CADENCES = [
   { key: 'daily', label: 'Daily' },

@@ -45,6 +45,7 @@ import {
 } from '../lib/insuranceClaimsAnalytics'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { isMissingRelation } from '../lib/api/_client'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement,
@@ -112,11 +113,6 @@ const SORTS = {
   status:         (a, b) => String(a.status || '').localeCompare(String(b.status || '')),
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') ||
-    m.includes('schema cache') || m.includes('could not find the table')
-}
 function fmtDate(v) {
   if (!v) return 'N/A'
   const d = new Date(v)

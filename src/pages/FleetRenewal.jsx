@@ -49,6 +49,7 @@ import { toUserMessage } from '../lib/safeError'
 const EPOCH_DATE = new Date(0)
 import { colorAt, categorical, withAlpha } from '../lib/reportColors'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, Tooltip, Legend)
 
@@ -83,11 +84,6 @@ const SORT_KEYS = {
 }
 const PRIORITY_RANK = { high: 3, medium: 2, low: 1 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('could not find the table') ||
-    m.includes('schema cache') || (m.includes('relation') && m.includes('fleet_renewal_plans'))
-}
 const fmtDate = (v) => (v ? String(v).slice(0, 10) : 'N/A')
 const num = (v) => (v === '' || v == null || Number.isNaN(Number(v)) ? 'N/A' : Number(v).toLocaleString())
 

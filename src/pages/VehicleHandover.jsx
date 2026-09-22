@@ -26,6 +26,7 @@ import { summariseHandovers, byCondition, damageCount } from '../lib/handoverRep
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 const EMPTY_FORM = {
   asset_no: '', report_no: '', handover_type: 'checkout', from_driver: '', to_driver: '',
@@ -62,11 +63,6 @@ function toLocalInput(v) {
   return new Date(d.getTime() - off * 60000).toISOString().slice(0, 16)
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') ||
-    m.includes('schema cache') || m.includes('could not find the table')
-}
 
 function TypeBadge({ type }) {
   const meta = TYPE_META[type]

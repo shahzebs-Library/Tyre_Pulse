@@ -31,6 +31,7 @@ import {
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 const EMPTY_FORM = {
   name: '', unit_type: '', parent_id: '', code: '',
@@ -49,11 +50,6 @@ const TYPE_META = {
   team:       { label: 'Team',       cls: 'bg-slate-500/15 text-slate-300 border-slate-500/30' },
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') ||
-    m.includes('schema cache') || m.includes('could not find the table')
-}
 
 function TypeBadge({ type }) {
   const meta = TYPE_META[type]

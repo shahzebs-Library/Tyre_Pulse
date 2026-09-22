@@ -24,6 +24,7 @@ import {
 import { summarizeIncidents, incidentAgeDays } from '../lib/incidents'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { isMissingRelation } from '../lib/api/_client'
 
 const TYPE_META = {
   near_miss: { label: 'Near miss' },
@@ -52,10 +53,6 @@ function fmtDate(v) {
   if (!v) return 'N/A'
   const d = new Date(v)
   return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString()
-}
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') || m.includes('schema cache') || m.includes('could not find the table')
 }
 
 const emptyForm = (country) => ({

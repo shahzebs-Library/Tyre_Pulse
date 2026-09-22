@@ -45,6 +45,7 @@ import {
 import {
   listAiFeedback, createAiFeedback, updateAiFeedback, deleteAiFeedback,
 } from '../lib/api/aiFeedback'
+import { isMissingRelation } from '../lib/api/_client'
 
 const ADMIN_ROLES = new Set(['Admin'])
 
@@ -65,12 +66,6 @@ const fmtDate = (v) => {
   if (!v) return 'N/A'
   const d = new Date(v)
   return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString()
-}
-
-function isMissingRelationErr(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('could not find the table') ||
-    m.includes('schema cache') || (m.includes('relation') && m.includes('ai_'))
 }
 
 // ── generic UI atoms ─────────────────────────────────────────────────────────
@@ -230,7 +225,7 @@ function useResource(loader, country) {
       // indistinguishable from a genuinely empty table; we only flag
       // not-provisioned on an explicit relation error below.
     } catch (err) {
-      if (isMissingRelationErr(err)) setNotProvisioned(true)
+      if (isMissingRelation(err)) setNotProvisioned(true)
       else setError(toUserMessage(err, 'Could not load records.'))
       setRows([])
     } finally {

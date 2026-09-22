@@ -32,6 +32,7 @@ import {
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 const EMPTY_FORM = {
   scenario_name: '', asset_no: '', asset_type: '', utilization_pct: '',
@@ -80,11 +81,6 @@ function ConfBadge({ value }) {
   )
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') ||
-    m.includes('schema cache') || m.includes('could not find the table')
-}
 
 export default function FleetOptimizer() {
   const { activeCountry } = useSettings()

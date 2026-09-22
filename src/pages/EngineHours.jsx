@@ -38,6 +38,7 @@ import { colorAt, categorical, withAlpha } from '../lib/reportColors'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, ArcElement,
@@ -53,10 +54,6 @@ const AXIS = {
 const today = () => new Date().toISOString().slice(0, 10)
 const emptyForm = () => ({ asset_no: '', engine_hours: '', reading_date: today(), source: 'manual', site: '', notes: '' })
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') || m.includes('schema cache') || m.includes('could not find the table')
-}
 const fmtHours = (v) => (v === null || v === undefined || v === '') ? 'N/A'
   : Number(v).toLocaleString(undefined, { maximumFractionDigits: 1 })
 const fmtDate = (d) => {

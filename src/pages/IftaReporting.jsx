@@ -26,6 +26,7 @@ import { summariseIfta, byJurisdiction, fuelEconomyKmPerL } from '../lib/iftaRec
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 const EMPTY_FORM = {
   asset_no: '', driver_name: '', jurisdiction: '', quarter: '', travel_date: '',
@@ -47,11 +48,6 @@ function fmtDate(v) {
   return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString()
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') ||
-    m.includes('schema cache') || m.includes('could not find the table')
-}
 
 export default function IftaReporting() {
   const { activeCountry } = useSettings()

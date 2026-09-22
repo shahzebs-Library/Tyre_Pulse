@@ -37,6 +37,7 @@ import {
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 const TABS = [
   { id: 'overview', label: 'Overview', icon: Layers },
@@ -64,11 +65,6 @@ function fmtDate(v) {
   return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString()
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') ||
-    m.includes('schema cache') || m.includes('could not find')
-}
 
 // Health-score → tone (bar + text colour). 0–100 scale.
 function healthTone(score) {

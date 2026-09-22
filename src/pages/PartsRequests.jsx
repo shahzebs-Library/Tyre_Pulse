@@ -34,6 +34,7 @@ import { colorAt, categorical, withAlpha } from '../lib/reportColors'
 import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 const WRITE_ROLES = new Set(['Admin', 'Manager', 'Director'])
 
@@ -66,10 +67,6 @@ const EMPTY_FORM = {
 
 const todayISO = () => new Date().toISOString().slice(0, 10)
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') || m.includes('schema cache') || m.includes('could not find the table')
-}
 function fmtDateTime(v) {
   if (!v) return 'N/A'
   const d = new Date(v)

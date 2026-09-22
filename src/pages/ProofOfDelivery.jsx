@@ -27,6 +27,7 @@ import { safeHref } from '../lib/safeUrl'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 const EMPTY_FORM = {
   pod_no: '', asset_no: '', driver_name: '', customer_name: '', delivery_address: '',
@@ -70,11 +71,6 @@ function StatusBadge({ status }) {
   )
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') ||
-    m.includes('schema cache') || m.includes('could not find the table')
-}
 
 export default function ProofOfDelivery() {
   const { activeCountry } = useSettings()

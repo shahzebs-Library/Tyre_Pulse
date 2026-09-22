@@ -26,6 +26,7 @@ import { summariseLoadPlans, utilization, isOverloaded } from '../lib/loadPlans'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 const STATUS_OPTIONS = ['draft', 'planned', 'loaded', 'dispatched', 'delivered']
 
@@ -55,11 +56,6 @@ function fmtDate(v) {
   return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString()
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') ||
-    m.includes('schema cache') || m.includes('could not find the table')
-}
 
 /** Utilisation pill: colour by band, red + ring when overloaded (>100%). */
 function UtilPill({ pct }) {

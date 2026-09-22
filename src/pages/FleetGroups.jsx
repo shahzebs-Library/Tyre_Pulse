@@ -29,6 +29,7 @@ import { formatCurrencyCompact } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 const EMPTY_FORM = {
   group_name: '', group_code: '', group_type: '', parent_group: '',
@@ -46,11 +47,6 @@ const TYPE_META = {
 
 const fmtInt = (v) => (v == null || v === '' ? 'N/A' : Number(v).toLocaleString())
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') ||
-    m.includes('schema cache') || m.includes('could not find the table')
-}
 
 function TypeBadge({ type }) {
   const meta = TYPE_META[type]

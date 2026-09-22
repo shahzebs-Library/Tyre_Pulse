@@ -15,6 +15,7 @@ import {
 } from '../lib/checklist/checklistRoles'
 import { resolveChecklistIcon, checklistIconComponent } from '../lib/checklist/checklistIcons'
 import { toUserMessage } from '../lib/safeError'
+import { isMissingRelation } from '../lib/api/_client'
 
 /**
  * The template's icon, resolved rather than printed raw - `icon` holds an emoji
@@ -30,11 +31,6 @@ function TemplateIcon({ template }) {
 }
 
 // "Tables not deployed yet" heuristic — mirrors Billing.jsx / Checklists.jsx.
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') ||
-    m.includes('schema cache') || m.includes('could not find the table')
-}
 
 // ── Date helpers (null-safe) ────────────────────────────────────────────────
 const MS_DAY = 86400000

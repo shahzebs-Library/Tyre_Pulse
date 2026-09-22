@@ -32,6 +32,7 @@ import { colorAt, withAlpha } from '../lib/reportColors'
 import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import useLatestRequest from '../lib/useLatestRequest'
+import { isMissingRelation } from '../lib/api/_client'
 
 const VIEW_ROLES = new Set(['Admin', 'Manager', 'Director'])
 
@@ -73,10 +74,6 @@ function fmtPct(v) {
 function fmtMin(v) {
   const n = Number(v)
   return Number.isFinite(n) ? `${Math.round(n)} min` : 'N/A'
-}
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') || m.includes('schema cache') || m.includes('could not find the table')
 }
 
 export default function WorkshopAnalytics() {

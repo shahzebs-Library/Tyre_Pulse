@@ -34,6 +34,7 @@ import {
 } from '../lib/developerPortal'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { isMissingRelation } from '../lib/api/_client'
 
 const EMPTY_KEY_FORM = {
   key_name: '', key_prefix: '', scopes: '', environment: 'sandbox',
@@ -79,11 +80,6 @@ function fmtDateTime(v) {
   return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleString()
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') ||
-    m.includes('schema cache') || m.includes('could not find the table')
-}
 
 export default function DeveloperPortal() {
   const { activeCountry } = useSettings()

@@ -30,6 +30,7 @@ import {
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { safeHref } from '../lib/safeUrl'
 import { toUserMessage } from '../lib/safeError'
+import { isMissingRelation } from '../lib/api/_client'
 
 const EMPTY_FORM = {
   title: '', phase: 'setup', description: '', sort_order: '', required: true,
@@ -51,11 +52,6 @@ function fmtDate(v) {
   return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString()
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') ||
-    m.includes('schema cache') || m.includes('could not find the table')
-}
 
 /** SVG progress ring. size/stroke in px, pct 0..100. */
 function ProgressRing({ pct = 0, size = 128, stroke = 12, tone = '#22c55e', label }) {

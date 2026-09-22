@@ -78,6 +78,7 @@ import { entryPerson, emptyWashDetails, staffWashActivity } from '../lib/washDet
 import WashDetailsForm from '../components/washing/WashDetailsForm'
 import WashRecordViewer from '../components/washing/WashRecordViewer'
 import WashAdvancedFilters from '../components/washing/WashAdvancedFilters'
+import { isMissingRelation } from '../lib/api/_client'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, ArcElement,
@@ -146,10 +147,6 @@ function nowHHMM() {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') || m.includes('schema cache') || m.includes('could not find the table')
-}
 const todayISO = () => new Date().toISOString().slice(0, 10)
 function fmtDate(v) {
   if (!v) return 'N/A'

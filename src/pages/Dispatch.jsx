@@ -27,6 +27,7 @@ import { summarizeDispatch, loadStatusMeta } from '../lib/dispatch'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 ChartJS.register(ArcElement, Tooltip, Legend)
 
@@ -43,10 +44,6 @@ const EMPTY_FORM = {
   cargo: '', weight_kg: '', scheduled_at: '', status: 'planned', site: '', notes: '',
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') || m.includes('schema cache') || m.includes('could not find the table')
-}
 function fmtDateTime(v) {
   if (!v) return 'N/A'
   const d = new Date(v)

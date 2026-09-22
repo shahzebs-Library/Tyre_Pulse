@@ -20,14 +20,11 @@ import { useTenant } from '../contexts/TenantContext'
 import ChecklistViewerDrawer from '../components/checklist/ChecklistViewerDrawer'
 import MonthlyGridPanel from '../components/checklist/MonthlyGridPanel'
 import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 const ELEVATED = ['admin', 'manager', 'director']
 
 // The friendly "tables not deployed yet" heuristic — mirrors Billing.jsx.
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') || m.includes('schema cache') || m.includes('could not find the table')
-}
 
 const STATUS_BADGE = {
   submitted: 'bg-sky-900/40 text-sky-300 border border-sky-700/50',

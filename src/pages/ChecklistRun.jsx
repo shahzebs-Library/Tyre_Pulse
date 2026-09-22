@@ -35,6 +35,7 @@ import BlockingMarksNotice from '../components/checklist/BlockingMarksNotice'
 import { getAssetByNo } from '../lib/api/assets'
 import { safeHref, safeImageSrc } from '../lib/safeUrl'
 import { toUserMessage } from '../lib/safeError'
+import { isMissingRelation } from '../lib/api/_client'
 
 /**
  * THE HEADER MUST NOT ASK WHAT THE SHEET ALREADY ASKS.
@@ -89,10 +90,6 @@ function meterBelowRegister(value, previous) {
   return v < p
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') || m.includes('schema cache') || m.includes('could not find the table')
-}
 
 export default function ChecklistRun() {
   const { templateId } = useParams()

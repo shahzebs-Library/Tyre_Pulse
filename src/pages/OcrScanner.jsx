@@ -34,6 +34,7 @@ import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { safeHref } from '../lib/safeUrl'
 import { toUserMessage } from '../lib/safeError'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 const SCAN_TYPES = [
   { value: 'tyre_sidewall', label: 'Tyre sidewall' },
@@ -92,11 +93,6 @@ function fieldsPreview(fields) {
     + (keys.length > 3 ? ` +${keys.length - 3}` : '')
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') ||
-    m.includes('schema cache') || m.includes('could not find the table')
-}
 
 function BandBadge({ scan }) {
   const b = BAND_META[confidenceBand(scan)]

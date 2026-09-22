@@ -24,6 +24,7 @@ import { summariseTrips, perAssetTotals } from '../lib/trips'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 const EMPTY_FORM = {
   asset_no: '', driver_name: '', origin: '', destination: '',
@@ -71,11 +72,6 @@ function statusLabel(v) {
   return STATUS_OPTIONS.find((s) => s.value === v)?.label || (v || 'N/A')
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') ||
-    m.includes('schema cache') || m.includes('could not find the table')
-}
 
 export default function Trips() {
   const { activeCountry } = useSettings()

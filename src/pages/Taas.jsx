@@ -32,6 +32,7 @@ import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { formatCurrency, formatCurrencyCompact } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 const EMPTY_FORM = {
   subscription_no: '', customer_name: '', asset_no: '', plan_type: 'per_km',
@@ -71,11 +72,6 @@ const fmtDate = (v) => {
 }
 const fmtPct = (v) => (v == null ? 'N/A' : `${Math.round(v)}%`)
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') ||
-    m.includes('schema cache') || m.includes('could not find the table')
-}
 
 function Badge({ label, cls }) {
   return (

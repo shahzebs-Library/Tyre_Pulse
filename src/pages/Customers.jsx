@@ -25,6 +25,7 @@ import { summarizeCustomers, isValidEmail } from '../lib/customers'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 const STATUS_META = {
   active: { label: 'Active', cls: 'bg-green-900/40 text-green-300 border border-green-700/50' },
@@ -36,11 +37,6 @@ const EMPTY_FORM = {
   address: '', site: '', status: 'active', notes: '',
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') ||
-    m.includes('schema cache') || m.includes('could not find the table')
-}
 
 // ─── Create / edit modal ──────────────────────────────────────────────────────
 function CustomerModal({ open, initial, onClose, onSaved, country }) {

@@ -25,6 +25,7 @@ import { summarisePositions, latestPerAsset, toFiniteNumber } from '../lib/gpsPo
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 const EMPTY_FORM = {
   asset_no: '', driver_name: '', latitude: '', longitude: '', speed_kmh: '',
@@ -56,11 +57,6 @@ function motionOf(r) {
   return 'stopped'
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') ||
-    m.includes('schema cache') || m.includes('could not find the table')
-}
 
 const MOTION_BADGE = {
   moving: 'bg-green-900/30 text-green-300 border-green-800/50',

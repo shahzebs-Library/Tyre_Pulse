@@ -27,6 +27,7 @@ import {
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 const EMPTY_FORM = {
   company_name: '', account_code: '', contact_name: '', email: '', phone: '',
@@ -66,11 +67,6 @@ function StatusBadge({ status }) {
 const fmtNum = (v) => (v == null || v === '' ? 'N/A' : Number(v).toLocaleString())
 const fmtHours = (v) => (v == null || v === '' ? 'N/A' : `${Number(v).toLocaleString()} h`)
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') ||
-    m.includes('schema cache') || m.includes('could not find the table')
-}
 
 export default function CustomerPortal() {
   const { activeCountry } = useSettings()

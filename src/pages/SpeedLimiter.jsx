@@ -49,6 +49,7 @@ import {
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 import toUserMessage from '../lib/safeError'
+import { isMissingRelation } from '../lib/api/_client'
 
 ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, Tooltip, Legend)
 
@@ -89,10 +90,6 @@ function fmtDueLabel(days) {
   if (days < 0) return `${Math.abs(days)}d overdue`
   if (days === 0) return 'Due today'
   return `In ${days}d`
-}
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') || m.includes('schema cache') || m.includes('could not find the table')
 }
 
 export default function SpeedLimiter() {

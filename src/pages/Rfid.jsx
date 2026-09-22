@@ -17,6 +17,7 @@ import { summarizeTags, normalizeTagId, RFID_STATUSES, RFID_STATUS_META } from '
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 const STATUS_STYLES = {
   active: 'bg-green-900/40 text-green-300 border border-green-700/50',
@@ -24,10 +25,6 @@ const STATUS_STYLES = {
   retired: 'bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]',
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') || m.includes('schema cache') || m.includes('could not find the table')
-}
 function fmtDateTime(v) {
   if (!v) return 'N/A'
   const d = new Date(v)

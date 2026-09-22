@@ -40,6 +40,7 @@ import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { formatCurrency } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
 import { categorical, withAlpha, ACCENTS } from '../lib/reportColors'
+import { isMissingRelation } from '../lib/api/_client'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
 
@@ -62,10 +63,6 @@ const BAND_LABEL = {
 const EMPTY_FORM = {
   title: '', category: '', version: '', owner: '',
   effective_date: '', review_date: '', status: 'draft', body: '', notes: '',
-}
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') || m.includes('schema cache') || m.includes('could not find the table')
 }
 function fmtDate(v) {
   if (!v) return 'N/A'

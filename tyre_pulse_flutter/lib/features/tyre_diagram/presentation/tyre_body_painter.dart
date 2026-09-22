@@ -186,8 +186,7 @@ TyreDiagramPhotoSpec? _busPhotoSpec({String? make, String? model}) {
     return null;
   }
 
-  if (normalisedModel.contains('hiace') ||
-      normalisedModel.contains('hi ace')) {
+  if (normalisedModel.contains('hiace') || normalisedModel.contains('hi ace')) {
     return _hiaceBusPhoto;
   }
   if (normalisedModel.contains('ashok') ||

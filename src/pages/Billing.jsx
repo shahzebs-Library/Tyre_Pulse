@@ -199,7 +199,7 @@ export default function Billing() {
     {
       id: 'period',
       header: 'Period',
-      accessorFn: r => r.period_start ? `${formatDate(r.period_start)} to ${formatDate(r.period_end)}` : '—',
+      accessorFn: r => r.period_start ? `${formatDate(r.period_start)} to ${formatDate(r.period_end)}` : 'N/A',
       size: 200,
     },
     {
@@ -305,7 +305,7 @@ export default function Billing() {
             {sub && <StatusBadge status={sub.status} />}
           </div>
           <div>
-            <p className="text-2xl font-bold text-white">{plan?.name || '—'}</p>
+            <p className="text-2xl font-bold text-white">{plan?.name || 'N/A'}</p>
             <p className="text-gray-400 text-sm mt-0.5">{plan?.description}</p>
           </div>
           <div className="space-y-2 text-sm border-t border-gray-800 pt-3">

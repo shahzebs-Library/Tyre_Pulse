@@ -73,8 +73,8 @@ export function classifyFitment(vehicle, fittedRows = []) {
 
   const fitted = rows.map((r) => ({
     id: r?.id,
-    serial: serialOf(r) || '—',
-    position: positionOf(r) || '—',
+    serial: serialOf(r) || 'N/A',
+    position: positionOf(r) || 'N/A',
     size: r?.size == null ? '' : String(r.size).trim(),
     sizeNorm: normalizeSize(r?.size),
     site: r?.site || '',

@@ -232,7 +232,7 @@ export default function CustomRolesManager() {
     setFormError('')
     const name = form.name.trim()
     if (!name) { setFormError('A role name is required.'); return }
-    if (!editing && isBuiltInRole(name)) { setFormError(`"${name}" is a built-in role — choose another name.`); return }
+    if (!editing && isBuiltInRole(name)) { setFormError(`"${name}" is a built-in role. Choose another name.`); return }
     setSaving(true)
     try {
       if (editing) {
@@ -309,7 +309,7 @@ export default function CustomRolesManager() {
           <Info size={15} className="text-[var(--text-muted)] mt-0.5 shrink-0" />
           <p className="text-xs text-[var(--text-muted)] max-w-2xl">
             Create your own roles and tick which modules each can access. New roles appear in User
-            Management so you can assign them to people — access is enforced immediately by the same
+            Management so you can assign them to people. Access is enforced immediately by the same
             engine as the built-in roles. Built-in roles are edited in the <span className="text-[var(--text-secondary)]">Role Permissions</span> tab.
           </p>
         </div>
@@ -355,7 +355,7 @@ export default function CustomRolesManager() {
               ) : roles.length === 0 ? (
                 <tr><td colSpan={5} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <UserCog size={26} className="mx-auto mb-2 opacity-60" />
-                  {notProvisioned ? 'Enable the module to start building roles.' : 'No custom roles yet — create your first one.'}
+                  {notProvisioned ? 'Enable the module to start building roles.' : 'No custom roles yet. Create your first one.'}
                 </td></tr>
               ) : rolesPager.pageRows.map((r) => (
                 <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
@@ -406,7 +406,7 @@ export default function CustomRolesManager() {
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" onClick={closeModal}>
           <div className="card w-full max-w-2xl max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-[var(--text-primary)]">{editing ? `Edit role — ${editing.name}` : 'New custom role'}</h3>
+              <h3 className="text-lg font-bold text-[var(--text-primary)]">{editing ? `Edit role: ${editing.name}` : 'New custom role'}</h3>
               <button onClick={closeModal} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Close"><X size={18} /></button>
             </div>
             <form onSubmit={submit} className="space-y-4">

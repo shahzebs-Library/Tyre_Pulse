@@ -48,7 +48,7 @@ const STATUS_META = {
 
 function TierBadge({ tier }) {
   const m = TIER_META[String(tier || '').toLowerCase()]
-  if (!m) return <span className="text-[var(--text-muted)]">—</span>
+  if (!m) return <span className="text-[var(--text-muted)]">N/A</span>
   const { Icon } = m
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-medium ${m.cls}`}>
@@ -59,12 +59,12 @@ function TierBadge({ tier }) {
 
 function StatusBadge({ status }) {
   const m = STATUS_META[String(status || '').toLowerCase()]
-  if (!m) return <span className="text-[var(--text-muted)]">—</span>
+  if (!m) return <span className="text-[var(--text-muted)]">N/A</span>
   return <span className={`inline-flex items-center px-2 py-0.5 rounded-full border text-[11px] font-medium ${m.cls}`}>{m.label}</span>
 }
 
-const fmtNum = (v) => (v == null || v === '' ? '—' : Number(v).toLocaleString())
-const fmtHours = (v) => (v == null || v === '' ? '—' : `${Number(v).toLocaleString()} h`)
+const fmtNum = (v) => (v == null || v === '' ? 'N/A' : Number(v).toLocaleString())
+const fmtHours = (v) => (v == null || v === '' ? 'N/A' : `${Number(v).toLocaleString()} h`)
 
 function isMissingRelation(err) {
   const m = String(err?.message || '').toLowerCase()
@@ -232,7 +232,7 @@ export default function CustomerPortal() {
     <div className="space-y-6">
       <PageHeader
         title="Customer Portal"
-        subtitle="Manage external customer accounts, grant portal access, and track their linked assets and open service requests — the admin control panel behind your customer-facing portal."
+        subtitle="Manage external customer accounts, grant portal access, and track their linked assets and open service requests: the admin control panel behind your customer-facing portal."
         icon={Building2}
         onRefresh={load}
         refreshing={refreshing}
@@ -281,7 +281,7 @@ export default function CustomerPortal() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -325,7 +325,7 @@ export default function CustomerPortal() {
           {rows === null ? (
             <div className="h-24 bg-[var(--input-bg)] rounded animate-pulse" />
           ) : attention.length === 0 ? (
-            <p className="text-sm text-[var(--text-muted)]">All accounts are healthy — none suspended, onboarding, or backlogged.</p>
+            <p className="text-sm text-[var(--text-muted)]">All accounts are healthy. None suspended, onboarding, or backlogged.</p>
           ) : (
             <div className="space-y-2 max-h-56 overflow-y-auto">
               {attention.slice(0, 12).map((r) => (
@@ -387,26 +387,26 @@ export default function CustomerPortal() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={10} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {rows.length === 0 && !notProvisioned ? 'No customer accounts yet — add your first account.' : 'No accounts match these filters.'}
+                  {rows.length === 0 && !notProvisioned ? 'No customer accounts yet. Add your first account.' : 'No accounts match these filters.'}
                 </td></tr>
               ) : (
                 pager.pageRows.map((r) => (
                   <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
                     <td className="px-4 py-2.5">
-                      <div className="font-medium text-[var(--text-primary)]">{r.company_name || '—'}</div>
+                      <div className="font-medium text-[var(--text-primary)]">{r.company_name || 'N/A'}</div>
                       <div className="text-[11px] text-[var(--text-muted)] flex items-center gap-2">
                         {r.account_code && <span className="font-mono">{r.account_code}</span>}
                         {r.country && <span className="inline-flex items-center gap-0.5"><Globe size={10} /> {r.country}</span>}
                       </div>
                     </td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)]">
-                      <div>{r.contact_name || '—'}</div>
+                      <div>{r.contact_name || 'N/A'}</div>
                       {r.email && <div className="text-[11px] text-[var(--text-muted)] truncate max-w-[180px]">{r.email}</div>}
                     </td>
                     <td className="px-4 py-2.5"><TierBadge tier={r.tier} /></td>
                     <td className="px-4 py-2.5"><StatusBadge status={r.status} /></td>
                     <td className="px-4 py-2.5">
-                      <button onClick={() => togglePortal(r)} className="inline-flex items-center gap-1.5 text-xs" aria-label="Toggle portal access" title={r.portal_enabled ? 'Portal enabled — click to disable' : 'Portal disabled — click to enable'}>
+                      <button onClick={() => togglePortal(r)} className="inline-flex items-center gap-1.5 text-xs" aria-label="Toggle portal access" title={r.portal_enabled ? 'Portal enabled, click to disable' : 'Portal disabled, click to enable'}>
                         {r.portal_enabled
                           ? <><ToggleRight size={22} className="text-green-400" /> <span className="text-green-300">On</span></>
                           : <><ToggleLeft size={22} className="text-[var(--text-muted)]" /> <span className="text-[var(--text-muted)]">Off</span></>}
@@ -417,7 +417,7 @@ export default function CustomerPortal() {
                       <span className={Number(r.open_requests) > 5 ? 'text-amber-300 font-semibold' : 'text-[var(--text-secondary)]'}>{fmtNum(r.open_requests)}</span>
                     </td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtHours(r.sla_hours)}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.account_manager || '—'}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.account_manager || 'N/A'}</td>
                     <td className="px-4 py-2.5">
                       <div className="flex items-center justify-end gap-1">
                         <button onClick={() => openEdit(r)} className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Edit"><Pencil size={14} /></button>

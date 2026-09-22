@@ -557,7 +557,7 @@ export default function FleetMaster() {
           { label: t('fleetmaster.summary.noPolicySet'),   value: summary?.noPolicy,     color: 'text-orange-400' },
         ].map(({ label, value, color }) => (
           <div key={label} className="card text-center">
-            <p className={`text-2xl font-bold ${color}`}>{summaryPending ? '—' : value.toLocaleString()}</p>
+            <p className={`text-2xl font-bold ${color}`}>{summaryPending ? 'N/A' : value.toLocaleString()}</p>
             <p className="text-gray-400 text-sm mt-1">{label}</p>
           </div>
         ))}

@@ -1,9 +1,26 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { BarChart3, CheckCircle2, ClipboardCheck, ShieldCheck, Truck, Wrench } from "lucide-react";
 import { Footer } from "@/components/Footer";
 import { Header } from "@/components/Header";
 import { Hero3D } from "@/components/Hero3D";
+import { alternatesFor } from "../schema";
+
+export const metadata: Metadata = {
+  title: { absolute: "تاير بالس | إدارة الإطارات والأسطول والورش" },
+  description:
+    "منصة تاير بالس تربط دورة حياة الإطارات وصيانة الأسطول وإدارة الورش والفحوصات والموافقات والتقارير التنفيذية في نظام واحد.",
+  alternates: alternatesFor("/ar"),
+  openGraph: {
+    title: "تاير بالس | عجلات أذكى. أسطول أقوى.",
+    description: "تحكم في كل إطار وافهم كل تكلفة من منصة واحدة.",
+    url: "/ar",
+    locale: "ar_SA",
+    alternateLocale: "en_US",
+    type: "website",
+  },
+};
 
 const features = [
   [Truck, "إدارة دورة حياة الإطارات", "متابعة التركيب والفك والضغط وعمق النقشة والإصلاح والضمان والتكلفة لكل كيلومتر."],
@@ -14,7 +31,7 @@ const features = [
 ];
 
 export default function ArabicPage() {
-  return <div className="rtl"><Header /><main>
+  return <div className="rtl" lang="ar" dir="rtl"><Header /><main id="main-content" tabIndex={-1}>
     <section className="hero"><div className="site-shell hero-grid">
       <div className="hero-copy"><span className="eyebrow">ذكاء الأسطول مبني على العمل الحقيقي</span><h1 className="display">تحكم في كل إطار. وافهم كل تكلفة.</h1><p className="lead">يربط تاير بالس بين دورة حياة الإطارات وصيانة الأسطول وإدارة الورش والفحوصات والموافقات والتقارير التنفيذية في منصة واحدة.</p><div className="hero-actions"><Link className="btn btn-primary" href="/contact">احجز عرضاً مخصصاً</Link><Link className="btn btn-secondary" href="/product">استكشف المنصة</Link></div><div className="hero-proof"><span><CheckCircle2 size={17} color="#0b9b6c" /> شركات ودول متعددة</span><span><CheckCircle2 size={17} color="#0b9b6c" /> فرق ميدانية وإدارية</span><span><CheckCircle2 size={17} color="#0b9b6c" /> العربية والإنجليزية</span></div></div>
       <div className="hero-stage"><Hero3D /><div className="floating-panel panel-one"><span className="muted">جاهزية الأسطول</span><strong>مؤشر مباشر</strong><span style={{ color: "var(--success)" }}>الهدف والاتجاه والانحراف</span></div><div className="floating-panel panel-two"><span className="muted">التحكم في التكلفة</span><strong>التكلفة لكل كيلومتر</strong><span>من الشراء إلى الإتلاف</span></div></div>

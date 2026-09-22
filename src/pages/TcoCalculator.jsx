@@ -7,7 +7,7 @@
  *    Engineering-KPI engine (kpiEngine.computeCpkFleet — never re-derived here),
  *    a peer percentile + performance band per asset (drill to /asset-management/:assetNo),
  *    a tyre-spend breakdown, a monthly CPK trend, GCC benchmark comparison and
- *    annual savings potential. Honest '—' wherever km/cost is missing.
+ *    annual savings potential. Honest 'N/A' wherever km/cost is missing.
  *
  *  • What-if calculator — the executive projection model (pure `src/lib/tco.js`
  *    computeTco): capital depreciation, fuel, maintenance, tyres, insurance and
@@ -102,7 +102,7 @@ function FleetActuals() {
   const canonicalCpk = useMemo(() => computeCpkFleet(records), [records])
 
   const money = (v) => formatCurrencyCompact(v, activeCurrency)
-  const cpkStr = (v) => (v == null ? '—' : `${formatCurrency(v, activeCurrency, 3)}/km`)
+  const cpkStr = (v) => (v == null ? 'N/A' : `${formatCurrency(v, activeCurrency, 3)}/km`)
   const muted = chartMutedColor()
 
   const { assets, rollup, monthly, breakdown, savings, benchmarks, meta } = actuals
@@ -156,7 +156,7 @@ function FleetActuals() {
         { key: 'percentile', header: 'Percentile' },
         { key: 'band', header: 'Band' },
       ],
-      'Fleet Actuals — Per-Asset TCO',
+      'Fleet Actuals: Per-Asset TCO',
       'TyrePulse_FleetActuals_TCO',
       'landscape',
     )
@@ -211,7 +211,7 @@ function FleetActuals() {
     { label: 'Total tyre TCO', value: money(rollup.total_tco), icon: Wallet, tone: 'text-[var(--brand-bright)]' },
     {
       label: 'Fleet CPK (canonical)',
-      value: canonicalCpk.validCount ? cpkStr(canonicalCpk.fleetAvgCpk) : '—',
+      value: canonicalCpk.validCount ? cpkStr(canonicalCpk.fleetAvgCpk) : 'N/A',
       icon: Gauge,
       tone: 'text-sky-400',
       sub: canonicalCpk.validCount
@@ -316,7 +316,7 @@ function FleetActuals() {
                     { key: 'percentile', header: 'Percentile' },
                     { key: 'band', header: 'Band' },
                   ],
-                  'Fleet Actuals — Per-Asset TCO',
+                  'Fleet Actuals: Per-Asset TCO',
                   'TyrePulse_FleetActuals_TCO',
                   'landscape',
                   '',
@@ -346,15 +346,15 @@ function FleetActuals() {
                   onClick={() => navigate(`/asset-management/${encodeURIComponent(a.asset_no)}`)}
                 >
                   <td className="py-2 pr-3 font-medium text-[var(--text-secondary)]">{a.asset_no}</td>
-                  <td className="py-2 pr-3 text-[var(--text-muted)]">{a.vehicle_type || '—'}</td>
+                  <td className="py-2 pr-3 text-[var(--text-muted)]">{a.vehicle_type || 'N/A'}</td>
                   <td className="py-2 pr-3 font-mono text-[var(--text-secondary)]">{money(a.tyre_procurement)}</td>
-                  <td className="py-2 pr-3 font-mono text-[var(--text-muted)]">{a.km > 0 ? a.km.toLocaleString() : '—'}</td>
+                  <td className="py-2 pr-3 font-mono text-[var(--text-muted)]">{a.km > 0 ? a.km.toLocaleString() : 'N/A'}</td>
                   <td className="py-2 pr-3 font-mono text-[var(--text-secondary)]">{cpkStr(a.cost_per_km)}</td>
-                  <td className="py-2 pr-3 font-mono text-[var(--text-muted)]">{a.percentile == null ? '—' : `P${a.percentile}`}</td>
+                  <td className="py-2 pr-3 font-mono text-[var(--text-muted)]">{a.percentile == null ? 'N/A' : `P${a.percentile}`}</td>
                   <td className="py-2 pr-3">
                     {a.band
                       ? <span className={`text-[11px] px-1.5 py-0.5 rounded border capitalize ${BAND_STYLE[a.band] || ''}`}>{a.band}</span>
-                      : <span className="text-[var(--text-muted)]">—</span>}
+                      : <span className="text-[var(--text-muted)]">N/A</span>}
                   </td>
                   <td className="py-2 pr-1 text-[var(--text-muted)]"><ArrowRight size={14} /></td>
                 </tr>
@@ -427,10 +427,10 @@ function FleetActuals() {
                   <td className="py-2 pr-3 text-[var(--text-secondary)]">{b.type}</td>
                   <td className="py-2 pr-3 font-mono text-[var(--text-muted)]">{cpkStr(b.benchmarkCpk)}</td>
                   <td className="py-2 pr-3 font-mono text-[var(--text-secondary)]">{cpkStr(b.actualCpk)}</td>
-                  <td className="py-2 pr-3 font-mono text-[var(--text-muted)]">{b.assetCount || '—'}</td>
+                  <td className="py-2 pr-3 font-mono text-[var(--text-muted)]">{b.assetCount || 'N/A'}</td>
                   <td className="py-2 pr-3 font-mono">
                     {b.variancePct == null
-                      ? <span className="text-[var(--text-muted)]">—</span>
+                      ? <span className="text-[var(--text-muted)]">N/A</span>
                       : <span className={b.variancePct <= 0 ? 'text-green-400' : 'text-red-400'}>{b.variancePct > 0 ? '+' : ''}{b.variancePct}%</span>}
                   </td>
                 </tr>

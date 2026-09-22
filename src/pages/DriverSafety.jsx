@@ -80,8 +80,8 @@ const CATEGORY_LABEL = {
   idling: 'Excessive idling', fatigue: 'Fatigue', other: 'Other',
 }
 
-const pct = (v) => (v == null ? '—' : `${Math.round(v * 1000) / 10}%`)
-const kmFmt = (v) => (v == null || !Number.isFinite(v) ? '—' : `${Math.round(v).toLocaleString()} km`)
+const pct = (v) => (v == null ? 'N/A' : `${Math.round(v * 1000) / 10}%`)
+const kmFmt = (v) => (v == null || !Number.isFinite(v) ? 'N/A' : `${Math.round(v).toLocaleString()} km`)
 
 const EMPTY_FORM = {
   asset_no: '', driver_name: '', event_type: '', severity: '', event_at: '',
@@ -108,12 +108,12 @@ const SEVERITY_TONE = {
   low: 'text-green-400 bg-green-900/20 border border-green-800/50',
 }
 
-const num = (v) => (v == null || v === '' ? '—' : Number(v).toLocaleString())
+const num = (v) => (v == null || v === '' ? 'N/A' : Number(v).toLocaleString())
 
 function fmtDateTime(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleString()
 }
 
 function scoreTone(score) {
@@ -355,7 +355,7 @@ export default function DriverSafety() {
     <div className="space-y-6">
       <PageHeader
         title="Driver Safety Events"
-        subtitle="Track harsh braking, acceleration, cornering, speeding and fatigue events per driver — and score each driver on risk. Driver conduct drives tyre wear, fuel burn and accident exposure."
+        subtitle="Track harsh braking, acceleration, cornering, speeding and fatigue events per driver, and score each driver on risk. Driver conduct drives tyre wear, fuel burn and accident exposure."
         icon={ShieldAlert}
         onRefresh={load}
         refreshing={refreshing}
@@ -418,7 +418,7 @@ export default function DriverSafety() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </Card>
           )
         })}
@@ -578,20 +578,20 @@ export default function DriverSafety() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={8} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {rows.length === 0 && !notProvisioned ? 'No events logged yet — log your first event.' : 'No events match these filters.'}
+                  {rows.length === 0 && !notProvisioned ? 'No events logged yet. Log your first event.' : 'No events match these filters.'}
                 </td></tr>
               ) : (
                 pager.pageRows.map((r) => (
                   <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                    <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.driver_name || '—'}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.asset_no || '—'}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{EVENT_TYPE_LABEL[r.event_type] || r.event_type || '—'}</td>
+                    <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.driver_name || 'N/A'}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.asset_no || 'N/A'}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{EVENT_TYPE_LABEL[r.event_type] || r.event_type || 'N/A'}</td>
                     <td className="px-4 py-2.5">
                       {r.severity ? (
                         <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${SEVERITY_TONE[r.severity] || 'text-[var(--text-secondary)]'}`}>
                           {r.severity[0].toUpperCase() + r.severity.slice(1)}
                         </span>
-                      ) : '—'}
+                      ) : 'N/A'}
                     </td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDateTime(r.event_at)}</td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">
@@ -661,7 +661,7 @@ export default function DriverSafety() {
                 </div>
                 <div>
                   <label className="label">Location (optional)</label>
-                  <input className="input w-full" placeholder="e.g. Riyadh–Dammam Hwy km 210" value={form.location} maxLength={300} onChange={(e) => set('location', e.target.value)} />
+                  <input className="input w-full" placeholder="e.g. Riyadh to Dammam Hwy km 210" value={form.location} maxLength={300} onChange={(e) => set('location', e.target.value)} />
                 </div>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -723,7 +723,7 @@ export default function DriverSafety() {
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 rounded-full bg-red-900/30 flex items-center justify-center shrink-0"><Trash2 size={18} className="text-red-400" /></div>
             <p className="text-sm text-[var(--text-muted)]">
-              {confirmDelete.driver_name || 'Event'} · {EVENT_TYPE_LABEL[confirmDelete.event_type] || confirmDelete.event_type || '—'} · {fmtDateTime(confirmDelete.event_at)}. This can’t be undone.
+              {confirmDelete.driver_name || 'Event'} · {EVENT_TYPE_LABEL[confirmDelete.event_type] || confirmDelete.event_type || 'N/A'} · {fmtDateTime(confirmDelete.event_at)}. This can’t be undone.
             </p>
           </div>
         </Modal>
@@ -796,7 +796,7 @@ function ScorecardsTab({ loading, banded, coaching, trend }) {
         {loading ? (
           <div className="h-64 bg-[var(--input-bg)] rounded animate-pulse" />
         ) : (trend || []).length === 0 ? (
-          <p className="text-sm text-[var(--text-muted)] py-8 text-center">No dated events yet — log events with a timestamp to build the trend.</p>
+          <p className="text-sm text-[var(--text-muted)] py-8 text-center">No dated events yet. Log events with a timestamp to build the trend.</p>
         ) : (
           <div className="h-64"><Line data={chartData} options={chartOpts} /></div>
         )}
@@ -836,7 +836,7 @@ function ScorecardsTab({ loading, banded, coaching, trend }) {
                     <td className="px-4 py-2.5"><GradePill grade={d.grade} /></td>
                     <td className="px-4 py-2.5"><BandPill band={d.band} /></td>
                     <td className="px-4 py-2.5"><BandPill band={d.composite?.band} /></td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{CATEGORY_LABEL[d.weakestCategory] || d.weakestCategory || '—'}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{CATEGORY_LABEL[d.weakestCategory] || d.weakestCategory || 'N/A'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -856,7 +856,7 @@ function ScorecardsTab({ loading, banded, coaching, trend }) {
         {loading ? (
           <div className="p-4"><div className="h-16 bg-[var(--input-bg)] rounded animate-pulse" /></div>
         ) : (coaching || []).length === 0 ? (
-          <p className="px-4 py-8 text-sm text-[var(--text-muted)] text-center">Every tracked driver is in the good band — no coaching needed.</p>
+          <p className="px-4 py-8 text-sm text-[var(--text-muted)] text-center">Every tracked driver is in the good band. No coaching needed.</p>
         ) : (
           <div className="divide-y divide-[var(--input-border)]/50">
             {coaching.map((c) => (
@@ -912,7 +912,7 @@ function CorrelationTab({ loading, correlation }) {
           <p className="text-[var(--text-primary)] font-medium">Driver ↔ tyre-damage correlation</p>
           <p className="text-[var(--text-muted)] text-sm mt-1">
             Joins each driver's tyre_records to surface driver-attributable damage (impact, cut, kerb, under-inflation, run-flat, overload), their real tyre CPK, and how often their tyres come off below the fleet median life
-            {median != null ? <> (<span className="font-mono text-[var(--text-primary)]">{kmFmt(median)}</span>)</> : null}. Drivers with no tyre history show “—”, never a guessed rate.
+            {median != null ? <> (<span className="font-mono text-[var(--text-primary)]">{kmFmt(median)}</span>)</> : null}. Drivers with no tyre history show “N/A”, never a guessed rate.
           </p>
         </div>
       </Card>
@@ -936,7 +936,7 @@ function CorrelationTab({ loading, correlation }) {
           <div className="p-4"><div className="h-16 bg-[var(--input-bg)] rounded animate-pulse" /></div>
         ) : drivers.length === 0 ? (
           <p className="px-4 py-8 text-sm text-[var(--text-muted)] text-center">
-            No tyre_records carry a driver name yet — populate driver_name on tyre records to unlock this analysis.
+            No tyre_records carry a driver name yet. Populate driver_name on tyre records to unlock this analysis.
           </p>
         ) : (
           <div className="overflow-x-auto">
@@ -958,7 +958,7 @@ function CorrelationTab({ loading, correlation }) {
                       </span>
                       {d.driverCausedRemovalRate != null && <span className="text-[var(--text-muted)] text-xs ml-1">({d.driverCausedRemovals}/{d.removals})</span>}
                     </td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{d.driverCpk == null ? '—' : d.driverCpk.toLocaleString(undefined, { maximumFractionDigits: 3 })}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{d.driverCpk == null ? 'N/A' : d.driverCpk.toLocaleString(undefined, { maximumFractionDigits: 3 })}</td>
                     <td className="px-4 py-2.5">
                       <span className={d.prematureRemovalRate == null ? 'text-[var(--text-muted)]' : d.prematureRemovalRate >= 0.5 ? 'text-red-400 font-semibold' : d.prematureRemovalRate > 0 ? 'text-amber-400' : 'text-green-400'}>
                         {pct(d.prematureRemovalRate)}

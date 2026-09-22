@@ -310,7 +310,7 @@ async function insertRowChunk(chunk, { attempts = 5, depth = 0 } = {}) {
       // A single row still cannot be saved after every retry — surface the real
       // cause so it is actionable, not a generic "too large" message.
       throw new ServiceError(
-        `Could not save a row after repeated attempts — ${e?.message || 'the connection dropped'}. `
+        `Could not save a row after repeated attempts: ${e?.message || 'the connection dropped'}. `
         + 'The connection looks unstable; check your network and retry from Intake History.',
         e?.code, e,
       )

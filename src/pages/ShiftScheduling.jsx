@@ -37,13 +37,13 @@ function isMissingRelation(err) {
   return m.includes('does not exist') || m.includes('relation') || m.includes('schema cache') || m.includes('could not find the table')
 }
 function fmtDate(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
   return Number.isNaN(d.getTime()) ? String(v) : d.toLocaleDateString()
 }
 function fmtTimeRange(a, b) {
-  if (!a && !b) return '—'
-  return `${a || '—'} – ${b || '—'}`
+  if (!a && !b) return 'N/A'
+  return `${a || 'N/A'} to ${b || 'N/A'}`
 }
 
 // ─── Create / Edit modal ──────────────────────────────────────────────────────
@@ -162,7 +162,7 @@ function ShiftModal({ open, initial, onClose, onSaved, activeCountry }) {
 
           <div>
             <label className="label">Notes</label>
-            <textarea className="input w-full min-h-[90px] resize-y" placeholder="Optional — coverage, handover, or special instructions." value={form.notes} maxLength={4000} onChange={(e) => set('notes', e.target.value)} />
+            <textarea className="input w-full min-h-[90px] resize-y" placeholder="Optional: coverage, handover, or special instructions." value={form.notes} maxLength={4000} onChange={(e) => set('notes', e.target.value)} />
           </div>
 
           {error && (
@@ -306,7 +306,7 @@ export default function ShiftScheduling() {
     <div className="space-y-6">
       <PageHeader
         title="Shift Scheduling"
-        subtitle="Roster driver & technician shifts — person, role, date, hours, site and status across the fleet."
+        subtitle="Roster driver & technician shifts: person, role, date, hours, site and status across the fleet."
         icon={CalendarClock}
         onRefresh={load}
         refreshing={refreshing}
@@ -355,7 +355,7 @@ export default function ShiftScheduling() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
               {k.label === 'Scheduled' && rows !== null && summary.scheduledToday > 0 && (
                 <p className="text-[11px] text-[var(--text-muted)] mt-1 flex items-center gap-1"><Clock size={11} /> {summary.scheduledToday} today</p>
               )}
@@ -425,14 +425,14 @@ export default function ShiftScheduling() {
                           <div className="w-7 h-7 rounded-full bg-[var(--brand-subtle)] border border-[var(--input-border)] flex items-center justify-center shrink-0">
                             <User size={13} className="text-[var(--brand-bright)]" />
                           </div>
-                          <span className="font-medium text-[var(--text-primary)]">{r.person_name || '—'}</span>
+                          <span className="font-medium text-[var(--text-primary)]">{r.person_name || 'N/A'}</span>
                         </div>
                       </td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.role || '—'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.role || 'N/A'}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDate(r.shift_date)}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtTimeRange(r.start_time, r.end_time)}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)]">
-                        {r.site ? <span className="inline-flex items-center gap-1"><MapPin size={12} className="text-[var(--text-muted)]" />{r.site}</span> : '—'}
+                        {r.site ? <span className="inline-flex items-center gap-1"><MapPin size={12} className="text-[var(--text-muted)]" />{r.site}</span> : 'N/A'}
                       </td>
                       <td className="px-4 py-2.5">
                         <span className={`badge text-[11px] px-2 py-0.5 rounded inline-flex items-center gap-1 ${st.cls}`}>

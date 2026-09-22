@@ -21,7 +21,7 @@ function Field({ label, hint, children }) {
 function PersonPicker({ label, value, onChange, people, copy, blank }) {
   const [query, setQuery] = useState('')
   const filtered = people.filter(p => p.id === value || [p.full_name, p.role, ...(p.sites || [])].join(' ').toLowerCase().includes(query.toLowerCase()))
-  return <div className="space-y-1"><Field label={`${copy.peopleSearch}: ${label}`}><input className={inputCls} value={query} onChange={e => setQuery(e.target.value)} /></Field><Field label={label}><select className={inputCls} value={value || ''} onChange={e => onChange(e.target.value || null)}><option value="">{blank || copy.none}</option>{filtered.map(p => <option key={p.id} value={p.id}>{p.full_name} — {p.role}{p.sites?.length ? ` — ${p.sites.join(', ')}` : ''}</option>)}</select></Field>{!filtered.length && <p className="text-xs">{copy.noPeople}</p>}</div>
+  return <div className="space-y-1"><Field label={`${copy.peopleSearch}: ${label}`}><input className={inputCls} value={query} onChange={e => setQuery(e.target.value)} /></Field><Field label={label}><select className={inputCls} value={value || ''} onChange={e => onChange(e.target.value || null)}><option value="">{blank || copy.none}</option>{filtered.map(p => <option key={p.id} value={p.id}>{p.full_name}: {p.role}{p.sites?.length ? ` (${p.sites.join(', ')})` : ''}</option>)}</select></Field>{!filtered.length && <p className="text-xs">{copy.noPeople}</p>}</div>
 }
 export default function ApprovalMatrix() {
   const { activeCountry } = useSettings()

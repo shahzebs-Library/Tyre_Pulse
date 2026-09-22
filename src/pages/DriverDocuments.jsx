@@ -35,11 +35,11 @@ function isMissingRelation(err) {
   return m.includes('does not exist') || m.includes('relation') || m.includes('schema cache') || m.includes('could not find the table')
 }
 function fmtDate(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString()
 }
-const docTypeLabel = (t) => DOC_TYPE_LABELS[t] || (t ? String(t).replace(/_/g, ' ') : '—')
+const docTypeLabel = (t) => DOC_TYPE_LABELS[t] || (t ? String(t).replace(/_/g, ' ') : 'N/A')
 
 const EMPTY_FORM = {
   driver_name: '', doc_type: 'license', doc_number: '', issuer: '',
@@ -202,7 +202,7 @@ export default function DriverDocuments() {
     <div className="space-y-6">
       <PageHeader
         title="Driver Documents"
-        subtitle="Driver licences, medical certificates, permits & visas — with issue/expiry tracking and renewal alerts."
+        subtitle="Driver licences, medical certificates, permits & visas, with issue/expiry tracking and renewal alerts."
         icon={FileCheck}
         onRefresh={load}
         refreshing={refreshing}
@@ -246,7 +246,7 @@ export default function DriverDocuments() {
         <div className="card border border-amber-800/50 flex items-center gap-3 !py-3">
           <Clock size={16} className="text-amber-400 shrink-0" />
           <span className="text-sm text-amber-200">
-            {summary.expiringSoon.length} document{summary.expiringSoon.length === 1 ? '' : 's'} expiring within {EXPIRING_SOON_DAYS} days or already expired — renewal required.
+            {summary.expiringSoon.length} document{summary.expiringSoon.length === 1 ? '' : 's'} expiring within {EXPIRING_SOON_DAYS} days or already expired. Renewal required.
           </span>
         </div>
       )}
@@ -261,7 +261,7 @@ export default function DriverDocuments() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -311,12 +311,12 @@ export default function DriverDocuments() {
                       <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">
                         <span className="inline-flex items-center gap-2">
                           <User size={14} className="text-[var(--text-muted)] shrink-0" />
-                          {r.driver_name || '—'}
+                          {r.driver_name || 'N/A'}
                         </span>
                       </td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)] capitalize">{docTypeLabel(r.doc_type)}</td>
-                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)]">{r.doc_number || '—'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.issuer || '—'}</td>
+                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)]">{r.doc_number || 'N/A'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.issuer || 'N/A'}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtDate(r.issue_date)}</td>
                       <td className={`px-4 py-2.5 ${expClass}`}>
                         {fmtDate(r.expiry_date)}

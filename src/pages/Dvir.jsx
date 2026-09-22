@@ -48,7 +48,7 @@ function isMissingRelation(err) {
   return m.includes('does not exist') || m.includes('relation') || m.includes('schema cache') || m.includes('could not find the table')
 }
 function fmtDate(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
   return Number.isNaN(d.getTime()) ? String(v) : d.toISOString().slice(0, 10)
 }
@@ -331,7 +331,7 @@ export default function Dvir() {
     <div className="space-y-6">
       <PageHeader
         title="DVIR Reports"
-        subtitle="Driver Vehicle Inspection Reports — daily pre/post-trip checks, defects found, and safe-to-operate status across the fleet."
+        subtitle="Driver Vehicle Inspection Reports: daily pre/post-trip checks, defects found, and safe-to-operate status across the fleet."
         icon={ClipboardCheck}
         onRefresh={load}
         refreshing={refreshing}
@@ -380,7 +380,7 @@ export default function Dvir() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -397,12 +397,12 @@ export default function Dvir() {
         <div className="card lg:col-span-2 flex flex-col justify-center">
           <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-4">At a glance</h3>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-            <MiniStat label="Distinct assets" value={rows === null ? '—' : summary.distinctAssets} />
-            <MiniStat label="Clean reports" value={rows === null ? '—' : Math.max(0, summary.total - summary.withDefects)} />
-            <MiniStat label="Defect rate" value={rows === null || !summary.total ? '—' : `${Math.round((summary.withDefects / summary.total) * 100)}%`} tone="text-red-400" />
-            <MiniStat label="Unsafe reports" value={rows === null ? '—' : summary.unsafe} tone="text-amber-400" />
-            <MiniStat label="Open" value={rows === null ? '—' : summary.open} tone="text-sky-400" />
-            <MiniStat label="Showing" value={rows === null ? '—' : `${filtered.length} / ${summary.total}`} />
+            <MiniStat label="Distinct assets" value={rows === null ? 'N/A' : summary.distinctAssets} />
+            <MiniStat label="Clean reports" value={rows === null ? 'N/A' : Math.max(0, summary.total - summary.withDefects)} />
+            <MiniStat label="Defect rate" value={rows === null || !summary.total ? 'N/A' : `${Math.round((summary.withDefects / summary.total) * 100)}%`} tone="text-red-400" />
+            <MiniStat label="Unsafe reports" value={rows === null ? 'N/A' : summary.unsafe} tone="text-amber-400" />
+            <MiniStat label="Open" value={rows === null ? 'N/A' : summary.open} tone="text-sky-400" />
+            <MiniStat label="Showing" value={rows === null ? 'N/A' : `${filtered.length} / ${summary.total}`} />
           </div>
         </div>
       </div>
@@ -456,8 +456,8 @@ export default function Dvir() {
               ) : (
                 pager.pageRows.map((r) => (
                   <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                    <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.asset_no || '—'}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.driver_name || '—'}</td>
+                    <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.asset_no || 'N/A'}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.driver_name || 'N/A'}</td>
                     <td className="px-4 py-2.5">
                       <span className={`badge text-[11px] px-2 py-0.5 rounded ${TYPE_STYLES[r.inspection_type] || ''}`}>{DVIR_TYPE_META[r.inspection_type]?.label || r.inspection_type}</span>
                     </td>
@@ -472,7 +472,7 @@ export default function Dvir() {
                         ? <span className="text-green-400 inline-flex items-center gap-1 text-xs"><CheckCircle2 size={13} /> Safe</span>
                         : <span className="text-red-400 inline-flex items-center gap-1 text-xs"><X size={13} /> Unsafe</span>}
                     </td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.site || '—'}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.site || 'N/A'}</td>
                     <td className="px-4 py-2.5">
                       <span className={`badge text-[11px] px-2 py-0.5 rounded ${STATUS_STYLES[r.status] || ''}`}>{DVIR_STATUS_META[r.status]?.label || r.status}</span>
                     </td>

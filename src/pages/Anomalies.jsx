@@ -95,8 +95,8 @@ function detectDataQuality(rows) {
       id: `DQ::${r.id}`,
       type: DATA_QUALITY,
       severity: ANOMALY_SEVERITY.LOW,
-      asset_no: r.asset_no || '—',
-      site: r.site || '—',
+      asset_no: r.asset_no || 'N/A',
+      site: r.site || 'N/A',
       record_ids: [r.id],
       records: [r],
       message: `Missing ${missing.join(', ')}, record cannot be used for CPK / lifecycle analytics`,
@@ -330,7 +330,7 @@ export default function Anomalies() {
     <div className="space-y-6">
       <PageHeader
         title="Anomaly Intelligence"
-        subtitle="Suspicious tyre records, cost outliers, data-quality issues and workshop-visit frequency — searchable by vehicle"
+        subtitle="Suspicious tyre records, cost outliers, data-quality issues and workshop-visit frequency, searchable by vehicle"
         icon={AlertTriangle}
       />
 
@@ -546,7 +546,7 @@ function WorkshopVisitsView({ summary, rows, columns, activeCurrency, searching 
         />
         <SeverityCard
           label="Busiest Vehicle"
-          value={summary.busiest ? summary.busiest.asset_no : '—'}
+          value={summary.busiest ? summary.busiest.asset_no : 'N/A'}
           icon={TrendingUp}
           valueClass="text-rose-400"
           ringClass="ring-rose-500/20"

@@ -101,7 +101,7 @@ const SORTS = {
 
 const scoreTone = (s) => (s >= 80 ? 'text-green-400' : s >= 60 ? 'text-yellow-400' : s >= 40 ? 'text-orange-400' : 'text-red-400')
 const scoreBg = (s) => (s >= 80 ? 'bg-green-500/20 border-green-500/30' : s >= 60 ? 'bg-yellow-500/20 border-yellow-500/30' : s >= 40 ? 'bg-orange-500/20 border-orange-500/30' : 'bg-red-500/20 border-red-500/30')
-const fmtTat = (d) => (d == null ? '—' : `${d.toFixed(1)}d`)
+const fmtTat = (d) => (d == null ? 'N/A' : `${d.toFixed(1)}d`)
 const normName = (s) => (s || '').toString().trim().toLowerCase()
 const profileName = (p) => (p?.full_name || p?.username || p?.email || 'Unnamed user')
 
@@ -336,7 +336,7 @@ export default function TechnicianScorecard() {
     <div className="space-y-6">
       <PageHeader
         title="Technician Scorecard"
-        subtitle="Workshop technician competency & performance — skills matrix, certifications, and a work-order performance leaderboard."
+        subtitle="Workshop technician competency & performance: skills matrix, certifications, and a work-order performance leaderboard."
         icon={Award}
         onRefresh={load}
         refreshing={refreshing}
@@ -396,7 +396,7 @@ export default function TechnicianScorecard() {
                     <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                     <Icon size={16} className={k.tone} />
                   </div>
-                  <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{orders === null ? '—' : k.value}</p>
+                  <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{orders === null ? 'N/A' : k.value}</p>
                 </Card>
               )
             })}
@@ -569,7 +569,7 @@ export default function TechnicianScorecard() {
                               { label: 'Jobs', value: perf.jobs },
                               { label: 'Completion', value: `${perf.completionRate}%` },
                               { label: 'Avg TAT', value: fmtTat(perf.avgTurnaround) },
-                              { label: 'Lifecycle', value: life.score == null ? '—' : life.score },
+                              { label: 'Lifecycle', value: life.score == null ? 'N/A' : life.score },
                             ].map((m) => (
                               <div key={m.label} className="rounded-lg bg-[var(--input-bg)]/60 p-2">
                                 <p className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">{m.label}</p>
@@ -652,7 +652,7 @@ export default function TechnicianScorecard() {
                     <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                     <Icon size={16} className={k.tone} />
                   </div>
-                  <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{loadingCompetency ? '—' : k.value}</p>
+                  <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{loadingCompetency ? 'N/A' : k.value}</p>
                 </Card>
               )
             })}
@@ -758,12 +758,12 @@ export default function TechnicianScorecard() {
                         <tr key={c.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
                           <td className="px-4 py-2.5 text-[var(--text-primary)] font-medium">{c.technician}</td>
                           <td className="px-4 py-2.5 text-[var(--text-secondary)]">{c.displayName}</td>
-                          <td className="px-4 py-2.5 text-[var(--text-muted)]">{c.issuer || '—'}</td>
-                          <td className="px-4 py-2.5 text-[var(--text-secondary)]">{c.issue_date ? formatDate(c.issue_date) : '—'}</td>
-                          <td className="px-4 py-2.5 text-[var(--text-secondary)]">{c.expiry_date ? formatDate(c.expiry_date) : '—'}</td>
-                          <td className={`px-4 py-2.5 text-right tabular-nums font-medium ${rowTone}`}>{c.days == null ? '—' : c.days < 0 ? `${c.days}` : c.days}</td>
+                          <td className="px-4 py-2.5 text-[var(--text-muted)]">{c.issuer || 'N/A'}</td>
+                          <td className="px-4 py-2.5 text-[var(--text-secondary)]">{c.issue_date ? formatDate(c.issue_date) : 'N/A'}</td>
+                          <td className="px-4 py-2.5 text-[var(--text-secondary)]">{c.expiry_date ? formatDate(c.expiry_date) : 'N/A'}</td>
+                          <td className={`px-4 py-2.5 text-right tabular-nums font-medium ${rowTone}`}>{c.days == null ? 'N/A' : c.days < 0 ? `${c.days}` : c.days}</td>
                           <td className="px-4 py-2.5"><span className={`text-[11px] px-2 py-0.5 rounded ${CERT_STATUS_STYLES[c.status]}`}>{c.status}</span></td>
-                          <td className="px-4 py-2.5">{href ? <a href={href} target="_blank" rel="noopener noreferrer" className="text-[var(--brand-bright)] hover:underline text-xs">view</a> : <span className="text-[var(--text-muted)]">—</span>}</td>
+                          <td className="px-4 py-2.5">{href ? <a href={href} target="_blank" rel="noopener noreferrer" className="text-[var(--brand-bright)] hover:underline text-xs">view</a> : <span className="text-[var(--text-muted)]">N/A</span>}</td>
                         </tr>
                       )
                     })
@@ -829,14 +829,14 @@ function SkillModal({ userId, userName, country, onClose, onSaved }) {
         <div>
           <label className="label">Skill</label>
           <select className="input w-full" value={skillId} onChange={(e) => setSkillId(e.target.value)}>
-            <option value="">— Select a skill —</option>
+            <option value="">Select a skill</option>
             {SKILL_CATALOGUE.map((s) => <option key={s.skill_id} value={s.skill_id}>{s.name}</option>)}
           </select>
         </div>
         <div>
           <label className="label">Proficiency level</label>
           <select className="input w-full" value={level} onChange={(e) => setLevel(Number(e.target.value))}>
-            {[1, 2, 3].map((n) => <option key={n} value={n}>{n} — {LEVEL_LABELS[n]}</option>)}
+            {[1, 2, 3].map((n) => <option key={n} value={n}>{n}: {LEVEL_LABELS[n]}</option>)}
           </select>
         </div>
         <div>
@@ -911,7 +911,7 @@ function CertModal({ userId, userName, country, onClose, onSaved }) {
         <div>
           <label className="label">Certification</label>
           <select className="input w-full" value={certId} onChange={(e) => onPickCert(e.target.value)}>
-            <option value="">— Select a certification —</option>
+            <option value="">Select a certification</option>
             {CERT_CATALOGUE.map((c) => <option key={c.cert_id} value={c.cert_id}>{c.name}</option>)}
           </select>
         </div>

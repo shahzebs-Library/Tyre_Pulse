@@ -54,19 +54,19 @@ const STATUS_BADGE = {
 const DL_LABEL = { driver_card: 'Driver card', vehicle_unit: 'Vehicle unit' }
 
 const fmtHrs = (min) => {
-  if (min == null || min === '') return '—'
+  if (min == null || min === '') return 'N/A'
   const n = Number(min)
-  if (!Number.isFinite(n)) return '—'
+  if (!Number.isFinite(n)) return 'N/A'
   const h = Math.floor(n / 60)
   const m = Math.round(n % 60)
   return `${h}h ${String(m).padStart(2, '0')}m`
 }
-const fmtKm = (v) => (v == null || v === '' ? '—' : `${Number(v).toLocaleString()} km`)
+const fmtKm = (v) => (v == null || v === '' ? 'N/A' : `${Number(v).toLocaleString()} km`)
 
 function fmtDate(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString()
 }
 
 function fmtInfringementTypes(v) {
@@ -249,7 +249,7 @@ export default function Tachograph() {
     <div className="space-y-6">
       <PageHeader
         title="Tachograph Records"
-        subtitle="EU driver tachograph downloads — driving, rest and work time with infringement tracking for EC 561/2006 compliance."
+        subtitle="EU driver tachograph downloads: driving, rest and work time with infringement tracking for EC 561/2006 compliance."
         icon={FileClock}
         onRefresh={load}
         refreshing={refreshing}
@@ -298,7 +298,7 @@ export default function Tachograph() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -369,7 +369,7 @@ export default function Tachograph() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={10} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {rows.length === 0 && !notProvisioned ? 'No tachograph records yet — add your first record.' : 'No records match these filters.'}
+                  {rows.length === 0 && !notProvisioned ? 'No tachograph records yet. Add your first record.' : 'No records match these filters.'}
                 </td></tr>
               ) : (
                 pager.pageRows.map((r) => {
@@ -377,10 +377,10 @@ export default function Tachograph() {
                   const count = Number(r.infringement_count) || 0
                   return (
                     <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                      <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.driver_name || '—'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.asset_no || '—'}</td>
+                      <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.driver_name || 'N/A'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.asset_no || 'N/A'}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDate(r.record_date)}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{DL_LABEL[r.download_type] || '—'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{DL_LABEL[r.download_type] || 'N/A'}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtHrs(r.driving_min)}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtHrs(r.rest_min)}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtKm(r.distance_km)}</td>
@@ -398,7 +398,7 @@ export default function Tachograph() {
                           <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium capitalize ${STATUS_BADGE[r.status] || 'bg-slate-800/40 text-slate-400 border-slate-700/50'}`}>
                             {r.status}
                           </span>
-                        ) : '—'}
+                        ) : 'N/A'}
                       </td>
                       <td className="px-4 py-2.5">
                         <div className="flex items-center justify-end gap-1">
@@ -448,7 +448,7 @@ export default function Tachograph() {
                 <div>
                   <label className="label">Download type</label>
                   <select className="input w-full" value={form.download_type} onChange={(e) => set('download_type', e.target.value)}>
-                    <option value="">—</option>
+                    <option value="">None</option>
                     {DOWNLOAD_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                   </select>
                 </div>
@@ -483,7 +483,7 @@ export default function Tachograph() {
                 <div>
                   <label className="label">Status</label>
                   <select className="input w-full" value={form.status} onChange={(e) => set('status', e.target.value)}>
-                    <option value="">—</option>
+                    <option value="">None</option>
                     {STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
                   </select>
                 </div>

@@ -29,9 +29,9 @@ function isMissingRelation(err) {
   return m.includes('does not exist') || m.includes('relation') || m.includes('schema cache') || m.includes('could not find the table')
 }
 function fmtDateTime(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleString()
 }
 
 // ─── Create / edit modal ──────────────────────────────────────────────────────
@@ -213,9 +213,9 @@ function ScanPanel({ country, onEdit }) {
             </span>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-[var(--text-secondary)]">
-            <div><span className="text-[var(--text-muted)]">Tyre serial</span><br />{result.tyre_serial || '—'}</div>
-            <div><span className="text-[var(--text-muted)]">Asset</span><br />{result.asset_no || '—'}</div>
-            <div><span className="text-[var(--text-muted)]">Site</span><br />{result.site || '—'}</div>
+            <div><span className="text-[var(--text-muted)]">Tyre serial</span><br />{result.tyre_serial || 'N/A'}</div>
+            <div><span className="text-[var(--text-muted)]">Asset</span><br />{result.asset_no || 'N/A'}</div>
+            <div><span className="text-[var(--text-muted)]">Site</span><br />{result.site || 'N/A'}</div>
             <div><span className="text-[var(--text-muted)]">Last scanned</span><br />{fmtDateTime(result.last_scanned_at)}</div>
           </div>
           <button type="button" onClick={() => onEdit?.(result)} className="btn-secondary text-xs inline-flex items-center gap-1.5 mt-1"><Pencil size={12} /> Open in editor</button>
@@ -370,7 +370,7 @@ export default function Rfid() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -432,12 +432,12 @@ export default function Rfid() {
                   <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
                     <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{r.tag_id}</td>
                     <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)]">
-                      {r.tyre_serial ? <span className="inline-flex items-center gap-1"><Link2 size={12} className="text-[var(--text-muted)]" />{r.tyre_serial}</span> : '—'}
+                      {r.tyre_serial ? <span className="inline-flex items-center gap-1"><Link2 size={12} className="text-[var(--text-muted)]" />{r.tyre_serial}</span> : 'N/A'}
                     </td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)]">
-                      {r.asset_no ? <span className="inline-flex items-center gap-1"><Boxes size={12} className="text-[var(--text-muted)]" />{r.asset_no}</span> : '—'}
+                      {r.asset_no ? <span className="inline-flex items-center gap-1"><Boxes size={12} className="text-[var(--text-muted)]" />{r.asset_no}</span> : 'N/A'}
                     </td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.site || '—'}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.site || 'N/A'}</td>
                     <td className="px-4 py-2.5"><span className={`badge text-[11px] px-2 py-0.5 rounded ${STATUS_STYLES[r.status] || STATUS_STYLES.retired}`}>{RFID_STATUS_META[r.status]?.label || r.status}</span></td>
                     <td className="px-4 py-2.5 text-xs text-[var(--text-secondary)] whitespace-nowrap">{fmtDateTime(r.last_scanned_at)}</td>
                     <td className="px-4 py-2.5">

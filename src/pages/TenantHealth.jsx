@@ -10,7 +10,7 @@ import { runTenantReport, WINDOW_DAYS } from '../lib/tenantHealth'
 // ── Formatting helpers ────────────────────────────────────────────────────────
 
 function formatNumber(n) {
-  if (n === null || n === undefined) return '—'
+  if (n === null || n === undefined) return 'N/A'
   return Number(n).toLocaleString()
 }
 
@@ -26,7 +26,7 @@ function formatTokens(n) {
 }
 
 function formatStamp(iso) {
-  if (!iso) return '—'
+  if (!iso) return 'N/A'
   return new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
@@ -219,26 +219,26 @@ export default function TenantHealth() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           label="Total Users"
-          value={users?.status === 'ok' ? formatNumber(users.data.total) : '—'}
+          value={users?.status === 'ok' ? formatNumber(users.data.total) : 'N/A'}
           sub={users?.status === 'ok' ? `${users.data.locked} locked` : null}
           badge={users?.status === 'ok' ? users.data.pending : null}
           icon={Users}
         />
         <StatCard
           label={`Active Users (${WINDOW_DAYS}d)`}
-          value={activity?.status === 'ok' ? formatNumber(activity.data.activeUsers) : '—'}
+          value={activity?.status === 'ok' ? formatNumber(activity.data.activeUsers) : 'N/A'}
           sub={activity?.status === 'ok' ? `${formatNumber(activity.data.totalEvents)} recorded audit events` : null}
           icon={Activity}
         />
         <StatCard
           label="Total Records"
-          value={totalRecords != null ? formatNumber(totalRecords) : '—'}
+          value={totalRecords != null ? formatNumber(totalRecords) : 'N/A'}
           sub="across core tables"
           icon={Database}
         />
         <StatCard
           label={`AI Spend (${WINDOW_DAYS}d)`}
-          value={ai?.status === 'ok' ? formatUSD(ai.data.totalCost) : '—'}
+          value={ai?.status === 'ok' ? formatUSD(ai.data.totalCost) : 'N/A'}
           sub={ai?.status === 'ok' ? `${formatTokens(ai.data.totalTokens)} tokens · ${formatNumber(ai.data.totalCalls)} calls` : null}
           icon={DollarSign}
         />
@@ -317,7 +317,7 @@ export default function TenantHealth() {
                 className="rounded-lg border border-[var(--input-border)] bg-[var(--panel-2)] px-3 py-2.5"
               >
                 <p className="text-lg font-bold text-[var(--text-primary)] leading-tight">
-                  {t.error ? '—' : formatNumber(t.count)}
+                  {t.error ? 'N/A' : formatNumber(t.count)}
                 </p>
                 <p className="text-xs text-[var(--text-muted)] mt-0.5">{t.label}</p>
                 {t.error && <p className="text-xs text-red-400 mt-0.5 truncate" title={t.error}>unavailable</p>}

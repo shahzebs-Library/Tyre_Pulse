@@ -43,7 +43,7 @@ function conditionSummary(conditions) {
 }
 
 function actionSummary(actions) {
-  if (!Array.isArray(actions) || actions.length === 0) return '—'
+  if (!Array.isArray(actions) || actions.length === 0) return 'N/A'
   return actions.map(a =>
     a.type === 'notify_role'
       ? `Notify ${ROLES.find(r => r.value === a.role)?.label || a.role}`

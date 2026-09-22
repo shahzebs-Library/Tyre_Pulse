@@ -254,7 +254,7 @@ export default function PartsCatalog() {
     <div className="space-y-6">
       <PageHeader
         title="Parts Catalog"
-        subtitle="Master catalog of spare parts — cost, on-hand stock, reorder levels and suppliers, with low-stock alerts."
+        subtitle="Master catalog of spare parts: cost, on-hand stock, reorder levels and suppliers, with low-stock alerts."
         icon={Boxes}
         onRefresh={load}
         refreshing={refreshing}
@@ -308,7 +308,7 @@ export default function PartsCatalog() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </Card>
           )
         })}
@@ -368,17 +368,17 @@ export default function PartsCatalog() {
                   return (
                     <tr key={p.id} className={`border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40 ${low ? 'bg-red-900/10' : ''}`}>
                       <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{p.part_no}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{p.name || '—'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] capitalize">{p.category || '—'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{p.unit_cost == null ? '—' : formatCurrency(p.unit_cost, activeCurrency)}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{p.name || 'N/A'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)] capitalize">{p.category || 'N/A'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{p.unit_cost == null ? 'N/A' : formatCurrency(p.unit_cost, activeCurrency)}</td>
                       <td className="px-4 py-2.5">
                         <span className={`font-semibold ${low ? 'text-red-400' : 'text-[var(--text-secondary)]'}`}>
-                          {p.on_hand_qty ?? '—'}{p.uom ? <span className="text-[var(--text-muted)] font-normal text-xs"> {p.uom}</span> : null}
+                          {p.on_hand_qty ?? 'N/A'}{p.uom ? <span className="text-[var(--text-muted)] font-normal text-xs"> {p.uom}</span> : null}
                         </span>
                         {low && <AlertTriangle size={12} className="inline ml-1.5 text-red-400" />}
                       </td>
-                      <td className="px-4 py-2.5 text-[var(--text-muted)]">{p.reorder_level ?? '—'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{p.supplier || '—'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-muted)]">{p.reorder_level ?? 'N/A'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{p.supplier || 'N/A'}</td>
                       <td className="px-4 py-2.5"><span className={`badge text-[11px] px-2 py-0.5 rounded ${STATUS_STYLES[p.status] || STATUS_STYLES.active}`}>{p.status || 'active'}</span></td>
                       <td className="px-4 py-2.5">
                         <div className="flex items-center gap-1 justify-end">
@@ -693,7 +693,7 @@ export default function PartsCatalog() {
             <div className="w-10 h-10 rounded-full bg-red-900/30 flex items-center justify-center shrink-0"><Trash2 size={18} className="text-red-400" /></div>
             <p className="text-sm text-[var(--text-secondary)]">
               Delete <span className="font-mono text-[var(--text-primary)]">{pendingDelete.part_no}</span>
-              {pendingDelete.name ? ` — ${pendingDelete.name}` : ''}? This can't be undone.
+              {pendingDelete.name ? ` (${pendingDelete.name})` : ''}? This can't be undone.
             </p>
           </div>
         </Modal>

@@ -42,12 +42,12 @@ const STATUS_META = {
   returned:  { label: 'Returned',  tone: 'text-violet-400',  badge: 'bg-violet-900/30 text-violet-300 border-violet-800/50', icon: Truck },
 }
 
-const fmtInt = (v) => (v == null || v === '' ? '—' : Number(v).toLocaleString())
+const fmtInt = (v) => (v == null || v === '' ? 'N/A' : Number(v).toLocaleString())
 
 function fmtDateTime(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleString()
 }
 
 function fmtDateInput(v) {
@@ -61,7 +61,7 @@ function fmtDateInput(v) {
 
 function StatusBadge({ status }) {
   const meta = STATUS_META[status]
-  if (!meta) return <span className="text-[var(--text-muted)]">—</span>
+  if (!meta) return <span className="text-[var(--text-muted)]">N/A</span>
   const Icon = meta.icon
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-medium ${meta.badge}`}>
@@ -215,7 +215,7 @@ export default function ProofOfDelivery() {
     <div className="space-y-6">
       <PageHeader
         title="Proof of Delivery"
-        subtitle="Capture confirmed delivery events with signature and photo evidence — the operational record behind delivery-reliability KPIs and dispute resolution."
+        subtitle="Capture confirmed delivery events with signature and photo evidence: the operational record behind delivery-reliability KPIs and dispute resolution."
         icon={PackageCheck}
         onRefresh={load}
         refreshing={refreshing}
@@ -264,7 +264,7 @@ export default function ProofOfDelivery() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -353,21 +353,21 @@ export default function ProofOfDelivery() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={7} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {rows.length === 0 && !notProvisioned ? 'No POD records yet — record your first delivery.' : 'No records match these filters.'}
+                  {rows.length === 0 && !notProvisioned ? 'No POD records yet. Record your first delivery.' : 'No records match these filters.'}
                 </td></tr>
               ) : (
                 pager.pageRows.map((r) => (
                   <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
                     <td className="px-4 py-2.5">
-                      <p className="font-medium text-[var(--text-primary)]">{r.pod_no || '—'}</p>
+                      <p className="font-medium text-[var(--text-primary)]">{r.pod_no || 'N/A'}</p>
                       {r.order_ref && <p className="text-[11px] text-[var(--text-muted)]">Order {r.order_ref}</p>}
                     </td>
                     <td className="px-4 py-2.5">
-                      <p className="text-[var(--text-primary)]">{r.customer_name || '—'}</p>
+                      <p className="text-[var(--text-primary)]">{r.customer_name || 'N/A'}</p>
                       {r.delivery_address && <p className="text-[11px] text-[var(--text-muted)] flex items-center gap-1 max-w-[220px] truncate"><MapPin size={11} className="shrink-0" /> {r.delivery_address}</p>}
                     </td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)]">
-                      <p>{r.asset_no || '—'}</p>
+                      <p>{r.asset_no || 'N/A'}</p>
                       {r.driver_name && <p className="text-[11px] text-[var(--text-muted)]">{r.driver_name}</p>}
                     </td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">
@@ -387,7 +387,7 @@ export default function ProofOfDelivery() {
                         ) : r.photo_url ? (
                           <span className="text-[var(--text-muted)]" title="Photo (unavailable)" aria-label="Photo unavailable"><ImageIcon size={15} /></span>
                         ) : null}
-                        {!r.signature_url && !r.photo_url && <span className="text-[11px] text-[var(--text-muted)]">—</span>}
+                        {!r.signature_url && !r.photo_url && <span className="text-[11px] text-[var(--text-muted)]">N/A</span>}
                         {r.items_count != null && <span className="text-[11px] text-[var(--text-muted)]">· {fmtInt(r.items_count)} items</span>}
                       </div>
                     </td>

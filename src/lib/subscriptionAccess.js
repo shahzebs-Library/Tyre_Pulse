@@ -90,7 +90,7 @@ function banner(tone, message) {
 const STATE_POLICY = Object.freeze({
   trialing: () => ({
     ...FULL,
-    reason: 'Trial active — full access.',
+    reason: 'Trial active. Full access.',
     banner: null,
   }),
   active: () => ({
@@ -104,7 +104,7 @@ const STATE_POLICY = Object.freeze({
   past_due: () => ({
     ...FULL,
     blockSelfServiceBilling: true,
-    reason: 'Payment past due — access continues during the grace period.',
+    reason: 'Payment past due. Access continues during the grace period.',
     banner: banner(
       'amber',
       'Your last payment did not go through. Please update your billing details to avoid losing access.',
@@ -118,7 +118,7 @@ const STATE_POLICY = Object.freeze({
     readOnly: true,
     billingOnly: false,
     blockSelfServiceBilling: false,
-    reason: 'Subscription canceled — read-only retention window.',
+    reason: 'Subscription canceled. Read-only retention window.',
     banner: banner(
       'gray',
       'Your subscription is canceled. Your data is read-only. Reactivate a plan to resume editing.',
@@ -132,7 +132,7 @@ const STATE_POLICY = Object.freeze({
     readOnly: true,
     billingOnly: true,
     blockSelfServiceBilling: false,
-    reason: 'Subscription expired — billing and export only.',
+    reason: 'Subscription expired. Billing and export only.',
     banner: banner(
       'red',
       'Your subscription has expired. Renew a plan to restore access. You can still export your data.',
@@ -145,7 +145,7 @@ const STATE_POLICY = Object.freeze({
     readOnly: true,
     billingOnly: false,
     blockSelfServiceBilling: false,
-    reason: 'Subscription suspended — access is blocked.',
+    reason: 'Subscription suspended. Access is blocked.',
     banner: banner(
       'red',
       'Your account is suspended. Please contact support to restore access.',
@@ -158,7 +158,7 @@ function failOpen(state) {
   return {
     state,
     ...FULL,
-    reason: 'Subscription state not loaded or unrecognised — access permitted.',
+    reason: 'Subscription state not loaded or unrecognised. Access permitted.',
     banner: null,
   }
 }

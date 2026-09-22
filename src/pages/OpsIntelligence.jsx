@@ -84,7 +84,7 @@ const ANOMALY_LABEL = {
   pm_due_soon: 'PM due soon',
 }
 
-const fmtMoney = (n) => (n == null ? '—' : Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 }))
+const fmtMoney = (n) => (n == null ? 'N/A' : Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 }))
 
 export default function OpsIntelligence() {
   const { activeCountry, activeCurrency } = useSettings()
@@ -293,7 +293,7 @@ export default function OpsIntelligence() {
     <div className="space-y-6">
       <PageHeader
         title="Ops Intelligence"
-        subtitle="Operations Intelligence Center — a live Fleet Health Pulse, anomaly feed, financial view and executive strip, above a cross-cutting exception scan of every tyre and work-order issue that needs action now."
+        subtitle="Operations Intelligence Center: a live Fleet Health Pulse, anomaly feed, financial view and executive strip, above a cross-cutting exception scan of every tyre and work-order issue that needs action now."
         icon={Activity}
         onRefresh={load}
         refreshing={refreshing}
@@ -306,14 +306,14 @@ export default function OpsIntelligence() {
             <button onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'ops_intelligence_exceptions')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileSpreadsheet size={14} /> Excel
             </button>
-            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Ops Intelligence — Exception Command Center', 'ops_intelligence_exceptions', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Ops Intelligence: Exception Command Center', 'ops_intelligence_exceptions', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileText size={14} /> PDF
             </button>
             <EmailPdfButton
               disabled={!filtered.length}
               className="btn-secondary text-sm inline-flex items-center gap-1.5 disabled:opacity-50"
               getPdf={async () => ({
-                base64: await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Ops Intelligence — Exception Command Center', 'ops_intelligence_exceptions', 'landscape', '', { returnBase64: true }),
+                base64: await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Ops Intelligence: Exception Command Center', 'ops_intelligence_exceptions', 'landscape', '', { returnBase64: true }),
                 filename: 'ops_intelligence_exceptions.pdf',
                 subject: 'Ops Intelligence',
                 bodyHtml: '<p>Attached is the Ops Intelligence report.</p>',
@@ -341,7 +341,7 @@ export default function OpsIntelligence() {
                 <HeartPulse size={13} className={tone.text} /> Fleet Health
               </p>
               <p className={`text-4xl font-bold leading-tight ${tone.text}`}>
-                {loading || pulse == null ? '—' : pulse.score}
+                {loading || pulse == null ? 'N/A' : pulse.score}
                 <span className="text-lg text-[var(--text-muted)] font-medium">/100</span>
               </p>
               <span className={`inline-block mt-1 text-[11px] font-semibold px-2 py-0.5 rounded ${SEVERITY_STYLES[pulse?.status === 'critical' ? 'high' : pulse?.status === 'warning' ? 'medium' : 'low']}`}>
@@ -356,7 +356,7 @@ export default function OpsIntelligence() {
               <div className="flex items-start gap-2 p-3 rounded-lg bg-red-900/30 border border-red-700/50">
                 <AlertOctagon size={18} className="text-red-400 mt-0.5 shrink-0" />
                 <p className="text-sm font-semibold text-red-300">
-                  Immediate action required — high-severity exceptions or unsafe tread detected.
+                  Immediate action required. High-severity exceptions or unsafe tread detected.
                 </p>
               </div>
             )}
@@ -368,7 +368,7 @@ export default function OpsIntelligence() {
             </div>
             <p className="text-[11px] text-[var(--text-muted)] flex items-start gap-1.5">
               <Info size={12} className="mt-0.5 shrink-0" />
-              No standalone alerts table in this schema — the critical-risk term uses the count of HIGH-severity exceptions from the scan below.
+              No standalone alerts table in this schema. The critical-risk term uses the count of HIGH-severity exceptions from the scan below.
             </p>
             {pmCompliance && pmCompliance.active > 0 && (
               <div className="flex items-center gap-3 p-3 rounded-lg bg-[var(--input-bg)]/50 border border-[var(--input-border)]">
@@ -404,7 +404,7 @@ export default function OpsIntelligence() {
                 <Icon size={14} className={k.tone} />
               </div>
               <p className={`text-2xl font-bold mt-1 ${k.tone}`}>
-                {loading ? '—' : (k.value == null ? '—' : k.value)}
+                {loading ? 'N/A' : (k.value == null ? 'N/A' : k.value)}
               </p>
             </div>
           )
@@ -432,7 +432,7 @@ export default function OpsIntelligence() {
             ) : feedItems.length === 0 ? (
               <div className="px-4 py-12 text-center text-[var(--text-muted)] text-sm">
                 <CheckCircle2 size={24} className="mx-auto mb-2 text-green-400 opacity-80" />
-                No anomalies detected — pressure, cost, inspection cadence and preventive maintenance all within range.
+                No anomalies detected. Pressure, cost, inspection cadence and preventive maintenance all within range.
               </div>
             ) : (
               feedItems.slice(0, 40).map((a, i) => (
@@ -487,8 +487,8 @@ export default function OpsIntelligence() {
               {[
                 ['YTD tyre spend', `${currency} ${fmtMoney(financials.ytdTyreSpend)}`],
                 ['Annual budget', financials.annualBudget > 0 ? `${currency} ${fmtMoney(financials.annualBudget)}` : 'Not set'],
-                ['Remaining', financials.remainingBudget == null ? '—' : `${currency} ${fmtMoney(financials.remainingBudget)}`],
-                ['Avg CPK', financials.avgCpk != null ? `${currency} ${financials.avgCpk}/km` : '—', financials.avgCpk != null ? (financials.cpkmStatus === 'good' ? 'text-green-400' : financials.cpkmStatus === 'average' ? 'text-amber-400' : 'text-red-400') : ''],
+                ['Remaining', financials.remainingBudget == null ? 'N/A' : `${currency} ${fmtMoney(financials.remainingBudget)}`],
+                ['Avg CPK', financials.avgCpk != null ? `${currency} ${financials.avgCpk}/km` : 'N/A', financials.avgCpk != null ? (financials.cpkmStatus === 'good' ? 'text-green-400' : financials.cpkmStatus === 'average' ? 'text-amber-400' : 'text-red-400') : ''],
                 ['CPK data points', financials.cpkDataPoints],
               ].map(([l, v, t]) => (
                 <div key={l} className="flex justify-between text-sm py-1.5 border-b border-[var(--input-border)]/60 last:border-0">
@@ -521,7 +521,7 @@ export default function OpsIntelligence() {
               <TrendingUp size={15} className="text-blue-400" /> Executive summary
             </h3>
             <span className={`text-[11px] font-semibold px-2 py-0.5 rounded ${SEVERITY_STYLES[executive.fleetHealthStatus === 'critical' ? 'high' : executive.fleetHealthStatus === 'warning' ? 'medium' : 'low']}`}>
-              Health {executive.fleetHealthScore ?? '—'}/100
+              Health {executive.fleetHealthScore ?? 'N/A'}/100
             </span>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
@@ -542,7 +542,7 @@ export default function OpsIntelligence() {
           {executive.actionRequired && (
             <div className="mt-3 p-3 rounded-lg bg-red-900/25 border border-red-700/50">
               <p className="text-sm font-semibold text-red-300 flex items-center gap-1.5">
-                <AlertOctagon size={15} /> Action required — review critical issues immediately.
+                <AlertOctagon size={15} /> Action required. Review critical issues immediately.
               </p>
             </div>
           )}
@@ -571,7 +571,7 @@ export default function OpsIntelligence() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{loading ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{loading ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -630,7 +630,7 @@ export default function OpsIntelligence() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={7} className="px-4 py-16 text-center text-[var(--text-muted)]">
                   {summary.total === 0 ? (
-                    <><CheckCircle2 size={26} className="mx-auto mb-2 text-green-400 opacity-80" />All clear — no open exceptions across the fleet.</>
+                    <><CheckCircle2 size={26} className="mx-auto mb-2 text-green-400 opacity-80" />All clear. No open exceptions across the fleet.</>
                   ) : (
                     <><Filter size={22} className="mx-auto mb-2 opacity-60" />No exceptions match these filters.</>
                   )}
@@ -646,8 +646,8 @@ export default function OpsIntelligence() {
                       </span>
                     </td>
                     <td className="px-4 py-2.5 text-[var(--text-primary)] font-medium max-w-[260px] truncate" title={e.title}>{e.title}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{e.asset_no || '—'}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{e.site || '—'}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{e.asset_no || 'N/A'}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{e.site || 'N/A'}</td>
                     <td className="px-4 py-2.5 text-[var(--text-muted)] text-xs max-w-[340px]">{e.detail}</td>
                     <td className="px-4 py-2.5 whitespace-nowrap text-right">
                       <button onClick={() => navigate(e.link)} className="btn-secondary text-xs inline-flex items-center gap-1 px-2.5 py-1" title={`Open in ${CATEGORY_META[e.category]?.module}`}>
@@ -683,7 +683,7 @@ function ScoreRing({ score, color, loading }) {
         />
       </svg>
       <div className="absolute inset-0 flex items-center justify-center">
-        <span className="text-lg font-bold" style={{ color }}>{loading || score == null ? '—' : score}</span>
+        <span className="text-lg font-bold" style={{ color }}>{loading || score == null ? 'N/A' : score}</span>
       </div>
     </div>
   )
@@ -694,7 +694,7 @@ function MiniStat({ label, value, tone, loading, capitalize }) {
     <div className="rounded-lg bg-[var(--input-bg)]/50 border border-[var(--input-border)] px-3 py-2">
       <p className="text-[11px] text-[var(--text-muted)] leading-tight">{label}</p>
       <p className={`text-lg font-bold mt-0.5 ${tone} ${capitalize ? 'capitalize' : ''}`}>
-        {loading ? '—' : (value == null ? '—' : value)}
+        {loading ? 'N/A' : (value == null ? 'N/A' : value)}
       </p>
     </div>
   )

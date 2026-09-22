@@ -2688,7 +2688,7 @@ export async function exportDailyExecutivePdf(data, filename) {
     doc.text(date + (data.generatedBy ? `  |  Prepared by: ${data.generatedBy}` : ''), 28, 103)
     // Footer meta line on the cover
     doc.setFontSize(7.5); doc.setFont('helvetica','normal'); doc.setTextColor(...P.ghost)
-    doc.text(`${siteLabel}  |  Confidential — for internal distribution only`, 28, PH - 16)
+    doc.text(`${siteLabel}  |  Confidential, for internal distribution only`, 28, PH - 16)
 
     // Right-side KPI tiles
     const kpis = [

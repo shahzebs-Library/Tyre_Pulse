@@ -404,7 +404,7 @@ export default function ReportBuilder() {
     meta: c.type === 'number' ? { align: 'right' } : undefined,
     cell: info => {
       const v = info.getValue()
-      if (v == null || v === '') return <span className="text-muted">—</span>
+      if (v == null || v === '') return <span className="text-muted">N/A</span>
       return String(v)
     },
   })), [resultColumns])

@@ -54,14 +54,14 @@ const EMPTY_TRANSFER = {
   quantity: '1', status: 'pending', notes: '',
 }
 
-const fmtInt = (v) => (v == null || v === '' ? '—' : Number(v).toLocaleString())
+const fmtInt = (v) => (v == null || v === '' ? 'N/A' : Number(v).toLocaleString())
 const fmtMoney = (v, cur = 'SAR') =>
-  v == null || v === '' ? '—' : `${cur} ${Math.round(Number(v)).toLocaleString()}`
+  v == null || v === '' ? 'N/A' : `${cur} ${Math.round(Number(v)).toLocaleString()}`
 
 function fmtDate(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString()
 }
 
 function isMissingRelation(err) {
@@ -166,7 +166,7 @@ export default function HoldingCompany() {
     return opts
   }, [subs, subsidiaries])
   const orgName_ = useCallback(
-    (id) => orgOptions.find((o) => o.id === id)?.name || id || '—',
+    (id) => orgOptions.find((o) => o.id === id)?.name || id || 'N/A',
     [orgOptions],
   )
 
@@ -314,7 +314,7 @@ export default function HoldingCompany() {
     <div className="space-y-6">
       <PageHeader
         title="Holding Company"
-        subtitle="Consolidate every subsidiary into one group command view — fleet health, performance league, spend distribution, and inter-company transfers."
+        subtitle="Consolidate every subsidiary into one group command view: fleet health, performance league, spend distribution, and inter-company transfers."
         icon={Building2}
         badge={summary.subsidiaryCount ? `${summary.subsidiaryCount} orgs` : undefined}
         onRefresh={load}
@@ -382,7 +382,7 @@ export default function HoldingCompany() {
               </div>
               {/* While loading each tile shows an em dash, never 0 - a
                   fabricated zero on a group money tile is a reporting defect. */}
-              <p className={`text-2xl font-bold mt-1 ${k.tone}`}>{loading ? '—' : k.value}</p>
+              <p className={`text-2xl font-bold mt-1 ${k.tone}`}>{loading ? 'N/A' : k.value}</p>
             </Card>
           )
         })}
@@ -637,15 +637,15 @@ export default function HoldingCompany() {
                       ) : filteredTransfers.length === 0 ? (
                         <tr><td colSpan={8} className="px-4 py-12 text-center text-[var(--text-muted)]">
                           <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                          {(transfers?.length || 0) === 0 ? 'No inter-company transfers yet — record your first movement.' : 'No transfers match these filters.'}
+                          {(transfers?.length || 0) === 0 ? 'No inter-company transfers yet. Record your first movement.' : 'No transfers match these filters.'}
                         </td></tr>
                       ) : (
                         transferPager.pageRows.map((t) => (
                           <tr key={t.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
                             <td className="px-4 py-2.5 text-[var(--text-primary)]">{orgName_(t.from_org_id)}</td>
                             <td className="px-4 py-2.5 text-[var(--text-primary)]">{orgName_(t.to_org_id)}</td>
-                            <td className="px-4 py-2.5 text-[var(--text-secondary)] capitalize">{t.asset_type || '—'}</td>
-                            <td className="px-4 py-2.5 text-[var(--text-secondary)]">{t.asset_ref || '—'}</td>
+                            <td className="px-4 py-2.5 text-[var(--text-secondary)] capitalize">{t.asset_type || 'N/A'}</td>
+                            <td className="px-4 py-2.5 text-[var(--text-secondary)]">{t.asset_ref || 'N/A'}</td>
                             <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtInt(t.quantity)}</td>
                             <td className="px-4 py-2.5">
                               <span className={`text-[11px] px-2 py-0.5 rounded-full border capitalize ${STATUS_STYLE[t.status] || STATUS_STYLE.pending}`}>{(t.status || 'pending').replace('_', ' ')}</span>

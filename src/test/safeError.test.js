@@ -72,12 +72,12 @@ describe('toUserMessage — textual permission / RLS detection', () => {
 describe('toUserMessage — network detection', () => {
   it('maps a "Failed to fetch" transport error to a network message', () => {
     const err = new TypeError('Failed to fetch')
-    expect(toUserMessage(err, 'fb')).toBe('Network error — check your connection.')
+    expect(toUserMessage(err, 'fb')).toBe('Network error. Check your connection.')
   })
 
   it('maps a generic network error to a network message', () => {
     const err = new Error('NetworkError when attempting to fetch resource')
-    expect(toUserMessage(err, 'fb')).toBe('Network error — check your connection.')
+    expect(toUserMessage(err, 'fb')).toBe('Network error. Check your connection.')
   })
 })
 

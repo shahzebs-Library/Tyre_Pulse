@@ -12,7 +12,7 @@ const OCT = Array.from({ length: 8 }).map((_, i) => {
   return `${(32 + Math.cos(a) * 13).toFixed(2)} ${(32 + Math.sin(a) * 13).toFixed(2)}`
 }).join(' ')
 
-export default function StatusCriticalIllustration({ size = 64, title = 'Critical', desc = 'Critical failure — act now', animate = true, ...rest }) {
+export default function StatusCriticalIllustration({ size = 64, title = 'Critical', desc = 'Critical failure, act now', animate = true, ...rest }) {
   const d = useDefs()
   const reduce = useReducedMotion()
   const on = animate && !reduce

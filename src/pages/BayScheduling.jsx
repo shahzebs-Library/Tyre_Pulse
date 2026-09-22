@@ -75,15 +75,15 @@ const PRIORITY_BADGE = {
   urgent: 'bg-red-900/30 text-red-300 border-red-800/50',
 }
 
-const fmtLabel = (v) => (v == null || v === '' ? '—' : String(v).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()))
+const fmtLabel = (v) => (v == null || v === '' ? 'N/A' : String(v).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()))
 
 function fmtDateTime(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
 }
 function fmtMin(v) {
-  if (v == null) return '—'
+  if (v == null) return 'N/A'
   const n = Math.round(v)
   if (Math.abs(n) < 60) return `${n} min`
   const h = Math.floor(Math.abs(n) / 60)
@@ -198,7 +198,7 @@ export default function BayScheduling() {
     { label: 'In progress', value: summary.inProgressCount, icon: PlayCircle, tone: 'text-indigo-400' },
     { label: 'Completed today', value: completedToday, icon: CheckCircle2, tone: 'text-green-400' },
     { label: 'Delayed', value: summary.delayedCount, icon: AlertTriangle, tone: summary.delayedCount > 0 ? 'text-amber-400' : 'text-[var(--text-primary)]' },
-    { label: 'Avg overrun', value: summary.avgOverrunMin == null ? '—' : fmtMin(summary.avgOverrunMin), icon: Timer, tone: (summary.avgOverrunMin ?? 0) > 0 ? 'text-red-400' : 'text-green-400' },
+    { label: 'Avg overrun', value: summary.avgOverrunMin == null ? 'N/A' : fmtMin(summary.avgOverrunMin), icon: Timer, tone: (summary.avgOverrunMin ?? 0) > 0 ? 'text-red-400' : 'text-green-400' },
     { label: 'Active bays', value: summary.activeBays, icon: Building2, tone: 'text-sky-400' },
   ]
 
@@ -291,7 +291,7 @@ export default function BayScheduling() {
     <div className="space-y-6">
       <PageHeader
         title="Bay Scheduling"
-        subtitle="Plan and track workshop bay capacity — utilisation, technician load, job overruns, and double-booking conflicts across every bay."
+        subtitle="Plan and track workshop bay capacity: utilisation, technician load, job overruns, and double-booking conflicts across every bay."
         icon={Wrench}
         onRefresh={load}
         refreshing={refreshing}
@@ -346,7 +346,7 @@ export default function BayScheduling() {
             <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
             <div className="flex-1 min-w-0">
               <p className="text-red-300 font-medium">
-                {conflicts.length} scheduling conflict{conflicts.length === 1 ? '' : 's'} detected — a bay is double-booked.
+                {conflicts.length} scheduling conflict{conflicts.length === 1 ? '' : 's'} detected. A bay is double-booked.
               </p>
               <div className="mt-2 flex flex-col gap-1.5">
                 {conflicts.slice(0, 5).map((c, i) => (
@@ -375,7 +375,7 @@ export default function BayScheduling() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </Card>
           )
         })}
@@ -432,7 +432,7 @@ export default function BayScheduling() {
             <Users size={18} className="text-amber-400 mt-0.5 shrink-0" />
             <div className="flex-1 min-w-0">
               <p className="text-amber-300 font-medium">
-                {techConflicts.length} technician double-booking{techConflicts.length === 1 ? '' : 's'} — a technician is assigned to overlapping jobs in different bays.
+                {techConflicts.length} technician double-booking{techConflicts.length === 1 ? '' : 's'}. A technician is assigned to overlapping jobs in different bays.
               </p>
               <div className="mt-2 flex flex-col gap-1.5">
                 {techConflicts.slice(0, 5).map((c, i) => (
@@ -469,7 +469,7 @@ export default function BayScheduling() {
           {rows === null ? (
             <div className="h-24 bg-[var(--input-bg)] rounded animate-pulse" />
           ) : forecast.activeBays === 0 ? (
-            <p className="text-sm text-[var(--text-muted)]">No active bays yet — schedule jobs to project capacity.</p>
+            <p className="text-sm text-[var(--text-muted)]">No active bays yet. Schedule jobs to project capacity.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -601,7 +601,7 @@ export default function BayScheduling() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={9} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {rows.length === 0 && !notProvisioned ? 'No jobs scheduled yet — schedule your first job.' : 'No jobs match these filters.'}
+                  {rows.length === 0 && !notProvisioned ? 'No jobs scheduled yet. Schedule your first job.' : 'No jobs match these filters.'}
                 </td></tr>
               ) : (
                 pager.pageRows.map((r) => {
@@ -610,24 +610,24 @@ export default function BayScheduling() {
                   return (
                     <tr key={r.id} className={`border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40 ${overrun ? 'bg-red-950/10' : ''}`}>
                       <td className="px-4 py-2.5">
-                        <p className="font-medium text-[var(--text-primary)]">{r.bay_name || '—'}</p>
+                        <p className="font-medium text-[var(--text-primary)]">{r.bay_name || 'N/A'}</p>
                         {r.workshop_site && <p className="text-[11px] text-[var(--text-muted)]">{r.workshop_site}</p>}
                       </td>
                       <td className="px-4 py-2.5">
-                        <p className="text-[var(--text-primary)]">{r.asset_no || '—'}</p>
+                        <p className="text-[var(--text-primary)]">{r.asset_no || 'N/A'}</p>
                         <p className="text-[11px] text-[var(--text-muted)]">{fmtLabel(r.job_type)}</p>
                       </td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.technician || '—'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.technician || 'N/A'}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDateTime(r.scheduled_start)}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{r.estimated_min == null || r.estimated_min === '' ? '—' : fmtMin(Number(r.estimated_min))}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{r.estimated_min == null || r.estimated_min === '' ? 'N/A' : fmtMin(Number(r.estimated_min))}</td>
                       <td className={`px-4 py-2.5 whitespace-nowrap font-medium ${ov == null ? 'text-[var(--text-muted)]' : ov > 0 ? 'text-red-400' : 'text-green-400'}`}>
-                        {ov == null ? '—' : `${ov > 0 ? '+' : ''}${fmtMin(ov)}`}
+                        {ov == null ? 'N/A' : `${ov > 0 ? '+' : ''}${fmtMin(ov)}`}
                       </td>
                       <td className="px-4 py-2.5">
-                        {r.priority ? <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border ${PRIORITY_BADGE[r.priority] || ''}`}>{fmtLabel(r.priority)}</span> : '—'}
+                        {r.priority ? <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border ${PRIORITY_BADGE[r.priority] || ''}`}>{fmtLabel(r.priority)}</span> : 'N/A'}
                       </td>
                       <td className="px-4 py-2.5">
-                        {r.status ? <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border ${STATUS_BADGE[r.status] || ''}`}>{fmtLabel(r.status)}</span> : '—'}
+                        {r.status ? <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border ${STATUS_BADGE[r.status] || ''}`}>{fmtLabel(r.status)}</span> : 'N/A'}
                       </td>
                       <td className="px-4 py-2.5">
                         <div className="flex items-center justify-end gap-1">

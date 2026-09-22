@@ -200,7 +200,7 @@ function ReportForm({ onSubmitted }) {
     return (
       <div className="card text-center py-10 space-y-3">
         <CheckCircle2 size={32} className="mx-auto text-green-400" />
-        <p className="text-[var(--text-primary)] font-semibold">Thanks — your issue has been sent.</p>
+        <p className="text-[var(--text-primary)] font-semibold">Thanks, your issue has been sent.</p>
         <p className="text-sm text-[var(--text-muted)]">Your administrator has been notified. Track progress under My tickets.</p>
         <button className="btn-secondary text-sm" onClick={() => setDone(false)}>Report another</button>
       </div>

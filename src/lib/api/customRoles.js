@@ -136,7 +136,7 @@ export async function setRoleModules(role, moduleKeys) {
 export async function createCustomRole({ name, description, moduleKeys } = {}) {
   const clean = String(name || '').trim()
   if (!clean) throw new Error('A role name is required.')
-  if (isBuiltInRole(clean)) throw new Error(`"${clean}" is a built-in role name — choose a different name.`)
+  if (isBuiltInRole(clean)) throw new Error(`"${clean}" is a built-in role name. Choose a different name.`)
 
   const row = unwrap(
     await supabase.from('custom_roles')

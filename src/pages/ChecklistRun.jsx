@@ -624,7 +624,7 @@ export default function ChecklistRun() {
                     ? 'bg-red-900/30 text-red-300 border-red-700/50'
                     : 'bg-[var(--input-bg)] text-[var(--text-dim)] border-[var(--input-border)]'
               }`}
-              title="Live score — updates as you fill the checklist"
+              title="Live score, updates as you fill the checklist"
             >
               <Gauge size={13} /> Score: {liveScore.pct}%
               {liveScore.passed != null && <span>· {liveScore.passed ? 'Pass' : 'Fail'}</span>}

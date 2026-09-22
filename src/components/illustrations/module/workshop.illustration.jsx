@@ -6,7 +6,7 @@
 import { IllustrationBase, BrandDefs, useDefs, motion, useReducedMotion, C } from '../primitives'
 import { G } from '../tokens'
 
-export default function WorkshopIllustration({ size = 200, title = 'No workshop activity', desc = 'Bays are idle — schedule a service to begin', animate = true, ...rest }) {
+export default function WorkshopIllustration({ size = 200, title = 'No workshop activity', desc = 'Bays are idle, schedule a service to begin', animate = true, ...rest }) {
   const d = useDefs()
   const reduce = useReducedMotion()
   const on = animate && !reduce

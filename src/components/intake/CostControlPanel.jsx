@@ -31,7 +31,7 @@ export default function CostControlPanel({ isElevated = false }) {
   const [scopeValue, setScopeValue] = useState('')
   const [amount, setAmount] = useState('')
 
-  const money = (n) => (n == null ? '—' : `${activeCurrency} ${Number(n).toLocaleString('en-US')}`)
+  const money = (n) => (n == null ? 'N/A' : `${activeCurrency} ${Number(n).toLocaleString('en-US')}`)
 
   const load = useCallback(async () => {
     setError('')

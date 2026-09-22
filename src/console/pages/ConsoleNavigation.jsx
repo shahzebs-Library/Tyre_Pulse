@@ -141,7 +141,7 @@ export default function ConsoleNavigation() {
           <h1 className="text-xl font-bold text-white flex items-center gap-2"><ListTree size={20} className="text-orange-400" /> Navigation Customizer</h1>
           <p className="text-sm text-slate-400 mt-1 max-w-2xl">
             Reorder the main-app sidebar, move items between groups, rename groups, and hide clutter. Applies org-wide.
-            Hiding is menu tidiness only — a hidden item is still reachable and access is still governed by roles and permissions.
+            Hiding is menu tidiness only. A hidden item is still reachable and access is still governed by roles and permissions.
           </p>
         </div>
         <div className="flex items-center gap-2">

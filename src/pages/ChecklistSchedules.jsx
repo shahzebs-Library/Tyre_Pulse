@@ -285,7 +285,7 @@ export default function ChecklistSchedules() {
     <div className="space-y-6">
       <PageHeader
         title="Checklist Schedules"
-        subtitle="Automate recurring compliance — assign checklists to sites and assets on a cadence."
+        subtitle="Automate recurring compliance: assign checklists to sites and assets on a cadence."
         icon={CalendarClock}
         badge={!loading && !missing ? `${activeCount} active` : undefined}
         actions={headerActions}

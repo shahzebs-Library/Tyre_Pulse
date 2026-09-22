@@ -46,7 +46,7 @@ const STATUS_BADGE = {
 }
 
 function StatusBadge({ status }) {
-  const s = STATUS_BADGE[status] || { label: status || '—', cls: 'bg-slate-800/60 text-slate-400 border-slate-700/50' }
+  const s = STATUS_BADGE[status] || { label: status || 'N/A', cls: 'bg-slate-800/60 text-slate-400 border-slate-700/50' }
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border ${s.cls}`}>
       {s.label}
@@ -55,17 +55,17 @@ function StatusBadge({ status }) {
 }
 
 const fmtKm = (v) =>
-  v == null || v === '' ? '—' : `${Number(v).toLocaleString()} km`
+  v == null || v === '' ? 'N/A' : `${Number(v).toLocaleString()} km`
 
 function fmtDateTime(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleString()
 }
 
 function fmtDuration(res) {
   const h = durationHours(res)
-  if (h == null) return '—'
+  if (h == null) return 'N/A'
   if (h < 24) return `${Math.round(h * 10) / 10} h`
   return `${Math.round((h / 24) * 10) / 10} d`
 }
@@ -243,7 +243,7 @@ export default function VehicleReservations() {
     <div className="space-y-6">
       <PageHeader
         title="Vehicle Reservations"
-        subtitle="Book and track shared motor-pool vehicles — approvals, check-out/return, and automatic double-booking detection for pool utilisation and availability."
+        subtitle="Book and track shared motor-pool vehicles: approvals, check-out/return, and automatic double-booking detection for pool utilisation and availability."
         icon={CalendarClock}
         onRefresh={load}
         refreshing={refreshing}
@@ -292,7 +292,7 @@ export default function VehicleReservations() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -362,7 +362,7 @@ export default function VehicleReservations() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={7} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {rows.length === 0 && !notProvisioned ? 'No reservations yet — create your first booking.' : 'No reservations match these filters.'}
+                  {rows.length === 0 && !notProvisioned ? 'No reservations yet. Create your first booking.' : 'No reservations match these filters.'}
                 </td></tr>
               ) : (
                 pager.pageRows.map((r) => {
@@ -372,12 +372,12 @@ export default function VehicleReservations() {
                       <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">
                         <div className="flex items-center gap-1.5">
                           {conflicted && <AlertTriangle size={13} className="text-red-400 shrink-0" title="Double-booked" />}
-                          {r.asset_no || '—'}
+                          {r.asset_no || 'N/A'}
                         </div>
                         {r.reference && <span className="block text-[11px] text-[var(--text-muted)]">{r.reference}</span>}
                       </td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)]">
-                        {r.requester_name || '—'}
+                        {r.requester_name || 'N/A'}
                         {r.department && <span className="block text-[11px] text-[var(--text-muted)]">{r.department}</span>}
                       </td>
                       <td className="px-4 py-2.5"><StatusBadge status={r.status} /></td>
@@ -388,8 +388,8 @@ export default function VehicleReservations() {
                       <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDuration(r)}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)]">
                         {(r.pickup_location || r.return_location) ? (
-                          <span className="flex items-center gap-1 text-xs"><MapPin size={12} className="text-[var(--text-muted)]" />{r.pickup_location || '—'} → {r.return_location || '—'}</span>
-                        ) : '—'}
+                          <span className="flex items-center gap-1 text-xs"><MapPin size={12} className="text-[var(--text-muted)]" />{r.pickup_location || 'N/A'} → {r.return_location || 'N/A'}</span>
+                        ) : 'N/A'}
                       </td>
                       <td className="px-4 py-2.5">
                         <div className="flex items-center justify-end gap-1">
@@ -507,7 +507,7 @@ export default function VehicleReservations() {
               <div>
                 <h3 className="text-[var(--text-primary)] font-semibold">Delete this reservation?</h3>
                 <p className="text-sm text-[var(--text-muted)] mt-1">
-                  {confirmDelete.asset_no || 'Reservation'} · {confirmDelete.requester_name || confirmDelete.reference || '—'} · {fmtDateTime(confirmDelete.start_at)}. This can’t be undone.
+                  {confirmDelete.asset_no || 'Reservation'} · {confirmDelete.requester_name || confirmDelete.reference || 'N/A'} · {fmtDateTime(confirmDelete.start_at)}. This can’t be undone.
                 </p>
               </div>
             </div>

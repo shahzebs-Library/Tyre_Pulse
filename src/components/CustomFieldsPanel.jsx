@@ -25,7 +25,7 @@ const humanize = (k) =>
     .replace(/\b\w/g, (c) => c.toUpperCase())
 
 function renderValue(key, val, currency) {
-  if (val == null || val === '') return '—'
+  if (val == null || val === '') return 'N/A'
   if (Array.isArray(val)) return `${val.length} item${val.length !== 1 ? 's' : ''}`
   if (typeof val === 'object') return JSON.stringify(val)
   const num = typeof val === 'number' ? val : Number(String(val).replace(/,/g, ''))
@@ -88,7 +88,7 @@ export default function CustomFieldsPanel({ data, title = 'Additional imported f
                   {lineItems.map((row, i) => (
                     <tr key={i} className="border-t border-gray-800/60">
                       {Object.keys(lineItems[0]).slice(0, 8).map((h) => (
-                        <td key={h} className="px-3 py-1.5 text-gray-300 whitespace-nowrap">{row?.[h] ?? '—'}</td>
+                        <td key={h} className="px-3 py-1.5 text-gray-300 whitespace-nowrap">{row?.[h] ?? 'N/A'}</td>
                       ))}
                     </tr>
                   ))}

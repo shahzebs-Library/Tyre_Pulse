@@ -491,7 +491,7 @@ export default function RetreadManagement() {
         out.push({
           tone: 'success',
           title: `Retreading is cutting cost-per-km by ${deltaPct.toFixed(0)}%`,
-          body: `Fleet retread CPK (${fmtCpk(kpis.retreadCpk, activeCurrency)}) is below new-tyre CPK (${fmtCpk(kpis.newCpk, activeCurrency)}). Retreading is the correct economic choice for eligible casings — protect casing quality to keep this advantage.`,
+          body: `Fleet retread CPK (${fmtCpk(kpis.retreadCpk, activeCurrency)}) is below new-tyre CPK (${fmtCpk(kpis.newCpk, activeCurrency)}). Retreading is the correct economic choice for eligible casings. Protect casing quality to keep this advantage.`,
         })
       } else {
         out.push({
@@ -514,7 +514,7 @@ export default function RetreadManagement() {
       } else if (kpis.successRate >= 90) {
         out.push({
           tone: 'success',
-          title: `Strong retread reliability — ${kpis.successRate.toFixed(0)}% success at removal`,
+          title: `Strong retread reliability: ${kpis.successRate.toFixed(0)}% success at removal`,
           body: `Casing selection and vendor quality are sound. Opportunity: extend the retread programme to more eligible casings to grow the CPK saving.`,
         })
       }
@@ -531,7 +531,7 @@ export default function RetreadManagement() {
           out.push({
             tone: 'warning',
             title: `${worst.brand} retreads cost ${gap.toFixed(0)}% more per km than ${best.brand}`,
-            body: `${worst.brand} averages ${fmtCpk(worst.avgCpk, activeCurrency)} vs ${best.brand} at ${fmtCpk(best.avgCpk, activeCurrency)}. Action: shift send-out volume toward ${best.brand} and put ${worst.brand} on review — a ${gap.toFixed(0)}% CPK gap across ${worst.count} casings is a direct, recoverable cost.`,
+            body: `${worst.brand} averages ${fmtCpk(worst.avgCpk, activeCurrency)} vs ${best.brand} at ${fmtCpk(best.avgCpk, activeCurrency)}. Action: shift send-out volume toward ${best.brand} and put ${worst.brand} on review. A ${gap.toFixed(0)}% CPK gap across ${worst.count} casings is a direct, recoverable cost.`,
           })
         }
       }
@@ -544,7 +544,7 @@ export default function RetreadManagement() {
       out.push({
         tone: deepFail > 0 ? 'danger' : 'warning',
         title: `${deep.length} casing(s) retreaded ${kpis.maxCycle}×${deepFail > 0 ? ` · ${deepFail} failed` : ''}`,
-        body: `Each retread cycle removes rubber and heat-cures the casing further, raising blow-out risk. ${deepFail > 0 ? 'Failures are already appearing at deep cycles. ' : ''}Action: set a maximum retread-cycle policy (commonly 2–3) and scrap casings that exceed it rather than re-sending.`,
+        body: `Each retread cycle removes rubber and heat-cures the casing further, raising blow-out risk. ${deepFail > 0 ? 'Failures are already appearing at deep cycles. ' : ''}Action: set a maximum retread-cycle policy (commonly 2 to 3) and scrap casings that exceed it rather than re-sending.`,
       })
     }
 

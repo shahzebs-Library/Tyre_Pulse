@@ -57,7 +57,7 @@ function isMissingRelation(err) {
 
 function TypeBadge({ type }) {
   const meta = TYPE_META[type]
-  if (!meta) return <span className="text-[var(--text-muted)]">—</span>
+  if (!meta) return <span className="text-[var(--text-muted)]">N/A</span>
   return (
     <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${meta.cls}`}>
       {meta.label}
@@ -451,7 +451,7 @@ export default function OrgHierarchy() {
     <div className="space-y-6">
       <PageHeader
         title="Organization Hierarchy"
-        subtitle="Model your internal structure — company, country, region, branch, project, site, workshop, department, and team — as a governed tree, and assign users to any level."
+        subtitle="Model your internal structure (company, country, region, branch, project, site, workshop, department, and team) as a governed tree, and assign users to any level."
         icon={Network}
         onRefresh={load}
         refreshing={refreshing}
@@ -508,7 +508,7 @@ export default function OrgHierarchy() {
               </div>
               {/* An em dash while `rows` is still null, never 0 - a fabricated
                   zero on a unit count reads as "the hierarchy is empty". */}
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </Card>
           )
         })}
@@ -532,7 +532,7 @@ export default function OrgHierarchy() {
         ) : tree.length === 0 ? (
           <div className="py-10 text-center text-[var(--text-muted)]">
             <Network size={26} className="mx-auto mb-2 opacity-60" />
-            <p className="text-sm">{notProvisioned ? 'Enable the module to start building your hierarchy.' : 'No units yet — create a company or country to begin.'}</p>
+            <p className="text-sm">{notProvisioned ? 'Enable the module to start building your hierarchy.' : 'No units yet. Create a company or country to begin.'}</p>
           </div>
         ) : (
           <div className="-mx-1">
@@ -618,7 +618,7 @@ export default function OrgHierarchy() {
                           </div>
                           {who.sub && <span className="text-[11px] text-[var(--text-muted)]">{who.sub}</span>}
                         </td>
-                        <td className="px-3 py-2.5 text-[var(--text-secondary)]">{m.role || <span className="text-[var(--text-muted)]">—</span>}</td>
+                        <td className="px-3 py-2.5 text-[var(--text-secondary)]">{m.role || <span className="text-[var(--text-muted)]">N/A</span>}</td>
                         <td className="px-3 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">
                           {(m.starts_at || m.ends_at) ? (
                             <span className="inline-flex items-center gap-1 text-xs">
@@ -657,7 +657,7 @@ export default function OrgHierarchy() {
           <CardHeader
             title="User coverage"
             icon={Users}
-            description="Effective reach = units a user is assigned to, plus every unit beneath them. This is a preview only — no access is scoped by unit yet."
+            description="Effective reach = units a user is assigned to, plus every unit beneath them. This is a preview only. No access is scoped by unit yet."
             actions={<span className="text-xs text-[var(--text-muted)]">{coverage.length} user{coverage.length === 1 ? '' : 's'} with active assignments</span>}
           />
           {/* EnterpriseTable REFUSED: composite cells again (a starred primary
@@ -682,8 +682,8 @@ export default function OrgHierarchy() {
                       </td>
                       <td className="px-3 py-2.5 text-[var(--text-secondary)]">
                         {c.primaryUnitId
-                          ? <span className="inline-flex items-center gap-1"><Star size={11} className="text-amber-400 fill-amber-400/40" />{nameById.get(String(c.primaryUnitId)) || '—'}</span>
-                          : <span className="text-[var(--text-muted)]">—</span>}
+                          ? <span className="inline-flex items-center gap-1"><Star size={11} className="text-amber-400 fill-amber-400/40" />{nameById.get(String(c.primaryUnitId)) || 'N/A'}</span>
+                          : <span className="text-[var(--text-muted)]">N/A</span>}
                       </td>
                       <td className="px-3 py-2.5 text-[var(--text-secondary)]">{c.directCount}</td>
                       <td className="px-3 py-2.5">
@@ -752,23 +752,23 @@ export default function OrgHierarchy() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={8} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {rows.length === 0 && !notProvisioned ? 'No units yet — create your first unit.' : 'No units match these filters.'}
+                  {rows.length === 0 && !notProvisioned ? 'No units yet. Create your first unit.' : 'No units match these filters.'}
                 </td></tr>
               ) : (
                 pager.pageRows.map((r) => (
                   <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
                     <td className="px-4 py-2.5">
                       <div className="flex items-center gap-2">
-                        <span className="font-medium text-[var(--text-primary)]">{r.name || '—'}</span>
+                        <span className="font-medium text-[var(--text-primary)]">{r.name || 'N/A'}</span>
                         {r.code && <span className="text-[11px] text-[var(--text-muted)] font-mono">#{r.code}</span>}
                         {r.active === false && <span className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">inactive</span>}
                       </div>
                     </td>
                     <td className="px-4 py-2.5"><TypeBadge type={r.unit_type} /></td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.parent_id ? (nameById.get(String(r.parent_id)) || <span className="text-[var(--text-muted)]">—</span>) : <span className="text-[var(--text-muted)]">root</span>}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.country ? <span className="inline-flex items-center gap-1"><MapPin size={12} className="opacity-60" />{r.country}</span> : '—'}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)] font-mono text-xs">{r.site_ref || '—'}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{depthOf(rows, r.id) ?? '—'}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.parent_id ? (nameById.get(String(r.parent_id)) || <span className="text-[var(--text-muted)]">N/A</span>) : <span className="text-[var(--text-muted)]">root</span>}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.country ? <span className="inline-flex items-center gap-1"><MapPin size={12} className="opacity-60" />{r.country}</span> : 'N/A'}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)] font-mono text-xs">{r.site_ref || 'N/A'}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{depthOf(rows, r.id) ?? 'N/A'}</td>
                     <td className="px-4 py-2.5">
                       <button
                         onClick={() => selectUnit(r)}
@@ -816,7 +816,7 @@ export default function OrgHierarchy() {
               <div>
                 <label className="label">Type</label>
                 <select className="input w-full" value={form.unit_type} onChange={(e) => set('unit_type', e.target.value)}>
-                  <option value="">— Select type —</option>
+                  <option value="">Select type</option>
                   {UNIT_TYPES.map((t) => <option key={t} value={t}>{TYPE_META[t]?.label || t}</option>)}
                 </select>
               </div>
@@ -825,7 +825,7 @@ export default function OrgHierarchy() {
               <div>
                 <label className="label">Parent unit (optional)</label>
                 <select className="input w-full" value={form.parent_id} onChange={(e) => set('parent_id', e.target.value)}>
-                  <option value="">— None (top level) —</option>
+                  <option value="">None (top level)</option>
                   {parentOptions.map((o) => (
                     <option key={o.id} value={o.id}>{o.name}{o.type ? ` · ${TYPE_META[o.type]?.label || o.type}` : ''}</option>
                   ))}
@@ -896,7 +896,7 @@ export default function OrgHierarchy() {
                 </div>
               ) : (
                 <select className="input w-full" value={assignForm.user_id} onChange={(e) => setAssign('user_id', e.target.value)}>
-                  <option value="">— Select a user —</option>
+                  <option value="">Select a user</option>
                   {assignableProfiles.map((p) => (
                     <option key={p.id} value={p.id}>
                       {(p.full_name || p.username || p.email || 'Unnamed user')}{p.email ? ` · ${p.email}` : (p.role ? ` · ${p.role}` : '')}

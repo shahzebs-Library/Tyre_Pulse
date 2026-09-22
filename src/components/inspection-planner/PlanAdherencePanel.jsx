@@ -391,7 +391,7 @@ function Tile({ label, value, suffix = '', tone = 'quiet', hint }) {
     <div className="card p-4">
       <span className="block text-sm text-[var(--panel-ink-3)]">{label}</span>
       <strong className={`mt-1 block text-2xl ${tone === 'danger' && value ? 'text-[var(--danger,#dc2626)]' : ''}`}>
-        {value == null ? '—' : `${value}${suffix}`}
+        {value == null ? 'N/A' : `${value}${suffix}`}
       </strong>
       {hint ? <span className="mt-1 block text-xs text-[var(--text-dim)]">{hint}</span> : null}
     </div>
@@ -436,7 +436,7 @@ function Breakdown({ title, icon, rows, loading }) {
                       <td className="p-2 text-end">{row.planned}</td>
                       <td className="p-2 text-end">{row.Done}</td>
                       <td className={`p-2 text-end ${row.Missed ? 'text-[var(--danger,#dc2626)] font-semibold' : ''}`}>{row.Missed}</td>
-                      <td className="p-2 text-end">{row.adherence == null ? '—' : `${row.adherence}%`}</td>
+                      <td className="p-2 text-end">{row.adherence == null ? 'N/A' : `${row.adherence}%`}</td>
                     </tr>
                   ))}
                 </tbody>

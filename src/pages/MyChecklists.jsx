@@ -56,10 +56,10 @@ function dueDeltaDays(due) {
 }
 
 function fmtDate(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
   return Number.isNaN(d.getTime())
-    ? '—'
+    ? 'N/A'
     : d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
@@ -285,7 +285,7 @@ export default function MyChecklists() {
     <div className="space-y-6">
       <PageHeader
         title="My Checklists"
-        subtitle="Checklist assignments due to you — start, complete, or skip scheduled inspections."
+        subtitle="Checklist assignments due to you: start, complete, or skip scheduled inspections."
         icon={ClipboardCheck}
         badge={!loading && !missing ? `${kpis.overdue + kpis.pending} to do` : undefined}
         actions={headerActions}
@@ -414,7 +414,7 @@ export default function MyChecklists() {
           {kpis.overdue + kpis.pending === 0 ? (
             <>
               <CheckCircle2 size={36} className="mx-auto text-green-400" />
-              <p className="text-[var(--text-primary)] font-semibold">You're all caught up — no checklists due</p>
+              <p className="text-[var(--text-primary)] font-semibold">You're all caught up, no checklists due</p>
               <p className="text-sm text-[var(--text-muted)] max-w-md mx-auto">
                 Scheduled assignments will appear here as they come due. Browse published checklists to run one on demand.
               </p>
@@ -485,7 +485,7 @@ export default function MyChecklists() {
                             <Boxes size={12} /> {a.asset_no}
                           </span>
                         )}
-                        {!a.site && !a.asset_no && <span className="text-[var(--text-muted)]">—</span>}
+                        {!a.site && !a.asset_no && <span className="text-[var(--text-muted)]">N/A</span>}
                       </div>
                     </td>
                     <td className="table-cell whitespace-nowrap">

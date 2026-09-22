@@ -54,9 +54,9 @@ const EMPTY_FORM = {
 }
 
 function fmtDate(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = v instanceof Date ? v : new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toISOString().slice(0, 10)
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toISOString().slice(0, 10)
 }
 function isMissingRelation(err) {
   const m = String(err?.message || '').toLowerCase()
@@ -227,7 +227,7 @@ export default function GoodsReceipt() {
     <div className="space-y-6">
       <PageHeader
         title="Goods Receipt"
-        subtitle="Record inward deliveries against purchase orders — quantities, condition, and short-shipment tracking."
+        subtitle="Record inward deliveries against purchase orders: quantities, condition, and short-shipment tracking."
         icon={PackageCheck}
         onRefresh={load}
         refreshing={refreshing}
@@ -278,7 +278,7 @@ export default function GoodsReceipt() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -304,14 +304,14 @@ export default function GoodsReceipt() {
             <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-9 bg-[var(--input-bg)] rounded animate-pulse" />)}</div>
           ) : enriched.filter((r) => r._isShort).length === 0 ? (
             <div className="h-52 flex flex-col items-center justify-center text-sm text-[var(--text-muted)] gap-2">
-              <CheckCircle2 size={24} className="text-green-400" /> No short shipments — all lines fully received.
+              <CheckCircle2 size={24} className="text-green-400" /> No short shipments. All lines fully received.
             </div>
           ) : (
             <div className="max-h-56 overflow-y-auto divide-y divide-[var(--input-border)]/60">
               {enriched.filter((r) => r._isShort).slice(0, 30).map((r) => (
                 <div key={r.id} className="flex items-center justify-between gap-3 py-2">
                   <div className="min-w-0">
-                    <p className="text-sm text-[var(--text-primary)] truncate">{r.grn_no || r.item || '—'}</p>
+                    <p className="text-sm text-[var(--text-primary)] truncate">{r.grn_no || r.item || 'N/A'}</p>
                     <p className="text-xs text-[var(--text-muted)] truncate">{r.supplier || 'Unknown supplier'}{r.item ? ` · ${r.item}` : ''}</p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
@@ -374,21 +374,21 @@ export default function GoodsReceipt() {
               ) : (
                 pager.pageRows.map((r) => (
                   <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                    <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{r.grn_no || '—'}</td>
-                    <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)]">{r.po_ref || '—'}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.supplier || '—'}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.item || '—'}</td>
+                    <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{r.grn_no || 'N/A'}</td>
+                    <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)]">{r.po_ref || 'N/A'}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.supplier || 'N/A'}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.item || 'N/A'}</td>
                     <td className="px-4 py-2.5">
                       <div className="flex items-center gap-2">
-                        <span className="text-[var(--text-secondary)]">{r.qty_ordered ?? '—'}</span>
+                        <span className="text-[var(--text-secondary)]">{r.qty_ordered ?? 'N/A'}</span>
                         <span className="text-[var(--text-muted)]">/</span>
-                        <span className={`font-semibold ${r._isShort ? 'text-amber-400' : 'text-[var(--text-primary)]'}`}>{r.qty_received ?? '—'}</span>
+                        <span className={`font-semibold ${r._isShort ? 'text-amber-400' : 'text-[var(--text-primary)]'}`}>{r.qty_received ?? 'N/A'}</span>
                         {r._isShort && <span className="text-[11px] text-red-400">(-{r._shortfall})</span>}
                       </div>
                     </td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{CONDITION_LABEL[r.condition] || r.condition || '—'}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{CONDITION_LABEL[r.condition] || r.condition || 'N/A'}</td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtDate(r.received_date)}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.site || '—'}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.site || 'N/A'}</td>
                     <td className="px-4 py-2.5"><span className={`badge text-[11px] px-2 py-0.5 rounded ${STATUS_BADGE[r.status]}`}>{GOODS_RECEIPT_STATUS_META[r.status]?.label || r.status}</span></td>
                     <td className="px-4 py-2.5">
                       <div className="flex items-center gap-1 justify-end">

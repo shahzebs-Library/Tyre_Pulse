@@ -302,7 +302,7 @@ export function lifecycleScore({ completed = 0, passRate = 0, certCount = 0 } = 
     score >= 70 ? 'proficient' :
     score >= 50 ? 'developing' :
     'needs_training'
-  return { score, band, label: `${LIFECYCLE_BAND_LABELS[band]} — ${score}/100` }
+  return { score, band, label: `${LIFECYCLE_BAND_LABELS[band]}: ${score}/100` }
 }
 
 /**

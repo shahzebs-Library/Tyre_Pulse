@@ -137,7 +137,7 @@ export function summarisePrefs(prefs) {
   const end = toMinutes(p.quiet_end)
   const quietHours =
     start != null && end != null && start !== end
-      ? `${p.quiet_start}–${p.quiet_end}`
+      ? `${p.quiet_start} to ${p.quiet_end}`
       : null
   return {
     channels,

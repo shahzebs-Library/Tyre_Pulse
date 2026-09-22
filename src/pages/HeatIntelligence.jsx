@@ -112,15 +112,15 @@ const TABS = [
   ['log', 'Temperature log', Thermometer],
 ]
 
-const fmtC = (v) => (v == null || v === '' ? '—' : `${Number(v).toLocaleString()} °C`)
-const fmtBar = (v) => (v == null || v === '' ? '—' : `${Number(v).toLocaleString()} bar`)
-const fmtNum = (v, unit) => (v == null || v === '' ? '—' : `${Number(v).toLocaleString()}${unit ? ` ${unit}` : ''}`)
+const fmtC = (v) => (v == null || v === '' ? 'N/A' : `${Number(v).toLocaleString()} °C`)
+const fmtBar = (v) => (v == null || v === '' ? 'N/A' : `${Number(v).toLocaleString()} bar`)
+const fmtNum = (v, unit) => (v == null || v === '' ? 'N/A' : `${Number(v).toLocaleString()}${unit ? ` ${unit}` : ''}`)
 const barColorFor = (t) => (t >= 45 ? '#dc2626' : t >= 40 ? '#ea580c' : t >= 35 ? '#f59e0b' : t >= 28 ? '#eab308' : '#38bdf8')
 
 function fmtDateTime(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleString()
 }
 
 // Live-weather formatters (kept ASCII, no dash glyphs).
@@ -321,7 +321,7 @@ export default function HeatIntelligence() {
     return {
       labels: entries.map(([c]) => c),
       datasets: [{
-        label: `Ambient °C — ${conditions.month}`,
+        label: `Ambient °C, ${conditions.month}`,
         data: entries.map(([, t]) => t),
         backgroundColor: entries.map(([, t]) => barColorFor(t)),
         borderRadius: 4,
@@ -393,8 +393,8 @@ export default function HeatIntelligence() {
     { label: 'Critical', value: summary.criticalCount, icon: Flame, tone: 'text-red-400' },
     { label: 'High', value: summary.highCount, icon: ThermometerSun, tone: 'text-orange-400' },
     { label: 'Assets tracked', value: summary.distinctAssets, icon: Truck, tone: 'text-sky-400' },
-    { label: 'Max temperature', value: summary.maxTempC == null ? '—' : fmtC(summary.maxTempC), icon: Thermometer, tone: 'text-amber-400' },
-    { label: 'Avg temperature', value: summary.avgTempC == null ? '—' : fmtC(Math.round(summary.avgTempC * 10) / 10), icon: TrendingUp, tone: 'text-green-400' },
+    { label: 'Max temperature', value: summary.maxTempC == null ? 'N/A' : fmtC(summary.maxTempC), icon: Thermometer, tone: 'text-amber-400' },
+    { label: 'Avg temperature', value: summary.avgTempC == null ? 'N/A' : fmtC(Math.round(summary.avgTempC * 10) / 10), icon: TrendingUp, tone: 'text-green-400' },
   ]
 
   // ── Log export ─────────────────────────────────────────────────────────────
@@ -513,7 +513,7 @@ export default function HeatIntelligence() {
     <div className="space-y-6">
       <PageHeader
         title="Desert Heat Intelligence"
-        subtitle="GCC-exclusive heat analytics — climatology, Gay-Lussac pressure physics, and fleet-wide blowout-risk scoring. Overheating is the leading indicator of blowouts, bearing failure, and chronic under-inflation."
+        subtitle="GCC-exclusive heat analytics: climatology, Gay-Lussac pressure physics, and fleet-wide blowout-risk scoring. Overheating is the leading indicator of blowouts, bearing failure, and chronic under-inflation."
         icon={ThermometerSun}
         badge={fleetRisk.risk_summary?.extreme ? `${fleetRisk.risk_summary.extreme} extreme risk` : (summary.criticalCount > 0 ? `${summary.criticalCount} critical` : undefined)}
         onRefresh={refreshAll}
@@ -694,7 +694,7 @@ export default function HeatIntelligence() {
             {/* All-city bars + Gay-Lussac + correlation */}
             <div className="space-y-[var(--space-6)]">
               <Card>
-                <CardHeader level={2} icon={Thermometer} title={`All GCC cities — ${conditions.month} ambient`} />
+                <CardHeader level={2} icon={Thermometer} title={`All GCC cities, ${conditions.month} ambient`} />
                 <CardBody style={{ height: 320 }}><Bar data={cityBarData} options={cityBarOptions} /></CardBody>
               </Card>
 
@@ -702,17 +702,17 @@ export default function HeatIntelligence() {
                 <CardHeader level={2} icon={Gauge} title="Gay-Lussac pressure effect" />
                 <p className="text-sm text-[var(--text-secondary)]">
                   At {conditions.road_surface_c}°C road surface, a 105 PSI cold tyre reaches approximately{' '}
-                  <strong className="text-[var(--text-primary)]">{Math.round(105 * (conditions.road_surface_c + 273.15) / (25 + 273.15))} PSI</strong>{' '}
-                  — a <strong className="text-orange-400">{conditions.pressure_increase_pct}% expected rise</strong> from ambient heat.
+                  <strong className="text-[var(--text-primary)]">{Math.round(105 * (conditions.road_surface_c + 273.15) / (25 + 273.15))} PSI</strong>
+                  , a <strong className="text-orange-400">{conditions.pressure_increase_pct}% expected rise</strong> from ambient heat.
                 </p>
                 <div className="mt-[var(--space-3)] rounded-lg border border-red-800/50 bg-red-950/20 px-3 py-2">
                   <p className="text-xs font-bold uppercase text-red-300 mb-0.5 inline-flex items-center gap-1"><AlertTriangle size={12} /> Critical</p>
-                  <p className="text-sm text-red-200">Always inflate when COLD. Never release pressure from hot tyres — the reading is normal heat expansion.</p>
+                  <p className="text-sm text-red-200">Always inflate when COLD. Never release pressure from hot tyres. The reading is normal heat expansion.</p>
                 </div>
               </Card>
 
               <Card>
-                <CardHeader level={2} icon={Activity} title="Heat–pressure correlation" description="Computed from the logged readings." />
+                <CardHeader level={2} icon={Activity} title="Heat-pressure correlation" description="Computed from the logged readings." />
                 {correlation.correlation == null ? (
                   <p className="text-sm text-[var(--text-muted)]">
                     Need at least 3 logged readings carrying both temperature and pressure to compute a correlation. Currently {correlation.samples} complete pair{correlation.samples === 1 ? '' : 's'}.
@@ -720,7 +720,7 @@ export default function HeatIntelligence() {
                 ) : (
                   <p className="text-sm text-[var(--text-secondary)]">
                     Pearson r = <strong className={`${correlation.correlation > 0.5 ? 'text-orange-400' : 'text-[var(--text-primary)]'}`}>{correlation.correlation}</strong>{' '}
-                    across {correlation.samples} logged reading{correlation.samples === 1 ? '' : 's'} — {correlation.correlation > 0.5 ? 'temperature and pressure rise together as expected under heat.' : correlation.correlation < -0.5 ? 'inverse relationship — investigate sensor placement or bleeding of hot tyres.' : 'weak linear relationship in the current sample.'}
+                    across {correlation.samples} logged reading{correlation.samples === 1 ? '' : 's'}: {correlation.correlation > 0.5 ? 'temperature and pressure rise together as expected under heat.' : correlation.correlation < -0.5 ? 'inverse relationship, investigate sensor placement or bleeding of hot tyres.' : 'weak linear relationship in the current sample.'}
                   </p>
                 )}
               </Card>
@@ -732,7 +732,7 @@ export default function HeatIntelligence() {
               <div className="space-y-[var(--space-4)]">
                 {[
                   ['Before departure', Wind, ['Check all tyre pressures when COLD (before 08:00)', 'Inspect for sidewall bulges and cracks', 'Ensure tread depth is ≥3mm for desert routes', 'Verify no damage from the previous trip']],
-                  ['During operation', ThermometerSun, ['Avoid sudden braking on hot roads', 'If a pressure warning sounds — pull over safely', 'Do NOT deflate hot tyres to reduce pressure', 'Allow tyres to cool 30+ mins before inspection']],
+                  ['During operation', ThermometerSun, ['Avoid sudden braking on hot roads', 'If a pressure warning sounds, pull over safely', 'Do NOT deflate hot tyres to reduce pressure', 'Allow tyres to cool 30+ mins before inspection']],
                   ['Post-trip', Thermometer, ['Check for embedded debris', 'Allow full cool-down before storing the vehicle', 'Flag any unusual wear patterns for inspection']],
                 ].map(([heading, Icon, items]) => (
                   <div key={heading}>
@@ -758,7 +758,7 @@ export default function HeatIntelligence() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-sm text-[var(--text-secondary)]">
-                Scored under <strong className="text-[var(--text-primary)]">{conditions.city}</strong> conditions —{' '}
+                Scored under <strong className="text-[var(--text-primary)]">{conditions.city}</strong> conditions:{' '}
                 {conditions.ambient_c}°C ambient · {conditions.road_surface_c}°C road · {conditions.month}.{' '}
                 {fleetRisk.fleet_size} installed tyre{fleetRisk.fleet_size === 1 ? '' : 's'} assessed.
               </p>
@@ -800,7 +800,7 @@ export default function HeatIntelligence() {
                     <p className={`text-xs font-semibold uppercase tracking-wider ${meta.tone}`}>{meta.label}</p>
                     <Flame size={14} className={meta.tone} />
                   </div>
-                  <p className="text-2xl font-bold mt-1 text-[var(--text-primary)]">{tyres === null ? '—' : (fleetRisk.risk_summary?.[level] || 0)}</p>
+                  <p className="text-2xl font-bold mt-1 text-[var(--text-primary)]">{tyres === null ? 'N/A' : (fleetRisk.risk_summary?.[level] || 0)}</p>
                 </Card>
               )
             })}
@@ -835,7 +835,7 @@ export default function HeatIntelligence() {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className={`text-xs font-bold uppercase px-2 py-0.5 rounded-full border ${meta.badge}`}>{meta.label}</span>
-                          <span className="font-mono font-semibold text-sm text-[var(--text-primary)]">{t.serial || '—'}</span>
+                          <span className="font-mono font-semibold text-sm text-[var(--text-primary)]">{t.serial || 'N/A'}</span>
                           {t.asset_no && <span className="text-xs text-[var(--text-muted)]">· {t.asset_no}</span>}
                           {t.position && <span className="text-xs text-[var(--text-muted)]">· {t.position}</span>}
                           {t.brand && <span className="text-xs text-[var(--text-muted)]">· {t.brand}</span>}
@@ -882,7 +882,7 @@ export default function HeatIntelligence() {
           </Card>
 
           <Card>
-            <CardHeader level={2} title={`Expected pressure by time of day — ${conditions.city}, ${conditions.month}`} />
+            <CardHeader level={2} title={`Expected pressure by time of day: ${conditions.city}, ${conditions.month}`} />
             {!(Number(coldPsi) > 0) ? (
               <p className="text-sm text-[var(--text-muted)]">Enter a cold inflation pressure above to project hot pressures.</p>
             ) : (
@@ -998,7 +998,7 @@ export default function HeatIntelligence() {
                     <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                     <Icon size={16} className={k.tone} />
                   </div>
-                  <p className={`text-2xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+                  <p className={`text-2xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
                 </Card>
               )
             })}
@@ -1011,7 +1011,7 @@ export default function HeatIntelligence() {
               <div className="h-16 bg-[var(--input-bg)] rounded animate-pulse" />
             ) : hot.length === 0 ? (
               <p className="text-sm text-[var(--text-muted)] flex items-center gap-2">
-                <Thermometer size={15} className="text-emerald-400" /> No tyres reading high or critical — fleet is within safe thermal limits.
+                <Thermometer size={15} className="text-emerald-400" /> No tyres reading high or critical. Fleet is within safe thermal limits.
               </p>
             ) : (
               <div className="flex flex-wrap gap-2">
@@ -1022,7 +1022,7 @@ export default function HeatIntelligence() {
                     <div key={`${h.asset_no}-${h.tyre_position}-${i}`} className={`rounded-lg border px-3 py-2 ${meta.badge}`}>
                       <div className="flex items-center gap-1.5">
                         <Icon size={13} />
-                        <span className="text-xs font-semibold">{h.asset_no || '—'}</span>
+                        <span className="text-xs font-semibold">{h.asset_no || 'N/A'}</span>
                         {h.tyre_position && <span className="text-[11px] opacity-80">· {h.tyre_position}</span>}
                       </div>
                       <p className="text-lg font-bold leading-tight mt-0.5">{fmtC(h.temperature_c)}</p>
@@ -1058,10 +1058,10 @@ export default function HeatIntelligence() {
                         const rise = tempOverAmbient(r)
                         return (
                           <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                            <td className="px-4 py-2 font-medium text-[var(--text-primary)]">{r.asset_no || '—'}</td>
-                            <td className="px-4 py-2 text-[var(--text-secondary)]">{r.tyre_position || '—'}</td>
+                            <td className="px-4 py-2 font-medium text-[var(--text-primary)]">{r.asset_no || 'N/A'}</td>
+                            <td className="px-4 py-2 text-[var(--text-secondary)]">{r.tyre_position || 'N/A'}</td>
                             <td className="px-4 py-2"><TempCell reading={r} /></td>
-                            <td className="px-4 py-2 text-[var(--text-secondary)]">{rise == null ? '—' : `+${fmtC(rise)}`}</td>
+                            <td className="px-4 py-2 text-[var(--text-secondary)]">{rise == null ? 'N/A' : `+${fmtC(rise)}`}</td>
                             <td className="px-4 py-2 text-[var(--text-secondary)]">{fmtBar(r.pressure_bar)}</td>
                             <td className="px-4 py-2"><StatusBadge band={classifyTemp(r)} /></td>
                             <td className="px-4 py-2 text-[var(--text-secondary)] whitespace-nowrap">{fmtDateTime(r.recorded_at)}</td>
@@ -1124,18 +1124,18 @@ export default function HeatIntelligence() {
                   ) : filtered.length === 0 ? (
                     <tr><td colSpan={10} className="px-4 py-12 text-center text-[var(--text-muted)]">
                       <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                      {rows.length === 0 && !notProvisioned ? 'No readings logged yet — log your first thermal reading.' : 'No readings match these filters.'}
+                      {rows.length === 0 && !notProvisioned ? 'No readings logged yet. Log your first thermal reading.' : 'No readings match these filters.'}
                     </td></tr>
                   ) : (
                     pager.pageRows.map((r) => {
                       const rise = tempOverAmbient(r)
                       return (
                         <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                          <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.asset_no || '—'}</td>
-                          <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.tyre_position || '—'}</td>
+                          <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.asset_no || 'N/A'}</td>
+                          <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.tyre_position || 'N/A'}</td>
                           <td className="px-4 py-2.5"><TempCell reading={r} /></td>
                           <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtC(r.ambient_c)}</td>
-                          <td className="px-4 py-2.5 text-[var(--text-secondary)]">{rise == null ? '—' : `+${fmtC(rise)}`}</td>
+                          <td className="px-4 py-2.5 text-[var(--text-secondary)]">{rise == null ? 'N/A' : `+${fmtC(rise)}`}</td>
                           <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtBar(r.pressure_bar)}</td>
                           <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtNum(r.speed_kmh, 'km/h')}</td>
                           <td className="px-4 py-2.5"><StatusBadge band={classifyTemp(r)} /></td>

@@ -2,12 +2,33 @@
 
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Environment, Float, OrbitControls } from "@react-three/drei";
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 
-function Wheel() {
+/**
+ * Hero3D already declines to mount this scene when the visitor asks for reduced
+ * motion, so in practice these guards never fire. They stay because a person can
+ * change the system setting while the page is open, and because a component that
+ * animates should not depend on its parent remembering to stop it.
+ */
+function usePrefersReducedMotion() {
+  const [reduced, setReduced] = useState(false);
+
+  useEffect(() => {
+    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const sync = () => setReduced(query.matches);
+    sync();
+    query.addEventListener("change", sync);
+    return () => query.removeEventListener("change", sync);
+  }, []);
+
+  return reduced;
+}
+
+function Wheel({ still }: { still: boolean }) {
   const group = useRef<THREE.Group>(null);
   useFrame((_, delta) => {
+    if (still) return;
     if (group.current) group.current.rotation.z += delta * 0.08;
   });
 
@@ -46,15 +67,35 @@ function Wheel() {
 }
 
 export default function HeroScene() {
+  const reduced = usePrefersReducedMotion();
+
   return (
-    <div className="canvas-wrap" aria-label="Interactive 3D tyre and wheel visualization">
-      <Canvas camera={{ position: [0, 0, 7.5], fov: 42 }} dpr={[1, 1.5]} shadows>
+    /*
+     * Decoration. The wheel says nothing the hero copy does not already say, so
+     * it is hidden from assistive technology rather than given a label that a
+     * screen reader user would have to listen to on every visit. Nothing inside
+     * is focusable, so hiding the subtree traps no keyboard focus.
+     */
+    <div className="canvas-wrap" aria-hidden="true">
+      <Canvas
+        camera={{ position: [0, 0, 7.5], fov: 42 }}
+        dpr={[1, 1.5]}
+        shadows
+        // A still frame costs one render instead of sixty a second.
+        frameloop={reduced ? "demand" : "always"}
+      >
         <ambientLight intensity={1.2} />
         <directionalLight position={[4, 5, 6]} intensity={5} castShadow color="#d6eaff" />
         <pointLight position={[-4, -2, 4]} intensity={18} color="#0ba7b4" />
-        <Float speed={1.2} rotationIntensity={0.18} floatIntensity={0.35}><Wheel /></Float>
+        <Float
+          speed={reduced ? 0 : 1.2}
+          rotationIntensity={reduced ? 0 : 0.18}
+          floatIntensity={reduced ? 0 : 0.35}
+        >
+          <Wheel still={reduced} />
+        </Float>
         <Environment preset="city" />
-        <OrbitControls enablePan={false} enableZoom={false} autoRotate autoRotateSpeed={0.6} />
+        <OrbitControls enablePan={false} enableZoom={false} autoRotate={!reduced} autoRotateSpeed={0.6} />
       </Canvas>
     </div>
   );

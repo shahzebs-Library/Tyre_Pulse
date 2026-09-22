@@ -55,7 +55,7 @@ const CHART_COLORS = [
   '#14b8a6', '#ec4899', '#eab308', '#6366f1', '#64748b',
 ]
 
-const positionOf = (r) => r.position || r.tyre_position || '—'
+const positionOf = (r) => r.position || r.tyre_position || 'N/A'
 
 const STATUS_META = {
   available:   { label: 'Available',   cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' },
@@ -71,7 +71,7 @@ const EMPTY_ADD = { tyre_serial: '', pool_location: '', reason: 'hot_spare', min
 
 function StatusBadge({ status }) {
   const meta = STATUS_META[status]
-  if (!meta) return <span className="text-[var(--text-muted)]">—</span>
+  if (!meta) return <span className="text-[var(--text-muted)]">N/A</span>
   return (
     <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${meta.cls}`}>
       {meta.label}
@@ -330,7 +330,7 @@ export default function TyrePool() {
     <div className="space-y-6">
       <PageHeader
         title="Tyre Pool"
-        subtitle="Manage the hot-spare pool — add, deploy and return spares, track utilisation and replenishment — or analyse the unfitted spare & stock tyres available for allocation."
+        subtitle="Manage the hot-spare pool (add, deploy and return spares, track utilisation and replenishment) or analyse the unfitted spare & stock tyres available for allocation."
         icon={PackageCheck}
         onRefresh={load}
         refreshing={refreshing}
@@ -412,7 +412,7 @@ export default function TyrePool() {
                     <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                     <Icon size={16} className={k.tone} />
                   </div>
-                  <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{entries === null ? '—' : k.value}</p>
+                  <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{entries === null ? 'N/A' : k.value}</p>
                 </Card>
               )
             })}
@@ -619,9 +619,9 @@ export default function TyrePool() {
                         <div>
                           <label className="label">Return condition</label>
                           <select className="input w-full" value={act.condition} onChange={(ev) => setActionField(e.id, 'condition', ev.target.value)}>
-                            <option value="good">Good — back to available</option>
-                            <option value="worn">Worn — to maintenance</option>
-                            <option value="damaged">Damaged — retire</option>
+                            <option value="good">Good: back to available</option>
+                            <option value="worn">Worn: to maintenance</option>
+                            <option value="damaged">Damaged: retire</option>
                           </select>
                         </div>
                         <div>
@@ -657,7 +657,7 @@ export default function TyrePool() {
             </Card>
           ) : (
             <>
-              <p className="text-sm text-[var(--text-muted)]">Available spares by holding location — where deployable stock currently sits.</p>
+              <p className="text-sm text-[var(--text-muted)]">Available spares by holding location: where deployable stock currently sits.</p>
               {entries === null ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {[0, 1, 2].map((i) => <div key={i} className="h-28 bg-[var(--input-bg)] rounded-xl animate-pulse" />)}
@@ -709,7 +709,7 @@ export default function TyrePool() {
                     <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                     <Icon size={16} className={k.tone} />
                   </div>
-                  <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+                  <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
                 </Card>
               )
             })}
@@ -779,17 +779,17 @@ export default function TyrePool() {
                   ) : (
                     pager.pageRows.map((r) => (
                       <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                        <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{poolSerialOf(r) || '—'}</td>
-                        <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.brand || '—'}{r.size ? ` · ${r.size}` : ''}</td>
-                        <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.site || '—'}</td>
+                        <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{poolSerialOf(r) || 'N/A'}</td>
+                        <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.brand || 'N/A'}{r.size ? ` · ${r.size}` : ''}</td>
+                        <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.site || 'N/A'}</td>
                         <td className="px-4 py-2.5 text-[var(--text-secondary)]">{positionOf(r)}</td>
-                        <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.tread_depth == null || r.tread_depth === '' ? '—' : `${r.tread_depth} mm`}</td>
+                        <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.tread_depth == null || r.tread_depth === '' ? 'N/A' : `${r.tread_depth} mm`}</td>
                         <td className="px-4 py-2.5">
                           <span className="badge text-[11px] px-2 py-0.5 rounded bg-green-900/40 text-green-300 border border-green-700/50">
                             {r.status || 'Available'}
                           </span>
                         </td>
-                        <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.cost_per_tyre == null || r.cost_per_tyre === '' ? '—' : formatCurrencyCompact(r.cost_per_tyre, activeCurrency)}</td>
+                        <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.cost_per_tyre == null || r.cost_per_tyre === '' ? 'N/A' : formatCurrencyCompact(r.cost_per_tyre, activeCurrency)}</td>
                       </tr>
                     ))
                   )}

@@ -55,9 +55,9 @@ const EMPTY_FORM = {
 }
 
 function fmtDateTime(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleString()
 }
 
 /** Datetime-local value (YYYY-MM-DDTHH:mm) from a stored timestamp. */
@@ -137,7 +137,7 @@ export default function ApprovalDelegations() {
   }, [people])
 
   const nameOf = useCallback((id) => {
-    if (!id) return '—'
+    if (!id) return 'N/A'
     const p = peopleById.get(id)
     if (!p) return id
     return p.full_name || p.username || p.email || id
@@ -181,7 +181,7 @@ export default function ApprovalDelegations() {
     delegator: nameOf(r.delegator_id),
     delegate: nameOf(r.delegate_id),
     entity_type: r.entity_type || 'All types',
-    status: STATUS_META[delegationStatus(r, nowMs)]?.label || '—',
+    status: STATUS_META[delegationStatus(r, nowMs)]?.label || 'N/A',
     starts_at: r.starts_at ? fmtDateTime(r.starts_at) : 'Immediately',
     ends_at: r.ends_at ? fmtDateTime(r.ends_at) : 'Open-ended',
     reason: r.reason || '',
@@ -304,7 +304,7 @@ export default function ApprovalDelegations() {
     <div className="space-y-6">
       <PageHeader
         title="Approval Delegation"
-        subtitle="Hand your approval authority to a backup or acting approver for a period — leave cover, temporary delegation, or a standing deputy. Additive to the approval workflow engine."
+        subtitle="Hand your approval authority to a backup or acting approver for a period: leave cover, temporary delegation, or a standing deputy. Additive to the approval workflow engine."
         icon={UserCheck}
         onRefresh={load}
         refreshing={refreshing}
@@ -353,7 +353,7 @@ export default function ApprovalDelegations() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -363,7 +363,7 @@ export default function ApprovalDelegations() {
       <div className="card">
         <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
           <ShieldCheck size={15} /> My delegations
-          <span className="text-xs font-normal text-[var(--text-muted)]">— approvals you have handed to someone else</span>
+          <span className="text-xs font-normal text-[var(--text-muted)]">(approvals you have handed to someone else)</span>
         </h3>
         {rows === null ? (
           <div className="h-16 bg-[var(--input-bg)] rounded animate-pulse" />
@@ -427,7 +427,7 @@ export default function ApprovalDelegations() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={7} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {(rows.length === 0 && !notProvisioned) ? 'No delegations yet — appoint an acting approver to get started.' : 'No delegations match these filters.'}
+                  {(rows.length === 0 && !notProvisioned) ? 'No delegations yet. Appoint an acting approver to get started.' : 'No delegations match these filters.'}
                 </td></tr>
               ) : (
                 pager.pageRows.map(renderRow)
@@ -453,7 +453,7 @@ export default function ApprovalDelegations() {
                   {people.length ? (
                     <select className="input w-full" value={form.delegator_id} onChange={(e) => set('delegator_id', e.target.value)}>
                       <option value="">Me ({nameOf(myId)})</option>
-                      {people.map((p) => <option key={p.id} value={p.id}>{p.full_name || p.username || p.email || p.id}{p.role ? ` — ${p.role}` : ''}</option>)}
+                      {people.map((p) => <option key={p.id} value={p.id}>{p.full_name || p.username || p.email || p.id}{p.role ? ` (${p.role})` : ''}</option>)}
                     </select>
                   ) : (
                     <input className="input w-full" placeholder="User id (leave blank for yourself)" value={form.delegator_id} onChange={(e) => set('delegator_id', e.target.value)} />
@@ -467,12 +467,12 @@ export default function ApprovalDelegations() {
                 {people.length ? (
                   <select className="input w-full" value={form.delegate_id} onChange={(e) => set('delegate_id', e.target.value)}>
                     <option value="">Select a user…</option>
-                    {people.map((p) => <option key={p.id} value={p.id}>{p.full_name || p.username || p.email || p.id}{p.role ? ` — ${p.role}` : ''}</option>)}
+                    {people.map((p) => <option key={p.id} value={p.id}>{p.full_name || p.username || p.email || p.id}{p.role ? ` (${p.role})` : ''}</option>)}
                   </select>
                 ) : (
                   <>
                     <input className="input w-full" placeholder="Delegate user id" value={form.delegate_id} onChange={(e) => set('delegate_id', e.target.value)} />
-                    <p className="text-[11px] text-[var(--text-muted)] mt-1 inline-flex items-center gap-1"><Info size={12} /> User directory unavailable — enter the delegate’s user id.</p>
+                    <p className="text-[11px] text-[var(--text-muted)] mt-1 inline-flex items-center gap-1"><Info size={12} /> User directory unavailable. Enter the delegate’s user id.</p>
                   </>
                 )}
               </div>
@@ -500,7 +500,7 @@ export default function ApprovalDelegations() {
 
               <div>
                 <label className="label">Reason (optional)</label>
-                <textarea className="input w-full min-h-[70px] resize-y" placeholder="e.g. annual leave 14–21 Jul; deputy approver" value={form.reason} maxLength={8000} onChange={(e) => set('reason', e.target.value)} />
+                <textarea className="input w-full min-h-[70px] resize-y" placeholder="e.g. annual leave 14 to 21 Jul; deputy approver" value={form.reason} maxLength={8000} onChange={(e) => set('reason', e.target.value)} />
               </div>
 
               <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer select-none">

@@ -245,7 +245,7 @@ export default function Combinations() {
     <div className="space-y-6">
       <PageHeader
         title="Combination Manager"
-        subtitle="Prime-mover ↔ trailer combinations — the operational units your fleet dispatches."
+        subtitle="Prime-mover ↔ trailer combinations: the operational units your fleet dispatches."
         icon={Combine}
         onRefresh={load}
         refreshing={refreshing}
@@ -312,7 +312,7 @@ export default function Combinations() {
             <p className="text-amber-300 font-medium">
               {duplicateTrailers.length} trailer{duplicateTrailers.length !== 1 ? 's' : ''} assigned to more than one active combination.
             </p>
-            <p className="text-[var(--text-muted)] text-sm mt-1">A trailer can only be part of one active unit at a time — review these registry entries.</p>
+            <p className="text-[var(--text-muted)] text-sm mt-1">A trailer can only be part of one active unit at a time. Review these registry entries.</p>
             <div className="flex flex-wrap gap-1.5 mt-2">
               {duplicateTrailers.map((d) => (
                 <span key={d.trailer} className="badge text-[11px] px-2 py-0.5 rounded bg-amber-900/30 text-amber-300 border border-amber-700/50 font-mono">
@@ -444,7 +444,7 @@ function RegistryTab({
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </Card>
           )
         })}
@@ -490,15 +490,15 @@ function RegistryTab({
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={6} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {rows.length === 0 ? 'No combinations yet — create your first prime-mover ↔ trailer link.' : 'No combinations match these filters.'}
+                  {rows.length === 0 ? 'No combinations yet. Create your first prime-mover ↔ trailer link.' : 'No combinations match these filters.'}
                 </td></tr>
               ) : (
                 registryPager.pageRows.map((r) => {
                   const trailers = parseTrailerList(r.trailer_nos)
                   return (
                     <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                      <td className="px-4 py-2.5 text-[var(--text-primary)] font-medium">{r.name || '—'}</td>
-                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)]">{r.prime_mover_no || '—'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-primary)] font-medium">{r.name || 'N/A'}</td>
+                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)]">{r.prime_mover_no || 'N/A'}</td>
                       <td className="px-4 py-2.5">
                         {trailers.length ? (
                           <div className="flex flex-wrap gap-1">
@@ -506,9 +506,9 @@ function RegistryTab({
                               <span key={`${t}-${i}`} className="badge text-[11px] px-2 py-0.5 rounded bg-[var(--input-bg)] text-[var(--text-secondary)] border border-[var(--input-border)] font-mono">{t}</span>
                             ))}
                           </div>
-                        ) : <span className="text-[var(--text-muted)]">—</span>}
+                        ) : <span className="text-[var(--text-muted)]">N/A</span>}
                       </td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.site || '—'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.site || 'N/A'}</td>
                       <td className="px-4 py-2.5"><span className={`badge text-[11px] px-2 py-0.5 rounded ${STATUS_STYLES[r.status] || STATUS_STYLES.inactive}`}>{r.status || 'inactive'}</span></td>
                       <td className="px-4 py-2.5">
                         <div className="flex items-center justify-end gap-1">
@@ -544,7 +544,7 @@ function IntelligenceTab({
       <Card className="text-center text-[var(--text-muted)]">
         <div style={{ paddingTop: 'var(--space-8)', paddingBottom: 'var(--space-8)' }}>
           <Network size={26} className="mx-auto mb-2 opacity-60" />
-          No combinations yet — create one in the Registry tab to analyse it as a combined unit.
+          No combinations yet. Create one in the Registry tab to analyse it as a combined unit.
         </div>
       </Card>
     )
@@ -561,7 +561,7 @@ function IntelligenceTab({
           <select className="input min-w-[240px]" value={selectedId} onChange={(e) => setSelectedId(e.target.value)} aria-label="Select combination">
             {rows.map((r) => (
               <option key={r.id} value={r.id}>
-                {(r.name || r.prime_mover_no || 'Unnamed')} · {r.prime_mover_no || '—'} ({parseTrailerList(r.trailer_nos).length} trailer{parseTrailerList(r.trailer_nos).length !== 1 ? 's' : ''})
+                {(r.name || r.prime_mover_no || 'Unnamed')} · {r.prime_mover_no || 'N/A'} ({parseTrailerList(r.trailer_nos).length} trailer{parseTrailerList(r.trailer_nos).length !== 1 ? 's' : ''})
               </option>
             ))}
           </select>
@@ -598,7 +598,7 @@ function IntelligenceTab({
             <IntelKpi icon={CircleDot} tone="text-indigo-400" label="Fitted tyres" value={rollup.fittedTyres}
               sub={`${rollup.tyreCount} record${rollup.tyreCount !== 1 ? 's' : ''} across unit`} />
             <IntelKpi icon={Gauge} tone="text-brand-bright" label="Unit CPK (blended)"
-              value={rollup.blendedCpk != null ? `${currency} ${fmt(rollup.blendedCpk, 3)}` : '—'}
+              value={rollup.blendedCpk != null ? `${currency} ${fmt(rollup.blendedCpk, 3)}` : 'N/A'}
               sub={rollup.canonicalCpk?.validCount ? `Canonical avg ${currency} ${fmt(rollup.canonicalCpk.fleetAvgCpk, 3)} · ${rollup.canonicalCpk.validCount} valid` : 'No valid cost/km rows'} />
             <IntelKpi icon={DollarSign} tone="text-emerald-400" label="Unit tyre spend"
               value={formatCurrency(rollup.totalSpend, currency, 0)}
@@ -644,8 +644,8 @@ function IntelligenceTab({
                     </div>
                     {m.resolved ? (
                       <div className="text-xs text-[var(--text-secondary)] mt-1.5 space-y-0.5">
-                        <div>{[m.make, m.model].filter(Boolean).join(' ') || m.vehicle_type || '—'}</div>
-                        <div className="text-[var(--text-muted)]">{m.vehicle_type || '—'}{m.status ? ` · ${m.status}` : ''}</div>
+                        <div>{[m.make, m.model].filter(Boolean).join(' ') || m.vehicle_type || 'N/A'}</div>
+                        <div className="text-[var(--text-muted)]">{m.vehicle_type || 'N/A'}{m.status ? ` · ${m.status}` : ''}</div>
                       </div>
                     ) : (
                       <div className="text-xs text-amber-300/80 mt-1.5">Not in fleet master</div>
@@ -688,7 +688,7 @@ function IntelligenceTab({
                         <td className="px-4 py-2.5 text-[var(--text-primary)]">{POSITION_LABELS[p.positionClass] || p.positionClass}</td>
                         <td className="px-4 py-2.5 text-right text-[var(--text-secondary)]">{p.count}</td>
                         <td className="px-4 py-2.5 text-right text-[var(--text-secondary)]">{formatCurrency(p.spend, currency, 0)}</td>
-                        <td className="px-4 py-2.5 text-right font-mono text-[var(--text-secondary)]">{p.cpk != null ? `${currency} ${fmt(p.cpk, 3)}` : '—'}</td>
+                        <td className="px-4 py-2.5 text-right font-mono text-[var(--text-secondary)]">{p.cpk != null ? `${currency} ${fmt(p.cpk, 3)}` : 'N/A'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -708,7 +708,7 @@ function IntelligenceTab({
               <Info size={18} className="text-[var(--text-muted)] mt-0.5 shrink-0" />
               <div className="min-w-0">
                 <h3 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-1.5">
-                  <Activity size={14} /> Live telemetry &amp; axle schematic — not available in this dataset
+                  <Activity size={14} /> Live telemetry &amp; axle schematic: not available in this dataset
                 </h3>
                 <p className="text-sm text-[var(--text-muted)] mt-1.5">
                   Per-tyre pressure (PSI), temperature and the top-down axle / wheel-position diagram require

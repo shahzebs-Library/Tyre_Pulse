@@ -58,21 +58,29 @@ batching stops them being started at all.
 # ⚑ SESSION 2026-09-22 — EVERY NEW WASH LOG WAS REFUSED: "Some values are not valid."
 # Client fix shipped; migration `20260922090000_wash_details_optional_checklist.sql` AUTHORED, NOT APPLIED.
 
-### **THE THIRD OCCURRENCE OF THE CHECK-vs-CLIENT DRIFT CLASS, AND THE FIRST WHERE THE SERVER WAS THE NEW SIDE**
-`20260921085115_washing_activity_and_evidence.sql` (shipped the day before) added CHECK `wash_details_valid`
-over `valid_wash_details(jsonb)`, whose third guard is
+### **PR #358 "Remove checklist from vehicle washing" BROKE EVERY WASH SAVE - IT DROPPED THE FIELD FROM THE
+### CLIENT AND LEFT THE SERVER CHECK DEMANDING IT. A FIELD REMOVAL IS A CONSTRAINT CHANGE.**
+`20260921085115_washing_activity_and_evidence.sql` added CHECK `wash_details_valid` over
+`valid_wash_details(jsonb)`, whose third guard is
 `jsonb_typeof(d->'checklist') is distinct from 'array' then return false`.
 **`d->'checklist'` on an object with no such key returns SQL NULL, and `jsonb_typeof(NULL)` is NULL, which IS
-distinct from 'array'** - so the guard fires. **NO client has ever written a `checklist` key**:
-`emptyWashDetails()` returned `{version, chemical_status, chemicals}` and `VehicleWashing.jsx` attaches it to
-EVERY new log (`submitForm` spreads `...form`). So **100% of new wash saves hit 23514**, mapped by
-`safeError.js` to the generic "Some values are not valid." Not intermittent - every single save.
-- **The migration's own header claims "Existing records and installed clients remain valid." It was false.**
-  `checklist` was the one part of the shape no client satisfied. Same family as V612 (`period='yesterday'`)
-  and V244 (`report_type`/`frequency`) - but those were a NEW CLIENT value against an OLD CHECK; this is a
-  **NEW CHECK against the SHAPE EVERY INSTALLED CLIENT ALREADY SENDS**, which is strictly worse because it
-  breaks retroactively with no client change. **RULE: a new CHECK on an existing column must be validated
-  against what the shipped clients actually write, not against the shape the new feature imagines.**
+distinct from 'array'** - so the guard fires and the row is refused with 23514, mapped by `safeError.js` to
+the generic "Some values are not valid."
+- **THE EXACT CAUSAL CHAIN, proven from the history - do not re-derive it:** (1) the migration made
+  `checklist` MANDATORY; (2) the client of the day satisfied it -
+  `emptyWashDetails()` returned `checklist: WASH_CHECKS.map(label => ({label, result:'not_checked', note:''}))`,
+  so washing WORKED; (3) **PR #358 (merge `127a72d2`, in production from 2026-09-22) removed the checklist
+  feature from the client - `emptyWashDetails()` became `{version, chemical_status, chemicals}` - and shipped
+  NO migration**; (4) from that deploy on, `VehicleWashing.jsx` attached the now-checklist-less object to
+  EVERY new log (`submitForm` spreads `...form`), so **100% of wash saves failed**. Not intermittent.
+- **THE RULE THIS TEACHES, and it is the inverse of the one this file already had twice** (V612
+  `period='yesterday'`, V244 `report_type`/`frequency`, both a NEW CLIENT VALUE against an OLD CHECK):
+  **REMOVING a field from a client is also a constraint change.** PR #358 was a pure deletion, reviewed as
+  a UI simplification, and it silently violated a CHECK written the day before. Before deleting any key from
+  a jsonb payload, grep the migrations for a CHECK that reads it - a missing key is NOT the same as an empty
+  one to Postgres, and `jsonb_typeof(NULL)` is the trap.
+- **The migration's own header claims "Existing records and installed clients remain valid."** That was true
+  when written and PR #358 falsified it, which is why the claim was no defence.
 - **THE TEST HAD ENCODED THE BROKEN CONTRACT AND WAS THE BUG'S ALIBI**: `washDetails.test.js` asserted
   `expect(d).not.toHaveProperty('checklist')` and `washEvidence.render.test.jsx` the same - both green while
   production refused every save, because neither exercises the SQL. A pure-JS test cannot see a CHECK.
@@ -83,6 +91,11 @@ EVERY new log (`submitForm` spreads `...form`). So **100% of new wash saves hit 
   <=1000, **a `fail` item requires a note**), rebuilding each item with String fields so a non-string can
   never reach the CHECK's `jsonb_typeof(...) <> 'string'` guard. Mutation-tested: reverting the one-token
   change fails 2 tests.
+- **THIS DOES NOT REINSTATE THE FEATURE PR #358 REMOVED.** No checklist UI comes back - `WashDetailsForm`
+  captures nothing and `WashRecordViewer` shows nothing; only an EMPTY array is sent, which is the honest
+  value for "no checklist recorded" and is what the live CHECK demands. Once the migration below is applied
+  the key becomes optional server-side and the client could stop sending it entirely; it is harmless either
+  way, so do NOT rush that follow-up.
 - **A SECOND, REAL BUG THE FIX EXPOSED - the retry guard would have falsely refused an identical retry.**
   `createWashRecord`'s dedupe compares the payload against the stored row via `canonicalWashValue`, which
   sorts keys but fills no defaults. A row stored WITHOUT `checklist` vs a payload WITH `checklist: []`

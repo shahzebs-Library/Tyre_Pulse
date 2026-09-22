@@ -14,9 +14,10 @@ import {
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
 import {
-  listCheckInOut, createEntry, updateEntry, deleteEntry, isMissingCheckInOutTable,
+  listCheckInOut, createEntry, updateEntry, deleteEntry,
   DIRECTIONS, STATUSES,
 } from '../lib/api/vehicleCheckInOut'
+import { probeRelation } from '../lib/api/_client'
 import { summarizeCheckInOut } from '../lib/vehicleCheckInOut'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
@@ -74,11 +75,24 @@ export default function VehicleCheckInOut() {
     setRefreshing(true); setError(''); setMissing(false)
     try {
       const data = await listCheckInOut({ country: activeCountry })
-      setRows(Array.isArray(data) ? data : [])
+      const list = Array.isArray(data) ? data : []
+      setRows(list)
+      // `listCheckInOut` DEGRADES a missing table to [] rather than throwing, so
+      // the catch below could NEVER see one - which left this page showing a
+      // silent empty list for a table that is not there. Probe only when the
+      // list is empty, and believe only a DEFINITE answer: an unknown result
+      // must not render "apply the migration".
+      if (list.length === 0) {
+        const { exists, checked } = await probeRelation('vehicle_checkinout')
+        setMissing(checked && !exists)
+      } else {
+        setMissing(false)
+      }
       setUpdatedAt(new Date())
     } catch (err) {
-      if (isMissingCheckInOutTable(err)) { setMissing(true); setRows([]) }
-      else { setError(toUserMessage(err, 'Could not load check-in/out entries.')); setRows([]) }
+      // A real failure only. The missing-table case is handled above by the
+      // probe, because the service never lets it reach here.
+      setError(toUserMessage(err, 'Could not load check-in/out entries.')); setRows([])
     } finally {
       setRefreshing(false)
     }

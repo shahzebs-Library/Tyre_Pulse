@@ -33,6 +33,7 @@ import { useSettings } from '../contexts/SettingsContext'
 import {
   listReadings, createReading, updateReading, deleteReading,
 } from '../lib/api/coldChain'
+import { probeRelation } from '../lib/api/_client'
 import {
   classifyTemp, summarizeColdChain, COLD_CHAIN_STATUS_META,
 } from '../lib/coldChain'
@@ -122,9 +123,17 @@ export default function ColdChain() {
       const data = await listReadings({ country: activeCountry })
       const list = Array.isArray(data) ? data : []
       setRows(list)
-      // listReadings degrades a missing table to [] without throwing; flag it so
-      // the "apply the migration" empty state can render instead of a bare table.
-      setNotProvisioned(false)
+      // listReadings degrades a missing table to [] without throwing, so the
+      // page can never learn from the list alone that `cold_chain_logs` is
+      // absent - which is why the banner below had no way to fire. Ask the
+      // database, and only on a CERTAIN answer (checked && !exists). An empty
+      // list on its own proves nothing: it is the ordinary "nothing logged
+      // yet" case, and claiming otherwise would send someone to the database
+      // for no reason.
+      if (list.length === 0) {
+        const { exists, checked } = await probeRelation('cold_chain_logs')
+        setNotProvisioned(checked && !exists)
+      }
       setUpdatedAt(new Date())
     } catch (err) {
       setError(toUserMessage(err, 'Could not load cold-chain readings.'))
@@ -627,8 +636,16 @@ export default function ColdChain() {
                 [0, 1, 2, 3, 4].map((i) => <tr key={i} className="border-b border-[var(--input-border)]/50"><td colSpan={8} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>)
               ) : sorted.length === 0 ? (
                 <tr><td colSpan={8} className="px-4 py-12 text-center text-[var(--text-muted)]">
-                  <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {(rows.length === 0 && !notProvisioned) ? 'No readings logged yet. Log your first reading.' : 'No readings match these filters.'}
+                  {/* Now that notProvisioned can genuinely be true, this cell must
+                      not report a missing table as a filter miss. The banner
+                      above carries the migration instruction. */}
+                  {notProvisioned ? (
+                    <><AlertTriangle size={22} className="mx-auto mb-2 text-amber-400 opacity-80" />No readings, because the cold-chain table has not been provisioned yet.</>
+                  ) : rows.length === 0 ? (
+                    <><ThermometerSnowflake size={22} className="mx-auto mb-2 opacity-60" />No readings logged yet. Log your first reading.</>
+                  ) : (
+                    <><Filter size={22} className="mx-auto mb-2 opacity-60" />No readings match these filters.</>
+                  )}
                 </td></tr>
               ) : (
                 pager.pageRows.map((r) => {

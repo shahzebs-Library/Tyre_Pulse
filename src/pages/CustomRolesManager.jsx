@@ -24,6 +24,7 @@ import {
   getRoleModules, setRoleModules, isBuiltInRole, countUsersByRole, duplicateName,
   cloneRoleCapabilities,
 } from '../lib/api/customRoles'
+import { probeRelation } from '../lib/api/_client'
 
 const EMPTY = { name: '', description: '', moduleKeys: [] }
 
@@ -113,11 +114,23 @@ export default function CustomRolesManager() {
     setRefreshing(true); setError(''); setNotProvisioned(false)
     try {
       const data = await listCustomRoles()
-      setRoles(Array.isArray(data) ? data : [])
+      const list = Array.isArray(data) ? data : []
+      setRoles(list)
+      // `listCustomRoles` DEGRADES a missing table to [] rather than throwing,
+      // so the catch below could NEVER see one, and the inline message-text test
+      // that used to live there was doubly dead (unwrap sanitises err.message).
+      // Probe only when the list is empty, and believe only a DEFINITE answer:
+      // an unknown result must not render "apply the migration".
+      if (list.length === 0) {
+        const { exists, checked } = await probeRelation('custom_roles')
+        setNotProvisioned(checked && !exists)
+      } else {
+        setNotProvisioned(false)
+      }
     } catch (err) {
-      const msg = String(err?.message || '')
-      if (/does not exist|schema cache|could not find the table/i.test(msg)) setNotProvisioned(true)
-      else setError(toUserMessage(err, 'Could not load custom roles.'))
+      // A real failure only. The missing-table case is handled above by the
+      // probe, because the service never lets it reach here.
+      setError(toUserMessage(err, 'Could not load custom roles.'))
       setRoles([])
     } finally { setRefreshing(false) }
   }, [])
@@ -329,7 +342,7 @@ export default function CustomRolesManager() {
         <div className="card border border-amber-800/50 flex items-start gap-3">
           <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
           <div>
-            <p className="text-amber-300 font-medium">Custom roles aren’t enabled on this database yet.</p>
+            <p className="text-amber-300 font-medium">Custom roles are not enabled on this database yet.</p>
             <p className="text-[var(--text-muted)] text-sm mt-1">Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V211_CUSTOM_ROLES.sql</span>, then reload.</p>
           </div>
         </div>
@@ -355,7 +368,7 @@ export default function CustomRolesManager() {
               ) : roles.length === 0 ? (
                 <tr><td colSpan={5} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <UserCog size={26} className="mx-auto mb-2 opacity-60" />
-                  {notProvisioned ? 'Enable the module to start building roles.' : 'No custom roles yet. Create your first one.'}
+                  {notProvisioned ? 'Apply the custom roles migration to start building roles.' : 'No custom roles yet. Create your first one.'}
                 </td></tr>
               ) : rolesPager.pageRows.map((r) => (
                 <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">

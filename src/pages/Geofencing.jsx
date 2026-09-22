@@ -25,6 +25,7 @@ import { useSettings } from '../contexts/SettingsContext'
 import {
   listGeofences, createGeofence, updateGeofence, deleteGeofence,
 } from '../lib/api/geofences'
+import { probeRelation } from '../lib/api/_client'
 import {
   ZONE_TYPES, ZONE_TYPE_META, validateGeofence, coverageSummary,
   hasValidCenter, zoneAreaKm2,
@@ -114,12 +115,18 @@ export default function Geofencing() {
     setRefreshing(true); setError(''); setNotProvisioned(false)
     try {
       const data = await listGeofences({ country: activeCountry })
-      setRows(Array.isArray(data) ? data : [])
-      if (Array.isArray(data) && data.length === 0) {
-        // Distinguish "no rows" from "table missing" — a follow-up probe would
-        // be redundant; the service already returns [] for a missing relation.
-        // We surface the migration hint only when the empty state has no filters.
-        setNotProvisioned(true)
+      const list = Array.isArray(data) ? data : []
+      setRows(list)
+      // An empty list is NOT evidence the table is missing. listGeofences
+      // degrades a missing relation to [], so "no zones recorded yet" and "the
+      // migration was never applied" arrive identically - and telling an owner
+      // to run database surgery over an ordinary empty register is the worse
+      // way to be wrong. Ask the database directly instead, and only when the
+      // probe is CERTAIN the relation is absent (checked && !exists) does the
+      // migration hint render; an inconclusive probe stays silent.
+      if (list.length === 0) {
+        const { exists, checked } = await probeRelation('geofences')
+        setNotProvisioned(checked && !exists)
       }
       setUpdatedAt(new Date())
     } catch (err) {
@@ -312,7 +319,9 @@ export default function Geofencing() {
             <button onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Geofence Zones', exportName, 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileText size={14} /> PDF
             </button>
-            <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5">
+            {/* A create into a table that does not exist can only fail, so the
+                action is withheld once the probe is certain it is absent. */}
+            <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5" disabled={notProvisioned}>
               <Plus size={14} /> New zone
             </button>
           </div>
@@ -535,15 +544,24 @@ export default function Geofencing() {
                 [0, 1, 2, 3, 4].map((i) => <tr key={i} className="border-b border-[var(--input-border)]/50"><td colSpan={7} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>)
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={7} className="px-4 py-12 text-center text-[var(--text-muted)]">
-                  {notProvisioned && !hasFilters ? (
+                  {/* Three genuinely different empty states. Collapsing the last
+                      two is what sent owners to run a migration over a register
+                      that was simply empty. */}
+                  {hasFilters ? (
+                    <><Filter size={22} className="mx-auto mb-2 opacity-60" />No zones match these filters.</>
+                  ) : notProvisioned ? (
+                    <div className="space-y-2">
+                      <AlertTriangle size={24} className="mx-auto mb-1 text-amber-400 opacity-80" />
+                      <p className="text-[var(--text-primary)] font-medium">Geofencing is not enabled on this database yet.</p>
+                      <p className="text-sm">Apply <code className="px-1.5 py-0.5 rounded bg-[var(--input-bg)] text-[var(--text-secondary)]">MIGRATIONS_V133_GEOFENCES.sql</code> to provision the <code className="px-1.5 py-0.5 rounded bg-[var(--input-bg)] text-[var(--text-secondary)]">geofences</code> table, then reload. Zones cannot be added until it exists.</p>
+                    </div>
+                  ) : (
                     <div className="space-y-2">
                       <MapPin size={24} className="mx-auto mb-1 opacity-60" />
                       <p className="text-[var(--text-primary)] font-medium">No geofence zones yet.</p>
-                      <p className="text-sm">If this is a fresh install, apply <code className="px-1.5 py-0.5 rounded bg-[var(--input-bg)] text-[var(--text-secondary)]">MIGRATIONS_V133_GEOFENCES.sql</code> to provision the <code className="px-1.5 py-0.5 rounded bg-[var(--input-bg)] text-[var(--text-secondary)]">geofences</code> table, then add your first zone.</p>
+                      <p className="text-sm">Add a centre coordinate and radius to define your first zone.</p>
                       <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5 mt-1"><Plus size={14} /> New zone</button>
                     </div>
-                  ) : (
-                    <><Filter size={22} className="mx-auto mb-2 opacity-60" />No zones match these filters.</>
                   )}
                 </td></tr>
               ) : (

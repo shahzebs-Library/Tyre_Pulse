@@ -55,6 +55,68 @@ batching stops them being started at all.
 
 ---
 
+# ⚑ SESSION 2026-09-22 — THE PROVISIONING BANNER: 4 PAGES COULD NOT MAKE THE STATEMENT, NOT 9.
+# No migration. Commit `fef966fb` on `feature/accident-case-web-redesign`, 8 files.
+
+### **THE BUG CLASS IS A SWALLOWED ERROR, NOT A STALE MATCHER - AND THAT REFRAMES `1d2a0287`**
+A page backed by a table behind an unapplied migration must SAY SO; an empty list otherwise reads as "we have
+no records" rather than "this was never installed". The previous session replaced 72 dead message-only
+matchers and framed the class as detection drift. That was only half of it. **A service that degrades a
+missing relation to `[]` guarantees the page's `catch` never runs, so the detector inside it is unreachable
+WHATEVER it contains.** Swapping the matcher in `CustomRolesManager` would have fixed exactly nothing -
+`listCustomRoles` already caught `isMissingRelation` and returned `[]` one level down. The matcher was a
+symptom. **RULE: to check whether a provisioning banner can fire, follow the error from the query to the
+banner. If a service swallows it, the page needs `probeRelation`, not a better regex.**
+
+### **MY OWN MEASUREMENT WAS WRONG THREE TIMES, ALL FROM ONE GREP TERM**
+I surveyed with `grep notProvisioned` and reported 9 broken pages. **Five of those pages name the flag
+`missing` instead**, so they read as "no detection at all" when they were fully correct. Wrong on
+FitmentValidation, Contracts, FuelCards, FuelDelivery and TelematicsDevices; three separate agents refuted me
+with evidence. **The real count was 4.** RULE: a provisioning flag in this app is spelled `notProvisioned`
+OR `missing`; search for both, and for the banner text ("apply", "MIGRATIONS_V"), never for one variable name.
+**A SECOND BAD HEURISTIC FROM THE SAME SESSION, DO NOT REUSE IT:** I sorted the remaining local matchers by
+whether they read `err.cause`, calling the message-only ones dead. `contracts.js` reads only `error.message`
+and WORKS, because it destructures `{data, error}` and never passes through `unwrap()`. **Only `unwrap`
+sanitises the message.** The question is which error SHAPE reaches the matcher, which a grep cannot answer.
+
+### THE FOUR THAT WERE GENUINELY BROKEN
+- **Geofencing - a FALSE POSITIVE, the worst of them.** It set the flag from "list empty and no filters", so a
+  correctly provisioned but EMPTY table told a non-technical owner to go apply `MIGRATIONS_V133_GEOFENCES.sql`.
+  Its own comment defended this ("a follow-up probe would be redundant; the service already returns [] for a
+  missing relation") - citing the cause as the excuse, when degrade-to-`[]` is precisely WHY emptiness proves
+  nothing. It also offered the **New zone** button inside that branch, where pressing it could only fail. Now
+  three branches: filtered / missing / genuinely empty.
+- **ColdChain** - `setNotProvisioned(false)` sat directly beneath a comment promising to flag it. Banner and
+  disabled button unreachable by construction. Its empty CELL would then have rendered a missing table as
+  "No readings match these filters" with no filters applied; fixed in the same pass.
+- **CustomRolesManager** - inline message-only regex, dead twice over (sanitised message AND a service that
+  caught first). Its empty state also said "Enable the module" directly under a banner saying "apply a
+  migration" - two different instructions on one screen.
+- **VehicleCheckInOut** - `isMissingCheckInOutTable`, a differently-named copy of the stale pattern, missed by
+  the 72-file sweep BECAUSE that sweep was keyed on the function name. Now removed repo-wide (0 refs).
+
+### **THE HONESTY RULE IS `checked && !exists`, AND IT IS TESTED NOT ASSERTED**
+`probeRelation` returns `{exists, checked}` and reports `checked:false, exists:true` for anything that is not a
+DEFINITE missing-relation. All four pages gate on `checked && !exists`, so a 42501 permission denial or a
+network failure produces SILENCE, never a false "your database is missing a table". Proven by an executed
+throwaway spec (mocked client): 42P01 -> banner; 42501 -> no banner; empty-but-present -> no banner.
+
+### ALREADY CORRECT - DO NOT "FIX" THESE
+FitmentValidation (`isFitmentProvisioned`, fail-open `.catch(() => true)` at the call site = the same contract
+by another route), Contracts, FuelCards, FuelDelivery, TelematicsDevices. **Contracts is the BEST pattern in
+the app and is worth copying:** `listContracts` returns `{rows, missing}` from the same query rather than
+discarding the signal and probing to recover it - zero extra round trips. The only thing missing across
+FuelCards/FuelDelivery/TelematicsDevices was a `disabled={missing}` create button (1 line each).
+
+### **~88 LOCAL MATCHER COPIES REMAIN IN `src/lib/api`, AND COLLAPSING THEM MAY BE WRONG**
+"One shared missing-relation check" is not literally true. Most of the remainder WORK (they read the raw error,
+or check `.cause`). **The shared `isMissingRelation` matches bare `relation` or `schema cache` anywhere in the
+text, which is WIDER than several local copies** - so a blanket swap would make a FALSE provisioning banner
+more likely, the exact harm the honesty rule exists to prevent. Do not sweep them without a reason and a
+per-file check of which error shape arrives.
+
+---
+
 # ⚑ SESSION 2026-09-22 — EVERY NEW WASH LOG WAS REFUSED: "Some values are not valid."
 # Client fix shipped; migration `20260922090000_wash_details_optional_checklist.sql` AUTHORED, NOT APPLIED.
 

@@ -920,6 +920,7 @@ export default function VehicleWashing() {
               columns={washRecordColumns}
               data={regRows}
               getRowId={(row) => String(row.id)}
+              onRowClick={setViewRow}
               loading={loading}
               error={error}
               onRetry={load}

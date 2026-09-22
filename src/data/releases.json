@@ -1,5 +1,13 @@
 [
   {
+    "id": "2026.09.22.1",
+    "date": "2026-09-22",
+    "changes": [{
+      "modules": ["vehicle_washing"],
+      "text": {"en": "Washing records now open immediately when their table row is selected, while PDF, asset, edit and delete controls continue to perform only their own actions."}
+    }]
+  },
+  {
     "id": "2026.09.21.4",
     "date": "2026-09-21",
     "changes": [{

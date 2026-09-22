@@ -21,7 +21,7 @@ it('opens staff drill-down and the saved checklist from the register',async()=>{
   expect(screen.queryByRole('button',{name:'View wash TEST-2'})).not.toBeInTheDocument()
   const headers=within(screen.getByRole('table')).getAllByRole('columnheader')
   expect(headers.at(-1)).toHaveTextContent('View')
-  fireEvent.click(screen.getByRole('button',{name:'View wash TEST-1'}))
+  fireEvent.click(screen.getByText('TEST-1').closest('tr'))
   expect(await screen.findByRole('dialog')).toBeInTheDocument()
   expect(screen.getByText('Dust remains')).toBeInTheDocument()
   expect(within(screen.getByRole('dialog')).getByText('No chemical used')).toBeInTheDocument()

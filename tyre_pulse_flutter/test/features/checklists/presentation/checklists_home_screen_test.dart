@@ -226,7 +226,7 @@ void main() {
       );
       expect(find.text('General checklist library'), findsOneWidget);
       expect(find.text('Tyre inspection'), findsOneWidget);
-      expect(find.text('Checklist history'), findsOneWidget);
+      expect(find.text('My checklist history'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );

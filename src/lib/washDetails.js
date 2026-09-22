@@ -1,33 +1,21 @@
 import { isCompletedWash } from './washAnalytics'
 
-export const CHECK_RESULTS = { not_checked: 'Not checked', pass: 'Checked', fail: 'Issue found', na: 'Not applicable' }
-export const WASH_CHECKS = ['Exterior surfaces', 'Windows, mirrors and lights', 'Wheels and wheel arches', 'Cab interior', 'Final rinse and visible residue']
-export const emptyWashDetails = () => ({ version: 1, chemical_status: 'not_recorded', chemicals: [], checklist: WASH_CHECKS.map(label => ({ label, result: 'not_checked', note: '' })) })
+export const emptyWashDetails = () => ({ version: 1, chemical_status: 'not_recorded', chemicals: [] })
 export const entryPerson = row => row.entry_name || row.entry_username || (row.created_by ? `User ${row.created_by}` : 'Unknown')
 export function canonicalWashValue(value) {
   if(Array.isArray(value)) return value.map(canonicalWashValue)
   if(value && typeof value === 'object') return Object.fromEntries(Object.keys(value).sort().map(k=>[k,canonicalWashValue(value[k])]))
   return value ?? null
 }
-export const checklistSummary = row => {
-  const checks = row.wash_details?.checklist || []
-  if (!checks.length) return 'Not recorded'
-  const issues = checks.filter(c => c.result === 'fail').length
-  return issues ? `${issues} issue(s)` : `${checks.filter(c => c.result === 'pass').length} checked / ${checks.length} items`
-}
 export function validateWashDetails(d) {
   if (d == null) return null
-  if (d.version !== 1 || !['not_recorded', 'none', 'used'].includes(d.chemical_status) || !Array.isArray(d.chemicals) || !Array.isArray(d.checklist)) throw new Error('Invalid wash details.')
-  if (d.chemicals.length > 10 || d.checklist.length > 30) throw new Error('Use at most 10 chemicals and 30 checklist items.')
+  if (d.version !== 1 || !['not_recorded', 'none', 'used'].includes(d.chemical_status) || !Array.isArray(d.chemicals)) throw new Error('Invalid wash details.')
+  if (d.chemicals.length > 10) throw new Error('Use at most 10 chemicals.')
   if (d.chemical_status === 'used' && !d.chemicals.length) throw new Error('Add the chemical product used.')
   if (d.chemical_status !== 'used' && d.chemicals.length) throw new Error('Confirm whether chemicals were used.')
   for (const c of d.chemicals) {
     if (!c.name?.trim() || c.name.length > 160) throw new Error('Enter a chemical product name (up to 160 characters).')
     if (c.sds_url && !/^https:\/\/\S+$/.test(c.sds_url)) throw new Error('The safety data sheet link must use HTTPS.')
-  }
-  for (const c of d.checklist) {
-    if (!c.label?.trim() || c.label.length > 200 || !Object.hasOwn(CHECK_RESULTS, c.result)) throw new Error('Check each checklist item and result.')
-    if (c.result === 'fail' && !c.note?.trim()) throw new Error('Describe each checklist issue.')
   }
   return d
 }

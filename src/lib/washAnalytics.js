@@ -163,10 +163,6 @@ export function filterWashes(rows, filters = {}) {
     if (filters.photos === 'no' && r.photos?.length) return false
     if (filters.chemicals && String(filters.chemicals).toLowerCase() !== 'all'
       && (r.wash_details?.chemical_status || 'not_recorded') !== filters.chemicals) return false
-    if (filters.checklist === 'issues' && !r.wash_details?.checklist?.some(c => c.result === 'fail')) return false
-    const checklist = r.wash_details?.checklist
-    if (filters.checklist === 'missing' && Array.isArray(checklist) && checklist.length > 0 && !checklist.some(c => c.result === 'not_checked')) return false
-    if (filters.checklist === 'complete' && (!Array.isArray(checklist) || !checklist.length || checklist.some(c => c.result === 'not_checked'))) return false
     return true
   })
 }

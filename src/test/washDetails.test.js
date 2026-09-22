@@ -3,13 +3,13 @@ import { emptyWashDetails, validateWashDetails, staffWashActivity } from '../lib
 import { filterWashes } from '../lib/washAnalytics'
 
 describe('wash evidence and staff activity', () => {
-  it('never prechecks a checklist or invents chemical use', () => {
+  it('starts with chemical use unrecorded and no washing checklist', () => {
     const d=emptyWashDetails()
-    expect(d.checklist.every(c=>c.result==='not_checked')).toBe(true)
+    expect(d).not.toHaveProperty('checklist')
     expect(d.chemical_status).toBe('not_recorded')
     expect(validateWashDetails(d)).toBe(d)
     expect(()=>validateWashDetails({...d,chemical_status:'used'})).toThrow('product')
-    expect(()=>validateWashDetails({...d,checklist:[{label:'Cab',result:'fail'}]})).toThrow('Describe')
+    expect(validateWashDetails({...d,checklist:[]})).toEqual({...d,checklist:[]})
   })
   it('keeps creators distinct despite matching names and deduplicates record IDs', () => {
     const rows=[{id:'1',created_by:'u1',entry_name:'Same',asset_no:'A',status:'Completed'},{id:'2',created_by:'u2',entry_name:'Same',asset_no:'A',status:'Scheduled'}]
@@ -19,8 +19,8 @@ describe('wash evidence and staff activity', () => {
     expect(counts.reduce((n,r)=>n+r.completed,0)).toBe(1)
   })
   it('combines person, receipt date, evidence and location filters', () => {
-    const row={id:'1',created_by:'u1',wash_date:'2026-08-01',created_at:'2026-09-01T10:00:00Z',country:'KSA',region:'North',photos:['photo'],wash_details:{chemical_status:'none',checklist:[{result:'fail'}]}}
-    const filters={dateBasis:'received',from:'2026-09-01',to:'2026-09-01',enteredBy:'u1',country:'KSA',region:'North',photos:'yes',chemicals:'none',checklist:'issues'}
+    const row={id:'1',created_by:'u1',wash_date:'2026-08-01',created_at:'2026-09-01T10:00:00Z',country:'KSA',region:'North',photos:['photo'],wash_details:{chemical_status:'none'}}
+    const filters={dateBasis:'received',from:'2026-09-01',to:'2026-09-01',enteredBy:'u1',country:'KSA',region:'North',photos:'yes',chemicals:'none'}
     expect(filterWashes([row],filters)).toEqual([row])
     expect(filterWashes([row],{...filters,dateBasis:'wash'})).toEqual([])
     expect(filterWashes([row],{...filters,enteredBy:'u2'})).toEqual([])
@@ -36,13 +36,6 @@ describe('wash evidence and staff activity', () => {
     expect(filterWashes(rows, { vehicleType: 'TR-MIXER,pump' })).toEqual(rows.slice(0, 2))
     expect(filterWashes(rows, { search: 'aisha' })).toEqual([rows[0], rows[2]])
     expect(filterWashes(rows, { site: [] })).toEqual(rows)
-  })
-  it('treats a partially unanswered checklist as incomplete', () => {
-    const partial = { id: '1', wash_details: { checklist: [{ result: 'pass' }, { result: 'not_checked' }] } }
-    const complete = { id: '2', wash_details: { checklist: [{ result: 'pass' }, { result: 'na' }] } }
-    const missing = { id: '3' }
-    expect(filterWashes([partial, complete, missing], { checklist: 'missing' })).toEqual([partial, missing])
-    expect(filterWashes([partial, complete, missing], { checklist: 'complete' })).toEqual([complete])
   })
   it('counts legacy blank-status work as completed staff activity', () => {
     const legacy = { id: '1', created_by: 'u1', asset_no: 'A', status: '' }

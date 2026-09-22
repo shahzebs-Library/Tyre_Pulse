@@ -1,5 +1,13 @@
 [
   {
+    "id": "2026.09.22.2",
+    "date": "2026-09-22",
+    "changes": [{
+      "modules": ["vehicle_washing"],
+      "text": {"en": "Vehicle washing no longer asks for or displays a wash checklist. Chemical, photo and entry-person details remain available in records and reports."}
+    }]
+  },
+  {
     "id": "2026.09.22.1",
     "date": "2026-09-22",
     "changes": [{

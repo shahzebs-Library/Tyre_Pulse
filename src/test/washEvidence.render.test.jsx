@@ -8,17 +8,15 @@ vi.mock('../lib/api/washRecords',()=>({listWashCorrections:vi.fn(async()=>[])}))
 vi.mock('../lib/storageRefs',()=>({resolveStorageUrl:vi.fn(async()=>null)}))
 
 describe('wash evidence capture and viewing',()=>{
-  it('records chemicals and individual checklist results without default successes',()=>{
+  it('records chemical details without showing a washing checklist',()=>{
     function Form(){const [value,setValue]=useState(emptyWashDetails());return <><WashDetailsForm value={value} onChange={setValue}/><output data-testid="data">{JSON.stringify(value)}</output></>}
     render(<Form/> )
     fireEvent.change(screen.getByLabelText('Chemical use'),{target:{value:'used'}})
     fireEvent.change(screen.getByLabelText('Product name'),{target:{value:'Recorded product'}})
-    fireEvent.change(screen.getByLabelText('Cab interior'),{target:{value:'fail'}})
-    fireEvent.change(screen.getByLabelText('Issue details (required)'),{target:{value:'Seat needs another clean'}})
     const value=JSON.parse(screen.getByTestId('data').textContent)
     expect(value.chemicals[0].name).toBe('Recorded product')
-    expect(value.checklist.find(c=>c.label==='Cab interior')).toMatchObject({result:'fail',note:'Seat needs another clean'})
-    expect(value.checklist.filter(c=>c.result==='not_checked')).toHaveLength(4)
+    expect(value).not.toHaveProperty('checklist')
+    expect(screen.queryByText('Wash checklist')).not.toBeInTheDocument()
   })
   it('opens recorded answers, creator and chemicals as a reading surface',async()=>{
     const close=vi.fn()
@@ -27,7 +25,8 @@ describe('wash evidence capture and viewing',()=>{
     expect(screen.getByText('Entry Person')).toBeInTheDocument()
     expect(screen.getByText('Wash Operator')).toBeInTheDocument()
     expect(screen.getByText('Recorded product')).toBeInTheDocument()
-    expect(screen.getByText('Issue found')).toBeInTheDocument()
+    expect(screen.queryByText('Wash checklist')).not.toBeInTheDocument()
+    expect(screen.queryByText('Seat needs another clean')).not.toBeInTheDocument()
     await waitFor(()=>expect(screen.getByText('No corrections recorded.')).toBeInTheDocument())
     fireEvent.keyDown(document,{key:'Escape'})
     expect(close).toHaveBeenCalled()

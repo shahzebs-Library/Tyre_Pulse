@@ -437,11 +437,11 @@ void main() {
   test('heavy vehicles keep truthful SVGs until verified top views exist', () {
     for (final MapEntry<TyreDiagramBodyKey, String> fallback
         in <TyreDiagramBodyKey, String>{
-          TyreDiagramBodyKey.canter: 'assets/vehicle_diagram/canter.svg',
-          TyreDiagramBodyKey.tata: 'assets/vehicle_diagram/tata.svg',
-          TyreDiagramBodyKey.ashokLeyland:
-              'assets/vehicle_diagram/ashok_leyland.svg',
-        }.entries) {
+      TyreDiagramBodyKey.canter: 'assets/vehicle_diagram/canter.svg',
+      TyreDiagramBodyKey.tata: 'assets/vehicle_diagram/tata.svg',
+      TyreDiagramBodyKey.ashokLeyland:
+          'assets/vehicle_diagram/ashok_leyland.svg',
+    }.entries) {
       expect(tyreDiagramVehiclePhotoSpec(fallback.key), isNull);
       expect(tyreDiagramBodyAsset(fallback.key), fallback.value);
     }

@@ -255,3 +255,16 @@ img { max-width: 100%; height: auto; }
   outline-offset: 2px;
 }
 [id="main-content"]:focus { outline: none; }
+
+/* A capability group's screenshot on /product. `.product-window` already owns
+   the frame, shadow and radius used by the home page hero, so this only sizes
+   and spaces it inside the feature row rather than inventing a second frame. */
+.feature-row .feature-shot {
+  margin-top: 16px;
+  max-width: 640px;
+}
+.feature-row .feature-shot img {
+  width: 100%;
+  height: auto;
+  display: block;
+}

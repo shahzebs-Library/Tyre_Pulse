@@ -21,11 +21,45 @@ import 'package:tyre_pulse/core/database/app_database.dart';
 import 'package:tyre_pulse/core/database/app_database_provider.dart';
 import 'package:tyre_pulse/core/network/supabase_client_provider.dart';
 import 'package:tyre_pulse/core/sync/queued_command_repository.dart';
+import 'package:tyre_pulse/core/sync/sync_workspace_id.dart';
+import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/checklists/data/checklist_draft_repository.dart';
 import 'package:tyre_pulse/features/checklists/data/checklist_history_repository.dart';
 import 'package:tyre_pulse/features/checklists/data/checklist_photo_capture.dart';
 import 'package:tyre_pulse/features/checklists/data/checklist_remote_repository.dart';
 import 'package:tyre_pulse/features/checklists/data/checklist_submission_repository.dart';
+import 'package:tyre_pulse/features/checklists/domain/checklist_i18n.dart';
+
+/// The checklist-content language selected on the asset hub. This is separate
+/// from the app locale: an English app can still show an Arabic, Hindi or Urdu
+/// checklist to the operator. Existing drafts keep their own saved language;
+/// this preference seeds only a newly opened sheet.
+final NotifierProvider<ChecklistContentLanguageController, String>
+    checklistContentLanguageProvider =
+    NotifierProvider<ChecklistContentLanguageController, String>(
+  ChecklistContentLanguageController.new,
+);
+
+final class ChecklistContentLanguageController extends Notifier<String> {
+  @override
+  String build() => kChecklistDefaultLang;
+
+  void select(String language) {
+    state = normalizeLang(language);
+  }
+}
+
+/// Every checklist-related screen must only claim that the device is synced
+/// after the real offline queue has been checked for the active workspace.
+/// A failed command is included by [QueueDao.pendingCount], so this cannot
+/// silently turn an item that needs attention into a green status label.
+final FutureProvider<int> checklistPendingSyncCountProvider =
+    FutureProvider<int>((ref) async {
+  final workspace = ref.watch(workspaceContextProvider);
+  if (workspace == null) return 0;
+  final AppDatabase db = ref.watch(appDatabaseProvider);
+  return db.queueDao.pendingCount(workspaceId: workspaceIdFor(workspace));
+});
 
 final Provider<ChecklistRemoteRepository> checklistRemoteRepositoryProvider =
     Provider<ChecklistRemoteRepository>(

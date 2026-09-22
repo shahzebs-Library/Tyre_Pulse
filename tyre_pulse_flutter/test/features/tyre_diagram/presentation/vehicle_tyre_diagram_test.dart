@@ -501,9 +501,8 @@ void main() {
     'bus identity changes artwork without changing position ids or coordinates',
     (WidgetTester tester) async {
       final DiagramLayout layout = kTyreDiagramLayouts['Bus']!;
-      final List<String> positions = layout.tyres
-          .map((TyreSlot tyre) => tyre.id)
-          .toList(growable: false);
+      final List<String> positions =
+          layout.tyres.map((TyreSlot tyre) => tyre.id).toList(growable: false);
 
       Future<List<Rect>> pumpFor({String? make}) async {
         await _pump(

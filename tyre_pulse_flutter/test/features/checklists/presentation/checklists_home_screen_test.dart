@@ -83,14 +83,16 @@ final class _ChecklistRemoteFake implements ChecklistRemoteRepository {
     String? country,
     String? role,
     bool isSuperAdmin = false,
-  }) async => const <ChecklistTemplateRecord>[_template];
+  }) async =>
+      const <ChecklistTemplateRecord>[_template];
 
   @override
   Future<List<ChecklistAssignmentRecord>> listAssignments({
     String? country,
     String? role,
     bool isSuperAdmin = false,
-  }) async => assignments;
+  }) async =>
+      assignments;
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -263,12 +265,12 @@ void main() {
     (WidgetTester tester) async {
       const ChecklistAssignmentRecord globalAssignment =
           ChecklistAssignmentRecord(
-            id: 'assignment-global',
-            templateId: 'site-safety',
-            templateName: 'Site safety briefing',
-            site: 'Dubai Industrial City',
-            status: 'pending',
-          );
+        id: 'assignment-global',
+        templateId: 'site-safety',
+        templateName: 'Site safety briefing',
+        site: 'Dubai Industrial City',
+        status: 'pending',
+      );
       await _pump(
         tester,
         remote: const _ChecklistRemoteFake(

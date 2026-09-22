@@ -1,0 +1,36 @@
+name: Codex Dart format capture
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - codex/flutter-checklist-production-fix
+    paths:
+      - .github/workflows/codex-dart-format-capture.yml
+
+jobs:
+  capture:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: tyre_pulse_flutter
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.2
+          cache: true
+      - run: flutter pub get
+      - name: Format and print canonical files
+        run: |
+          dart format lib/features/checklists/presentation/checklists_home_screen.dart test/features/checklists/presentation/checklists_home_screen_test.dart
+          echo SCREEN_B64_BEGIN
+          base64 -w 0 lib/features/checklists/presentation/checklists_home_screen.dart
+          echo
+          echo SCREEN_B64_END
+          echo TEST_B64_BEGIN
+          base64 -w 0 test/features/checklists/presentation/checklists_home_screen_test.dart
+          echo
+          echo TEST_B64_END

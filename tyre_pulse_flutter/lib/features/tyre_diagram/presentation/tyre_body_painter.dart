@@ -103,20 +103,16 @@ TyreDiagramPhotoSpec? tyreDiagramVehiclePhotoSpec(
     TyreDiagramBodyKey.wheelLoader => const TyreDiagramPhotoSpec(
         asset: 'assets/vehicle_photos/wheel_loader.png',
       ),
-    TyreDiagramBodyKey.skidLoader =>
-      const TyreDiagramPhotoSpec(
+    TyreDiagramBodyKey.skidLoader => const TyreDiagramPhotoSpec(
         asset: 'assets/vehicle_photos/skid_loader_top_down_v2.png',
       ),
-    TyreDiagramBodyKey.triMixer =>
-      const TyreDiagramPhotoSpec(
+    TyreDiagramBodyKey.triMixer => const TyreDiagramPhotoSpec(
         asset: 'assets/vehicle_photos/tri_mixer_top_down.webp',
       ),
-    TyreDiagramBodyKey.linePump =>
-      const TyreDiagramPhotoSpec(
+    TyreDiagramBodyKey.linePump => const TyreDiagramPhotoSpec(
         asset: 'assets/vehicle_photos/line_pump_top_down_v2.png',
       ),
-    TyreDiagramBodyKey.concretePump =>
-      const TyreDiagramPhotoSpec(
+    TyreDiagramBodyKey.concretePump => const TyreDiagramPhotoSpec(
         asset: 'assets/vehicle_photos/concrete_pump_top_down.webp',
       ),
     TyreDiagramBodyKey.bus => const TyreDiagramPhotoSpec(

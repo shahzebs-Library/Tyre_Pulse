@@ -906,3 +906,23 @@ select role, count(*) filter (where module_key like 'mobile:%') as mobile_rows,
 select module_key, capability, effect, count(*)
   from public.user_access_grants group by 1,2,3 order by 4 desc limit 50;
 ```
+
+---
+
+## 10. Access for business modules added in Flutter
+
+Added 2026-09-23. Sections 1 to 9 are cited by number from
+`lib/core/permissions/`, so they are unchanged. Two modules the Expo app never
+had (artifact 01 section 2.15) reach users differently from everything in the
+31-module registry.
+
+| Module | In `ModuleRegistry`? | Who reaches it | Where it is enforced |
+|---|---|---|---|
+| Inspection plans | No key of its own. It rides on `inspect` | Everyone whose effective access includes `inspect` (by default Manager, Director, Inspector, Tyre Man, plus Admin and per-user grants, per section 1) | The route guard decides screen reach. The DATA is bounded by RLS on `inspection_schedules` (RESTRICTIVE org and country) and by the repository filtering to the signed-in user's own assignments. An empty owner returns nothing rather than the whole country |
+| Driver workspace | **No.** There is no `ModuleKey` | Anyone signed in sees the entry card. What they can DO is decided by the server | `private.driver_workspace_access(driver_id)` inside every read and command RPC, plus RLS on the driver tables (`organisation_id = app_current_org() AND driver_workspace_access(driver_id) <> 'none'`). The client only reads back `can_manage`, `can_respond`, `can_review` from the snapshot, and forces all three false while offline |
+
+The driver workspace is therefore the one business module the Access Manager
+cannot switch off per role or per user. That is consistent with section 4's
+principle that the server is the real boundary, but it means an administrator
+looking for it in the module list will not find it. Decision D11 in artifact 09
+asks whether it should get a key.

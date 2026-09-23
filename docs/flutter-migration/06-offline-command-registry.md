@@ -62,7 +62,7 @@ as mandatory and keep the opt-out only if a genuinely append-only table with no
 | `REPORT_ACCIDENT` | `accidents` | insert | n/a | `accidents.client_uuid` added specifically so a replay is idempotent |
 | `WASH_RECORD` | `wash_records` | insert | n/a | `client_uuid` + unique index |
 | `WORKSHOP_EVENT` | `tech_activity_events` | insert | n/a | Idempotent. `client_uuid` + unique index added by V292 - see the correction in section 1 |
-| `REPAIR_REQUEST` | `repair_requests` | insert | n/a | **UNVERIFIED as shipped**: the table is created by `MIGRATIONS_V608_REPAIR_REQUEST_RFR.sql`, which is UNTRACKED in-flight work from a parallel session at the time of writing |
+| `REPAIR_REQUEST` | `repair_requests` | insert | n/a | **UNVERIFIED as shipped**: the table is created by `MIGRATIONS_V608_REPAIR_REQUEST_RFR.sql`. That file was untracked in-flight work when this was written; as of 2026-09-23 it is committed (commit `8ca0b28d`) but its header still reads AUTHORED - NOT YET APPLIED, so the table does not exist until someone applies it. Live apply status must be re-checked in `supabase_migrations` before this command is ported |
 
 An `update` command excludes the match column from the SET clause, so the
 primary key is never rewritten. Flutter must preserve that.
@@ -95,7 +95,7 @@ Spec section 14 is "Do Not Offline-Queue Unsafe Decisions". The rule used here:
 | `STOCK_ADJUST` | QUEUEABLE | Absolute value (section 3) |
 | `WORK_ORDER_STATUS`, `CORRECTIVE_ACTION_STATUS`, `CHECKLIST_ASSIGNMENT_STATUS` | QUEUEABLE WITH CARE | A blind patch-by-id can overwrite a decision someone else made while the phone was offline. Flutter should carry the expected prior status and let the server refuse a stale transition rather than silently clobber |
 | `CHECKLIST_APPROVAL` | **SHOULD BE ONLINE-ONLY** | An approval is a DECISION, not an observation. Three reasons, all recorded in PROJECT_MEMORY: a checklist's closability depends on its own answers and a single blocking fault mark must refuse closure; the database enforces that at APPROVAL time with a trigger, so a queued approval can be accepted by the phone and then refused by the server; and the approver's identity and permission must be re-checked server-side. The correct path is the `decide_checklist_approval` RPC while online |
-| `REPAIR_REQUEST` | UNVERIFIED | Parallel in-flight work. Classify once V608 settles |
+| `REPAIR_REQUEST` | UNVERIFIED | V608 is committed but not applied (2026-09-23). Classify once it is applied and its shape is verified live |
 
 **This is the single most important finding in this artifact.** `CHECKLIST_APPROVAL`
 is currently a queued blind `update` on `checklist_submissions` matched by `id`,
@@ -147,3 +147,23 @@ RECORDED traps worth carrying into the Drift design:
 - Uploads must be BOUNDED in parallelism. RECORDED: a `Promise.all` over every tyre
   position decoded 13 full-size bitmaps at once and hard-crashed 2 GB handsets,
   and the offline queue then REPLAYED the crash.
+
+---
+
+## 7. Write paths the Flutter app added outside this registry
+
+Added 2026-09-23. Sections 1 to 6 port the 16 commands of the Expo app's
+`recordQueue.ts`. Two business modules the Flutter app gained since have their
+own write story, and neither goes through `CommandRegistry`. Both are
+deliberate, and both are recorded here so nobody "fixes" them into the queue.
+
+| Module | Writes | Verdict | Why |
+|---|---|---|---|
+| Inspection plans (artifact 01 section 2.15) | None | n/a | Read-only. The plan state is derived server-side by `get_schedule_adherence`; the phone never stores or writes one |
+| Driver workspace (artifact 01 section 2.15) | `driver_workspace_command` RPC for every action (respond to a fine, review, attach evidence, assign, link records); a direct upload to the `driver-fine-evidence` bucket before `attach_evidence` | **ONLINE-ONLY** | Every action is a DECISION evaluated against current server state: fine version, review stage, the caller's `driver_workspace_access`. That is exactly the spec section 14 case this artifact's section 4 applies to `CHECKLIST_APPROVAL`. Idempotency comes from `p_request_id`, and a repeat evidence upload that returns HTTP 409 is treated as already done |
+
+Offline behaviour of the driver workspace, for completeness: reads fall back
+to an encrypted snapshot in secure storage keyed per account, refused once it
+is 24 hours old; while that snapshot is shown, `can_manage`, `can_respond` and
+`can_review` all read false, so no decision control is offered. A response the
+driver has not yet sent can be saved explicitly as a draft in the same store.

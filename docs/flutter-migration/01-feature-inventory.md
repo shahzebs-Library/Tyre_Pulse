@@ -289,6 +289,47 @@ a THIRD copy, and a text-comparing test cannot span languages. Decide the parity
 mechanism before porting the first engine - artifacts 07 and 08 exist for exactly
 this.
 
+### 2.15 Business modules added in Flutter with no React Native original
+
+Added 2026-09-23. Sections 2.1 to 2.14 inventory the PRODUCTION Expo app, so a
+module the Flutter app gained later has no row above - and two did, with no
+entry in any of the ten artifacts. They are recorded here rather than folded
+into 2.1-2.13 so the section numbers the Flutter code cites stay valid, and so
+the section 3 counts, which measure the Expo app, stay true.
+
+Columns are the same as the rest of section 2, except **RN source** is replaced
+by **Flutter source** (there is no RN original) and **Kotlin** is omitted
+(neither exists there). Everything is VERIFIED against the Flutter source and
+the migration files named.
+
+| Feature | Flutter source | What it does | Backing surface | Offline | Tests | Access |
+|---|---|---|---|---|---|---|
+| Inspection plans ("My plans") | `features/inspections/presentation/my_plans_screen.dart`, `data/inspection_plan_repository.dart`, `domain/inspection_plan.dart`; route `/inspect/plans` (`MyPlansRoute`) | Shows the vehicles THIS person is planned to inspect, 45 days back to 21 days ahead (`kPlanDaysBack`/`kPlanDaysAhead`), sorted worst-state-first then soonest, grouped by day. States: missed, due, started, upcoming, done, cancelled, plus `unknown` for any state this build does not recognise. Also reachable from a Home tile (gated on `inspect`) and from a `plan_assigned` notification | RPC `get_schedule_adherence(p_country, p_from, p_to)` over `inspection_schedules` (artifact 02 section 7) | **Read-only.** No write path; nothing queued | `test/features/inspections/domain/inspection_plan_test.dart` (state parsing and crew ordering); route and notification wiring in `inspections_screen_registrations_test.dart` and `test/app/router/notification_routing_test.dart`. The repository's RPC call is not unit-tested | Route guarded by the `inspect` module (`route_access.dart`) |
+| Driver workspace | `features/driver_workspace/` (`data/driver_workspace_repository.dart`, `presentation/driver_workspace_panel.dart`); opened as a sheet from the Profile screen (`DriverWorkspaceEntry`), no route of its own | A driver's traffic fines (respond with a resolution, explanation, statement acknowledgement and signature; attach photo evidence), team and vehicle assignments, and verified work records linked to them. Supervisors and finance reviewers see and act on the same cases. Five resolutions: `direct_payment`, `already_paid`, `dispute`, `company_recovery`, `instalments` | RPCs `driver_workspace`, `driver_workspace_command`, `driver_workspace_options`; table `driver_fine_responses` (signature read on demand); bucket `driver-fine-evidence` (artifact 02 section 7) | **Online-only for every decision** (spec section 14). Reads fall back to an encrypted per-account snapshot in secure storage, refused once it is 24 hours old | `test/features/driver_workspace/driver_workspace_test.dart` | Decided **server-side** by `private.driver_workspace_access(driver_id)`; the snapshot's `can_manage` / `can_respond` / `can_review` flags drive the UI, and all three read false while offline |
+
+Four facts about the driver workspace that differ from the conventions the rest
+of the app follows, recorded rather than silently accepted:
+
+1. **It bypasses the table-name registry.** `driver_workspace_repository.dart`
+   calls its three RPCs, `driver_fine_responses` and the `driver-fine-evidence`
+   bucket by string literal. None is in `SupabaseTables` / `SupabaseRpcs`.
+   Every one of them is REAL (artifact 02 section 7 lists the migrations), so
+   this is a convention breach, not a fabrication - but AGENTS.md rule 3 and
+   the registry's own header say a repository must reference a constant.
+2. **It is not in the module registry.** There is no `ModuleKey` for it, so
+   the Access Manager cannot switch it on or off per role or per user. The
+   entry card renders for every signed-in user; a person with no driver scope
+   gets the server's refusal, not a hidden entry.
+3. **Its text is not in the ARB catalogs.** Copy is a generated map,
+   `presentation/driver_workspace_copy.dart`, produced by
+   `scripts/sync-driver-workspace-copy.mjs` from
+   `shared/driver-workspace-copy.json`, which the web app also consumes. The
+   ARB key-parity test therefore does not cover it; edit the JSON and
+   regenerate, never the Dart file.
+4. **Evidence upload is narrower than the bucket.** The client accepts PNG or
+   JPEG up to 5 MB; the bucket also admits PDF. Uploading a PDF from the phone
+   is not offered.
+
 ---
 
 ## 3. Summary counts

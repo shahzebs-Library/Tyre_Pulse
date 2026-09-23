@@ -222,12 +222,13 @@ blocks so none is discovered late.
 | D2 | Which of the three checklist-approval gates is authoritative? The supervisory roles V600 named as signers are refused at the screen TODAY | 6 | Artifact 01 section 5.15b |
 | D3 | Do approvals route through the RPC and stop being queued? | 6 | Artifact 06 section 4 |
 | D4 | `workorders/index.tsx` is labelled Work Orders and reads `corrective_actions`; `work-orders.tsx` reads the real table and is orphaned. Which is live, and does the label or the table change? | 8 | Artifact 01 questions 1-3 |
-| D5 | Is the repair-request/RFR flow in scope, and will V608 be applied? The table does not exist, so every submit fails today | 7 or 10 | Artifact 01 question 6 |
+| D5 | Is the repair-request/RFR flow in scope, and will V608 be applied? The table does not exist, so every submit fails today. **Status 2026-09-23:** `MIGRATIONS_V608_REPAIR_REQUEST_RFR.sql` is now committed but its header still reads AUTHORED - NOT YET APPLIED; the decision is still open | 7 or 10 | Artifact 01 question 6 |
 | D6 | Does `routeAccess.ts` become the source of truth in Flutter, or be deleted? It has zero consumers today and has already drifted from the guards | 2 | Artifact 03 |
 | D7 | Seven live features have no Flutter package in spec section 3: alerts, calendar, analytics, overview, report-an-issue, repair-request, serial search | 10 | Artifact 01 question 7 |
-| D8 | Global search is specified (spec 34) but does not exist on the phone. Build it or drop it? | 3 | Artifact 01 question 8 |
+| D8 | Global search is specified (spec 34) but does not exist on the phone. Build it or drop it? **Status 2026-09-23:** built but NOT reachable. `features/search/` has its data, domain and screen, but `GlobalSearchRoute` cannot extend the sealed `TpRoute` from outside `routes.dart`, which is one of the seven files AGENTS.md reserves for a human. The remaining step is that human edit, then one entry in `global_search_screen_registrations.dart` | 3 | Artifact 01 question 8 |
 | D9 | Confirm the field-capture lockdown stands. The registry prose contradicts its own data and the data is right | 2 | Artifact 01 question 9 |
 | D10 | `engine_hours_logs` is written by mobile and never read. Add hours history, or accept write-only? | 7 | Artifact 01 question 8 |
+| D11 | The driver workspace has no `ModuleKey`, so it cannot be switched off per role or user from the Access Manager; only the server decides who reaches it. Keep it server-gated only, or give it a module key? | n/a (already shipped) | Artifact 01 section 2.15 |
 
 **D1, D6 and D9 block phase 2, which is the next phase.** They should be
 answered first.
@@ -250,6 +251,7 @@ answered first.
 | R10 | A publishing accident creates a second unrelated Play listing | Medium | Spec section 69. Confirm package id, signing key and version code before any release. Nothing is published in phases 1-11 |
 | R11 | Unsynced Expo work is lost at upgrade | Medium | Spec section 68: require the legacy app to drain its queue first, verify pending is zero, warn before upgrade. The server is the migration authority - do NOT read AsyncStorage from Flutter |
 | R12 | A compromised signing key is in repository history | Recorded | Spec section 70. Treat as compromised, never copy into the Flutter repo, rotate. `.gitignore` blocks all signing material |
+| R13 | **The driver workspace bypasses the table-name registry.** Three RPCs, one table and one bucket are called by string literal. All five are real, so nothing fabricated reaches the server today, but it is the exact drift pattern that sank the Kotlin rebuild | Medium | Artifact 02 section 7.5 lists the constants to add. A code change, so it must pass `flutter analyze` and the registry drift test in CI |
 
 ---
 
@@ -271,7 +273,7 @@ The Supabase connector was not authenticated for any artifact in this set. These
 must be run before Flutter code depends on them. Artifact 01 section 10 carries
 the SQL; the highest-priority four are:
 
-1. Does `repair_requests` exist? Decides D5.
+1. Does `repair_requests` exist? Decides D5. (2026-09-23: V608 is committed, header says not applied; still needs the live check.)
 2. Which tables carry `client_uuid` AND a unique index? This is what makes queue
    idempotency real rather than assumed, and artifact 05 flags that the
    migrations disagree with each other on partial versus plain indexes.

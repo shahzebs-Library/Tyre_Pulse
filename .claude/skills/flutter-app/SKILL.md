@@ -1,6 +1,6 @@
 ---
 name: flutter-app
-description: Work on the Flutter (Dart) app in tyre_pulse_flutter/, the field application being migrated to from the Expo app. Use this skill for ANY change under tyre_pulse_flutter/ - adding or editing a screen, widget, ViewModel/notifier, repository, DTO/mapper, router entry, l10n string or test; fixing an analyzer or build error; regenerating goldens or generated sources; bumping the version; or preparing a build. Use it whenever the user says Flutter, Dart, tyre_pulse_flutter, "the Flutter app", golden test, ARB, l10n/localization key parity, "flutter analyze", "flutter test", pubspec, build_runner, gen-l10n, or "the migration app". Do NOT use it for the Expo/React Native app under mobile/ (see mobile-ui-design) or the native Kotlin app under tyre_pulse_app/ (see native-android) - both are READ-ONLY reference material from here, never edited.
+description: Work on the Flutter (Dart) app in tyre_pulse_flutter/, the field application being migrated to from the Expo app. Use this skill for ANY change under tyre_pulse_flutter/ - adding or editing a screen, widget, ViewModel/notifier, repository, DTO/mapper, router entry, l10n string or test; fixing an analyzer or build error; regenerating goldens or generated sources; bumping the version; preparing a build; or adding, auditing or documenting a business module in the Flutter migration artifacts (docs/flutter-migration/, the feature inventory, the backend table/RPC map, the offline command registry, the migration matrix). Use it whenever the user says Flutter, Dart, tyre_pulse_flutter, "the Flutter app", golden test, ARB, l10n/localization key parity, "flutter analyze", "flutter test", pubspec, build_runner, gen-l10n, or "the migration app". Do NOT use it for the Expo/React Native app under mobile/ (see mobile-ui-design) or the native Kotlin app under tyre_pulse_app/ (see native-android) - both are READ-ONLY reference material from here, never edited.
 ---
 
 # Tyre Pulse Flutter app
@@ -12,14 +12,53 @@ migrating TO. ~448 Dart files under `lib/`, ~264 test files, ~24 golden
 **Read `tyre_pulse_flutter/AGENTS.md` first, every time.** It is the project's
 own contract and it overrides anything here. Also skim
 `tyre_pulse_flutter/docs/TOOLCHAIN.md` (what is installed and why CI is the
-verification boundary), `docs/BOOTSTRAP.md` (why `android/`+`ios/` are absent),
-`README.md` and `design-qa.md`.
+verification boundary), `tyre_pulse_flutter/docs/BOOTSTRAP.md` (why
+`android/`+`ios/` are absent), `tyre_pulse_flutter/README.md` and
+`tyre_pulse_flutter/design-qa.md`.
 
-> Note: AGENTS.md still points at a `docs/flutter-migration/` folder and a
-> "Master Architecture and Migration Specification" doc. **Those paths no longer
-> exist in the tree.** Do not go looking for them or cite them - use the docs
-> that are actually present (listed above) and treat AGENTS.md's own text as the
-> live contract.
+## The contract documents live at the REPO ROOT, not inside the Flutter folder
+
+AGENTS.md and the code say `docs/flutter-migration/...` - that path is relative
+to the **repository root**, beside the governing spec. Searching inside
+`tyre_pulse_flutter/docs/` finds neither, and it is easy to wrongly conclude
+they are missing. They are not:
+
+- `docs/Tyre Pulse Flutter Mobile Master Architecture and Migration Specification.md`
+  - the governing spec, 75 sections. The code cites "spec section N".
+- `docs/flutter-migration/` - ten audit artifacts. The code cites them as
+  "artifact NN section X.Y", so **never renumber an existing section**:
+
+| Artifact | File | Covers | Read before touching |
+|---|---|---|---|
+| 01 | `01-feature-inventory.md` | Every business module, its backing surface, offline path, tests, target package. Section 2.15 holds modules added in Flutter (inspection plans, driver workspace) | Any feature |
+| 02 | `02-backend-table-rpc-map.md` | The REAL server surface: tables, RPCs, edge functions, storage buckets. Section 7 holds Flutter-era objects and the registry drift to close | Any repository |
+| 03 | `03-mobile-route-map.md` | Routes, back-navigation contract, notification routing, guards. Section 9 holds Flutter-era entry points | `lib/app/router/` |
+| 04 | `04-role-permission-matrix.md` | Roles, module registry, access precedence, scope sentinels. Section 10 covers modules outside the registry | `lib/core/permissions/`, `lib/core/workspace/` |
+| 05 | `05-local-database-schema.md` | Drift tables, command and photo state machines, retention caps | `lib/core/database/` |
+| 06 | `06-offline-command-registry.md` | The 14 queued commands, allow-lists, what is online-only. Section 7 covers Flutter-era write paths | `lib/core/sync/`, any write |
+| 07 | `07-tyre-layout-parity-tests.md` | Tyre layouts, resolver order, position vocabularies, parity groups A-I | `features/tyre_diagram/` |
+| 08 | `08-checklist-engine-parity-tests.md` | Checklist engine, approval ladder, parity groups A-O | `features/checklists/`, `features/approvals/` |
+| 09 | `09-migration-matrix.md` | Phases, blocking decisions D1-D11, risk register R1-R13 | Planning, scope questions |
+| 10 | `10-accident-characterisation-tests.md` | Accident flow characterisation (Phase 9 gate) | `features/accidents/` |
+
+## Adding or changing a business module: document it, correctly
+
+Every module under `lib/features/` must be findable in the artifacts. When you
+add one (or change what one reads, writes or who reaches it), update:
+
+1. **01** - a row in section 2.15 (Flutter-era) with source, behaviour,
+   backing surface, offline verdict, the exact test file, and access.
+2. **02** - every new table, RPC or bucket in section 7, each with the
+   migration that creates it. No migration found = mark UNVERIFIED and stop
+   (AGENTS.md rule 3). Also add the name to `lib/core/network/supabase_tables.dart`.
+3. **06** section 7 - whether its writes are queued or online-only, and why.
+4. **03** section 9 / **04** section 10 - if it has a new route or is gated
+   outside `ModuleRegistry`.
+5. **09** - any decision it raises (next D-number) or risk (next R-number).
+
+Append, never renumber, and verify every claim against the code or a
+migration file before writing it - a doc that asserts a test or a link that is
+not there is worse than no doc.
 
 ## The single most important fact
 

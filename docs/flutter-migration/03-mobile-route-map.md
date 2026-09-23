@@ -1040,3 +1040,23 @@ promoting any of them.
    If it is, routing to the detail is a small change and closes spec section 5's
    "Notification -> Work Order" journey; if it is not, the list destinations are
    correct and the gap is server-side.
+
+---
+
+## 9. Routes and entry points added in Flutter
+
+Added 2026-09-23. Sections 1 to 8 map the Expo app's routes and are cited by
+number from the Flutter router, so they are unchanged. These are the entry
+points the Flutter app gained for business modules the Expo app never had
+(artifact 01 section 2.15). VERIFIED against `lib/app/router/`.
+
+| Module | Entry point | Guard | Notification tap |
+|---|---|---|---|
+| Inspection plans | Route `/inspect/plans`, `MyPlansRoute`, route id `myPlans`. Also linked from a Home tile gated on the `inspect` module | `ModuleGuarded(RouteModule.inspect)` in `route_access.dart`: whoever may start an inspection may see their plans | A `plan_assigned` type, or an entity containing `inspection_plan`, opens `MyPlansRoute`. The row id is an `inspection_schedules` id, not an inspection id, so it deliberately does not open a detail screen |
+| Driver workspace | **No route.** A full-height bottom sheet opened from the Profile screen (`DriverWorkspaceEntry` -> `DriverWorkspacePanel`) | None on the client. The card renders for every signed-in user; the server decides, through `private.driver_workspace_access`, whether any data comes back and which actions are offered | A notification whose type or entity is `driver_workspace` opens `ProfileRoute`, where the entry card is. That is matched FIRST in `notificationDestination`, before the entity buckets |
+| Global search | Built (`features/search/`), **not reachable**. `GlobalSearchRoute` cannot extend the sealed `TpRoute` outside `routes.dart`, a file AGENTS.md reserves for a human | n/a until wired | n/a |
+
+A sheet rather than a route means the driver workspace has no deep link and no
+back-stack entry of its own: Back closes the sheet and returns to Profile,
+which is the behaviour spec section 5 asks for. If it ever needs a shareable
+link, it needs a real route in `routes.dart`, which is a human change.

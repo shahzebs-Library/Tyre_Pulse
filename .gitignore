@@ -67,3 +67,6 @@ mobile-ui-design-review.html
 
 # Local Supabase CLI state (linked project cache, CLI version pin).
 supabase/.temp/
+
+# ux-skill local state (lint runs, decisions ledger)
+.ux/

@@ -69,6 +69,17 @@ batching stops them being started at all.
   pptxgenjs. Lockfile hand-narrowed to image-size + dropped `queue` - a plain `npm install` on this npm strips
   every `libc` field (unrelated churn), so do not commit that.
 
+- **WASH FIX APPLIED LIVE (2026-09-23):** `20260922090000_wash_details_optional_checklist` applied via MCP; VERIFY
+  t,t,t,f,f,f. Every wash save since PR #358 is unblocked server-side too, incl. stale PWA tabs.
+- **send-scheduled-reports is ALREADY CURRENT:** deployed v18 == repo byte-for-byte (CRLF-normalised), workshop digest
+  included. The long-standing "needs redeploy" note is CLOSED.
+- **POSTHOG RECEIVES NOTHING (0 events / 30 days).** Two causes: CSP `connect-src` never listed PostHog (now added
+  us/eu.i.posthog.com; `disable_external_dependency_loading:true` keeps script-src 'self'), AND `VITE_POSTHOG_KEY`
+  is likely unset in Vercel (could not verify - no env-read permission). OWNER: set VITE_POSTHOG_KEY (+ HOST) in Vercel.
+- **Tooling:** `ux@ux-skill` plugin enabled in `.claude/settings.json`; `scripts/claude-env-setup.sh` installs the
+  ux-skill engine (from git, PyPI lags) and BUILDS codebase-memory-mcp from source (proxy blocks GitHub release
+  downloads, which both its npm and PyPI wrappers use). Point the cloud env setup script at it.
+
 ---
 
 # ⚑ SESSION 2026-09-22 — THE PROVISIONING BANNER: 4 PAGES COULD NOT MAKE THE STATEMENT, NOT 9.

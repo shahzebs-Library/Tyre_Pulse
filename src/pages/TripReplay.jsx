@@ -31,6 +31,7 @@ import {
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 import { toUserMessage } from '../lib/safeError'
+import { isMissingRelation } from '../lib/api/_client'
 
 const EMPTY_FORM = {
   trip_ref: '', asset_no: '', driver_name: '', sequence: '', latitude: '',
@@ -47,23 +48,23 @@ const EVENT_META = {
   harsh_accel:  { label: 'Harsh accel', cls: 'bg-orange-900/30 text-orange-300 border-orange-800/50' },
   harsh_corner: { label: 'Harsh corner',cls: 'bg-amber-900/30 text-amber-300 border-amber-800/50' },
   speeding:     { label: 'Speeding',    cls: 'bg-fuchsia-900/30 text-fuchsia-300 border-fuchsia-800/50' },
-  none:         { label: '—',           cls: 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)]' },
+  none:         { label: 'N/A',           cls: 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)]' },
 }
 
 const HARSH_SET = new Set(['harsh_brake', 'harsh_accel', 'harsh_corner', 'speeding'])
 
-const fmtKm = (v) => (v == null ? '—' : `${Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })} km`)
-const fmtSpeed = (v) => (v == null || v === '' ? '—' : `${Number(v).toLocaleString(undefined, { maximumFractionDigits: 1 })} km/h`)
-const fmtNum = (v, d = 1) => (v == null ? '—' : Number(v).toLocaleString(undefined, { maximumFractionDigits: d }))
+const fmtKm = (v) => (v == null ? 'N/A' : `${Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })} km`)
+const fmtSpeed = (v) => (v == null || v === '' ? 'N/A' : `${Number(v).toLocaleString(undefined, { maximumFractionDigits: 1 })} km/h`)
+const fmtNum = (v, d = 1) => (v == null ? 'N/A' : Number(v).toLocaleString(undefined, { maximumFractionDigits: d }))
 
 function fmtTime(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  if (Number.isNaN(d.getTime())) return '—'
+  if (Number.isNaN(d.getTime())) return 'N/A'
   return d.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })
 }
 function fmtCoord(lat, lng) {
-  if (lat == null || lat === '' || lng == null || lng === '') return '—'
+  if (lat == null || lat === '' || lng == null || lng === '') return 'N/A'
   return `${Number(lat).toFixed(4)}, ${Number(lng).toFixed(4)}`
 }
 
@@ -76,11 +77,6 @@ function EventBadge({ type }) {
   )
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') ||
-    m.includes('schema cache') || m.includes('could not find the table')
-}
 
 export default function TripReplay() {
   const { activeCountry } = useSettings()
@@ -281,7 +277,7 @@ export default function TripReplay() {
     <div className="space-y-6">
       <PageHeader
         title="Trip Replay"
-        subtitle="Reconstruct a journey from its ordered GPS breadcrumbs — distance travelled, stops, harsh driving events, and the full speed profile, segment by segment."
+        subtitle="Reconstruct a journey from its ordered GPS breadcrumbs: distance travelled, stops, harsh driving events, and the full speed profile, segment by segment."
         icon={Navigation}
         onRefresh={reloadAll}
         refreshing={refreshing || segLoading}
@@ -291,7 +287,7 @@ export default function TripReplay() {
             <button onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, exportName)} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileSpreadsheet size={14} /> Excel
             </button>
-            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), `Trip Replay — ${tripRef || ''}`.trim(), exportName, 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), `Trip Replay ${tripRef || ''}`.trim(), exportName, 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileText size={14} /> PDF
             </button>
             <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5" disabled={notProvisioned}>
@@ -368,7 +364,7 @@ export default function TripReplay() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-2xl font-bold mt-1 ${k.tone}`}>{segments === null ? '—' : k.value}</p>
+              <p className={`text-2xl font-bold mt-1 ${k.tone}`}>{segments === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -490,20 +486,20 @@ export default function TripReplay() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={8} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {noTrips && !notProvisioned ? 'No trips recorded yet — add your first segment.'
-                    : summary.segments === 0 ? 'This trip has no segments — add one to begin the replay.'
+                  {noTrips && !notProvisioned ? 'No trips recorded yet. Add your first segment.'
+                    : summary.segments === 0 ? 'This trip has no segments. Add one to begin the replay.'
                       : 'No segments match these filters.'}
                 </td></tr>
               ) : (
                 pager.pageRows.map((r) => (
                   <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                    <td className="px-4 py-2.5 font-mono text-[var(--text-secondary)] tabular-nums">{r.sequence ?? '—'}</td>
+                    <td className="px-4 py-2.5 font-mono text-[var(--text-secondary)] tabular-nums">{r.sequence ?? 'N/A'}</td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtTime(r.recorded_at)}</td>
                     <td className="px-4 py-2.5"><EventBadge type={r.event_type} /></td>
                     <td className="px-4 py-2.5 font-semibold text-[var(--text-primary)] whitespace-nowrap">{fmtSpeed(r.speed_kmh)}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)] tabular-nums">{r.heading == null ? '—' : `${Math.round(r.heading)}°`}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)] tabular-nums">{r.heading == null ? 'N/A' : `${Math.round(r.heading)}°`}</td>
                     <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)] whitespace-nowrap">{fmtCoord(r.latitude, r.longitude)}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)] max-w-[220px] truncate" title={r.address || ''}>{r.address || '—'}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)] max-w-[220px] truncate" title={r.address || ''}>{r.address || 'N/A'}</td>
                     <td className="px-4 py-2.5">
                       <div className="flex items-center justify-end gap-1">
                         <button onClick={() => openEdit(r)} className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Edit"><Pencil size={14} /></button>
@@ -570,7 +566,7 @@ export default function TripReplay() {
                 <div>
                   <label className="label">Event type</label>
                   <select className="input w-full" value={form.event_type} onChange={(e) => set('event_type', e.target.value)}>
-                    <option value="">—</option>
+                    <option value="">None</option>
                     {EVENT_TYPES.map((t) => <option key={t} value={t}>{(EVENT_META[t] || EVENT_META.none).label}</option>)}
                   </select>
                 </div>
@@ -614,7 +610,7 @@ export default function TripReplay() {
               <div>
                 <h3 className="text-[var(--text-primary)] font-semibold">Delete this segment?</h3>
                 <p className="text-sm text-[var(--text-muted)] mt-1">
-                  Seq {confirmDelete.sequence ?? '—'} · {(EVENT_META[confirmDelete.event_type] || EVENT_META.none).label} · {fmtTime(confirmDelete.recorded_at)}. This can’t be undone.
+                  Seq {confirmDelete.sequence ?? 'N/A'} · {(EVENT_META[confirmDelete.event_type] || EVENT_META.none).label} · {fmtTime(confirmDelete.recorded_at)}. This can’t be undone.
                 </p>
               </div>
             </div>
@@ -636,5 +632,5 @@ function meta_hint(summary) {
   if (!summary.segments) return ''
   if (summary.harshEvents === 0) return 'No harsh driving events detected on this trip.'
   const rate = Math.round((summary.harshEvents / summary.segments) * 100)
-  return `${summary.harshEvents} harsh event${summary.harshEvents === 1 ? '' : 's'} across ${summary.segments} segments (${rate}%) — review driver coaching if this is recurring.`
+  return `${summary.harshEvents} harsh event${summary.harshEvents === 1 ? '' : 's'} across ${summary.segments} segments (${rate}%). Review driver coaching if this is recurring.`
 }

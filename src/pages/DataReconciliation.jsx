@@ -194,7 +194,7 @@ export default function DataReconciliation() {
   const loadOrphans = useCallback(async () => {
     setOrphans((s) => ({ ...s, loading: true, error: null }))
     if (typeof recon.listOrphanAssets !== 'function') {
-      setOrphans({ loading: true, error: null, rows: [] }) // sibling not landed yet
+      setOrphans({ loading: false, error: 'Reconciliation service unavailable.', rows: [] })
       return
     }
     try {
@@ -208,7 +208,7 @@ export default function DataReconciliation() {
   const loadDupes = useCallback(async () => {
     setDupes((s) => ({ ...s, loading: true, error: null }))
     if (typeof recon.listDuplicateTyres !== 'function') {
-      setDupes({ loading: true, error: null, rows: [] })
+      setDupes({ loading: false, error: 'Reconciliation service unavailable.', rows: [] })
       return
     }
     try {
@@ -222,7 +222,7 @@ export default function DataReconciliation() {
   const loadConflicts = useCallback(async () => {
     setConflicts((s) => ({ ...s, loading: true, error: null }))
     if (typeof recon.listSerialConflicts !== 'function') {
-      setConflicts({ loading: true, error: null, rows: [] })
+      setConflicts({ loading: false, error: 'Reconciliation service unavailable.', rows: [] })
       return
     }
     try {
@@ -303,7 +303,7 @@ export default function DataReconciliation() {
   const orphanCount = orphans.rows.length
   const dupeCount = dupes.rows.length
   const movementCount = conflicts.rows.length
-  const summaryLoading = orphans.loading || dupes.loading || conflicts.loading
+  const summaryIncomplete = orphans.loading || dupes.loading || conflicts.loading || orphans.error || dupes.error || conflicts.error
 
   const countries = useMemo(() => [...new Set(orphans.rows.map((r) => String(pick(r, ['country', 'country_code', 'location'], '')).trim()).filter(Boolean))].sort(), [orphans.rows])
   const query = filters.q.trim().toLowerCase()
@@ -350,7 +350,7 @@ export default function DataReconciliation() {
           placeholder: 'All countries', ariaLabel: 'Filter orphan assets by country',
           options: countries.map((value) => ({ value, label: value })),
         }]}
-        resultCount={filteredTotal}
+        resultCount={summaryIncomplete ? undefined : filteredTotal}
         onClearAll={hasActiveFilters ? resetFilters : undefined}
       >
         <DateField value={filters.from} onChange={(value) => setFilter('from', value)} placeholder="Movement from" ariaLabel="Filter movements from date" max={filters.to || undefined} />
@@ -382,7 +382,7 @@ export default function DataReconciliation() {
         <SummaryTile
           icon={Building2}
           label="Orphan assets"
-          value={orphanCount}
+          value={orphans.error ? 'Unavailable' : orphanCount}
           hint="Have tyres but no fleet record"
           tone="warn"
           loading={orphans.loading}
@@ -390,7 +390,7 @@ export default function DataReconciliation() {
         <SummaryTile
           icon={Copy}
           label="Exact duplicates"
-          value={dupeCount}
+          value={dupes.error ? 'Unavailable' : dupeCount}
           hint="Byte-identical tyre copies"
           tone="danger"
           loading={dupes.loading}
@@ -398,7 +398,7 @@ export default function DataReconciliation() {
         <SummaryTile
           icon={ArrowLeftRight}
           label="Movement records"
-          value={movementCount}
+          value={conflicts.error ? 'Unavailable' : movementCount}
           hint="Same serial across vehicles (informational)"
           tone="info"
           loading={conflicts.loading}
@@ -423,7 +423,7 @@ export default function DataReconciliation() {
         icon={Building2}
         title="Assets missing from the fleet register"
         subtitle="These asset numbers appear on tyre records but were never entered into the fleet register. Add them to close the gap."
-        badge={orphans.loading ? null : `${filteredOrphans.length} of ${orphanCount}`}
+        badge={orphans.loading || orphans.error ? null : `${filteredOrphans.length} of ${orphanCount}`}
         headerAction={
           !orphans.loading && !orphans.error && orphanCount > 0 && typeof recon.backfillAllOrphanAssets === 'function' ? (
             <button
@@ -513,7 +513,7 @@ export default function DataReconciliation() {
         icon={Copy}
         title="Exact duplicates"
         subtitle="Byte-identical tyre rows that can be safely merged. Merging keeps the newest copy and removes only the exact duplicates."
-        badge={dupes.loading ? null : `${filteredDupes.length} of ${dupeCount}`}
+        badge={dupes.loading || dupes.error ? null : `${filteredDupes.length} of ${dupeCount}`}
       >
         {dupes.error ? (
           <ErrorBanner message={dupes.error} onRetry={loadDupes} />
@@ -576,7 +576,7 @@ export default function DataReconciliation() {
         icon={ArrowLeftRight}
         title="Tyre movement (same serial, different vehicles)"
         subtitle="Normal tyre history, no action needed. These are the same tyre fitted to different vehicles over time, not duplicates."
-        badge={conflicts.loading ? null : `${filteredConflicts.length} of ${movementCount}`}
+        badge={conflicts.loading || conflicts.error ? null : `${filteredConflicts.length} of ${movementCount}`}
         headerAction={
           <span className="hidden sm:inline-flex items-center gap-1.5 text-[11px] text-blue-300 bg-blue-950/40 border border-blue-800/40 rounded-full px-2.5 py-1">
             <Info size={12} /> Informational only

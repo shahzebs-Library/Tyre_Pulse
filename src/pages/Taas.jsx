@@ -32,6 +32,7 @@ import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { formatCurrency, formatCurrencyCompact } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 const EMPTY_FORM = {
   subscription_no: '', customer_name: '', asset_no: '', plan_type: 'per_km',
@@ -63,19 +64,14 @@ const STATUS_BADGE = {
   expired: 'bg-slate-500/15 text-slate-300 border-slate-500/30',
 }
 
-const fmtKm = (v) => (v == null || v === '' ? '—' : `${Number(v).toLocaleString()} km`)
+const fmtKm = (v) => (v == null || v === '' ? 'N/A' : `${Number(v).toLocaleString()} km`)
 const fmtDate = (v) => {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString()
 }
-const fmtPct = (v) => (v == null ? '—' : `${Math.round(v)}%`)
+const fmtPct = (v) => (v == null ? 'N/A' : `${Math.round(v)}%`)
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') ||
-    m.includes('schema cache') || m.includes('could not find the table')
-}
 
 function Badge({ label, cls }) {
   return (
@@ -87,7 +83,7 @@ function Badge({ label, cls }) {
 
 /** Utilisation pill: colours by band, flags over-run above 100%. */
 function UtilBar({ pct }) {
-  if (pct == null) return <span className="text-[var(--text-muted)]">—</span>
+  if (pct == null) return <span className="text-[var(--text-muted)]">N/A</span>
   const capped = Math.min(pct, 100)
   const over = pct > 100
   const tone = over ? 'bg-red-500' : pct >= 85 ? 'bg-amber-500' : 'bg-green-500'
@@ -286,7 +282,7 @@ export default function Taas() {
     <div className="space-y-6">
       <PageHeader
         title="Tyre-as-a-Service"
-        subtitle="Manage subscription and usage-billing contracts — per-km, per-month, per-tyre, and hybrid plans — with cost-per-km, utilisation, MRR, and renewal tracking."
+        subtitle="Manage subscription and usage-billing contracts (per-km, per-month, per-tyre, and hybrid plans) with cost-per-km, utilisation, MRR, and renewal tracking."
         icon={Repeat}
         onRefresh={load}
         refreshing={refreshing}
@@ -335,7 +331,7 @@ export default function Taas() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -401,9 +397,9 @@ export default function Taas() {
                     className="w-full flex items-center justify-between gap-3 rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)]/40 px-3 py-2 text-left hover:bg-[var(--input-bg)]/70 transition-colors"
                   >
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-[var(--text-primary)] truncate">{r.customer_name || '—'}</p>
+                      <p className="text-sm font-medium text-[var(--text-primary)] truncate">{r.customer_name || 'N/A'}</p>
                       <p className="text-[11px] text-[var(--text-muted)] truncate">
-                        {r.subscription_no || r.asset_no || '—'} · {PLAN_LABEL[r.plan_type] || r.plan_type || '—'} · {fmtDate(r.renewal_date)}
+                        {r.subscription_no || r.asset_no || 'N/A'} · {PLAN_LABEL[r.plan_type] || r.plan_type || 'N/A'} · {fmtDate(r.renewal_date)}
                       </p>
                     </div>
                     <span className={`text-xs font-semibold whitespace-nowrap ${tone}`}>{chip}</span>
@@ -456,7 +452,7 @@ export default function Taas() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={9} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {rows.length === 0 && !notProvisioned ? 'No subscriptions yet — create your first TaaS contract.' : 'No subscriptions match these filters.'}
+                  {rows.length === 0 && !notProvisioned ? 'No subscriptions yet. Create your first TaaS contract.' : 'No subscriptions match these filters.'}
                 </td></tr>
               ) : (
                 pager.pageRows.map((r) => {
@@ -466,15 +462,15 @@ export default function Taas() {
                   return (
                     <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
                       <td className="px-4 py-2.5">
-                        <p className="font-medium text-[var(--text-primary)]">{r.customer_name || '—'}</p>
-                        <p className="text-[11px] text-[var(--text-muted)]">{r.subscription_no || r.asset_no || '—'}</p>
+                        <p className="font-medium text-[var(--text-primary)]">{r.customer_name || 'N/A'}</p>
+                        <p className="text-[11px] text-[var(--text-muted)]">{r.subscription_no || r.asset_no || 'N/A'}</p>
                       </td>
-                      <td className="px-4 py-2.5"><Badge label={PLAN_LABEL[r.plan_type] || r.plan_type || '—'} cls={PLAN_BADGE[r.plan_type] || PLAN_BADGE.unspecified} /></td>
-                      <td className="px-4 py-2.5"><Badge label={STATUS_LABEL[r.status] || r.status || '—'} cls={STATUS_BADGE[r.status] || STATUS_BADGE.expired} /></td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] tabular-nums">{r.tyres_covered ?? '—'}</td>
+                      <td className="px-4 py-2.5"><Badge label={PLAN_LABEL[r.plan_type] || r.plan_type || 'N/A'} cls={PLAN_BADGE[r.plan_type] || PLAN_BADGE.unspecified} /></td>
+                      <td className="px-4 py-2.5"><Badge label={STATUS_LABEL[r.status] || r.status || 'N/A'} cls={STATUS_BADGE[r.status] || STATUS_BADGE.expired} /></td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)] tabular-nums">{r.tyres_covered ?? 'N/A'}</td>
                       <td className="px-4 py-2.5"><UtilBar pct={util} /></td>
-                      <td className="px-4 py-2.5 font-semibold text-[var(--text-primary)] tabular-nums">{cpk == null ? '—' : formatCurrency(cpk, r.currency || currency, 3)}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] tabular-nums">{r.monthly_fee == null ? '—' : formatCurrency(r.monthly_fee, r.currency || currency, 0)}</td>
+                      <td className="px-4 py-2.5 font-semibold text-[var(--text-primary)] tabular-nums">{cpk == null ? 'N/A' : formatCurrency(cpk, r.currency || currency, 3)}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)] tabular-nums">{r.monthly_fee == null ? 'N/A' : formatCurrency(r.monthly_fee, r.currency || currency, 0)}</td>
                       <td className="px-4 py-2.5 whitespace-nowrap">
                         <span className="text-[var(--text-secondary)]">{fmtDate(r.renewal_date)}</span>
                         {days != null && (r.status === 'active' || r.status === 'trial') && days <= 30 && (
@@ -613,7 +609,7 @@ export default function Taas() {
               <div>
                 <h3 className="text-[var(--text-primary)] font-semibold">Delete this subscription?</h3>
                 <p className="text-sm text-[var(--text-muted)] mt-1">
-                  {confirmDelete.customer_name || 'Subscription'} · {PLAN_LABEL[confirmDelete.plan_type] || confirmDelete.plan_type || '—'} · {fmtDate(confirmDelete.renewal_date)}. This can’t be undone.
+                  {confirmDelete.customer_name || 'Subscription'} · {PLAN_LABEL[confirmDelete.plan_type] || confirmDelete.plan_type || 'N/A'} · {fmtDate(confirmDelete.renewal_date)}. This can’t be undone.
                 </p>
               </div>
             </div>

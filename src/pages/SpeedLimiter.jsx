@@ -31,6 +31,8 @@ import {
   CheckCircle2, MapPin, ArrowUpDown, Percent,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import Card, { CardHeader } from '../components/ui/Card'
+import Modal from '../components/ui/Modal'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   listSpeedLimiters, createSpeedLimiter, updateSpeedLimiter, deleteSpeedLimiter,
@@ -47,6 +49,7 @@ import {
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 import toUserMessage from '../lib/safeError'
+import { isMissingRelation } from '../lib/api/_client'
 
 ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, Tooltip, Legend)
 
@@ -87,10 +90,6 @@ function fmtDueLabel(days) {
   if (days < 0) return `${Math.abs(days)}d overdue`
   if (days === 0) return 'Due today'
   return `In ${days}d`
-}
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') || m.includes('schema cache') || m.includes('could not find the table')
 }
 
 export default function SpeedLimiter() {
@@ -338,8 +337,15 @@ export default function SpeedLimiter() {
         }
       />
 
+      {/* "We could not look" and "the table is not deployed" are different
+          statements from "there is nothing", so both keep their own banner. */}
       {missing && (
-        <div className="card border border-amber-800/50 flex items-start gap-3">
+        // The old `border border-amber-800/50` was DEAD on a Card: border and
+        // borderColor are written inline and a plain class loses to them. The
+        // amber edge is the `warn` tone instead. Direction is inline for the
+        // same reason in reverse - Tailwind emits .flex-col after .flex-row, so
+        // a `flex-row` class could never win against Card's own flex-col.
+        <Card tone="warn" className="items-start gap-3" style={{ flexDirection: 'row' }}>
           <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
           <div>
             <p className="text-amber-300 font-medium">Speed limiters are not enabled on this database yet.</p>
@@ -347,22 +353,26 @@ export default function SpeedLimiter() {
               Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V153_SPEED_LIMITERS.sql</span>, then reload.
             </p>
           </div>
-        </div>
+        </Card>
       )}
 
       {error && (
-        <div className="card border border-red-800/50 flex items-start gap-3">
+        // Same pair of traps: the red border was dead (now `crit`), and the row
+        // direction has to be inline.
+        <Card tone="crit" className="items-start gap-3" style={{ flexDirection: 'row' }}>
           <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
           <div className="flex-1">
             <p className="text-red-300 font-medium">Could not load speed limiters.</p>
             <p className="text-[var(--text-muted)] text-sm mt-1">{error}</p>
           </div>
           <button onClick={load} className="btn-secondary text-sm shrink-0">Retry</button>
-        </div>
+        </Card>
       )}
 
       {/* Verification policy control (tunable, transparent) */}
-      <div className="card flex flex-wrap items-center gap-x-6 gap-y-3">
+      {/* Row direction and wrapping are inline: Card is `flex flex-col`, and a
+          `flex-row` class loses to it because Tailwind emits .flex-col later. */}
+      <Card className="items-center gap-x-6 gap-y-3" style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
         <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
           <CalendarClock size={15} className="text-sky-400" />
           <span>Re-verification pipeline derived from <span className="text-[var(--text-secondary)]">Last verified</span> + interval.</span>
@@ -384,28 +394,30 @@ export default function SpeedLimiter() {
             <AlertTriangle size={12} className="text-amber-400" /> No fleet master data: coverage ratios unavailable.
           </span>
         )}
-      </div>
+      </Card>
 
-      {/* KPI tiles */}
+      {/* KPI tiles. `rows === null` means the read has not resolved (or failed),
+          so the tile reads N/A rather than a fabricated 0 - an unmeasured fleet
+          must never render as a compliant one. */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {kpis.map((k) => {
           const Icon = k.icon
           return (
-            <div key={k.label} className="card">
+            <Card key={k.label}>
               <div className="flex items-center justify-between">
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
               <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
-            </div>
+            </Card>
           )
         })}
       </div>
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="card">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Fitment status distribution</h3>
+        <Card>
+          <CardHeader title="Fitment status distribution" />
           <div className="h-64">
             {rows && summary.total ? <Doughnut data={statusDonut} options={donutOpts} /> : (
               <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">
@@ -413,11 +425,9 @@ export default function SpeedLimiter() {
               </div>
             )}
           </div>
-        </div>
-        <div className="card">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-1.5">
-            <CalendarClock size={15} className="text-sky-400" /> Verification pipeline
-          </h3>
+        </Card>
+        <Card>
+          <CardHeader title="Verification pipeline" icon={CalendarClock} iconTone="info" />
           <div className="h-64">
             {rows && summary.total ? <Bar data={bandBar} options={barOpts()} /> : (
               <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">
@@ -425,9 +435,9 @@ export default function SpeedLimiter() {
               </div>
             )}
           </div>
-        </div>
-        <div className="card">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Governed set-speed distribution</h3>
+        </Card>
+        <Card>
+          <CardHeader title="Governed set-speed distribution" />
           <div className="h-64">
             {rows && speedDist.length ? <Bar data={speedBar} options={barOpts()} /> : (
               <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">
@@ -435,11 +445,9 @@ export default function SpeedLimiter() {
               </div>
             )}
           </div>
-        </div>
-        <div className="card">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-1.5">
-            <MapPin size={15} className="text-sky-400" /> Active coverage by site
-          </h3>
+        </Card>
+        <Card>
+          <CardHeader title="Active coverage by site" icon={MapPin} iconTone="info" />
           <div className="h-64">
             {rows === null ? (
               <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" />
@@ -452,17 +460,18 @@ export default function SpeedLimiter() {
               </div>
             )}
           </div>
-        </div>
+        </Card>
       </div>
 
-      {/* Non-compliant priority list */}
-      <div className="card">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-1.5">
-            <ShieldAlert size={15} className="text-red-400" /> Non-compliant limiters
-          </h3>
-          {rows && <span className="text-xs text-[var(--text-muted)]">{nonCompliant.length} needing action</span>}
-        </div>
+      {/* Non-compliant priority list. One count in `actions` is inside the
+          one-or-two-control budget that slot is shrink-0 for. */}
+      <Card>
+        <CardHeader
+          title="Non-compliant limiters"
+          icon={ShieldAlert}
+          iconTone="crit"
+          actions={rows ? <span className="text-xs text-[var(--text-muted)]">{nonCompliant.length} needing action</span> : null}
+        />
         {rows === null ? (
           <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-9 bg-[var(--input-bg)] rounded animate-pulse" />)}</div>
         ) : nonCompliant.length === 0 ? (
@@ -487,10 +496,12 @@ export default function SpeedLimiter() {
             ))}
           </div>
         )}
-      </div>
+      </Card>
 
-      {/* Filters */}
-      <div className="card space-y-2">
+      {/* Filters. No `clip` here: these are native <select>s, whose option list
+          the browser paints outside the page's overflow context anyway, and
+          Card does not clip by default. */}
+      <Card className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[200px]">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
@@ -525,10 +536,13 @@ export default function SpeedLimiter() {
           {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
           <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {summary.total}</span>
         </div>
-      </div>
+      </Card>
 
-      {/* Table */}
-      <div className="card overflow-hidden !p-0">
+      {/* Table. `pad="none"` + `clip` replace the old `!p-0 overflow-hidden`:
+          Card writes padding inline, so `pad` is the route rather than a
+          `!important` fight. TablePagination's rows-per-page control is a
+          native <select>, which an ancestor's overflow cannot clip. */}
+      <Card pad="none" clip>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -587,85 +601,88 @@ export default function SpeedLimiter() {
           </table>
         </div>
         <TablePagination {...pager} />
-      </div>
+      </Card>
 
-      {/* Create / edit modal */}
-      {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onMouseDown={closeModal}>
-          <div className="card w-full max-w-lg max-h-[90vh] overflow-y-auto" onMouseDown={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
-                <Gauge size={18} className="text-[var(--brand-bright)]" />
-                {editing ? 'Edit speed limiter' : 'Register speed limiter'}
-              </h2>
-              <button onClick={closeModal} className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Close"><X size={18} /></button>
+      {/* Create / edit dialog. The submit button stays INSIDE the <form> rather
+          than moving to Modal's footer slot: that would need a form="id"
+          association, which is a behaviour change, not a styling one.
+          `closeModal` already no-ops while saving, so Escape, the backdrop and
+          the X all share one guarded close instead of the old split where only
+          the backdrop was guarded. */}
+      <Modal
+        open={modalOpen}
+        onClose={closeModal}
+        title={editing ? 'Edit speed limiter' : 'Register speed limiter'}
+        size="md"
+      >
+        <form onSubmit={submit} className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="label">Asset number</label>
+              <input className="input w-full" placeholder="TRK-014" value={form.asset_no} onChange={(e) => set('asset_no', e.target.value)} maxLength={120} />
             </div>
-            <form onSubmit={submit} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="label">Asset number</label>
-                  <input className="input w-full" placeholder="TRK-014" value={form.asset_no} onChange={(e) => set('asset_no', e.target.value)} maxLength={120} />
-                </div>
-                <div>
-                  <label className="label">Limit (km/h)</label>
-                  <input type="number" min="0" step="1" className="input w-full" placeholder="80" value={form.limit_kph} onChange={(e) => set('limit_kph', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Device ID</label>
-                  <input className="input w-full" placeholder="SL-2026-00123" value={form.device_id} onChange={(e) => set('device_id', e.target.value)} maxLength={120} />
-                </div>
-                <div>
-                  <label className="label">Site</label>
-                  <input className="input w-full" placeholder="Riyadh Depot" value={form.site} onChange={(e) => set('site', e.target.value)} maxLength={120} />
-                </div>
-                <div>
-                  <label className="label">Last verified</label>
-                  <input type="date" className="input w-full" value={form.last_verified_at} onChange={(e) => set('last_verified_at', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Status</label>
-                  <select className="input w-full" value={form.status} onChange={(e) => set('status', e.target.value)}>
-                    {SPEED_LIMITER_STATUSES.map((s) => <option key={s} value={s}>{SPEED_LIMITER_STATUS_META[s].label}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className="label">Notes</label>
-                <textarea className="input w-full min-h-[80px] resize-y" placeholder="Calibration notes, installer, certificate reference" value={form.notes} maxLength={4000} onChange={(e) => set('notes', e.target.value)} />
-              </div>
-              {formError && (
-                <div className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
-                  <AlertTriangle size={15} className="mt-0.5 shrink-0" /> {formError}
-                </div>
-              )}
-              <div className="flex items-center justify-end gap-2 pt-1">
-                <button type="button" onClick={closeModal} className="btn-secondary text-sm" disabled={saving}>Cancel</button>
-                <button type="submit" className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={saving}>
-                  {saving ? 'Saving...' : editing ? 'Save changes' : 'Register limiter'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Delete confirm */}
-      {confirmDel && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onMouseDown={() => !deleting && setConfirmDel(null)}>
-          <div className="card w-full max-w-md" onMouseDown={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2"><Trash2 size={18} className="text-red-400" /> Delete speed limiter?</h2>
-            <p className="text-sm text-[var(--text-muted)] mt-2">
-              This permanently removes the limiter for asset <span className="font-semibold text-[var(--text-secondary)]">{confirmDel.asset_no || confirmDel.id}</span>. This cannot be undone.
-            </p>
-            <div className="flex items-center justify-end gap-2 mt-5">
-              <button onClick={() => setConfirmDel(null)} className="btn-secondary text-sm" disabled={deleting}>Cancel</button>
-              <button onClick={doDelete} className="btn-danger text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={deleting}>
-                <Trash2 size={14} /> {deleting ? 'Deleting...' : 'Delete'}
-              </button>
+            <div>
+              <label className="label">Limit (km/h)</label>
+              <input type="number" min="0" step="1" className="input w-full" placeholder="80" value={form.limit_kph} onChange={(e) => set('limit_kph', e.target.value)} />
+            </div>
+            <div>
+              <label className="label">Device ID</label>
+              <input className="input w-full" placeholder="SL-2026-00123" value={form.device_id} onChange={(e) => set('device_id', e.target.value)} maxLength={120} />
+            </div>
+            <div>
+              <label className="label">Site</label>
+              <input className="input w-full" placeholder="Riyadh Depot" value={form.site} onChange={(e) => set('site', e.target.value)} maxLength={120} />
+            </div>
+            <div>
+              <label className="label">Last verified</label>
+              <input type="date" className="input w-full" value={form.last_verified_at} onChange={(e) => set('last_verified_at', e.target.value)} />
+            </div>
+            <div>
+              <label className="label">Status</label>
+              <select className="input w-full" value={form.status} onChange={(e) => set('status', e.target.value)}>
+                {SPEED_LIMITER_STATUSES.map((s) => <option key={s} value={s}>{SPEED_LIMITER_STATUS_META[s].label}</option>)}
+              </select>
             </div>
           </div>
-        </div>
-      )}
+          <div>
+            <label className="label">Notes</label>
+            <textarea className="input w-full min-h-[80px] resize-y" placeholder="Calibration notes, installer, certificate reference" value={form.notes} maxLength={4000} onChange={(e) => set('notes', e.target.value)} />
+          </div>
+          {formError && (
+            <div className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
+              <AlertTriangle size={15} className="mt-0.5 shrink-0" /> {formError}
+            </div>
+          )}
+          <div className="flex items-center justify-end gap-2 pt-1">
+            <button type="button" onClick={closeModal} className="btn-secondary text-sm" disabled={saving}>Cancel</button>
+            <button type="submit" className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={saving}>
+              {saving ? 'Saving...' : editing ? 'Save changes' : 'Register limiter'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Delete confirm. No form here, so the actions belong in the footer slot.
+          The guard is applied once, on the shared close: the hand-rolled version
+          guarded only the backdrop, so a mid-delete Escape had no protection. */}
+      <Modal
+        open={!!confirmDel}
+        onClose={() => { if (!deleting) setConfirmDel(null) }}
+        title="Delete speed limiter?"
+        size="sm"
+        footer={
+          <>
+            <button onClick={() => setConfirmDel(null)} className="btn-secondary text-sm" disabled={deleting}>Cancel</button>
+            <button onClick={doDelete} className="btn-danger text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={deleting}>
+              <Trash2 size={14} /> {deleting ? 'Deleting...' : 'Delete'}
+            </button>
+          </>
+        }
+      >
+        <p className="text-sm text-[var(--text-muted)]">
+          This permanently removes the limiter for asset <span className="font-semibold text-[var(--text-secondary)]">{confirmDel?.asset_no || confirmDel?.id}</span>. This cannot be undone.
+        </p>
+      </Modal>
     </div>
   )
 }

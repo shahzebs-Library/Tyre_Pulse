@@ -155,7 +155,6 @@ const ALLOWED = [
   { file: 'src/pages/Accidents.jsx', why: "in('id', ids.slice) - case-track columns fetched in 500s" },
   { file: 'src/lib/api/uploads.js', why: "in('serial_no', serials) - caller batches" },
   { file: 'src/lib/api/combinations.js', why: "in('asset_no', slice) - chunked 100" },
-  { file: 'src/lib/api/pmPrograms.js', why: "in('asset_no', chunk) - caller-chunked km/hours lookup" },
   { file: 'src/lib/api/fleetRenewal.js', why: "in('asset_no', assetNos) from a short plan list" },
 
   // --- Deliberate complete work_orders reads in the service layer. Each is
@@ -208,7 +207,7 @@ const RPC_LARGE = new RegExp(`\\.rpc\\(\\s*['"](${LARGE_RPCS.join('|')})['"]`)
 // single-entity while the supplied value is a literal serial. Callers pass a
 // scanned or typed serial straight through, so they escape it first.
 const BOUNDED_EQ = new RegExp(`\\.(eq|ilike)\\(\\s*['"](${BOUNDED_EQ_KEYS.join('|')})['"]`)
-const PAGING = /fetchAllPages\s*\(|fetchAllRows\s*\(|fetchAllRpcPages\s*\(|fetchAllRpcRows\s*\(|pageAll\s*\(/
+const PAGING = /fetchAllPages\s*\(|fetchAllRows\s*\(|fetchAllRpcPages\s*\(|fetchAllRpcRows\s*\(|pageAll\s*\(|completeRows\s*\(/ 
 
 /**
  * The statement that starts at `startLine`, forward-only. Stops at the next
@@ -350,10 +349,26 @@ function findOffenders() {
   return hits
 }
 
+/**
+ * The scan walks every source file under SCAN_DIRS, and two tests need the
+ * result. Running it twice pushed this file past the 20s default timeout as the
+ * codebase grew, which reddens CI for a reason that has nothing to do with row
+ * caps. The source cannot change mid-run, so scan once and share it. Callers
+ * only filter and map, never mutate.
+ */
+let offendersCache = null
+function offendersOnce() {
+  if (offendersCache === null) offendersCache = findOffenders()
+  return offendersCache
+}
+
+// Headroom for a whole-repo walk on a loaded machine; it is not a speed test.
+const SCAN_TIMEOUT_MS = 120000
+
 describe('row cap guard', () => {
   it('has no unbounded read against a table that can exceed 1000 rows', () => {
     const allowedFiles = new Set(ALLOWED.map((a) => a.file))
-    const offenders = findOffenders().filter((h) => !allowedFiles.has(h.file))
+    const offenders = offendersOnce().filter((h) => !allowedFiles.has(h.file))
     const detail = offenders
       .map((o) => `${o.file}:${o.line} reads ${o.table} (${o.kind}) without a bound`)
       .join('\n')
@@ -361,20 +376,20 @@ describe('row cap guard', () => {
       offenders,
       `\n${detail}\n\nUse fetchAllPages / fetchAllRows with an .order(<unique column>) tiebreak, and a { max } ceiling on a massive table.`,
     ).toEqual([])
-  })
+  }, SCAN_TIMEOUT_MS)
 
   it('keeps the allowlist honest - every entry must still match a real read', () => {
     // An allowlist entry that no longer corresponds to a real flagged read is a
     // stale exemption, and a stale exemption is how a fixed bug quietly comes
     // back. When a page is genuinely fixed, its entry MUST be removed.
-    const found = new Set(findOffenders().map((h) => h.file))
+    const found = new Set(offendersOnce().map((h) => h.file))
     for (const entry of ALLOWED) {
       expect(
         found.has(entry.file),
         `${entry.file} is allowlisted (${entry.why}) but has no flagged read - remove the stale entry`,
       ).toBe(true)
     }
-  })
+  }, SCAN_TIMEOUT_MS)
 
   it('scans mobile as well as web, and reads .ts/.tsx', () => {
     // The previous revision scanned src/ only and filtered on /\.(js|jsx)$/, so

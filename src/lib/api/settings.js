@@ -7,14 +7,14 @@
  * (thenable) or auth promise the page reads via `.data` / `.error`, preserving
  * the page's existing destructuring, `Promise.all` and error handling exactly.
  * Explicit column lists where the page used them (no widening of selects).
- * Additive only - mirrors dashboard.js. `settings` and `app_settings` are two
- * distinct tables and stay distinct here.
+ * Organisation configuration namespaces are persisted through audited RPCs.
  */
 import { supabase } from './_client'
+import { listConfiguration, getConfiguration, saveConfiguration } from '../configurationStore'
 
-/** All global key/value settings rows the page hydrates `appSettings` from. */
+/** All current-organisation key/value settings rows the page hydrates `appSettings` from. */
 export function listSettings() {
-  return supabase.from('settings').select('key, value')
+  return listConfiguration(supabase, 'settings')
 }
 
 /** Three most-recent upload history rows for the "recent uploads" panel. */
@@ -34,17 +34,21 @@ export function listKpiTargetsByYear(year) {
 /** The single `alert_thresholds` app_settings row (JSON value). */
 export function getAlertThresholds() {
   // maybeSingle: the row is optional — .single() 406s when it doesn't exist yet.
-  return supabase.from('app_settings').select('value').eq('key', 'alert_thresholds').maybeSingle()
+  return getConfiguration(supabase, 'app_settings', 'alert_thresholds')
 }
 
-/** Upsert one global `settings` row (onConflict: key). Page builds the row. */
+/** Save one organisation `settings` value. Page builds the row. */
 export function upsertSetting(row) {
-  return supabase.from('settings').upsert(row, { onConflict: 'key' })
+  return saveConfiguration(supabase, 'settings', row)
 }
 
-/** Upsert one `app_settings` row (onConflict: key). Page builds the row. */
+export function saveAppSettings(rows) {
+  return saveConfiguration(supabase, 'settings', rows)
+}
+
+/** Save one organisation `app_settings` value. Page builds the row. */
 export function upsertAppSetting(row) {
-  return supabase.from('app_settings').upsert(row, { onConflict: 'key' })
+  return saveConfiguration(supabase, 'app_settings', row)
 }
 
 /** Update the caller's profile by id with the given patch. */

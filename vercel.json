@@ -100,8 +100,9 @@
     "deploymentEnabled": {
       "claude/accident-builder-report-ui-2bkwb5": false,
       "claude/ksa-asset-mobile-visibility-xlnp7m": false,
-      "claude/workshop-job-card-flow": false
+      "claude/workshop-job-card-flow": false,
+      "feature/accident-case-web-redesign": false
     }
   },
-  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- . \":(exclude)mobile\" \":(exclude)*.md\" \":(exclude)MIGRATIONS_*.sql\" \":(exclude)store-assets\" \":(exclude).claude\" \":(exclude).github\" \":(exclude)tyre_pulse_app\" \":(exclude)tyre_pulse_flutter\""
+  "ignoreCommand": "node scripts/vercel-ignore-build.mjs"
 }

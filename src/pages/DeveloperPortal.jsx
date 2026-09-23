@@ -34,6 +34,7 @@ import {
 } from '../lib/developerPortal'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { isMissingRelation } from '../lib/api/_client'
 
 const EMPTY_KEY_FORM = {
   key_name: '', key_prefix: '', scopes: '', environment: 'sandbox',
@@ -69,21 +70,16 @@ function Badge({ children, className }) {
 }
 
 function fmtDate(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString()
 }
 function fmtDateTime(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleString()
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') ||
-    m.includes('schema cache') || m.includes('could not find the table')
-}
 
 export default function DeveloperPortal() {
   const { activeCountry } = useSettings()
@@ -312,7 +308,7 @@ export default function DeveloperPortal() {
     <div className="space-y-6">
       <PageHeader
         title="Developer Portal"
-        subtitle="Issue and manage API keys and webhook endpoints for the integrators and external systems that connect to Tyre Pulse. Secrets are never stored — only display prefixes and delivery metadata."
+        subtitle="Register API key references and webhook details. These records do not issue credentials, enforce access or rate limits, or start webhook delivery."
         icon={KeyRound}
         onRefresh={load}
         refreshing={refreshing}
@@ -326,7 +322,7 @@ export default function DeveloperPortal() {
               <FileText size={14} /> PDF
             </button>
             <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5" disabled={notProvisioned}>
-              <Plus size={14} /> {tab === 'keys' ? 'New key' : 'New webhook'}
+              <Plus size={14} /> {tab === 'keys' ? 'Register key reference' : 'Register webhook'}
             </button>
           </div>
         }
@@ -364,7 +360,7 @@ export default function DeveloperPortal() {
             >
               <Icon size={15} /> {t.label}
               <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[11px] ${active ? 'bg-indigo-900/40 text-indigo-300' : 'bg-[var(--input-bg)] text-[var(--text-muted)]'}`}>
-                {loaded === null ? '—' : t.count}
+                {loaded === null ? 'N/A' : t.count}
               </span>
             </button>
           )
@@ -381,7 +377,7 @@ export default function DeveloperPortal() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{loaded === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{loaded === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -394,7 +390,7 @@ export default function DeveloperPortal() {
             <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
               <Activity size={15} /> Delivery health
             </h3>
-            <span className="text-sm font-semibold text-[var(--text-primary)]">{hooks === null ? '—' : `${hookHealth}%`}</span>
+            <span className="text-sm font-semibold text-[var(--text-primary)]">{hooks === null ? 'N/A' : `${hookHealth}%`}</span>
           </div>
           <div className="h-2.5 w-full rounded-full bg-[var(--input-bg)] overflow-hidden">
             <div
@@ -445,7 +441,7 @@ export default function DeveloperPortal() {
                 ) : filteredKeys.length === 0 ? (
                   <tr><td colSpan={8} className="px-4 py-12 text-center text-[var(--text-muted)]">
                     <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                    {keys.length === 0 && !notProvisioned ? 'No API keys issued yet — create your first key.' : 'No keys match these filters.'}
+                    {keys.length === 0 && !notProvisioned ? 'No API keys issued yet. Create your first key.' : 'No keys match these filters.'}
                   </td></tr>
                 ) : (
                   keysPager.pageRows.map((r) => {
@@ -453,17 +449,17 @@ export default function DeveloperPortal() {
                     const effStatus = expired ? 'expired' : String(r.status || '').toLowerCase()
                     return (
                       <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                        <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.key_name || '—'}</td>
+                        <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.key_name || 'N/A'}</td>
                         <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)] whitespace-nowrap">{maskKey(r.key_prefix)}</td>
-                        <td className="px-4 py-2.5"><Badge className={ENV_STYLE[r.environment] || ''}>{r.environment || '—'}</Badge></td>
-                        <td className="px-4 py-2.5"><Badge className={KEY_STATUS_STYLE[effStatus] || ''}>{effStatus || '—'}</Badge></td>
-                        <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.rate_limit != null ? `${Number(r.rate_limit).toLocaleString()}/min` : '—'}</td>
+                        <td className="px-4 py-2.5"><Badge className={ENV_STYLE[r.environment] || ''}>{r.environment || 'N/A'}</Badge></td>
+                        <td className="px-4 py-2.5"><Badge className={KEY_STATUS_STYLE[effStatus] || ''}>{effStatus || 'N/A'}</Badge></td>
+                        <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.rate_limit != null ? `${Number(r.rate_limit).toLocaleString()}/min` : 'N/A'}</td>
                         <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDate(r.expires_at)}</td>
                         <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDate(r.last_used_at)}</td>
                         <td className="px-4 py-2.5">
                           <div className="flex items-center justify-end gap-1">
                             <button onClick={() => openEditKey(r)} className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Edit"><Pencil size={14} /></button>
-                            <button onClick={() => setConfirmDelete({ ...r, _kind: 'key' })} className="p-1.5 rounded hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400" aria-label="Revoke"><Ban size={14} /></button>
+                            <button onClick={() => setConfirmDelete({ ...r, _kind: 'key' })} className="p-1.5 rounded hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400" aria-label="Delete key reference"><Ban size={14} /></button>
                           </div>
                         </td>
                       </tr>
@@ -485,17 +481,17 @@ export default function DeveloperPortal() {
                 ) : filteredHooks.length === 0 ? (
                   <tr><td colSpan={8} className="px-4 py-12 text-center text-[var(--text-muted)]">
                     <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                    {hooks.length === 0 && !notProvisioned ? 'No webhook endpoints yet — register your first endpoint.' : 'No endpoints match these filters.'}
+                    {hooks.length === 0 && !notProvisioned ? 'No webhook endpoints yet. Register your first endpoint.' : 'No endpoints match these filters.'}
                   </td></tr>
                 ) : (
                   hooksPager.pageRows.map((r) => {
                     const status = String(r.status || '').toLowerCase()
                     return (
                       <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                        <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.endpoint_name || '—'}</td>
-                        <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)] max-w-[280px] truncate" title={r.url || ''}>{r.url || '—'}</td>
-                        <td className="px-4 py-2.5"><Badge className={HOOK_STATUS_STYLE[status] || ''}>{status || '—'}</Badge></td>
-                        <td className="px-4 py-2.5 text-[var(--text-secondary)] max-w-[200px] truncate" title={r.event_types || ''}>{r.event_types || '—'}</td>
+                        <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.endpoint_name || 'N/A'}</td>
+                        <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)] max-w-[280px] truncate" title={r.url || ''}>{r.url || 'N/A'}</td>
+                        <td className="px-4 py-2.5"><Badge className={HOOK_STATUS_STYLE[status] || ''}>{status || 'N/A'}</Badge></td>
+                        <td className="px-4 py-2.5 text-[var(--text-secondary)] max-w-[200px] truncate" title={r.event_types || ''}>{r.event_types || 'N/A'}</td>
                         <td className="px-4 py-2.5">
                           <span className={(Number(r.failure_count) || 0) > 0 ? 'text-red-400 font-semibold' : 'text-[var(--text-secondary)]'}>
                             {r.failure_count != null ? Number(r.failure_count).toLocaleString() : '0'}
@@ -531,7 +527,7 @@ export default function DeveloperPortal() {
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-[var(--text-primary)] inline-flex items-center gap-2">
                 {tab === 'keys' ? <KeyRound size={18} /> : <Webhook size={18} />}
-                {editing ? (tab === 'keys' ? 'Edit API key' : 'Edit webhook') : (tab === 'keys' ? 'New API key' : 'New webhook')}
+                {editing ? (tab === 'keys' ? 'Edit API key reference' : 'Edit webhook record') : (tab === 'keys' ? 'New API key reference' : 'New webhook record')}
               </h3>
               <button onClick={closeModal} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
             </div>
@@ -547,7 +543,7 @@ export default function DeveloperPortal() {
                     <div>
                       <label className="label">Key prefix (display hint)</label>
                       <input className="input w-full font-mono" placeholder="tp_live_9f3c" value={keyForm.key_prefix} maxLength={60} onChange={(e) => setKey('key_prefix', e.target.value)} />
-                      <p className="text-[11px] text-[var(--text-muted)] mt-1">Never store the full secret — only a recognisable prefix.</p>
+                      <p className="text-[11px] text-[var(--text-muted)] mt-1">Never store the full secret, only a recognisable prefix.</p>
                     </div>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -621,7 +617,7 @@ export default function DeveloperPortal() {
                   </div>
                   <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer">
                     <input type="checkbox" checked={hookForm.secret_set} onChange={(e) => setHook('secret_set', e.target.checked)} className="accent-indigo-500" />
-                    Signing secret configured
+                    Signing secret recorded as configured
                     <span className="text-[11px] text-[var(--text-muted)]">(the secret value itself is never stored here)</span>
                   </label>
                   <div>
@@ -640,7 +636,7 @@ export default function DeveloperPortal() {
               <div className="flex items-center justify-end gap-2 pt-1">
                 <button type="button" onClick={closeModal} className="btn-secondary text-sm" disabled={saving}>Cancel</button>
                 <button type="submit" className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={saving}>
-                  {saving ? 'Saving…' : editing ? 'Save changes' : (tab === 'keys' ? 'Create key' : 'Create webhook')}
+                  {saving ? 'Saving…' : editing ? 'Save changes' : (tab === 'keys' ? 'Save key reference' : 'Save webhook record')}
                 </button>
               </div>
             </form>
@@ -658,12 +654,12 @@ export default function DeveloperPortal() {
               </div>
               <div>
                 <h3 className="text-[var(--text-primary)] font-semibold">
-                  {confirmDelete._kind === 'key' ? 'Revoke this API key?' : 'Delete this webhook?'}
+                  {confirmDelete._kind === 'key' ? 'Delete this key reference?' : 'Delete this webhook record?'}
                 </h3>
                 <p className="text-sm text-[var(--text-muted)] mt-1">
                   {confirmDelete._kind === 'key'
-                    ? <>{confirmDelete.key_name || 'Key'} · {maskKey(confirmDelete.key_prefix)}. Revoking permanently disables this credential and cannot be undone.</>
-                    : <>{confirmDelete.endpoint_name || 'Endpoint'} · {confirmDelete.url || '—'}. This can’t be undone.</>}
+                    ? <>{confirmDelete.key_name || 'Key'} · {maskKey(confirmDelete.key_prefix)}. This removes the saved reference. Revoke the actual credential in the service that issued it.</>
+                    : <>{confirmDelete.endpoint_name || 'Endpoint'} · {confirmDelete.url || 'N/A'}. This can’t be undone.</>}
                 </p>
               </div>
             </div>
@@ -671,7 +667,7 @@ export default function DeveloperPortal() {
               <button onClick={() => setConfirmDelete(null)} className="btn-secondary text-sm" disabled={deleting}>Cancel</button>
               <button onClick={doDelete} className="btn-danger text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={deleting}>
                 {confirmDelete._kind === 'key' ? <Ban size={14} /> : <Trash2 size={14} />}
-                {deleting ? 'Working…' : (confirmDelete._kind === 'key' ? 'Revoke' : 'Delete')}
+                {deleting ? 'Working…' : (confirmDelete._kind === 'key' ? 'Delete reference' : 'Delete record')}
               </button>
             </div>
           </div>

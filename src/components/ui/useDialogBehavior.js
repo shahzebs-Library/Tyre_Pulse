@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 
 /**
  * The behaviour every dialog is expected to have, in one place.
@@ -8,11 +8,29 @@ import { useEffect } from 'react'
  * was previously re-implemented per file, so some dialogs had all of it, some
  * had Escape only, and some had none.
  *
+ * WHY `onClose` IS HELD IN A REF AND KEPT OUT OF THE DEPENDENCY ARRAY.
+ * It used to sit in the deps. Almost every caller passes an inline arrow, which
+ * is a new function identity on every parent render, so the effect tore down
+ * and re-ran constantly. That is not merely wasteful: the CLEANUP restores
+ * focus to whatever opened the dialog, and the re-run then focuses the panel.
+ * So for any dialog whose form state lives in the PAGE rather than in a child,
+ * every single keystroke yanked focus out of the field being typed into and the
+ * dialog was effectively unusable. It was reported independently from two
+ * different pages before the cause was found.
+ *
+ * Holding the callback in a ref means the latest one is always invoked while
+ * the effect runs exactly once per open/close. Callers therefore do NOT need to
+ * wrap `onClose` in useCallback — passing an inline arrow is safe.
+ *
  * @param {boolean} open
  * @param {object}  panelRef  ref to the dialog panel element
  * @param {() => void} onClose
  */
 export default function useDialogBehavior(open, panelRef, onClose) {
+  // Kept current on every render; read only from inside the key handler.
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+
   useEffect(() => {
     if (!open) return
 
@@ -35,7 +53,7 @@ export default function useDialogBehavior(open, panelRef, onClose) {
     function onKey(e) {
       if (e.key === 'Escape') {
         e.stopPropagation()
-        onClose?.()
+        onCloseRef.current?.()
         return
       }
       if (e.key !== 'Tab') return
@@ -59,5 +77,7 @@ export default function useDialogBehavior(open, panelRef, onClose) {
       body.style.overflow = priorOverflow
       if (previouslyFocused instanceof HTMLElement) previouslyFocused.focus?.()
     }
-  }, [open, panelRef, onClose])
+    // `onClose` is deliberately NOT a dependency — see the note above. Adding
+    // it back makes every dialog with page-level form state untypeable.
+  }, [open, panelRef])
 }

@@ -7,6 +7,7 @@ import 'package:tyre_pulse/app/router/screen_registry.dart';
 import 'package:tyre_pulse/features/inspections/inspections_screen_registrations.dart';
 import 'package:tyre_pulse/features/inspections/presentation/inspection_detail_screen.dart';
 import 'package:tyre_pulse/features/inspections/presentation/inspection_history_screen.dart';
+import 'package:tyre_pulse/features/inspections/presentation/my_plans_screen.dart';
 import 'package:tyre_pulse/features/inspections/presentation/new_inspection_screen.dart';
 
 void main() {
@@ -15,6 +16,7 @@ void main() {
       TpRouteId.newInspection,
       TpRouteId.inspectionDetail,
       TpRouteId.activityHistory,
+      TpRouteId.myPlans,
     ]);
   });
 
@@ -27,6 +29,10 @@ void main() {
         inspectionId: InspectionId('inspection-1'),
       ): InspectionDetailScreen,
       const ActivityHistoryRoute(): InspectionHistoryScreen,
+      // Only CONSTRUCTED here, never pumped - the builder returns the widget
+      // and the test renders a SizedBox instead, so a screen that reads
+      // providers needs no ProviderScope for this assertion.
+      const MyPlansRoute(): MyPlansScreen,
     };
 
     for (final MapEntry<TpRoute, Type> entry in cases.entries) {

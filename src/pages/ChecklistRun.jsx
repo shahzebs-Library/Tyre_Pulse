@@ -14,7 +14,7 @@ import {
 } from '../lib/checklist/checklistDraft'
 import { useLanguage } from '../contexts/LanguageContext'
 import { getTemplate, createSubmission, uploadChecklistPhoto, listSubmissions } from '../lib/api/checklists'
-import { blankAnswer, validateSubmission, isLayoutField, visibleFields, computeScore, isReferenceField, referenceSource, isAutoField, resolveAutoValue, signatureFields } from '../lib/checklist/fieldTypes'
+import { blankAnswer, validateSubmission, checklistReviewIssues, isLayoutField, visibleFields, computeScore, isReferenceField, referenceSource, isAutoField, resolveAutoValue, signatureFields } from '../lib/checklist/fieldTypes'
 // The marks / auto-fill / close-gate engine. THIS PAGE OWNS NO COPY OF THESE
 // RULES - every one of them is read from the shared module so the screen, the
 // phone and guard_checklist_approval_stages cannot drift apart.
@@ -35,6 +35,7 @@ import BlockingMarksNotice from '../components/checklist/BlockingMarksNotice'
 import { getAssetByNo } from '../lib/api/assets'
 import { safeHref, safeImageSrc } from '../lib/safeUrl'
 import { toUserMessage } from '../lib/safeError'
+import { isMissingRelation } from '../lib/api/_client'
 
 /**
  * THE HEADER MUST NOT ASK WHAT THE SHEET ALREADY ASKS.
@@ -89,10 +90,6 @@ function meterBelowRegister(value, previous) {
   return v < p
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') || m.includes('schema cache') || m.includes('could not find the table')
-}
 
 export default function ChecklistRun() {
   const { templateId } = useParams()
@@ -422,6 +419,8 @@ export default function ChecklistRun() {
       }
       return
     }
+    const reviewIssues = checklistReviewIssues(visibleFields(fields, answers), answers)
+    if (reviewIssues.length) { setSubmitError(reviewIssues.join(' ')); return }
     // The meter pair. Either reading satisfies it and neither may be skipped:
     // 98 of 227 KSA transit mixers carry no odometer at all while every one of
     // them has engine hours. ZERO IS A READING and counts as answered.
@@ -622,7 +621,7 @@ export default function ChecklistRun() {
                     ? 'bg-red-900/30 text-red-300 border-red-700/50'
                     : 'bg-[var(--input-bg)] text-[var(--text-dim)] border-[var(--input-border)]'
               }`}
-              title="Live score — updates as you fill the checklist"
+              title="Live score, updates as you fill the checklist"
             >
               <Gauge size={13} /> Score: {liveScore.pct}%
               {liveScore.passed != null && <span>· {liveScore.passed ? 'Pass' : 'Fail'}</span>}

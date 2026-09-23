@@ -46,7 +46,7 @@ export function shapeRow(r = {}) {
     daysOn: num(r.days_on),
     expectedDays: num(r.expected_days),
     daySample: num(r.day_sample),
-    remainingDays: num(r.remaining_days),
+    remainingDays: num(r.expected_days) > 0 ? num(r.remaining_days) : null,
     lifeBasis: r.life_basis || null,
     kmAtFitment: num(r.km_at_fitment),
     currentKm: num(r.current_km),
@@ -193,7 +193,7 @@ const BAND_RANK = { overdue: 4, 'due-soon': 3, 'mid-life': 2, healthy: 1, unknow
 /** The verdict for ONE budget, judged only against that budget's own limits. */
 function dimensionBand(remaining, used, soonLimit) {
   if (remaining == null) return 'unknown'
-  if (remaining === 0) return 'overdue'
+  if (remaining <= 0 || (used != null && used >= 100)) return 'overdue'
   if (remaining < soonLimit || (used != null && used >= LIFE_USED_DUE_PCT)) return 'due-soon'
   if (used != null && used >= 60) return 'mid-life'
   return 'healthy'
@@ -232,19 +232,22 @@ export function measureFor(row) {
   }
   if (!row) return none
 
+  // A fixed 10,000-km warning must not flag a tyre whose entire life is shorter.
+  const kmLimit = row.expectedLifeKm > 0 ? Math.min(DUE_SOON_KM, row.expectedLifeKm * 0.1) : DUE_SOON_KM
+  const hoursLimit = row.expectedLifeHours > 0 ? Math.min(DUE_SOON_HOURS, row.expectedLifeHours * 0.1) : DUE_SOON_HOURS
   const km = {
     dimension: 'km',
     remaining: row.remainingKm,
     used: row.lifeUsedPct,
-    soon: row.remainingKm != null && row.remainingKm < DUE_SOON_KM,
-    band: dimensionBand(row.remainingKm, row.lifeUsedPct, DUE_SOON_KM),
+    soon: row.remainingKm != null && row.remainingKm < kmLimit,
+    band: dimensionBand(row.remainingKm, row.lifeUsedPct, kmLimit),
   }
   const hours = {
     dimension: 'hours',
     remaining: row.remainingHours,
     used: row.hoursUsedPct,
-    soon: row.remainingHours != null && row.remainingHours < DUE_SOON_HOURS,
-    band: dimensionBand(row.remainingHours, row.hoursUsedPct, DUE_SOON_HOURS),
+    soon: row.remainingHours != null && row.remainingHours < hoursLimit,
+    band: dimensionBand(row.remainingHours, row.hoursUsedPct, hoursLimit),
   }
 
   // shapeRow folds 'engine_hours' to 'hours'; accept BOTH tokens so this is

@@ -6,7 +6,7 @@
  * validation/clamps at the boundary, and graceful degradation when the table is
  * absent so the page can prompt for the migration instead of erroring.
  */
-import { supabase, unwrap, applyCountry } from './_client'
+import { supabase, unwrap, applyCountry, isMissingRelation } from './_client'
 
 export const COLS =
   'id,organisation_id,country,asset_no,driver_name,direction,odometer_km,' +
@@ -14,23 +14,6 @@ export const COLS =
 
 export const DIRECTIONS = ['out', 'in']
 export const STATUSES = ['open', 'closed']
-
-/**
- * True when a Supabase/PostgREST error means the `vehicle_checkinout` relation
- * does not exist yet (migration not applied). Covers Postgres 42P01,
- * PostgREST PGRST205, and the message-text fallbacks.
- */
-export function isMissingCheckInOutTable(error) {
-  if (!error) return false
-  const code = String(error.code || '')
-  if (code === '42P01' || code === 'PGRST205') return true
-  const msg = String(error.message || '').toLowerCase()
-  return (
-    /relation .* does not exist/.test(msg) ||
-    (msg.includes('does not exist') && msg.includes('relation')) ||
-    (msg.includes('could not find the table') && msg.includes('schema cache'))
-  )
-}
 
 /**
  * List handover entries (newest first). Optional direction/status/country
@@ -46,7 +29,10 @@ export async function listCheckInOut({ direction, status, country, limit = 500 }
   q = applyCountry(q, country)
   const { data, error } = await q.order('checked_at', { ascending: false }).limit(limit)
   if (error) {
-    if (isMissingCheckInOutTable(error)) return []
+    // Degrading a missing relation to [] is deliberate: the page ships before
+    // its migration is applied. It also means the page can NEVER see this error,
+    // so the "apply the migration" banner there is driven by probeRelation().
+    if (isMissingRelation(error)) return []
     throw error
   }
   return data || []

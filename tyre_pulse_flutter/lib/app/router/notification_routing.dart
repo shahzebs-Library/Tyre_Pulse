@@ -72,6 +72,9 @@ TpRoute? notificationDestination(TpNotificationTarget target) {
   final String type = target.typeKey;
   final String entity = target.entityKey;
   final String? id = target.id;
+  if (type == 'driver_workspace' || entity == 'driver_workspace') {
+    return const ProfileRoute();
+  }
 
   // 1. LOCAL device notifications, matched on the EXACT type and matched
   //    FIRST. Their wording overlaps the entity buckets below:
@@ -92,6 +95,23 @@ TpRoute? notificationDestination(TpNotificationTarget target) {
     return entity.contains('checklist')
         ? const ChecklistsRoute()
         : const ActivityHistoryRoute();
+  }
+
+  // 2b. A planned inspection assigned TO YOU - your own work still to do.
+  //
+  //     Kept ahead of every bucket below because it would otherwise be
+  //     swallowed TWICE OVER, and both landings would be wrong:
+  //       - rule 4 matches "assign", so `plan_assigned` would open the
+  //         workshop board;
+  //       - rule 5 matches "inspection", so `inspection_plan` would open
+  //         somebody else's approval queue and ask this person to sign work
+  //         they have not done.
+  //
+  //     The id on these rows is an `inspection_schedules` id, which is NOT an
+  //     inspection id, so it is deliberately not used to open a detail screen -
+  //     the same reasoning the file header gives for claims and parts requests.
+  if (type == 'plan_assigned' || entity.contains('inspection_plan')) {
+    return const MyPlansRoute();
   }
 
   // 3. Checklist before workshop: the workshop bucket below matches "assign",

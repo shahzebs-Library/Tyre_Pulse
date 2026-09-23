@@ -19,6 +19,7 @@
  */
 
 import { supabase } from './supabase'
+import { getConfiguration, saveConfiguration, configurationGeneration } from './configurationStore'
 
 export const FEATURE_FLAGS_SETTINGS_KEY = 'feature_flags'
 
@@ -176,6 +177,7 @@ export function mergeFlags(raw) {
 // ── Cache + subscriptions ────────────────────────────────────────────────────
 
 let cache = null            // { flags, at }
+let cacheGeneration = -1
 let inflight = null         // de-dupe concurrent fetches
 const subscribers = new Set()
 
@@ -208,6 +210,8 @@ export function clearFlagsCache() {
  * defaults (fail open — features never disappear because of a network blip).
  */
 export async function fetchFlags({ force = false } = {}) {
+  const generation = configurationGeneration()
+  if (cacheGeneration !== generation) { clearFlagsCache(); cacheGeneration = generation }
   if (!force && cache && Date.now() - cache.at < FLAGS_CACHE_TTL_MS) {
     return cache.flags
   }
@@ -215,24 +219,17 @@ export async function fetchFlags({ force = false } = {}) {
 
   inflight = (async () => {
     try {
-      // NB: `.limit(1)` (not `.maybeSingle()`) — if the table ever holds more
-      // than one feature_flags row, maybeSingle() throws and we would silently
-      // fall back to DEFAULT_FLAGS, where several capabilities (e.g.
-      // automation_platform) default OFF. That would hide those features and
-      // redirect their routes to the dashboard. Taking the first row keeps the
-      // real flags even in a benign duplicate/legacy state.
-      const { data, error } = await supabase
-        .from('app_settings')
-        .select('value')
-        .eq('key', FEATURE_FLAGS_SETTINGS_KEY)
-        .limit(1)
-      const flags = error ? { ...DEFAULT_FLAGS } : mergeFlags(data?.[0]?.value)
+      const { data, error } = await getConfiguration(supabase, 'app_settings', FEATURE_FLAGS_SETTINGS_KEY)
+      if (error) throw error
+      const flags = mergeFlags(data?.value)
+      if (generation !== configurationGeneration()) return { ...DEFAULT_FLAGS }
       cache = { flags, at: Date.now() }
       return flags
     } catch {
+      if (generation !== configurationGeneration()) return { ...DEFAULT_FLAGS }
       return cache?.flags ?? { ...DEFAULT_FLAGS }
     } finally {
-      inflight = null
+      if (generation === configurationGeneration()) inflight = null
     }
   })()
   return inflight
@@ -244,15 +241,17 @@ export async function fetchFlags({ force = false } = {}) {
  * the cache and notifies subscribers so open pages re-render immediately.
  */
 export async function saveFlags(flags) {
+  const generation = configurationGeneration()
   const clean = mergeFlags(flags)
-  const { error } = await supabase.from('app_settings').upsert(
+  const { error } = await saveConfiguration(supabase, 'app_settings',
     {
       key: FEATURE_FLAGS_SETTINGS_KEY,
       value: JSON.stringify({ ...clean, updated_at: new Date().toISOString() }),
     },
-    { onConflict: 'key' },
   )
   if (error) throw new Error('Could not save feature flags.')
+  if (generation !== configurationGeneration()) throw new Error('Organisation changed. Reload feature flags.')
+  cacheGeneration = generation
   cache = { flags: clean, at: Date.now() }
   notify(clean)
   return clean

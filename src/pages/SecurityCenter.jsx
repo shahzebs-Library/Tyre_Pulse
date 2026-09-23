@@ -389,7 +389,7 @@ export default function SecurityCenter() {
                     <td className="px-5 py-2.5"><ActionBadge action={r.action} /></td>
                     <td className="px-5 py-2.5 text-[var(--text-muted)] whitespace-nowrap">{formatDateTime(r.created_at)}</td>
                     <td className="px-5 py-2.5 hidden md:table-cell">
-                      <span className="text-xs font-mono text-[var(--text-dim)]">{r.session_id ? String(r.session_id).slice(0, 8) : '—'}</span>
+                      <span className="text-xs font-mono text-[var(--text-dim)]">{r.session_id ? String(r.session_id).slice(0, 8) : 'N/A'}</span>
                     </td>
                   </tr>
                 ))}
@@ -435,7 +435,7 @@ export default function SecurityCenter() {
                       </td>
                       <td className="px-5 py-2.5"><ActionBadge action={ev.action} /></td>
                       <td className="px-5 py-2.5 text-[var(--text-muted)]">
-                        {ev.table_name || '—'}
+                        {ev.table_name || 'N/A'}
                         {ev.record_id && <span className="text-xs text-[var(--text-dim)] font-mono ml-1.5">#{String(ev.record_id).slice(0, 12)}</span>}
                       </td>
                       <td className="px-5 py-2.5 text-[var(--text-muted)] whitespace-nowrap">{formatDateTime(ev.created_at)}</td>

@@ -70,7 +70,7 @@ artifact 01 sections 2.1 to 2.13.
 | 6 | Generic checklist engine, then approvals | 2.4 | 5 | Not started |
 | 7 | Tyre replacement, meter logs, washing | 2.7, part of 2.5 | 4, 6 | Not started |
 | 8 | Workshop, work orders, maintenance | 2.9 | 2 | Not started |
-| 9 | Accidents, evidence, claims, RCA, PDFs | 2.8 | 2, plus characterisation tests | Not started |
+| 9 | Accidents, evidence, claims, RCA, PDFs | 2.8 | 2, plus characterisation tests | Mock parity implemented, CI verification pending |
 | 10 | Stock, notifications, reports, team, admin, AI | 2.10, 2.11, 2.12 | 2 | Not started |
 | 11 | iOS completion: APNs, permissions, background modes, deep links, signing, TestFlight | all | 2 onward | Continuous, closed here |
 | 12 | Parallel production validation against the Expo app | all | 11 | Not started |

@@ -31,6 +31,7 @@ import {
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 // ── Enum vocabularies (mirror the V186 CHECK constraints) ────────────────────
 const CATEGORY_OPTS = [
@@ -91,16 +92,11 @@ const EMPTY_FORM = {
 }
 
 function fmtDate(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString()
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') ||
-    m.includes('schema cache') || m.includes('could not find the table')
-}
 
 function Badge({ children, className }) {
   return (
@@ -267,7 +263,7 @@ export default function ActionCenter() {
     <div className="space-y-6">
       <PageHeader
         title="Action Center"
-        subtitle="A unified, prioritised queue of operational exceptions across the fleet — safety, compliance, maintenance, cost, tyre, inspection, and data-quality actions, worst-first."
+        subtitle="A unified, prioritised queue of operational exceptions across the fleet: safety, compliance, maintenance, cost, tyre, inspection, and data-quality actions, worst-first."
         icon={ListChecks}
         badge={summary.openCount ? `${summary.openCount} open` : undefined}
         onRefresh={load}
@@ -278,7 +274,7 @@ export default function ActionCenter() {
             <button onClick={async () => { try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'action_center') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileSpreadsheet size={14} /> Excel
             </button>
-            <button onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Action Center — Exception Queue', 'action_center', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Action Center: Exception Queue', 'action_center', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileText size={14} /> PDF
             </button>
             <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5" disabled={notProvisioned}>
@@ -317,7 +313,7 @@ export default function ActionCenter() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -408,7 +404,7 @@ export default function ActionCenter() {
       {rows !== null && topQueue.length > 0 && (
         <div className="card">
           <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
-            <ArrowUpDown size={15} /> Priority queue — act on these first
+            <ArrowUpDown size={15} /> Priority queue: act on these first
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
             {topQueue.map((r) => {
@@ -427,7 +423,7 @@ export default function ActionCenter() {
                   </div>
                   <p className="text-sm font-semibold text-[var(--text-primary)] line-clamp-2">{r.title}</p>
                   <div className="flex items-center flex-wrap gap-x-3 gap-y-1 mt-2 text-[11px] text-[var(--text-muted)]">
-                    <span className="inline-flex items-center gap-1"><Zap size={11} /> {CATEGORY_LABEL[r.category] || r.category || '—'}</span>
+                    <span className="inline-flex items-center gap-1"><Zap size={11} /> {CATEGORY_LABEL[r.category] || r.category || 'N/A'}</span>
                     {r.asset_no && <span className="inline-flex items-center gap-1">{r.asset_no}</span>}
                     {r.assigned_to && <span className="inline-flex items-center gap-1"><User size={11} /> {r.assigned_to}</span>}
                     {r.due_date && <span className={`inline-flex items-center gap-1 ${overdue ? 'text-red-400' : ''}`}><Calendar size={11} /> {fmtDate(r.due_date)}</span>}
@@ -484,7 +480,7 @@ export default function ActionCenter() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={9} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {allRows.length === 0 && !notProvisioned ? 'No action items yet — raise your first exception.' : 'No action items match these filters.'}
+                  {allRows.length === 0 && !notProvisioned ? 'No action items yet. Raise your first exception.' : 'No action items match these filters.'}
                 </td></tr>
               ) : (
                 pager.pageRows.map((r) => {
@@ -492,18 +488,18 @@ export default function ActionCenter() {
                   return (
                     <tr key={r.id} className={`border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40 ${overdue ? 'bg-red-950/15' : ''}`}>
                       <td className="px-4 py-2.5 max-w-[320px]">
-                        <div className="font-medium text-[var(--text-primary)] line-clamp-1">{r.title || '—'}</div>
+                        <div className="font-medium text-[var(--text-primary)] line-clamp-1">{r.title || 'N/A'}</div>
                         {r.recommended_action && <div className="text-[11px] text-[var(--text-muted)] line-clamp-1">{r.recommended_action}</div>}
                       </td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{CATEGORY_LABEL[r.category] || r.category || '—'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{CATEGORY_LABEL[r.category] || r.category || 'N/A'}</td>
                       <td className="px-4 py-2.5"><Badge className={SEVERITY_BADGE[r.severity] || SEVERITY_BADGE.info}>{(r.severity || 'info').toUpperCase()}</Badge></td>
                       <td className="px-4 py-2.5"><Badge className={STATUS_BADGE[r.status] || STATUS_BADGE.open}>{STATUS_LABEL[r.status] || r.status || 'Open'}</Badge></td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{r.asset_no || '—'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{r.assigned_to || '—'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{r.asset_no || 'N/A'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{r.assigned_to || 'N/A'}</td>
                       <td className={`px-4 py-2.5 whitespace-nowrap ${overdue ? 'text-red-400 font-medium' : 'text-[var(--text-secondary)]'}`}>
                         {overdue && <Clock size={12} className="inline mr-1 -mt-0.5" />}{fmtDate(r.due_date)}
                       </td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] tabular-nums">{r.priority_score ?? '—'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)] tabular-nums">{r.priority_score ?? 'N/A'}</td>
                       <td className="px-4 py-2.5">
                         <div className="flex items-center justify-end gap-1">
                           <button onClick={() => openEdit(r)} className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Edit"><Pencil size={14} /></button>
@@ -564,7 +560,7 @@ export default function ActionCenter() {
                 </div>
                 <div>
                   <label className="label">Priority score (optional)</label>
-                  <input className="input w-full" type="number" step="1" min="0" placeholder="0–100" value={form.priority_score} onChange={(e) => set('priority_score', e.target.value)} />
+                  <input className="input w-full" type="number" step="1" min="0" placeholder="0 to 100" value={form.priority_score} onChange={(e) => set('priority_score', e.target.value)} />
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -622,7 +618,7 @@ export default function ActionCenter() {
               <div>
                 <h3 className="text-[var(--text-primary)] font-semibold">Delete this action item?</h3>
                 <p className="text-sm text-[var(--text-muted)] mt-1">
-                  {confirmDelete.title || 'Action item'} · {CATEGORY_LABEL[confirmDelete.category] || confirmDelete.category || '—'}. This can’t be undone.
+                  {confirmDelete.title || 'Action item'} · {CATEGORY_LABEL[confirmDelete.category] || confirmDelete.category || 'N/A'}. This can’t be undone.
                 </p>
               </div>
             </div>

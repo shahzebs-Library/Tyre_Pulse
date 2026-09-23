@@ -40,6 +40,7 @@ import DateField from '../components/ui/DateField'
 import StatTile from '../components/ui/StatTile'
 import Gauge from '../components/ui/Gauge'
 import Skeleton, { SkeletonCards, SkeletonChart } from '../components/ui/Skeleton'
+import Card, { CardHeader, CardBody } from '../components/ui/Card'
 
 // exportUtils and its report engines are ~41 kB gz that only matter once someone
 // actually asks for a file, so they load on first click rather than riding with
@@ -159,21 +160,13 @@ function HealthRing({ score }) {
 /* ── Chart Panel ─────────────────────────────────────────────────────────── */
 function ChartPanel({ title, subtitle, icon: Icon, onExpand, children, className = '' }) {
   return (
-    <div className={`card group ${className}`}>
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex items-center gap-2.5">
-          {Icon && (
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-              style={{ background: 'rgba(22,163,74,0.1)', border: '1px solid rgba(22,163,74,0.2)' }}>
-              <Icon size={14} className="text-green-400" />
-            </div>
-          )}
-          <div>
-            <h3 className="text-sm font-semibold text-[var(--text-primary)] leading-none">{title}</h3>
-            {subtitle && <p className="text-[11px] text-gray-500 mt-0.5">{subtitle}</p>}
-          </div>
-        </div>
-        {onExpand && (
+    <Card className={`group ${className}`}>
+      <CardHeader
+        level={2}
+        icon={Icon}
+        title={title}
+        description={subtitle}
+        actions={onExpand && (
           <button
             onClick={onExpand}
             className="opacity-0 group-hover:opacity-100 transition-opacity w-6 h-6 flex items-center justify-center rounded-md text-gray-600 hover:text-white hover:bg-white/5"
@@ -181,9 +174,9 @@ function ChartPanel({ title, subtitle, icon: Icon, onExpand, children, className
             <Maximize2 size={12} />
           </button>
         )}
-      </div>
-      {children}
-    </div>
+      />
+      <CardBody grow>{children}</CardBody>
+    </Card>
   )
 }
 
@@ -440,7 +433,7 @@ export default function Dashboard() {
       .filter(isHigh)
       .map(r => ({
         id: r.id ?? `${r.asset_no}-${r.serial_no}`,
-        asset: r.asset_no || '—',
+        asset: r.asset_no || 'N/A',
         detail: [r.brand, r.site].filter(Boolean).join(' · ') || (r.category || ''),
         cost: recordCost(r),
       }))
@@ -1083,21 +1076,18 @@ export default function Dashboard() {
       </div>
 
       {/* ── PRIORITY RECOMMENDATIONS (concise, number-led, real data only) ─── */}
-      <div className="card">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-              style={{ background: 'rgba(234,88,12,0.1)', border: '1px solid rgba(234,88,12,0.2)' }}>
-              <Zap size={13} className="text-orange-400" />
-            </div>
-            <h3 className="text-sm font-semibold text-[var(--text-primary)]">
-              {tf('dashboard.recs.title', 'Priority Recommendations')}
-            </h3>
-          </div>
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-            {tf('dashboard.recs.count', '{count} to act on', { count: recommendations.length })}
-          </span>
-        </div>
+      <Card>
+        <CardHeader
+          level={2}
+          icon={Zap}
+          title={tf('dashboard.recs.title', 'Priority Recommendations')}
+          actions={
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+              {tf('dashboard.recs.count', '{count} to act on', { count: recommendations.length })}
+            </span>
+          }
+        />
+        <CardBody>
         {recommendations.length === 0 ? (
           <div className="flex items-center gap-2 py-3 text-sm text-[var(--text-muted)]">
             <ShieldCheck size={15} className="text-[var(--accent)]" />
@@ -1119,29 +1109,24 @@ export default function Dashboard() {
             ))}
           </ul>
         )}
-      </div>
+        </CardBody>
+      </Card>
 
       {/* ── PREVENTIVE MAINTENANCE (compact signal, real plans only) ──────── */}
       {pm.status === 'ready' && pmCompliance.total > 0 && (
-        <div className="card">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-                style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)' }}>
-                <Wrench size={13} className="text-blue-400" />
-              </div>
-              <h3 className="text-sm font-semibold text-[var(--text-primary)]">
-                {tf('dashboard.pm.title', 'Preventive Maintenance')}
-              </h3>
-              <span className="text-[11px] text-[var(--text-muted)]">
-                {tf('dashboard.pm.activePlans', '{count} active plans', { count: pmCompliance.active })}
-              </span>
-            </div>
-            <Link to="/pm-programs" className="text-[11px] text-blue-500 hover:text-blue-400 font-medium flex items-center gap-1 transition-colors">
-              {tf('dashboard.pm.view', 'View')} <ChevronRight size={11} />
-            </Link>
-          </div>
-          <div className="grid grid-cols-3 gap-3">
+        <Card>
+          <CardHeader
+            level={2}
+            icon={Wrench}
+            title={tf('dashboard.pm.title', 'Preventive Maintenance')}
+            description={tf('dashboard.pm.activePlans', '{count} active plans', { count: pmCompliance.active })}
+            actions={
+              <Link to="/pm-programs" className="text-[11px] text-blue-500 hover:text-blue-400 font-medium flex items-center gap-1 transition-colors">
+                {tf('dashboard.pm.view', 'View')} <ChevronRight size={11} />
+              </Link>
+            }
+          />
+          <div className="grid grid-cols-3 gap-[var(--space-3)]">
             <Link to="/pm-programs" className="rounded-xl px-3 py-2.5 transition-colors"
               style={{ background: 'rgba(234,88,12,0.06)', border: '1px solid rgba(234,88,12,0.16)' }}>
               <p className="text-2xl font-extrabold leading-none tabular-nums text-orange-400">{pmCompliance.overdue}</p>
@@ -1160,7 +1145,7 @@ export default function Dashboard() {
               <p className="text-label mt-1.5">{tf('dashboard.pm.compliance', 'Compliance')}</p>
             </div>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* ── WORKSHOP TODAY (live technician + job-card signal, engine-sourced) ─
@@ -1168,22 +1153,18 @@ export default function Dashboard() {
            Every number comes from the shared workshopLive engine via
            loadWorkshopKpis - no maths is duplicated here. */}
       {ws.status === 'ready' && ws.hasData && ws.kpis && (
-        <div className="card">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-                style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)' }}>
-                <Activity size={13} className="text-green-400" />
-              </div>
-              <h3 className="text-sm font-semibold text-[var(--text-primary)]">
-                {tf('dashboard.workshop.title', 'Workshop Today')}
-              </h3>
-            </div>
-            <Link to="/workshop-live" className="text-[11px] text-green-500 hover:text-green-400 font-medium flex items-center gap-1 transition-colors">
-              {tf('dashboard.workshop.view', 'Live Control')} <ChevronRight size={11} />
-            </Link>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-3">
+        <Card>
+          <CardHeader
+            level={2}
+            icon={Activity}
+            title={tf('dashboard.workshop.title', 'Workshop Today')}
+            actions={
+              <Link to="/workshop-live" className="text-[11px] text-green-500 hover:text-green-400 font-medium flex items-center gap-1 transition-colors">
+                {tf('dashboard.workshop.view', 'Live Control')} <ChevronRight size={11} />
+              </Link>
+            }
+          />
+          <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-[var(--space-3)]">
             {[
               { key: 'working',   label: tf('dashboard.workshop.working', 'Working'),        value: ws.kpis.working,           color: '#22c55e' },
               { key: 'available', label: tf('dashboard.workshop.available', 'Available'),    value: ws.kpis.available,         color: '#38bdf8' },
@@ -1202,7 +1183,7 @@ export default function Dashboard() {
               </Link>
             ))}
           </div>
-        </div>
+        </Card>
       )}
 
       {/* ── JOB CARDS TODAY (asset availability, from the job card export) ──
@@ -1212,13 +1193,16 @@ export default function Dashboard() {
       <DailyJobCards country={activeCountry} />
 
       {/* ── FLEET GAUGES + NEEDS ATTENTION (instrument row) ──────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-        <div className="card lg:col-span-3">
-          <div className="flex items-center justify-between mb-1">
-            <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t('dashboard.gauges.title')}</h3>
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">{t('dashboard.gauges.sub')}</span>
-          </div>
-          <div className="grid grid-cols-3 gap-2 justify-items-center pt-3">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-[var(--gap-grid)]">
+        <Card className="lg:col-span-3">
+          <CardHeader
+            level={2}
+            title={t('dashboard.gauges.title')}
+            actions={
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">{t('dashboard.gauges.sub')}</span>
+            }
+          />
+          <div className="grid grid-cols-3 gap-[var(--space-2)] justify-items-center">
             <Gauge index={0} value={fleetHealthScore} max={100} label={t('dashboard.gauges.health')} />
             <Gauge index={1} value={stats.tyres ? (stats.critical / stats.tyres) * 100 : 0} max={100} unit="%"
               label={t('dashboard.gauges.critical')} reverse format={(x) => x.toFixed(1)} />
@@ -1226,19 +1210,21 @@ export default function Dashboard() {
               value={Math.min(100, ((tyreLife?.avgLifeKm || 0) / ((appSettings?.expected_km_per_tyre) || 100000)) * 100)}
               max={100} unit="%" label={t('dashboard.gauges.lifeTarget')} format={(x) => Math.round(x)} />
           </div>
-        </div>
+        </Card>
 
         {/* NEEDS ATTENTION */}
-        <div className="card !p-0 overflow-hidden lg:col-span-2">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--card-border,rgba(255,255,255,0.06))]">
-          <div className="flex items-center gap-2">
-            <AlertTriangle size={15} className="text-[#f26161]" />
-            <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t('dashboard.attention.title')}</h3>
-          </div>
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-            {t('dashboard.attention.count', { count: attentionItems.length })}
-          </span>
-        </div>
+        <Card pad="none" clip tone={attentionItems.length ? 'crit' : 'default'} className="lg:col-span-2">
+        <CardHeader
+          level={2}
+          icon={AlertTriangle}
+          title={t('dashboard.attention.title')}
+          actions={
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+              {t('dashboard.attention.count', { count: attentionItems.length })}
+            </span>
+          }
+          className="!mb-0 px-[var(--space-4)] py-[var(--space-3)] border-b border-[var(--border-dim)]"
+        />
         {attentionItems.length === 0 ? (
           <div className="px-4 py-6 text-sm text-[var(--text-muted)] flex items-center gap-2">
             <ShieldCheck size={15} className="text-[var(--accent)]" /> {t('dashboard.attention.allClear')}
@@ -1262,11 +1248,13 @@ export default function Dashboard() {
             ))}
           </ul>
         )}
-        </div>
+        </Card>
       </div>
 
       {/* ── COMMAND BAR (filters) ─────────────────────────────────────────── */}
-      <div className="card py-4 space-y-3">
+      {/* No `clip`: this card holds a native select and the custom-date picker,
+          and clipping them is exactly the bug the Card primitive exists to end. */}
+      <Card className="gap-[var(--space-3)]">
         <div className="flex flex-wrap gap-3 items-center">
           {/* Search */}
           <div className="relative flex-1 min-w-52">
@@ -1359,7 +1347,7 @@ export default function Dashboard() {
             </motion.div>
           )}
         </AnimatePresence>
-      </div>
+      </Card>
 
       {/* ── QUICK ACTIONS ────────────────────────────────────────────────── */}
       <div className="flex flex-wrap gap-2">
@@ -1371,9 +1359,9 @@ export default function Dashboard() {
       </div>
 
       {/* ── INTEL ROW - Avg Life + Seasonal ──────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-[var(--gap-grid)]">
         {/* Avg tyre life */}
-        <div className="card flex flex-col items-center justify-center text-center gap-1 py-6">
+        <Card className="items-center justify-center text-center gap-[var(--space-1)]">
           <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-2"
             style={{ background:'rgba(59,130,246,0.1)', border:'1px solid rgba(59,130,246,0.25)' }}>
             <Clock size={16} className="text-blue-400" />
@@ -1384,7 +1372,7 @@ export default function Dashboard() {
           </p>
           <p className="text-xs text-gray-600">{t('dashboard.intel.days')}</p>
           {tyreLife?.avgLifeKm != null && <p className="text-[10px] text-gray-700 mt-0.5">{t('dashboard.intel.kmAvg', { km: tyreLife.avgLifeKm.toLocaleString() })}</p>}
-        </div>
+        </Card>
 
         {/* Seasonal chart */}
         <ChartPanel title={t('dashboard.charts.seasonalPattern')} subtitle={t('dashboard.charts.seasonalSubtitle')} icon={BarChart2} className="lg:col-span-2">
@@ -1395,7 +1383,7 @@ export default function Dashboard() {
       </div>
 
       {/* ── MAIN CHART + BRAND ────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-[var(--gap-grid)]">
         <ChartPanel title={periodChartTitle} subtitle={t('dashboard.charts.periodSubtitle', { period: dateShortcut, count: tyres.length.toLocaleString() })} icon={TrendingUp} onExpand={() => setExpandedChart('main')} className="lg:col-span-2">
           <div className="h-60">
             <Bar data={periodChartData} options={{ ...BASE_OPTS, plugins: { legend: LEGEND } }} />
@@ -1411,11 +1399,15 @@ export default function Dashboard() {
       </div>
 
       {/* ── TOP VEHICLES (benchmark bars) ────────────────────────────────── */}
-      <div className="card">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t('dashboard.topVehicles.title')}</h3>
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">{t('dashboard.topVehicles.sub')}</span>
-        </div>
+      <Card>
+        <CardHeader
+          level={2}
+          title={t('dashboard.topVehicles.title')}
+          actions={
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">{t('dashboard.topVehicles.sub')}</span>
+          }
+        />
+        <CardBody>
         {topVehicles.rows.length === 0 ? (
           <p className="text-sm text-[var(--text-muted)] py-4">{t('dashboard.topVehicles.empty')}</p>
         ) : (
@@ -1438,7 +1430,8 @@ export default function Dashboard() {
             <p className="text-[11px] text-[var(--text-dim)] pt-1">{t('dashboard.topVehicles.avgNote', { avg: `${activeCurrency} ${Math.round(topVehicles.avg).toLocaleString()}` })}</p>
           </div>
         )}
-      </div>
+        </CardBody>
+      </Card>
 
       {/* ── COST TREND ───────────────────────────────────────────────────── */}
       <ChartPanel title={t('dashboard.charts.monthlyCostTrend', { currency: activeCurrency })} subtitle={t('dashboard.charts.costSubtitle')} icon={DollarSign} onExpand={() => setExpandedChart('cost')}>
@@ -1448,19 +1441,14 @@ export default function Dashboard() {
       </ChartPanel>
 
       {/* ── FORECAST ─────────────────────────────────────────────────────── */}
-      <div className="card">
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background:'rgba(59,130,246,0.1)', border:'1px solid rgba(59,130,246,0.2)' }}>
-              <Zap size={14} className="text-blue-400" />
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t('dashboard.forecast.title')}</h3>
-              <p className="text-[11px] text-gray-500">{t('dashboard.forecast.subtitle')} <span className="text-blue-400">{forecastData.confidence}</span></p>
-            </div>
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-3 mb-4">
+      <Card>
+        <CardHeader
+          level={2}
+          icon={Zap}
+          title={t('dashboard.forecast.title')}
+          description={<>{t('dashboard.forecast.subtitle')} <span className="text-blue-400">{forecastData.confidence}</span></>}
+        />
+        <div className="grid grid-cols-2 gap-[var(--space-3)] mb-[var(--space-4)]">
           {[
             { label:t('dashboard.forecast.thisMonth'), value:`~${forecastData.forecastThisMonth}`, color:'text-blue-400' },
             { label:t('dashboard.forecast.nextMonth'), value:`~${forecastData.forecastNextMonth}`, color:'text-blue-300' },
@@ -1474,10 +1462,10 @@ export default function Dashboard() {
         <div className="h-44">
           <Bar data={{ labels: forecastData.chartLabels, datasets: [{ label:t('dashboard.forecast.actual'), data:forecastData.actualData, backgroundColor:'rgba(22,163,74,0.75)', borderRadius:5 }, { label:t('dashboard.forecast.forecast'), data:forecastData.projectedData, backgroundColor:'rgba(59,130,246,0.55)', borderRadius:5 }] }} options={{ ...BASE_OPTS, plugins:{ legend:LEGEND } }} />
         </div>
-      </div>
+      </Card>
 
       {/* ── RISK + CATEGORY ──────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-[var(--gap-grid)]">
         <ChartPanel title={t('dashboard.charts.riskDistribution')} icon={AlertTriangle}>
           <div className="h-52">
             <Bar data={riskDistData} options={{ ...H_BAR, scales:{ x:{ ticks:TICK, grid:GRID }, y:{ ticks:{ color:'#9ca3af' }, grid:GRID } } }} />
@@ -1493,7 +1481,7 @@ export default function Dashboard() {
       </div>
 
       {/* ── TOP ASSETS + SITES ───────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-[var(--gap-grid)]">
         <ChartPanel title={t('dashboard.charts.topAssets', { currency: activeCurrency })} subtitle={t('dashboard.charts.topAssetsSubtitle')} icon={Cpu}>
           <div className="h-64">
             {topAssetsData
@@ -1511,7 +1499,7 @@ export default function Dashboard() {
       </div>
 
       {/* ── RISK MIX TREND + SPEND SPLIT ─────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-[var(--gap-grid)]">
         <ChartPanel title={tf('dashboard.charts.riskMixTrend', 'Risk Mix Over Time')} subtitle={tf('dashboard.charts.riskMixSubtitle', 'Monthly tyre volume by risk level · last 12 months')} icon={Activity} onExpand={riskMixData ? () => setExpandedChart('riskMix') : undefined}>
           <div className="h-64">
             {riskMixData
@@ -1533,20 +1521,20 @@ export default function Dashboard() {
         <YearlyTrendPanel compact title="Spend by year (tyres / spare / lubricant) + forecast" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-[var(--gap-grid)]">
         {/* Recent tyre records */}
-        <div className="card">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background:'rgba(22,163,74,0.1)', border:'1px solid rgba(22,163,74,0.2)' }}>
-                <CircleDot size={13} className="text-green-400" />
-              </div>
-              <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t('dashboard.activity.recentTyreRecords')}</h3>
-            </div>
-            <Link to="/tyres" className="text-[11px] text-green-600 hover:text-green-400 font-medium flex items-center gap-1 transition-colors">
-              {t('dashboard.activity.viewAll')} <ChevronRight size={11} />
-            </Link>
-          </div>
+        <Card>
+          <CardHeader
+            level={2}
+            icon={CircleDot}
+            title={t('dashboard.activity.recentTyreRecords')}
+            actions={
+              <Link to="/tyres" className="text-[11px] text-green-600 hover:text-green-400 font-medium flex items-center gap-1 transition-colors">
+                {t('dashboard.activity.viewAll')} <ChevronRight size={11} />
+              </Link>
+            }
+          />
+          <CardBody grow>
           {recentRecords.length === 0
             ? <EmptyState compact icon="database" title={t('dashboard.activity.noRecords')} description={t('dashboard.activity.noRecordsDesc')} />
             : (
@@ -1574,21 +1562,22 @@ export default function Dashboard() {
                 ))}
               </div>
             )}
-        </div>
+          </CardBody>
+        </Card>
 
         {/* Open corrective actions */}
-        <div className="card">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background:'rgba(245,158,11,0.1)', border:'1px solid rgba(245,158,11,0.2)' }}>
-                <ClipboardList size={13} className="text-yellow-400" />
-              </div>
-              <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t('dashboard.activity.openActions')}</h3>
-            </div>
-            <Link to="/actions" className="text-[11px] text-yellow-600 hover:text-yellow-400 font-medium flex items-center gap-1 transition-colors">
-              {t('dashboard.activity.viewAll')} <ChevronRight size={11} />
-            </Link>
-          </div>
+        <Card>
+          <CardHeader
+            level={2}
+            icon={ClipboardList}
+            title={t('dashboard.activity.openActions')}
+            actions={
+              <Link to="/actions" className="text-[11px] text-yellow-600 hover:text-yellow-400 font-medium flex items-center gap-1 transition-colors">
+                {t('dashboard.activity.viewAll')} <ChevronRight size={11} />
+              </Link>
+            }
+          />
+          <CardBody grow>
           {openActions.length === 0
             ? <EmptyState compact icon="search" title={t('dashboard.activity.noActions')} description={t('dashboard.activity.noActionsDesc')} />
             : (
@@ -1617,7 +1606,8 @@ export default function Dashboard() {
                 })}
               </div>
             )}
-        </div>
+          </CardBody>
+        </Card>
       </div>
 
       {/* Chart modals */}

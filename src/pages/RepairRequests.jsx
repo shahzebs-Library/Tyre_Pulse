@@ -39,6 +39,8 @@ import {
   Inbox, Wrench, Link2, ChevronRight, Hash, User, Camera, ListChecks,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import Card, { CardHeader } from '../components/ui/Card'
+import Modal from '../components/ui/Modal'
 import EmptyState from '../components/EmptyState'
 import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import { useSettings } from '../contexts/SettingsContext'
@@ -96,11 +98,18 @@ function hours(n) {
 }
 
 function Tile({ label, value, sub, icon: Icon, tone, active, onClick }) {
-  const Cmp = onClick ? 'button' : 'div'
   return (
-    <Cmp
+    <Card
+      as={onClick ? 'button' : 'div'}
+      pad="tight"
+      // `interactive` replaces the hand-rolled hover border and, unlike it,
+      // also carries a focus-visible ring - and it is only set when the WHOLE
+      // tile is genuinely a button.
+      interactive={!!onClick}
       onClick={onClick}
-      className={`card p-4 text-left w-full ${onClick ? 'hover:border-white/20 transition-colors' : ''}`}
+      className="text-left w-full"
+      // Card spreads `style` last, so the active accent still wins over the
+      // borderColor Card sets from its tone.
       style={active ? { borderColor: 'var(--accent)' } : undefined}
     >
       <div className="flex items-center justify-between mb-1">
@@ -111,7 +120,7 @@ function Tile({ label, value, sub, icon: Icon, tone, active, onClick }) {
         {value === null || value === undefined ? 'N/A' : value}
       </div>
       {sub && <div className="text-[11px] mt-0.5" style={{ color: 'var(--text-dim)' }}>{sub}</div>}
-    </Cmp>
+    </Card>
   )
 }
 
@@ -429,6 +438,16 @@ export default function RepairRequests() {
     } finally { setBusy(false) }
   }
 
+  // ── stable dialog close handlers ──────────────────────────────────────────
+  // `useDialogBehavior` still lists `onClose` in its effect deps, so an inline
+  // arrow is a fresh identity on every render. All three of these dialogs keep
+  // their form state HERE in the page, so each keystroke would tear the effect
+  // down and re-focus the panel, making the field untypeable. A stable callback
+  // is what keeps the effect running exactly once per open/close.
+  const closeReject = useCallback(() => setRejecting(null), [])
+  const closeConvert = useCallback(() => setConverting(null), [])
+  const closeForm = useCallback(() => setForm(null), [])
+
   // ── chart data (palette follows the shared report theme) ──────────────────
   const funnelData = useMemo(() => {
     const steps = funnel.filter((s) => s.key !== 'rejected' && s.key !== 'cancelled')
@@ -518,8 +537,11 @@ export default function RepairRequests() {
   const notProvisioned = queue && !queue.ok
 
   const filterPanel = (
-    <div className="card p-4">
-      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+    // Deliberately NOT `clip`: every control in here is a native <select> or a
+    // date input, and overflow:hidden on the surface is the clipping bug Card
+    // exists to end.
+    <Card pad="tight">
+      <div className="grid gap-[var(--space-3)] md:grid-cols-2 lg:grid-cols-4">
         <label className="block">
           <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Search</span>
           <div className="relative mt-1">
@@ -589,7 +611,7 @@ export default function RepairRequests() {
           <X className="w-3 h-3" /> Clear filters
         </button>
       </div>
-    </div>
+    </Card>
   )
 
   return (
@@ -646,12 +668,16 @@ export default function RepairRequests() {
         })}
       </div>
 
+      {/* Card is `flex flex-col` and Tailwind emits .flex-col after .flex-row, so
+          a `flex-row` class would silently lose. The direction goes in `style`,
+          which Card spreads last - which is also why the tone colours below
+          still override the surface and border Card sets inline. */}
       {notice && (
-        <div className="card p-3 flex items-start justify-between gap-3"
-          style={{ background: TONE.good.bg, borderColor: TONE.good.border }}>
+        <Card pad="tight" className="items-start justify-between gap-[var(--space-3)]"
+          style={{ flexDirection: 'row', background: TONE.good.bg, borderColor: TONE.good.border }}>
           <p className="text-sm" style={{ color: TONE.good.text }}>{notice}</p>
           <button onClick={() => setNotice('')} className="btn-secondary text-xs">Dismiss</button>
-        </div>
+        </Card>
       )}
 
       {showFilters && tab !== 'analytics' && filterPanel}
@@ -660,17 +686,22 @@ export default function RepairRequests() {
       {tab === 'requests' && (
         <>
           {queueError && (
-            <div className="card p-4 flex items-start justify-between gap-3"
-              style={{ background: TONE.danger.bg, borderColor: TONE.danger.border }}>
+            <Card pad="tight" className="items-start justify-between gap-[var(--space-3)]"
+              style={{ flexDirection: 'row', background: TONE.danger.bg, borderColor: TONE.danger.border }}>
               <p className="text-sm" style={{ color: TONE.danger.text }}>{queueError}</p>
               <button onClick={loadQueue} className="btn-secondary text-xs">Retry</button>
-            </div>
+            </Card>
           )}
 
           {queueLoading ? (
-            <div className="card p-10 text-center text-sm" style={{ color: 'var(--text-secondary)' }}>
-              Loading the repair request queue...
-            </div>
+            // `p-10` on a Card would be dead, so the extra breathing room moves
+            // onto the content: 20px from the card plus 20px here reproduces it.
+            <Card>
+              <div className="text-center text-sm"
+                style={{ color: 'var(--text-secondary)', paddingTop: 'var(--space-5)', paddingBottom: 'var(--space-5)' }}>
+                Loading the repair request queue...
+              </div>
+            </Card>
           ) : notProvisioned ? (
             <EmptyState
               icon={ClipboardList}
@@ -711,26 +742,31 @@ export default function RepairRequests() {
               </div>
 
               {queue.truncated && (
-                <div className="card p-3" style={{ background: TONE.warning.bg, borderColor: TONE.warning.border }}>
+                <Card pad="tight" style={{ background: TONE.warning.bg, borderColor: TONE.warning.border }}>
                   <p className="text-sm" style={{ color: TONE.warning.text }}>
                     This view was capped. Narrow the date range to see the whole register.
                   </p>
-                </div>
+                </Card>
               )}
 
               {findings.length > 0 && (
-                <div className="card p-4 space-y-2">
-                  <h3 className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>What needs attention</h3>
-                  {findings.map((f, i) => (
-                    <div key={i} className="rounded-lg px-3 py-2 text-sm"
-                      style={{ background: TONE[f.tone]?.bg, border: `1px solid ${TONE[f.tone]?.border}`, color: TONE[f.tone]?.text }}>
-                      {f.text}
-                    </div>
-                  ))}
-                </div>
+                <Card pad="tight">
+                  <CardHeader title="What needs attention" level={2} />
+                  <div className="space-y-2">
+                    {findings.map((f, i) => (
+                      <div key={i} className="rounded-lg px-3 py-2 text-sm"
+                        style={{ background: TONE[f.tone]?.bg, border: `1px solid ${TONE[f.tone]?.border}`, color: TONE[f.tone]?.text }}>
+                        {f.text}
+                      </div>
+                    ))}
+                  </div>
+                </Card>
               )}
 
-              <div className="card overflow-hidden">
+              {/* `pad="none"` lets the table sit flush. It does NOT take `clip`:
+                  TablePagination carries a native <select>, and rule one of this
+                  kit is that a card holding a dropdown never gets overflow:hidden. */}
+              <Card pad="none">
                 {!sortedQueue.length ? (
                   <EmptyState
                     icon={Inbox}
@@ -792,7 +828,7 @@ export default function RepairRequests() {
                     <TablePagination {...queuePager} />
                   </div>
                 )}
-              </div>
+              </Card>
             </>
           )}
         </>
@@ -802,17 +838,20 @@ export default function RepairRequests() {
       {tab === 'jobcards' && (
         <>
           {cardsError && (
-            <div className="card p-4 flex items-start justify-between gap-3"
-              style={{ background: TONE.danger.bg, borderColor: TONE.danger.border }}>
+            <Card pad="tight" className="items-start justify-between gap-[var(--space-3)]"
+              style={{ flexDirection: 'row', background: TONE.danger.bg, borderColor: TONE.danger.border }}>
               <p className="text-sm" style={{ color: TONE.danger.text }}>{cardsError}</p>
               <button onClick={loadCards} className="btn-secondary text-xs">Retry</button>
-            </div>
+            </Card>
           )}
 
           {cardsLoading ? (
-            <div className="card p-10 text-center text-sm" style={{ color: 'var(--text-secondary)' }}>
-              Loading job cards that name an RFR...
-            </div>
+            <Card>
+              <div className="text-center text-sm"
+                style={{ color: 'var(--text-secondary)', paddingTop: 'var(--space-5)', paddingBottom: 'var(--space-5)' }}>
+                Loading job cards that name an RFR...
+              </div>
+            </Card>
           ) : cards && !cards.ok ? (
             <EmptyState
               icon={Wrench}
@@ -844,17 +883,17 @@ export default function RepairRequests() {
               </div>
 
               {cards?.truncated && (
-                <div className="card p-3" style={{ background: TONE.warning.bg, borderColor: TONE.warning.border }}>
+                <Card pad="tight" style={{ background: TONE.warning.bg, borderColor: TONE.warning.border }}>
                   <p className="text-sm" style={{ color: TONE.warning.text }}>
                     This view was capped before the whole history was read. Narrow the date range for a complete set.
                   </p>
-                </div>
+                </Card>
               )}
 
-              <div className="card p-4">
-                <h3 className="text-sm font-medium mb-3" style={{ color: 'var(--text-primary)' }}>
-                  Job cards raised from a request, by month
-                </h3>
+              {/* No `clip` on any chart card: a tooltip that overflows its well
+                  must not be cut off. */}
+              <Card pad="tight">
+                <CardHeader title="Job cards raised from a request, by month" level={2} />
                 {cardTrend.points.some((p) => p.count) ? (
                   <div className="h-56"><Line data={cardTrendData} options={chartOpts(legendOpts)} /></div>
                 ) : (
@@ -866,9 +905,9 @@ export default function RepairRequests() {
                     {cardTrend.anchoredToData ? ', the newest month with data.' : '.'}
                   </p>
                 )}
-              </div>
+              </Card>
 
-              <div className="card overflow-hidden">
+              <Card pad="none">
                 {!filteredCards.length ? (
                   <EmptyState
                     icon={Wrench}
@@ -908,10 +947,10 @@ export default function RepairRequests() {
                     <TablePagination {...cardsPager} />
                   </div>
                 )}
-              </div>
+              </Card>
 
-              <div className="card p-4">
-                <h3 className="text-sm font-medium mb-3" style={{ color: 'var(--text-primary)' }}>Where requests come from</h3>
+              <Card pad="tight">
+                <CardHeader title="Where requests come from" level={2} />
                 {bySiteCards.length ? (
                   <div className="space-y-1.5">
                     {bySiteCards.map((g, i) => {
@@ -930,7 +969,7 @@ export default function RepairRequests() {
                 ) : (
                   <p className="text-sm" style={{ color: 'var(--text-dim)' }}>Nothing to show in this view.</p>
                 )}
-              </div>
+              </Card>
             </>
           )}
         </>
@@ -953,12 +992,15 @@ export default function RepairRequests() {
             />
           ) : (
             <>
-              <div className="grid gap-4 lg:grid-cols-2">
-                <div className="card p-4">
-                  <h3 className="text-sm font-medium mb-1" style={{ color: 'var(--text-primary)' }}>Conversion funnel</h3>
-                  <p className="text-[11px] mb-3" style={{ color: 'var(--text-dim)' }}>
-                    A converted request was necessarily acknowledged, so the middle stage counts it even when nobody stamped the acknowledgement.
-                  </p>
+              {/* No `clip` on any of these: a chart tooltip that overflows its
+                  well must not be cut off. */}
+              <div className="grid gap-[var(--gap-grid)] lg:grid-cols-2">
+                <Card pad="tight">
+                  <CardHeader
+                    title="Conversion funnel"
+                    level={2}
+                    description="A converted request was necessarily acknowledged, so the middle stage counts it even when nobody stamped the acknowledgement."
+                  />
                   <div className="h-64"><Bar data={funnelData} options={chartOpts({ indexAxis: 'y' })} /></div>
                   <div className="mt-3 space-y-1">
                     {funnel.map((s) => (
@@ -971,39 +1013,40 @@ export default function RepairRequests() {
                       </div>
                     ))}
                   </div>
-                </div>
+                </Card>
 
-                <div className="card p-4">
-                  <h3 className="text-sm font-medium mb-1" style={{ color: 'var(--text-primary)' }}>How long until a job card</h3>
-                  <p className="text-[11px] mb-3" style={{ color: 'var(--text-dim)' }}>
-                    {convertBands.unconverted
+                <Card pad="tight">
+                  <CardHeader
+                    title="How long until a job card"
+                    level={2}
+                    description={convertBands.unconverted
                       ? `${convertBands.unconverted} request${convertBands.unconverted === 1 ? '' : 's'} never converted and are excluded rather than counted as a long wait.`
                       : 'Every request in this view converted.'}
-                  </p>
+                  />
                   <div className="h-64"><Bar data={bandData} options={chartOpts()} /></div>
-                </div>
+                </Card>
 
-                <div className="card p-4">
-                  <h3 className="text-sm font-medium mb-3" style={{ color: 'var(--text-primary)' }}>What is being reported</h3>
+                <Card pad="tight">
+                  <CardHeader title="What is being reported" level={2} />
                   {byFault.length ? (
                     <div className="h-64"><Doughnut data={faultData} options={chartOpts(legendOpts)} /></div>
                   ) : (
                     <p className="text-sm" style={{ color: 'var(--text-dim)' }}>Nothing to chart in this view.</p>
                   )}
-                </div>
+                </Card>
 
-                <div className="card p-4">
-                  <h3 className="text-sm font-medium mb-3" style={{ color: 'var(--text-primary)' }}>Requests by site</h3>
+                <Card pad="tight">
+                  <CardHeader title="Requests by site" level={2} />
                   {bySiteQueue.length ? (
                     <div className="h-64"><Bar data={siteData} options={chartOpts()} /></div>
                   ) : (
                     <p className="text-sm" style={{ color: 'var(--text-dim)' }}>Nothing to chart in this view.</p>
                   )}
-                </div>
+                </Card>
               </div>
 
-              <div className="card p-4">
-                <h3 className="text-sm font-medium mb-3" style={{ color: 'var(--text-primary)' }}>Raised and converted, by month</h3>
+              <Card pad="tight">
+                <CardHeader title="Raised and converted, by month" level={2} />
                 <div className="h-64"><Line data={trendData} options={chartOpts(legendOpts)} /></div>
                 {trend.anchor && (
                   <p className="text-[11px] mt-2" style={{ color: 'var(--text-dim)' }}>
@@ -1013,13 +1056,19 @@ export default function RepairRequests() {
                       : '.'}
                   </p>
                 )}
-              </div>
+              </Card>
             </>
           )}
         </>
       )}
 
-      {/* ── Drawer: one request ───────────────────────────────────────────── */}
+      {/* ── Drawer: one request ───────────────────────────────────────────────
+          DELIBERATELY still hand-rolled, and the only overlay on this page that
+          is. Modal has no drawer size: its panel is a centred box capped at
+          92dvh, so converting this would turn a full-height right-hand rail
+          into a dialog and change the layout rather than just the plumbing.
+          The same call was already made for the WorkOrders drawer in the first
+          migration wave. The three dialogs below DO use Modal. */}
       {open && (
         <div className="fixed inset-0 z-50 flex justify-end" style={{ background: 'rgba(0,0,0,0.5)' }}
           onClick={() => setOpen(null)}>
@@ -1143,61 +1192,65 @@ export default function RepairRequests() {
         </div>
       )}
 
-      {/* ── Reject, with a reason ─────────────────────────────────────────── */}
-      {rejecting && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.6)' }} onClick={() => setRejecting(null)}>
-          <div className="card p-5 w-full max-w-md space-y-3" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>Reject this request</h3>
-            <p className="text-xs" style={{ color: 'var(--text-dim)' }}>
-              A rejected request whose reason nobody recorded is indistinguishable from one that was lost, so the reason is required.
-            </p>
-            <textarea rows={3} className={inputCls} value={rejecting.reason}
-              placeholder="Why is this not going to a job card?"
-              onChange={(e) => setRejecting((r) => ({ ...r, reason: e.target.value }))} />
-            <div className="flex justify-end gap-2">
-              <button className="btn-secondary text-sm" onClick={() => setRejecting(null)}>Cancel</button>
-              <button className="btn-primary text-sm" disabled={busy || !rejecting.reason.trim()}
-                onClick={() => move(rejecting.row, 'rejected', rejecting.reason.trim())}>
-                Reject request
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ── Reject, with a reason ─────────────────────────────────────────────
+          Modal owns the backdrop, Escape, the focus trap, the scroll lock and
+          the height cap, so the hand-rolled backdrop click, the stopPropagation
+          guard and the fixed panel are all gone. */}
+      <Modal
+        open={!!rejecting}
+        onClose={closeReject}
+        size="sm"
+        title="Reject this request"
+        subtitle="A rejected request whose reason nobody recorded is indistinguishable from one that was lost, so the reason is required."
+        footer={(
+          <>
+            <button className="btn-secondary text-sm" onClick={closeReject}>Cancel</button>
+            <button className="btn-primary text-sm" disabled={busy || !rejecting?.reason?.trim()}
+              onClick={() => move(rejecting.row, 'rejected', rejecting.reason.trim())}>
+              Reject request
+            </button>
+          </>
+        )}
+      >
+        <textarea rows={3} className={inputCls} value={rejecting?.reason || ''}
+          placeholder="Why is this not going to a job card?"
+          onChange={(e) => setRejecting((r) => ({ ...r, reason: e.target.value }))} />
+      </Modal>
 
       {/* ── Convert to a job card ─────────────────────────────────────────── */}
-      {converting && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.6)' }} onClick={() => setConverting(null)}>
-          <div className="card p-5 w-full max-w-md space-y-3" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>Convert to a job card</h3>
-            <p className="text-xs" style={{ color: 'var(--text-dim)' }}>
-              The request and the card are stamped together, so the same job can never be open in both places. Leave the number blank to let the system mint one.
-            </p>
-            <label className="block">
-              <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Job card number (optional)</span>
-              <input className={`${inputCls} mt-1`} value={converting.workOrderNo}
-                placeholder="Leave blank to generate"
-                onChange={(e) => setConverting((c) => ({ ...c, workOrderNo: e.target.value }))} />
-            </label>
-            {formError && <p className="text-sm" style={{ color: TONE.danger.text }}>{formError}</p>}
-            <div className="flex justify-end gap-2">
-              <button className="btn-secondary text-sm" onClick={() => setConverting(null)}>Cancel</button>
-              <button className="btn-primary text-sm" disabled={busy} onClick={doConvert}>Convert</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal
+        open={!!converting}
+        onClose={closeConvert}
+        size="sm"
+        title="Convert to a job card"
+        subtitle="The request and the card are stamped together, so the same job can never be open in both places. Leave the number blank to let the system mint one."
+        footer={(
+          <>
+            <button className="btn-secondary text-sm" onClick={closeConvert}>Cancel</button>
+            <button className="btn-primary text-sm" disabled={busy} onClick={doConvert}>Convert</button>
+          </>
+        )}
+      >
+        <label className="block">
+          <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Job card number (optional)</span>
+          <input className={`${inputCls} mt-1`} value={converting?.workOrderNo || ''}
+            placeholder="Leave blank to generate"
+            onChange={(e) => setConverting((c) => ({ ...c, workOrderNo: e.target.value }))} />
+        </label>
+        {formError && <p className="text-sm mt-3" style={{ color: TONE.danger.text }}>{formError}</p>}
+      </Modal>
 
-      {/* ── Raise a request ───────────────────────────────────────────────── */}
+      {/* ── Raise a request ───────────────────────────────────────────────────
+          Mounted conditionally rather than driven by `open`, because every field
+          below reads `form.x` and Modal's props are built by this component
+          before Modal can check `open`. The submit button stays INSIDE the form
+          rather than moving to Modal's footer: out there it would need a
+          `form="..."` association to keep submitting, which is a behaviour
+          change, not a layout one. */}
       {form && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.6)' }} onClick={() => setForm(null)}>
-          <form onSubmit={submitForm} className="card p-5 w-full max-w-2xl space-y-3 max-h-[90vh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>Raise a repair request</h3>
-            <div className="grid gap-3 md:grid-cols-2">
+        <Modal open onClose={closeForm} size="md" title="Raise a repair request">
+          <form onSubmit={submitForm} className="space-y-3">
+            <div className="grid gap-[var(--space-3)] md:grid-cols-2">
               <label className="block">
                 <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>RFR number</span>
                 <input className={`${inputCls} mt-1`} value={form.rfr_no}
@@ -1261,11 +1314,11 @@ export default function RepairRequests() {
             </div>
             {formError && <p className="text-sm" style={{ color: TONE.danger.text }}>{formError}</p>}
             <div className="flex justify-end gap-2">
-              <button type="button" className="btn-secondary text-sm" onClick={() => setForm(null)}>Cancel</button>
+              <button type="button" className="btn-secondary text-sm" onClick={closeForm}>Cancel</button>
               <button type="submit" className="btn-primary text-sm" disabled={busy}>Raise request</button>
             </div>
           </form>
-        </div>
+        </Modal>
       )}
     </div>
   )

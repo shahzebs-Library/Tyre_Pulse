@@ -27,12 +27,14 @@ const h = vi.hoisted(() => ({
     { name: 'CAIRO', country: 'Egypt', region: null },
   ],
   sitesError: null,
+  configurationRows: [],
 }))
 
 vi.mock('../lib/supabase', () => {
   const channel = { on: () => channel, subscribe: () => channel }
   return {
     supabase: {
+      rpc: async () => ({ data: h.configurationRows, error: null }),
       from: (table) => ({
         select: () => (table === 'sites'
           ? Promise.resolve({ data: h.sitesError ? null : h.siteRows, error: h.sitesError })
@@ -80,6 +82,7 @@ beforeEach(() => {
     profile: { id: 'u1', role: 'Admin', is_super_admin: true, country: null, sites: ['ALL'] },
   }
   h.sitesError = null
+  h.configurationRows = []
 })
 
 describe('setWorkingContext writes the legacy activeCountry', () => {
@@ -222,4 +225,19 @@ describe('the site register is best-effort', () => {
     await act(async () => { api.setActiveCountry('UAE') })
     expect(api.activeCountry).toBe('UAE')
   })
+})
+
+
+it('does not retain previous tenant settings when membership changes', async () => {
+  h.auth.profile.organisation_id = 'org-a'
+  h.configurationRows = [{ key: 'company_name', value: '"Tenant A"' }]
+  const view = await mount()
+  await waitFor(() => expect(api.appSettings.company_name).toBe('Tenant A'))
+  h.auth = { ...h.auth, profile: { ...h.auth.profile, organisation_id: 'org-b' } }
+  h.configurationRows = []
+  view.rerender(createElement(SettingsProvider, null, createElement(Probe)))
+  expect(api.appSettings.company_name).not.toBe('Tenant A')
+  await waitFor(() => expect(api.settingsStatus).toBe('unconfigured'))
+  expect(api.appSettings.cost_per_tyre).toBe('')
+  expect(api.appSettings.currency).toBe('')
 })

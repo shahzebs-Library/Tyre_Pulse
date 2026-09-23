@@ -28,7 +28,8 @@ import {
   submissionSections, submissionSignatures, templateTitle, documentNo,
   templateFieldsOf, templateFromSubmission,
 } from './checklistView'
-import { gridFields, monthlySummary, cellText, isNotOk, isNotApplicable, needsAttention } from './checklistMonthly'
+import { gridFields, monthlySummary, cellText, isNotOk, isNotApplicable, needsAttention, submissionDate } from './checklistMonthly'
+import { checklistReviewIssues } from './checklist/fieldTypes'
 import { langMeta, normalizeLang } from './checklist/checklistI18n'
 
 const MX = 12                 // page margin, mm
@@ -106,11 +107,10 @@ export function checklistFileName(parts, { lang = 'en' } = {}) {
 }
 
 /** The date a sheet belongs to, as YYYY-MM-DD. Blank when nothing was recorded. */
-function fileDate(v) {
-  if (!v) return ''
-  const d = new Date(v)
-  if (Number.isNaN(d.getTime())) return ''
-  return d.toISOString().slice(0, 10)
+function fileDate(sub, fields) {
+  const { year, month, day } = submissionDate(sub, fields)
+  if (day == null) return ''
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
 
 function fmtDateTime(v) {
@@ -232,7 +232,7 @@ export async function renderChecklistPdf({
   header()
   let y = 30
 
-  const need = (h) => { if (y + h > ph - 18) { doc.addPage(); header(); y = 30 } }
+  const need = (h, bottom = 18) => { if (y + h > ph - bottom) { doc.addPage(); header(); y = 30 } }
 
   const sectionBar = (label) => {
     need(12)
@@ -335,6 +335,15 @@ export async function renderChecklistPdf({
   const allChecks = []
   for (const s2 of sections) for (const r of s2.rows) if (checkIds.has(r.id)) allChecks.push(r)
 
+  const reviewIssues = checklistReviewIssues(fields, sub.answers || {})
+  if (reviewIssues.length) {
+    sectionBar('Record requires review')
+    doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(...FAULT)
+    for (const issue of reviewIssues) {
+      const lines = doc.splitTextToSize(issue, pw - MX * 2)
+      need(lines.length * 4 + 3); doc.text(lines, MX, y); y += lines.length * 4 + 3
+    }
+  }
   const attention = allChecks.filter((r) => needsAttention(r.value))
   const okCount = allChecks.filter((r) => String(r.value ?? '').trim() && !needsAttention(r.value)
     && !isNotApplicable(r.value)).length
@@ -373,7 +382,7 @@ export async function renderChecklistPdf({
       startY: y,
       head: [['#', 'Check', 'Status', 'Remarks']],
       body,
-      margin: { left: MX, right: MX },
+      margin: { top: 30, bottom: 18, left: MX, right: MX },
       styles: { ...theme.styles, fontSize: 7.5, cellPadding: 1.4, overflow: 'linebreak' },
       columnStyles: {
         0: { cellWidth: 8, halign: 'center' },
@@ -399,7 +408,7 @@ export async function renderChecklistPdf({
     need(10)
     doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...INK)
     doc.text(allChecks.length
-      ? 'Nothing needed attention. Every check on this sheet was recorded OK or not applicable.'
+      ? (blankCount ? 'Some checks were not recorded. This sheet is incomplete.' : 'Nothing needed attention. Every check on this sheet was recorded OK or not applicable.')
       : 'This checklist recorded no inspection lines.', MX, y)
     y += 6
     tally()
@@ -420,7 +429,13 @@ export async function renderChecklistPdf({
     }
   }
 
+  need(items.length ? 72 : 20)
   sectionBar(`Photographs (${items.length})`)
+  if (items.length) {
+    doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(...MUTED)
+    doc.text('Attachments as submitted. Verify the vehicle identity and the check shown in each photo.', MX, y)
+    y += 6
+  }
   if (!items.length) {
     doc.setFontSize(7.5); doc.setFont('helvetica', 'italic'); doc.setTextColor(...MUTED)
     doc.text('No photographs were captured with this checklist.', MX + 2, y + 1)
@@ -476,6 +491,7 @@ export async function renderChecklistPdf({
 
   // ── Sign off: the names, beside the signatures they belong to ─────────────
   if (signoff.length) {
+    need(20)
     sectionBar('Sign off')
     const half = (pw - MX * 2) / 2
     for (let i = 0; i < signoff.length; i += 2) {
@@ -498,6 +514,9 @@ export async function renderChecklistPdf({
 
   // ── Signatures: every one of them ─────────────────────────────────────────
   const sigs = submissionSignatures(sub, { template, lang: language })
+  const unsignedOnly = sigs.length > 0 && sigs.every((s) => !s.data)
+  // Compact unsigned entries can use the space up to 4 mm above the footer rule.
+  need(sigs.length ? (unsignedOnly ? 21 : 47) : 18, unsignedOnly ? 14 : 18)
   sectionBar('Signatures')
   if (!sigs.length) {
     doc.setFontSize(7.5); doc.setFont('helvetica', 'italic'); doc.setTextColor(...MUTED)
@@ -507,15 +526,26 @@ export async function renderChecklistPdf({
     const cols = Math.min(3, sigs.length)
     const gap = 6
     const boxW = (pw - MX * 2 - gap * (cols - 1)) / cols
-    const boxH = 34
+    const boxH = unsignedOnly ? 12 : 34
     let col = 0
     let top = y
     for (const s of sigs) {
-      if (col === 0) { need(boxH + 4); top = y }
+      if (col === 0) { need(boxH, unsignedOnly ? 14 : 18); top = y }
       const x = MX + col * (boxW + gap)
       doc.setDrawColor(...LINE); doc.setLineWidth(0.3)
       doc.setFillColor(255, 255, 255)
       doc.rect(x, top, boxW, boxH, 'FD')
+      if (unsignedOnly) {
+        doc.setFontSize(6); doc.setFont('helvetica', 'normal'); doc.setTextColor(...MUTED)
+        doc.text(doc.splitTextToSize(pick(s.label, s.label, state), boxW - 4)[0] || '', x + 2, top + 3.3)
+        doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(...INK)
+        doc.text(doc.splitTextToSize(s.printedName || 'Name not recorded', boxW - 4)[0] || '', x + 2, top + 7)
+        doc.setFontSize(6); doc.setFont('helvetica', 'italic'); doc.setTextColor(...MUTED)
+        doc.text('Not signed', x + 2, top + 10.2)
+        col += 1
+        if (col >= cols) { col = 0; y = top + boxH + gap }
+        continue
+      }
       if (s.data && /^data:image\//i.test(s.data)) {
         try { doc.addImage(s.data, /png/i.test(s.data) ? 'PNG' : 'JPEG', x + 2, top + 2, boxW - 4, 16, undefined, 'FAST') }
         catch { /* a malformed data url just leaves the box empty */ }
@@ -568,7 +598,7 @@ export async function renderChecklistPdf({
   // only added when there is no number to carry it (it is already inside one).
   const docRefName = documentNo(sub)
   const name = filename || checklistFileName(
-    [title, docRefName || sub.asset_no || sub.id, fileDate(sub.submitted_at || sub.created_at)],
+    [title, docRefName || sub.asset_no || sub.id, fileDate(sub, fields)],
     { lang: language },
   )
   if (save) doc.save(`${name}.pdf`)

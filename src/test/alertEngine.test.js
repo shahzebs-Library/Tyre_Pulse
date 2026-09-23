@@ -65,6 +65,16 @@ function makeSupabaseMock({
 // ALERT_TYPES and SEVERITY constants
 // ─────────────────────────────────────────────────────────────────────────────
 describe('ALERT_TYPES and SEVERITY constants', () => {
+  it('does not query any table when no alert source module is permitted', async () => {
+    const db = makeSupabaseMock()
+    expect(await detectAlertBadgeCount(db, null, new Set(), [])).toBe(0)
+    expect(db.from).not.toHaveBeenCalled()
+  })
+  it('queries only the permitted inspection source for a restricted badge', async () => {
+    const db = makeSupabaseMock()
+    await detectAlertBadgeCount(db, null, new Set(), ['inspections'])
+    expect(db.from.mock.calls.map(([table]) => table)).toEqual(['inspections'])
+  })
   it('ALERT_TYPES has all expected keys', () => {
     expect(ALERT_TYPES.STOCK_CRITICAL).toBe('STOCK_CRITICAL')
     expect(ALERT_TYPES.BUDGET_OVERAGE).toBe('BUDGET_OVERAGE')

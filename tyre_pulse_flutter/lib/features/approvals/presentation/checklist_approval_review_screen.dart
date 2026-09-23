@@ -157,7 +157,12 @@ class _ChecklistApprovalReviewScreenState
           .byId(_submissionId);
       ChecklistApprovalTemplateInfo? templateInfo;
       final String? templateId = item?.templateId;
-      if (templateId != null && templateId.isNotEmpty) {
+      if (item != null && item.templateSnapshot.isNotEmpty) {
+        templateInfo = ChecklistApprovalTemplateInfo.fromSnapshot(
+          item.templateSnapshot,
+        );
+      }
+      if (templateInfo == null && templateId != null && templateId.isNotEmpty) {
         // Best-effort - see the library comment: labels degrade to field
         // ids and the ladder is treated as single-stage when this fails.
         templateInfo = await ref
@@ -373,8 +378,10 @@ class _ChecklistApprovalReviewScreenState
 
     final workspace = ref.watch(workspaceContextProvider);
     final ApprovalStage? stage = _stage;
-    final ApprovalStatusSummary summary =
-        statusSummary(_templateLike, item.asSubmissionLike);
+    final ApprovalStatusSummary summary = statusSummary(
+      _templateLike,
+      item.asSubmissionLike,
+    );
     final bool myTurn = canDecide(
       _templateLike,
       item.asSubmissionLike,
@@ -631,11 +638,7 @@ class _ApprovalVehicleImage extends StatelessWidget {
       ),
       clipBehavior: Clip.antiAlias,
       child: photo == null
-          ? Icon(
-              vehicleFallbackIcon(asset),
-              color: palette.textMuted,
-              size: 44,
-            )
+          ? Icon(vehicleFallbackIcon(asset), color: palette.textMuted, size: 44)
           : Image.asset(
               photo!,
               fit: BoxFit.contain,
@@ -662,26 +665,24 @@ class _ApprovalSummaryDetails extends StatelessWidget {
           _submissionTitle(item, l10n.checklistApprovalFallbackTitle),
           maxLines: 3,
           overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
+          style: Theme.of(context)
+              .textTheme
+              .titleMedium
+              ?.copyWith(fontWeight: FontWeight.w800),
         ),
         if (item.documentNo != null) ...<Widget>[
           const SizedBox(height: 2),
           Text(
             item.documentNo!,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: palette.primary,
-                  fontWeight: FontWeight.w700,
-                ),
+            style: Theme.of(context)
+                .textTheme
+                .bodySmall
+                ?.copyWith(color: palette.primary, fontWeight: FontWeight.w700),
           ),
         ],
         const SizedBox(height: TpSpace.xs),
         if (item.assetNo != null)
-          _SummaryRow(
-            icon: Icons.local_shipping_outlined,
-            text: item.assetNo!,
-          ),
+          _SummaryRow(icon: Icons.local_shipping_outlined, text: item.assetNo!),
         if (item.site != null)
           _SummaryRow(icon: Icons.place_outlined, text: item.site!),
         _SummaryRow(
@@ -740,10 +741,10 @@ class _ApprovalStatusPanel extends StatelessWidget {
           Expanded(
             child: Text(
               checklistApprovalStatusLabel(l10n, summary),
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: colors.onSoft,
-                    fontWeight: FontWeight.w700,
-                  ),
+              style: Theme.of(context)
+                  .textTheme
+                  .labelMedium
+                  ?.copyWith(color: colors.onSoft, fontWeight: FontWeight.w700),
             ),
           ),
         ],
@@ -884,9 +885,10 @@ class _OutcomeStat extends StatelessWidget {
           const SizedBox(height: TpSpace.xs),
           Text(
             value,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.w800),
           ),
           Text(
             label,
@@ -1056,10 +1058,7 @@ class _HorizontalSignOffLadder extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           for (int index = 0; index < rungs.length; index++) ...<Widget>[
-            Expanded(
-              flex: 3,
-              child: _HorizontalRung(rung: rungs[index]),
-            ),
+            Expanded(flex: 3, child: _HorizontalRung(rung: rungs[index])),
             if (index < rungs.length - 1)
               Expanded(
                 child: Padding(
@@ -1304,9 +1303,7 @@ class _RungRow extends StatelessWidget {
                 height: 190,
                 child: ApprovalSignaturePreview(
                   value: dataUrl,
-                  fallback: Text(
-                    l10n.checklistApprovalSignatureSavedLabel,
-                  ),
+                  fallback: Text(l10n.checklistApprovalSignatureSavedLabel),
                 ),
               ),
               if (name != null && name.trim().isNotEmpty) ...<Widget>[

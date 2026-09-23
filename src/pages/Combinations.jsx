@@ -21,6 +21,8 @@ import {
   DollarSign, Recycle, CircleDot, CheckCircle2, XCircle, Info, Activity, Layers,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import Card, { CardBody, CardHeader } from '../components/ui/Card'
+import Modal from '../components/ui/Modal'
 import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import { useSettings } from '../contexts/SettingsContext'
 import {
@@ -177,7 +179,17 @@ export default function Combinations() {
     setFormError('')
     setModalOpen(true)
   }
-  const closeModal = () => { if (!saving) { setModalOpen(false); setEditing(null) } }
+  // Stable identities. `useDialogBehavior` currently holds onClose in a ref, so
+  // an inline arrow is safe today — but this form's state lives on the PAGE, and
+  // that is exactly the shape that was untypeable when the callback sat in the
+  // effect's dependency array. Keeping it stable costs nothing and means a future
+  // change to the hook cannot quietly make this dialog lose focus per keystroke.
+  const closeModal = useCallback(() => {
+    if (!saving) { setModalOpen(false); setEditing(null) }
+  }, [saving])
+  const closeConfirmDelete = useCallback(() => {
+    if (!deleting) setConfirmDelete(null)
+  }, [deleting])
 
   const submitForm = async (e) => {
     e.preventDefault()
@@ -233,7 +245,7 @@ export default function Combinations() {
     <div className="space-y-6">
       <PageHeader
         title="Combination Manager"
-        subtitle="Prime-mover ↔ trailer combinations — the operational units your fleet dispatches."
+        subtitle="Prime-mover ↔ trailer combinations: the operational units your fleet dispatches."
         icon={Combine}
         onRefresh={load}
         refreshing={refreshing}
@@ -277,7 +289,10 @@ export default function Combinations() {
       </div>
 
       {error && (
-        <div className="card border border-red-800/50 flex items-start gap-3">
+        // Card is `flex flex-col`; Tailwind emits .flex-col after .flex-row, so a
+        // `flex-row` class here would silently lose. Direction goes in `style`,
+        // which Card spreads last.
+        <Card tone="crit" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
           <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
           <div className="min-w-0">
             <p className="text-red-300 font-medium">Couldn't load combinations.</p>
@@ -286,18 +301,18 @@ export default function Combinations() {
               <Database size={12} /> If this is a missing-table error, apply <span className="font-mono">MIGRATIONS_V141_ASSET_COMBINATIONS.sql</span>.
             </p>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Duplicate-trailer data-quality warning (both tabs) */}
       {duplicateTrailers.length > 0 && (
-        <div className="card border border-amber-700/50 bg-amber-900/10 flex items-start gap-3">
+        <Card tone="warn" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
           <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
           <div className="min-w-0">
             <p className="text-amber-300 font-medium">
               {duplicateTrailers.length} trailer{duplicateTrailers.length !== 1 ? 's' : ''} assigned to more than one active combination.
             </p>
-            <p className="text-[var(--text-muted)] text-sm mt-1">A trailer can only be part of one active unit at a time — review these registry entries.</p>
+            <p className="text-[var(--text-muted)] text-sm mt-1">A trailer can only be part of one active unit at a time. Review these registry entries.</p>
             <div className="flex flex-wrap gap-1.5 mt-2">
               {duplicateTrailers.map((d) => (
                 <span key={d.trailer} className="badge text-[11px] px-2 py-0.5 rounded bg-amber-900/30 text-amber-300 border border-amber-700/50 font-mono">
@@ -306,7 +321,7 @@ export default function Combinations() {
               ))}
             </div>
           </div>
-        </div>
+        </Card>
       )}
 
       {view === 'registry' ? (
@@ -329,85 +344,84 @@ export default function Combinations() {
         />
       )}
 
-      {/* Create / edit modal */}
-      {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={closeModal}>
-          <div className="card w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
-                <Combine size={18} className="text-brand-bright" />
-                {editing ? 'Edit combination' : 'New combination'}
-              </h2>
-              <button onClick={closeModal} className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)]"><X size={16} /></button>
-            </div>
-
-            <form onSubmit={submitForm} className="space-y-4">
-              <div>
-                <label className="block text-xs text-[var(--text-muted)] mb-1">Name</label>
-                <input className="input w-full" placeholder="e.g. Route 12 rig" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
-              </div>
-              <div>
-                <label className="block text-xs text-[var(--text-muted)] mb-1">Prime mover number <span className="text-red-400">*</span></label>
-                <input className="input w-full font-mono" placeholder="e.g. PM-1024" value={form.prime_mover_no} onChange={(e) => setForm((f) => ({ ...f, prime_mover_no: e.target.value }))} required />
-              </div>
-              <div>
-                <label className="block text-xs text-[var(--text-muted)] mb-1">Trailer numbers</label>
-                <input className="input w-full font-mono" placeholder="Comma-separated, e.g. TR-01, TR-02" value={form.trailer_nos} onChange={(e) => setForm((f) => ({ ...f, trailer_nos: e.target.value }))} />
-                <p className="text-[11px] text-[var(--text-muted)] mt-1">{parseTrailerList(form.trailer_nos).length} trailer(s)</p>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-[var(--text-muted)] mb-1">Site</label>
-                  <input className="input w-full" placeholder="Depot / yard" value={form.site} onChange={(e) => setForm((f) => ({ ...f, site: e.target.value }))} />
-                </div>
-                <div>
-                  <label className="block text-xs text-[var(--text-muted)] mb-1">Status</label>
-                  <select className="input w-full" value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}>
-                    {COMBINATION_STATUSES.map((s) => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs text-[var(--text-muted)] mb-1">Notes</label>
-                <textarea className="input w-full min-h-[72px]" placeholder="Optional context…" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} />
-              </div>
-
-              {formError && (
-                <div className="text-sm text-red-300 bg-red-900/30 border border-red-800/50 rounded px-3 py-2 flex items-start gap-2">
-                  <AlertTriangle size={14} className="mt-0.5 shrink-0" /> <span className="break-words">{formError}</span>
-                </div>
-              )}
-
-              <div className="flex items-center justify-end gap-2 pt-2">
-                <button type="button" onClick={closeModal} disabled={saving} className="btn-secondary text-sm">Cancel</button>
-                <button type="submit" disabled={saving} className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60">
-                  {saving ? 'Saving…' : editing ? 'Save changes' : 'Create combination'}
-                </button>
-              </div>
-            </form>
+      {/* Create / edit dialog */}
+      <Modal
+        open={modalOpen}
+        onClose={closeModal}
+        size="md"
+        title={editing ? 'Edit combination' : 'New combination'}
+      >
+        {/* The submit button stays INSIDE the form. Moving it to Modal's `footer`
+            would break form association unless it carried form="…", which is a
+            behaviour change, not a migration. */}
+        <form onSubmit={submitForm} className="space-y-4">
+          <div>
+            <label className="block text-xs text-[var(--text-muted)] mb-1">Name</label>
+            <input className="input w-full" placeholder="e.g. Route 12 rig" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
           </div>
-        </div>
-      )}
-
-      {/* Delete confirm */}
-      {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => !deleting && setConfirmDelete(null)}>
-          <div className="card w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2 mb-2">
-              <Trash2 size={18} className="text-red-400" /> Delete combination
-            </h2>
-            <p className="text-sm text-[var(--text-muted)]">
-              Delete <span className="font-semibold text-[var(--text-secondary)]">{confirmDelete.name || confirmDelete.prime_mover_no}</span>? This cannot be undone.
-            </p>
-            <div className="flex items-center justify-end gap-2 mt-5">
-              <button onClick={() => setConfirmDelete(null)} disabled={deleting} className="btn-secondary text-sm">Cancel</button>
-              <button onClick={doDelete} disabled={deleting} className="btn-primary text-sm !bg-red-600 hover:!bg-red-700 disabled:opacity-60">
-                {deleting ? 'Deleting…' : 'Delete'}
-              </button>
+          <div>
+            <label className="block text-xs text-[var(--text-muted)] mb-1">Prime mover number <span className="text-red-400">*</span></label>
+            <input className="input w-full font-mono" placeholder="e.g. PM-1024" value={form.prime_mover_no} onChange={(e) => setForm((f) => ({ ...f, prime_mover_no: e.target.value }))} required />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--text-muted)] mb-1">Trailer numbers</label>
+            <input className="input w-full font-mono" placeholder="Comma-separated, e.g. TR-01, TR-02" value={form.trailer_nos} onChange={(e) => setForm((f) => ({ ...f, trailer_nos: e.target.value }))} />
+            <p className="text-[11px] text-[var(--text-muted)] mt-1">{parseTrailerList(form.trailer_nos).length} trailer(s)</p>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-[var(--text-muted)] mb-1">Site</label>
+              <input className="input w-full" placeholder="Depot / yard" value={form.site} onChange={(e) => setForm((f) => ({ ...f, site: e.target.value }))} />
+            </div>
+            <div>
+              <label className="block text-xs text-[var(--text-muted)] mb-1">Status</label>
+              <select className="input w-full" value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}>
+                {COMBINATION_STATUSES.map((s) => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}
+              </select>
             </div>
           </div>
-        </div>
-      )}
+          <div>
+            <label className="block text-xs text-[var(--text-muted)] mb-1">Notes</label>
+            <textarea className="input w-full min-h-[72px]" placeholder="Optional context…" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} />
+          </div>
+
+          {formError && (
+            <div className="text-sm text-red-300 bg-red-900/30 border border-red-800/50 rounded px-3 py-2 flex items-start gap-2">
+              <AlertTriangle size={14} className="mt-0.5 shrink-0" /> <span className="break-words">{formError}</span>
+            </div>
+          )}
+
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <button type="button" onClick={closeModal} disabled={saving} className="btn-secondary text-sm">Cancel</button>
+            <button type="submit" disabled={saving} className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60">
+              {saving ? 'Saving…' : editing ? 'Save changes' : 'Create combination'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Delete confirm — no form here, so the actions belong in Modal's footer. */}
+      <Modal
+        open={!!confirmDelete}
+        onClose={closeConfirmDelete}
+        size="sm"
+        title="Delete combination"
+        footer={
+          <>
+            <button onClick={closeConfirmDelete} disabled={deleting} className="btn-secondary text-sm">Cancel</button>
+            <button onClick={doDelete} disabled={deleting} className="btn-primary text-sm !bg-red-600 hover:!bg-red-700 disabled:opacity-60">
+              {deleting ? 'Deleting…' : 'Delete'}
+            </button>
+          </>
+        }
+      >
+        <p className="text-sm text-[var(--text-muted)] flex items-start gap-2">
+          <Trash2 size={16} className="text-red-400 mt-0.5 shrink-0" />
+          <span>
+            Delete <span className="font-semibold text-[var(--text-secondary)]">{confirmDelete?.name || confirmDelete?.prime_mover_no}</span>? This cannot be undone.
+          </span>
+        </p>
+      </Modal>
     </div>
   )
 }
@@ -421,23 +435,25 @@ function RegistryTab({
   return (
     <>
       {/* KPI tiles */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-[var(--gap-grid)]">
         {kpis.map((k) => {
           const Icon = k.icon
           return (
-            <div key={k.label} className="card">
+            <Card key={k.label}>
               <div className="flex items-center justify-between">
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
-            </div>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
+            </Card>
           )
         })}
       </div>
 
-      {/* Filters */}
-      <div className="card space-y-3">
+      {/* Filters. Deliberately NOT `clip`: this card holds two native <select>
+          dropdowns, and overflow:hidden on their container is the exact bug the
+          Card primitive exists to end. */}
+      <Card>
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[200px]">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
@@ -454,10 +470,13 @@ function RegistryTab({
           {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
           <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {summary.total}</span>
         </div>
-      </div>
+      </Card>
 
-      {/* Table */}
-      <div className="card overflow-hidden !p-0">
+      {/* Registry table. Kept as raw table markup on purpose: composite cells
+          (trailer badge lists, row actions), its own TablePagination and the
+          page-level Excel/PDF export. EnterpriseTable would add a second search
+          box and a different export alongside the ones already here. */}
+      <Card pad="none" clip>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -471,15 +490,15 @@ function RegistryTab({
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={6} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {rows.length === 0 ? 'No combinations yet — create your first prime-mover ↔ trailer link.' : 'No combinations match these filters.'}
+                  {rows.length === 0 ? 'No combinations yet. Create your first prime-mover ↔ trailer link.' : 'No combinations match these filters.'}
                 </td></tr>
               ) : (
                 registryPager.pageRows.map((r) => {
                   const trailers = parseTrailerList(r.trailer_nos)
                   return (
                     <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                      <td className="px-4 py-2.5 text-[var(--text-primary)] font-medium">{r.name || '—'}</td>
-                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)]">{r.prime_mover_no || '—'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-primary)] font-medium">{r.name || 'N/A'}</td>
+                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)]">{r.prime_mover_no || 'N/A'}</td>
                       <td className="px-4 py-2.5">
                         {trailers.length ? (
                           <div className="flex flex-wrap gap-1">
@@ -487,9 +506,9 @@ function RegistryTab({
                               <span key={`${t}-${i}`} className="badge text-[11px] px-2 py-0.5 rounded bg-[var(--input-bg)] text-[var(--text-secondary)] border border-[var(--input-border)] font-mono">{t}</span>
                             ))}
                           </div>
-                        ) : <span className="text-[var(--text-muted)]">—</span>}
+                        ) : <span className="text-[var(--text-muted)]">N/A</span>}
                       </td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.site || '—'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.site || 'N/A'}</td>
                       <td className="px-4 py-2.5"><span className={`badge text-[11px] px-2 py-0.5 rounded ${STATUS_STYLES[r.status] || STATUS_STYLES.inactive}`}>{r.status || 'inactive'}</span></td>
                       <td className="px-4 py-2.5">
                         <div className="flex items-center justify-end gap-1">
@@ -505,7 +524,7 @@ function RegistryTab({
           </table>
         </div>
         <TablePagination {...registryPager} />
-      </div>
+      </Card>
     </>
   )
 }
@@ -515,21 +534,26 @@ function IntelligenceTab({
   rows, selectedId, setSelectedId, selectedCombo, intelLoading, intelError, rollup, currency,
 }) {
   if (rows === null) {
-    return <div className="card"><div className="h-40 bg-[var(--input-bg)] rounded animate-pulse" /></div>
+    return <Card><div className="h-40 bg-[var(--input-bg)] rounded animate-pulse" /></Card>
   }
   if (rows.length === 0) {
     return (
-      <div className="card py-12 text-center text-[var(--text-muted)]">
-        <Network size={26} className="mx-auto mb-2 opacity-60" />
-        No combinations yet — create one in the Registry tab to analyse it as a combined unit.
-      </div>
+      // The old `py-12` utility would be DEAD here: Card sets `padding` inline
+      // and inline beats a class, so the empty state would silently collapse.
+      // The vertical room goes on an inner element as a token instead.
+      <Card className="text-center text-[var(--text-muted)]">
+        <div style={{ paddingTop: 'var(--space-8)', paddingBottom: 'var(--space-8)' }}>
+          <Network size={26} className="mx-auto mb-2 opacity-60" />
+          No combinations yet. Create one in the Registry tab to analyse it as a combined unit.
+        </div>
+      </Card>
     )
   }
 
   return (
     <div className="space-y-4">
-      {/* Selector */}
-      <div className="card">
+      {/* Selector. No `clip` — it holds a native <select>. */}
+      <Card>
         <div className="flex flex-wrap items-center gap-3">
           <label className="text-sm text-[var(--text-muted)] inline-flex items-center gap-1.5">
             <Combine size={15} className="text-brand-bright" /> Combined unit
@@ -537,7 +561,7 @@ function IntelligenceTab({
           <select className="input min-w-[240px]" value={selectedId} onChange={(e) => setSelectedId(e.target.value)} aria-label="Select combination">
             {rows.map((r) => (
               <option key={r.id} value={r.id}>
-                {(r.name || r.prime_mover_no || 'Unnamed')} · {r.prime_mover_no || '—'} ({parseTrailerList(r.trailer_nos).length} trailer{parseTrailerList(r.trailer_nos).length !== 1 ? 's' : ''})
+                {(r.name || r.prime_mover_no || 'Unnamed')} · {r.prime_mover_no || 'N/A'} ({parseTrailerList(r.trailer_nos).length} trailer{parseTrailerList(r.trailer_nos).length !== 1 ? 's' : ''})
               </option>
             ))}
           </select>
@@ -548,33 +572,33 @@ function IntelligenceTab({
           )}
           {selectedCombo?.site && <span className="text-xs text-[var(--text-muted)]">Site: {selectedCombo.site}</span>}
         </div>
-      </div>
+      </Card>
 
       {intelError && (
-        <div className="card border border-red-800/50 flex items-start gap-3">
+        <Card tone="crit" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
           <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
           <div>
             <p className="text-red-300 font-medium">Couldn't load combined-unit data.</p>
             <p className="text-[var(--text-muted)] text-sm mt-1 break-words">{intelError}</p>
           </div>
-        </div>
+        </Card>
       )}
 
       {intelLoading || !rollup ? (
         !intelError && (
-          <div className="grid gap-3">
-            <div className="card"><div className="h-24 bg-[var(--input-bg)] rounded animate-pulse" /></div>
-            <div className="card"><div className="h-40 bg-[var(--input-bg)] rounded animate-pulse" /></div>
+          <div className="grid gap-[var(--gap-grid)]">
+            <Card><div className="h-24 bg-[var(--input-bg)] rounded animate-pulse" /></Card>
+            <Card><div className="h-40 bg-[var(--input-bg)] rounded animate-pulse" /></Card>
           </div>
         )
       ) : (
         <>
           {/* Combined-unit KPI cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-[var(--gap-grid)]">
             <IntelKpi icon={CircleDot} tone="text-indigo-400" label="Fitted tyres" value={rollup.fittedTyres}
               sub={`${rollup.tyreCount} record${rollup.tyreCount !== 1 ? 's' : ''} across unit`} />
             <IntelKpi icon={Gauge} tone="text-brand-bright" label="Unit CPK (blended)"
-              value={rollup.blendedCpk != null ? `${currency} ${fmt(rollup.blendedCpk, 3)}` : '—'}
+              value={rollup.blendedCpk != null ? `${currency} ${fmt(rollup.blendedCpk, 3)}` : 'N/A'}
               sub={rollup.canonicalCpk?.validCount ? `Canonical avg ${currency} ${fmt(rollup.canonicalCpk.fleetAvgCpk, 3)} · ${rollup.canonicalCpk.validCount} valid` : 'No valid cost/km rows'} />
             <IntelKpi icon={DollarSign} tone="text-emerald-400" label="Unit tyre spend"
               value={formatCurrency(rollup.totalSpend, currency, 0)}
@@ -584,57 +608,65 @@ function IntelligenceTab({
           </div>
 
           {/* Members */}
-          <div className="card">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-bold text-[var(--text-primary)] inline-flex items-center gap-1.5">
-                <Truck size={15} className="text-brand-bright" /> Member assets
-              </h3>
-              <span className="text-xs text-[var(--text-muted)]">
-                {rollup.resolution.resolvedCount}/{rollup.members.length} resolved in fleet master
-              </span>
-            </div>
-
-            {rollup.resolution.unresolvedCount > 0 && (
-              <div className="mb-3 rounded border border-amber-700/50 bg-amber-900/10 px-3 py-2 text-sm text-amber-300 flex items-start gap-2">
-                <AlertTriangle size={14} className="mt-0.5 shrink-0" />
-                <span>
-                  {rollup.resolution.unresolvedCount} member{rollup.resolution.unresolvedCount !== 1 ? 's' : ''} not found in <span className="font-mono">vehicle_fleet</span>:{' '}
-                  <span className="font-mono">{rollup.resolution.unresolved.join(', ')}</span>. Add them to fleet master for complete intelligence.
+          <Card>
+            <CardHeader
+              level={2}
+              icon={Truck}
+              title="Member assets"
+              actions={
+                <span className="text-xs text-[var(--text-muted)]">
+                  {rollup.resolution.resolvedCount}/{rollup.members.length} resolved in fleet master
                 </span>
-              </div>
-            )}
-
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
-              {rollup.members.map((m) => (
-                <div key={`${m.role}-${m.asset_no}`} className={`rounded-lg border p-3 ${m.resolved ? 'border-[var(--input-border)] bg-[var(--input-bg)]/40' : 'border-amber-700/50 bg-amber-900/10'}`}>
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-sm font-semibold text-[var(--text-primary)]">{m.asset_no}</span>
-                    {m.resolved
-                      ? <CheckCircle2 size={15} className="text-green-400" />
-                      : <XCircle size={15} className="text-amber-400" />}
-                  </div>
-                  <div className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] mt-0.5">
-                    {m.role === 'prime_mover' ? 'Prime mover' : 'Trailer'}
-                  </div>
-                  {m.resolved ? (
-                    <div className="text-xs text-[var(--text-secondary)] mt-1.5 space-y-0.5">
-                      <div>{[m.make, m.model].filter(Boolean).join(' ') || m.vehicle_type || '—'}</div>
-                      <div className="text-[var(--text-muted)]">{m.vehicle_type || '—'}{m.status ? ` · ${m.status}` : ''}</div>
-                    </div>
-                  ) : (
-                    <div className="text-xs text-amber-300/80 mt-1.5">Not in fleet master</div>
-                  )}
+              }
+            />
+            <CardBody>
+              {rollup.resolution.unresolvedCount > 0 && (
+                <div className="mb-3 rounded border border-amber-700/50 bg-amber-900/10 px-3 py-2 text-sm text-amber-300 flex items-start gap-2">
+                  <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+                  <span>
+                    {rollup.resolution.unresolvedCount} member{rollup.resolution.unresolvedCount !== 1 ? 's' : ''} not found in <span className="font-mono">vehicle_fleet</span>:{' '}
+                    <span className="font-mono">{rollup.resolution.unresolved.join(', ')}</span>. Add them to fleet master for complete intelligence.
+                  </span>
                 </div>
-              ))}
-            </div>
-          </div>
+              )}
 
-          {/* Position-class breakdown */}
-          <div className="card overflow-hidden !p-0">
-            <div className="px-4 py-3 border-b border-[var(--input-border)] flex items-center gap-1.5">
-              <Layers size={15} className="text-brand-bright" />
-              <h3 className="text-sm font-bold text-[var(--text-primary)]">Position-class breakdown</h3>
-            </div>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                {rollup.members.map((m) => (
+                  <div key={`${m.role}-${m.asset_no}`} className={`rounded-lg border p-3 ${m.resolved ? 'border-[var(--input-border)] bg-[var(--input-bg)]/40' : 'border-amber-700/50 bg-amber-900/10'}`}>
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-sm font-semibold text-[var(--text-primary)]">{m.asset_no}</span>
+                      {m.resolved
+                        ? <CheckCircle2 size={15} className="text-green-400" />
+                        : <XCircle size={15} className="text-amber-400" />}
+                    </div>
+                    <div className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] mt-0.5">
+                      {m.role === 'prime_mover' ? 'Prime mover' : 'Trailer'}
+                    </div>
+                    {m.resolved ? (
+                      <div className="text-xs text-[var(--text-secondary)] mt-1.5 space-y-0.5">
+                        <div>{[m.make, m.model].filter(Boolean).join(' ') || m.vehicle_type || 'N/A'}</div>
+                        <div className="text-[var(--text-muted)]">{m.vehicle_type || 'N/A'}{m.status ? ` · ${m.status}` : ''}</div>
+                      </div>
+                    ) : (
+                      <div className="text-xs text-amber-300/80 mt-1.5">Not in fleet master</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </CardBody>
+          </Card>
+
+          {/* Position-class breakdown. Raw table markup kept on purpose: at most
+              four summary rows, and its CPK cell encodes a null-vs-value
+              distinction (an unmeasurable rate is not a zero) that a generic cell
+              renderer would flatten. */}
+          <Card pad="none" clip>
+            <CardHeader
+              level={2}
+              icon={Layers}
+              title="Position-class breakdown"
+              className="!mb-0 px-[var(--space-4)] py-[var(--space-3)] border-b border-[var(--border-dim)]"
+            />
             {rollup.positionBreakdown.length === 0 ? (
               <div className="px-4 py-8 text-center text-sm text-[var(--text-muted)]">
                 No tyre records found for this unit's members.
@@ -656,7 +688,7 @@ function IntelligenceTab({
                         <td className="px-4 py-2.5 text-[var(--text-primary)]">{POSITION_LABELS[p.positionClass] || p.positionClass}</td>
                         <td className="px-4 py-2.5 text-right text-[var(--text-secondary)]">{p.count}</td>
                         <td className="px-4 py-2.5 text-right text-[var(--text-secondary)]">{formatCurrency(p.spend, currency, 0)}</td>
-                        <td className="px-4 py-2.5 text-right font-mono text-[var(--text-secondary)]">{p.cpk != null ? `${currency} ${fmt(p.cpk, 3)}` : '—'}</td>
+                        <td className="px-4 py-2.5 text-right font-mono text-[var(--text-secondary)]">{p.cpk != null ? `${currency} ${fmt(p.cpk, 3)}` : 'N/A'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -666,15 +698,17 @@ function IntelligenceTab({
             <p className="px-4 py-2 text-[11px] text-[var(--text-muted)] border-t border-[var(--input-border)]/60">
               Positions that don't parse to steer / drive / trailer are grouped honestly as "Other / Unclassified".
             </p>
-          </div>
+          </Card>
 
-          {/* Honest telemetry / schematic panel */}
-          <div className="card border border-[var(--input-border)] bg-[var(--input-bg)]/30">
+          {/* Honest telemetry / schematic panel. The old `border`/`bg-*` classes
+              were dead against Card's inline border and background, so they are
+              gone rather than left as decoration that does nothing. */}
+          <Card>
             <div className="flex items-start gap-3">
               <Info size={18} className="text-[var(--text-muted)] mt-0.5 shrink-0" />
               <div className="min-w-0">
                 <h3 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-1.5">
-                  <Activity size={14} /> Live telemetry &amp; axle schematic — not available in this dataset
+                  <Activity size={14} /> Live telemetry &amp; axle schematic: not available in this dataset
                 </h3>
                 <p className="text-sm text-[var(--text-muted)] mt-1.5">
                   Per-tyre pressure (PSI), temperature and the top-down axle / wheel-position diagram require
@@ -691,7 +725,7 @@ function IntelligenceTab({
                 </div>
               </div>
             </div>
-          </div>
+          </Card>
         </>
       )}
     </div>
@@ -700,13 +734,13 @@ function IntelligenceTab({
 
 function IntelKpi({ icon: Icon, tone, label, value, sub }) {
   return (
-    <div className="card">
+    <Card>
       <div className="flex items-center justify-between">
         <p className="text-xs text-[var(--text-muted)]">{label}</p>
         <Icon size={16} className={tone} />
       </div>
       <p className={`text-2xl font-bold mt-1 ${tone}`}>{value}</p>
       {sub && <p className="text-[11px] text-[var(--text-muted)] mt-1">{sub}</p>}
-    </div>
+    </Card>
   )
 }

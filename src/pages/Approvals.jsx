@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   CheckSquare, X, Search, Clock, Inbox, Filter, AlertTriangle,
@@ -9,6 +9,9 @@ import {
 import { motion, AnimatePresence } from 'framer-motion'
 import * as workflows from '../lib/api/workflows'
 import * as queue from '../lib/api/approvalsQueue'
+import ApprovalReview from '../components/workflow/ApprovalReview'
+import { isGovernedApproval, mergePendingApprovals } from '../lib/approvalInbox'
+import { matchesCountry } from '../lib/countryFilter'
 import { toUserMessage } from '../lib/safeError'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
@@ -26,6 +29,7 @@ import {
   canDecide, stageFor, stageLabel, statusSummary, isTwoStage, STAGE_SUPERVISOR,
 } from '../lib/checklist/checklistApproval'
 import { canClose } from '../lib/checklist/checklistMarks'
+import { canSignInspection } from '../lib/inspectionApproval'
 import { getMySignature } from '../lib/api/userSignature'
 import { isUsableSignature } from '../lib/savedSignature'
 import { templateFromSubmission, submissionAnswers } from '../lib/checklistView'
@@ -118,7 +122,7 @@ function currentStepOf(instance) {
 
 function entityLabelOf(i) {
   return i?.entity_label
-    || (i?.entity_type ? `${i.entity_type}${i.entity_id ? ` #${i.entity_id}` : ''}` : '—')
+    || (i?.entity_type ? `${i.entity_type}${i.entity_id ? ` #${i.entity_id}` : ''}` : 'N/A')
 }
 
 /** SLA state for a pending-style instance from its current step's sla_hours. */
@@ -144,7 +148,7 @@ function toClosureItem(a) {
   return {
     source: SOURCE.accident_closure,
     id: a.id,
-    title: `Closure request — ${label}`,
+    title: `Closure request: ${label}`,
     subtitle: [
       a.driver_name && `Driver ${a.driver_name}`,
       a.incident_date && `Incident ${a.incident_date}`,
@@ -335,7 +339,7 @@ function InstanceRow({ instance, bucketKey, onOpen }) {
       <div className="hidden md:flex flex-col items-end gap-1 shrink-0">
         <span className={`text-xs whitespace-nowrap ${overdue ? 'text-red-400 font-semibold' : 'text-[var(--text-muted)]'}`}>
           {overdue && <AlertTriangle className="w-3 h-3 inline mr-1 -mt-0.5" />}
-          {sla?.dueLabel || relTime(timeRef) || '—'}
+          {sla?.dueLabel || relTime(timeRef) || 'N/A'}
         </span>
       </div>
 
@@ -406,6 +410,15 @@ function GenericRow({ item, onOpen, selectable = false, picked = false, onToggle
 // ─── Detail drawer (workflow engine) ─────────────────────────────────────────────
 
 function DetailDrawer({ instance, actionable, onClose, onActed }) {
+  if (isGovernedApproval(instance) && ['inspection', 'checklist', 'work_order', 'tyre_change'].includes(instance.entity_type)
+    && (['pending', 'in_review'].includes(instance.status) || ['work_order', 'tyre_change'].includes(instance.entity_type))) {
+    return <ApprovalReview entityType={instance.entity_type} entityId={String(instance.entity_id)}
+      title={instance.entity_label || instance.definition_name} onClose={onClose} onActed={onActed} />
+  }
+  return <LegacyDetailDrawer instance={instance} actionable={actionable} onClose={onClose} onActed={onActed} />
+}
+
+function LegacyDetailDrawer({ instance, actionable, onClose, onActed }) {
   const [events, setEvents] = useState(null)
   const [trailErr, setTrailErr] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -495,6 +508,13 @@ function DetailDrawer({ instance, actionable, onClose, onActed }) {
 // ─── Simple approval drawer (accident closure / checklist) ───────────────────────
 
 function SimpleApprovalDrawer({ item, canAct, onClose, onActed }) {
+  const legacy = <LegacySimpleApprovalDrawer item={item} canAct={canAct} onClose={onClose} onActed={onActed} />
+  if (!['checklist', 'inspection'].includes(item.source)) return legacy
+  return <ApprovalReview key={`${item.source}:${item.id}`} entityType={item.source} entityId={item.id}
+    title={item.title} onClose={onClose} onActed={onActed} legacy={legacy} />
+}
+
+function LegacySimpleApprovalDrawer({ item, canAct, onClose, onActed }) {
   const meta = SOURCE_META[item.source] || SOURCE_META.workflow
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
@@ -546,7 +566,16 @@ function SimpleApprovalDrawer({ item, canAct, onClose, onActed }) {
     profile?.role,
     { isSuperAdmin: !!profile?.is_super_admin },
   )
-  const mayAct = isChecklistish ? mayDecideChecklist : canAct
+  // An inspection has its own signer list in the RPC, which is NOT the
+  // Admin/Manager/Director set `canAct` carries: a Manager or Director is
+  // refused, and a PMV manager, either area manager or a Tyre Data Collector is
+  // accepted. Asking the shared predicate keeps this button in step with the
+  // database instead of hiding it from the people who can actually sign.
+  const mayDecideInspection = item.source === SOURCE.inspection
+    && canSignInspection(profile?.role, { isSuperAdmin: !!profile?.is_super_admin })
+  const mayAct = isChecklistish
+    ? mayDecideChecklist
+    : (item.source === SOURCE.inspection ? mayDecideInspection : canAct)
 
   // An inspection sign-off is a signature too. The register has always refused
   // to approve one without a mark; the queue silently stored an approval with
@@ -905,7 +934,7 @@ function EngineUnavailable({ message, onRetry, retrying }) {
         <p className="text-[var(--text-primary)] text-sm font-semibold">Approval services unavailable</p>
         <p className="text-[var(--text-muted)] text-xs mt-1 max-w-md">
           None of the approval sources could be reached. This usually means a
-          connectivity issue or that the workflow engine migrations (V116–V118)
+          connectivity issue or that the workflow engine migrations (V116 to V118)
           have not been applied to this environment yet.
         </p>
         {message && (
@@ -928,9 +957,14 @@ function EngineUnavailable({ message, onRetry, retrying }) {
 const MANAGER_ROLES = new Set(['Admin', 'Manager', 'Director'])
 
 export default function Approvals() {
-  const { profile } = useAuth()
+  const { profile, modulePerms, grantOverrides, capabilities } = useAuth()
   const { activeCountry } = useSettings()
   const navigate = useNavigate()
+  const accessKey = JSON.stringify([profile?.id, profile?.org_id, profile?.role, profile?.country,
+    profile?.countries, profile?.site, profile?.sites, profile?.approved, profile?.locked,
+    profile?.is_super_admin, modulePerms, grantOverrides, capabilities])
+  const generation = useRef(0)
+  const bulkLock = useRef(false)
 
   const canActNonWorkflow = MANAGER_ROLES.has(profile?.role)
 
@@ -958,6 +992,7 @@ export default function Approvals() {
   const [bulk, setBulk] = useState({ busy: false, result: null })
 
   const load = useCallback(async () => {
+    const current = ++generation.current
     setLoading(true)
     setFatalError(null)
     setWorkflowError(null)
@@ -972,11 +1007,17 @@ export default function Approvals() {
       queue.listChecklistSignoffGaps({ country }),
       queue.listInspectionApprovals({ country }),
     ])
+    if (current !== generation.current) return
 
     // Workflow engine (non-fatal — the other sources still render).
-    if (dashR.status === 'fulfilled') {
-      setBuckets({ ...EMPTY_BUCKETS, ...(dashR.value?.buckets || {}) })
-      setMetricsRaw(dashR.value?.metrics ?? null)
+    const dashboardValid = dashR.status === 'fulfilled' && dashR.value?.buckets
+      && Object.values(dashR.value.buckets).every(Array.isArray)
+    if (dashboardValid) {
+      setBuckets(Object.fromEntries(Object.entries({ ...EMPTY_BUCKETS, ...(dashR.value?.buckets || {}) })
+        .map(([key, rows]) => [key, rows.filter(row => matchesCountry(row, country))])))
+      // Server metrics span the caller's full scope; a selected country uses
+      // the same filtered buckets as the visible queue.
+      setMetricsRaw(!country || country === 'All' ? dashR.value?.metrics ?? null : null)
     } else {
       setBuckets(EMPTY_BUCKETS)
       setMetricsRaw(null)
@@ -992,33 +1033,39 @@ export default function Approvals() {
     setInspectionItems(inspectionsR.status === 'fulfilled' ? (inspectionsR.value || []).map(toInspectionItem) : [])
 
     // Fatal only when EVERY primary source failed.
-    const anyOk = [dashR, closuresR, checklistR].some(r => r.status === 'fulfilled')
+    const anyOk = [dashR, closuresR, checklistR, inspectionsR, gapsR, intakeR].some(r => r.status === 'fulfilled')
     if (!anyOk) setFatalError(toUserMessage(dashR.reason, 'Failed to load approvals'))
 
     setUpdatedAt(new Date())
     setLoading(false)
   }, [activeCountry])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    setBuckets(EMPTY_BUCKETS); setMetricsRaw(null); setClosures([]); setChecklistItems([])
+    setInspectionItems([]); setSignoffGaps([]); setIntakeCount(0); setActionableIds(new Set())
+    setSelected(null); setSelectedGeneric(null); setPicked(new Set()); setBulk({ busy: false, result: null })
+    setSiteFilter('all'); setUpdatedAt(null)
+    load()
+    return () => { generation.current += 1 }
+  }, [load, accessKey])
 
   // Merged pending queue: workflow pending + closures + checklists + inspections.
   const mergedPending = useMemo(() => {
-    const wf = (buckets.pending || []).map(i => ({ ...i, source: SOURCE.workflow }))
-    return [...wf, ...closures, ...checklistItems, ...inspectionItems]
+    return mergePendingApprovals(buckets.pending || [], [...closures, ...checklistItems, ...inspectionItems])
   }, [buckets.pending, closures, checklistItems, inspectionItems])
 
   const counts = useMemo(() => ({
-    workflow_pending:  (buckets.pending || []).length,
+    workflow_pending:  mergedPending.filter(i => i.source === SOURCE.workflow).length,
     closures_pending:  closures.length,
-    checklist_pending: checklistItems.length,
-    inspection_pending: inspectionItems.length,
+    checklist_pending: mergedPending.filter(i => i.source === SOURCE.checklist).length,
+    inspection_pending: mergedPending.filter(i => i.source === SOURCE.inspection).length,
     total_pending:     mergedPending.length,
     overdue:           (buckets.overdue || []).length,
     returned:          (buckets.returned || []).length,
     rejected:          (buckets.rejected || []).length,
     recently_approved: (buckets.recently_approved || []).length,
     signoff_gaps:      signoffGaps.length,
-  }), [buckets, closures, checklistItems, inspectionItems, mergedPending, signoffGaps])
+  }), [buckets, closures, mergedPending, signoffGaps])
 
   const metrics = useMemo(() => {
     const m = metricsRaw && typeof metricsRaw === 'object' ? metricsRaw : {}
@@ -1029,12 +1076,12 @@ export default function Approvals() {
     }
   }, [metricsRaw, counts])
 
-  // Site options across the non-workflow items (workflow instances carry no site).
+  // Governed workflow projections also carry the submitted site's scope.
   const siteOptions = useMemo(() => {
     const set = new Set()
-    ;[...closures, ...checklistItems, ...inspectionItems, ...signoffGaps].forEach(i => i.site && set.add(i.site))
+    ;[...closures, ...checklistItems, ...inspectionItems, ...signoffGaps, ...Object.values(buckets).flat()].forEach(i => i.site && set.add(i.site))
     return Array.from(set).sort()
-  }, [closures, checklistItems, inspectionItems, signoffGaps])
+  }, [closures, checklistItems, inspectionItems, signoffGaps, buckets])
 
   const q = search.trim().toLowerCase()
 
@@ -1049,7 +1096,7 @@ export default function Approvals() {
 
   const matchWorkflow = useCallback((i) => {
     if (sourceFilter !== 'all' && sourceFilter !== SOURCE.workflow) return false
-    if (siteFilter !== 'all') return false // workflow instances have no site dimension
+    if (siteFilter !== 'all' && i.site !== siteFilter) return false
     if (!q) return true
     return (entityLabelOf(i).toLowerCase().includes(q))
       || (i.definition_name || '').toLowerCase().includes(q)
@@ -1084,8 +1131,9 @@ export default function Approvals() {
   // the requirements the engine exists to enforce. A missed sign-off is a fact to
   // correct rather than a decision to make, so it is not bulk-decidable either.
   const bulkableList = useMemo(
-    () => activeList.filter(i => BULKABLE.includes(i.source)),
-    [activeList],
+    () => activeList.filter(i => BULKABLE.includes(i.source) && !i.governed
+      && (!workflowError || i.source === SOURCE.accident_closure)),
+    [activeList, workflowError],
   )
   const keyOf = (i) => `${i.source}:${i.id}`
   const pickedItems = useMemo(
@@ -1133,7 +1181,8 @@ export default function Approvals() {
     [activeBucket, q, sourceFilter, siteFilter])
 
   async function runBulk(action) {
-    if (!pickedItems.length) return
+    if (!pickedItems.length || bulkLock.current) return
+    const current = generation.current
     let reason = null
     if (action === 'reject') {
       // A checklist return REQUIRES a note (the service enforces it), so ask once
@@ -1147,14 +1196,18 @@ export default function Approvals() {
     // Approving inspections in a batch needs a signature - the approver's saved
     // mark, applied to each. Load it up front and refuse rather than store an
     // approval nobody signed. Returning for correction needs no signature.
+    bulkLock.current = true
+    setBulk({ busy: true, result: null })
     let signature = null
     if (action === 'approve' && pickedInspections.length > 0) {
       try { signature = await getMySignature() } catch { signature = null }
+      if (current !== generation.current) { bulkLock.current = false; return }
       if (!isUsableSignature(signature)) {
         setBulk({ busy: false, result: {
           ok: [], failed: [],
           note: 'These inspections need a signature. Save one in Settings > My signature, or open each to sign it.',
         } })
+        bulkLock.current = false
         return
       }
     }
@@ -1164,11 +1217,14 @@ export default function Approvals() {
       // The approver's identity is taken server-side from the session, never
       // from the client; only the signature (their own saved mark) is carried.
       const res = await queue.bulkDecide(pickedItems, action, { reason, signature })
+      if (current !== generation.current) return
       setBulk({ busy: false, result: { ...res, action } })
       setPicked(new Set())
       await load()
     } catch (err) {
-      setBulk({ busy: false, result: { ok: [], failed: [], note: toUserMessage(err, 'the bulk action failed') } })
+      if (current === generation.current) setBulk({ busy: false, result: { ok: [], failed: [], note: toUserMessage(err, 'the bulk action failed') } })
+    } finally {
+      bulkLock.current = false
     }
   }
 
@@ -1181,7 +1237,7 @@ export default function Approvals() {
     <div className="text-[var(--text-primary)] space-y-6">
       <PageHeader
         title="Approval Dashboard"
-        subtitle="Every pending approval across your organisation — workflows, accident closures, checklist and inspection sign-offs"
+        subtitle="Every pending approval across your organisation: workflows, accident closures, checklist and inspection sign-offs"
         icon={CheckSquare}
         badge={loading ? undefined : (metrics.total_pending ? `${metrics.total_pending} pending` : undefined)}
         onRefresh={load}
@@ -1200,7 +1256,7 @@ export default function Approvals() {
             <div className="flex items-center gap-2.5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-sm text-amber-300">
               <AlertTriangle className="w-4 h-4 shrink-0" />
               <span className="flex-1">
-                Workflow engine is unavailable — showing accident closures and checklist approvals only.
+                Workflow engine is unavailable. Available documents remain visible; open each checklist or inspection individually to verify its approval route.
               </span>
               <button
                 onClick={load}
@@ -1433,7 +1489,7 @@ export default function Approvals() {
                     key={`${row.source}-${row.id}`}
                     item={row}
                     onOpen={openRow}
-                    selectable={canActNonWorkflow && BULKABLE.includes(row.source)}
+                    selectable={canActNonWorkflow && bulkableList.includes(row)}
                     picked={picked.has(keyOf(row))}
                     onTogglePick={togglePick}
                   />

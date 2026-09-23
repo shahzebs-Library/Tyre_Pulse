@@ -20,6 +20,7 @@ import {
   FileSpreadsheet, FileText, Activity, Percent, Target, Wrench, Clock,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import Card, { CardBody, CardHeader } from '../components/ui/Card'
 import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import DateField from '../components/ui/DateField'
 import EChart from '../components/charts/EChart'
@@ -31,6 +32,7 @@ import { colorAt, withAlpha } from '../lib/reportColors'
 import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import useLatestRequest from '../lib/useLatestRequest'
+import { isMissingRelation } from '../lib/api/_client'
 
 const VIEW_ROLES = new Set(['Admin', 'Manager', 'Director'])
 
@@ -72,10 +74,6 @@ function fmtPct(v) {
 function fmtMin(v) {
   const n = Number(v)
   return Number.isFinite(n) ? `${Math.round(n)} min` : 'N/A'
-}
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') || m.includes('schema cache') || m.includes('could not find the table')
 }
 
 export default function WorkshopAnalytics() {
@@ -300,13 +298,18 @@ export default function WorkshopAnalytics() {
     return (
       <div className="space-y-6">
         <PageHeader title="Workshop Analytics" subtitle="Workshop productivity history and trends." icon={TrendingUp} />
-        <div className="card border border-amber-800/50 flex items-start gap-3">
+        {/* Card is `flex flex-col` and Tailwind emits .flex-col after .flex-row,
+            so a `flex-row` class would silently lose. The direction goes in
+            `style`, which Card spreads last. The old `border-amber-800/50` is
+            dropped rather than kept: Card sets `border` inline, so a border
+            utility on it is dead - the amber edge comes from tone="warn". */}
+        <Card tone="warn" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
           <ShieldAlert size={18} className="text-amber-400 mt-0.5 shrink-0" />
           <div>
             <p className="text-amber-300 font-medium">You do not have access to workshop analytics.</p>
             <p className="text-[var(--text-muted)] text-sm mt-1">This view is limited to Admin, Manager and Director roles.</p>
           </div>
-        </div>
+        </Card>
       </div>
     )
   }
@@ -323,7 +326,7 @@ export default function WorkshopAnalytics() {
       />
 
       {missing && (
-        <div className="card border border-amber-800/50 flex items-start gap-3">
+        <Card tone="warn" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
           <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
           <div>
             <p className="text-amber-300 font-medium">Workshop activity tracking is not enabled on this database yet.</p>
@@ -331,37 +334,41 @@ export default function WorkshopAnalytics() {
               The <span className="font-mono text-[var(--text-primary)]">tech_activity_events</span> and <span className="font-mono text-[var(--text-primary)]">work_orders</span> tables must exist, then reload.
             </p>
           </div>
-        </div>
+        </Card>
       )}
 
       {error && (
-        <div className="card border border-red-800/50 flex items-start gap-3">
+        <Card tone="crit" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
           <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
           <div>
             <p className="text-red-300 font-medium">Something went wrong.</p>
             <p className="text-[var(--text-muted)] text-sm mt-1">{error}</p>
             <button onClick={load} className="mt-2 text-sm text-blue-400 hover:text-blue-300">Retry</button>
           </div>
-        </div>
+        </Card>
       )}
 
-      {/* Filters */}
-      <div className="card space-y-3">
-        <div className="flex items-center gap-2 text-[var(--text-secondary)]">
-          <Filter size={15} /> <span className="text-sm font-medium">Filters</span>
-          <div className="ml-auto flex flex-wrap gap-1.5">
-            {quickRanges.map((q) => (
-              <button
-                key={q.id}
-                onClick={() => setFilters((f) => ({ ...f, from: q.from, to: q.to }))}
-                className="text-[11px] px-2.5 py-1 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] hover:border-blue-600/50 text-[var(--text-secondary)]"
-              >
-                {q.label}
-              </button>
-            ))}
-          </div>
+      {/* Filters. Deliberately NOT `clip`: this card holds a native <select> and
+          two DateField pickers, and overflow:hidden on the surface is the exact
+          clipping bug Card exists to end. */}
+      <Card>
+        {/* The quick ranges sit on their own wrapping row rather than in
+            CardHeader's `actions`: that slot is `flex-shrink-0`, so four
+            buttons in it would refuse to wrap and push a phone-width card into
+            horizontal scroll. */}
+        <CardHeader title="Filters" level={2} icon={Filter} />
+        <div className="flex flex-wrap justify-end gap-1.5" style={{ marginBottom: 'var(--space-3)' }}>
+          {quickRanges.map((q) => (
+            <button
+              key={q.id}
+              onClick={() => setFilters((f) => ({ ...f, from: q.from, to: q.to }))}
+              className="text-[11px] px-2.5 py-1 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] hover:border-blue-600/50 text-[var(--text-secondary)]"
+            >
+              {q.label}
+            </button>
+          ))}
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-[var(--gap-grid)]">
           <div className="text-xs text-[var(--text-muted)] space-y-1">
             <span>From</span>
             <DateField className="text-sm" value={filters.from} onChange={(v) => setFilter('from', v)} placeholder="From date" ariaLabel="From date" />
@@ -383,114 +390,117 @@ export default function WorkshopAnalytics() {
             </button>
           </div>
         </div>
-      </div>
+      </Card>
 
       {/* KPI tiles */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-[var(--gap-grid)]">
         {kpis.map((k) => {
           const Icon = k.icon
           return (
-            <div key={k.label} className="card">
+            <Card key={k.label}>
               <div className="flex items-center justify-between">
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={15} className="text-[var(--text-muted)]" />
               </div>
               <p className="text-2xl font-bold text-[var(--text-primary)] mt-1">{loading ? '-' : k.value}</p>
               <p className="text-[10px] text-[var(--text-muted)] mt-0.5">{k.sub}</p>
-            </div>
+            </Card>
           )
         })}
       </div>
 
       {loading ? (
-        <div className="card"><div className="space-y-2">{[0, 1, 2, 3, 4, 5].map((i) => <div key={i} className="h-9 bg-[var(--input-bg)] rounded animate-pulse" />)}</div></div>
+        <Card><CardBody className="space-y-2">{[0, 1, 2, 3, 4, 5].map((i) => <div key={i} className="h-9 bg-[var(--input-bg)] rounded animate-pulse" />)}</CardBody></Card>
       ) : !hasActivity ? (
-        <div className="card py-12 text-center text-[var(--text-muted)]">
-          <TrendingUp size={30} className="mx-auto mb-2 opacity-50" />
-          <p className="text-sm">No workshop activity in this range.</p>
-          <p className="text-xs mt-1">Technicians logging jobs and blockers (Workshop Live Control) populate this report.</p>
-        </div>
+        <Card>
+          {/* `py-12` on a Card would be dead - Card sets padding inline and inline
+              beats a class - so the extra breathing room moves onto the body. */}
+          <CardBody
+            className="text-center text-[var(--text-muted)]"
+            style={{ paddingTop: 'var(--space-8)', paddingBottom: 'var(--space-8)' }}
+          >
+            <TrendingUp size={30} className="mx-auto mb-2 opacity-50" />
+            <p className="text-sm">No workshop activity in this range.</p>
+            <p className="text-xs mt-1">Technicians logging jobs and blockers (Workshop Live Control) populate this report.</p>
+          </CardBody>
+        </Card>
       ) : (
         <>
-          {/* Trend charts */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className="card">
-              <div className="flex items-center gap-2 mb-3">
-                <TrendingUp size={16} className="text-[var(--text-secondary)]" />
-                <h3 className="font-semibold text-[var(--text-primary)]">Utilization trend</h3>
-              </div>
-              <div className="h-[260px]">
+          {/* Trend charts. No `clip` on any chart card: an ECharts tooltip that
+              overflows its well must not be cut off. */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-[var(--gap-grid)]">
+            <Card>
+              <CardHeader title="Utilization trend" icon={TrendingUp} level={2} />
+              <CardBody className="h-[260px]">
                 {trend.length ? <EChart option={utilizationOption} ariaLabel="Daily utilization trend" /> : <EmptyChart />}
-              </div>
-            </div>
-            <div className="card">
-              <div className="flex items-center gap-2 mb-3">
-                <Activity size={16} className="text-[var(--text-secondary)]" />
-                <h3 className="font-semibold text-[var(--text-primary)]">Productive vs blocked vs unassigned</h3>
-              </div>
-              <div className="h-[260px]">
+              </CardBody>
+            </Card>
+            <Card>
+              <CardHeader title="Productive vs blocked vs unassigned" icon={Activity} level={2} />
+              <CardBody className="h-[260px]">
                 {trend.length ? <EChart option={timeStackOption} ariaLabel="Daily hours by classification" /> : <EmptyChart />}
-              </div>
-            </div>
+              </CardBody>
+            </Card>
           </div>
 
           {/* Delay cost + first-time-fix */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div className="card lg:col-span-2">
-              <div className="flex items-center gap-2 mb-3">
-                <AlertTriangle size={16} className="text-[var(--text-secondary)]" />
-                <h3 className="font-semibold text-[var(--text-primary)]">Delay cost by root cause</h3>
-              </div>
-              <div style={{ height: Math.max(180, delayRows.length * 42) }}>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-[var(--gap-grid)]">
+            <Card className="lg:col-span-2">
+              <CardHeader title="Delay cost by root cause" icon={AlertTriangle} level={2} />
+              <CardBody style={{ height: Math.max(180, delayRows.length * 42) }}>
                 {delayRows.length ? <EChart option={delayCostOption} ariaLabel="Delay cost by cause" /> : <EmptyChart hint="No blocked time recorded in this range." />}
-              </div>
-            </div>
-            <div className="card">
-              <div className="flex items-center gap-2 mb-3">
-                <Gauge size={16} className="text-[var(--text-secondary)]" />
-                <h3 className="font-semibold text-[var(--text-primary)]">First time fix</h3>
-              </div>
-              <div className="h-[220px]">
+              </CardBody>
+            </Card>
+            <Card>
+              <CardHeader title="First time fix" icon={Gauge} level={2} />
+              <CardBody className="h-[220px]">
                 <EChart option={ftfGaugeOption} ariaLabel="First time fix rate" />
-              </div>
+              </CardBody>
               <p className="text-center text-[11px] text-[var(--text-muted)] -mt-2">
                 {ftf.rate == null ? 'No completed jobs to measure.' : `${fmtNum(ftf.firstTime)} of ${fmtNum(ftf.completed)} completed jobs with no rework.`}
               </p>
-            </div>
+            </Card>
           </div>
 
           {/* Target vs actual */}
-          <div className="card">
-            <div className="flex items-center gap-2 mb-3">
-              <Target size={16} className="text-[var(--text-secondary)]" />
-              <h3 className="font-semibold text-[var(--text-primary)]">Target vs actual completion time</h3>
-              {tva && (
-                <span className="text-[11px] text-[var(--text-muted)]">
+          <Card>
+            <CardHeader
+              title="Target vs actual completion time"
+              icon={Target}
+              level={2}
+              description={tva ? (
+                <>
                   avg target {fmtMin(tva.avgTargetMin)} | avg actual {fmtMin(tva.avgActualMin)}
                   {tva.variancePct != null ? ` | variance ${tva.variancePct > 0 ? '+' : ''}${tva.variancePct}%` : ''}
-                </span>
-              )}
-            </div>
-            <div className="h-[260px]">
+                </>
+              ) : undefined}
+            />
+            <CardBody className="h-[260px]">
               {tvaOption ? <EChart option={tvaOption} ariaLabel="Target vs actual completion time" /> : <EmptyChart hint="No jobs with a target (standard hours or estimated minutes) and a recorded duration." />}
-            </div>
-          </div>
+            </CardBody>
+          </Card>
 
-          {/* Technician leaderboard */}
-          <div className="card">
-            <div className="flex items-center gap-2 mb-3">
-              <Users size={16} className="text-[var(--text-secondary)]" />
-              <h3 className="font-semibold text-[var(--text-primary)]">Technician leaderboard</h3>
-              <span className="text-[11px] text-[var(--text-muted)]">{analytics.technicianLeaderboard.length} with activity</span>
-              <div className="ml-auto flex items-center gap-2">
-                <button onClick={exportExcel} disabled={!analytics.technicianLeaderboard.length} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-50">
-                  <FileSpreadsheet size={14} /> Excel
-                </button>
-                <button onClick={exportPdf} disabled={!analytics.technicianLeaderboard.length} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-50">
-                  <FileText size={14} /> PDF
-                </button>
-              </div>
-            </div>
+          {/* Technician leaderboard. The raw table markup is DELIBERATELY kept
+              rather than moved to EnterpriseTable: it already pages through the
+              shared usePagedRows/TablePagination primitive, and EnterpriseTable
+              would bring a second pager and its own search box and export. */}
+          <Card>
+            <CardHeader
+              title="Technician leaderboard"
+              icon={Users}
+              level={2}
+              description={`${analytics.technicianLeaderboard.length} with activity`}
+              actions={(
+                <>
+                  <button onClick={exportExcel} disabled={!analytics.technicianLeaderboard.length} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-50">
+                    <FileSpreadsheet size={14} /> Excel
+                  </button>
+                  <button onClick={exportPdf} disabled={!analytics.technicianLeaderboard.length} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-50">
+                    <FileText size={14} /> PDF
+                  </button>
+                </>
+              )}
+            />
             {analytics.technicianLeaderboard.length === 0 ? (
               <p className="text-sm text-[var(--text-muted)] py-6 text-center">No technician activity in this range.</p>
             ) : (
@@ -522,15 +532,14 @@ export default function WorkshopAnalytics() {
                 <TablePagination {...techniciansPager} />
               </div>
             )}
-          </div>
+          </Card>
 
-          {/* Delay accountability table */}
+          {/* Delay accountability. Raw table markup kept for the same reason as
+              the leaderboard, plus a composite priority-pill cell that
+              EnterpriseTable would have to re-express. */}
           {delayRows.length > 0 && (
-            <div className="card">
-              <div className="flex items-center gap-2 mb-3">
-                <Timer size={16} className="text-[var(--text-secondary)]" />
-                <h3 className="font-semibold text-[var(--text-primary)]">Delay accountability</h3>
-              </div>
+            <Card>
+              <CardHeader title="Delay accountability" icon={Timer} level={2} />
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -562,7 +571,7 @@ export default function WorkshopAnalytics() {
                 </table>
                 <TablePagination {...delaysPager} />
               </div>
-            </div>
+            </Card>
           )}
         </>
       )}

@@ -176,7 +176,7 @@ describe('notificationPrefs — summarisePrefs', () => {
       min_priority: 'high',
     })
     expect(s.channels).toContain('sms')
-    expect(s.quietHours).toBe('22:00–07:00')
+    expect(s.quietHours).toBe('22:00 to 07:00')
     expect(s.timezone).toBe('Asia/Riyadh')
     expect(s.digest).toBe('daily')
     expect(s.minPriority).toBe('high')

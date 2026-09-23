@@ -209,7 +209,7 @@ describe('pmPrograms.recordPmService', () => {
 })
 
 describe('pmPrograms.listPmServiceRecords', () => {
-  it('builds select/eq/order/limit and returns the rows', async () => {
+  it('builds a stable paged query and returns the rows', async () => {
     const rows = [{ id: 'sr1', asset_no: 'A1', service_date: '2026-07-10', total_cost: 90 }]
     h.state.tables.pm_service_records = { data: rows, error: null }
 
@@ -217,7 +217,7 @@ describe('pmPrograms.listPmServiceRecords', () => {
     expect(out).toEqual(rows)
 
     const rec = lastCall('pm_service_records')
-    expect(opNames(rec)).toEqual(['select', 'eq', 'eq', 'order', 'limit'])
+    expect(opNames(rec)).toEqual(['select', 'eq', 'eq', 'order', 'order', 'range'])
     // first select column list, both eq filters present
     expect(rec.ops[0][1][0]).toBe(pm.SERVICE_RECORD_COLS)
     expect(rec.ops[1][1]).toEqual(['asset_no', 'A1'])
@@ -225,12 +225,12 @@ describe('pmPrograms.listPmServiceRecords', () => {
     expect(rec.ops[3][1]).toEqual(['service_date', { ascending: false }])
   })
 
-  it('returns [] when the table is missing (never throws)', async () => {
+  it('reports missing history instead of implying no services', async () => {
     h.state.tables.pm_service_records = {
       data: null,
       error: { message: 'relation "pm_service_records" does not exist', code: '42P01' },
     }
-    expect(await pm.listPmServiceRecords({ asset_no: 'A1' })).toEqual([])
+    await expect(pm.listPmServiceRecords({ asset_no: 'A1' })).rejects.toThrow()
   })
 
   it('applies a country OR filter when a country is active', async () => {
@@ -280,7 +280,7 @@ describe('pmPrograms.loadPmDashboard', () => {
     expect(inOp[1]).toEqual(['asset_no', ['A1', 'A2']])
   })
 
-  it('survives a missing engine_hours_logs (hoursByAsset -> {})', async () => {
+  it('reports an unavailable meter source instead of assuming no readings', async () => {
     h.state.tables.pm_programs = { data: [{ id: 'p1', asset_no: 'A1' }], error: null }
     h.state.tables.vehicle_fleet = { data: [{ asset_no: 'A1', current_km: 5 }], error: null }
     h.state.tables.engine_hours_logs = {
@@ -288,9 +288,7 @@ describe('pmPrograms.loadPmDashboard', () => {
       error: { message: 'relation "engine_hours_logs" does not exist', code: '42P01' },
     }
 
-    const { kmByAsset, hoursByAsset } = await pm.loadPmDashboard({})
-    expect(kmByAsset).toEqual({ A1: 5 })
-    expect(hoursByAsset).toEqual({})
+    await expect(pm.loadPmDashboard({})).rejects.toBeDefined()
   })
 
   it('short-circuits to empty meter maps when no assets are referenced', async () => {

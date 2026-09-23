@@ -66,6 +66,7 @@ import {
   FileText, RefreshCcw, AlertTriangle, Sparkles, Gauge, X, Coins, Hash,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import Card from '../components/ui/Card'
 import ReportingScopeBar from '../components/shell/ReportingScopeBar'
 import { useSettings } from '../contexts/SettingsContext'
 import { getExpensePeriodTrend, getExpensePeriodTrendMulti } from '../lib/api/expenseTrends'
@@ -100,14 +101,20 @@ function fmtPct(v) {
 
 function Stat({ icon: Icon, label, value, sub, tone = 'text-slate-100' }) {
   return (
-    <div className="card p-4 flex items-start gap-3">
+    // `p-4` would be DEAD on a Card - padding is set inline there and a plain
+    // utility loses to it - but `pad="tight"` IS --space-4, the same 1rem.
+    // Card is `flex flex-col` and Tailwind emits `.flex-col` after `.flex-row`,
+    // so the icon-beside-text row direction has to be an inline style.
+    // `tone` here is this component's own text-colour prop on the VALUE line; it
+    // is deliberately not Card's `tone` (which tints the border, not text).
+    <Card pad="tight" className="items-start gap-3" style={{ flexDirection: 'row' }}>
       <div className="rounded-lg bg-white/5 p-2"><Icon className="w-5 h-5 text-emerald-400" /></div>
       <div className="min-w-0">
         <div className="text-xs uppercase tracking-wide text-slate-400">{label}</div>
         <div className={`text-lg font-semibold ${tone}`}>{value}</div>
         {sub && <div className="text-xs text-slate-500 mt-0.5">{sub}</div>}
       </div>
-    </div>
+    </Card>
   )
 }
 
@@ -173,7 +180,13 @@ function CountryTrend({ entry, grain }) {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="card p-4 lg:col-span-2">
+        {/* Titles stay hand-rolled rather than moving to CardHeader: CardHeader
+            renders its title inside `truncate`, and at phone width that would
+            clip "(with forecast)" / "& forecast" off the end - the one word that
+            tells the reader part of what is plotted is a projection. The chart
+            well keeps its own `h-64`, which is the definite height chart.js
+            needs under maintainAspectRatio:false. */}
+        <Card pad="tight" className="lg:col-span-2">
           <div className="text-sm font-medium text-slate-200 mb-3">Spend by {perLabel.toLowerCase()} &amp; category (with forecast)</div>
           <div className="h-64">
             <Bar data={stacked} options={{
@@ -182,14 +195,14 @@ function CountryTrend({ entry, grain }) {
               scales: { x: catAxis, y: { ...moneyAxis, stacked: true } },
             }} />
           </div>
-        </div>
-        <div className="card p-4">
+        </Card>
+        <Card pad="tight">
           <div className="text-sm font-medium text-slate-200 mb-3">Category share ({last?.label ?? '-'})</div>
           <div className="h-64"><Doughnut data={shareData} options={{ maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#cbd5e1' } } } }} /></div>
-        </div>
+        </Card>
       </div>
 
-      <div className="card p-4">
+      <Card pad="tight">
         <div className="text-sm font-medium text-slate-200 mb-3 flex items-center gap-2"><LineChart className="w-4 h-4" /> Category trend &amp; forecast</div>
         <div className="h-64">
           <Line data={lineData} options={{
@@ -198,10 +211,13 @@ function CountryTrend({ entry, grain }) {
             scales: { x: { ticks: { color: '#94a3b8' }, grid: { color: 'var(--panel-2)' } }, y: moneyAxis },
           }} />
         </div>
-      </div>
+      </Card>
 
-      {/* YoY table */}
-      <div className="card overflow-hidden">
+      {/* YoY table. It stays a raw <table>: the rows ARE the message. Periods
+          run in chronological order and the forecast rows are appended after the
+          actuals in their own tint, so a sortable header would interleave
+          projections with measured periods and destroy both orderings. */}
+      <Card clip>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-white/5 text-slate-400">
@@ -238,17 +254,17 @@ function CountryTrend({ entry, grain }) {
             </tbody>
           </table>
         </div>
-      </div>
+      </Card>
 
       {t.insights.length > 0 && (
-        <div className="card p-4 space-y-1.5">
+        <Card pad="tight" className="space-y-1.5">
           {t.insights.map((ins, i) => (
             <div key={i} className="text-sm text-slate-300 flex items-start gap-2">
               <span className="mt-1 w-1.5 h-1.5 rounded-full shrink-0" style={{ background: ins.tone === 'good' ? '#10b981' : ins.tone === 'warning' ? '#f59e0b' : ins.tone === 'accent' ? '#e879f9' : '#3b82f6' }} />
               {ins.text}
             </div>
           ))}
-        </div>
+        </Card>
       )}
     </div>
   )
@@ -488,7 +504,11 @@ export default function ExpenseTrends() {
 
       {/* Reporting scope: which countries this report aggregates. Separate from
           the working context in the top bar, and it drives the queries below. */}
-      <div className="card p-3 flex flex-wrap items-start justify-between gap-4">
+      {/* No `clip`: this card holds the scope menu. That popover portals, so it
+          was never actually clipped by the legacy .card overflow - but leaving a
+          card unclipped is the kit default for a reason, and the next control
+          dropped in here may not portal. */}
+      <Card pad="tight" className="flex-wrap items-start justify-between gap-4" style={{ flexDirection: 'row' }}>
         <ReportingScopeBar />
         {scopeEntries.length > 0 && (
           <div className="flex flex-wrap items-start gap-4 text-xs">
@@ -515,10 +535,10 @@ export default function ExpenseTrends() {
         {scopeMoneyNote && (
           <p className="w-full text-[11px] text-slate-500">{scopeMoneyNote}</p>
         )}
-      </div>
+      </Card>
 
       {/* Date-range window (feeds the trend + forecast) */}
-      <div className="card p-3 flex flex-wrap items-center gap-3">
+      <Card pad="tight" className="flex-wrap items-center gap-3" style={{ flexDirection: 'row' }}>
         <span className="text-xs uppercase tracking-wide text-slate-400 flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> Date range</span>
         <div className="flex items-center gap-1.5">
           <span className="text-xs text-slate-500">From</span>
@@ -544,25 +564,29 @@ export default function ExpenseTrends() {
         </div>
         {rangeActive && <button onClick={clearRange} className="btn-ghost text-xs gap-1"><X className="w-3.5 h-3.5" /> Clear</button>}
         <span className="text-xs text-slate-500 ml-auto">{rangeActive ? 'Forecast is projected from the selected window.' : 'All periods'}</span>
-      </div>
+      </Card>
 
       {error && (
-        <div className="card p-4 border border-red-500/40 flex items-center justify-between">
+        // `border border-red-500/40` was DEAD here - Card sets `border` inline -
+        // so the red edge this banner depends on is now `tone="crit"`.
+        <Card pad="tight" tone="crit" className="items-center justify-between" style={{ flexDirection: 'row' }}>
           <div className="flex items-center gap-2 text-red-300"><AlertTriangle className="w-4 h-4" /> {error}</div>
           <button onClick={load} className="btn-ghost">Retry</button>
-        </div>
+        </Card>
       )}
 
+      {/* `p-10` would be dead on a Card, and roominess is the whole point of an
+          empty state, so it goes inline as the same 2.5rem --space-10 step. */}
       {loading ? (
-        <div className="card p-10 text-center text-slate-400">Loading expense history…</div>
+        <Card className="text-center text-slate-400" style={{ padding: 'var(--space-10)' }}>Loading expense history…</Card>
       ) : scopeCountryList.length === 0 ? (
-        <div className="card p-10 text-center text-slate-400">
+        <Card className="text-center text-slate-400" style={{ padding: 'var(--space-10)' }}>
           No countries are selected in the reporting scope, so there is nothing to report on.
-        </div>
+        </Card>
       ) : countries.length === 0 ? (
-        <div className="card p-10 text-center text-slate-400">
+        <Card className="text-center text-slate-400" style={{ padding: 'var(--space-10)' }}>
           No expense history for {scopeTitle}{rangeActive ? ' in the selected date range' : ''} yet.
-        </div>
+        </Card>
       ) : (
         <div className="space-y-8">
           {countries.map((c) => (

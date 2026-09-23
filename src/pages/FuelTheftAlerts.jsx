@@ -26,6 +26,7 @@ import { formatCurrency } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 const EMPTY_FORM = {
   alert_no: '', asset_no: '', driver_name: '', location: '', detected_at: '',
@@ -50,21 +51,16 @@ const STATUS_BADGE = {
   resolved: 'bg-green-900/30 text-green-300 border border-green-800/50',
 }
 
-const titleCase = (s) => (s ? String(s).charAt(0).toUpperCase() + String(s).slice(1) : '—')
+const titleCase = (s) => (s ? String(s).charAt(0).toUpperCase() + String(s).slice(1) : 'N/A')
 const fmtLitres = (v) =>
-  v == null || v === '' ? '—' : `${Number(v).toLocaleString()} L`
+  v == null || v === '' ? 'N/A' : `${Number(v).toLocaleString()} L`
 
 function fmtDateTime(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleString()
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') ||
-    m.includes('schema cache') || m.includes('could not find the table')
-}
 
 export default function FuelTheftAlerts() {
   const { activeCountry, activeCurrency } = useSettings()
@@ -108,7 +104,7 @@ export default function FuelTheftAlerts() {
   const assetRollup = useMemo(() => byAsset(rows || []), [rows])
 
   const fmtMoney = useCallback(
-    (v) => (v == null ? '—' : formatCurrency(v, activeCurrency, 0)),
+    (v) => (v == null ? 'N/A' : formatCurrency(v, activeCurrency, 0)),
     [activeCurrency],
   )
 
@@ -217,7 +213,7 @@ export default function FuelTheftAlerts() {
     <div className="space-y-6">
       <PageHeader
         title="Fuel Theft Alerts"
-        subtitle="Detected fuel-level drops and refuel discrepancies per asset — triage, investigate, and quantify fuel loss across the fleet."
+        subtitle="Detected fuel-level drops and refuel discrepancies per asset: triage, investigate, and quantify fuel loss across the fleet."
         icon={Fuel}
         onRefresh={load}
         refreshing={refreshing}
@@ -266,7 +262,7 @@ export default function FuelTheftAlerts() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -333,7 +329,7 @@ export default function FuelTheftAlerts() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={8} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {rows.length === 0 && !notProvisioned ? 'No alerts logged yet — log your first alert.' : 'No alerts match these filters.'}
+                  {rows.length === 0 && !notProvisioned ? 'No alerts logged yet. Log your first alert.' : 'No alerts match these filters.'}
                 </td></tr>
               ) : (
                 pager.pageRows.map((r) => {
@@ -341,16 +337,16 @@ export default function FuelTheftAlerts() {
                   const st = String(r.status || '').toLowerCase()
                   return (
                     <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                      <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.alert_no || '—'}</td>
-                      <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.asset_no || '—'}</td>
+                      <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.alert_no || 'N/A'}</td>
+                      <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.asset_no || 'N/A'}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDateTime(r.detected_at)}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtLitres(r.drop_litres)}</td>
                       <td className="px-4 py-2.5 font-semibold text-orange-400 whitespace-nowrap">{fmtMoney(estimatedLoss(r))}</td>
                       <td className="px-4 py-2.5">
-                        {sev ? <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium ${SEVERITY_BADGE[sev] || SEVERITY_BADGE.medium}`}>{titleCase(sev)}</span> : '—'}
+                        {sev ? <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium ${SEVERITY_BADGE[sev] || SEVERITY_BADGE.medium}`}>{titleCase(sev)}</span> : 'N/A'}
                       </td>
                       <td className="px-4 py-2.5">
-                        {st ? <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium ${STATUS_BADGE[st] || STATUS_BADGE.open}`}>{titleCase(st)}</span> : '—'}
+                        {st ? <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium ${STATUS_BADGE[st] || STATUS_BADGE.open}`}>{titleCase(st)}</span> : 'N/A'}
                       </td>
                       <td className="px-4 py-2.5">
                         <div className="flex items-center justify-end gap-1">
@@ -394,7 +390,7 @@ export default function FuelTheftAlerts() {
                 </div>
                 <div>
                   <label className="label">Location (optional)</label>
-                  <input className="input w-full" placeholder="e.g. Riyadh — Ring Rd" value={form.location} maxLength={200} onChange={(e) => set('location', e.target.value)} />
+                  <input className="input w-full" placeholder="e.g. Riyadh, Ring Rd" value={form.location} maxLength={200} onChange={(e) => set('location', e.target.value)} />
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -439,7 +435,7 @@ export default function FuelTheftAlerts() {
               </div>
               <div>
                 <label className="label">Resolution (optional)</label>
-                <input className="input w-full" placeholder="e.g. confirmed siphoning — driver counselled" value={form.resolution} maxLength={8000} onChange={(e) => set('resolution', e.target.value)} />
+                <input className="input w-full" placeholder="e.g. confirmed siphoning, driver counselled" value={form.resolution} maxLength={8000} onChange={(e) => set('resolution', e.target.value)} />
               </div>
               <div>
                 <label className="label">Notes (optional)</label>

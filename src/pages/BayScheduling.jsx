@@ -19,6 +19,13 @@ import {
   Layers, Building2, CalendarDays, Users, TrendingUp,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+// CardHeader is deliberately NOT imported: both section headings on this page
+// are compound - an icon, a title and an INLINE muted qualifier naming the
+// working-day denominator the percentages are read against. CardHeader renders
+// its title inside `truncate`, and a utilisation figure whose basis has been
+// clipped away is not a measurement.
+import Card from '../components/ui/Card'
+import Modal from '../components/ui/Modal'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   listBaySchedules, createBaySchedule, updateBaySchedule, deleteBaySchedule,
@@ -30,6 +37,7 @@ import {
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 const EMPTY_FORM = {
   bay_name: '', workshop_site: '', asset_no: '', job_type: '', technician: '',
@@ -68,15 +76,15 @@ const PRIORITY_BADGE = {
   urgent: 'bg-red-900/30 text-red-300 border-red-800/50',
 }
 
-const fmtLabel = (v) => (v == null || v === '' ? '—' : String(v).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()))
+const fmtLabel = (v) => (v == null || v === '' ? 'N/A' : String(v).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()))
 
 function fmtDateTime(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
 }
 function fmtMin(v) {
-  if (v == null) return '—'
+  if (v == null) return 'N/A'
   const n = Math.round(v)
   if (Math.abs(n) < 60) return `${n} min`
   const h = Math.floor(Math.abs(n) / 60)
@@ -92,11 +100,6 @@ function toLocalInput(v) {
   return new Date(d.getTime() - off * 60000).toISOString().slice(0, 16)
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') ||
-    m.includes('schema cache') || m.includes('could not find the table')
-}
 
 export default function BayScheduling() {
   const { activeCountry } = useSettings()
@@ -191,7 +194,7 @@ export default function BayScheduling() {
     { label: 'In progress', value: summary.inProgressCount, icon: PlayCircle, tone: 'text-indigo-400' },
     { label: 'Completed today', value: completedToday, icon: CheckCircle2, tone: 'text-green-400' },
     { label: 'Delayed', value: summary.delayedCount, icon: AlertTriangle, tone: summary.delayedCount > 0 ? 'text-amber-400' : 'text-[var(--text-primary)]' },
-    { label: 'Avg overrun', value: summary.avgOverrunMin == null ? '—' : fmtMin(summary.avgOverrunMin), icon: Timer, tone: (summary.avgOverrunMin ?? 0) > 0 ? 'text-red-400' : 'text-green-400' },
+    { label: 'Avg overrun', value: summary.avgOverrunMin == null ? 'N/A' : fmtMin(summary.avgOverrunMin), icon: Timer, tone: (summary.avgOverrunMin ?? 0) > 0 ? 'text-red-400' : 'text-green-400' },
     { label: 'Active bays', value: summary.activeBays, icon: Building2, tone: 'text-sky-400' },
   ]
 
@@ -227,7 +230,12 @@ export default function BayScheduling() {
     })
     setFormError(''); setShowModal(true)
   }
+  // One guarded close per dialog. Modal routes Escape, the backdrop and its own
+  // X through a single `onClose`, where the hand-rolled overlays guarded only
+  // the backdrop. `submit` and `doDelete` clear their dialog state directly, so
+  // a successful write still closes while the in-flight flag is set.
   const closeModal = () => { if (!saving) { setShowModal(false); setEditing(null) } }
+  const closeDelete = () => { if (!deleting) setConfirmDelete(null) }
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
 
   const submit = useCallback(async (e) => {
@@ -279,7 +287,7 @@ export default function BayScheduling() {
     <div className="space-y-6">
       <PageHeader
         title="Bay Scheduling"
-        subtitle="Plan and track workshop bay capacity — utilisation, technician load, job overruns, and double-booking conflicts across every bay."
+        subtitle="Plan and track workshop bay capacity: utilisation, technician load, job overruns, and double-booking conflicts across every bay."
         icon={Wrench}
         onRefresh={load}
         refreshing={refreshing}
@@ -299,8 +307,13 @@ export default function BayScheduling() {
         }
       />
 
+      {/* `tone` carries the edge tint the dead `border border-*` classes used
+          to: Card writes `border` inline, so a border utility on it is silently
+          inert. `flexDirection` is inline for the mirror-image reason - Card is
+          `flex flex-col` and Tailwind emits `.flex-col` after `.flex-row`, so a
+          `flex-row` class could never win. */}
       {notProvisioned && (
-        <div className="card border border-amber-800/50 flex items-start gap-3">
+        <Card tone="warn" className="items-start gap-3" style={{ flexDirection: 'row' }}>
           <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
           <div>
             <p className="text-amber-300 font-medium">Bay scheduling isn’t enabled on this database yet.</p>
@@ -308,24 +321,28 @@ export default function BayScheduling() {
               Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V184_BAY_SCHEDULES.sql</span>, then reload.
             </p>
           </div>
-        </div>
+        </Card>
       )}
 
       {error && (
-        <div className="card border border-red-800/50 flex items-start gap-3">
+        <Card tone="crit" className="items-start gap-3" style={{ flexDirection: 'row' }}>
           <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
           <div><p className="text-red-300 font-medium">Couldn’t load bay schedules.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
-        </div>
+        </Card>
       )}
 
-      {/* Conflict warning strip */}
+      {/* Conflict warning strip. The old `bg-red-950/20` surface wash is also
+          dead against Card's inline background, and the kit's rule is that a
+          tone tints the EDGE only so a wall of cards stays scannable. The
+          double-booking is still carried by the crit edge, the red AlertTriangle,
+          the red headline and the per-conflict "overlaps" marker. */}
       {conflicts.length > 0 && (
-        <div className="card border border-red-800/50 bg-red-950/20">
+        <Card tone="crit">
           <div className="flex items-start gap-3">
             <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
             <div className="flex-1 min-w-0">
               <p className="text-red-300 font-medium">
-                {conflicts.length} scheduling conflict{conflicts.length === 1 ? '' : 's'} detected — a bay is double-booked.
+                {conflicts.length} scheduling conflict{conflicts.length === 1 ? '' : 's'} detected. A bay is double-booked.
               </p>
               <div className="mt-2 flex flex-col gap-1.5">
                 {conflicts.slice(0, 5).map((c, i) => (
@@ -341,7 +358,7 @@ export default function BayScheduling() {
               </div>
             </div>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* KPI tiles */}
@@ -349,19 +366,23 @@ export default function BayScheduling() {
         {kpis.map((k) => {
           const Icon = k.icon
           return (
-            <div key={k.label} className="card">
+            <Card key={k.label}>
               <div className="flex items-center justify-between">
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
-            </div>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
+            </Card>
           )
         })}
       </div>
 
-      {/* Per-bay load / utilisation */}
-      <div className="card">
+      {/* Per-bay load / utilisation. The heading keeps its hand-rolled form:
+          the title is COMPOUND - an inline qualifier that names the working-day
+          basis the utilisation is measured against - and CardHeader renders its
+          title inside `truncate`, which would clip that basis away on a narrow
+          card. A utilisation figure without its denominator is not a reading. */}
+      <Card>
         <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
           <Gauge size={15} /> Bay load &amp; utilisation <span className="text-[var(--text-muted)] font-normal">(today · vs {WORKING_HOURS_PER_DAY}h working day)</span>
         </h3>
@@ -395,16 +416,19 @@ export default function BayScheduling() {
             })}
           </div>
         )}
-      </div>
+      </Card>
 
-      {/* Technician double-booking strip (across different bays) */}
+      {/* Technician double-booking strip (across different bays). Same dead
+          `bg-amber-950/20` wash as the bay-conflict strip above; the warn edge,
+          the amber Users icon, the amber headline and the per-row "overlaps"
+          marker all survive. */}
       {techConflicts.length > 0 && (
-        <div className="card border border-amber-800/50 bg-amber-950/20">
+        <Card tone="warn">
           <div className="flex items-start gap-3">
             <Users size={18} className="text-amber-400 mt-0.5 shrink-0" />
             <div className="flex-1 min-w-0">
               <p className="text-amber-300 font-medium">
-                {techConflicts.length} technician double-booking{techConflicts.length === 1 ? '' : 's'} — a technician is assigned to overlapping jobs in different bays.
+                {techConflicts.length} technician double-booking{techConflicts.length === 1 ? '' : 's'}. A technician is assigned to overlapping jobs in different bays.
               </p>
               <div className="mt-2 flex flex-col gap-1.5">
                 {techConflicts.slice(0, 5).map((c, i) => (
@@ -420,13 +444,14 @@ export default function BayScheduling() {
               </div>
             </div>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Capacity forecast (next 7 days) + technician load */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        {/* Forecast */}
-        <div className="card xl:col-span-2">
+        {/* Forecast. `xl:col-span-2` is grid PLACEMENT, which Card sets nothing
+            for, so unlike padding/border/background it survives as a class. */}
+        <Card className="xl:col-span-2">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
               <CalendarDays size={15} /> Capacity forecast <span className="text-[var(--text-muted)] font-normal">(next 7 days)</span>
@@ -440,7 +465,7 @@ export default function BayScheduling() {
           {rows === null ? (
             <div className="h-24 bg-[var(--input-bg)] rounded animate-pulse" />
           ) : forecast.activeBays === 0 ? (
-            <p className="text-sm text-[var(--text-muted)]">No active bays yet — schedule jobs to project capacity.</p>
+            <p className="text-sm text-[var(--text-muted)]">No active bays yet. Schedule jobs to project capacity.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -485,10 +510,12 @@ export default function BayScheduling() {
               </p>
             </div>
           )}
-        </div>
+        </Card>
 
-        {/* Technician load */}
-        <div className="card">
+        {/* Technician load. Compound heading again - the "(vs Nh day)" qualifier
+            is the denominator the percentages are read against, so it stays out
+            of CardHeader's truncating title. */}
+        <Card>
           <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
             <Users size={15} /> Technician load <span className="text-[var(--text-muted)] font-normal">(vs {WORKING_HOURS_PER_DAY}h day)</span>
           </h3>
@@ -520,11 +547,11 @@ export default function BayScheduling() {
               })}
             </div>
           )}
-        </div>
+        </Card>
       </div>
 
       {/* Filters */}
-      <div className="card space-y-3">
+      <Card className="space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[200px]">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
@@ -549,10 +576,14 @@ export default function BayScheduling() {
           {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
           <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {summary.totalJobs}</span>
         </div>
-      </div>
+      </Card>
 
-      {/* Table */}
-      <div className="card overflow-hidden !p-0">
+      {/* Table. `pad="none" clip` reproduces the edge-to-edge crop the legacy
+          `!p-0 overflow-hidden` gave, without the `!important` this kit retires.
+          Clipping is safe: the only popup inside is TablePagination's rows-per-
+          page control, a native <select> the browser paints outside the page's
+          overflow context. */}
+      <Card pad="none" clip>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -566,7 +597,7 @@ export default function BayScheduling() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={9} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {rows.length === 0 && !notProvisioned ? 'No jobs scheduled yet — schedule your first job.' : 'No jobs match these filters.'}
+                  {rows.length === 0 && !notProvisioned ? 'No jobs scheduled yet. Schedule your first job.' : 'No jobs match these filters.'}
                 </td></tr>
               ) : (
                 pager.pageRows.map((r) => {
@@ -575,24 +606,24 @@ export default function BayScheduling() {
                   return (
                     <tr key={r.id} className={`border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40 ${overrun ? 'bg-red-950/10' : ''}`}>
                       <td className="px-4 py-2.5">
-                        <p className="font-medium text-[var(--text-primary)]">{r.bay_name || '—'}</p>
+                        <p className="font-medium text-[var(--text-primary)]">{r.bay_name || 'N/A'}</p>
                         {r.workshop_site && <p className="text-[11px] text-[var(--text-muted)]">{r.workshop_site}</p>}
                       </td>
                       <td className="px-4 py-2.5">
-                        <p className="text-[var(--text-primary)]">{r.asset_no || '—'}</p>
+                        <p className="text-[var(--text-primary)]">{r.asset_no || 'N/A'}</p>
                         <p className="text-[11px] text-[var(--text-muted)]">{fmtLabel(r.job_type)}</p>
                       </td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.technician || '—'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.technician || 'N/A'}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDateTime(r.scheduled_start)}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{r.estimated_min == null || r.estimated_min === '' ? '—' : fmtMin(Number(r.estimated_min))}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{r.estimated_min == null || r.estimated_min === '' ? 'N/A' : fmtMin(Number(r.estimated_min))}</td>
                       <td className={`px-4 py-2.5 whitespace-nowrap font-medium ${ov == null ? 'text-[var(--text-muted)]' : ov > 0 ? 'text-red-400' : 'text-green-400'}`}>
-                        {ov == null ? '—' : `${ov > 0 ? '+' : ''}${fmtMin(ov)}`}
+                        {ov == null ? 'N/A' : `${ov > 0 ? '+' : ''}${fmtMin(ov)}`}
                       </td>
                       <td className="px-4 py-2.5">
-                        {r.priority ? <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border ${PRIORITY_BADGE[r.priority] || ''}`}>{fmtLabel(r.priority)}</span> : '—'}
+                        {r.priority ? <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border ${PRIORITY_BADGE[r.priority] || ''}`}>{fmtLabel(r.priority)}</span> : 'N/A'}
                       </td>
                       <td className="px-4 py-2.5">
-                        {r.status ? <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border ${STATUS_BADGE[r.status] || ''}`}>{fmtLabel(r.status)}</span> : '—'}
+                        {r.status ? <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border ${STATUS_BADGE[r.status] || ''}`}>{fmtLabel(r.status)}</span> : 'N/A'}
                       </td>
                       <td className="px-4 py-2.5">
                         <div className="flex items-center justify-end gap-1">
@@ -608,16 +639,21 @@ export default function BayScheduling() {
           </table>
         </div>
         <TablePagination {...pager} />
-      </div>
+      </Card>
 
-      {/* Create / Edit modal */}
+      {/* Create / Edit modal. The submit button stays INSIDE the <form> rather
+          than moving to Modal's `footer`: a footer button would need a
+          `form="..."` association to keep submitting, which is a behaviour
+          change, not a migration. Modal owns the height cap the `max-h-[90vh]`
+          was doing by hand, the focus trap, the scroll lock and the portal, and
+          routes Escape, the backdrop and its X through the one guarded close. */}
       {showModal && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" onClick={closeModal}>
-          <div className="card w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-[var(--text-primary)]">{editing ? 'Edit scheduled job' : 'Schedule a job'}</h3>
-              <button onClick={closeModal} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
-            </div>
+        <Modal
+          open
+          onClose={closeModal}
+          size="md"
+          title={editing ? 'Edit scheduled job' : 'Schedule a job'}
+        >
             <form onSubmit={submit} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -708,31 +744,36 @@ export default function BayScheduling() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
+        </Modal>
       )}
 
-      {/* Delete confirm */}
+      {/* Delete confirm. No <form> here, so the actions belong in Modal's
+          `footer`, which pins them where a user can always reach them. The
+          legacy overlay guarded only its backdrop against closing mid-delete
+          and had no X at all; `closeDelete` is now the single guarded close
+          behind Escape, the backdrop and the X alike. */}
       {confirmDelete && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" onClick={() => !deleting && setConfirmDelete(null)}>
-          <div className="card w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-full bg-red-900/30 flex items-center justify-center shrink-0"><Trash2 size={18} className="text-red-400" /></div>
-              <div>
-                <h3 className="text-[var(--text-primary)] font-semibold">Delete this scheduled job?</h3>
-                <p className="text-sm text-[var(--text-muted)] mt-1">
-                  {confirmDelete.bay_name || 'Job'} · {confirmDelete.asset_no || fmtLabel(confirmDelete.job_type)} · {fmtDateTime(confirmDelete.scheduled_start)}. This can’t be undone.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center justify-end gap-2 mt-5">
-              <button onClick={() => setConfirmDelete(null)} className="btn-secondary text-sm" disabled={deleting}>Cancel</button>
+        <Modal
+          open
+          onClose={closeDelete}
+          size="sm"
+          title="Delete this scheduled job?"
+          footer={
+            <>
+              <button onClick={closeDelete} className="btn-secondary text-sm" disabled={deleting}>Cancel</button>
               <button onClick={doDelete} className="btn-danger text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={deleting}>
                 <Trash2 size={14} /> {deleting ? 'Deleting…' : 'Delete'}
               </button>
-            </div>
+            </>
+          }
+        >
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-full bg-red-900/30 flex items-center justify-center shrink-0"><Trash2 size={18} className="text-red-400" /></div>
+            <p className="text-sm text-[var(--text-muted)]">
+              {confirmDelete.bay_name || 'Job'} · {confirmDelete.asset_no || fmtLabel(confirmDelete.job_type)} · {fmtDateTime(confirmDelete.scheduled_start)}. This can’t be undone.
+            </p>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   )

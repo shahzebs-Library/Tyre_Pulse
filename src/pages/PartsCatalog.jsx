@@ -19,6 +19,8 @@ import {
   ShoppingCart, BarChart3, ClipboardList, ShieldAlert,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import Card, { CardHeader } from '../components/ui/Card'
+import Modal from '../components/ui/Modal'
 import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import { useSettings } from '../contexts/SettingsContext'
 import { formatCurrencyCompact, formatCurrency } from '../lib/formatters'
@@ -32,6 +34,7 @@ import {
 import { colorAt, categorical, withAlpha } from '../lib/reportColors'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { isMissingRelation } from '../lib/api/_client'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
 
@@ -53,10 +56,9 @@ const EMPTY_FORM = {
   reorder_level: '', supplier: '', uom: 'pcs', status: 'active', notes: '',
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') || m.includes('schema cache') || m.includes('could not find the table')
-}
+
+/** Rows shown in the ABC table. Surfaced in the header when it truncates. */
+const ABC_TABLE_ROWS = 30
 
 export default function PartsCatalog() {
   const { activeCountry, activeCurrency } = useSettings()
@@ -177,7 +179,15 @@ export default function PartsCatalog() {
     })
     setFormError(''); setShowForm(true)
   }
-  const closeForm = () => { setShowForm(false); setEditing(null) }
+  // ONE guarded close for each dialog. `Modal` routes Escape, the backdrop and
+  // its own X through a single `onClose`, where the hand-rolled overlay guarded
+  // the backdrop for the delete confirm only and nothing at all for the form.
+  // `submit` deliberately clears the dialog state DIRECTLY rather than calling
+  // this: it runs inside the try, while `saving` is still true, so routing the
+  // success path through a guarded close would leave the dialog open after a
+  // save that had in fact succeeded.
+  const closeForm = () => { if (!saving) { setShowForm(false); setEditing(null) } }
+  const closeDelete = () => { if (!deleting) setPendingDelete(null) }
 
   const submit = useCallback(async (e) => {
     e?.preventDefault?.()
@@ -188,7 +198,7 @@ export default function PartsCatalog() {
       const payload = { ...form, country: activeCountry !== 'All' ? activeCountry : null }
       if (editing) await updatePart(editing.id, payload)
       else await createPart(payload)
-      closeForm()
+      setShowForm(false); setEditing(null)
       await load()
     } catch (err) {
       setFormError(toUserMessage(err, 'Could not save the part.'))
@@ -241,7 +251,7 @@ export default function PartsCatalog() {
     <div className="space-y-6">
       <PageHeader
         title="Parts Catalog"
-        subtitle="Master catalog of spare parts — cost, on-hand stock, reorder levels and suppliers, with low-stock alerts."
+        subtitle="Master catalog of spare parts: cost, on-hand stock, reorder levels and suppliers, with low-stock alerts."
         icon={Boxes}
         onRefresh={load}
         refreshing={refreshing}
@@ -261,8 +271,13 @@ export default function PartsCatalog() {
         }
       />
 
+      {/* `tone` carries the amber edge the dead `border border-amber-800/50`
+          class used to: Card writes `border` inline, so a plain border utility
+          on it is silently inert. `flexDirection` is inline for the same reason
+          in reverse - Card is `flex flex-col` and Tailwind emits `.flex-col`
+          after `.flex-row`, so a `flex-row` class could not win. */}
       {missing && (
-        <div className="card border border-amber-800/50 flex items-start gap-3">
+        <Card tone="warn" className="items-start gap-3" style={{ flexDirection: 'row' }}>
           <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
           <div>
             <p className="text-amber-300 font-medium">The parts catalog isn't enabled on this database yet.</p>
@@ -270,14 +285,14 @@ export default function PartsCatalog() {
               Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V140_PARTS_CATALOG.sql</span>, then reload.
             </p>
           </div>
-        </div>
+        </Card>
       )}
 
       {error && (
-        <div className="card border border-red-800/50 flex items-start gap-3">
+        <Card tone="crit" className="items-start gap-3" style={{ flexDirection: 'row' }}>
           <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
           <div><p className="text-red-300 font-medium">Something went wrong.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
-        </div>
+        </Card>
       )}
 
       {/* KPI tiles */}
@@ -285,19 +300,19 @@ export default function PartsCatalog() {
         {kpis.map((k) => {
           const Icon = k.icon
           return (
-            <div key={k.label} className="card">
+            <Card key={k.label}>
               <div className="flex items-center justify-between">
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
-            </div>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
+            </Card>
           )
         })}
       </div>
 
       {/* Filters */}
-      <div className="card space-y-3">
+      <Card className="space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[200px]">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
@@ -314,10 +329,14 @@ export default function PartsCatalog() {
           {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
           <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {summary.total}</span>
         </div>
-      </div>
+      </Card>
 
-      {/* Table */}
-      <div className="card overflow-hidden !p-0">
+      {/* Table. `pad="none" clip` reproduces the edge-to-edge crop the legacy
+          `!p-0 overflow-hidden` gave, without the `!important` this kit retires.
+          Clipping is safe: the only popup inside is TablePagination's rows-per-
+          page control, a native <select> the browser paints outside the page's
+          overflow context. */}
+      <Card pad="none" clip>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -346,17 +365,17 @@ export default function PartsCatalog() {
                   return (
                     <tr key={p.id} className={`border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40 ${low ? 'bg-red-900/10' : ''}`}>
                       <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{p.part_no}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{p.name || '—'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] capitalize">{p.category || '—'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{p.unit_cost == null ? '—' : formatCurrency(p.unit_cost, activeCurrency)}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{p.name || 'N/A'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)] capitalize">{p.category || 'N/A'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{p.unit_cost == null ? 'N/A' : formatCurrency(p.unit_cost, activeCurrency)}</td>
                       <td className="px-4 py-2.5">
                         <span className={`font-semibold ${low ? 'text-red-400' : 'text-[var(--text-secondary)]'}`}>
-                          {p.on_hand_qty ?? '—'}{p.uom ? <span className="text-[var(--text-muted)] font-normal text-xs"> {p.uom}</span> : null}
+                          {p.on_hand_qty ?? 'N/A'}{p.uom ? <span className="text-[var(--text-muted)] font-normal text-xs"> {p.uom}</span> : null}
                         </span>
                         {low && <AlertTriangle size={12} className="inline ml-1.5 text-red-400" />}
                       </td>
-                      <td className="px-4 py-2.5 text-[var(--text-muted)]">{p.reorder_level ?? '—'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{p.supplier || '—'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-muted)]">{p.reorder_level ?? 'N/A'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{p.supplier || 'N/A'}</td>
                       <td className="px-4 py-2.5"><span className={`badge text-[11px] px-2 py-0.5 rounded ${STATUS_STYLES[p.status] || STATUS_STYLES.active}`}>{p.status || 'active'}</span></td>
                       <td className="px-4 py-2.5">
                         <div className="flex items-center gap-1 justify-end">
@@ -372,7 +391,7 @@ export default function PartsCatalog() {
           </table>
           <TablePagination {...partsPager} />
         </div>
-      </div>
+      </Card>
 
       {/* Analytics */}
       {rows !== null && summary.total > 0 && (
@@ -384,47 +403,53 @@ export default function PartsCatalog() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className="card">
-              <p className="text-sm font-semibold text-[var(--text-primary)] mb-1">Value by category</p>
-              <p className="text-xs text-[var(--text-muted)] mb-3">Inventory value ({activeCurrency}) contribution per category</p>
+            {/* CardHeader replaces the hand-rolled title/subtitle pair so these
+                four render a REAL <h3> under the "Inventory analytics" <h2>,
+                keeping the page's heading outline sequential. The `h-64` well
+                stays an inner div - chart.js sizes from a parent with a
+                definite height. */}
+            <Card>
+              <CardHeader title="Value by category" description={`Inventory value (${activeCurrency}) contribution per category`} />
               <div className="h-64">
                 {analytics.valuation.total > 0
                   ? <Doughnut data={valueByCategory} options={{ maintainAspectRatio: false, responsive: true, plugins: { legend: { position: 'right', labels: { color: '#9ca3af', font: { size: 11 }, boxWidth: 12 } } } }} />
                   : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No costed stock to value yet.</div>}
               </div>
-            </div>
+            </Card>
 
-            <div className="card">
-              <p className="text-sm font-semibold text-[var(--text-primary)] mb-1">Stock status</p>
-              <p className="text-xs text-[var(--text-muted)] mb-3">Parts by on-hand position vs reorder point</p>
+            <Card>
+              <CardHeader title="Stock status" description="Parts by on-hand position vs reorder point" />
               <div className="h-64"><Bar data={statusBar} options={chartAxis} /></div>
-            </div>
+            </Card>
 
-            <div className="card">
-              <p className="text-sm font-semibold text-[var(--text-primary)] mb-1">ABC class distribution</p>
-              <p className="text-xs text-[var(--text-muted)] mb-3">Pareto split by inventory value (A ~80%, B ~15%, C ~5%)</p>
+            <Card>
+              <CardHeader title="ABC class distribution" description="Pareto split by inventory value (A ~80%, B ~15%, C ~5%)" />
               <div className="h-64"><Bar data={abcBar} options={chartAxis} /></div>
-            </div>
+            </Card>
 
-            <div className="card">
-              <p className="text-sm font-semibold text-[var(--text-primary)] mb-1">Top value parts</p>
-              <p className="text-xs text-[var(--text-muted)] mb-3">Highest line value ({activeCurrency}) SKUs</p>
+            <Card>
+              <CardHeader title="Top value parts" description={`Highest line value (${activeCurrency}) SKUs`} />
               <div className="h-64">
                 {topValueBar.labels.length
                   ? <Bar data={topValueBar} options={{ ...chartAxis, indexAxis: 'y' }} />
                   : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No costed stock to rank yet.</div>}
               </div>
-            </div>
+            </Card>
           </div>
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-            {/* Reorder needed */}
-            <div className="card !p-0 overflow-hidden">
-              <div className="px-4 py-3 border-b border-[var(--input-border)] flex items-center gap-2">
-                <ShoppingCart size={16} className="text-orange-400" />
-                <h3 className="font-semibold text-[var(--text-primary)] text-sm">Reorder needed</h3>
-                <span className="text-xs text-[var(--text-muted)] ml-auto">{analytics.reorder.length} parts</span>
-              </div>
+            {/* Reorder needed. The header keeps its own padded, bordered row
+                so the rule above the table survives; CardHeader carries the
+                semantic icon through `iconTone` and the count through
+                `actions`, which is a single control and so may not wrap. */}
+            <Card pad="none" clip>
+              <CardHeader
+                className="px-4 py-3 border-b border-[var(--input-border)] !mb-0"
+                icon={ShoppingCart}
+                iconTone="warn"
+                title="Reorder needed"
+                actions={<span className="text-xs text-[var(--text-muted)]">{analytics.reorder.length} parts</span>}
+              />
               {analytics.reorder.length === 0 ? (
                 <div className="px-4 py-10 text-center text-sm text-[var(--text-muted)]">
                   <ClipboardList size={20} className="mx-auto mb-2 opacity-60" />
@@ -461,15 +486,30 @@ export default function PartsCatalog() {
                   <TablePagination {...reorderPager} />
                 </div>
               )}
-            </div>
+            </Card>
 
             {/* ABC analysis */}
-            <div className="card !p-0 overflow-hidden">
-              <div className="px-4 py-3 border-b border-[var(--input-border)] flex items-center gap-2">
-                <Layers size={16} className="text-emerald-400" />
-                <h3 className="font-semibold text-[var(--text-primary)] text-sm">ABC analysis</h3>
-                <span className="text-xs text-[var(--text-muted)] ml-auto">By inventory value</span>
-              </div>
+            <Card pad="none" clip>
+              <CardHeader
+                className="px-4 py-3 border-b border-[var(--input-border)] !mb-0"
+                icon={Layers}
+                iconTone="good"
+                title="ABC analysis"
+                actions={(() => {
+                  // STATE THE CAP. This table slices to 30 rows. Without a note a
+                  // reader takes a truncated Pareto for the whole catalogue - the
+                  // silent-truncation class this codebase has been bitten by
+                  // before. Only says "top 30" when something is actually hidden.
+                  const costed = analytics.abc.items.filter((i) => i.value > 0).length
+                  return (
+                    <span className="text-xs text-[var(--text-muted)]">
+                      {costed > ABC_TABLE_ROWS
+                        ? `By inventory value · top ${ABC_TABLE_ROWS} of ${costed}`
+                        : 'By inventory value'}
+                    </span>
+                  )
+                })()}
+              />
               {analytics.abc.total <= 0 ? (
                 <div className="px-4 py-10 text-center text-sm text-[var(--text-muted)]">
                   <BarChart3 size={20} className="mx-auto mb-2 opacity-60" />
@@ -500,7 +540,7 @@ export default function PartsCatalog() {
                         </tr>
                       </thead>
                       <tbody>
-                        {analytics.abc.items.filter((i) => i.value > 0).slice(0, 30).map((i) => (
+                        {analytics.abc.items.filter((i) => i.value > 0).slice(0, ABC_TABLE_ROWS).map((i) => (
                           <tr key={i.id} className="border-b border-[var(--input-border)]/50">
                             <td className="px-3 py-2 font-mono text-xs text-[var(--text-primary)]">{i.part_no}</td>
                             <td className="px-3 py-2 text-[var(--text-secondary)]">{formatCurrency(i.value, activeCurrency)}</td>
@@ -515,17 +555,19 @@ export default function PartsCatalog() {
                   </div>
                 </>
               )}
-            </div>
+            </Card>
           </div>
 
-          {/* Data quality */}
+          {/* Data quality. `tone="warn"` carries the amber edge the dead
+              `border border-amber-800/40` class used to. */}
           {analytics.dataQuality.totalIssues > 0 && (
-            <div className="card border border-amber-800/40">
-              <div className="flex items-center gap-2 mb-3">
-                <ShieldAlert size={16} className="text-amber-400" />
-                <h3 className="font-semibold text-[var(--text-primary)] text-sm">Data quality</h3>
-                <span className="text-xs text-[var(--text-muted)] ml-auto">{analytics.dataQuality.totalIssues} issues found</span>
-              </div>
+            <Card tone="warn">
+              <CardHeader
+                icon={ShieldAlert}
+                iconTone="warn"
+                title="Data quality"
+                actions={<span className="text-xs text-[var(--text-muted)]">{analytics.dataQuality.totalIssues} issues found</span>}
+              />
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
                 {[
                   { label: 'Missing cost', value: analytics.dataQuality.counts.missingCost },
@@ -539,20 +581,25 @@ export default function PartsCatalog() {
                   </div>
                 ))}
               </div>
-            </div>
+            </Card>
           )}
         </div>
       )}
 
-      {/* Create / edit modal */}
+      {/* Create / edit modal. The submit button stays INSIDE the <form> rather
+          than moving to Modal's `footer`: a footer button would need a
+          `form="..."` association to keep submitting, which is a behaviour
+          change, not a migration. Modal owns the height cap the `max-h-[90vh]`
+          and the sticky header were doing by hand, plus the focus trap, the
+          scroll lock, escape-to-close and the portal. */}
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={closeForm}>
-          <div className="bg-[var(--card-bg)] border border-[var(--input-border)] rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="sticky top-0 bg-[var(--card-bg)] border-b border-[var(--input-border)] px-5 py-4 flex items-center justify-between">
-              <h2 className="font-bold text-[var(--text-primary)]">{editing ? 'Edit part' : 'Add part to catalog'}</h2>
-              <button onClick={closeForm} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
-            </div>
-            <form onSubmit={submit} className="p-5 space-y-4">
+        <Modal
+          open
+          onClose={closeForm}
+          size="md"
+          title={editing ? 'Edit part' : 'Add part to catalog'}
+        >
+            <form onSubmit={submit} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="label">Part number <span className="text-red-400">*</span></label>
@@ -614,33 +661,39 @@ export default function PartsCatalog() {
                 <button type="button" onClick={closeForm} className="btn-secondary">Cancel</button>
               </div>
             </form>
-          </div>
-        </div>
+        </Modal>
       )}
 
-      {/* Delete confirm */}
+      {/* Delete confirm. No <form> here, so the actions belong in Modal's
+          `footer`, which pins them where a user can always reach them. The
+          legacy overlay guarded only its backdrop against closing mid-delete
+          and had no X at all; `closeDelete` is now the single guarded close
+          behind Escape, the backdrop and the X alike. The Trash2 cue moves
+          from the old header row into the body beside the sentence. */}
       {pendingDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={() => !deleting && setPendingDelete(null)}>
-          <div className="bg-[var(--card-bg)] border border-[var(--input-border)] rounded-xl w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="px-5 py-4 border-b border-[var(--input-border)] flex items-center gap-2">
-              <Trash2 size={18} className="text-red-400" />
-              <h2 className="font-bold text-[var(--text-primary)]">Delete part?</h2>
-            </div>
-            <div className="p-5 space-y-4">
-              <p className="text-sm text-[var(--text-secondary)]">
-                Delete <span className="font-mono text-[var(--text-primary)]">{pendingDelete.part_no}</span>
-                {pendingDelete.name ? ` — ${pendingDelete.name}` : ''}? This can't be undone.
-              </p>
-              <div className="flex items-center gap-3">
-                <button onClick={confirmDelete} disabled={deleting} className="btn-primary bg-red-600 hover:bg-red-500 inline-flex items-center gap-2 disabled:opacity-60">
-                  {deleting ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
-                  {deleting ? 'Deleting…' : 'Delete'}
-                </button>
-                <button onClick={() => setPendingDelete(null)} disabled={deleting} className="btn-secondary">Cancel</button>
-              </div>
-            </div>
+        <Modal
+          open
+          onClose={closeDelete}
+          size="sm"
+          title="Delete part?"
+          footer={
+            <>
+              <button onClick={closeDelete} disabled={deleting} className="btn-secondary">Cancel</button>
+              <button onClick={confirmDelete} disabled={deleting} className="btn-primary bg-red-600 hover:bg-red-500 inline-flex items-center gap-2 disabled:opacity-60">
+                {deleting ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+                {deleting ? 'Deleting…' : 'Delete'}
+              </button>
+            </>
+          }
+        >
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-full bg-red-900/30 flex items-center justify-center shrink-0"><Trash2 size={18} className="text-red-400" /></div>
+            <p className="text-sm text-[var(--text-secondary)]">
+              Delete <span className="font-mono text-[var(--text-primary)]">{pendingDelete.part_no}</span>
+              {pendingDelete.name ? ` (${pendingDelete.name})` : ''}? This can't be undone.
+            </p>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   )

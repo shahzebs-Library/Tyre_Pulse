@@ -1,0 +1,61 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { test } from 'node:test';
+import { PGlite } from '@electric-sql/pglite';
+
+const migration = await readFile(new URL('../migrations/20260910184011_tenant_administration_configuration.sql', import.meta.url), 'utf8');
+const orgA='00000000-0000-0000-0000-000000000001', orgB='00000000-0000-0000-0000-000000000002';
+test('tenant configuration isolates data and atomically audits confirmed saves', async () => {
+  const db = new PGlite();
+  try {
+    await db.exec(`CREATE SCHEMA auth; CREATE ROLE anon; CREATE ROLE authenticated;
+      CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql AS $$ SELECT '${orgA}'::uuid $$;
+      CREATE FUNCTION app_current_org() RETURNS uuid LANGUAGE sql AS $$ SELECT current_setting('test.org')::uuid $$;
+      CREATE FUNCTION app_is_active() RETURNS boolean LANGUAGE sql AS $$ SELECT current_setting('test.active')::boolean $$;
+      CREATE FUNCTION get_my_role() RETURNS text LANGUAGE sql AS $$ SELECT current_setting('test.role') $$;
+      CREATE FUNCTION is_super_admin() RETURNS boolean LANGUAGE sql AS $$ SELECT false $$;
+      SET test.org='${orgA}'; SET test.role='Admin'; SET test.active='true';
+      CREATE TABLE organisations(id uuid PRIMARY KEY,settings jsonb,updated_at timestamptz);
+      INSERT INTO organisations VALUES('${orgA}','{"branding":{"logo":"keep"}}',now()),('${orgB}','{}',now());
+      CREATE TABLE settings(key text,value jsonb); CREATE TABLE app_settings(key text,value text);
+      INSERT INTO settings VALUES('company_name','"Legacy private name"');
+      CREATE TABLE audit_log(table_name text,record_id uuid,action text,old_data jsonb,new_data jsonb,changed_by uuid,organisation_id uuid,details jsonb);
+      GRANT USAGE ON SCHEMA auth TO authenticated; GRANT SELECT,UPDATE ON organisations TO authenticated;
+      GRANT SELECT,INSERT,UPDATE,DELETE ON settings,app_settings TO authenticated;
+      ALTER TABLE settings ENABLE ROW LEVEL SECURITY; ALTER TABLE app_settings ENABLE ROW LEVEL SECURITY;
+      CREATE POLICY legacy ON settings TO authenticated USING(true) WITH CHECK(true);
+      CREATE POLICY legacy ON app_settings TO authenticated USING(true) WITH CHECK(true);
+      ${migration}
+      SET ROLE authenticated;`);
+    const save = values => db.query('SELECT save_organisation_configuration($1,$2::jsonb) result',['settings',JSON.stringify(values)]);
+    const read = () => db.query("SELECT * FROM get_organisation_configuration('settings',NULL)");
+    assert.deepEqual((await read()).rows,[]);
+    assert.deepEqual((await db.query('SELECT * FROM settings')).rows,[],'legacy data must not leak');
+    assert.equal((await save([{key:'company_name',value:'"Tenant A"'},{key:'currency',value:'"SAR"'}])).rows[0].result.saved,2);
+    assert.equal((await read()).rows.length,2);
+    await db.exec(`SET test.org='${orgB}'`);
+    assert.deepEqual((await read()).rows,[]);
+    await db.exec(`SET test.org='${orgA}'; SET test.role='Driver'`);
+    await assert.rejects(save([{key:'currency',value:'"AED"'}]), e=>e.code==='42501');
+    await db.exec("SET test.role='Admin'; SET test.active='false'");
+    await assert.rejects(read(),e=>e.code==='42501');
+    await db.exec("SET test.active='true'");
+    await assert.rejects(db.query("SELECT save_organisation_configuration('app_settings',$1::jsonb)", [JSON.stringify([{key:'webhook_endpoints',value:JSON.stringify([{url:'https://example.com',secret:'must-not-store'}])}])]), e=>e.code==='22023');
+    await db.exec("SET test.role='Integration Admin'");
+    await assert.rejects(save([{key:'company_name',value:'forged'}]),e=>e.code==='42501');
+    await db.exec("SET test.role='Admin'");
+    await assert.rejects(save([{key:'currency',value:'SAR'},{key:'currency',value:'AED'}]),e=>e.code==='22023');
+    await assert.rejects(db.query("UPDATE organisations SET settings='{}' WHERE id=$1",[orgA]),e=>e.code==='42501');
+    await db.exec('RESET ROLE');
+    assert.equal((await db.query('SELECT settings FROM organisations WHERE id=$1',[orgA])).rows[0].settings.branding.logo,'keep');
+    assert.equal((await db.query('SELECT count(*)::int n FROM audit_log')).rows[0].n,1);
+    await db.exec(`CREATE FUNCTION fail_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'audit unavailable'; END $$;
+      CREATE TRIGGER fail_audit BEFORE INSERT ON audit_log FOR EACH ROW EXECUTE FUNCTION fail_audit(); SET ROLE authenticated;`);
+    await assert.rejects(save([{key:'currency',value:'"AED"'},{key:'company_name',value:'"Changed"'}]));
+    assert.equal((await read()).rows.find(r=>r.key==='currency').value,'"SAR"');
+    await db.exec('RESET ROLE; DROP TRIGGER fail_audit ON audit_log; SET ROLE authenticated');
+    await save([{key:'currency',value:'"SAR"'},{key:'company_name',value:'"Tenant A"'}]);
+    await db.exec('RESET ROLE');
+    assert.equal((await db.query('SELECT count(*)::int n FROM audit_log')).rows[0].n,1,'identical retry is a no-op');
+  } finally { await db.close(); }
+});

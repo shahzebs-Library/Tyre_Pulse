@@ -1,0 +1,83 @@
+﻿import { beforeEach, expect, it, vi } from 'vitest'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+const h = vi.hoisted(() => ({ get: vi.fn(), request: vi.fn(), profile: { id: 'u', org_id: 'org' } }))
+vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ profile: h.profile }) }))
+vi.mock('../contexts/SettingsContext', () => ({ useSettings: () => ({ activeCountry: 'KSA' }) }))
+vi.mock('../contexts/LanguageContext', () => ({ useLanguage: () => ({ language: 'en' }) }))
+vi.mock('../lib/api/workOrderApprovals', () => ({ getWorkOrderApproval: h.get, requestWorkOrderApproval: h.request }))
+vi.mock('../lib/api/approvalDecisions', () => ({ isApprovalReviewUnavailable: error => error?.code === 'PGRST202' }))
+vi.mock('../components/workflow/ApprovalReview', () => ({ default: ({ entityType, entityId }) => <p>Review {entityType}:{entityId}</p> }))
+import WorkOrderApprovalGate from '../components/workorders/WorkOrderApprovalGate'
+const data = { mode: 'enforced', can_submit: true, can_execute: false, request_id: null, review: null, work_order: { id: 'wo1' } }
+beforeEach(() => { vi.clearAllMocks(); localStorage.clear(); h.profile = { id: 'u', org_id: 'org' }; h.get.mockResolvedValue(data) })
+it('retains the submitted operation across refresh and closing the work order', async () => {
+  h.request.mockRejectedValueOnce(new Error('lost')).mockResolvedValueOnce({ ...data, can_submit: false, request_id: 'r1', review: { status: 'pending' } })
+  const view = render(<WorkOrderApprovalGate orderId="wo1" />)
+  fireEvent.change(await screen.findByLabelText('Submission reason'), { target: { value: 'Repair safely' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Request approval' }))
+  await screen.findByRole('button', { name: 'Retry the same request' })
+  fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
+  await waitFor(() => expect(h.get).toHaveBeenCalledTimes(2))
+  view.unmount()
+  render(<WorkOrderApprovalGate orderId="wo1" />)
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Retry the same request' })).toBeEnabled())
+  fireEvent.click(screen.getByRole('button', { name: 'Retry the same request' }))
+  await waitFor(() => expect(h.request).toHaveBeenCalledTimes(2))
+  expect(h.request.mock.calls[1]).toEqual(h.request.mock.calls[0])
+})
+it('discards old authority immediately on a site change and rechecks the server', async () => {
+  h.get.mockResolvedValueOnce({ ...data, can_execute: true }).mockRejectedValueOnce({ code: '42501' })
+  const gate = vi.fn()
+  const view = render(<WorkOrderApprovalGate orderId="wo1" onGateChange={gate} />)
+  await waitFor(() => expect(gate).toHaveBeenLastCalledWith({ canExecute: true, lockEdits: false }))
+  h.profile = { ...h.profile, sites: ['new-site'] }
+  view.rerender(<WorkOrderApprovalGate orderId="wo1" onGateChange={gate} />)
+  expect(gate).toHaveBeenLastCalledWith({ canExecute: false })
+  await screen.findByRole('alert')
+})
+it('does not call the server when the retry intent cannot be persisted', async () => {
+  // WHERE THE SPY GOES DEPENDS ON WHAT PROVIDED THE STORAGE (see
+  // navFavorites.test.js's "localStorage unavailable" block for the full
+  // reasoning): under a recent Node, src/test/setup.js installs a plain-object
+  // stand-in whose methods are OWN properties, so a Storage.prototype spy does
+  // not reach them and this test would otherwise pass vacuously against real
+  // storage while asserting `h.request` was never called.
+  const target = Object.prototype.hasOwnProperty.call(localStorage, 'setItem') ? localStorage : Storage.prototype
+  const write = vi.spyOn(target, 'setItem').mockImplementation(() => { throw new Error('Storage full') })
+  expect(vi.isMockFunction(localStorage.setItem)).toBe(true)
+  render(<WorkOrderApprovalGate orderId="wo1" />)
+  fireEvent.change(await screen.findByLabelText('Submission reason'), { target: { value: 'Repair' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Request approval' }))
+  await screen.findByText(/request could not be saved/)
+  expect(h.request).not.toHaveBeenCalled()
+  write.mockRestore()
+})
+it('fails closed for unknown execution authority instead of treating errors as legacy', async () => {
+  h.get.mockRejectedValue({ code: '42501' }); const onGateChange = vi.fn()
+  render(<WorkOrderApprovalGate orderId="wo1" onGateChange={onGateChange} legacy={<p>Legacy</p>} />)
+  await screen.findByRole('alert')
+  expect(screen.queryByText('Legacy')).not.toBeInTheDocument()
+  expect(onGateChange).toHaveBeenLastCalledWith({ canExecute: false })
+})
+it('uses the request ID for review and allows execution after approval', async () => {
+  h.get.mockResolvedValue({ ...data, can_submit: false, can_execute: true, request_id: 'request1', review: { status: 'approved' } })
+  const onGateChange = vi.fn()
+  render(<WorkOrderApprovalGate orderId="wo1" onGateChange={onGateChange} />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Review approval request' }))
+  expect(screen.getByText('Review work_order:request1')).toBeInTheDocument()
+  expect(onGateChange).toHaveBeenLastCalledWith({ canExecute: true, lockEdits: false })
+})
+it('keeps one operation ID and exact reason after a submission timeout', async () => {
+  h.request.mockRejectedValueOnce(new Error('lost')).mockResolvedValueOnce({ ...data, can_submit: false, request_id: 'r1', review: { status: 'pending' } })
+  render(<WorkOrderApprovalGate orderId="wo1" />)
+  fireEvent.change(await screen.findByLabelText('Submission reason'), { target: { value: 'Repair safely' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Request approval' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Retry the same request' }))
+  await waitFor(() => expect(h.request).toHaveBeenCalledTimes(2))
+  expect(h.request.mock.calls[1]).toEqual(h.request.mock.calls[0])
+})
+it('preserves the legacy panel only for an explicit absent RPC', async () => {
+  h.get.mockRejectedValue({ code: 'PGRST202' })
+  render(<WorkOrderApprovalGate orderId="wo1" legacy={<p>Legacy</p>} />)
+  expect(await screen.findByText('Legacy')).toBeInTheDocument()
+})

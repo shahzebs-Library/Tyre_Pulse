@@ -30,6 +30,7 @@ import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 import { toUserMessage } from '../lib/safeError'
 import useLatestRequest from '../lib/useLatestRequest'
+import { isMissingRelation } from '../lib/api/_client'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend)
 
@@ -79,10 +80,6 @@ function fmtNum(v) {
 }
 function fmtRate(r) {
   return r == null ? 'N/A' : `${Math.round(r * 100)}%`
-}
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') || m.includes('schema cache') || m.includes('could not find the table')
 }
 
 export default function WorkshopAbsence() {

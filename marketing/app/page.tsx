@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -9,6 +10,21 @@ import { Footer } from "@/components/Footer";
 import { Hero3D } from "@/components/Hero3D";
 import { SectionTitle } from "@/components/SectionTitle";
 import { CTA } from "@/components/CTA";
+import { alternatesFor } from "./schema";
+
+export const metadata: Metadata = {
+  title: { absolute: "Tyre Pulse | Tyre, Fleet and Workshop Intelligence Platform" },
+  description:
+    "Tyre Pulse connects tyre lifecycle, fleet maintenance, workshop control, inspections, approvals and executive reporting in one platform. Web and Android, English and Arabic.",
+  alternates: alternatesFor("/"),
+  openGraph: {
+    title: "Tyre Pulse | Smarter Wheels. Stronger Fleet.",
+    description:
+      "Control every tyre. Understand every cost. One commercial platform for tyre, fleet, workshop and inspection operations.",
+    url: "/",
+    type: "website",
+  },
+};
 
 const features = [
   { icon: Truck, title: "Tyre lifecycle control", text: "Track fitment, removal, pressure, tread, repairs, warranty, scrap and cost per kilometre from one history." },
@@ -30,7 +46,7 @@ export default function HomePage() {
   return (
     <>
       <Header />
-      <main>
+      <main id="main-content" tabIndex={-1}>
         <section className="hero">
           <div className="site-shell hero-grid">
             <div className="hero-copy">

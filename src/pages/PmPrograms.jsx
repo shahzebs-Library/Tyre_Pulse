@@ -21,7 +21,7 @@
  * org-isolated and country-scoped by RLS. Honest loading / empty / error
  * states, no fabricated data.
  */
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend,
 } from 'chart.js'
@@ -33,6 +33,8 @@ import {
   ListChecks, ClipboardCheck, Timer, Layers, LayoutTemplate, BarChart3, PieChart, Trophy,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import Card, { CardHeader, CardBody } from '../components/ui/Card'
+import Modal from '../components/ui/Modal'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   createPmProgram, updatePmProgram, deletePmProgram,
@@ -52,6 +54,8 @@ import {
   PM_STATUS_META, PM_DUE_META, PM_STATUSES,
 } from '../lib/pmPrograms'
 import { templatesFor, applyTemplate } from '../lib/pmTemplates'
+import PmVehicleLookup from '../components/PmVehicleLookup'
+import { pmVehicleProfile, pmNextDueFromService } from '../lib/pmVehicleSetup'
 import {
   costByAsset, costByCategory, monthlyServiceCost, outcomeBreakdown, pmSummary,
 } from '../lib/pmAnalytics'
@@ -66,6 +70,7 @@ import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 import { formatCurrencyCompact } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
+import { isMissingRelation } from '../lib/api/_client'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
 
@@ -88,10 +93,6 @@ const TABS = [
   { id: 'history', label: 'Service History', icon: History },
 ]
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') || m.includes('schema cache') || m.includes('could not find the table')
-}
 function fmtDate(v) {
   if (!v) return 'N/A'
   const d = new Date(v)
@@ -163,6 +164,8 @@ const EMPTY_RECORD = {
 }
 
 export default function PmPrograms() {
+  const loadId = useRef(0)
+  const [dataWarning, setDataWarning] = useState('')
   const { activeCountry, activeCurrency } = useSettings()
 
   // ── Data (null sentinel = not loaded yet) ─────────────────────────────────
@@ -199,6 +202,9 @@ export default function PmPrograms() {
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
   const [templateId, setTemplateId] = useState('') // create-mode "start from template" selection
+  const [selectedVehicle, setSelectedVehicle] = useState(null)
+  const vehicleProfile = useMemo(() => pmVehicleProfile(selectedVehicle), [selectedVehicle])
+  useEffect(() => { setSelectedVehicle(null); setModalOpen(false) }, [activeCountry])
 
   // Delete confirmation
   const [confirmDelete, setConfirmDelete] = useState(null)
@@ -218,34 +224,40 @@ export default function PmPrograms() {
 
   // ── Load ──────────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
-    setRefreshing(true); setError(''); setMissing(false)
+    const request = ++loadId.current
+    setRefreshing(true); setError(''); setMissing(false); setDataWarning('')
+    setDashboard(null); setHistory(null); setCost(null)
     try {
       const [dash, hist, split] = await Promise.all([
         loadPmDashboard({ country: activeCountry }),
-        listPmServiceRecords({ country: activeCountry }).catch(() => []),
-        loadGovernedCostSplit({ country: activeCountry }).catch(() => ({ tyre: 0, maintenance: 0, byMonth: [] })),
+        listPmServiceRecords({ country: activeCountry }),
+        loadGovernedCostSplit({ country: activeCountry }).catch(() => null),
       ])
+      if (request !== loadId.current) return
+      if (!split) setDataWarning('Cost information could not be loaded. Cost totals are unavailable.')
       setDashboard(dash || { plans: [], kmByAsset: {}, hoursByAsset: {} })
       setHistory(Array.isArray(hist) ? hist : [])
-      setCost(split || { tyre: 0, maintenance: 0, byMonth: [] })
+      setCost(split)
       setNowTs(Date.now())
       setUpdatedAt(new Date())
     } catch (err) {
+      if (request !== loadId.current) return
       if (isMissingRelation(err)) {
         setMissing(true)
         setDashboard({ plans: [], kmByAsset: {}, hoursByAsset: {} })
-        setHistory([]); setCost({ tyre: 0, maintenance: 0, byMonth: [] })
+        setHistory([]); setCost(null)
       } else {
         setError(toUserMessage(err, 'Could not load Preventive Maintenance data.'))
         setDashboard({ plans: [], kmByAsset: {}, hoursByAsset: {} })
-        setHistory([]); setCost({ tyre: 0, maintenance: 0, byMonth: [] })
+        setHistory([]); setCost(null)
       }
     } finally {
-      setRefreshing(false)
+      if (request === loadId.current) setRefreshing(false)
     }
   }, [activeCountry])
 
-  useEffect(() => { load() }, [load])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Invalidate the current request on cleanup.
+  useEffect(() => { load(); return () => { loadId.current++ } }, [load])
 
   // Load the spare-parts catalog once per country (best-effort, non-blocking).
   useEffect(() => {
@@ -365,7 +377,7 @@ export default function PmPrograms() {
   }), [costMode, activeCurrency])
 
   // ── PM analytics (over loaded plans + the fetched service records) ────────────
-  const records = history
+  const records = useMemo(() => history || [], [history])
   const hasServiceData = records.length > 0
   const pmCatCost = useMemo(() => costByCategory(plans, records), [plans, records])
   const pmMonthlyCost = useMemo(() => monthlyServiceCost(records, { now: nowTs, months: 12 }), [records, nowTs])
@@ -448,9 +460,11 @@ export default function PmPrograms() {
 
   // ── Create / edit ───────────────────────────────────────────────────────────
   const openCreate = () => {
+    setSelectedVehicle(null)
     setEditing(null); setForm(EMPTY_FORM); setTaskDraft(''); setFormError(''); setTemplateId(''); setModalOpen(true)
   }
   const openEdit = (p) => {
+    setSelectedVehicle(null)
     setEditing(p); setTemplateId('')
     setForm({
       name: p.name || '',
@@ -486,8 +500,9 @@ export default function PmPrograms() {
   // "Start from a template" (create mode only). Templates are editable starting
   // points drawn from common OEM service practice, NOT live data.
   const availableTemplates = useMemo(
-    () => templatesFor(canonAssetCategory(form.asset_category) || null),
-    [form.asset_category],
+    () => templatesFor(canonAssetCategory(form.asset_category) || null)
+      .filter(t => !vehicleProfile || vehicleProfile.sources.includes(t.meter_source)),
+    [form.asset_category, vehicleProfile],
   )
   const applyTpl = (id) => {
     setTemplateId(id)
@@ -515,12 +530,18 @@ export default function PmPrograms() {
     e?.preventDefault?.()
     setFormError('')
     if (!form.name.trim()) { setFormError('Program name is required.'); return }
+    if (form.asset_no.trim() && (!editing || form.asset_no !== editing.asset_no) && !selectedVehicle) { setFormError('Find and confirm the vehicle before saving its service plan.'); return }
+    if ((form.interval_value !== '' && (!Number.isFinite(Number(form.interval_value)) || Number(form.interval_value) <= 0))
+      || (form.meter_source !== 'none' && (!Number.isFinite(Number(form.meter_interval)) || Number(form.meter_interval) <= 0))) {
+      setFormError('Enter a positive service interval for every enabled schedule.'); return
+    }
     setSaving(true)
     try {
       const meterNone = form.meter_source === 'none'
       const payload = {
         name: form.name,
         asset_no: form.asset_no || null,
+        asset_type: selectedVehicle?.vehicle_type || editing?.asset_type || null,
         asset_category: canonAssetCategory(form.asset_category),
         site: form.site || null,
         assigned_to: form.assigned_to || null,
@@ -542,7 +563,7 @@ export default function PmPrograms() {
         const updated = await updatePmProgram(editing.id, payload)
         setDashboard((d) => ({ ...d, plans: (d?.plans || []).map((r) => (r.id === updated.id ? updated : r)) }))
       } else {
-        const created = await createPmProgram({ ...payload, country: activeCountry !== 'All' ? activeCountry : null })
+        const created = await createPmProgram({ ...payload, country: selectedVehicle?.country || (activeCountry !== 'All' ? activeCountry : null) })
         setDashboard((d) => ({ ...(d || { kmByAsset: {}, hoursByAsset: {} }), plans: [created, ...(d?.plans || [])] }))
       }
       setModalOpen(false)
@@ -551,7 +572,7 @@ export default function PmPrograms() {
     } finally {
       setSaving(false)
     }
-  }, [form, editing, activeCountry])
+  }, [form, editing, activeCountry, selectedVehicle])
 
   const doDelete = useCallback(async () => {
     if (!confirmDelete) return
@@ -750,30 +771,37 @@ export default function PmPrograms() {
       />
 
       {missing && (
-        <div className="card border border-amber-800/50 flex items-start gap-3">
-          <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
-          <div>
-            <p className="text-amber-300 font-medium">Preventive Maintenance is not enabled on this database yet.</p>
-            <p className="text-[var(--text-muted)] text-sm mt-1">
-              Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V253.sql</span>, then reload.
-            </p>
+        <Card tone="warn">
+          <div className="flex items-start gap-[var(--space-3)]">
+            <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-amber-300 font-medium">Preventive Maintenance is not enabled on this database yet.</p>
+              <p className="text-[var(--text-muted)] text-sm mt-1">
+                Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V253.sql</span>, then reload.
+              </p>
+            </div>
           </div>
-        </div>
+        </Card>
       )}
 
       {error && (
-        <div className="card border border-red-800/50 flex items-start gap-3">
-          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
-          <div><p className="text-red-300 font-medium">Something went wrong.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
-        </div>
+        <Card tone="crit">
+          <div className="flex items-start gap-[var(--space-3)]">
+            <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
+            <div><p className="text-red-300 font-medium">Something went wrong.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
+          </div>
+        </Card>
       )}
 
+      {dataWarning && <Card as="p" role="alert" tone="warn" className="text-sm text-amber-500">{dataWarning}</Card>}
       {recordOk && (
-        <div className="card border border-emerald-800/50 flex items-center gap-3 !py-3">
-          <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />
-          <span className="text-sm text-emerald-200">{recordOk}</span>
-          <button onClick={() => setRecordOk('')} className="ml-auto p-1 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)]"><X size={14} /></button>
-        </div>
+        <Card pad="tight" tone="good">
+          <div className="flex items-center gap-[var(--space-3)]">
+            <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />
+            <span className="text-sm text-emerald-200">{recordOk}</span>
+            <button onClick={() => setRecordOk('')} className="ml-auto p-1 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)]"><X size={14} /></button>
+          </div>
+        </Card>
       )}
 
       {/* Tabs */}
@@ -798,7 +826,7 @@ export default function PmPrograms() {
         <div className="space-y-6">
           {/* Due banner */}
           {(summary.overdue > 0 || summary.dueSoon > 0) && (
-            <div className="card border border-amber-800/50 space-y-2 !py-3">
+            <Card pad="tight" tone="warn" className="space-y-2">
               <div className="flex items-center gap-2">
                 <CalendarClock size={16} className="text-amber-400 shrink-0" />
                 <span className="text-sm text-amber-200">
@@ -822,7 +850,7 @@ export default function PmPrograms() {
                   </button>
                 ))}
               </div>
-            </div>
+            </Card>
           )}
 
           {/* KPI tiles */}
@@ -830,16 +858,16 @@ export default function PmPrograms() {
             {kpis.map((k) => {
               const Icon = k.icon
               return (
-                <div key={k.label} className="card">
+                <Card key={k.label}>
                   <div className="flex items-center justify-between">
                     <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                     <Icon size={16} className={k.tone} />
                   </div>
                   <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{notLoaded ? '-' : k.value}</p>
-                </div>
+                </Card>
               )
             })}
-            <div className="card">
+            <Card>
               <div className="flex items-center justify-between">
                 <p className="text-xs text-[var(--text-muted)]">Compliance</p>
                 <ClipboardCheck size={16} className="text-sky-400" />
@@ -848,16 +876,13 @@ export default function PmPrograms() {
                 {notLoaded ? '-' : (summary.compliantPct == null ? 'N/A' : `${summary.compliantPct}%`)}
               </p>
               <p className="text-[11px] text-[var(--text-muted)] mt-0.5">active plans not overdue</p>
-            </div>
+            </Card>
           </div>
 
           {/* Upcoming buckets + category mix */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className="card">
-              <div className="flex items-center gap-2 mb-3">
-                <Timer size={16} className="text-[var(--text-secondary)]" />
-                <h3 className="font-semibold text-[var(--text-primary)]">Upcoming services</h3>
-              </div>
+            <Card>
+              <CardHeader title="Upcoming services" icon={Timer} level={2} />
               <div className="grid grid-cols-3 gap-3">
                 {[['Next 30 days', summary.buckets.d30], ['Next 60 days', summary.buckets.d60], ['Next 90 days', summary.buckets.d90]].map(([label, val]) => (
                   <div key={label} className="rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] p-3 text-center">
@@ -867,13 +892,10 @@ export default function PmPrograms() {
                 ))}
               </div>
               <p className="text-[11px] text-[var(--text-muted)] mt-3">Counts active plans due by date or by meter within each window.</p>
-            </div>
+            </Card>
 
-            <div className="card">
-              <div className="flex items-center gap-2 mb-3">
-                <Layers size={16} className="text-[var(--text-secondary)]" />
-                <h3 className="font-semibold text-[var(--text-primary)]">Plans by asset category</h3>
-              </div>
+            <Card>
+              <CardHeader title="Plans by asset category" icon={Layers} level={2} />
               {notLoaded ? (
                 <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-4 bg-[var(--input-bg)] rounded animate-pulse" />)}</div>
               ) : summary.byCategory.length === 0 ? (
@@ -894,32 +916,33 @@ export default function PmPrograms() {
                   })}
                 </div>
               )}
-            </div>
+            </Card>
           </div>
 
           {/* Cost view switch */}
-          <div className="card">
-            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-              <div className="flex items-center gap-2">
-                <Wallet size={16} className="text-[var(--text-secondary)]" />
-                <h3 className="font-semibold text-[var(--text-primary)]">Cost view</h3>
-                <span className="text-[11px] text-[var(--text-muted)]">one-click Tyres vs Maintenance</span>
-              </div>
-              <div className="inline-flex rounded-lg border border-[var(--input-border)] overflow-hidden">
-                {COST_MODES.map((m) => (
-                  <button
-                    key={m.key}
-                    onClick={() => setCostMode(m.key)}
-                    className={`px-3.5 py-1.5 text-sm font-medium transition-colors ${costMode === m.key ? 'text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)] bg-transparent'}`}
-                    style={costMode === m.key ? { backgroundColor: COST_MODE_COLOR[m.key] } : undefined}
-                  >
-                    {m.label}
-                  </button>
-                ))}
-              </div>
-            </div>
+          <Card>
+            <CardHeader
+              title="Cost view"
+              icon={Wallet}
+              level={2}
+              description="one-click Tyres vs Maintenance"
+              actions={(
+                <div className="inline-flex rounded-lg border border-[var(--input-border)] overflow-hidden">
+                  {COST_MODES.map((m) => (
+                    <button
+                      key={m.key}
+                      onClick={() => setCostMode(m.key)}
+                      className={`px-3.5 py-1.5 text-sm font-medium transition-colors ${costMode === m.key ? 'text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)] bg-transparent'}`}
+                      style={costMode === m.key ? { backgroundColor: COST_MODE_COLOR[m.key] } : undefined}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            />
 
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+            <CardBody className="grid grid-cols-1 lg:grid-cols-4 gap-4">
               <div className="rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] p-4 flex flex-col justify-center">
                 <p className="text-xs text-[var(--text-muted)]">{costModeLabel(costMode)} cost</p>
                 <p className="text-3xl font-bold mt-1" style={{ color: COST_MODE_COLOR[costMode] }}>
@@ -946,25 +969,24 @@ export default function PmPrograms() {
                   )}
                 </div>
               </div>
-            </div>
-          </div>
+            </CardBody>
+          </Card>
 
           {/* Service analytics (over recorded services) */}
-          <div className="card">
-            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-              <div className="flex items-center gap-2">
-                <BarChart3 size={16} className="text-[var(--text-secondary)]" />
-                <h3 className="font-semibold text-[var(--text-primary)]">Service analytics</h3>
-                <span className="text-[11px] text-[var(--text-muted)]">from recorded services</span>
-              </div>
-              {hasServiceData && (
+          <Card>
+            <CardHeader
+              title="Service analytics"
+              icon={BarChart3}
+              level={2}
+              description="from recorded services"
+              actions={hasServiceData ? (
                 <div className="flex flex-wrap items-center gap-4 text-[11px] text-[var(--text-muted)]">
                   <span>Services: <span className="text-[var(--text-secondary)] font-medium">{fmtNum(pmStats.servicesCount)}</span></span>
                   <span>Total cost: <span className="text-[var(--text-secondary)] font-medium">{formatCurrencyCompact(pmStats.totalServiceCost, activeCurrency)}</span></span>
                   <span>Avg / service: <span className="text-[var(--text-secondary)] font-medium">{pmStats.avgCostPerService == null ? 'N/A' : formatCurrencyCompact(pmStats.avgCostPerService, activeCurrency)}</span></span>
                 </div>
-              )}
-            </div>
+              ) : null}
+            />
 
             {notLoaded || history === null ? (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -1052,7 +1074,7 @@ export default function PmPrograms() {
                 </div>
               </div>
             )}
-          </div>
+          </Card>
         </div>
       )}
 
@@ -1060,7 +1082,7 @@ export default function PmPrograms() {
       {tab === 'plans' && (
         <div className="space-y-4">
           {/* Filters */}
-          <div className="card">
+          <Card>
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative flex-1 min-w-[200px]">
                 <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
@@ -1087,10 +1109,10 @@ export default function PmPrograms() {
                 <button onClick={exportPlansPdf} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!planExportRows.length}><FileText size={14} /> PDF</button>
               </div>
             </div>
-          </div>
+          </Card>
 
           {/* Table */}
-          <div className="card overflow-hidden !p-0">
+          <Card pad="none" clip>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -1151,14 +1173,14 @@ export default function PmPrograms() {
               </table>
             </div>
             <TablePagination {...planPager} />
-          </div>
+          </Card>
         </div>
       )}
 
       {/* ══════════════════════════ SERVICE HISTORY ══════════════════════════ */}
       {tab === 'history' && (
         <div className="space-y-4">
-          <div className="card">
+          <Card>
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative flex-1 min-w-[180px]">
                 <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
@@ -1180,9 +1202,9 @@ export default function PmPrograms() {
                 <button onClick={exportHistPdf} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!histExportRows.length}><FileText size={14} /> PDF</button>
               </div>
             </div>
-          </div>
+          </Card>
 
-          <div className="card overflow-hidden !p-0">
+          <Card pad="none" clip>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -1222,379 +1244,389 @@ export default function PmPrograms() {
               </table>
             </div>
             <TablePagination {...histPager} />
-          </div>
+          </Card>
         </div>
       )}
 
       {/* ══════════════════════════ CREATE / EDIT MODAL ══════════════════════════ */}
-      {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => !saving && setModalOpen(false)}>
-          <div className="card w-full max-w-3xl max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold text-[var(--text-primary)]">{editing ? 'Edit maintenance plan' : 'New maintenance plan'}</h2>
-              <button onClick={() => !saving && setModalOpen(false)} className="p-1.5 rounded-lg hover:bg-[var(--input-bg)] text-[var(--text-muted)]"><X size={18} /></button>
+      <Modal
+        open={modalOpen}
+        onClose={() => { if (!saving) setModalOpen(false) }}
+        size="lg"
+        title={editing ? 'Edit maintenance plan' : 'New maintenance plan'}
+      >
+        <form onSubmit={submit} className="space-y-5">
+          <PmVehicleLookup key={`${activeCountry}:${editing?.id || 'new'}`} value={form.asset_no} country={activeCountry}
+            onChange={value => { setSelectedVehicle(null); setTemplateId(''); setField('asset_no', value) }}
+            onSelect={vehicle => {
+              const profile = pmVehicleProfile(vehicle)
+              setSelectedVehicle(vehicle); setTemplateId('')
+              setForm(f => ({ ...f, asset_no: vehicle.asset_no, site: vehicle.site || '', asset_category: profile.category || '',
+                ...(editing?.asset_no === vehicle.asset_no && editing?.country === vehicle.country ? {} :
+                  { meter_source: 'none', meter_interval: '', last_done_meter: '', next_due_meter: '', last_done: '', next_due: '' }) }))
+            }} />
+          {selectedVehicle && <p className="text-sm text-[var(--text-secondary)]">
+            {selectedVehicle.asset_no} · {selectedVehicle.vehicle_type || 'Vehicle type not recorded'} · {[selectedVehicle.make, selectedVehicle.model, selectedVehicle.site, selectedVehicle.country].filter(Boolean).join(' · ')}
+            <span className="block text-xs mt-1">Choose the service below. Confirm its intervals against this vehicle’s service specification; current readings are not the last service reading.</span>
+          </p>}
+          {/* Start from a template (create mode only) */}
+          {!editing && (
+            <div className="rounded-xl border border-indigo-800/40 bg-indigo-500/5 p-4">
+              <div className="flex items-center gap-2 mb-1">
+                <LayoutTemplate size={15} className="text-indigo-300" />
+                <h3 className="text-sm font-semibold text-[var(--text-primary)]">Start from a template</h3>
+              </div>
+              <p className="text-[11px] text-[var(--text-muted)] mb-3">
+                Suggested service intervals, not a verified specification for this vehicle. Select its service and confirm the intervals before saving. The date or applicable meter limit that is reached first determines when service is due.
+              </p>
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="flex-1 min-w-[240px]">
+                  <label className="label">Template{form.asset_category ? ` (${ASSET_CATEGORY_LABELS[canonAssetCategory(form.asset_category)] || 'category'})` : ''}</label>
+                  <select className="input w-full" value={templateId} onChange={(e) => applyTpl(e.target.value)}>
+                    <option value="">No template : start from blank</option>
+                    {availableTemplates.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+                  </select>
+                </div>
+                {templateId && (
+                  <div className="text-[11px] text-[var(--text-muted)] pb-2">
+                    Prefilled {form.task_list.length} task{form.task_list.length === 1 ? '' : 's'}. Every field stays editable.
+                  </div>
+                )}
+              </div>
+              {availableTemplates.length === 0 && (
+                <p className="text-[11px] text-[var(--text-muted)]">No templates for this category yet. Choose another category or build the plan manually below.</p>
+              )}
             </div>
-            <form onSubmit={submit} className="space-y-5">
-              {/* Start from a template (create mode only) */}
-              {!editing && (
-                <div className="rounded-xl border border-indigo-800/40 bg-indigo-500/5 p-4">
-                  <div className="flex items-center gap-2 mb-1">
-                    <LayoutTemplate size={15} className="text-indigo-300" />
-                    <h3 className="text-sm font-semibold text-[var(--text-primary)]">Start from a template</h3>
-                  </div>
-                  <p className="text-[11px] text-[var(--text-muted)] mb-3">
-                    Editable starting points from common OEM service practice, not live data. Pick one to prefill the plan, then adjust every field before saving.
-                  </p>
-                  <div className="flex flex-wrap items-end gap-3">
-                    <div className="flex-1 min-w-[240px]">
-                      <label className="label">Template{form.asset_category ? ` (${ASSET_CATEGORY_LABELS[canonAssetCategory(form.asset_category)] || 'category'})` : ''}</label>
-                      <select className="input w-full" value={templateId} onChange={(e) => applyTpl(e.target.value)}>
-                        <option value="">No template : start from blank</option>
-                        {availableTemplates.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
-                      </select>
-                    </div>
-                    {templateId && (
-                      <div className="text-[11px] text-[var(--text-muted)] pb-2">
-                        Prefilled {form.task_list.length} task{form.task_list.length === 1 ? '' : 's'}. Every field stays editable.
-                      </div>
-                    )}
-                  </div>
-                  {availableTemplates.length === 0 && (
-                    <p className="text-[11px] text-[var(--text-muted)]">No templates for this category yet. Choose another category or build the plan manually below.</p>
-                  )}
-                </div>
-              )}
+          )}
 
-              {/* Identity */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="sm:col-span-2">
-                  <label className="label">Plan name<span className="text-red-400"> *</span></label>
-                  <input className="input w-full" placeholder="e.g. 250 hour generator service" value={form.name} maxLength={200} onChange={(e) => setField('name', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Asset number</label>
-                  <input className="input w-full" placeholder="e.g. GEN-014" value={form.asset_no} maxLength={120} onChange={(e) => setField('asset_no', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Asset category</label>
-                  <select className="input w-full" value={form.asset_category} onChange={(e) => setField('asset_category', e.target.value)}>
-                    <option value="">Select category</option>
-                    {ASSET_CATEGORIES.map((c) => <option key={c} value={c}>{ASSET_CATEGORY_LABELS[c]}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="label">Site</label>
-                  <input className="input w-full" placeholder="Depot / workshop" value={form.site} maxLength={120} onChange={(e) => setField('site', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Assigned to</label>
-                  <input className="input w-full" placeholder="Owner / technician" value={form.assigned_to} maxLength={120} onChange={(e) => setField('assigned_to', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Priority</label>
-                  <select className="input w-full" value={form.priority} onChange={(e) => setField('priority', e.target.value)}>
-                    {PM_PRIORITIES.map((p) => <option key={p} value={p}>{PM_PRIORITY_META[p]?.label || p}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="label">Status</label>
-                  <select className="input w-full" value={form.status} onChange={(e) => setField('status', e.target.value)}>
-                    {PM_STATUSES.map((s) => <option key={s} value={s}>{PM_STATUS_META[s]?.label || s}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              {/* Time schedule */}
-              <div className="rounded-xl border border-[var(--input-border)] p-4">
-                <div className="flex items-center gap-2 mb-3"><Calendar size={15} className="text-[var(--text-secondary)]" /><h3 className="text-sm font-semibold text-[var(--text-primary)]">Time schedule</h3></div>
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-                  <div>
-                    <label className="label">Interval type</label>
-                    <select className="input w-full" value={form.interval_type} onChange={(e) => setField('interval_type', e.target.value)}>
-                      <option value="days">Days</option>
-                      <option value="months">Months</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="label">Interval value</label>
-                    <input type="number" min="0" step="1" className="input w-full" placeholder="e.g. 6" value={form.interval_value} onChange={(e) => setField('interval_value', e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="label">Last done</label>
-                    <input type="date" className="input w-full" value={form.last_done || ''} onChange={(e) => setField('last_done', e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="label">Next due</label>
-                    <input type="date" className="input w-full" value={form.next_due || ''} onChange={(e) => setField('next_due', e.target.value)} />
-                  </div>
-                </div>
-              </div>
-
-              {/* Meter schedule */}
-              <div className="rounded-xl border border-[var(--input-border)] p-4">
-                <div className="flex items-center gap-2 mb-3"><Gauge size={15} className="text-[var(--text-secondary)]" /><h3 className="text-sm font-semibold text-[var(--text-primary)]">Meter schedule</h3></div>
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-                  <div>
-                    <label className="label">Meter source</label>
-                    <select className="input w-full" value={form.meter_source} onChange={(e) => setField('meter_source', e.target.value)}>
-                      {METER_SOURCES.map((m) => <option key={m} value={m}>{METER_SOURCE_LABELS[m]}</option>)}
-                    </select>
-                  </div>
-                  {form.meter_source !== 'none' && (
-                    <>
-                      <div>
-                        <label className="label">Interval ({meterUnit(form.meter_source)})</label>
-                        <input type="number" min="0" step="any" className="input w-full" placeholder={`e.g. ${form.meter_source === 'engine_hours' ? '250' : '5000'}`} value={form.meter_interval} onChange={(e) => setField('meter_interval', e.target.value)} />
-                      </div>
-                      <div>
-                        <label className="label">Last done ({meterUnit(form.meter_source)})</label>
-                        <input type="number" min="0" step="any" className="input w-full" value={form.last_done_meter} onChange={(e) => setField('last_done_meter', e.target.value)} />
-                      </div>
-                      <div>
-                        <label className="label">Next due ({meterUnit(form.meter_source)})</label>
-                        <input type="number" min="0" step="any" className="input w-full" value={form.next_due_meter} onChange={(e) => setField('next_due_meter', e.target.value)} />
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* Tasks + cost */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="label">Task checklist</label>
-                  <div className="flex items-center gap-2">
-                    <input className="input flex-1" placeholder="Add a task, e.g. Replace oil filter" value={taskDraft} onChange={(e) => setTaskDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTask() } }} />
-                    <button type="button" onClick={addTask} className="btn-secondary text-sm inline-flex items-center gap-1"><Plus size={14} /> Add</button>
-                  </div>
-                  {form.task_list.length > 0 && (
-                    <ul className="mt-2 space-y-1">
-                      {form.task_list.map((t, i) => (
-                        <li key={i} className="flex items-center gap-2 text-sm text-[var(--text-secondary)] bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-2.5 py-1.5">
-                          <ListChecks size={13} className="text-[var(--text-muted)] shrink-0" />
-                          <span className="flex-1 truncate">{t}</span>
-                          <button type="button" onClick={() => removeTask(i)} className="text-[var(--text-muted)] hover:text-red-400"><X size={13} /></button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-                <div>
-                  <label className="label">Estimated cost ({activeCurrency})</label>
-                  <input type="number" min="0" step="any" className="input w-full" placeholder="0" value={form.estimated_cost} onChange={(e) => setField('estimated_cost', e.target.value)} />
-                  <label className="label mt-4">Notes</label>
-                  <textarea className="input w-full min-h-[80px] resize-y" value={form.notes} maxLength={4000} onChange={(e) => setField('notes', e.target.value)} />
-                </div>
-              </div>
-
-              {formError && (
-                <div className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
-                  <AlertTriangle size={15} className="mt-0.5 shrink-0" /> {formError}
-                </div>
-              )}
-              <div className="flex items-center gap-3">
-                <button type="submit" disabled={saving} className="btn-primary inline-flex items-center gap-2 disabled:opacity-60">
-                  {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
-                  {saving ? 'Saving' : editing ? 'Save changes' : 'Create plan'}
-                </button>
-                <button type="button" onClick={() => setModalOpen(false)} disabled={saving} className="btn-secondary">Cancel</button>
-              </div>
-            </form>
+          {/* Identity */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="sm:col-span-2">
+              <label className="label">Plan name<span className="text-red-400"> *</span></label>
+              <input className="input w-full" placeholder="e.g. 250 hour generator service" value={form.name} maxLength={200} onChange={(e) => setField('name', e.target.value)} />
+            </div>
+            <div>
+              <label className="label">Asset category</label>
+              <select className="input w-full" value={form.asset_category} disabled={Boolean(vehicleProfile?.category)} onChange={(e) => setField('asset_category', e.target.value)}>
+                <option value="">Select category</option>
+                {ASSET_CATEGORIES.map((c) => <option key={c} value={c}>{ASSET_CATEGORY_LABELS[c]}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="label">Site</label>
+              <input className="input w-full" placeholder="Depot / workshop" value={form.site} maxLength={120} onChange={(e) => setField('site', e.target.value)} />
+            </div>
+            <div>
+              <label className="label">Assigned to</label>
+              <input className="input w-full" placeholder="Owner / technician" value={form.assigned_to} maxLength={120} onChange={(e) => setField('assigned_to', e.target.value)} />
+            </div>
+            <div>
+              <label className="label">Priority</label>
+              <select className="input w-full" value={form.priority} onChange={(e) => setField('priority', e.target.value)}>
+                {PM_PRIORITIES.map((p) => <option key={p} value={p}>{PM_PRIORITY_META[p]?.label || p}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="label">Status</label>
+              <select className="input w-full" value={form.status} onChange={(e) => setField('status', e.target.value)}>
+                {PM_STATUSES.map((s) => <option key={s} value={s}>{PM_STATUS_META[s]?.label || s}</option>)}
+              </select>
+            </div>
           </div>
-        </div>
-      )}
+
+          {/* Time schedule */}
+          <div className="rounded-xl border border-[var(--input-border)] p-4">
+            <div className="flex items-center gap-2 mb-3"><Calendar size={15} className="text-[var(--text-secondary)]" /><h3 className="text-sm font-semibold text-[var(--text-primary)]">Time schedule</h3></div>
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+              <div>
+                <label className="label">Interval type</label>
+                <select className="input w-full" value={form.interval_type} onChange={(e) => setField('interval_type', e.target.value)}>
+                  <option value="days">Days</option>
+                  <option value="months">Months</option>
+                </select>
+              </div>
+              <div>
+                <label className="label">Interval value</label>
+                <input type="number" min="0" step="1" className="input w-full" placeholder="e.g. 6" value={form.interval_value} onChange={(e) => setField('interval_value', e.target.value)} />
+              </div>
+              <div>
+                <label className="label">Last done</label>
+                <input type="date" className="input w-full" value={form.last_done || ''} onChange={(e) => setField('last_done', e.target.value)} />
+              </div>
+              <div>
+                <label className="label">Next due</label>
+                <input type="date" className="input w-full" value={form.next_due || ''} onChange={(e) => setField('next_due', e.target.value)} />
+              </div>
+            </div>
+          </div>
+
+          {/* Meter schedule */}
+          <div className="rounded-xl border border-[var(--input-border)] p-4">
+            <div className="flex items-center gap-2 mb-3"><Gauge size={15} className="text-[var(--text-secondary)]" /><h3 className="text-sm font-semibold text-[var(--text-primary)]">Meter schedule</h3></div>
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+              <div>
+                <label className="label">Meter source</label>
+                <select className="input w-full" value={form.meter_source} onChange={(e) => setField('meter_source', e.target.value)}>
+                  {METER_SOURCES.filter(m => !vehicleProfile || vehicleProfile.sources.includes(m)).map((m) => <option key={m} value={m}>{METER_SOURCE_LABELS[m]}</option>)}
+                </select>
+              </div>
+              {form.meter_source !== 'none' && (
+                <>
+                  <div>
+                    <label className="label">Interval ({meterUnit(form.meter_source)})</label>
+                    <input type="number" min="0" step="any" className="input w-full" placeholder={`e.g. ${form.meter_source === 'engine_hours' ? '250' : '5000'}`} value={form.meter_interval} onChange={(e) => setField('meter_interval', e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="label">Last done ({meterUnit(form.meter_source)})</label>
+                    <input type="number" min="0" step="any" className="input w-full" value={form.last_done_meter} onChange={(e) => setField('last_done_meter', e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="label">Next due ({meterUnit(form.meter_source)})</label>
+                    <input type="number" min="0" step="any" className="input w-full" value={form.next_due_meter} onChange={(e) => setField('next_due_meter', e.target.value)} />
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Tasks + cost */}
+          <button type="button" className="btn-secondary text-sm" onClick={() => {
+            const next = pmNextDueFromService(form)
+            if (!Object.keys(next).length) { setFormError('Enter the last service date or reading and its interval to calculate the next due.'); return }
+            setForm(f => ({ ...f, ...next })); setFormError('')
+          }}>Calculate next due from last service</button>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="label">Task checklist</label>
+              <div className="flex items-center gap-2">
+                <input className="input flex-1" placeholder="Add a task, e.g. Replace oil filter" value={taskDraft} onChange={(e) => setTaskDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTask() } }} />
+                <button type="button" onClick={addTask} className="btn-secondary text-sm inline-flex items-center gap-1"><Plus size={14} /> Add</button>
+              </div>
+              {form.task_list.length > 0 && (
+                <ul className="mt-2 space-y-1">
+                  {form.task_list.map((t, i) => (
+                    <li key={i} className="flex items-center gap-2 text-sm text-[var(--text-secondary)] bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-2.5 py-1.5">
+                      <ListChecks size={13} className="text-[var(--text-muted)] shrink-0" />
+                      <span className="flex-1 truncate">{t}</span>
+                      <button type="button" onClick={() => removeTask(i)} className="text-[var(--text-muted)] hover:text-red-400"><X size={13} /></button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div>
+              <label className="label">Estimated cost ({activeCurrency})</label>
+              <input type="number" min="0" step="any" className="input w-full" placeholder="0" value={form.estimated_cost} onChange={(e) => setField('estimated_cost', e.target.value)} />
+              <label className="label mt-4">Notes</label>
+              <textarea className="input w-full min-h-[80px] resize-y" value={form.notes} maxLength={4000} onChange={(e) => setField('notes', e.target.value)} />
+            </div>
+          </div>
+
+          {formError && (
+            <div className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
+              <AlertTriangle size={15} className="mt-0.5 shrink-0" /> {formError}
+            </div>
+          )}
+          <div className="flex items-center gap-3">
+            <button type="submit" disabled={saving} className="btn-primary inline-flex items-center gap-2 disabled:opacity-60">
+              {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+              {saving ? 'Saving' : editing ? 'Save changes' : 'Create plan'}
+            </button>
+            <button type="button" onClick={() => setModalOpen(false)} disabled={saving} className="btn-secondary">Cancel</button>
+          </div>
+        </form>
+      </Modal>
 
       {/* ══════════════════════════ RECORD SERVICE MODAL ══════════════════════════ */}
       {recordFor && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => !recording && setRecordFor(null)}>
-          <div className="card w-full max-w-2xl max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-start justify-between mb-4">
+        <Modal
+          open
+          onClose={() => { if (!recording) setRecordFor(null) }}
+          size="lg"
+          title="Record service"
+          subtitle={`${recordFor.name}${recordFor.asset_no ? ` | ${recordFor.asset_no}` : ''}`}
+        >
+          <form onSubmit={submitRecord} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <h2 className="text-lg font-bold text-[var(--text-primary)]">Record service</h2>
-                <p className="text-sm text-[var(--text-muted)] mt-0.5">{recordFor.name}{recordFor.asset_no ? ` | ${recordFor.asset_no}` : ''}</p>
+                <label className="label">Service date</label>
+                <input type="date" className="input w-full" value={recordForm.service_date} onChange={(e) => setRecordField('service_date', e.target.value)} />
               </div>
-              <button onClick={() => !recording && setRecordFor(null)} className="p-1.5 rounded-lg hover:bg-[var(--input-bg)] text-[var(--text-muted)]"><X size={18} /></button>
-            </div>
-            <form onSubmit={submitRecord} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {recordMeter.source !== 'none' && (
                 <div>
-                  <label className="label">Service date</label>
-                  <input type="date" className="input w-full" value={recordForm.service_date} onChange={(e) => setRecordField('service_date', e.target.value)} />
-                </div>
-                {recordMeter.source !== 'none' && (
-                  <div>
-                    <label className="label">Meter reading ({recordMeter.unit})</label>
-                    <input type="number" min="0" step="any" className="input w-full" value={recordForm.meter_reading} onChange={(e) => setRecordField('meter_reading', e.target.value)} />
-                  </div>
-                )}
-                <div>
-                  <label className="label">Performed by</label>
-                  <input className="input w-full" placeholder="Technician" value={recordForm.performed_by} maxLength={120} onChange={(e) => setRecordField('performed_by', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Workshop</label>
-                  <input className="input w-full" placeholder="Workshop / vendor" value={recordForm.workshop} maxLength={120} onChange={(e) => setRecordField('workshop', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Site</label>
-                  <input className="input w-full" value={recordForm.site} maxLength={120} onChange={(e) => setRecordField('site', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Outcome</label>
-                  <select className="input w-full" value={recordForm.outcome} onChange={(e) => setRecordField('outcome', e.target.value)}>
-                    {PM_OUTCOMES.map((o) => <option key={o} value={o}>{PM_OUTCOME_META[o]?.label || o}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              {/* Tasks done */}
-              <div>
-                <label className="label">Tasks completed</label>
-                {(recordFor.task_list || []).length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {(recordFor.task_list || []).map((t, i) => {
-                      const on = recordForm.tasks_done.includes(t)
-                      return (
-                        <button type="button" key={i} onClick={() => toggleTaskDone(t)} className={`text-[12px] px-2.5 py-1.5 rounded-lg border inline-flex items-center gap-1.5 ${on ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40' : 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)] hover:text-[var(--text-secondary)]'}`}>
-                          {on ? <CheckCircle2 size={13} /> : <ListChecks size={13} />} {t}
-                        </button>
-                      )
-                    })}
-                  </div>
-                ) : (
-                  <p className="text-[12px] text-[var(--text-muted)]">This plan has no task checklist. Add tasks on the plan to track them here.</p>
-                )}
-                <div className="flex items-center gap-2 mt-2">
-                  <input className="input flex-1" placeholder="Add another completed task" value={partDraft._task || ''} onChange={(e) => setPartDraft((d) => ({ ...d, _task: e.target.value }))} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); const v = (partDraft._task || '').trim(); if (v) { setRecordForm((f) => ({ ...f, tasks_done: [...f.tasks_done, v] })); setPartDraft((d) => ({ ...d, _task: '' })) } } }} />
-                  <button type="button" onClick={() => { const v = (partDraft._task || '').trim(); if (v) { setRecordForm((f) => ({ ...f, tasks_done: [...f.tasks_done, v] })); setPartDraft((d) => ({ ...d, _task: '' })) } }} className="btn-secondary text-sm inline-flex items-center gap-1"><Plus size={14} /> Add</button>
-                </div>
-              </div>
-
-              {/* Parts */}
-              <div>
-                <label className="label">Parts used</label>
-                {hasCatalog && (
-                  <datalist id="pm-parts-catalog">
-                    {catalogParts.slice(0, 1000).map((p) => (
-                      <option key={p.id} value={p.name} label={p.unit_cost != null ? `${activeCurrency} ${p.unit_cost}${p.part_no ? ` (${p.part_no})` : ''}` : (p.part_no || '')} />
-                    ))}
-                  </datalist>
-                )}
-                <div className="flex flex-wrap items-center gap-2">
-                  <input
-                    className="input flex-1 min-w-[180px]"
-                    list={hasCatalog ? 'pm-parts-catalog' : undefined}
-                    placeholder={hasCatalog ? 'Search catalog or type a part' : 'Part name'}
-                    value={partDraft.name}
-                    onChange={(e) => onPartNameChange(e.target.value)}
-                  />
-                  <input type="number" min="1" step="1" className="input w-20" placeholder="Qty" value={partDraft.qty} onChange={(e) => setPartDraft((d) => ({ ...d, qty: e.target.value }))} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addPart() } }} />
-                  <input type="number" min="0" step="any" className="input w-32" placeholder={`Unit cost (${activeCurrency})`} value={partDraft.cost} onChange={(e) => setPartDraft((d) => ({ ...d, cost: e.target.value }))} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addPart() } }} />
-                  <button type="button" onClick={addPart} className="btn-secondary text-sm inline-flex items-center gap-1"><Plus size={14} /> Add</button>
-                </div>
-                <p className="text-[11px] text-[var(--text-muted)] mt-1">
-                  {hasCatalog
-                    ? 'Pick a catalog part to auto-fill its unit cost, or type an ad-hoc part. Line costs sum into Parts cost below.'
-                    : 'Type any part and unit cost. Line costs sum into Parts cost below.'}
-                </p>
-                {recordForm.parts_used.length > 0 && (
-                  <ul className="mt-2 space-y-1">
-                    {recordForm.parts_used.map((p, i) => {
-                      const q = Number(p.qty) > 0 ? Number(p.qty) : 1
-                      const lineTotal = (Number.isFinite(Number(p.cost)) ? Number(p.cost) : 0) * q
-                      return (
-                        <li key={i} className="flex items-center gap-2 text-sm text-[var(--text-secondary)] bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-2.5 py-1.5">
-                          <span className="flex-1 truncate">{q > 1 ? `${fmtNum(q)} x ` : ''}{p.name}</span>
-                          <span className="text-[var(--text-muted)] text-[12px] whitespace-nowrap">{p.cost != null ? formatCurrencyCompact(p.cost, activeCurrency) : 'no cost'}</span>
-                          <span className="w-24 text-right text-[var(--text-secondary)] whitespace-nowrap">{p.cost != null ? formatCurrencyCompact(lineTotal, activeCurrency) : ''}</span>
-                          <button type="button" onClick={() => removePart(i)} className="text-[var(--text-muted)] hover:text-red-400"><X size={13} /></button>
-                        </li>
-                      )
-                    })}
-                  </ul>
-                )}
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                  <label className="label">Parts cost ({activeCurrency})</label>
-                  <input type="number" min="0" step="any" className="input w-full" placeholder="0" value={recordForm.parts_cost} onChange={(e) => setRecordField('parts_cost', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Labour cost ({activeCurrency})</label>
-                  <input type="number" min="0" step="any" className="input w-full" placeholder="0" value={recordForm.labour_cost} onChange={(e) => setRecordField('labour_cost', e.target.value)} />
-                </div>
-                <div className="flex flex-col justify-end">
-                  <label className="label">Total</label>
-                  <div className="input w-full flex items-center font-semibold text-[var(--text-primary)]">{formatCurrencyCompact(recordTotal, activeCurrency)}</div>
-                </div>
-              </div>
-
-              <div>
-                <label className="label">Findings</label>
-                <textarea className="input w-full min-h-[70px] resize-y" placeholder="Observations, defects found, follow-ups" value={recordForm.findings} maxLength={4000} onChange={(e) => setRecordField('findings', e.target.value)} />
-              </div>
-
-              {/* Live next-due preview */}
-              <div className="rounded-xl border border-sky-800/40 bg-sky-500/5 px-4 py-3 flex items-start gap-3">
-                <CalendarClock size={16} className="text-sky-400 mt-0.5 shrink-0" />
-                <div className="text-sm">
-                  <p className="text-sky-200 font-medium">After recording, the schedule advances to:</p>
-                  <p className="text-[var(--text-secondary)] mt-0.5">
-                    Next due: <span className="text-[var(--text-primary)]">{recordPreview?.next_due ? fmtDate(recordPreview.next_due) : 'unchanged'}</span>
-                    {recordMeter.source !== 'none' && (
-                      <> {' | '} meter: <span className="text-[var(--text-primary)]">{recordPreview?.next_due_meter != null ? `${fmtNum(recordPreview.next_due_meter)} ${recordMeter.unit}` : 'unchanged'}</span></>
-                    )}
-                  </p>
-                </div>
-              </div>
-
-              <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer">
-                <input type="checkbox" className="accent-blue-500" checked={recordForm.create_wo} onChange={(e) => setRecordField('create_wo', e.target.checked)} />
-                Create a linked work order for this service
-              </label>
-
-              {recordError && (
-                <div className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
-                  <AlertTriangle size={15} className="mt-0.5 shrink-0" /> {recordError}
+                  <label className="label">Meter reading ({recordMeter.unit})</label>
+                  <input type="number" min="0" step="any" className="input w-full" value={recordForm.meter_reading} onChange={(e) => setRecordField('meter_reading', e.target.value)} />
                 </div>
               )}
-              <div className="flex items-center gap-3">
-                <button type="submit" disabled={recording} className="btn-primary inline-flex items-center gap-2 disabled:opacity-60">
-                  {recording ? <Loader2 size={15} className="animate-spin" /> : <ClipboardCheck size={15} />}
-                  {recording ? 'Recording' : 'Record service'}
-                </button>
-                <button type="button" onClick={() => setRecordFor(null)} disabled={recording} className="btn-secondary">Cancel</button>
+              <div>
+                <label className="label">Performed by</label>
+                <input className="input w-full" placeholder="Technician" value={recordForm.performed_by} maxLength={120} onChange={(e) => setRecordField('performed_by', e.target.value)} />
               </div>
-            </form>
-          </div>
-        </div>
+              <div>
+                <label className="label">Workshop</label>
+                <input className="input w-full" placeholder="Workshop / vendor" value={recordForm.workshop} maxLength={120} onChange={(e) => setRecordField('workshop', e.target.value)} />
+              </div>
+              <div>
+                <label className="label">Site</label>
+                <input className="input w-full" value={recordForm.site} maxLength={120} onChange={(e) => setRecordField('site', e.target.value)} />
+              </div>
+              <div>
+                <label className="label">Outcome</label>
+                <select className="input w-full" value={recordForm.outcome} onChange={(e) => setRecordField('outcome', e.target.value)}>
+                  {PM_OUTCOMES.map((o) => <option key={o} value={o}>{PM_OUTCOME_META[o]?.label || o}</option>)}
+                </select>
+              </div>
+            </div>
+
+            {/* Tasks done */}
+            <div>
+              <label className="label">Tasks completed</label>
+              {(recordFor.task_list || []).length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {(recordFor.task_list || []).map((t, i) => {
+                    const on = recordForm.tasks_done.includes(t)
+                    return (
+                      <button type="button" key={i} onClick={() => toggleTaskDone(t)} className={`text-[12px] px-2.5 py-1.5 rounded-lg border inline-flex items-center gap-1.5 ${on ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40' : 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)] hover:text-[var(--text-secondary)]'}`}>
+                        {on ? <CheckCircle2 size={13} /> : <ListChecks size={13} />} {t}
+                      </button>
+                    )
+                  })}
+                </div>
+              ) : (
+                <p className="text-[12px] text-[var(--text-muted)]">This plan has no task checklist. Add tasks on the plan to track them here.</p>
+              )}
+              <div className="flex items-center gap-2 mt-2">
+                <input className="input flex-1" placeholder="Add another completed task" value={partDraft._task || ''} onChange={(e) => setPartDraft((d) => ({ ...d, _task: e.target.value }))} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); const v = (partDraft._task || '').trim(); if (v) { setRecordForm((f) => ({ ...f, tasks_done: [...f.tasks_done, v] })); setPartDraft((d) => ({ ...d, _task: '' })) } } }} />
+                <button type="button" onClick={() => { const v = (partDraft._task || '').trim(); if (v) { setRecordForm((f) => ({ ...f, tasks_done: [...f.tasks_done, v] })); setPartDraft((d) => ({ ...d, _task: '' })) } }} className="btn-secondary text-sm inline-flex items-center gap-1"><Plus size={14} /> Add</button>
+              </div>
+            </div>
+
+            {/* Parts */}
+            <div>
+              <label className="label">Parts used</label>
+              {hasCatalog && (
+                <datalist id="pm-parts-catalog">
+                  {catalogParts.slice(0, 1000).map((p) => (
+                    <option key={p.id} value={p.name} label={p.unit_cost != null ? `${activeCurrency} ${p.unit_cost}${p.part_no ? ` (${p.part_no})` : ''}` : (p.part_no || '')} />
+                  ))}
+                </datalist>
+              )}
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  className="input flex-1 min-w-[180px]"
+                  list={hasCatalog ? 'pm-parts-catalog' : undefined}
+                  placeholder={hasCatalog ? 'Search catalog or type a part' : 'Part name'}
+                  value={partDraft.name}
+                  onChange={(e) => onPartNameChange(e.target.value)}
+                />
+                <input type="number" min="1" step="1" className="input w-20" placeholder="Qty" value={partDraft.qty} onChange={(e) => setPartDraft((d) => ({ ...d, qty: e.target.value }))} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addPart() } }} />
+                <input type="number" min="0" step="any" className="input w-32" placeholder={`Unit cost (${activeCurrency})`} value={partDraft.cost} onChange={(e) => setPartDraft((d) => ({ ...d, cost: e.target.value }))} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addPart() } }} />
+                <button type="button" onClick={addPart} className="btn-secondary text-sm inline-flex items-center gap-1"><Plus size={14} /> Add</button>
+              </div>
+              <p className="text-[11px] text-[var(--text-muted)] mt-1">
+                {hasCatalog
+                  ? 'Pick a catalog part to auto-fill its unit cost, or type an ad-hoc part. Line costs sum into Parts cost below.'
+                  : 'Type any part and unit cost. Line costs sum into Parts cost below.'}
+              </p>
+              {recordForm.parts_used.length > 0 && (
+                <ul className="mt-2 space-y-1">
+                  {recordForm.parts_used.map((p, i) => {
+                    const q = Number(p.qty) > 0 ? Number(p.qty) : 1
+                    const lineTotal = (Number.isFinite(Number(p.cost)) ? Number(p.cost) : 0) * q
+                    return (
+                      <li key={i} className="flex items-center gap-2 text-sm text-[var(--text-secondary)] bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-2.5 py-1.5">
+                        <span className="flex-1 truncate">{q > 1 ? `${fmtNum(q)} x ` : ''}{p.name}</span>
+                        <span className="text-[var(--text-muted)] text-[12px] whitespace-nowrap">{p.cost != null ? formatCurrencyCompact(p.cost, activeCurrency) : 'no cost'}</span>
+                        <span className="w-24 text-right text-[var(--text-secondary)] whitespace-nowrap">{p.cost != null ? formatCurrencyCompact(lineTotal, activeCurrency) : ''}</span>
+                        <button type="button" onClick={() => removePart(i)} className="text-[var(--text-muted)] hover:text-red-400"><X size={13} /></button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="label">Parts cost ({activeCurrency})</label>
+                <input type="number" min="0" step="any" className="input w-full" placeholder="0" value={recordForm.parts_cost} onChange={(e) => setRecordField('parts_cost', e.target.value)} />
+              </div>
+              <div>
+                <label className="label">Labour cost ({activeCurrency})</label>
+                <input type="number" min="0" step="any" className="input w-full" placeholder="0" value={recordForm.labour_cost} onChange={(e) => setRecordField('labour_cost', e.target.value)} />
+              </div>
+              <div className="flex flex-col justify-end">
+                <label className="label">Total</label>
+                <div className="input w-full flex items-center font-semibold text-[var(--text-primary)]">{formatCurrencyCompact(recordTotal, activeCurrency)}</div>
+              </div>
+            </div>
+
+            <div>
+              <label className="label">Findings</label>
+              <textarea className="input w-full min-h-[70px] resize-y" placeholder="Observations, defects found, follow-ups" value={recordForm.findings} maxLength={4000} onChange={(e) => setRecordField('findings', e.target.value)} />
+            </div>
+
+            {/* Live next-due preview */}
+            <div className="rounded-xl border border-sky-800/40 bg-sky-500/5 px-4 py-3 flex items-start gap-3">
+              <CalendarClock size={16} className="text-sky-400 mt-0.5 shrink-0" />
+              <div className="text-sm">
+                <p className="text-sky-200 font-medium">After recording, the schedule advances to:</p>
+                <p className="text-[var(--text-secondary)] mt-0.5">
+                  Next due: <span className="text-[var(--text-primary)]">{recordPreview?.next_due ? fmtDate(recordPreview.next_due) : 'unchanged'}</span>
+                  {recordMeter.source !== 'none' && (
+                    <> {' | '} meter: <span className="text-[var(--text-primary)]">{recordPreview?.next_due_meter != null ? `${fmtNum(recordPreview.next_due_meter)} ${recordMeter.unit}` : 'unchanged'}</span></>
+                  )}
+                </p>
+              </div>
+            </div>
+
+            <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer">
+              <input type="checkbox" className="accent-blue-500" checked={recordForm.create_wo} onChange={(e) => setRecordField('create_wo', e.target.checked)} />
+              Create a linked work order for this service
+            </label>
+
+            {recordError && (
+              <div className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
+                <AlertTriangle size={15} className="mt-0.5 shrink-0" /> {recordError}
+              </div>
+            )}
+            <div className="flex items-center gap-3">
+              <button type="submit" disabled={recording} className="btn-primary inline-flex items-center gap-2 disabled:opacity-60">
+                {recording ? <Loader2 size={15} className="animate-spin" /> : <ClipboardCheck size={15} />}
+                {recording ? 'Recording' : 'Record service'}
+              </button>
+              <button type="button" onClick={() => setRecordFor(null)} disabled={recording} className="btn-secondary">Cancel</button>
+            </div>
+          </form>
+        </Modal>
       )}
 
       {/* ══════════════════════════ DELETE CONFIRMATION ══════════════════════════ */}
       {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => !deleting && setConfirmDelete(null)}>
-          <div className="card w-full max-w-md" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-xl bg-red-900/30 flex items-center justify-center shrink-0">
-                <Trash2 size={20} className="text-red-400" />
-              </div>
-              <div className="flex-1">
-                <h3 className="text-base font-bold text-[var(--text-primary)]">Delete maintenance plan?</h3>
-                <p className="text-sm text-[var(--text-muted)] mt-1">
-                  This permanently removes <span className="font-medium text-[var(--text-secondary)]">{confirmDelete.name}</span>. Recorded service history is retained. This cannot be undone.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center justify-end gap-3 mt-5">
+        <Modal
+          open
+          onClose={() => { if (!deleting) setConfirmDelete(null) }}
+          size="sm"
+          title="Delete maintenance plan?"
+          footer={(
+            <>
               <button onClick={() => setConfirmDelete(null)} disabled={deleting} className="btn-secondary">Cancel</button>
               <button onClick={doDelete} disabled={deleting} className="btn-primary bg-red-600 hover:bg-red-500 border-red-600 inline-flex items-center gap-2 disabled:opacity-60">
                 {deleting ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
                 {deleting ? 'Deleting' : 'Delete'}
               </button>
+            </>
+          )}
+        >
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-red-900/30 flex items-center justify-center shrink-0">
+              <Trash2 size={20} className="text-red-400" />
             </div>
+            <p className="flex-1 text-sm text-[var(--text-muted)]">
+              This permanently removes <span className="font-medium text-[var(--text-secondary)]">{confirmDelete.name}</span>. Recorded service history is retained. This cannot be undone.
+            </p>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   )

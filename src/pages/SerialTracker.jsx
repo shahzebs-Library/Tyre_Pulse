@@ -1,10 +1,12 @@
-import { useState, useMemo, useRef, useEffect } from 'react'
-import { supabase } from '../lib/supabase'
-import { escapeLike } from '../lib/searchFilter'
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
+import { findSerialRecords } from '../lib/api/serialTracker'
+import { useSettings } from '../contexts/SettingsContext'
 import { exportToPdf, exportToExcel, reportFileName } from '../lib/exportUtils'
 import { formatCurrencyCompact, formatDate } from '../lib/formatters'
-import { ScanLine, Search, Download, FileText, Upload, AlertTriangle, Trash2, RotateCcw, X } from 'lucide-react'
+import { ScanLine, Search, Download, FileText, Upload, AlertTriangle, Trash2, RotateCcw } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import Card, { CardBody, CardHeader } from '../components/ui/Card'
+import Modal from '../components/ui/Modal'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 import EmptyState from '../components/EmptyState'
 import { toUserMessage } from '../lib/safeError'
@@ -15,7 +17,7 @@ import { COUNTRY_CURRENCY } from '../lib/api/assetMaster'
 function SearchSkeleton() {
   return (
     <>
-      <div className="card animate-pulse">
+      <Card className="animate-pulse">
         <div className="flex items-start justify-between flex-wrap gap-4 mb-4">
           <div className="space-y-2">
             <div className="flex items-center gap-3">
@@ -38,9 +40,9 @@ function SearchSkeleton() {
           ))}
         </div>
         <div className="h-4 w-32 bg-[var(--surface-2)] rounded mt-3" />
-      </div>
+      </Card>
 
-      <div className="card animate-pulse">
+      <Card className="animate-pulse">
         <div className="h-5 w-32 bg-[var(--surface-2)] rounded mb-4" />
         <div className="space-y-4">
           {[...Array(3)].map((_, gi) => (
@@ -64,12 +66,14 @@ function SearchSkeleton() {
             </div>
           ))}
         </div>
-      </div>
+      </Card>
     </>
   )
 }
 
 export default function SerialTracker() {
+  const { activeCountry } = useSettings()
+  const queryId = useRef(0)
   const { profile, isSuperAdmin, grantedModules } = useAuth()
   // MARKING a scrap and UNDOING one are two different rights, and the server is
   // the one that decides both. Marking is a field observation and reaches the
@@ -109,10 +113,19 @@ export default function SerialTracker() {
   const [scrapReason, setScrapReason] = useState('')
   const [scrapBusy, setScrapBusy]     = useState(false)
   const [scrapErr, setScrapErr]       = useState(null)
+  // One named close, carrying the in-flight guard, because the dialog is closed
+  // from four places: Escape, the backdrop, the X and Cancel. The guard matters
+  // here specifically - closing mid-RPC would hide a scrap that is still being
+  // written. `useCallback` is belt and braces: `useDialogBehavior` deliberately
+  // holds `onClose` in a ref and keeps it out of its dependency array so a
+  // re-created callback cannot steal focus from the reason textarea.
+  const closeScrap = useCallback(() => { if (!scrapBusy) setScrapOpen(false) }, [scrapBusy])
 
   // ── Bulk Lookup state ─────────────────────────────────────────────────────
   const [bulkResults, setBulkResults]   = useState([])
   const [bulkLoading, setBulkLoading]   = useState(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Invalidate the current request on cleanup.
+  useEffect(() => { queryId.current++; setRecords([]); setBulkResults([]); setSearched(false); setLoading(false); setBulkLoading(false); setBulkDone(false); return () => { queryId.current++ } }, [activeCountry])
   const [bulkFileName, setBulkFileName] = useState('')
   const [bulkDragOver, setBulkDragOver] = useState(false)
   const [bulkDone, setBulkDone]         = useState(false)
@@ -195,24 +208,24 @@ export default function SerialTracker() {
     setLoading(true)
     setSearched(false)
     setError(null)
+    const request = ++queryId.current
+    setBulkLoading(false)
     const q = serialInput.trim()
     setScrapMark(null)
     setScrapErr(null)
     try {
-      const { data, error: qErr } = await supabase
-        .from('tyre_records')
-        .select('*')
-        .ilike('serial_no', escapeLike(q))
-        .order('issue_date', { ascending: true })
-      if (qErr) throw qErr
+      const data = await findSerialRecords(q, { country: activeCountry })
+      if (request !== queryId.current) return
       setRecords(data || [])
       if ((data || []).length) {
-        try { setScrapMark(await getScrapMark(q)) } catch { /* scrap flag is best-effort */ }
+        try { const mark = await getScrapMark(q); if (request === queryId.current) setScrapMark(mark) } catch { /* scrap flag is best-effort */ }
       }
     } catch (err) {
+      if (request !== queryId.current) return
       setError(toUserMessage(err, 'Could not search for that serial.'))
       setRecords([])
     } finally {
+      if (request !== queryId.current) return
       setLastQuery(q)
       setSearched(true)
       setLoading(false)
@@ -341,7 +354,8 @@ export default function SerialTracker() {
   }
 
   async function processBulkFile(file) {
-    const XLSX = await import('xlsx')
+    const request = ++queryId.current
+    setLoading(false)
     setBulkFileName(file.name)
     setBulkLoading(true)
     setBulkDone(false)
@@ -351,6 +365,8 @@ export default function SerialTracker() {
     setError(null)
 
     try {
+      const XLSX = await import('xlsx')
+      if (request !== queryId.current) return
       const arrayBuffer = await file.arrayBuffer()
       const wb = XLSX.read(arrayBuffer, { type: 'array' })
       const serials = extractSerialsFromSheet(wb, XLSX)
@@ -369,15 +385,11 @@ export default function SerialTracker() {
       const BATCH_SIZE = 10
 
       for (let i = 0; i < serials.length; i += BATCH_SIZE) {
+        if (request !== queryId.current) return
         const batch = serials.slice(i, i + BATCH_SIZE)
         const batchResults = await Promise.all(
           batch.map(async serial => {
-            const { data, error: qErr } = await supabase
-              .from('tyre_records')
-              .select('serial_no, issue_date, asset_no, status, country, cost:cost_per_tyre')
-              .ilike('serial_no', escapeLike(serial))
-              .order('issue_date', { ascending: true })
-            if (qErr) throw qErr
+            const data = await findSerialRecords(serial, { country: activeCountry, columns: 'serial_no, issue_date, asset_no, status, country, cost:cost_per_tyre' })
             if (!data || data.length === 0) {
               return { serial, first_seen: null, last_asset: null, total_records: 0, cost: 0, country: null, status: 'Not Found' }
             }
@@ -400,11 +412,14 @@ export default function SerialTracker() {
         results.push(...batchResults)
       }
 
+      if (request !== queryId.current) return
       setBulkResults(results)
     } catch (err) {
+      if (request !== queryId.current) return
       setError(toUserMessage(err, 'Could not process that file.'))
       setBulkResults([])
     } finally {
+      if (request !== queryId.current) return
       setBulkLoading(false)
       setBulkDone(true)
     }
@@ -500,7 +515,8 @@ export default function SerialTracker() {
       {/* ── Single Search tab ──────────────────────────────────────────────── */}
       {activeTab === 'single' && (
         <>
-          <div className="card">
+          {/* Deliberately NOT clipped: this is the page's search control. */}
+          <Card>
             <div className="flex gap-3">
               <input
                 className="input flex-1 text-base"
@@ -515,32 +531,35 @@ export default function SerialTracker() {
                 {loading ? 'Searching...' : 'Search'}
               </button>
             </div>
-          </div>
+          </Card>
 
           {loading && <SearchSkeleton />}
 
           {!loading && error && (
-            <div className="card border border-red-500/30 flex items-center gap-3">
+            /* Card is flex-col by default and Tailwind emits .flex-col after
+               .flex-row, so a row-direction card sets its direction through
+               `style`, where Card spreads it last and it deterministically wins. */
+            <Card tone="crit" className="items-center gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
               <AlertTriangle size={18} className="text-red-400 shrink-0" />
               <p className="text-sm text-red-300 flex-1">{error}</p>
               <button onClick={search} className="btn-secondary text-xs px-3 py-1.5">Retry</button>
-            </div>
+            </Card>
           )}
 
           {!loading && !error && searched && records.length === 0 && (
-            <div className="card">
+            <Card>
               <EmptyState
                 illustration="state/search-empty"
                 icon={ScanLine}
                 title="No records found"
                 description={`No tyre records match serial "${lastQuery}". Check spelling and capitalisation.`}
               />
-            </div>
+            </Card>
           )}
 
           {!loading && stats && (
             <>
-              <div className="card">
+              <Card>
                 <div className="flex items-start justify-between flex-wrap gap-4 mb-4">
                   <div>
                     <div className="flex items-center gap-3 mb-1 flex-wrap">
@@ -614,10 +633,10 @@ export default function SerialTracker() {
                     Total cost: <span className="text-[var(--text-primary)] font-semibold">{formatCurrencyCompact(stats.totalCost, COUNTRY_CURRENCY[records[0]?.country] || 'SAR')}</span>
                   </p>
                 )}
-              </div>
+              </Card>
 
-              <div className="card">
-                <h3 className="text-base font-semibold text-[var(--text-primary)] mb-4">Service Timeline</h3>
+              <Card>
+                <CardHeader level={2} title="Service Timeline" />
                 <div className="space-y-4">
                   {timeline.map((group, gi) => (
                     <div key={gi}>
@@ -649,7 +668,7 @@ export default function SerialTracker() {
                     </div>
                   ))}
                 </div>
-              </div>
+              </Card>
             </>
           )}
         </>
@@ -658,10 +677,17 @@ export default function SerialTracker() {
       {/* ── Bulk Lookup tab ────────────────────────────────────────────────── */}
       {activeTab === 'bulk' && (
         <div className="space-y-4">
-          <div
-            className={`card border-2 border-dashed transition-all cursor-pointer ${
-              bulkDragOver ? 'border-green-500 bg-green-900/10' : 'border-[var(--border-bright)] hover:border-gray-500'
-            }`}
+          {/* The whole surface is the drop target and is genuinely clickable, so
+              it takes `interactive`. Card sets `border` INLINE and inline beats a
+              class, so the dashed drop affordance is set through `style` - a
+              `border-2 border-dashed` class here would be silently dead. */}
+          <Card
+            interactive
+            className="transition-all cursor-pointer"
+            style={{
+              border: bulkDragOver ? '2px dashed rgb(34 197 94)' : '2px dashed var(--border-bright)',
+              ...(bulkDragOver ? { background: 'rgba(20, 83, 45, 0.10)' } : {}),
+            }}
             onDragOver={e => { e.preventDefault(); setBulkDragOver(true) }}
             onDragLeave={() => setBulkDragOver(false)}
             onDrop={handleBulkDrop}
@@ -689,20 +715,23 @@ export default function SerialTracker() {
                 Browse File
               </button>
             </div>
-          </div>
+          </Card>
 
+          {/* `py-10` would be DEAD on a Card - Card sets padding inline and
+              inline beats a class - so the state's breathing room is a spacing
+              token instead. */}
           {bulkLoading && (
-            <div className="card text-center py-10">
+            <Card className="text-center" style={{ paddingBlock: 'var(--space-10)' }}>
               <div className="inline-block w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full animate-spin mb-3" />
               <p className="text-[var(--text-secondary)]">Processing serial numbers...</p>
-            </div>
+            </Card>
           )}
 
           {error && !bulkLoading && (
-            <div className="card border border-red-500/30 flex items-center gap-3">
+            <Card tone="crit" className="items-center gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
               <AlertTriangle size={18} className="text-red-400 shrink-0" />
               <p className="text-sm text-red-300 flex-1">{error}</p>
-            </div>
+            </Card>
           )}
 
           {bulkDone && !bulkLoading && !error && (
@@ -766,21 +795,23 @@ export default function SerialTracker() {
               )}
 
               {bulkResults.length === 0 ? (
-                <div className="card">
+                <Card>
                   <EmptyState
                     illustration="state/search-empty"
                     icon={FileText}
                     title="No serials found"
                     description="No serial numbers could be extracted from the file. Check that it has a recognised column header."
                   />
-                </div>
+                </Card>
               ) : filteredBulkResults.length === 0 ? (
-                <div className="card text-center py-10">
+                <Card className="text-center" style={{ paddingBlock: 'var(--space-10)' }}>
                   <p className="text-[var(--text-secondary)]">No results match the current filter.</p>
                   <button onClick={() => { setStatusFilter(null); setBulkSearch('') }} className="text-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)] underline mt-1">Clear filters</button>
-                </div>
+                </Card>
               ) : (
-                <div className="card overflow-x-auto">
+                /* Kept unclipped and padded: the horizontal scroller is the
+                   card's own class, and `clip` would fight it. */
+                <Card className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="text-left text-[var(--text-secondary)] border-b border-[var(--border-dim)]">
@@ -818,7 +849,7 @@ export default function SerialTracker() {
                     </tbody>
                   </table>
                   <TablePagination {...bulkPager} />
-                </div>
+                </Card>
               )}
             </>
           )}
@@ -828,72 +859,76 @@ export default function SerialTracker() {
       {/* ── Scrapped register tab ──────────────────────────────────────────── */}
       {activeTab === 'scrapped' && (
         <div className="space-y-4">
-          <div className="card">
-            <div className="flex items-center justify-between flex-wrap gap-3">
-              <div>
-                <h3 className="text-base font-semibold text-[var(--text-primary)]">Scrapped tyres</h3>
-                <p className="text-sm text-[var(--text-secondary)]">
-                  {scrapListLoad ? 'Loading...' : `${scrapList.length} tyre${scrapList.length !== 1 ? 's' : ''} marked as scrap`}
-                  {canUndo ? ' · edit the reason or undo a mistaken scrap'
-                    : canScrap ? ' · edit the reason' : ''}
+          {/* Deliberately NOT clipped: this card hosts the filter input. */}
+          <Card>
+            <CardHeader
+              level={2}
+              title="Scrapped tyres"
+              description={<>
+                {scrapListLoad ? 'Loading...' : `${scrapList.length} tyre${scrapList.length !== 1 ? 's' : ''} marked as scrap`}
+                {canUndo ? ' · edit the reason or undo a mistaken scrap'
+                  : canScrap ? ' · edit the reason' : ''}
+              </>}
+              actions={
+                <>
+                  <div className="relative">
+                    <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+                    <input
+                      className="input text-sm pl-7 pr-3 py-1.5 w-48"
+                      placeholder="Filter serial / reason..."
+                      value={scrapListSearch}
+                      onChange={e => setScrapListSearch(e.target.value)}
+                    />
+                  </div>
+                  <button onClick={loadScrapList} disabled={scrapListLoad}
+                    className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5 disabled:opacity-50">
+                    <RotateCcw size={14} /> Refresh
+                  </button>
+                </>
+              }
+            />
+            <CardBody>
+              {!canScrap ? (
+                <p className="text-xs text-[var(--text-muted)] flex items-center gap-1.5">
+                  <AlertTriangle size={12} /> You can view scrapped tyres. Marking one as scrap needs the tyre scrap permission, which an admin grants in Access Control.
                 </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="relative">
-                  <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-                  <input
-                    className="input text-sm pl-7 pr-3 py-1.5 w-48"
-                    placeholder="Filter serial / reason..."
-                    value={scrapListSearch}
-                    onChange={e => setScrapListSearch(e.target.value)}
-                  />
-                </div>
-                <button onClick={loadScrapList} disabled={scrapListLoad}
-                  className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5 disabled:opacity-50">
-                  <RotateCcw size={14} /> Refresh
-                </button>
-              </div>
-            </div>
-            {!canScrap ? (
-              <p className="text-xs text-[var(--text-muted)] mt-2 flex items-center gap-1.5">
-                <AlertTriangle size={12} /> You can view scrapped tyres. Marking one as scrap needs the tyre scrap permission, which an admin grants in Access Control.
-              </p>
-            ) : !canUndo ? (
-              <p className="text-xs text-[var(--text-muted)] mt-2 flex items-center gap-1.5">
-                <AlertTriangle size={12} /> You can mark a tyre as scrap and edit the reason. Undoing a scrap is an administrator action.
-              </p>
-            ) : null}
-          </div>
+              ) : !canUndo ? (
+                <p className="text-xs text-[var(--text-muted)] flex items-center gap-1.5">
+                  <AlertTriangle size={12} /> You can mark a tyre as scrap and edit the reason. Undoing a scrap is an administrator action.
+                </p>
+              ) : null}
+            </CardBody>
+          </Card>
 
           {scrapListErr && (
-            <div className="card border border-red-500/30 flex items-center gap-3">
+            <Card tone="crit" className="items-center gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
               <AlertTriangle size={18} className="text-red-400 shrink-0" />
               <p className="text-sm text-red-300 flex-1">{scrapListErr}</p>
               <button onClick={loadScrapList} className="btn-secondary text-xs px-3 py-1.5">Retry</button>
-            </div>
+            </Card>
           )}
 
           {scrapListLoad ? (
-            <div className="card text-center py-10">
+            <Card className="text-center" style={{ paddingBlock: 'var(--space-10)' }}>
               <div className="inline-block w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full animate-spin mb-3" />
               <p className="text-[var(--text-secondary)]">Loading scrapped tyres...</p>
-            </div>
+            </Card>
           ) : scrapList.length === 0 ? (
-            <div className="card">
+            <Card>
               <EmptyState
                 illustration="state/search-empty"
                 icon={Trash2}
                 title="No scrapped tyres"
                 description="Tyres you mark as scrap from Single Search will appear here."
               />
-            </div>
+            </Card>
           ) : filteredScrapList.length === 0 ? (
-            <div className="card text-center py-10">
+            <Card className="text-center" style={{ paddingBlock: 'var(--space-10)' }}>
               <p className="text-[var(--text-secondary)]">No scrapped tyres match "{scrapListSearch}".</p>
               <button onClick={() => setScrapListSearch('')} className="text-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)] underline mt-1">Clear filter</button>
-            </div>
+            </Card>
           ) : (
-            <div className="card overflow-x-auto">
+            <Card className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-[var(--text-secondary)] border-b border-[var(--border-dim)]">
@@ -972,52 +1007,51 @@ export default function SerialTracker() {
                 </tbody>
               </table>
               <TablePagination {...scrapPager} />
-            </div>
+            </Card>
           )}
         </div>
       )}
 
-      {/* ── Scrap confirmation modal ───────────────────────────────────────── */}
+      {/* ── Scrap confirmation modal ─────────────────────────────────────────
+          No <form> here, so the actions belong in the Modal footer. The scrap
+          RPC call itself is untouched. */}
       {scrapOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-          onClick={() => !scrapBusy && setScrapOpen(false)}>
-          <div className="card w-full max-w-md" onClick={e => e.stopPropagation()}>
-            <div className="flex items-start justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-lg bg-red-900/30 text-red-400"><Trash2 size={18} /></div>
-                <div>
-                  <h3 className="text-base font-semibold text-[var(--text-primary)]">Mark tyre as scrap</h3>
-                  <p className="text-xs text-[var(--text-muted)] font-mono">{lastQuery}</p>
-                </div>
-              </div>
-              <button onClick={() => !scrapBusy && setScrapOpen(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">
-                <X size={18} />
-              </button>
-            </div>
-            <p className="text-sm text-[var(--text-secondary)] mb-3">
-              This flags the tyre and all {records.length} of its record{records.length !== 1 ? 's' : ''} as Scrapped, removing it from active and pool counts. You can undo this later.
-            </p>
-            <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">Reason (optional)</label>
-            <textarea
-              className="input w-full text-sm min-h-[72px]"
-              placeholder="e.g. Worn beyond limit, sidewall damage, retread failed..."
-              value={scrapReason}
-              onChange={e => setScrapReason(e.target.value)}
-            />
-            {scrapErr && (
-              <div className="mt-2 flex items-center gap-2 text-sm text-red-300">
-                <AlertTriangle size={14} className="shrink-0" /> {scrapErr}
-              </div>
-            )}
-            <div className="flex justify-end gap-2 mt-4">
-              <button onClick={() => setScrapOpen(false)} disabled={scrapBusy} className="btn-secondary text-sm px-4 py-1.5 disabled:opacity-50">Cancel</button>
+        <Modal
+          open
+          onClose={closeScrap}
+          title="Mark tyre as scrap"
+          subtitle={lastQuery}
+          size="sm"
+          footer={
+            <>
+              <button onClick={closeScrap} disabled={scrapBusy} className="btn-secondary text-sm px-4 py-1.5 disabled:opacity-50">Cancel</button>
               <button onClick={confirmScrap} disabled={scrapBusy}
                 className="flex items-center gap-1.5 text-sm px-4 py-1.5 rounded-md font-medium border border-red-700/50 bg-red-600/80 text-white hover:bg-red-600 transition-colors disabled:opacity-50">
                 <Trash2 size={14} /> {scrapBusy ? 'Marking...' : 'Confirm scrap'}
               </button>
-            </div>
+            </>
+          }
+        >
+          <div className="flex items-start gap-3 mb-3">
+            <div className="p-2 rounded-lg bg-red-900/30 text-red-400 shrink-0"><Trash2 size={18} /></div>
+            <p className="text-sm text-[var(--text-secondary)]">
+              This flags the tyre and all {records.length} of its record{records.length !== 1 ? 's' : ''} as Scrapped, removing it from active and pool counts. You can undo this later.
+            </p>
           </div>
-        </div>
+          <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1" htmlFor="scrap-reason">Reason (optional)</label>
+          <textarea
+            id="scrap-reason"
+            className="input w-full text-sm min-h-[72px]"
+            placeholder="e.g. Worn beyond limit, sidewall damage, retread failed..."
+            value={scrapReason}
+            onChange={e => setScrapReason(e.target.value)}
+          />
+          {scrapErr && (
+            <div className="mt-2 flex items-center gap-2 text-sm text-red-300">
+              <AlertTriangle size={14} className="shrink-0" /> {scrapErr}
+            </div>
+          )}
+        </Modal>
       )}
     </div>
   )

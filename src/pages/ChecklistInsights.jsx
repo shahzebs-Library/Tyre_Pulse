@@ -15,8 +15,10 @@ import PageHeader from '../components/ui/PageHeader'
 import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import { useSettings } from '../contexts/SettingsContext'
 import { listSubmissions, listTemplates } from '../lib/api/checklists'
+import { getApprovalAgeMonitor, getComplianceMonitor } from '../lib/api/checklistSchedules'
 import { isValueField, fieldTypeDef } from '../lib/checklist/fieldTypes'
 import { toUserMessage } from '../lib/safeError'
+import { isMissingRelation } from '../lib/api/_client'
 
 ChartJS.register(
   CategoryScale, LinearScale,
@@ -25,15 +27,6 @@ ChartJS.register(
 )
 
 // ── Missing-table heuristic (mirrors Billing.jsx / Checklists.jsx) ───────────
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return (
-    m.includes('does not exist') ||
-    m.includes('relation') ||
-    m.includes('schema cache') ||
-    m.includes('could not find the table')
-  )
-}
 
 // ── Chart options factory (mirrors EngineeringKpi / Analytics style) ─────────
 function chartOpts(horizontal = false, yLabel = '', xLabel = '') {
@@ -137,6 +130,9 @@ function pct(n, d) {
 function fmtPct(v) {
   return v == null ? 'N/A' : `${v.toFixed(1)}%`
 }
+function prettyToken(value) {
+  return String(value || '').replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
+}
 
 export default function ChecklistInsights() {
   const { activeCountry } = useSettings()
@@ -144,6 +140,9 @@ export default function ChecklistInsights() {
 
   const [templates, setTemplates] = useState([])
   const [submissions, setSubmissions] = useState([])
+  const [complianceRows, setComplianceRows] = useState([])
+  const [complianceError, setComplianceError] = useState(null)
+  const [approvalAgeRows, setApprovalAgeRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -159,19 +158,52 @@ export default function ChecklistInsights() {
     setLoading(true)
     setError(null)
     try {
-      const [tpls, subs] = await Promise.all([
+      const today = new Date()
+      const from = new Date(today)
+      from.setDate(from.getDate() - 29)
+      const isoDay = (date) => date.toISOString().slice(0, 10)
+      const [tpls, subs, compliance, approvalAges] = await Promise.all([
         listTemplates({ country }),
         listSubmissions({ country }),
+        getComplianceMonitor({ from: isoDay(from), to: isoDay(today), country })
+          .then((rows) => ({ rows, error: null }))
+          .catch((monitorError) => ({ rows: [], error: monitorError })),
+        getApprovalAgeMonitor({ country })
+          .then((rows) => ({ rows, error: null }))
+          .catch((monitorError) => ({ rows: [], error: monitorError })),
       ])
       if (myReq !== reqIdRef.current) return
       setTemplates(Array.isArray(tpls) ? tpls : [])
       setSubmissions(Array.isArray(subs) ? subs : [])
+      setComplianceRows(Array.isArray(compliance.rows) ? compliance.rows : [])
+      setComplianceError(compliance.error)
+      setApprovalAgeRows(Array.isArray(approvalAges.rows) ? approvalAges.rows : [])
     } catch (err) {
       if (myReq === reqIdRef.current) setError(err)
     } finally {
       if (myReq === reqIdRef.current) setLoading(false)
     }
   }, [country])
+
+  const compliance = useMemo(() => {
+    const rows = complianceRows.filter((row) => templateFilter === 'all'
+      || String(row.template_id) === String(templateFilter))
+    const total = (key) => rows.reduce((sum, row) => sum + Number(row[key] || 0), 0)
+    const due = total('due_count')
+    const completed = total('completed_count')
+    const completedOnTime = total('completed_on_time_count')
+    return {
+      rows, due, completed,
+      overdue: total('overdue_count'),
+      evidenceGaps: total('evidence_gap_count'),
+      compliancePct: pct(completed, due - total('skipped_count')),
+      onTimePct: pct(completedOnTime, completed),
+    }
+  }, [complianceRows, templateFilter])
+
+  const approvalAges = useMemo(() => approvalAgeRows.filter((row) =>
+    templateFilter === 'all' || String(row.template_id) === String(templateFilter)),
+  [approvalAgeRows, templateFilter])
 
   useEffect(() => { loadData() }, [loadData])
 
@@ -275,7 +307,7 @@ export default function ChecklistInsights() {
   const byTemplate = useMemo(() => {
     const map = new Map()
     for (const s of filteredSubs) {
-      const id = s?.template_id ?? '—'
+      const id = s?.template_id ?? 'N/A'
       let row = map.get(id)
       if (!row) {
         row = {
@@ -507,6 +539,88 @@ export default function ChecklistInsights() {
           accent={metrics.approvalPassRate == null ? 'text-[var(--text-primary)]'
             : metrics.approvalPassRate >= 85 ? 'text-green-400'
             : metrics.approvalPassRate >= 60 ? 'text-amber-400' : 'text-red-400'} />
+      </div>
+
+      <div className="card space-y-3">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h3 className="text-sm font-medium text-[var(--text-primary)]">Scheduled compliance · last 30 days</h3>
+            <p className="text-xs text-[var(--text-muted)] mt-1">Calculated from due assignments, with skipped work excluded from the denominator.</p>
+          </div>
+          <span className="text-xs text-[var(--text-muted)]">{compliance.rows.length} template/site group{compliance.rows.length === 1 ? '' : 's'}</span>
+        </div>
+        {complianceError ? (
+          <p className="text-sm text-amber-400">The compliance monitor is unavailable until its database migration is applied.</p>
+        ) : compliance.due === 0 ? (
+          <p className="text-sm text-[var(--text-muted)]">No scheduled assignments exist in this period, so a compliance percentage cannot be reported yet.</p>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+              <KpiCard title="Due" value={compliance.due.toLocaleString()} icon={CalendarClock} />
+              <KpiCard title="Completed" value={compliance.completed.toLocaleString()} icon={CheckCircle2} />
+              <KpiCard title="Compliance" value={fmtPct(compliance.compliancePct)} icon={ShieldCheck} />
+              <KpiCard title="On time" value={fmtPct(compliance.onTimePct)} icon={TrendingUp} />
+              <KpiCard title="Evidence gaps" value={compliance.evidenceGaps.toLocaleString()}
+                sub={`${compliance.overdue} overdue`} icon={AlertTriangle}
+                accent={compliance.evidenceGaps ? 'text-amber-400' : 'text-green-400'} />
+            </div>
+            <div className="overflow-x-auto border border-[var(--border-dim)] rounded-lg">
+              <table className="w-full text-sm">
+                <thead><tr className="text-left text-xs text-[var(--text-muted)] border-b border-[var(--border-dim)]">
+                  <th className="px-3 py-2 font-medium">Template / site</th>
+                  <th className="px-3 py-2 font-medium text-right">Due</th>
+                  <th className="px-3 py-2 font-medium text-right">Completed</th>
+                  <th className="px-3 py-2 font-medium text-right">Overdue</th>
+                  <th className="px-3 py-2 font-medium text-right">Compliance</th>
+                  <th className="px-3 py-2 font-medium text-right">Evidence gaps</th>
+                </tr></thead>
+                <tbody>{compliance.rows.map((row) => (
+                  <tr key={`${row.template_id}:${row.country}:${row.site}`} className="border-b border-[var(--border-dim)] last:border-0">
+                    <td className="px-3 py-2"><div className="text-[var(--text-primary)]">{row.template_name}</div><div className="text-xs text-[var(--text-muted)]">{[row.site, row.country].filter(Boolean).join(' · ')}</div></td>
+                    <td className="px-3 py-2 text-right">{Number(row.due_count).toLocaleString()}</td>
+                    <td className="px-3 py-2 text-right">{Number(row.completed_count).toLocaleString()}</td>
+                    <td className="px-3 py-2 text-right">{Number(row.overdue_count).toLocaleString()}</td>
+                    <td className="px-3 py-2 text-right">{row.compliance_pct == null ? 'N/A' : `${Number(row.compliance_pct).toFixed(1)}%`}</td>
+                    <td className={`px-3 py-2 text-right ${Number(row.evidence_gap_count) ? 'text-amber-400' : ''}`}>{Number(row.evidence_gap_count).toLocaleString()}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="card p-0 overflow-hidden">
+        <div className="px-4 py-3 border-b border-[var(--border-dim)]">
+          <h3 className="text-sm font-medium text-[var(--text-primary)]">Pending approval age</h3>
+          <p className="text-xs text-[var(--text-muted)] mt-1">Measured from submission or supervisor sign-off against the organisation's configured stage SLA.</p>
+        </div>
+        {approvalAges.length === 0 ? (
+          <div className="px-4 py-8 text-center text-sm text-[var(--text-muted)]">No pending checklist approvals in this scope.</div>
+        ) : (
+          <div className="overflow-x-auto"><table className="w-full text-sm">
+            <thead><tr className="text-left text-xs text-[var(--text-muted)] border-b border-[var(--border-dim)]">
+              <th className="px-4 py-2 font-medium">Template / site</th>
+              <th className="px-4 py-2 font-medium">Stage</th>
+              <th className="px-4 py-2 font-medium text-right">Pending</th>
+              <th className="px-4 py-2 font-medium text-right">Oldest age</th>
+              <th className="px-4 py-2 font-medium text-right">Average age</th>
+              <th className="px-4 py-2 font-medium text-right">SLA / breached</th>
+            </tr></thead>
+            <tbody>{approvalAges.map((row) => (
+              <tr key={`${row.template_id}:${row.country}:${row.site}:${row.approval_stage}`} className="border-b border-[var(--border-dim)] last:border-0">
+                <td className="px-4 py-2.5"><div className="text-[var(--text-primary)]">{row.template_name}</div><div className="text-xs text-[var(--text-muted)]">{[row.site, row.country].filter(Boolean).join(' · ')}</div></td>
+                <td className="px-4 py-2.5 text-[var(--text-muted)]">{prettyToken(row.approval_stage)}</td>
+                <td className="px-4 py-2.5 text-right">{Number(row.pending_count).toLocaleString()}</td>
+                <td className="px-4 py-2.5 text-right">{Number(row.oldest_age_hours).toFixed(1)} h</td>
+                <td className="px-4 py-2.5 text-right">{Number(row.average_age_hours).toFixed(1)} h</td>
+                <td className={`px-4 py-2.5 text-right ${Number(row.breached_count) > 0 ? 'text-red-400 font-medium' : 'text-green-400'}`}>
+                  {Number(row.target_hours).toLocaleString()} h / {Number(row.breached_count).toLocaleString()}
+                </td>
+              </tr>
+            ))}</tbody>
+          </table></div>
+        )}
       </div>
 
       {/* Charts */}

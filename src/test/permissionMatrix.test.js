@@ -21,7 +21,16 @@ const h = vi.hoisted(() => {
     state.last = b
     return b
   }
-  return { state, supabase: { from } }
+  function rpc(name,args) {
+    state.last = {name,args}
+    if (name.startsWith('save_')) {
+      state.upserts.push({namespace:args.p_namespace,row:args.p_values[0]})
+      return Promise.resolve({data:{saved:args.p_values.length},error:state.upsertResult?.error??null})
+    }
+    const data=state.result.data
+    return Promise.resolve({...state.result,data:data==null?[]:Array.isArray(data)?data:[data]})
+  }
+  return { state, supabase: { from, rpc } }
 })
 
 vi.mock('../lib/supabase', () => ({ supabase: h.supabase }))
@@ -297,8 +306,7 @@ describe('persistence', () => {
     h.state.result = { data: { value: JSON.stringify({ version: 1, overrides: { Driver: { alerts: { export: false } } } }) }, error: null }
     const out = await getPermissionOverrides()
     expect(out).toEqual({ Driver: { alerts: { export: false } } })
-    expect(h.state.last._table).toBe('app_settings')
-    expect(h.state.last._calls.eq).toContainEqual(['key', PERMISSION_OVERRIDES_KEY])
+    expect(h.state.last).toEqual({name:'get_organisation_configuration',args:{p_namespace:'app_settings',p_key:PERMISSION_OVERRIDES_KEY}})
   })
 
   it('getPermissionOverrides returns {} when no row exists', async () => {
@@ -317,10 +325,9 @@ describe('persistence', () => {
       Ghost: { alerts: { edit: false } },
     })
     expect(h.state.upserts).toHaveLength(1)
-    const { table, row, opts } = h.state.upserts[0]
-    expect(table).toBe('app_settings')
+    const { namespace, row } = h.state.upserts[0]
+    expect(namespace).toBe('app_settings')
     expect(row.key).toBe(PERMISSION_OVERRIDES_KEY)
-    expect(opts).toEqual({ onConflict: 'key' })
     const stored = JSON.parse(row.value)
     expect(stored.overrides).toEqual({
       Driver: { alerts: { export: false } },

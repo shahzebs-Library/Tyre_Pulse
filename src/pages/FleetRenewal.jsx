@@ -28,6 +28,8 @@ import {
   AlertOctagon, ChevronUp, ChevronDown, CalendarDays,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import Card, { CardHeader } from '../components/ui/Card'
+import Modal from '../components/ui/Modal'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   listRenewalPlansEnriched, createRenewalPlan, updateRenewalPlan, deleteRenewalPlan,
@@ -47,6 +49,7 @@ import { toUserMessage } from '../lib/safeError'
 const EPOCH_DATE = new Date(0)
 import { colorAt, categorical, withAlpha } from '../lib/reportColors'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, Tooltip, Legend)
 
@@ -81,11 +84,6 @@ const SORT_KEYS = {
 }
 const PRIORITY_RANK = { high: 3, medium: 2, low: 1 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('could not find the table') ||
-    m.includes('schema cache') || (m.includes('relation') && m.includes('fleet_renewal_plans'))
-}
 const fmtDate = (v) => (v ? String(v).slice(0, 10) : 'N/A')
 const num = (v) => (v === '' || v == null || Number.isNaN(Number(v)) ? 'N/A' : Number(v).toLocaleString())
 
@@ -112,6 +110,10 @@ export default function FleetRenewal() {
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(null)
+  // The delete dialog needs its OWN error slot. `formError` renders only inside
+  // the create/edit dialog, so a failed delete used to write its message where
+  // nothing could show it: the dialog just stayed open with no explanation.
+  const [deleteError, setDeleteError] = useState('')
   const [deleting, setDeleting] = useState(false)
 
   const load = useCallback(async () => {
@@ -300,16 +302,25 @@ export default function FleetRenewal() {
   const doDelete = useCallback(async () => {
     if (!confirmDelete) return
     setDeleting(true)
+    setDeleteError('')
     try {
       await deleteRenewalPlan(confirmDelete.id)
       setRows((prev) => (prev || []).filter((r) => r.id !== confirmDelete.id))
       setConfirmDelete(null)
     } catch (err) {
-      setFormError(toUserMessage(err, 'Could not delete the plan.'))
+      setDeleteError(toUserMessage(err, 'Could not delete the plan.'))
     } finally {
       setDeleting(false)
     }
   }, [confirmDelete])
+
+  // One named close per dialog, carrying the in-flight guard the hand-rolled
+  // backdrop already had. Each dialog can now be closed from Escape, the
+  // backdrop, the X and Cancel, and all four must agree: dropping out mid-save
+  // would hide a write that is still running. `useDialogBehavior` keeps onClose
+  // in a ref, so a plain function here needs no useCallback.
+  const closeForm = () => { if (!saving) setModalOpen(false) }
+  const closeDelete = () => { if (!deleting) { setConfirmDelete(null); setDeleteError('') } }
 
   const clearFilters = () => {
     setStatusFilter('all'); setPriorityFilter('all'); setSiteFilter('all')
@@ -372,7 +383,12 @@ export default function FleetRenewal() {
       />
 
       {error === 'missing' ? (
-        <div className="card border border-amber-800/50 flex items-start gap-3">
+        // `border border-amber-800/50` as classes would be DEAD here: Card sets
+        // `border` and `borderColor` inline and inline beats a class, so the tint
+        // is carried by `tone` instead. Card is `flex flex-col` and Tailwind
+        // emits .flex-col after .flex-row, so the row direction goes in `style`,
+        // which Card spreads last.
+        <Card tone="warn" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
           <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
           <div>
             <p className="text-amber-300 font-medium">Fleet renewal planning is not enabled on this database yet.</p>
@@ -380,40 +396,41 @@ export default function FleetRenewal() {
               Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V159_FLEET_RENEWAL.sql</span>, then reload.
             </p>
           </div>
-        </div>
+        </Card>
       ) : error ? (
-        <div className="card border border-red-800/50 flex items-start gap-3">
+        <Card tone="crit" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
           <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
           <div className="flex-1">
             <p className="text-red-300 font-medium">Could not load renewal plans.</p>
             <p className="text-[var(--text-muted)] text-sm mt-1">{error}</p>
           </div>
           <button onClick={load} className="btn-secondary text-sm">Retry</button>
-        </div>
+        </Card>
       ) : null}
 
       {/* KPI tiles */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-[var(--gap-grid)]">
         {kpis.map((k) => {
           const Icon = k.icon
           return (
-            <div key={k.label} className="card">
+            <Card key={k.label}>
               <div className="flex items-center justify-between">
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
               <p className={`text-2xl font-bold mt-1 ${k.tone}`}>{loading ? 'N/A' : k.value}</p>
-            </div>
+            </Card>
           )
         })}
       </div>
 
       {/* Insights */}
       {!loading && insights.length > 0 && (
-        <div className="card border border-[var(--input-border)]">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-2 flex items-center gap-1.5">
-            <AlertTriangle size={14} className="text-amber-400" /> Priority findings
-          </h3>
+        // The old `border border-[var(--input-border)]` only restated the default
+        // card edge, and as a class it could not win against Card's inline
+        // border anyway. Card's default tone already draws it.
+        <Card>
+          <CardHeader icon={AlertTriangle} title="Priority findings" />
           <ul className="space-y-1.5">
             {insights.map((s, i) => (
               <li key={i} className="text-sm text-[var(--text-secondary)] flex items-start gap-2">
@@ -421,24 +438,28 @@ export default function FleetRenewal() {
               </li>
             ))}
           </ul>
-        </div>
+        </Card>
       )}
 
       {/* Pipeline */}
-      <div className="card">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-1.5">
-            <CalendarDays size={15} className="text-sky-400" /> Renewal pipeline
-          </h3>
-          <div className="flex items-center gap-1 text-xs">
-            {['month', 'year'].map((g) => (
-              <button key={g} onClick={() => setPipelineGranularity(g)}
-                className={`px-2.5 py-1 rounded ${pipelineGranularity === g ? 'bg-[var(--input-bg)] text-[var(--text-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}>
-                {g === 'month' ? 'Monthly' : 'Yearly'}
-              </button>
-            ))}
-          </div>
-        </div>
+      <Card>
+        {/* Two short toggles only, so they are safe in `actions` (which is
+            flex-shrink-0 and cannot wrap); a wider button group would belong on
+            its own row beneath the header instead. */}
+        <CardHeader
+          icon={CalendarDays}
+          title="Renewal pipeline"
+          actions={
+            <div className="flex items-center gap-1 text-xs">
+              {['month', 'year'].map((g) => (
+                <button key={g} onClick={() => setPipelineGranularity(g)}
+                  className={`px-2.5 py-1 rounded ${pipelineGranularity === g ? 'bg-[var(--input-bg)] text-[var(--text-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}>
+                  {g === 'month' ? 'Monthly' : 'Yearly'}
+                </button>
+              ))}
+            </div>
+          }
+        />
         <div className="h-64">
           {loading ? <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" />
             : pipeline.hasDated ? <Bar data={pipelineChart} options={barOpts((c) => `${c.parsed.y} plan(s), ${money(pipeline.periods[c.dataIndex]?.estCost)}`)} />
@@ -450,28 +471,30 @@ export default function FleetRenewal() {
             {pipeline.undated.count > 0 && <span className="inline-flex items-center gap-1"><Clock size={12} /> {pipeline.undated.count} without a target date</span>}
           </div>
         )}
-      </div>
+      </Card>
 
       {/* Distributions */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="card">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Lifecycle status</h3>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-[var(--gap-grid)]">
+        <Card>
+          <CardHeader title="Lifecycle status" />
           <div className="h-56">
             {loading ? <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" />
               : (rows && rows.length) ? <Doughnut data={statusDonut} options={donutOpts} />
               : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No plans yet.</div>}
           </div>
-        </div>
-        <div className="card">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Priority</h3>
+        </Card>
+        <Card>
+          <CardHeader title="Priority" />
           <div className="h-56">
             {loading ? <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" />
               : (rows && rows.length) ? <Doughnut data={priorityDonut} options={donutOpts} />
               : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No plans yet.</div>}
           </div>
-        </div>
-        <div className="card">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-2 flex items-center gap-1.5"><Wallet size={14} className="text-emerald-400" /> Estimated budget</h3>
+        </Card>
+        <Card>
+          <CardHeader icon={Wallet} title="Estimated budget" />
+          {/* `money(null)` is 'N/A', never 0: a fleet with no costed plan must not
+              read as a zero budget. The engine returns null for that case. */}
           <p className="text-3xl font-bold text-emerald-400">{loading ? 'N/A' : money(budget.total)}</p>
           {!loading && (
             <div className="mt-3 space-y-1.5 text-xs text-[var(--text-muted)]">
@@ -480,54 +503,58 @@ export default function FleetRenewal() {
               {budget.withoutCost > 0 && <p className="text-amber-400">{budget.withoutCost} plan(s) have no estimated cost, so the budget is understated.</p>}
             </div>
           )}
-        </div>
+        </Card>
       </div>
 
       {/* Breakdowns: site + type */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="card">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-1.5"><MapPin size={14} className="text-sky-400" /> By site</h3>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-[var(--gap-grid)]">
+        <Card>
+          <CardHeader icon={MapPin} title="By site" />
           <div className="h-56">
             {loading ? <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" />
               : siteBreakdown.length ? <Bar data={siteChart} options={barOpts()} />
               : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No site data on these plans.</div>}
           </div>
-        </div>
-        <div className="card">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-1.5"><Layers size={14} className="text-indigo-400" /> By vehicle type</h3>
+        </Card>
+        <Card>
+          <CardHeader icon={Layers} title="By vehicle type" />
           <div className="h-56">
             {loading ? <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" />
               : typeBreakdown.length ? <Bar data={typeChart} options={barOpts()} />
               : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No matching fleet-master vehicle types for these assets.</div>}
           </div>
-        </div>
+        </Card>
       </div>
 
       {/* Due bands: age + mileage */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="card">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-1.5"><Gauge size={14} className="text-amber-400" /> Age bands</h3>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-[var(--gap-grid)]">
+        <Card>
+          <CardHeader icon={Gauge} title="Age bands" />
           <div className="h-52">
             {loading ? <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" />
               : ageBandData.hasData ? <Bar data={ageBandChart} options={barOpts()} />
               : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No age recorded on these plans.</div>}
           </div>
           {!loading && ageBandData.hasData && <p className="text-xs text-[var(--text-muted)] mt-2">{ageBandData.withData} plan(s) with a recorded age.</p>}
-        </div>
-        <div className="card">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-1.5"><TrendingUp size={14} className="text-sky-400" /> Mileage bands</h3>
+        </Card>
+        <Card>
+          <CardHeader icon={TrendingUp} title="Mileage bands" />
           <div className="h-52">
             {loading ? <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" />
               : mileageBandData.hasData ? <Bar data={mileageBandChart} options={barOpts()} />
               : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No mileage recorded on these plans.</div>}
           </div>
           {!loading && mileageBandData.hasData && <p className="text-xs text-[var(--text-muted)] mt-2">{mileageBandData.withData} plan(s) with a recorded odometer.</p>}
-        </div>
+        </Card>
       </div>
 
       {/* Overdue watchlist */}
       {!loading && overdue.length > 0 && (
-        <div className="card border border-red-800/50">
+        // Deliberately NOT CardHeader: the red heading is semantic here (this is
+        // an alert surface), and CardHeader pins its title to --text-primary.
+        // The `border border-red-800/50` classes moved to `tone`, which is the
+        // only place a Card border tint can be set.
+        <Card tone="crit">
           <h3 className="text-sm font-semibold text-red-300 mb-3 flex items-center gap-1.5"><AlertOctagon size={15} /> Overdue watchlist ({overdue.length})</h3>
           <div className="flex flex-wrap gap-2">
             {sortBySoonest(overdue, now).slice(0, 12).map((r) => (
@@ -537,11 +564,13 @@ export default function FleetRenewal() {
               </button>
             ))}
           </div>
-        </div>
+        </Card>
       )}
 
-      {/* Filters */}
-      <div className="card">
+      {/* Filters. No `clip`: the controls here are native <select> and
+          <input type="date">, whose popups the browser paints outside the page's
+          overflow context, so nothing in this card needs cropping. */}
+      <Card>
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[200px]">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
@@ -571,10 +600,14 @@ export default function FleetRenewal() {
           {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
           <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {kpi.total}</span>
         </div>
-      </div>
+      </Card>
 
-      {/* Table */}
-      <div className="card overflow-hidden !p-0">
+      {/* Table. `pad="none"` replaces the old `!p-0` override, and `clip`
+          reproduces the edge-to-edge crop the legacy .card gave for free. The
+          rows-per-page control in TablePagination is a native <select>, whose
+          option list the browser paints outside this overflow context, so
+          clipping it here is safe. */}
+      <Card pad="none" clip>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -633,19 +666,25 @@ export default function FleetRenewal() {
           </table>
         </div>
         <TablePagination {...pager} />
-      </div>
+      </Card>
 
-      {/* Create / Edit modal */}
+      {/* Create / Edit modal. The submit button stays INSIDE the <form> rather
+          than moving to Modal's `footer`: a footer button would need a
+          `form="..."` association to keep submitting, which is a behaviour
+          change, not a migration. Modal already owns the height cap, the focus
+          trap, the scroll lock and escape-to-close. */}
       {modalOpen && (
-        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={() => !saving && setModalOpen(false)}>
-          <div className="bg-[var(--card-bg)] border border-[var(--input-border)] rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="px-6 py-4 border-b border-[var(--input-border)] flex items-center justify-between">
-              <h2 className="font-bold text-[var(--text-primary)] flex items-center gap-2">
-                {editing ? <><Pencil size={16} /> Edit renewal plan</> : <><Plus size={16} /> New renewal plan</>}
-              </h2>
-              <button onClick={() => setModalOpen(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
-            </div>
-            <form onSubmit={submit} className="p-6 space-y-4">
+        <Modal
+          open
+          onClose={closeForm}
+          size="md"
+          title={
+            <span className="inline-flex items-center gap-2">
+              {editing ? <><Pencil size={16} /> Edit renewal plan</> : <><Plus size={16} /> New renewal plan</>}
+            </span>
+          }
+        >
+            <form onSubmit={submit} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="label">Asset number *</label>
@@ -698,39 +737,44 @@ export default function FleetRenewal() {
                 </div>
               )}
               <div className="flex items-center justify-end gap-3 pt-1">
-                <button type="button" onClick={() => setModalOpen(false)} className="btn-secondary text-sm" disabled={saving}>Cancel</button>
+                <button type="button" onClick={closeForm} className="btn-secondary text-sm" disabled={saving}>Cancel</button>
                 <button type="submit" className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={saving}>
                   {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
                   {saving ? 'Saving...' : (editing ? 'Save changes' : 'Create plan')}
                 </button>
               </div>
             </form>
-          </div>
-        </div>
+        </Modal>
       )}
 
-      {/* Delete confirm */}
+      {/* Delete confirm. No <form> here, so the actions belong in Modal's
+          `footer`, which pins them where a user can always reach them. */}
       {confirmDelete && (
-        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={() => !deleting && setConfirmDelete(null)}>
-          <div className="bg-[var(--card-bg)] border border-[var(--input-border)] rounded-2xl w-full max-w-sm shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="p-6 space-y-4">
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-full bg-red-900/30 flex items-center justify-center shrink-0"><Trash2 size={18} className="text-red-400" /></div>
-                <div>
-                  <p className="font-semibold text-[var(--text-primary)]">Delete renewal plan?</p>
-                  <p className="text-sm text-[var(--text-muted)] mt-1">Plan for <span className="font-medium text-[var(--text-secondary)]">{confirmDelete.asset_no}</span> will be permanently removed.</p>
-                </div>
-              </div>
-              <div className="flex items-center justify-end gap-3">
-                <button onClick={() => setConfirmDelete(null)} className="btn-secondary text-sm" disabled={deleting}>Cancel</button>
-                <button onClick={doDelete} className="btn-danger text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={deleting}>
-                  {deleting ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
-                  {deleting ? 'Deleting...' : 'Delete'}
-                </button>
-              </div>
-            </div>
+        <Modal
+          open
+          onClose={closeDelete}
+          size="sm"
+          title="Delete renewal plan?"
+          footer={
+            <>
+              <button onClick={closeDelete} className="btn-secondary text-sm" disabled={deleting}>Cancel</button>
+              <button onClick={doDelete} className="btn-danger text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={deleting}>
+                {deleting ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+                {deleting ? 'Deleting...' : 'Delete'}
+              </button>
+            </>
+          }
+        >
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-full bg-red-900/30 flex items-center justify-center shrink-0"><Trash2 size={18} className="text-red-400" /></div>
+            <p className="text-sm text-[var(--text-muted)]">Plan for <span className="font-medium text-[var(--text-secondary)]">{confirmDelete.asset_no}</span> will be permanently removed.</p>
           </div>
-        </div>
+          {deleteError && (
+            <p role="alert" className="flex items-start gap-2 text-sm text-red-400" style={{ marginTop: 'var(--space-3)' }}>
+              <AlertTriangle size={15} className="mt-0.5 shrink-0" /> {deleteError}
+            </p>
+          )}
+        </Modal>
       )}
     </div>
   )

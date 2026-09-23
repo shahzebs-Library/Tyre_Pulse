@@ -116,6 +116,20 @@ vi.mock('../lib/api/storeSiteExpense', () => ({
   listSites: () => Promise.resolve(['NHC', 'RED SEA']),
   setStoreSiteMap: (args) => { h.calls.setMap.push(args); return Promise.resolve(true) },
 }))
+// These independent panels are outside this suite's expense scope assertions.
+// Keep their reads deterministic instead of contacting the dummy Supabase host.
+vi.mock('../lib/api/latestActivity', () => ({
+  defaultPeriodFor: () => Promise.resolve(null),
+}))
+vi.mock('../lib/api/fleetCpk', () => ({
+  getFleetCpk: () => Promise.resolve({ perVehicle: [], byType: [], fleet: [] }),
+}))
+vi.mock('../lib/api/expenseTrends', () => ({
+  getExpensePeriodTrendMulti: () => Promise.resolve({ ok: false, refused: [], rows: [] }),
+}))
+vi.mock('../lib/api/tyreRecords', () => ({
+  listTcoActualRecords: () => Promise.resolve({ data: [], error: null }),
+}))
 vi.mock('../lib/exportUtils', () => ({
   exportToExcel: (...a) => { h.calls.excel.push(a); return Promise.resolve() },
   reportFileName: (...p) => p.join(' '),

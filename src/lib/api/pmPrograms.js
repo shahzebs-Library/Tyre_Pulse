@@ -5,11 +5,9 @@
  * Director). This layer keeps an explicit column list (least-privilege select)
  * and null-safe country scoping, mirroring certifications.js / support.js.
  *
- * When the table has not been migrated yet, the lister degrades to [] so the
- * page can surface an "apply MIGRATIONS_V163_PM_PROGRAMS.sql" hint instead of
- * throwing.
+ * Read failures propagate so unavailable data is not presented as an empty list.
  */
-import { supabase, unwrap, applyCountry, isMissingRelation } from './_client'
+import { supabase, unwrap, applyCountry, isMissingRelation, fetchAllPages } from './_client'
 
 export const COLS =
   'id,organisation_id,country,name,asset_no,asset_type,interval_type,interval_value,' +
@@ -49,16 +47,14 @@ function chunk(arr, size) {
  * Returns [] when the table is missing so the UI can prompt for the migration
  * rather than error.
  */
-export async function listPmPrograms({ country, status, limit = 500 } = {}) {
-  try {
+export async function listPmPrograms({ country, status } = {}) {
+  const result = await fetchAllPages((from, to) => {
     let q = supabase.from('pm_programs').select(COLS)
     if (status) q = q.eq('status', status)
-    q = applyCountry(q, country)
-    return unwrap(await q.order('next_due', { ascending: true, nullsFirst: false }).limit(limit)) || []
-  } catch (err) {
-    if (isMissingRelation(err)) return []
-    throw err
-  }
+    return applyCountry(q, country).order('next_due', { ascending: true, nullsFirst: false }).order('id').range(from, to)
+  }, { max: 50000 })
+  if (result.truncated) throw new Error('Too many maintenance programs to load completely. Narrow the country selection.')
+  return unwrap(result) || []
 }
 
 export async function getPmProgram(id) {
@@ -221,28 +217,24 @@ async function captureMeterReading(result, values = {}) {
 
 /**
  * List PM service history (newest first). Optionally scoped to one asset and/or
- * program, country-scoped (null-safe). Returns [] when the table is not
- * provisioned so the page degrades to an "apply the migration" state.
- * @param {{ asset_no?:string, program_id?:string|number, country?:string, limit?:number }} [opts]
+ * program, country-scoped (null-safe). Read failures propagate to the page.
+ * @param {{ asset_no?:string, program_id?:string|number, country?:string,  }} [opts]
  */
-export async function listPmServiceRecords({ asset_no, program_id, country, limit = 500 } = {}) {
-  try {
+export async function listPmServiceRecords({ asset_no, program_id, country } = {}) {
+  const result = await fetchAllPages((from, to) => {
     let q = supabase.from('pm_service_records').select(SERVICE_RECORD_COLS)
     if (asset_no) q = q.eq('asset_no', asset_no)
     if (program_id) q = q.eq('pm_program_id', program_id)
-    q = applyCountry(q, country)
-    return unwrap(await q.order('service_date', { ascending: false }).limit(limit)) || []
-  } catch (err) {
-    if (isMissingRelation(err)) return []
-    throw err
-  }
+    return applyCountry(q, country).order('service_date', { ascending: false }).order('id').range(from, to)
+  }, { max: 50000 })
+  if (result.truncated) throw new Error('Service history is too large to load completely. Narrow the selection.')
+  return unwrap(result) || []
 }
 
 /**
  * Load the PM dashboard bundle: every program plus the latest meter reading for
  * each referenced asset, so the page can flag km / engine-hour based programs as
- * due without re-querying per row. Each meter source degrades independently to
- * an empty map on a missing relation, so one absent table never sinks the other.
+ * due without re-querying per row. Meter failures propagate; unavailable readings must not imply compliance.
  * @param {{ country?:string }} [opts]
  * @returns {Promise<{ plans:object[], kmByAsset:object, hoursByAsset:object }>}
  */
@@ -254,37 +246,40 @@ export async function loadPmDashboard({ country } = {}) {
   if (!assetNos.length) return { plans, kmByAsset, hoursByAsset }
 
   const chunks = chunk(assetNos, 200)
+  const seenFleetAssets = new Set()
+  const ambiguousAssets = new Set()
 
   // Odometer / current_km from the fleet master.
   try {
     for (const c of chunks) {
-      const { data, error } = await supabase
-        .from('vehicle_fleet').select('asset_no,current_km').in('asset_no', c)
+      const { data, error } = await applyCountry(supabase
+        .from('vehicle_fleet').select('asset_no,current_km').in('asset_no', c), country)
       if (error) throw error
       for (const r of data || []) {
-        if (r && r.asset_no != null) kmByAsset[r.asset_no] = Number(r.current_km)
+        if (seenFleetAssets.has(r.asset_no)) ambiguousAssets.add(r.asset_no)
+        seenFleetAssets.add(r.asset_no)
+        if (r && r.asset_no != null && r.current_km != null && Number.isFinite(Number(r.current_km))) kmByAsset[r.asset_no] = Number(r.current_km)
       }
     }
-  } catch {
-    // Missing relation or read error: leave kmByAsset as collected (never throw).
-  }
+  } catch (error) { throw error }
 
   // Engine hours: keep the FIRST (latest) reading seen per asset (desc by date).
   try {
     for (const c of chunks) {
-      const { data, error } = await supabase
+      const { data, error } = await fetchAllPages((from, to) => applyCountry(supabase
         .from('engine_hours_logs').select('asset_no,engine_hours,reading_date')
-        .in('asset_no', c).order('reading_date', { ascending: false })
+        .in('asset_no', c), country).order('reading_date', { ascending: false }).order('id').range(from, to))
       if (error) throw error
       for (const r of data || []) {
-        if (r && r.asset_no != null && !(r.asset_no in hoursByAsset)) {
+        if (r && r.asset_no != null && r.engine_hours != null && Number.isFinite(Number(r.engine_hours)) && !(r.asset_no in hoursByAsset)) {
           hoursByAsset[r.asset_no] = Number(r.engine_hours)
         }
       }
     }
-  } catch {
-    // Missing relation or read error: leave hoursByAsset as collected (never throw).
-  }
+  } catch (error) { throw error }
 
+  // An asset number can exist in more than one country. Do not assign an
+  // arbitrary meter to a plan when the selected scope is ambiguous.
+  for (const asset of ambiguousAssets) { delete kmByAsset[asset]; delete hoursByAsset[asset] }
   return { plans, kmByAsset, hoursByAsset }
 }

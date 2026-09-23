@@ -94,6 +94,7 @@ export const NAV_COMMANDS = [
   { id: 'compliance',     label: 'Compliance Dashboard', path: '/compliance',   icon: 'Shield',     adminOnly: true },
   { id: 'alerts',         label: 'Alerts',               path: '/alerts',       icon: 'Bell',       adminOnly: true },
   { id: 'driver-management', label: 'Driver Intelligence', path: '/driver-management', icon: 'Users', adminOnly: true, moduleKey: 'fleet_master' },
+  { id: 'driver-workspace', label: 'Driver Workspace', path: '/driver-workspace', icon: 'Users' },
   { id: 'retread',        label: 'Retread Management',   path: '/retread',      icon: 'RefreshCw',  adminOnly: true },
   // Accident & Insurance
   { id: 'accidents',      label: 'Accidents',            path: '/accidents',    icon: 'AlertTriangle' },
@@ -121,6 +122,7 @@ export const NAV_COMMANDS = [
   { id: 'scan',           label: 'Tyre Scan (QR)',       path: '/scan',         icon: 'QrCode' },
   // Platform (roadmap tranche)
   { id: 'report-builder',    label: 'Report Builder',      path: '/report-builder',    icon: 'FileText',   keywords: ['custom report', 'export', 'build'] },
+  { id: 'design-system',     label: 'Design System',       path: '/design-system',     icon: 'Layers',     keywords: ['ui kit', 'components', 'card', 'modal', 'tokens', 'style guide', 'storybook'] },
   { id: 'dashboard-builder', label: 'Dashboard Builder',   path: '/dashboard-builder', icon: 'LayoutGrid', keywords: ['widgets', 'layout', 'custom dashboard'] },
   { id: 'executive-analytics', label: 'Executive Analytics', path: '/executive-analytics', icon: 'BarChart2', roles: ANALYTICS_ROLES, keywords: ['echarts', 'heatmap', 'sankey', 'treemap'] },
   { id: 'tv-display',        label: 'TV Display Mode',     path: '/display',           icon: 'Radio',      adminOnly: true, keywords: ['tv', 'board', 'screen', 'wall'] },
@@ -141,7 +143,7 @@ export const NAV_COMMANDS = [
   { id: 'shifts', label: 'Shift Scheduling', path: '/shifts', icon: 'CalendarClock', adminOnly: true },
   { id: 'speed-limiter', label: 'Speed Limiter', path: '/speed-limiter', icon: 'Gauge', adminOnly: true },
   { id: 'engine-hours', label: 'Engine Hours', path: '/engine-hours', icon: 'Gauge', adminOnly: true, keywords: ['hour meter', 'hourmeter', 'running hours', 'smr'] },
-  { id: 'odometer-logs', label: 'Odometer Logs', path: '/odometer-logs', icon: 'Activity', adminOnly: true },
+  { id: 'odometer-logs', label: 'Odometer Logs', path: '/odometer-logs', icon: 'Activity', moduleKey: 'odometer_logs' },
   { id: 'fleet-utilization', label: 'Fleet Utilization', path: '/fleet-utilization', icon: 'Gauge', roles: ANALYTICS_ROLES },
   { id: 'trips', label: 'Trip History', path: '/trips', icon: 'MapPin', adminOnly: true },
   { id: 'route-optimization', label: 'Route Optimization', path: '/route-optimization', icon: 'Navigation', adminOnly: true },
@@ -296,9 +298,10 @@ export function isCommandVisible(cmd, profile, hasPermission, grantedModules, is
   const path = cmd.path
   const perm = typeof hasPermission === 'function' ? hasPermission : null
 
+  if (path === '/odometer-logs') return perm ? perm('odometer_logs') === true : false
+
   // Restricted single-purpose roles (same as the sidebar).
   if (role === 'Inspector') return path === '/inspections' || path === '/settings'
-  if (role === 'Data Monitor Officer') return path === '/accidents' || path === '/settings'
   if (isChecklistOnlyRole(role)) return isChecklistPathAllowed(path)
 
   // Report builders are Admin-only, and deliberately checked BEFORE the per-user
@@ -306,6 +309,13 @@ export function isCommandVisible(cmd, profile, hasPermission, grantedModules, is
   // grant must not be able to open one. The builder components refuse to render
   // for a non-Admin anyway, so showing the entry would only lead to a dead page.
   if (REPORT_BUILDER_ROUTES.includes(path) && !canUseReportBuilder(profile, isSuperAdmin)) return false
+
+  // DMO is restrictive by default, but saved module grants extend its workspace.
+  // Resolve through hasPermission so a revoke beats an older explicit grant.
+  if (role === 'Data Monitor Officer') {
+    if (ALWAYS_ALLOWED_PATHS.has(path)) return true
+    return perm ? perm(cmd.moduleKey || governingModuleKey(path)) === true : false
+  }
 
   // Per-user GRANT opens visibility for the exact key the route guard resolves.
   const routeKey = cmd.moduleKey || governingModuleKey(path)

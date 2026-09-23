@@ -173,21 +173,21 @@ export async function checkDatabase() {
   }
 }
 
-/** Auth service: getSession must resolve (a null session is still a healthy service). */
+/** Validate the current user with the remote Auth service. A local session is not a health probe. */
 export async function checkAuth() {
   const meta = { id: 'auth', group: 'auth', label: 'Authentication' }
   const start = now()
   try {
-    const { data, error } = await supabase.auth.getSession()
+    const { data, error } = await supabase.auth.getUser()
     const latencyMs = now() - start
     if (error) {
-      return shapeResult({ ...meta, status: STATUS.DEGRADED, latencyMs, detail: errMessage(error) })
+      return shapeResult({ ...meta, status: Number(error.status) >= 500 ? STATUS.DOWN : STATUS.DEGRADED, latencyMs, detail: errMessage(error) })
     }
     return shapeResult({
       ...meta,
-      status: classifyLatency(latencyMs),
+      status: data?.user ? classifyLatency(latencyMs) : STATUS.DEGRADED,
       latencyMs,
-      detail: data?.session ? 'Session active' : 'Service reachable (no session)',
+      detail: data?.user ? 'User verified by Auth service' : 'No verified user; authentication health is unconfirmed',
     })
   } catch (err) {
     return shapeResult({ ...meta, status: STATUS.DOWN, latencyMs: now() - start, detail: errMessage(err) })
@@ -240,11 +240,9 @@ export async function checkStorage(bucket) {
  * Edge-function reachability: OPTIONS preflight-style ping against
  * {VITE_SUPABASE_URL}/functions/v1/{name}. NEVER invokes the function body —
  * zero AI/email cost. Interpretation:
- *   - any HTTP response except 404      → reachable ('ok'; 401/403 still prove
- *                                         the gateway routed to the function)
- *   - 404                               → 'down' (function not deployed)
- *   - network error / timeout           → 'down'
- *   - missing VITE_SUPABASE_URL         → 'unknown'
+ *   - 2xx: preflight reachable; application execution remains unverified
+ *   - 404 / 5xx: down; other unsuccessful responses: degraded
+ *   - network error / timeout: down; missing base URL: unknown
  */
 export async function checkEdgeFunction(name, { timeoutMs = EDGE_FN_TIMEOUT_MS } = {}) {
   const meta = { id: `edge:${name}`, group: 'edge', label: name }
@@ -264,12 +262,12 @@ export async function checkEdgeFunction(name, { timeoutMs = EDGE_FN_TIMEOUT_MS }
     if (res.status === 404) {
       return shapeResult({ ...meta, status: STATUS.DOWN, latencyMs, detail: 'Function not deployed (404)' })
     }
-    const status = classifyLatency(latencyMs)
+    const status = res.status >= 500 ? STATUS.DOWN : res.status >= 200 && res.status < 300 ? classifyLatency(latencyMs) : STATUS.DEGRADED
     return shapeResult({
       ...meta,
       status,
       latencyMs,
-      detail: `Reachable (HTTP ${res.status})`,
+      detail: res.status >= 200 && res.status < 300 ? `Preflight reachable (HTTP ${res.status}); execution not tested` : `Preflight failed (HTTP ${res.status})`,
     })
   } catch (err) {
     const latencyMs = now() - start

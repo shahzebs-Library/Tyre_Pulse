@@ -57,6 +57,42 @@ describe('checklist schedules service', () => {
     expect(n).toBe(5)
   })
 
+  it('requests assignment-based compliance with explicit filters', async () => {
+    h.state.result = { data: [{ due_count: 4 }], error: null }
+    const rpc = vi.spyOn(h.supabase, 'rpc').mockResolvedValueOnce(h.state.result)
+    const rows = await cs.getComplianceMonitor({
+      from: '2026-09-01', to: '2026-09-30', country: 'KSA', site: 'Riyadh', templateId: 't1',
+    })
+    expect(rpc).toHaveBeenCalledWith('checklist_compliance_monitor', {
+      p_from: '2026-09-01', p_to: '2026-09-30', p_country: 'KSA', p_site: 'Riyadh', p_template_id: 't1',
+    })
+    expect(rows).toEqual([{ due_count: 4 }])
+  })
+
+  it('requests approval age with the tenant-configured SLA threshold', async () => {
+    h.state.result = { data: [{ approval_stage: 'supervisor', pending_count: 2, target_hours: 24 }], error: null }
+    const rpc = vi.spyOn(h.supabase, 'rpc').mockResolvedValueOnce(h.state.result)
+    const rows = await cs.getApprovalAgeMonitor({ country: 'KSA', templateId: 't1' })
+    expect(rpc).toHaveBeenCalledWith('checklist_approval_sla_monitor', {
+      p_country: 'KSA', p_template_id: 't1',
+    })
+    expect(rows[0].pending_count).toBe(2)
+  })
+
+  it('loads and saves tenant checklist governance through validated RPCs', async () => {
+    const rpc = vi.spyOn(h.supabase, 'rpc')
+      .mockResolvedValueOnce({ data: { industry_profile: 'mining' }, error: null })
+      .mockResolvedValueOnce({ data: { industry_profile: 'logistics' }, error: null })
+    rpc.mockClear()
+    expect(await cs.getChecklistGovernancePolicy()).toEqual({ industry_profile: 'mining' })
+    expect(await cs.saveChecklistGovernancePolicy({ industry_profile: 'logistics' }))
+      .toEqual({ industry_profile: 'logistics' })
+    expect(rpc).toHaveBeenNthCalledWith(1, 'get_checklist_governance_policy')
+    expect(rpc).toHaveBeenNthCalledWith(2, 'save_checklist_governance_policy', {
+      p_policy: { industry_profile: 'logistics' },
+    })
+  })
+
   it('listAssignments filters by status + template', async () => {
     await cs.listAssignments({ status: 'overdue', templateId: 't1', country: 'KSA' })
     expect(h.state.last._table).toBe('checklist_assignments')
@@ -76,7 +112,11 @@ describe('checklist schedules service', () => {
 
   it('skipAssignment sets status skipped', async () => {
     h.state.result = { data: { id: 'a1' }, error: null }
-    await cs.skipAssignment('a1')
-    expect(h.state.last._calls.update).toEqual({ status: 'skipped' })
+    await cs.skipAssignment('a1', 'Asset out of service')
+    expect(h.state.last._calls.update).toEqual({ status: 'skipped', skip_reason: 'Asset out of service' })
+  })
+
+  it('skipAssignment refuses an unaudited skip', async () => {
+    await expect(cs.skipAssignment('a1', '  ')).rejects.toThrow(/reason is required/i)
   })
 })

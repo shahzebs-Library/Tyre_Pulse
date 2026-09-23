@@ -31,6 +31,7 @@ const ROUTE_RULES: RouteRule[] = [
   // Always-allowed authenticated screens (no module gate).
   { test: /^index$/,                                moduleKey: null },
   { test: /^profile$/,                              moduleKey: null },
+  { test: /^driver-workspace$/,                     moduleKey: null },
   { test: /^notifications$/,                        moduleKey: null },
 
   // Admin surfaces (sensitive — fail closed on permission errors).

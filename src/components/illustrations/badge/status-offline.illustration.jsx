@@ -6,7 +6,7 @@
 import { IllustrationBase, BrandDefs, useDefs, motion, useReducedMotion, C } from '../primitives'
 import { G } from '../tokens'
 
-export default function StatusOfflineIllustration({ size = 64, title = 'Offline', desc = 'Disconnected — no signal', animate = true, ...rest }) {
+export default function StatusOfflineIllustration({ size = 64, title = 'Offline', desc = 'Disconnected, no signal', animate = true, ...rest }) {
   const d = useDefs()
   const reduce = useReducedMotion()
   const on = animate && !reduce

@@ -48,6 +48,26 @@ describe('fetchAllPages', () => {
     expect(truncated).toBe(true)
   })
 
+  it.each([
+    [50, 25], // A short first page can still exceed a smaller caller limit.
+    [2600, 2500], // A short page ends the same window that crosses the limit.
+    [3000, 2500], // An empty tail can end that window too.
+    [50100, 50000], // Inspection Planner's source ceiling.
+  ])('flags discarded rows when %i source rows exceed a %i limit', async (total, max) => {
+    const s = makeSource(total)
+    const result = await fetchAllPages(s.pageFn, { max })
+    expect(result.error).toBeNull()
+    expect(result.truncated).toBe(true)
+    expect(result.data).toEqual(s.rows.slice(0, max))
+  })
+
+  it('does not flag a complete short final page that exactly meets the limit', async () => {
+    const s = makeSource(2500)
+    const result = await fetchAllPages(s.pageFn, { max: 2500 })
+    expect(result.truncated).toBe(false)
+    expect(result.data).toEqual(s.rows)
+  })
+
   it('short-circuits on error and returns rows gathered so far', async () => {
     const rows = Array.from({ length: 3000 }, (_, i) => ({ i }))
     let n = 0

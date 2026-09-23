@@ -21,6 +21,7 @@ import {
   BarChart3,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import Card, { CardHeader } from '../components/ui/Card'
 import DateField from '../components/ui/DateField'
 import ReportingScopeBar from '../components/shell/ReportingScopeBar'
 import { scopeLabel } from '../lib/reportingScope'
@@ -273,20 +274,26 @@ const DOUGHNUT_OPTS = {
 /** Colourful KPI tile. */
 function Kpi({ label, value, accent = ACCENTS.primary, sub }) {
   return (
-    <div className="card" style={{ borderTop: `3px solid ${accent}` }}>
+    <Card style={{ borderTop: `3px solid ${accent}` }}>
       <p className="text-2xl font-bold" style={{ color: accent }}>{value}</p>
       <p className="text-xs text-[var(--text-muted)] mt-1">{label}</p>
       {sub ? <p className="text-[11px] text-[var(--text-dim)] mt-0.5">{sub}</p> : null}
-    </div>
+    </Card>
   )
 }
 
+/**
+ * Chart tile. `level={4}` because every caller sits under a section <h3> inside
+ * CountryReport (itself under the country <h2>), so h4 keeps the outline
+ * sequential. Deliberately NOT `clip`: a chart.js canvas is already sized to its
+ * container, and clipping here would be the legacy .card bug for no gain.
+ */
 function ChartCard({ title, children, refCb }) {
   return (
-    <div className="card">
-      <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">{title}</h3>
+    <Card>
+      <CardHeader title={title} level={4} />
       <div style={{ height: 240 }} ref={refCb}>{children}</div>
-    </div>
+    </Card>
   )
 }
 
@@ -296,7 +303,7 @@ function ChartCard({ title, children, refCb }) {
 function SiteTable({ group, canMap, onSave }) {
   const money = moneyIn(group.currency)
   return (
-    <div className="card overflow-x-auto">
+    <Card className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="text-left text-[var(--text-muted)] border-b border-[var(--hairline)]">
@@ -338,7 +345,7 @@ function SiteTable({ group, canMap, onSave }) {
           })}
         </tbody>
       </table>
-    </div>
+    </Card>
   )
 }
 
@@ -363,9 +370,14 @@ function BySitePanel({ groups, canMap, onSave, error }) {
         {canMap ? '; pick a site and Save to map them.' : '.'}
         {multi ? ' Each country is listed separately in its own currency and is never summed with another country.' : ''}
       </p>
-      {error && <div className="card border border-red-700/50 text-red-300 text-sm">{error}</div>}
+      {error && <Card tone="crit" className="text-red-300 text-sm">{error}</Card>}
       {list.length === 0 ? (
-        <div className="card text-center text-[var(--text-muted)] py-8">No per-site expense for the selected filters.</div>
+        <Card
+          className="text-center text-[var(--text-muted)]"
+          style={{ paddingTop: 'var(--space-8)', paddingBottom: 'var(--space-8)' }}
+        >
+          No per-site expense for the selected filters.
+        </Card>
       ) : (
         list.map((g) => (
           <div key={g.country || 'scope'} className="space-y-2">
@@ -495,9 +507,12 @@ function CountryReport({
       )}
 
       {!hasSnap && (
-        <div className="card text-center text-[var(--text-muted)] py-6 text-sm">
+        <Card
+          className="text-center text-[var(--text-muted)] text-sm"
+          style={{ paddingTop: 'var(--space-6)', paddingBottom: 'var(--space-6)' }}
+        >
           No expense lines for {country} in this period.
-        </div>
+        </Card>
       )}
 
       {sections.kpis && k && hasSnap && (
@@ -1352,7 +1367,8 @@ export default function ExpenseReport() {
 
       {/* Reporting scope: which countries this report covers. Separate from the
           working context in the top bar, and it drives every query below. */}
-      <div className="card p-3 space-y-2">
+      {/* No `clip`: this card holds the scope bar's own popover controls. */}
+      <Card pad="tight" className="space-y-2">
         <ReportingScopeBar />
         {isAll && hasScope && (
           <p className="text-[11px] text-[var(--text-muted)]">
@@ -1370,12 +1386,15 @@ export default function ExpenseReport() {
             out of every figure above rather than partly counted.
           </p>
         )}
-      </div>
+      </Card>
 
       {!hasScope && (
-        <div className="card text-center text-[var(--text-muted)] py-10">
+        <Card
+          className="text-center text-[var(--text-muted)]"
+          style={{ paddingTop: 'var(--space-10)', paddingBottom: 'var(--space-10)' }}
+        >
           No countries are selected in the reporting scope, so there is nothing to report on.
-        </div>
+        </Card>
       )}
 
       {/* Says which month is on screen whenever it is not the current one. */}
@@ -1435,13 +1454,21 @@ export default function ExpenseReport() {
         </div>
       </div>
 
-      {error && <div className="card border border-red-700/50 text-red-300 text-sm">{error}</div>}
+      {error && <Card tone="crit" className="text-red-300 text-sm">{error}</Card>}
       {loading ? (
-        <div className="card text-center text-[var(--text-muted)] py-10">Loading the expense report...</div>
+        <Card
+          className="text-center text-[var(--text-muted)]"
+          style={{ paddingTop: 'var(--space-10)', paddingBottom: 'var(--space-10)' }}
+        >
+          Loading the expense report...
+        </Card>
       ) : !hasAny ? (
-        <div className="card text-center text-[var(--text-muted)] py-10">
+        <Card
+          className="text-center text-[var(--text-muted)]"
+          style={{ paddingTop: 'var(--space-10)', paddingBottom: 'var(--space-10)' }}
+        >
           <p>No expense data yet. Import your grid file from <Link to="/expense-import" className="text-[var(--accent)] font-semibold hover:underline">Expense Import</Link>.</p>
-        </div>
+        </Card>
       ) : (
         <>
           {/* Per-country totals in each own currency (All-countries view only, so
@@ -1459,7 +1486,7 @@ export default function ExpenseReport() {
                   const cur = currencyForCountry(c.country, activeCurrency)
                   const fmt = (v) => formatCurrency(Number(v) || 0, cur, 0)
                   return (
-                    <div key={c.country} className="card p-4">
+                    <Card key={c.country}>
                       <div className="flex items-center justify-between">
                         <p className="text-sm font-semibold text-[var(--text-primary)]">{c.country}</p>
                         <span className="text-xs px-2 py-0.5 rounded bg-[var(--surface-2,#1e293b)] text-[var(--text-secondary)]">{cur}</span>
@@ -1471,7 +1498,7 @@ export default function ExpenseReport() {
                         <div><span className="block text-[var(--text-tertiary)]">Oil</span>{fmt(c.oil)}</div>
                       </div>
                       <p className="mt-2 text-xs text-[var(--text-tertiary)]">{num(c.lines)} lines</p>
-                    </div>
+                    </Card>
                   )
                 })}
               </div>
@@ -1565,8 +1592,9 @@ export default function ExpenseReport() {
           {sections.builder && studioCatalog.length > 0 && (
             <StudioBoundary>
               <div className="space-y-2">
+                {/* The picker card takes no `clip`: it holds a <select>. */}
                 {reports.length > 1 && (
-                  <div className="card p-3 space-y-2">
+                  <Card pad="tight" className="space-y-2">
                     <p className="text-[11px] text-[var(--text-muted)]">
                       {tx('expense.scope.builderOneCountry',
                         'Charts are built one country at a time. This tool lets you put any two series on the same '
@@ -1602,7 +1630,7 @@ export default function ExpenseReport() {
                           + 'split per country. Narrow the reporting scope to one country to chart them.')}
                       </p>
                     )}
-                  </div>
+                  </Card>
                 )}
                 <PresentationStudio
                   key={studioCountry}
@@ -1635,18 +1663,33 @@ export default function ExpenseReport() {
               </div>
 
               {fleetCpkLoading ? (
-                <div className="card flex items-center justify-center py-8 text-[var(--text-muted)] text-sm gap-3">
+                /* The row direction is set INLINE, not with `flex-row`: Card's
+                   base class is `flex-col`, and Tailwind emits `.flex-col`
+                   after `.flex-row`, so a utility class would lose and the
+                   spinner would stack above its label instead of sitting
+                   beside it. */
+                <Card
+                  className="items-center justify-center gap-3 text-[var(--text-muted)] text-sm"
+                  style={{
+                    flexDirection: 'row',
+                    paddingTop: 'var(--space-8)',
+                    paddingBottom: 'var(--space-8)',
+                  }}
+                >
                   <div className="w-4 h-4 rounded-full border-2 border-[var(--input-border)] border-t-[var(--accent)] animate-spin" />
                   Computing unit-aware CPK...
-                </div>
+                </Card>
               ) : !cpkHasData ? (
-                <div className="card flex flex-col items-center justify-center py-8 gap-2 text-center">
+                <Card
+                  className="items-center justify-center gap-2 text-center"
+                  style={{ paddingTop: 'var(--space-8)', paddingBottom: 'var(--space-8)' }}
+                >
                   <Gauge size={26} className="text-[var(--text-muted)]" />
                   <p className="text-[var(--text-secondary)] text-sm font-medium">No CPK data for the selected filters</p>
                   <p className="text-[var(--text-tertiary)] text-xs max-w-md">
                     CPK needs measured distance (odometer) or engine-hours plus expense data in this window.
                   </p>
-                </div>
+                </Card>
               ) : (
                 <>
                   {/* Fleet summary tiles per country (km side + hour side) */}
@@ -1654,7 +1697,7 @@ export default function ExpenseReport() {
                     {cpkFleetTiles.map((t, i) => {
                       const isHours = t.unit === 'engine_hours'
                       return (
-                        <div key={`${t.country}-${t.unit}-${i}`} className="card border border-[var(--input-border)] flex flex-col gap-2">
+                        <Card key={`${t.country}-${t.unit}-${i}`} className="gap-2">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-1.5 min-w-0">
                               {isHours ? <Clock size={14} className="text-amber-400 shrink-0" /> : <Gauge size={14} className="text-[var(--accent)] shrink-0" />}
@@ -1681,7 +1724,7 @@ export default function ExpenseReport() {
                           <p className="text-[10px] text-[var(--text-muted)]">
                             {fmtDistance(t.distance, t.unit)} measured | Coverage {fmtCoverage(t.coveragePct)}
                           </p>
-                        </div>
+                        </Card>
                       )
                     })}
                   </div>
@@ -1698,12 +1741,15 @@ export default function ExpenseReport() {
                   )}
 
                   {/* By asset type (worst CPK first) */}
-                  <div className="card overflow-x-auto">
-                    <div className="flex items-center gap-2 mb-3">
-                      <Layers size={15} className="text-[var(--text-muted)]" />
-                      <h3 className="text-sm font-medium text-[var(--text-secondary)]">CPK by asset type</h3>
-                      <span className="text-xs text-[var(--text-muted)] ml-auto">{cpkByType.length} types | worst CPK first</span>
-                    </div>
+                  <Card className="overflow-x-auto">
+                    <CardHeader
+                      title="CPK by asset type"
+                      level={3}
+                      icon={Layers}
+                      actions={(
+                        <span className="text-xs text-[var(--text-muted)]">{cpkByType.length} types | worst CPK first</span>
+                      )}
+                    />
                     {cpkByType.length === 0 ? (
                       <p className="text-[var(--text-muted)] text-sm py-6 text-center">No asset-type data</p>
                     ) : (
@@ -1744,7 +1790,7 @@ export default function ExpenseReport() {
                         </tbody>
                       </table>
                     )}
-                  </div>
+                  </Card>
                 </>
               )}
             </section>

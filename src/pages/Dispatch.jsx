@@ -27,6 +27,7 @@ import { summarizeDispatch, loadStatusMeta } from '../lib/dispatch'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 ChartJS.register(ArcElement, Tooltip, Legend)
 
@@ -43,14 +44,10 @@ const EMPTY_FORM = {
   cargo: '', weight_kg: '', scheduled_at: '', status: 'planned', site: '', notes: '',
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') || m.includes('schema cache') || m.includes('could not find the table')
-}
 function fmtDateTime(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleString()
 }
 // Convert an ISO timestamp to the value a <input type="datetime-local"> expects.
 function toLocalInput(v) {
@@ -317,7 +314,7 @@ export default function Dispatch() {
     <div className="space-y-6">
       <PageHeader
         title="Dispatch Planning"
-        subtitle="Plan and track loads across the fleet — assign assets and drivers, schedule dispatches and follow them to delivery."
+        subtitle="Plan and track loads across the fleet: assign assets and drivers, schedule dispatches and follow them to delivery."
         icon={Truck}
         onRefresh={load}
         refreshing={refreshing}
@@ -366,7 +363,7 @@ export default function Dispatch() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -461,21 +458,21 @@ export default function Dispatch() {
                   const meta = loadStatusMeta[r.status] || loadStatusMeta.planned
                   return (
                     <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{r.load_no || '—'}</td>
+                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{r.load_no || 'N/A'}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)]">
-                        <div className="font-medium text-[var(--text-primary)]">{r.asset_no || '—'}</div>
-                        <div className="text-xs text-[var(--text-muted)]">{r.driver_name || '—'}</div>
+                        <div className="font-medium text-[var(--text-primary)]">{r.asset_no || 'N/A'}</div>
+                        <div className="text-xs text-[var(--text-muted)]">{r.driver_name || 'N/A'}</div>
                       </td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)]">
                         <div className="flex items-center gap-1.5 whitespace-nowrap">
                           <MapPin size={12} className="text-[var(--text-muted)] shrink-0" />
-                          <span className="truncate max-w-[120px]">{r.origin || '—'}</span>
+                          <span className="truncate max-w-[120px]">{r.origin || 'N/A'}</span>
                           <ArrowRight size={12} className="text-[var(--text-muted)] shrink-0" />
-                          <span className="truncate max-w-[120px]">{r.destination || '—'}</span>
+                          <span className="truncate max-w-[120px]">{r.destination || 'N/A'}</span>
                         </div>
                       </td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]"><span className="truncate max-w-[160px] block">{r.cargo || '—'}</span></td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{r.weight_kg != null && r.weight_kg !== '' ? `${Number(r.weight_kg).toLocaleString()} kg` : '—'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]"><span className="truncate max-w-[160px] block">{r.cargo || 'N/A'}</span></td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{r.weight_kg != null && r.weight_kg !== '' ? `${Number(r.weight_kg).toLocaleString()} kg` : 'N/A'}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDateTime(r.scheduled_at)}</td>
                       <td className="px-4 py-2.5"><span className={`badge text-[11px] px-2 py-0.5 rounded ${meta.cls}`}>{meta.label}</span></td>
                       <td className="px-4 py-2.5">

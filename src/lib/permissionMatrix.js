@@ -27,6 +27,7 @@
  */
 
 import { supabase } from './supabase'
+import { getConfiguration, saveConfiguration } from './configurationStore'
 import { MODULE_GROUPS, ACCESS_ROLES, ALL_MODULES, MODULE_LABEL } from './moduleCatalog'
 import { resolveAccess, overrideToFlags } from './accessResolver'
 
@@ -356,11 +357,7 @@ export function resolvePermissions(role, overrides = null, viewMap = null) {
 
 /** Read the org's stored capability overrides (authenticated read via RLS). */
 export async function getPermissionOverrides() {
-  const { data, error } = await supabase
-    .from('app_settings')
-    .select('value')
-    .eq('key', PERMISSION_OVERRIDES_KEY)
-    .maybeSingle()
+  const { data, error } = await getConfiguration(supabase, 'app_settings', PERMISSION_OVERRIDES_KEY)
   if (error) throw new Error(error.message || 'Could not load permission overrides.')
   return parseOverrides(data?.value)
 }
@@ -368,10 +365,7 @@ export async function getPermissionOverrides() {
 /** Save capability overrides (admins only — enforced by app_settings RLS). */
 export async function savePermissionOverrides(overrides) {
   const clean = sanitizeOverrides(overrides)
-  const { error } = await supabase.from('app_settings').upsert(
-    { key: PERMISSION_OVERRIDES_KEY, value: serializeOverrides(clean) },
-    { onConflict: 'key' },
-  )
+  const { error } = await saveConfiguration(supabase, 'app_settings', { key: PERMISSION_OVERRIDES_KEY, value: serializeOverrides(clean) })
   if (error) throw new Error(error.message || 'Could not save permission overrides.')
   return clean
 }

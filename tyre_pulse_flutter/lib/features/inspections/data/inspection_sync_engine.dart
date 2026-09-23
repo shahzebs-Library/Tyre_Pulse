@@ -284,28 +284,18 @@ final class InspectionSyncEngine {
     final TyrePositionReading reading = result[position]!;
     final String? localPath = reading.photoLocalPath;
     if (localPath == null) return;
-    try {
-      final String url = await _photoUploader.upload(
-        localPath: localPath,
-        inspectionId: inspectionId,
-        position: position,
-      );
-      result[position] = reading.copyWith(
-        photoUrl: url,
-        clearPhotoLocalPath: true,
-      );
-    } on Object {
-      // Left with its local path intact - never written as a dead
-      // reference, never dropped. The whole delivery attempt fails at
-      // the upsert step below only if the CALLER decides an unresolved
-      // photo should block the row; this engine deliberately still
-      // submits the row with whatever mix of photo_url/photo_uri
-      // survives, matching production's own behaviour ("a photo that
-      // cannot upload is dropped from the OUTGOING record's dead
-      // reference, never the record itself" - artifact rule 5.28's
-      // spirit, applied here to a position rather than a checklist
-      // field: the observation is not discarded for want of a picture).
-    }
+    final String url = await _photoUploader.upload(
+      localPath: localPath,
+      inspectionId: inspectionId,
+      position: position,
+    );
+    result[position] = reading.copyWith(
+      photoUrl: url,
+      clearPhotoLocalPath: true,
+    );
+    // Upload failures propagate to the delivery handler, which retains the
+    // queue and draft for retry. A saved observation alone does not confirm
+    // delivery of its evidence and must never trigger local photo deletion.
   }
 
   /// Deliberately best-effort and silent: `QueueDao.pruneSyncedCommands`'s

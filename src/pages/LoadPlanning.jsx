@@ -26,6 +26,7 @@ import { summariseLoadPlans, utilization, isOverloaded } from '../lib/loadPlans'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 const STATUS_OPTIONS = ['draft', 'planned', 'loaded', 'dispatched', 'delivered']
 
@@ -44,26 +45,21 @@ const EMPTY_FORM = {
 }
 
 const fmtKg = (v) =>
-  v == null || v === '' ? '—' : `${Number(v).toLocaleString()} kg`
+  v == null || v === '' ? 'N/A' : `${Number(v).toLocaleString()} kg`
 const fmtM3 = (v) =>
-  v == null || v === '' ? '—' : `${Number(v).toLocaleString()} m³`
-const fmtPct = (v) => (v == null ? '—' : `${v}%`)
+  v == null || v === '' ? 'N/A' : `${Number(v).toLocaleString()} m³`
+const fmtPct = (v) => (v == null ? 'N/A' : `${v}%`)
 
 function fmtDate(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString()
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') ||
-    m.includes('schema cache') || m.includes('could not find the table')
-}
 
 /** Utilisation pill: colour by band, red + ring when overloaded (>100%). */
 function UtilPill({ pct }) {
-  if (pct == null) return <span className="text-[var(--text-muted)]">—</span>
+  if (pct == null) return <span className="text-[var(--text-muted)]">N/A</span>
   const over = pct > 100
   const tone = over
     ? 'bg-red-500/15 text-red-300 border-red-500/40'
@@ -236,7 +232,7 @@ export default function LoadPlanning() {
     <div className="space-y-6">
       <PageHeader
         title="Load Planning"
-        subtitle="Plan each asset's cargo against its rated payload and volume — catch overloads before dispatch and protect tyre life, axles, and compliance."
+        subtitle="Plan each asset's cargo against its rated payload and volume: catch overloads before dispatch and protect tyre life, axles, and compliance."
         icon={Boxes}
         onRefresh={load}
         refreshing={refreshing}
@@ -285,7 +281,7 @@ export default function LoadPlanning() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -307,7 +303,7 @@ export default function LoadPlanning() {
                   className="text-left rounded-lg border border-red-500/30 bg-red-900/10 px-3 py-2 hover:bg-red-900/20"
                 >
                   <p className="text-xs font-semibold text-[var(--text-primary)]">{r.reference}</p>
-                  <p className="text-[11px] text-[var(--text-muted)]">{r.asset_no || '—'}</p>
+                  <p className="text-[11px] text-[var(--text-muted)]">{r.asset_no || 'N/A'}</p>
                   <p className="text-[11px] text-red-300 mt-0.5">
                     {u.weightPct != null && u.weightPct > 100 ? `Weight ${u.weightPct}%` : ''}
                     {u.weightPct != null && u.weightPct > 100 && u.volumePct != null && u.volumePct > 100 ? ' · ' : ''}
@@ -355,7 +351,7 @@ export default function LoadPlanning() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={9} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {rows.length === 0 && !notProvisioned ? 'No load plans yet — create your first plan.' : 'No plans match these filters.'}
+                  {rows.length === 0 && !notProvisioned ? 'No load plans yet. Create your first plan.' : 'No plans match these filters.'}
                 </td></tr>
               ) : (
                 pager.pageRows.map((r) => {
@@ -365,21 +361,21 @@ export default function LoadPlanning() {
                     <tr key={r.id} className={`border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40 ${over ? 'bg-red-900/5' : ''}`}>
                       <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">
                         <div className="flex items-center gap-1.5">
-                          {r.reference || '—'}
+                          {r.reference || 'N/A'}
                           {over && <span className="inline-flex items-center gap-1 rounded-full border border-red-500/40 bg-red-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-red-300"><AlertTriangle size={10} /> Overload</span>}
                         </div>
                       </td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.asset_no || '—'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.asset_no || 'N/A'}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">
                         {r.origin || r.destination ? (
                           <span className="inline-flex items-center gap-1">
-                            <MapPin size={12} className="opacity-60" />{r.origin || '—'}<ArrowRight size={12} className="opacity-50" />{r.destination || '—'}
+                            <MapPin size={12} className="opacity-60" />{r.origin || 'N/A'}<ArrowRight size={12} className="opacity-50" />{r.destination || 'N/A'}
                           </span>
-                        ) : '—'}
+                        ) : 'N/A'}
                       </td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDate(r.plan_date)}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)]">
-                        <div>{r.cargo_type || '—'}</div>
+                        <div>{r.cargo_type || 'N/A'}</div>
                         {r.cargo_weight_kg != null && <div className="text-[11px] text-[var(--text-muted)]">{fmtKg(r.cargo_weight_kg)}</div>}
                       </td>
                       <td className="px-4 py-2.5"><UtilPill pct={u.weightPct} /></td>
@@ -387,7 +383,7 @@ export default function LoadPlanning() {
                       <td className="px-4 py-2.5">
                         {r.status ? (
                           <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium capitalize ${STATUS_TONE[r.status] || STATUS_TONE.draft}`}>{r.status}</span>
-                        ) : '—'}
+                        ) : 'N/A'}
                       </td>
                       <td className="px-4 py-2.5">
                         <div className="flex items-center justify-end gap-1">

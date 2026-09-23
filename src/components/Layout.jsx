@@ -1,3 +1,5 @@
+import { WorkspaceNavigationContext } from '../contexts/WorkspaceNavigationContext'
+import { moduleAvailable } from '../lib/workspaceAccess'
 import { Fragment, useState, useEffect, useCallback, useMemo } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -132,7 +134,7 @@ const NAV_GROUPS = [
       { to: '/qr-labels',           label: 'QR Labels', parent: 'Identification',          icon: QrCode, adminOnly: A },
       { to: '/rfid',                label: 'RFID Registry', parent: 'Identification',      icon: Radio, adminOnly: A },
       { to: '/engine-hours',        label: 'Engine Hours', parent: 'Meters',       icon: Gauge, adminOnly: A },
-      { to: '/odometer-logs',       label: 'Odometer Logs', parent: 'Meters',      icon: Activity, adminOnly: A },
+      { to: '/odometer-logs',       label: 'Odometer Logs', parent: 'Meters',      icon: Activity },
       { to: '/fleet-utilization',   label: 'Fleet Utilization', parent: 'Meters',  icon: Gauge, roles: ANALYTICS_ROLES },
       { to: '/vehicle-checkinout',  label: 'Vehicle Check In/Out', parent: 'Movement', icon: ArrowLeftRight, adminOnly: A },
       { to: '/handovers',           label: 'Vehicle Handover', parent: 'Movement',   icon: KeyRound, adminOnly: A },
@@ -228,6 +230,7 @@ const NAV_GROUPS = [
     label: 'Drivers & Safety',
     items: [
       { to: '/driver-management',      label: 'Driver Intelligence', icon: Users, adminOnly: A },
+      { to: '/driver-workspace',       label: 'Driver workspace', icon: Users },
       { to: '/driver-safety',          label: 'Driver Safety',       icon: ShieldAlert, adminOnly: A },
       { to: '/driver-training',        label: 'Driver Training',     icon: GraduationCap, adminOnly: A },
       { to: '/driver-coaching',        label: 'Driver Coaching',     icon: Award, adminOnly: A },
@@ -426,6 +429,8 @@ function shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedM
   // to. Default is to keep it and dim it (see the render below).
   if (activeCountry && isModuleHiddenInContext(item.to, activeCountry)) return false
 
+  if (item.to === '/odometer-logs') return typeof hasPermission === 'function' && hasPermission('odometer_logs') === true
+
   const grantKey = NAV_MODULE_KEY[item.to]
   // The GRANT check uses the same key the route guard resolves (NAV_MODULE_KEY,
   // else the route slug), so a page that has no NAV_MODULE_KEY entry - e.g.
@@ -434,16 +439,12 @@ function shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedM
   // widening it to the slug would make permissive built-in roles (Manager,
   // Director) SEE admin-only items they would then be denied at the route.
   const routeGrantKey = governingModuleKey(item.to)
-  if (routeGrantKey && grantedModules && grantedModules.has(routeGrantKey)) return true
+  if (profile?.role !== 'Data Monitor Officer' && routeGrantKey && grantedModules && grantedModules.has(routeGrantKey)) return true
   if (profile?.role === 'Inspector') {
     return item.to === '/inspections' || item.to === '/settings'
   }
-  // Data Monitor Officer — accident monitoring + own settings only.
-  if (profile?.role === 'Data Monitor Officer') {
-    return item.to === '/accidents' || item.to === '/settings'
-  }
   // Admin-defined custom roles: sidebar derived from granted module access.
-  if (isCustomNavRole(profile?.role)) {
+  if (profile?.role === 'Data Monitor Officer' || isCustomNavRole(profile?.role)) {
     return navItemAllowedForCustomRole(item.to, hasPermission)
   }
   // Checklist-only role (Maintenance Supervisor): sidebar shows only checklists.
@@ -793,7 +794,10 @@ export default function Layout({ children }) {
   // DO NOT re-add a global subscribe-to-everything hook. If a page needs live data,
   // subscribe in that page to that table and consume the payload.
 
-  const { profile, hasPermission, grantedModules, isSuperAdmin } = useAuth()
+  const auth = useAuth()
+  const { profile, hasPermission, grantedModules, isSuperAdmin } = auth
+  const canLoadAlerts = moduleAvailable(auth, 'alerts')
+  const alertModules = ['stock', 'corrective_actions', 'tyre_records', 'inspections'].filter(key => moduleAvailable(auth, key)).join(',')
   const { t }                               = useLanguage()
   const { branding }                        = useTenant()
   // Org-assigned app icon (V120); falls back to the built-in mark so an
@@ -874,11 +878,11 @@ export default function Layout({ children }) {
       const heading = groupHeadingFor(t, group)
       for (const item of group.items || []) {
         if (!item?.to || map.has(item.to)) continue
-        map.set(item.to, { item, group: heading, label: navLabelFor(t, item.to, item.label) })
+        map.set(item.to, { item, groupAllowed: shouldShowGroup(group, profile), group: heading, label: navLabelFor(t, item.to, item.label) })
       }
     }
     return map
-  }, [effectiveGroups, t])
+  }, [effectiveGroups, t, profile])
 
   // Shape navFavorites expects: { '/route': { label, group } }.
   const navIndex = useMemo(() => {
@@ -899,6 +903,10 @@ export default function Layout({ children }) {
       shouldShowNavItem(entry.item, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin, activeCountry),
     )
   }, [navByRoute, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin, activeCountry])
+
+  const workspaceNavigation = useMemo(() => [...navByRoute.values()]
+    .filter(entry => entry.groupAllowed && canSeeRoute(entry.item.to))
+    .map(entry => ({ ...entry.item, label: entry.label })), [navByRoute, canSeeRoute])
 
   const favoriteItems = useMemo(
     () => visibleFavorites(favorites, navIndex, canSeeRoute)
@@ -990,6 +998,8 @@ export default function Layout({ children }) {
 
   useEffect(() => {
     let cancelled = false
+    setAlertCount(0)
+    if (!canLoadAlerts || !alertModules) return
     async function fetchAlertCount() {
       // A hidden tab is a TV left on or a background window; refreshing a badge
       // nobody can see is pure cost. The visibility listener below catches up the
@@ -1001,7 +1011,7 @@ export default function Layout({ children }) {
           try { return new Set(JSON.parse(localStorage.getItem('tp_dismissed_alerts') || '[]')) }
           catch { return new Set() }
         })()
-        const count = await detectAlertBadgeCount(supabase, country, dismissed)
+        const count = await detectAlertBadgeCount(supabase, country, dismissed, alertModules.split(','))
         if (!cancelled) setAlertCount(count)
       } catch { /* ignore */ }
     }
@@ -1017,7 +1027,7 @@ export default function Layout({ children }) {
       clearInterval(iv)
       document.removeEventListener('visibilitychange', fetchAlertCount)
     }
-  }, [activeCountry])
+  }, [activeCountry, canLoadAlerts, alertModules, profile?.id, profile?.site, profile?.sites])
 
   useEffect(() => {
     function onKeyDown(e) {
@@ -1030,7 +1040,7 @@ export default function Layout({ children }) {
 
 
   if (profile?.role === 'Tyre Man') {
-    return <TyreManShell alertCount={alertCount} appIcon={appIcon} customAppIcon={hasCustomIcon ? appIcon : null}>{children}</TyreManShell>
+    return <TyreManShell alertCount={alertCount} appIcon={appIcon} customAppIcon={hasCustomIcon ? appIcon : null}><WorkspaceNavigationContext.Provider value={workspaceNavigation}>{children}</WorkspaceNavigationContext.Provider></TyreManShell>
   }
 
   const navItemVariants = {
@@ -1405,7 +1415,7 @@ export default function Layout({ children }) {
             transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
             className="px-4 py-5 sm:px-6 xl:px-8 2xl:px-10 max-w-[1800px] mx-auto"
           >
-            {children}
+            <WorkspaceNavigationContext.Provider value={workspaceNavigation}>{children}</WorkspaceNavigationContext.Provider>
           </motion.div>
         </main>
       </div>

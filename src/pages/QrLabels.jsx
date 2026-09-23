@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import QRCode from 'qrcode'
+import { useSettings } from '../contexts/SettingsContext'
+import { applyCountry } from '../lib/api/_client'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { LABEL_SIZES, labelGrid, pageCount, fitLabelText, fitLogoBox } from '../lib/qrLabelLayout'
@@ -67,6 +69,8 @@ async function fetchLogoDataUrl(url) {
 
 export default function QrLabels() {
   const { profile } = useAuth()
+  const { activeCountry } = useSettings()
+  const loadId = useRef(0)
 
   const [mode,       setMode]       = useState('tyres')  // 'tyres' | 'assets'
   const [data,       setData]       = useState([])
@@ -100,6 +104,9 @@ export default function QrLabels() {
   }, [])
 
   const loadData = useCallback(async () => {
+    const request = ++loadId.current
+    const countryQuery = (table, columns) => applyCountry(supabase.from(table).select(columns), activeCountry)
+    setData([])
     setLoading(true)
     setError(null)
     try {
@@ -116,13 +123,12 @@ export default function QrLabels() {
         // page and "Select All (1000)" read as the whole fleet. `id` is the
         // unique paging tiebreak (asset_no repeats across a vehicle's tyres).
         const { data: rows, error: qErr, truncated } = await fetchAllPages(
-          (from, to) => supabase
-            .from('tyre_records')
-            .select('id, serial_number:serial_no, brand, site, country, asset_no, risk_level, size, position:tyre_position')
+          (from, to) => countryQuery('tyre_records', 'id, serial_number:serial_no, brand, site, country, asset_no, risk_level, size, position:tyre_position')
             .order('asset_no').order('id')
             .range(from, to),
           { max: TYRE_ROW_CAP },
         )
+        if (request !== loadId.current) return
         if (qErr) throw qErr
         setData(rows || [])
         setTruncated(truncated)
@@ -133,30 +139,26 @@ export default function QrLabels() {
         // unreachable from this page's own search box. asset_no is unique per
         // COUNTRY, not globally, so `id` is the tiebreak.
         const { data: rows, error: qErr, truncated } = await fetchAllPages(
-          (from, to) => supabase
-            .from('vehicle_fleet')
-            // The vehicle columns come with the rows so the Excel download
-            // beside the labels carries the machine's details, not just its
-            // code. Population measured live so nobody expects a full sheet:
-            // make 783 / model 497 / registration 396 / chassis 389 of 1,617.
-            .select('id, asset_no, vehicle_type, site, country, status, ops_status, make, model, model_year, registration_no, fleet_number, chassis_no, engine_no, capacity, current_km')
+          (from, to) => countryQuery('vehicle_fleet', 'id, asset_no, vehicle_type, site, country, status, ops_status, make, model, model_year, registration_no, fleet_number, chassis_no, engine_no, capacity, current_km')
             .not('asset_no', 'is', null)
             .order('asset_no').order('id')
             .range(from, to),
           { max: FLEET_ROW_CAP },
         )
+        if (request !== loadId.current) return
         if (qErr) throw qErr
         setData(rows || [])
         setTruncated(truncated)
         setSites([...new Set((rows || []).map(r => r.site).filter(Boolean))].sort())
       }
     } catch (err) {
+      if (request !== loadId.current) return
       setError(toUserMessage(err, 'Could not load records.'))
       setData([]); setSites([]); setTruncated(false)
     } finally {
-      setLoading(false)
+      if (request === loadId.current) setLoading(false)
     }
-  }, [mode])
+  }, [mode, activeCountry])
 
   useEffect(() => {
     setSelected(new Set())
@@ -166,6 +168,8 @@ export default function QrLabels() {
     setTruncated(false)
     setBulkText(''); setBulkResult(null); setBulkError(null)
     loadData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Invalidate the current request on cleanup.
+    return () => { loadId.current++ }
   }, [loadData])
 
   const filtered = data.filter(r => {

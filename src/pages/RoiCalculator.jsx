@@ -64,7 +64,7 @@ export default function RoiCalculator() {
   const headline = [
     { label: 'Net annual benefit', value: money(r.netAnnualBenefit), icon: DollarSign, tone: r.netAnnualBenefit >= 0 ? 'text-green-400' : 'text-red-400' },
     { label: 'ROI', value: `${r.roi}%`, icon: TrendingUp, tone: 'text-[var(--brand-bright)]' },
-    { label: 'Payback', value: r.paybackMonths == null ? '—' : `${r.paybackMonths} mo`, icon: Clock, tone: 'text-amber-400' },
+    { label: 'Payback', value: r.paybackMonths == null ? 'N/A' : `${r.paybackMonths} mo`, icon: Clock, tone: 'text-amber-400' },
     { label: 'Improved CPKM', value: `${r.improvedCpkm} (−${r.cpkmImprovementPct}%)`, icon: Gauge, tone: 'text-sky-400' },
   ]
 

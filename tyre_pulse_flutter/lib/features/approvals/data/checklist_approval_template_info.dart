@@ -119,6 +119,18 @@ final class ChecklistApprovalTemplateInfo {
     );
   }
 
+  /// Decodes the immutable snapshot stored on a submission. Snapshot keys use
+  /// `template_id` rather than the live table row's `id`.
+  static ChecklistApprovalTemplateInfo? fromSnapshot(
+    Map<String, Object?> snapshot,
+  ) {
+    final Map<String, Object?> row = <String, Object?>{
+      ...snapshot,
+      'id': snapshot['template_id'],
+    };
+    return fromRow(row);
+  }
+
   @override
   String toString() => 'ChecklistApprovalTemplateInfo(id: $id, '
       'requireAreaManager: $requireAreaManager, fields: ${fields.length})';

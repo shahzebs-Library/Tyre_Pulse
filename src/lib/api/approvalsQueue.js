@@ -232,9 +232,10 @@ export async function decideChecklist(id, {
     p_note: reviewNote && String(reviewNote).trim() ? String(reviewNote).trim().slice(0, 8000) : null,
     p_signature: signature ? String(signature) : null,
   }))
-  return res && typeof res === 'object'
-    ? res
-    : { ok: true, decision: approved ? 'approved' : 'rejected', status: approved ? 'approved' : 'rejected' }
+  if (!res || res.ok !== true || typeof res.status !== 'string') {
+    throw new Error('The server did not confirm the checklist decision. Refresh before retrying.')
+  }
+  return res
 }
 
 // ─── Inspection sign-off approvals ──────────────────────────────────────────────

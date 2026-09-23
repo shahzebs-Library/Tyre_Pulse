@@ -29,6 +29,7 @@ import {
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 const EMPTY_FORM = {
   driver_name: '', period: '', safety_score: '', fuel_score: '', harsh_events: '',
@@ -49,9 +50,9 @@ const STATUS_LABEL = {
 }
 
 const fmtNum = (v, suffix = '') =>
-  v == null || v === '' ? '—' : `${Number(v).toLocaleString()}${suffix}`
+  v == null || v === '' ? 'N/A' : `${Number(v).toLocaleString()}${suffix}`
 
-const fmtScore = (v) => (v == null ? '—' : Number(v).toFixed(1))
+const fmtScore = (v) => (v == null ? 'N/A' : Number(v).toFixed(1))
 
 function scoreTone(score) {
   if (score == null) return 'text-[var(--text-muted)]'
@@ -72,11 +73,6 @@ const MEDAL = {
   3: { icon: Award, tone: 'text-orange-400' },
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') ||
-    m.includes('schema cache') || m.includes('could not find the table')
-}
 
 export default function DriverCoaching() {
   const { activeCountry } = useSettings()
@@ -147,11 +143,11 @@ export default function DriverCoaching() {
   // ── KPIs ─────────────────────────────────────────────────────────────────
   const kpis = [
     { label: 'Drivers scored', value: summary.totalDrivers, icon: Users, tone: 'text-[var(--text-primary)]' },
-    { label: 'Fleet avg score', value: summary.totalDrivers ? summary.avgScore.toFixed(1) : '—', icon: Gauge, tone: scoreTone(summary.totalDrivers ? summary.avgScore : null) },
+    { label: 'Fleet avg score', value: summary.totalDrivers ? summary.avgScore.toFixed(1) : 'N/A', icon: Gauge, tone: scoreTone(summary.totalDrivers ? summary.avgScore : null) },
     { label: 'Needs coaching', value: summary.needsCoachingCount, icon: GraduationCap, tone: 'text-amber-400' },
     { label: 'Coached', value: summary.coachedCount, icon: ShieldCheck, tone: 'text-green-400' },
-    { label: 'Top score', value: summary.topScore == null ? '—' : summary.topScore.toFixed(1), icon: Star, tone: 'text-amber-400' },
-    { label: 'Lowest score', value: summary.bottomScore == null ? '—' : summary.bottomScore.toFixed(1), icon: TrendingDown, tone: scoreTone(summary.bottomScore) },
+    { label: 'Top score', value: summary.topScore == null ? 'N/A' : summary.topScore.toFixed(1), icon: Star, tone: 'text-amber-400' },
+    { label: 'Lowest score', value: summary.bottomScore == null ? 'N/A' : summary.bottomScore.toFixed(1), icon: TrendingDown, tone: scoreTone(summary.bottomScore) },
   ]
 
   // ── Export ───────────────────────────────────────────────────────────────
@@ -239,7 +235,7 @@ export default function DriverCoaching() {
     <div className="space-y-6">
       <PageHeader
         title="Driver Leaderboard & Coaching"
-        subtitle="Score drivers on safety and fuel behaviour, rank the fleet, and target the drivers who most need coaching — the leading indicator behind tyre wear, fuel burn, and accident risk."
+        subtitle="Score drivers on safety and fuel behaviour, rank the fleet, and target the drivers who most need coaching: the leading indicator behind tyre wear, fuel burn, and accident risk."
         icon={Trophy}
         onRefresh={load}
         refreshing={refreshing}
@@ -288,7 +284,7 @@ export default function DriverCoaching() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -304,7 +300,7 @@ export default function DriverCoaching() {
           {rows === null ? (
             <div className="space-y-2">{[0, 1, 2, 3].map((i) => <div key={i} className="h-10 bg-[var(--input-bg)] rounded animate-pulse" />)}</div>
           ) : topBoard.length === 0 ? (
-            <p className="text-sm text-[var(--text-muted)]">No scored drivers yet — add a scorecard to build the leaderboard.</p>
+            <p className="text-sm text-[var(--text-muted)]">No scored drivers yet. Add a scorecard to build the leaderboard.</p>
           ) : (
             <div className="space-y-1.5">
               {topBoard.map((b) => {
@@ -406,7 +402,7 @@ export default function DriverCoaching() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={10} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {(rows || []).length === 0 && !notProvisioned ? 'No scorecards yet — add your first driver scorecard.' : 'No scorecards match these filters.'}
+                  {(rows || []).length === 0 && !notProvisioned ? 'No scorecards yet. Add your first driver scorecard.' : 'No scorecards match these filters.'}
                 </td></tr>
               ) : (
                 pager.pageRows.map((r) => {
@@ -420,10 +416,10 @@ export default function DriverCoaching() {
                       <td className="px-4 py-2.5">
                         <span className="inline-flex items-center gap-1">
                           {MedalIcon ? <MedalIcon size={14} className={medal.tone} /> : null}
-                          <span className="font-semibold text-[var(--text-secondary)]">{rank ? `#${rank}` : '—'}</span>
+                          <span className="font-semibold text-[var(--text-secondary)]">{rank ? `#${rank}` : 'N/A'}</span>
                         </span>
                       </td>
-                      <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.driver_name || '—'}</td>
+                      <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.driver_name || 'N/A'}</td>
                       <td className="px-4 py-2.5">
                         <div className="flex items-center gap-2">
                           <span className={`font-bold ${scoreTone(os)}`}>{os.toFixed(1)}</span>
@@ -443,7 +439,7 @@ export default function DriverCoaching() {
                       <td className="px-4 py-2.5">
                         <span className={`text-[11px] px-2 py-0.5 rounded border ${STATUS_STYLE[status]}`}>{STATUS_LABEL[status]}</span>
                       </td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{r.period || '—'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{r.period || 'N/A'}</td>
                       <td className="px-4 py-2.5">
                         <div className="flex items-center justify-end gap-1">
                           <button onClick={() => openEdit(r)} className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Edit"><Pencil size={14} /></button>
@@ -481,11 +477,11 @@ export default function DriverCoaching() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="label">Safety score (0–100)</label>
+                  <label className="label">Safety score (0 to 100)</label>
                   <input className="input w-full" type="number" step="0.1" min="0" max="100" placeholder="82" value={form.safety_score} onChange={(e) => set('safety_score', e.target.value)} />
                 </div>
                 <div>
-                  <label className="label">Fuel score (0–100)</label>
+                  <label className="label">Fuel score (0 to 100)</label>
                   <input className="input w-full" type="number" step="0.1" min="0" max="100" placeholder="76" value={form.fuel_score} onChange={(e) => set('fuel_score', e.target.value)} />
                 </div>
               </div>

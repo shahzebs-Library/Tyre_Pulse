@@ -11,10 +11,11 @@
  * table under a page-owned key that the page passes in.
  */
 import { supabase } from './_client'
+import { getConfiguration, saveConfiguration } from '../configurationStore'
 
 /** Read a single `settings` row's value by key (maybeSingle - may be absent). */
 export function getSetting(key) {
-  return supabase.from('settings').select('value').eq('key', key).maybeSingle()
+  return getConfiguration(supabase, 'settings', key)
 }
 
 /**
@@ -45,5 +46,5 @@ export function insertPurchaseOrder(payload) {
 
 /** Upsert a shared `settings` row (onConflict: key). Page passes key + value. */
 export function upsertSetting(key, value) {
-  return supabase.from('settings').upsert({ key, value }, { onConflict: 'key' })
+  return saveConfiguration(supabase, 'settings', { key, value })
 }

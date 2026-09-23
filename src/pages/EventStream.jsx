@@ -325,7 +325,7 @@ export default function EventStream() {
                         </td>
                         <td className="px-3 py-2.5">
                           <p className="text-gray-300 text-xs truncate max-w-[180px]">
-                            {ev.entity_type || '—'}{ev.entity_id ? <span className="text-gray-500"> #{ev.entity_id}</span> : ''}
+                            {ev.entity_type || 'N/A'}{ev.entity_id ? <span className="text-gray-500"> #{ev.entity_id}</span> : ''}
                           </p>
                         </td>
                         <td className="px-3 py-2.5"><StatusBadge status={ev.status} /></td>

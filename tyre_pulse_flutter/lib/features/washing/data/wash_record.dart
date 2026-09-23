@@ -47,6 +47,11 @@ final class WashRecord {
     this.notes,
     this.photos,
     this.createdAt,
+    this.createdBy,
+    this.entryName,
+    this.entryUsername,
+    this.washDetails,
+    this.capturedAt,
   });
 
   /// Throws a [FormatException] when the row has no usable `id`, mirroring
@@ -71,6 +76,13 @@ final class WashRecord {
       notes: _stringOrNull(row['notes']),
       photos: _stringListOrNull(row['photos']),
       createdAt: _stringOrNull(row['created_at']),
+      createdBy: _stringOrNull(row['created_by']),
+      entryName: _stringOrNull(row['entry_name']),
+      entryUsername: _stringOrNull(row['entry_username']),
+      capturedAt: _stringOrNull(row['captured_at']),
+      washDetails: row['wash_details'] is Map<String, dynamic>
+          ? row['wash_details'] as Map<String, dynamic>
+          : null,
     );
   }
 
@@ -96,6 +108,11 @@ final class WashRecord {
   final String? notes;
   final List<String>? photos;
   final String? createdAt;
+  final String? createdBy;
+  final String? entryName;
+  final String? entryUsername;
+  final String? capturedAt;
+  final Map<String, dynamic>? washDetails;
 
   @override
   String toString() =>

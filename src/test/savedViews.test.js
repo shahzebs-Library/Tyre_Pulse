@@ -34,7 +34,11 @@ const h = vi.hoisted(() => {
     return b
   }
   const auth = { getUser: () => Promise.resolve({ data: { user: state.user }, error: null }) }
-  return { state, supabase: { from, auth } }
+  function rpc(name, args) {
+    state.calls.push({ rpc: name, args })
+    return Promise.resolve(nextResult())
+  }
+  return { state, supabase: { from, auth, rpc } }
 })
 
 vi.mock('../lib/supabase', () => ({ supabase: h.supabase }))
@@ -51,6 +55,7 @@ const PGRST = { code: 'PGRST205', message: "Could not find the table 'public.use
 
 /** Queue a sequence of { data, error } results consumed FIFO by awaited builders. */
 function queue(...results) { h.state.queue.push(...results) }
+function lastRpc(name) { return [...h.state.calls].reverse().find(c => c.rpc === name) }
 function lastCallTo(table) { return [...h.state.calls].reverse().find(c => c.table === table) }
 
 beforeEach(() => {
@@ -108,7 +113,7 @@ describe('listReports', () => {
     // 1) table select succeeds; 2) legacy blob read (for merge); 3+) migration upsert
     queue(
       { data: [{ id: 'r1', user_id: 'user-1', name: 'R1', module: 'tyres', columns: ['asset_no'], filters: [], sort: null, shared: false }], error: null },
-      { data: { value: '[]' }, error: null }, // legacy app_settings for merge
+      { data: [{ value: '[]' }], error: null }, // legacy app_settings for merge
     )
     const reports = await listReports()
     expect(lastCallTo('report_definitions').op).toBe('select')
@@ -122,13 +127,13 @@ describe('listReports', () => {
     const legacyBlob = JSON.stringify([{ id: 'leg1', name: 'Legacy', config: { dataset: 'suppliers', columns: ['x'] } }])
     queue(
       { data: null, error: MISSING },
-      { data: { value: legacyBlob }, error: null },
+      { data: [{ value: legacyBlob }], error: null },
     )
     const reports = await listReports()
     expect(reports).toHaveLength(1)
     expect(reports[0].id).toBe('leg1')
     // fallback read went to app_settings
-    expect(lastCallTo('app_settings')).toBeTruthy()
+    expect(lastRpc('get_organisation_configuration').args.p_namespace).toBe('app_settings')
   })
 
   it('propagates non-missing-table errors', async () => {
@@ -141,7 +146,7 @@ describe('listReports', () => {
     // read#1: table select ok (empty), legacy read (has migratable row), migration upsert ok
     queue(
       { data: [], error: null },
-      { data: { value: legacyBlob }, error: null },
+      { data: [{ value: legacyBlob }], error: null },
       { data: null, error: null }, // migration upsert
     )
     await listReports()
@@ -151,7 +156,7 @@ describe('listReports', () => {
 
     // read#2 in same session: table ok, legacy read — but NO second migration upsert
     h.state.calls = []
-    queue({ data: [], error: null }, { data: { value: legacyBlob }, error: null })
+    queue({ data: [], error: null }, { data: [{ value: legacyBlob }], error: null })
     await listReports()
     expect(h.state.calls.filter(c => c.op === 'upsert')).toHaveLength(0)
   })
@@ -169,22 +174,23 @@ describe('saveReport (write routing)', () => {
   })
 
   it('keeps a module-mismatch report in app_settings (never hits the table)', async () => {
-    queue({ data: null, error: null }) // legacy upsert
+    queue({ data: { saved: 1 }, error: null }) // configuration saved
     const rec = { id: 'w1', name: 'Warranty', config: { dataset: 'warranty', columns: ['removal_date'] } }
     await saveReport(rec, [])
     expect(lastCallTo('report_definitions')).toBeUndefined()
-    const app = lastCallTo('app_settings')
-    expect(app.op).toBe('upsert')
+    const app = lastRpc('save_organisation_configuration')
+    expect(app.args.p_namespace).toBe('app_settings')
+    expect(JSON.parse(app.args.p_values[0].value)[0]).toMatchObject({ id: 'w1', name: 'Warranty' })
   })
 
   it('falls back to app_settings when the table is missing', async () => {
     queue(
       { data: null, error: MISSING }, // table upsert fails missing
-      { data: null, error: null },    // legacy upsert
+      { data: { saved: 1 }, error: null }, // configuration saved
     )
     const rec = { id: 'r10', name: 'X', config: { dataset: 'fleet', columns: ['asset_no'] } }
     await saveReport(rec, [])
-    expect(lastCallTo('app_settings').op).toBe('upsert')
+    expect(lastRpc('save_organisation_configuration').args).toMatchObject({ p_namespace: 'app_settings', p_values: [{ key: expect.any(String), value: expect.any(String) }] })
   })
 })
 
@@ -212,7 +218,7 @@ describe('listDashboards', () => {
   it('reads user_dashboards first and maps layout rows', async () => {
     queue(
       { data: [{ id: 'd1', user_id: 'user-1', name: 'Mine', layout: { widgets: [{ widgetId: 'total-vehicles', w: 1, h: 'sm' }] }, is_default: true, shared: false }], error: null },
-      { data: { value: '[]' }, error: null }, // legacy read inside migration
+      { data: [{ value: '[]' }], error: null }, // legacy read inside migration
     )
     const layouts = await listDashboards()
     expect(lastCallTo('user_dashboards').op).toBe('select')
@@ -225,11 +231,11 @@ describe('listDashboards', () => {
     const legacyBlob = JSON.stringify([{ id: 'ld1', name: 'Legacy', widgets: [], created_by: 'user-1' }])
     queue(
       { data: null, error: PGRST },
-      { data: { value: legacyBlob }, error: null },
+      { data: [{ value: legacyBlob }], error: null },
     )
     const layouts = await listDashboards()
     expect(layouts.map(l => l.id)).toContain('ld1')
-    expect(lastCallTo('app_settings')).toBeTruthy()
+    expect(lastRpc('get_organisation_configuration').args.p_namespace).toBe('app_settings')
   })
 })
 
@@ -247,10 +253,10 @@ describe('saveDashboard / deleteDashboard write routing', () => {
   })
 
   it('falls back to app_settings when the table is missing', async () => {
-    queue({ data: null, error: MISSING }, { data: null, error: null })
+    queue({ data: null, error: MISSING }, { data: { saved: 1 }, error: null })
     const layout = { id: 'd6', name: 'L', widgets: [], created_by: 'user-1' }
     await saveDashboard(layout, [])
-    expect(lastCallTo('app_settings').op).toBe('upsert')
+    expect(lastRpc('save_organisation_configuration').args).toMatchObject({ p_namespace: 'app_settings', p_values: [{ key: expect.any(String), value: expect.any(String) }] })
   })
 
   it('deletes a layout row by id from the table', async () => {
@@ -286,8 +292,8 @@ describe('setDefaultDashboard / shareDashboard', () => {
   })
 
   it('falls back to app_settings for sharing when the table is missing', async () => {
-    queue({ data: null, error: PGRST }, { data: null, error: null })
+    queue({ data: null, error: PGRST }, { data: { saved: 1 }, error: null })
     await shareDashboard('d1', true, [{ id: 'd1', name: 'A', created_by: 'user-1', widgets: [], shared: false }])
-    expect(lastCallTo('app_settings').op).toBe('upsert')
+    expect(lastRpc('save_organisation_configuration').args).toMatchObject({ p_namespace: 'app_settings', p_values: [{ key: expect.any(String), value: expect.any(String) }] })
   })
 })

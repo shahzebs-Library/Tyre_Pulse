@@ -19,6 +19,12 @@ import {
   FileSpreadsheet, FileText, Plus, Pencil, Trash2, Activity, Layers, Sparkles,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+/* CardHeader is deliberately NOT imported: every heading on this page either
+   carries a semantically coloured icon (Trophy amber, Wallet green) or keeps a
+   qualifier inline with the title, and CardHeader renders its icon in
+   --text-muted and splits title from description onto separate rows. */
+import Card from '../components/ui/Card'
+import Modal from '../components/ui/Modal'
 import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
 import {
@@ -31,6 +37,7 @@ import {
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 const TABS = [
   { id: 'overview', label: 'Overview', icon: Layers },
@@ -48,21 +55,16 @@ const EMPTY_TRANSFER = {
   quantity: '1', status: 'pending', notes: '',
 }
 
-const fmtInt = (v) => (v == null || v === '' ? '—' : Number(v).toLocaleString())
+const fmtInt = (v) => (v == null || v === '' ? 'N/A' : Number(v).toLocaleString())
 const fmtMoney = (v, cur = 'SAR') =>
-  v == null || v === '' ? '—' : `${cur} ${Math.round(Number(v)).toLocaleString()}`
+  v == null || v === '' ? 'N/A' : `${cur} ${Math.round(Number(v)).toLocaleString()}`
 
 function fmtDate(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString()
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') ||
-    m.includes('schema cache') || m.includes('could not find')
-}
 
 // Health-score → tone (bar + text colour). 0–100 scale.
 function healthTone(score) {
@@ -160,7 +162,7 @@ export default function HoldingCompany() {
     return opts
   }, [subs, subsidiaries])
   const orgName_ = useCallback(
-    (id) => orgOptions.find((o) => o.id === id)?.name || id || '—',
+    (id) => orgOptions.find((o) => o.id === id)?.name || id || 'N/A',
     [orgOptions],
   )
 
@@ -308,7 +310,7 @@ export default function HoldingCompany() {
     <div className="space-y-6">
       <PageHeader
         title="Holding Company"
-        subtitle="Consolidate every subsidiary into one group command view — fleet health, performance league, spend distribution, and inter-company transfers."
+        subtitle="Consolidate every subsidiary into one group command view: fleet health, performance league, spend distribution, and inter-company transfers."
         icon={Building2}
         badge={summary.subsidiaryCount ? `${summary.subsidiaryCount} orgs` : undefined}
         onRefresh={load}
@@ -329,8 +331,14 @@ export default function HoldingCompany() {
         }
       />
 
+      {/* Not-provisioned and error banners. `border border-amber-800/50` and
+          `border border-red-800/50` would be DEAD on a Card - Card writes
+          `border` inline and a plain utility loses to it - so the tint comes
+          from `tone`. Card is `flex flex-col` and `.flex-col` is emitted after
+          `.flex-row`, so the row direction has to go in `style`, which Card
+          spreads last. */}
       {notProvisioned && (
-        <div className="card border border-amber-800/50 flex items-start gap-3">
+        <Card tone="warn" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
           <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
           <div>
             <p className="text-amber-300 font-medium">Group consolidation isn’t enabled on this database yet.</p>
@@ -338,21 +346,24 @@ export default function HoldingCompany() {
               Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V201_HOLDING_COMPANY.sql</span>, then reload.
             </p>
           </div>
-        </div>
+        </Card>
       )}
 
       {error && (
-        <div className="card border border-red-800/50 flex items-start gap-3">
+        <Card tone="crit" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
           <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
           <div><p className="text-red-300 font-medium">Couldn’t load group consolidation.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
-        </div>
+        </Card>
       )}
 
+      {/* Link result. The old `border border-[var(--input-border)]` was the plain
+          default edge and is dead on a Card, so this simply takes Card's own
+          default border rather than being given a tone it never carried. */}
       {linkMsg && (
-        <div className="card border border-[var(--input-border)] flex items-center justify-between gap-3">
+        <Card className="items-center justify-between gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
           <p className="text-sm text-[var(--text-secondary)] inline-flex items-center gap-2"><Sparkles size={14} className="text-indigo-400" /> {linkMsg}</p>
           <button onClick={() => setLinkMsg('')} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={15} /></button>
-        </div>
+        </Card>
       )}
 
       {/* KPI tiles */}
@@ -360,20 +371,22 @@ export default function HoldingCompany() {
         {kpis.map((k) => {
           const Icon = k.icon
           return (
-            <div key={k.label} className="card">
+            <Card key={k.label}>
               <div className="flex items-center justify-between">
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-2xl font-bold mt-1 ${k.tone}`}>{loading ? '—' : k.value}</p>
-            </div>
+              {/* While loading each tile shows an em dash, never 0 - a
+                  fabricated zero on a group money tile is a reporting defect. */}
+              <p className={`text-2xl font-bold mt-1 ${k.tone}`}>{loading ? 'N/A' : k.value}</p>
+            </Card>
           )
         })}
       </div>
 
       {/* Group-health strip */}
       {!loading && summary.subsidiaryCount > 0 && (
-        <div className="card flex items-center gap-4">
+        <Card className="items-center gap-[var(--space-4)]" style={{ flexDirection: 'row' }}>
           <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
             <Activity size={15} className="text-indigo-400" /> Group fleet health
           </div>
@@ -381,12 +394,15 @@ export default function HoldingCompany() {
             <div className={`h-full ${healthTone(summary.avgHealth).bar}`} style={{ width: `${Math.min(100, summary.avgHealth)}%` }} />
           </div>
           <span className={`text-sm font-semibold ${healthTone(summary.avgHealth).text}`}>{summary.avgHealth}/100 · {healthTone(summary.avgHealth).label}</span>
-        </div>
+        </Card>
       )}
 
-      {/* Not-provisioned empty state / link CTA */}
+      {/* Not-provisioned empty state / link CTA. `py-12` would be DEAD on a Card
+          - Card sets `padding` inline - so the roominess goes in `style`, which
+          Card spreads after its own `padding`, leaving the inline-axis padding
+          intact. --space-12 is 3rem, exactly the py-12 it replaces. */}
       {isEmpty && (
-        <div className="card flex flex-col items-center text-center py-12">
+        <Card className="flex-col items-center text-center" style={{ paddingBlock: 'var(--space-12)' }}>
           <div className="w-14 h-14 rounded-2xl bg-indigo-900/30 border border-indigo-800/40 flex items-center justify-center mb-4">
             <Network size={26} className="text-indigo-400" />
           </div>
@@ -397,7 +413,7 @@ export default function HoldingCompany() {
           <button onClick={doLink} className="btn-primary text-sm inline-flex items-center gap-1.5 mt-5" disabled={linking}>
             <Link2 size={14} /> Link your first subsidiary
           </button>
-        </div>
+        </Card>
       )}
 
       {/* Tabs */}
@@ -431,7 +447,7 @@ export default function HoldingCompany() {
                 {subs.map((s) => {
                   const tone = healthTone(s.fleet_health_score)
                   return (
-                    <div key={s.tenant_id} className="card">
+                    <Card key={s.tenant_id}>
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-2 min-w-0">
                           {s.logo_url
@@ -465,13 +481,16 @@ export default function HoldingCompany() {
                         <div><p className="text-xs text-[var(--text-muted)]">Low tread</p><p className="text-sm font-semibold text-orange-400">{fmtInt(s.low_tread)}</p></div>
                         <div><p className="text-xs text-[var(--text-muted)]">Spend 30d</p><p className="text-sm font-semibold text-green-400">{fmtMoney(s.spend_30d, currency)}</p></div>
                       </div>
-                    </div>
+                    </Card>
                   )
                 })}
               </div>
 
-              {/* Permission matrix (read-only) */}
-              <div className="card">
+              {/* Permission matrix (read-only). The heading keeps its bespoke
+                  markup because the trailing "(read-only)" qualifier sits INSIDE
+                  the heading line, which CardHeader's title/description split
+                  cannot reproduce without moving it onto its own row. */}
+              <Card>
                 <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
                   <Users size={15} /> Group access matrix
                   <span className="text-xs font-normal text-[var(--text-muted)]">(role → subsidiary access, read-only)</span>
@@ -498,13 +517,17 @@ export default function HoldingCompany() {
                     </tbody>
                   </table>
                 </div>
-              </div>
+              </Card>
             </div>
           )}
 
           {/* ── LEAGUE TABLE ─────────────────────────────────────────────── */}
+          {/* Not clipped: the metric picker is a NATIVE <select>, whose option
+              list the browser paints as an OS-level popup outside the page's
+              overflow context, so no un-clipping treatment is needed (and Card
+              does not clip by default anyway). */}
           {tab === 'league' && (
-            <div className="card space-y-4">
+            <Card className="space-y-4">
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2"><Trophy size={15} className="text-amber-400" /> Subsidiary performance league</h3>
                 <select className="input" value={metric} onChange={(e) => setMetric(e.target.value)} aria-label="League metric">
@@ -537,12 +560,12 @@ export default function HoldingCompany() {
                   })()}
                 </div>
               )}
-            </div>
+            </Card>
           )}
 
           {/* ── SPEND ────────────────────────────────────────────────────── */}
           {tab === 'spend' && (
-            <div className="card space-y-4">
+            <Card className="space-y-4">
               <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2"><Wallet size={15} className="text-green-400" /> 30-day spend distribution</h3>
               {spend.length === 0 || spend.every((s) => s.spend === 0) ? (
                 <p className="text-sm text-[var(--text-muted)] py-6 text-center">No spend recorded across the group in the last 30 days.</p>
@@ -567,13 +590,16 @@ export default function HoldingCompany() {
                   </div>
                 </div>
               )}
-            </div>
+            </Card>
           )}
 
           {/* ── TRANSFERS ────────────────────────────────────────────────── */}
           {tab === 'transfers' && (
             <div className="space-y-4">
-              <div className="card space-y-3">
+              {/* Filter bar. Left unclipped: the status filter is a native
+                  <select>, so its option list is an OS popup, not DOM inside
+                  the card. */}
+              <Card className="space-y-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <div className="relative flex-1 min-w-[200px]">
                     <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
@@ -587,9 +613,13 @@ export default function HoldingCompany() {
                   <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5"><Plus size={14} /> New transfer</button>
                   <span className="text-xs text-[var(--text-muted)] ml-auto">{filteredTransfers.length} of {transfers?.length || 0}</span>
                 </div>
-              </div>
+              </Card>
 
-              <div className="card overflow-hidden !p-0">
+              {/* Edge-to-edge table, so this is one of the rare cards that
+                  genuinely must clip: `pad="none" clip` replaces the old
+                  `overflow-hidden !p-0`. TablePagination's rows-per-page select
+                  is a native <select> and is unaffected by the clip. */}
+              <Card pad="none" clip>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
@@ -603,15 +633,15 @@ export default function HoldingCompany() {
                       ) : filteredTransfers.length === 0 ? (
                         <tr><td colSpan={8} className="px-4 py-12 text-center text-[var(--text-muted)]">
                           <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                          {(transfers?.length || 0) === 0 ? 'No inter-company transfers yet — record your first movement.' : 'No transfers match these filters.'}
+                          {(transfers?.length || 0) === 0 ? 'No inter-company transfers yet. Record your first movement.' : 'No transfers match these filters.'}
                         </td></tr>
                       ) : (
                         transferPager.pageRows.map((t) => (
                           <tr key={t.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
                             <td className="px-4 py-2.5 text-[var(--text-primary)]">{orgName_(t.from_org_id)}</td>
                             <td className="px-4 py-2.5 text-[var(--text-primary)]">{orgName_(t.to_org_id)}</td>
-                            <td className="px-4 py-2.5 text-[var(--text-secondary)] capitalize">{t.asset_type || '—'}</td>
-                            <td className="px-4 py-2.5 text-[var(--text-secondary)]">{t.asset_ref || '—'}</td>
+                            <td className="px-4 py-2.5 text-[var(--text-secondary)] capitalize">{t.asset_type || 'N/A'}</td>
+                            <td className="px-4 py-2.5 text-[var(--text-secondary)]">{t.asset_ref || 'N/A'}</td>
                             <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtInt(t.quantity)}</td>
                             <td className="px-4 py-2.5">
                               <span className={`text-[11px] px-2 py-0.5 rounded-full border capitalize ${STATUS_STYLE[t.status] || STATUS_STYLE.pending}`}>{(t.status || 'pending').replace('_', ' ')}</span>
@@ -630,102 +660,112 @@ export default function HoldingCompany() {
                   </table>
                 </div>
                 <TablePagination {...transferPager} />
-              </div>
+              </Card>
             </div>
           )}
         </>
       )}
 
-      {/* Transfer create / edit modal */}
+      {/* Transfer create / edit modal. `max-h-[90vh] overflow-y-auto` is dropped
+          on purpose: Modal already caps the panel to the viewport and scrolls
+          the BODY only, so the heading and the action row stay reachable. The
+          submit button stays INSIDE the <form> rather than moving to Modal's
+          footer - hoisting it would need a `form="id"` association, which is a
+          behaviour change, not a migration. The in-flight guard from the old
+          backdrop handler lives on `closeModal`, so Escape and the backdrop
+          still cannot close mid-save. */}
       {showModal && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" onClick={closeModal}>
-          <div className="card w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-[var(--text-primary)]">{editing ? 'Edit transfer' : 'Record inter-company transfer'}</h3>
-              <button onClick={closeModal} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
+        <Modal
+          open
+          onClose={closeModal}
+          size="lg"
+          title={editing ? 'Edit transfer' : 'Record inter-company transfer'}
+        >
+          <form onSubmit={submit} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="label">From organisation</label>
+                <select className="input w-full" value={form.from_org_id} onChange={(e) => set('from_org_id', e.target.value)}>
+                  <option value="">Select source…</option>
+                  {orgOptions.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label">To organisation</label>
+                <select className="input w-full" value={form.to_org_id} onChange={(e) => set('to_org_id', e.target.value)}>
+                  <option value="">Select destination…</option>
+                  {orgOptions.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+                </select>
+              </div>
             </div>
-            <form onSubmit={submit} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="label">From organisation</label>
-                  <select className="input w-full" value={form.from_org_id} onChange={(e) => set('from_org_id', e.target.value)}>
-                    <option value="">Select source…</option>
-                    {orgOptions.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="label">To organisation</label>
-                  <select className="input w-full" value={form.to_org_id} onChange={(e) => set('to_org_id', e.target.value)}>
-                    <option value="">Select destination…</option>
-                    {orgOptions.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                  <label className="label">Asset type</label>
-                  <select className="input w-full" value={form.asset_type} onChange={(e) => set('asset_type', e.target.value)}>
-                    {ASSET_TYPES.map((a) => <option key={a} value={a} className="capitalize">{a}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="label">Quantity</label>
-                  <input className="input w-full" type="number" step="1" min="0" value={form.quantity} onChange={(e) => set('quantity', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Status</label>
-                  <select className="input w-full" value={form.status} onChange={(e) => set('status', e.target.value)}>
-                    {TRANSFER_STATUSES.map((s) => <option key={s} value={s} className="capitalize">{s.replace('_', ' ')}</option>)}
-                  </select>
-                </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="label">Asset type</label>
+                <select className="input w-full" value={form.asset_type} onChange={(e) => set('asset_type', e.target.value)}>
+                  {ASSET_TYPES.map((a) => <option key={a} value={a} className="capitalize">{a}</option>)}
+                </select>
               </div>
               <div>
-                <label className="label">Asset reference (optional)</label>
-                <input className="input w-full" placeholder="e.g. tyre serial / plate / PO" value={form.asset_ref} maxLength={200} onChange={(e) => set('asset_ref', e.target.value)} />
+                <label className="label">Quantity</label>
+                <input className="input w-full" type="number" step="1" min="0" value={form.quantity} onChange={(e) => set('quantity', e.target.value)} />
               </div>
               <div>
-                <label className="label">Notes (optional)</label>
-                <textarea className="input w-full min-h-[80px] resize-y" placeholder="Reason, condition, approvals…" value={form.notes} maxLength={8000} onChange={(e) => set('notes', e.target.value)} />
+                <label className="label">Status</label>
+                <select className="input w-full" value={form.status} onChange={(e) => set('status', e.target.value)}>
+                  {TRANSFER_STATUSES.map((s) => <option key={s} value={s} className="capitalize">{s.replace('_', ' ')}</option>)}
+                </select>
               </div>
+            </div>
+            <div>
+              <label className="label">Asset reference (optional)</label>
+              <input className="input w-full" placeholder="e.g. tyre serial / plate / PO" value={form.asset_ref} maxLength={200} onChange={(e) => set('asset_ref', e.target.value)} />
+            </div>
+            <div>
+              <label className="label">Notes (optional)</label>
+              <textarea className="input w-full min-h-[80px] resize-y" placeholder="Reason, condition, approvals…" value={form.notes} maxLength={8000} onChange={(e) => set('notes', e.target.value)} />
+            </div>
 
-              {formError && (
-                <div className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
-                  <AlertTriangle size={15} className="mt-0.5 shrink-0" /> {formError}
-                </div>
-              )}
-
-              <div className="flex items-center justify-end gap-2 pt-1">
-                <button type="button" onClick={closeModal} className="btn-secondary text-sm" disabled={saving}>Cancel</button>
-                <button type="submit" className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={saving}>
-                  {saving ? 'Saving…' : editing ? 'Save changes' : 'Record transfer'}
-                </button>
+            {formError && (
+              <div className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
+                <AlertTriangle size={15} className="mt-0.5 shrink-0" /> {formError}
               </div>
-            </form>
-          </div>
-        </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button type="button" onClick={closeModal} className="btn-secondary text-sm" disabled={saving}>Cancel</button>
+              <button type="submit" className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={saving}>
+                {saving ? 'Saving…' : editing ? 'Save changes' : 'Record transfer'}
+              </button>
+            </div>
+          </form>
+        </Modal>
       )}
 
-      {/* Delete confirm */}
+      {/* Delete confirm. No <form> here, so the actions belong in Modal's
+          footer. The in-flight guard from the old backdrop handler is preserved
+          on onClose, so Escape and the backdrop still cannot close mid-delete. */}
       {confirmDelete && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" onClick={() => !deleting && setConfirmDelete(null)}>
-          <div className="card w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-full bg-red-900/30 flex items-center justify-center shrink-0"><Trash2 size={18} className="text-red-400" /></div>
-              <div>
-                <h3 className="text-[var(--text-primary)] font-semibold">Delete this transfer?</h3>
-                <p className="text-sm text-[var(--text-muted)] mt-1">
-                  {orgName_(confirmDelete.from_org_id)} → {orgName_(confirmDelete.to_org_id)} · {confirmDelete.asset_type} · {fmtInt(confirmDelete.quantity)}. This can’t be undone.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center justify-end gap-2 mt-5">
+        <Modal
+          open
+          onClose={() => { if (!deleting) setConfirmDelete(null) }}
+          size="sm"
+          title="Delete this transfer?"
+          footer={(
+            <>
               <button onClick={() => setConfirmDelete(null)} className="btn-secondary text-sm" disabled={deleting}>Cancel</button>
               <button onClick={doDelete} className="btn-danger text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={deleting}>
                 <Trash2 size={14} /> {deleting ? 'Deleting…' : 'Delete'}
               </button>
-            </div>
+            </>
+          )}
+        >
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-full bg-red-900/30 flex items-center justify-center shrink-0"><Trash2 size={18} className="text-red-400" /></div>
+            <p className="text-sm text-[var(--text-muted)]">
+              {orgName_(confirmDelete.from_org_id)} → {orgName_(confirmDelete.to_org_id)} · {confirmDelete.asset_type} · {fmtInt(confirmDelete.quantity)}. This can’t be undone.
+            </p>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   )

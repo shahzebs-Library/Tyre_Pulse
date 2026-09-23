@@ -450,15 +450,31 @@ void main() {
     // states now use locale-owned copy instead of hard-coded English.
     // 806 + 1 = 807. Checklist draft rows now use a locale-owned Resume
     // action label across all three catalogs.
-    // 807 + 4 = 811. The vehicles list/detail screens added four field
-    // labels - vehiclesFieldCapacity, vehiclesFieldEngineNo,
-    // vehiclesFieldOperationalStatus, vehiclesFieldSerialNo - to all three
-    // catalogs in parity (verified directly against the committed files:
-    // en = ar = ur = 811).
-    test('en, ar and ur each carry exactly 811 translatable keys today', () {
-      expect(_translatableKeys(en).length, 811);
-      expect(_translatableKeys(ar).length, 811);
-      expect(_translatableKeys(ur).length, 811);
+    // 807 + 4 = 811. Vehicle details add equipment serial, engine number,
+    // capacity and operational status (commit 56b0107f).
+    // 811 + 31 = 842. Washing adds entry attribution, chemical details,
+    // checklist results and record-viewer labels in all three locales.
+    // 842 + 19 = 861. "My plans", the inspector-facing view of
+    // `inspection_schedules`: myPlansNavTitle through myPlansOverdue (18 -
+    // the app-bar title and subtitle, the loading and empty states, the
+    // truncation notice, the seven plan-state labels which the summary
+    // tallies REUSE rather than carrying a second vocabulary of their own,
+    // the no-location fallback, and the four footnote strings including a
+    // `{days}` plural for an overdue plan), plus `dateGroupTomorrow`, which
+    // is general date vocabulary sitting with dateGroupToday/Yesterday rather
+    // than a myPlans-local duplicate - and note Urdu's own `کل` already means
+    // YESTERDAY, so tomorrow is a distinct phrase there, not that word
+    // reused. `homeMyPlansAction` was RETIRED in the same change: a Home tile
+    // reuses its destination's own nav-title key (see this file's own
+    // 547-3+9 note on why the three stopgap home* tile keys were retired for
+    // exactly that reason), so the screen and the tile both read
+    // `myPlansNavTitle`.
+    // 861 + 9 = 870. The asset-first checklist hub adds shared labels for
+    // asset search, section headings, content language and checklist states.
+    test('en, ar and ur each carry exactly 870 translatable keys today', () {
+      expect(_translatableKeys(en).length, 870);
+      expect(_translatableKeys(ar).length, 870);
+      expect(_translatableKeys(ur).length, 870);
     });
   });
 

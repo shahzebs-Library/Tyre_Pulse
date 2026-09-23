@@ -1,10 +1,17 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { render, screen, fireEvent, cleanup, waitFor, within } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup, waitFor, within, act } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 // The page never touches Supabase directly — it talks to two API boundaries:
 // the V95 workflow engine (`workflows`) and the aggregation service (`queue`).
+// These tests exercise the installed legacy contract; only an absent new RPC enables fallback.
+vi.mock('../lib/api/approvalDecisions', () => ({
+  getApprovalReview: vi.fn().mockRejectedValue({ code: 'PGRST202' }),
+  isApprovalReviewUnavailable: error => error?.code === 'PGRST202',
+  createApprovalIntent: vi.fn(), submitApprovalIntent: vi.fn(),
+}))
+
 vi.mock('../lib/api/workflows', () => ({
   getApprovalDashboard: vi.fn(),
   myPendingApprovals: vi.fn(),
@@ -43,6 +50,7 @@ vi.mock('../lib/api/userSignature', () => ({
 // taken off both CHECKLIST rungs - the area manager or the PMV manager signs
 // those. One global role can no longer serve both halves of this file.
 const authRole = { current: 'Manager', name: 'Mona Manager' }
+const settings = { country: 'All' }
 vi.mock('../contexts/AuthContext', () => ({
   useAuth: () => ({
     profile: { id: 'u-1', role: authRole.current, full_name: authRole.name },
@@ -52,22 +60,33 @@ vi.mock('../contexts/AuthContext', () => ({
 
 // Country scope defaults to "All" without a provider.
 vi.mock('../contexts/SettingsContext', () => ({
-  useSettings: () => ({ activeCountry: 'All' }),
+  useSettings: () => ({ activeCountry: settings.country }),
 }))
 
 // framer-motion pulls in animation timing that is irrelevant here; render plain.
-vi.mock('framer-motion', () => ({
-  motion: new Proxy({}, { get: () => (props) => {
-    const { children, ...rest } = props
-    delete rest.initial; delete rest.animate; delete rest.exit; delete rest.transition
-    return <div {...rest}>{children}</div>
-  } }),
-  AnimatePresence: ({ children }) => <>{children}</>,
-}))
+vi.mock('framer-motion', () => {
+  // Match real motion components' stable identity: a parent re-render must not
+  // remount the drawer and restart its saved-signature lookup.
+  const components = new Map()
+  return {
+    motion: new Proxy({}, { get: (_target, tag) => {
+      if (!components.has(tag)) {
+        components.set(tag, (props) => {
+          const { children, ...rest } = props
+          delete rest.initial; delete rest.animate; delete rest.exit; delete rest.transition
+          return <div {...rest}>{children}</div>
+        })
+      }
+      return components.get(tag)
+    } }),
+    AnimatePresence: ({ children }) => <>{children}</>,
+  }
+})
 
 import * as workflows from '../lib/api/workflows'
 import * as queue from '../lib/api/approvalsQueue'
 import * as sigApi from '../lib/api/userSignature'
+import * as decisions from '../lib/api/approvalDecisions'
 import Approvals from '../pages/Approvals'
 
 const renderPage = () => render(<MemoryRouter><Approvals /></MemoryRouter>)
@@ -122,19 +141,21 @@ const INSPECTION = {
  * Draw on the signature pad. A sign-off IS a signature, and the server refuses an
  * approval without one, so every approve path here has to go through this.
  */
-function sign() {
-  // Queried from `screen`, not from a captured dialog: the framer-motion stub
-  // returns a fresh component identity on every access, so the drawer's whole
-  // subtree is replaced on each re-render and a node captured earlier is stale.
-  const pad = screen.getByTestId('signature-capture')
+async function sign() {
+  // The dialog appears before SignatureField finishes getMySignature(). Draw
+  // only once its real pad is ready, as a user would.
+  const pad = await screen.findByTestId('signature-capture')
 
-  fireEvent.mouseDown(pad, { clientX: 10, clientY: 12 })
-  fireEvent.mouseMove(pad, { clientX: 60, clientY: 40 })
-  fireEvent.mouseUp(pad, { clientX: 60, clientY: 40 })
+  await act(async () => {
+    fireEvent.mouseDown(pad, { clientX: 10, clientY: 12 })
+    fireEvent.mouseMove(pad, { clientX: 60, clientY: 40 })
+    fireEvent.mouseUp(pad, { clientX: 60, clientY: 40 })
+  })
 }
 
 beforeEach(() => {
     authRole.current = 'Manager'; authRole.name = 'Mona Manager'
+  settings.country = 'All'
   vi.clearAllMocks()
   workflows.getApprovalDashboard.mockResolvedValue(DASHBOARD)
   workflows.myPendingApprovals.mockResolvedValue([{ id: 'wi-1' }])
@@ -174,7 +195,7 @@ describe('Unified approval dashboard', () => {
   it('merges workflow, accident-closure and checklist items into the pending queue', async () => {
     renderPage()
     await waitFor(() => expect(screen.getByText('Vehicle ABC-123 · Tyre Replacement')).toBeInTheDocument())
-    expect(screen.getByText(/Closure request — TRK-01 · Collision/)).toBeInTheDocument()
+    expect(screen.getByText(/Closure request: TRK-01 · Collision/)).toBeInTheDocument()
     expect(screen.getByText('Daily Safety Check')).toBeInTheDocument()
   })
 
@@ -193,7 +214,7 @@ describe('Unified approval dashboard', () => {
 
     await waitFor(() => expect(screen.queryByText('Vehicle ABC-123 · Tyre Replacement')).not.toBeInTheDocument())
     expect(screen.queryByText('Daily Safety Check')).not.toBeInTheDocument()
-    expect(screen.getByText(/Closure request — TRK-01 · Collision/)).toBeInTheDocument()
+    expect(screen.getByText(/Closure request: TRK-01 · Collision/)).toBeInTheDocument()
   })
 
   it('switches to workflow-only lifecycle buckets', async () => {
@@ -220,9 +241,9 @@ describe('Unified approval dashboard', () => {
 
   it('approves an accident closure through the RLS-enforced RPC', async () => {
     renderPage()
-    await waitFor(() => expect(screen.getByText(/Closure request — TRK-01/)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText(/Closure request: TRK-01/)).toBeInTheDocument())
 
-    fireEvent.click(screen.getByText(/Closure request — TRK-01/))
+    fireEvent.click(screen.getByText(/Closure request: TRK-01/))
     const dialog = await screen.findByRole('dialog')
     fireEvent.click(within(dialog).getByRole('button', { name: /Approve/i }))
 
@@ -240,10 +261,10 @@ describe('Unified approval dashboard', () => {
 
     fireEvent.click(screen.getByText('Daily Safety Check'))
     await screen.findByRole('dialog')
-    expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled()
+    expect(await screen.findByRole('button', { name: 'Approve' })).toBeDisabled()
     expect(queue.decideChecklist).not.toHaveBeenCalled()
 
-    sign()
+    await sign()
     await waitFor(() => expect(screen.getByRole('button', { name: 'Approve' })).not.toBeDisabled())
     fireEvent.click(screen.getByRole('button', { name: 'Approve' }))
 
@@ -266,9 +287,9 @@ describe('Unified approval dashboard', () => {
 
     fireEvent.click(screen.getByText('Daily Safety Check'))
     await screen.findByRole('dialog')
-    expect(screen.getByText(/passes this sheet to the area manager/i)).toBeInTheDocument()
+    expect(await screen.findByText(/passes this sheet to the area manager/i)).toBeInTheDocument()
 
-    sign()
+    await sign()
     await waitFor(() => expect(screen.getByRole('button', { name: 'Sign off' })).not.toBeDisabled())
     fireEvent.click(screen.getByRole('button', { name: 'Sign off' }))
     await waitFor(() => expect(screen.getByText(/goes to the area manager for final approval/i)).toBeInTheDocument())
@@ -308,17 +329,87 @@ describe('Unified approval dashboard', () => {
 
     // Non-workflow sources still render, with a degraded banner (not a dead page).
     await waitFor(() => expect(screen.getByText(/Workflow engine is unavailable/i)).toBeInTheDocument())
-    expect(screen.getByText(/Closure request — TRK-01/)).toBeInTheDocument()
+    expect(screen.getByText(/Closure request: TRK-01/)).toBeInTheDocument()
+    expect(screen.getByText('Select all 1')).toBeInTheDocument()
+    expect(screen.queryByRole('checkbox', { name: /Daily Safety Check/ })).not.toBeInTheDocument()
   })
 
   it('shows the fatal error state only when every source fails', async () => {
     workflows.getApprovalDashboard.mockRejectedValueOnce(new Error('boom'))
     queue.listAccidentClosures.mockRejectedValueOnce(new Error('boom'))
     queue.listChecklistApprovals.mockRejectedValueOnce(new Error('boom'))
+    queue.listInspectionApprovals.mockRejectedValueOnce(new Error('boom'))
+    queue.listChecklistSignoffGaps.mockRejectedValueOnce(new Error('boom'))
+    queue.countDataIntakePending.mockRejectedValueOnce(new Error('boom'))
     renderPage()
 
     await waitFor(() => expect(screen.getByText(/Approval services unavailable/i)).toBeInTheDocument())
     expect(screen.getByRole('button', { name: /Retry/i })).toBeInTheDocument()
+  })
+
+  it('keeps reachable inspections visible when the other primary sources fail', async () => {
+    workflows.getApprovalDashboard.mockRejectedValueOnce(new Error('boom'))
+    queue.listAccidentClosures.mockRejectedValueOnce(new Error('boom'))
+    queue.listChecklistApprovals.mockRejectedValueOnce(new Error('boom'))
+    queue.listInspectionApprovals.mockResolvedValueOnce([INSPECTION])
+    renderPage()
+    expect(await screen.findByText('Tyre inspection')).toBeInTheDocument()
+    expect(screen.queryByText(/Approval services unavailable/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Select all/)).not.toBeInTheDocument()
+  })
+
+  it('filters governed workflow requests by their submitted site and selected country', async () => {
+    settings.country = 'KSA'
+    workflows.getApprovalDashboard.mockResolvedValue({ buckets: { pending: [
+      makeInstance({ governed: true, entity_type: 'work_order', country: 'KSA', site: 'Riyadh', entity_label: 'Start Riyadh work' }),
+      makeInstance({ id: 'other-country', governed: true, entity_type: 'work_order', country: 'UAE', site: 'Dubai', entity_label: 'Start Dubai work' }),
+    ] } })
+    renderPage()
+    await screen.findByText('Start Riyadh work')
+    expect(screen.queryByText('Start Dubai work')).not.toBeInTheDocument()
+    const siteSelect = screen.getAllByRole('combobox').find(select => within(select).queryByRole('option', { name: 'Riyadh' }))
+    fireEvent.change(siteSelect, { target: { value: 'Riyadh' } })
+    expect(screen.getByText('Start Riyadh work')).toBeInTheDocument()
+  })
+
+  it('ignores a late dashboard response after the country changes', async () => {
+    let resolveOld
+    workflows.getApprovalDashboard.mockImplementationOnce(() => new Promise(resolve => { resolveOld = resolve }))
+      .mockResolvedValueOnce({ buckets: { pending: [makeInstance({ entity_label: 'Current country work', country: 'UAE' })] } })
+    const { rerender } = renderPage()
+    settings.country = 'UAE'
+    rerender(<MemoryRouter><Approvals /></MemoryRouter>)
+    await screen.findByText('Current country work')
+    await act(async () => { resolveOld(DASHBOARD) })
+    expect(screen.queryByText('Vehicle ABC-123 · Tyre Replacement')).not.toBeInTheDocument()
+    expect(screen.getByText('Current country work')).toBeInTheDocument()
+  })
+
+  it('opens a finalized operational request with its canonical request ID', async () => {
+    workflows.getApprovalDashboard.mockResolvedValue({ buckets: { returned: [
+      makeInstance({ governed: true, entity_type: 'work_order', entity_id: 'execution-request', status: 'returned', entity_label: 'Returned work request' }),
+    ] } })
+    renderPage()
+    await screen.findByText('Daily Safety Check')
+    fireEvent.click(screen.getByRole('button', { name: /^Returned/ }))
+    fireEvent.click(await screen.findByText('Returned work request'))
+    await waitFor(() => expect(decisions.getApprovalReview).toHaveBeenCalledWith('work_order', 'execution-request'))
+    expect(workflows.listStepEvents).not.toHaveBeenCalled()
+  })
+
+  it('does not submit an old-scope bulk decision after its signature lookup resolves', async () => {
+    let resolveSignature
+    sigApi.getMySignature.mockImplementationOnce(() => new Promise(resolve => { resolveSignature = resolve }))
+    queue.listChecklistApprovals.mockResolvedValue([])
+    queue.listInspectionApprovals.mockResolvedValue([INSPECTION])
+    const { rerender } = renderPage()
+    fireEvent.click(await screen.findByText('Select all 2'))
+    fireEvent.click(screen.getByText('Approve selected'))
+    await waitFor(() => expect(sigApi.getMySignature).toHaveBeenCalledTimes(1))
+    authRole.current = 'Viewer'
+    rerender(<MemoryRouter><Approvals /></MemoryRouter>)
+    await act(async () => { resolveSignature('<svg id="old-user"/>') })
+    expect(queue.bulkDecide).not.toHaveBeenCalled()
   })
 
   // ── Bulk decisions ─────────────────────────────────────────────────────────

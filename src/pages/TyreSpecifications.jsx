@@ -15,6 +15,8 @@ import {
   Scale, DollarSign, TrendingDown, Award, Gauge, Package,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import Card from '../components/ui/Card'
+import Modal from '../components/ui/Modal'
 import EmptyState from '../components/EmptyState'
 const uuidv4 = () => crypto.randomUUID()
 import * as tyreSpecsApi from '../lib/api/tyreSpecs'
@@ -22,7 +24,7 @@ import {
   VEHICLE_TYPES, POSITIONS, SPEED_INDICES, PLY_RATINGS, APPROVED_BRANDS, SMART_DEFAULTS,
   BRAND_META, brandMeta,
 } from '../lib/tyreSpecCatalog'
-import { buildPolicySections, renderTyreSpecPolicyPdf } from '../lib/tyreSpecPolicy'
+import { buildPolicySections, renderTyreSpecPolicyPdf, buildSizeInventoryRows } from '../lib/tyreSpecPolicy'
 import { normalizePosition } from '../lib/tyrePositions'
 import * as procurementApi from '../lib/api/tyreProcurement'
 import { recommend, LIFECYCLE_DEFAULTS } from '../lib/tyreValueAdvisor'
@@ -206,12 +208,18 @@ function BrandTagInput({ values = [], onChange, placeholder, suggestions = [] })
 
 // ── KPI Card ──────────────────────────────────────────────────────────────────
 
+// Card is `flex flex-col` and `.flex-col` is emitted after `.flex-row`, so the
+// row direction has to go in `style`, which Card spreads last. `items-start`
+// stays a class - it is what stops the icon block being stretched to the height
+// of the text column now that the tile is a flex row.
 function KpiCard({ icon: Icon, label, value, sub, color = 'text-blue-400', loading }) {
   return (
-    <motion.div
+    <Card
+      as={motion.div}
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      className="card flex items-start gap-4"
+      className="items-start gap-4"
+      style={{ flexDirection: 'row' }}
     >
       <div className={`p-2.5 rounded-lg bg-[var(--input-bg)] ${color}`}>
         <Icon size={20} />
@@ -225,7 +233,7 @@ function KpiCard({ icon: Icon, label, value, sub, color = 'text-blue-400', loadi
         )}
         {sub && <p className="text-[var(--text-muted)] text-xs mt-0.5">{sub}</p>}
       </div>
-    </motion.div>
+    </Card>
   )
 }
 
@@ -263,33 +271,28 @@ function SpecFormModal({ spec, onClose, onSave, isAdmin, saving }) {
     onSave(form)
   }
 
+  // Admin-only gate, unchanged: a non-admin never renders this dialog at all,
+  // and RLS enforces the same boundary server-side.
   if (!isAdmin) return null
 
-  return (
-    <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
-        onClick={e => { if (e.target === e.currentTarget) onClose() }}
-      >
-        <motion.div
-          initial={{ scale: 0.95, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.95, opacity: 0 }}
-          className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
-        >
-          <div className="flex items-center justify-between p-6 border-b border-[var(--input-border)]">
-            <h3 className="text-[var(--text-primary)] font-semibold text-lg">
-              {spec?.id ? 'Edit Specification' : 'Add Specification'}
-            </h3>
-            <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
-              <X size={20} />
-            </button>
-          </div>
+  // Escape, the backdrop and the X all route through ONE guarded close. The old
+  // markup guarded only the Cancel button (`disabled={saving}`) while the
+  // backdrop and the X could dismiss a save that was still in flight; those
+  // three paths must not disagree. `handleSaveSpec` clears `saving` in a
+  // `finally`, so the dialog can never be left unclosable.
+  const guardedClose = () => { if (!saving) onClose() }
 
-          <form onSubmit={submit} className="p-6 space-y-5">
+  return (
+    <Modal
+      open
+      onClose={guardedClose}
+      size="lg"
+      title={spec?.id ? 'Edit Specification' : 'Add Specification'}
+    >
+          {/* The submit button STAYS inside its <form>: Modal's footer renders
+              outside the form element, so moving it there would need a
+              `form="…"` association - a behaviour change, not a migration. */}
+          <form onSubmit={submit} className="space-y-5">
             {error && (
               <div className="bg-red-900/30 border border-red-700 text-red-300 text-sm px-4 py-2.5 rounded-lg flex items-center gap-2">
                 <AlertTriangle size={14} /> {error}
@@ -430,49 +433,47 @@ function SpecFormModal({ spec, onClose, onSave, isAdmin, saving }) {
               </button>
             </div>
           </form>
-        </motion.div>
-      </motion.div>
-    </AnimatePresence>
+    </Modal>
   )
 }
 
 // ── Delete Confirm Modal ───────────────────────────────────────────────────────
 
+// No form here, so the actions belong in Modal's pinned footer. The red panel
+// edge the old overlay carried was decorative; the dialog shell owns its border
+// now and the destructive intent is carried by the red Delete button and the
+// consequence line, which is where it belongs.
 function DeleteConfirmModal({ spec, onClose, onConfirm }) {
   return (
-    <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
-        onClick={e => { if (e.target === e.currentTarget) onClose() }}
-      >
-        <motion.div
-          initial={{ scale: 0.95, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.95, opacity: 0 }}
-          className="bg-[var(--surface-1)] border border-red-800 rounded-2xl w-full max-w-md p-6"
-        >
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 bg-red-900/30 rounded-lg">
-              <Trash2 size={18} className="text-red-400" />
-            </div>
-            <h3 className="text-[var(--text-primary)] font-semibold">Delete Specification</h3>
-          </div>
+    <Modal
+      open
+      onClose={onClose}
+      size="sm"
+      title="Delete Specification"
+      footer={(
+        <>
+          <button onClick={onClose} className="px-4 py-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] text-sm transition-colors">Cancel</button>
+          <button onClick={onConfirm} className="flex items-center gap-2 bg-red-700 hover:bg-red-600 text-white text-sm px-4 py-2 rounded-lg transition-colors">
+            <Trash2 size={14} /> Delete
+          </button>
+        </>
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <div className="p-2 bg-red-900/30 rounded-lg shrink-0">
+          <Trash2 size={18} className="text-red-400" />
+        </div>
+        <div>
           <p className="text-[var(--text-muted)] text-sm mb-2">
             Delete <span className="text-[var(--text-primary)] font-medium">{spec?.vehicle_type}, {spec?.position}</span>?
           </p>
-          <p className="text-[var(--text-muted)] text-xs mb-6">This action cannot be undone. Compliance records will show "No Spec Defined" for affected vehicles.</p>
-          <div className="flex justify-end gap-3">
-            <button onClick={onClose} className="px-4 py-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] text-sm transition-colors">Cancel</button>
-            <button onClick={onConfirm} className="flex items-center gap-2 bg-red-700 hover:bg-red-600 text-white text-sm px-4 py-2 rounded-lg transition-colors">
-              <Trash2 size={14} /> Delete
-            </button>
-          </div>
-        </motion.div>
-      </motion.div>
-    </AnimatePresence>
+          {/* Kept verbatim. Deleting a fitment standard silently re-labels every
+              affected vehicle in the compliance report, so the reader has to be
+              told before, not after. */}
+          <p className="text-[var(--text-muted)] text-xs">This action cannot be undone. Compliance records will show "No Spec Defined" for affected vehicles.</p>
+        </div>
+      </div>
+    </Modal>
   )
 }
 
@@ -514,37 +515,31 @@ function RaiseWorkOrderModal({ asset, violations, country, createdBy, onClose })
     }
   }
 
+  // One guarded close for Escape, the backdrop and the X. Previously only the
+  // Cancel button was disabled while the insert was in flight, so dismissing
+  // via the backdrop mid-request left the caller with no idea whether the work
+  // order had been created. `submit` clears `saving` in a `finally`.
+  const guardedClose = () => { if (!saving) onClose() }
+
   return (
-    <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
-        onClick={e => { if (e.target === e.currentTarget) onClose() }}
-      >
-        <motion.div
-          initial={{ scale: 0.95, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.95, opacity: 0 }}
-          className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-2xl w-full max-w-lg p-6"
-        >
+    <Modal
+      open
+      onClose={guardedClose}
+      size="md"
+      title={done ? 'Work Order Raised' : 'Raise Work Order'}
+    >
           {done ? (
             <div className="text-center py-4">
               <CheckCircle size={40} className="text-green-400 mx-auto mb-3" />
-              <p className="text-[var(--text-primary)] font-medium mb-1">Work Order Raised</p>
               <p className="text-[var(--text-muted)] text-sm">A high-priority work order has been created for {asset.asset_no}.</p>
               <button onClick={onClose} className="btn-secondary mt-4">Close</button>
             </div>
           ) : (
             <>
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-2 bg-orange-900/30 rounded-lg">
-                  <Wrench size={18} className="text-orange-400" />
-                </div>
-                <h3 className="text-[var(--text-primary)] font-semibold">Raise Work Order</h3>
-              </div>
               <p className="text-[var(--text-muted)] text-sm mb-2">Asset: <span className="text-[var(--text-primary)]">{asset.asset_no}</span>, Site: <span className="text-[var(--text-primary)]">{asset.site}</span></p>
+              {/* The violations this work order is being raised for, listed in
+                  full - the person approving it must see what they are
+                  committing a workshop to. */}
               <div className="bg-[var(--input-bg)] rounded-lg p-3 mb-4 space-y-1">
                 {violations.map((v, i) => (
                   <div key={i} className="flex items-center gap-2 text-xs text-orange-300">
@@ -557,6 +552,8 @@ function RaiseWorkOrderModal({ asset, violations, country, createdBy, onClose })
                   <AlertTriangle size={14} /> {error}
                 </div>
               )}
+              {/* Submit stays inside its <form> rather than moving to Modal's
+                  footer, which sits outside the form element. */}
               <form onSubmit={submit} className="flex justify-end gap-3">
                 <button type="button" onClick={onClose} disabled={saving} className="px-4 py-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-50 text-sm transition-colors">Cancel</button>
                 <button type="submit" disabled={saving} className="flex items-center gap-2 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm px-5 py-2 rounded-lg transition-colors">
@@ -566,9 +563,7 @@ function RaiseWorkOrderModal({ asset, violations, country, createdBy, onClose })
               </form>
             </>
           )}
-        </motion.div>
-      </motion.div>
-    </AnimatePresence>
+    </Modal>
   )
 }
 
@@ -744,31 +739,20 @@ function QuoteFormModal({ quote, onClose, onSave, saving }) {
   const inputCls = 'w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-primary)] text-sm focus:border-blue-500 outline-none'
   const labelCls = 'text-[var(--text-muted)] text-xs mb-1.5 block'
 
-  return (
-    <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
-        onClick={e => { if (e.target === e.currentTarget) onClose() }}
-      >
-        <motion.div
-          initial={{ scale: 0.95, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.95, opacity: 0 }}
-          className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
-        >
-          <div className="flex items-center justify-between p-6 border-b border-[var(--input-border)]">
-            <h3 className="text-[var(--text-primary)] font-semibold text-lg">
-              {quote?.id ? 'Edit Supplier Quote' : 'Add Supplier Quote'}
-            </h3>
-            <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
-              <X size={20} />
-            </button>
-          </div>
+  // Same single guarded close as the specification form: the old backdrop and
+  // X could both dismiss a save still in flight while Cancel was disabled.
+  // `handleSaveQuote` clears `saving` in a `finally`.
+  const guardedClose = () => { if (!saving) onClose() }
 
-          <form onSubmit={submit} className="p-6 space-y-5">
+  return (
+    <Modal
+      open
+      onClose={guardedClose}
+      size="lg"
+      title={quote?.id ? 'Edit Supplier Quote' : 'Add Supplier Quote'}
+    >
+          {/* Submit stays inside its <form>; Modal's footer is outside it. */}
+          <form onSubmit={submit} className="space-y-5">
             {error && (
               <div className="bg-red-900/30 border border-red-700 text-red-300 text-sm px-4 py-2.5 rounded-lg flex items-center gap-2">
                 <AlertTriangle size={14} /> {error}
@@ -864,48 +848,42 @@ function QuoteFormModal({ quote, onClose, onSave, saving }) {
               </button>
             </div>
           </form>
-        </motion.div>
-      </motion.div>
-    </AnimatePresence>
+    </Modal>
   )
 }
 
 // ── Delete Quote Confirm Modal ─────────────────────────────────────────────────
 
+// No form, so the actions sit in Modal's pinned footer.
 function DeleteQuoteConfirmModal({ quote, onClose, onConfirm }) {
   return (
-    <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
-        onClick={e => { if (e.target === e.currentTarget) onClose() }}
-      >
-        <motion.div
-          initial={{ scale: 0.95, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.95, opacity: 0 }}
-          className="bg-[var(--surface-1)] border border-red-800 rounded-2xl w-full max-w-md p-6"
-        >
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 bg-red-900/30 rounded-lg"><Trash2 size={18} className="text-red-400" /></div>
-            <h3 className="text-[var(--text-primary)] font-semibold">Delete Supplier Quote</h3>
-          </div>
+    <Modal
+      open
+      onClose={onClose}
+      size="sm"
+      title="Delete Supplier Quote"
+      footer={(
+        <>
+          <button onClick={onClose} className="px-4 py-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] text-sm transition-colors">Cancel</button>
+          <button onClick={onConfirm} className="flex items-center gap-2 bg-red-700 hover:bg-red-600 text-white text-sm px-4 py-2 rounded-lg transition-colors">
+            <Trash2 size={14} /> Delete
+          </button>
+        </>
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <div className="p-2 bg-red-900/30 rounded-lg shrink-0"><Trash2 size={18} className="text-red-400" /></div>
+        <div>
           <p className="text-[var(--text-muted)] text-sm mb-2">
             Delete the quote for <span className="text-[var(--text-primary)] font-medium">{quote?.brand || 'this brand'}</span>
             {quote?.supplier ? <> from <span className="text-[var(--text-primary)] font-medium">{quote.supplier}</span></> : null}?
           </p>
-          <p className="text-[var(--text-muted)] text-xs mb-6">This removes it from the value ranking. This action cannot be undone.</p>
-          <div className="flex justify-end gap-3">
-            <button onClick={onClose} className="px-4 py-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] text-sm transition-colors">Cancel</button>
-            <button onClick={onConfirm} className="flex items-center gap-2 bg-red-700 hover:bg-red-600 text-white text-sm px-4 py-2 rounded-lg transition-colors">
-              <Trash2 size={14} /> Delete
-            </button>
-          </div>
-        </motion.div>
-      </motion.div>
-    </AnimatePresence>
+          {/* Kept verbatim: removing a quote changes which option the advisor
+              ranks as best value, so the effect is stated, not implied. */}
+          <p className="text-[var(--text-muted)] text-xs">This removes it from the value ranking. This action cannot be undone.</p>
+        </div>
+      </div>
+    </Modal>
   )
 }
 
@@ -962,6 +940,7 @@ export default function TyreSpecifications() {
   // Fitment Policy PDF generation state
   const [policyBusy, setPolicyBusy] = useState(false)
   const [policyError, setPolicyError] = useState('')
+  const [sizeSearch, setSizeSearch] = useState('')
 
   // ── In-session audit log (DB does not persist spec history) ──────────────────
 
@@ -1474,10 +1453,69 @@ export default function TyreSpecifications() {
 
   // ── Fitment Policy (branded standard document) ─────────────────────────────────
 
+  // Current fleet tyres, grouped by tyre size (works across every vehicle type,
+  // position, site and country in scope - it groups on the tyre's own `size`
+  // field rather than on vehicle-type derivation, which is often incomplete).
+  const sizeInventory = useMemo(() => {
+    try {
+      return buildSizeInventoryRows({ complianceRows: complianceData, specs }) || []
+    } catch {
+      return []
+    }
+  }, [complianceData, specs])
+
+  const filteredSizeInventory = useMemo(() => {
+    const q = sizeSearch.trim().toLowerCase()
+    if (!q) return sizeInventory
+    return sizeInventory.filter(r =>
+      r.size.toLowerCase().includes(q) ||
+      r.brandsLabel.toLowerCase().includes(q) ||
+      r.approvedBrandsLabel.toLowerCase().includes(q) ||
+      r.vehicleTypesLabel.toLowerCase().includes(q)
+    )
+  }, [sizeInventory, sizeSearch])
+
+  async function exportSizeInventoryExcel() {
+    if (filteredSizeInventory.length === 0) return
+    const XLSX = await import('xlsx')
+    const rows = filteredSizeInventory.map(r => ({
+      'Tyre Size': r.size,
+      'Fitted Qty': r.count,
+      'Brands In Use': r.brandsLabel,
+      'Approved Brands': r.approvedBrandsLabel,
+      'Ply Rating': r.plyRating,
+      'Min Tread (mm)': r.minTreadDepth,
+      'Load Index': r.minLoadIndex,
+      'Speed Index': r.minSpeedIndex,
+      'Recommended Pressure (PSI)': r.recommendedPressure,
+      'Vehicle Types': r.vehicleTypesLabel,
+      'Positions': r.positionsLabel,
+      'Sites Fitted': r.sites.length,
+      'Approved Fitment Standards Matched': r.specCount,
+      'Approved (fitments)': r.compliance.approved,
+      'Non-Standard Size (fitments)': r.compliance.nonStandardSize,
+      'Non-Approved Brand (fitments)': r.compliance.nonApprovedBrand,
+      'Multiple Violations (fitments)': r.compliance.multipleViolations,
+      'No Spec Defined (fitments)': r.compliance.noSpec,
+      'Brands Fitted But Not Approved': r.brandsFittedNotApproved.join(', '),
+    }))
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([{
+      'Report': 'Current Fleet Tyre Inventory by Size',
+      'Sizes included': filteredSizeInventory.length,
+      'Sizes in fleet': sizeInventory.length,
+      'Search applied': sizeSearch.trim() || 'None (whole fleet)',
+      'Scope': country || 'All Countries',
+    }]), 'Report Scope')
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Tyre Size Inventory')
+    XLSX.writeFile(wb, 'TyrePulse_Tyre_Size_Inventory.xlsx')
+  }
+
   const policySections = useMemo(() => {
     try {
       return buildPolicySections({
         specs,
+        complianceRows: complianceData,
         company,
         country,
         generatedBy: profile?.email,
@@ -1486,7 +1524,7 @@ export default function TyreSpecifications() {
     } catch {
       return []
     }
-  }, [specs, company, country, profile?.email])
+  }, [specs, complianceData, company, country, profile?.email])
 
   async function downloadPolicyPdf() {
     setPolicyBusy(true)
@@ -1494,6 +1532,7 @@ export default function TyreSpecifications() {
     try {
       await renderTyreSpecPolicyPdf({
         specs,
+        complianceRows: complianceData,
         company,
         branding,
         country,
@@ -1629,11 +1668,16 @@ export default function TyreSpecifications() {
             </div>
 
             {/* Spec Cards */}
+            {/* `py-16` would be DEAD on a Card - Card writes `padding` inline
+                and a plain utility loses to it, so the roominess moves into
+                `style`, which Card spreads after its own padding and so leaves
+                the inline-axis padding intact. --space-12 is the top of the
+                spacing ladder the tokens tell components to pick from. */}
             {loadingSpecs ? (
-              <div className="card py-16 text-center">
+              <Card className="text-center" style={{ paddingBlock: 'var(--space-12)' }}>
                 <RefreshCw size={28} className="animate-spin text-[var(--text-dim)] mx-auto mb-3" />
                 <p className="text-[var(--text-muted)] text-sm">Loading specifications...</p>
-              </div>
+              </Card>
             ) : specsError ? (
               <div className="bg-[var(--surface-1)] border border-red-800 rounded-xl py-16 text-center">
                 <AlertOctagon size={40} className="text-red-500 mx-auto mb-3" />
@@ -1644,27 +1688,40 @@ export default function TyreSpecifications() {
                 </button>
               </div>
             ) : filteredSpecs.length === 0 ? (
-              <div className="card py-16 text-center">
+              /* The empty state distinguishes "nothing defined yet" from
+                 "nothing matches the filters" - collapsing the two would read
+                 as an empty specification library when it is only a search. */
+              <Card className="text-center" style={{ paddingBlock: 'var(--space-12)' }}>
                 <ClipboardList size={40} className="text-[var(--text-dim)] mx-auto mb-3" />
                 <p className="text-[var(--text-muted)] font-medium mb-1">No Specification Profiles</p>
                 <p className="text-[var(--text-dim)] text-sm mb-4">
                   {specs.length === 0 ? 'Get started by adding your first tyre specification or using Quick Setup.' : 'No specs match the current filters.'}
                 </p>
+                {/* `self-center` because Card is a flex column: a direct child
+                    with no definite width is stretched to the full card, which
+                    would drag this link's underline edge to edge. */}
                 {isAdmin && specs.length === 0 && (
-                  <button onClick={() => setActiveTab('defaults')} className="text-blue-400 hover:text-blue-300 text-sm underline">
+                  <button onClick={() => setActiveTab('defaults')} className="self-center text-blue-400 hover:text-blue-300 text-sm underline">
                     View Quick Setup defaults →
                   </button>
                 )}
-              </div>
+              </Card>
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+                {/* The old `hover:border-[var(--input-border)]` is DEAD on a
+                    Card - a variant prefix does not save a class that loses to
+                    an inline `border`. It is dropped rather than replaced with
+                    `interactive`: the card is not clickable as a whole, its
+                    edit and delete buttons are, and an interactive affordance
+                    on a non-clickable surface is a lie. */}
                 {filteredSpecs.map((spec, idx) => (
-                  <motion.div
+                  <Card
+                    as={motion.div}
                     key={spec.id}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: idx * 0.03 }}
-                    className="card hover:border-[var(--input-border)] transition-colors"
+                    className="transition-colors"
                   >
                     <div className="flex items-start justify-between mb-3">
                       <div>
@@ -1741,7 +1798,7 @@ export default function TyreSpecifications() {
                         <p className="text-[var(--text-muted)] text-xs border-t border-[var(--input-border)] pt-2 line-clamp-2">{spec.notes}</p>
                       )}
                     </div>
-                  </motion.div>
+                  </Card>
                 ))}
               </div>
             )}
@@ -1754,7 +1811,11 @@ export default function TyreSpecifications() {
 
             {/* Chart + Summary */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              <div className="card flex flex-col">
+              {/* `flex flex-col` was redundant even before the migration -
+                  Card is a flex column natively, which is what lets the chart
+                  well below take the remaining height via `flex-1`. The chart
+                  is a canvas, not a DOM overlay, so this card needs no clip. */}
+              <Card>
                 <p className="text-[var(--text-muted)] text-sm font-medium mb-3 flex items-center gap-2"><BarChart3 size={14} /> Compliance Breakdown</p>
                 <div className="flex-1 min-h-[180px]">
                   {complianceData.length > 0 ? (
@@ -1763,7 +1824,7 @@ export default function TyreSpecifications() {
                     <div className="h-full flex items-center justify-center text-[var(--text-dim)] text-sm">No data</div>
                   )}
                 </div>
-              </div>
+              </Card>
 
               <div className="lg:col-span-2 grid grid-cols-2 sm:grid-cols-3 gap-3 content-start">
                 {Object.entries({
@@ -1823,6 +1884,13 @@ export default function TyreSpecifications() {
                   <p className="text-[var(--text-muted)] text-sm">Loading fleet data...</p>
                 </div>
               ) : (
+                /* EnterpriseTable REFUSED: this grid runs its own compSearch /
+                   site / type / status filter bar and its own PAGE_SIZE pager,
+                   and `exportCompliancePdf` above walks the full
+                   `filteredCompliance` set those controls produce.
+                   EnterpriseTable would add a second search box beside the
+                   existing four filters and a competing export beside the two
+                   already in the page header. */
                 <>
                   <div className="overflow-x-auto">
                     <table className="w-full">
@@ -1933,6 +2001,9 @@ export default function TyreSpecifications() {
                   description="No non-conforming fitments detected across the fleet."
                 />
               ) : (
+                /* EnterpriseTable REFUSED: composite cells throughout - a
+                   ranked badge, a set of violation-type pills, a recommended
+                   action and a Raise WO button gated on `isAdmin`. */
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
@@ -1994,12 +2065,12 @@ export default function TyreSpecifications() {
         {activeTab === 'defaults' && (
           <motion.div key="defaults" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
 
-            <div className="card flex items-start gap-3">
+            <Card className="items-start gap-3" style={{ flexDirection: 'row' }}>
               <Info size={16} className="text-blue-400 mt-0.5 shrink-0" />
               <p className="text-[var(--text-secondary)] text-sm">
                 Industry-standard tyre specification defaults. Click <strong>Import</strong> to add any profile to your specification library. Already-imported specs are greyed out.
               </p>
-            </div>
+            </Card>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
               {SMART_DEFAULTS.map((def, i) => {
@@ -2079,8 +2150,11 @@ export default function TyreSpecifications() {
         {activeTab === 'policy' && (
           <motion.div key="policy" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
 
-            {/* Intro + download */}
-            <div className="card flex flex-col sm:flex-row sm:items-center gap-4">
+            {/* Intro + download. The direction is RESPONSIVE here, and its base
+                (column) is already Card's own, so no inline `flexDirection` is
+                needed: Tailwind emits `sm:flex-row` after the unprefixed
+                `flex-col` Card carries, so the variant still wins at >=sm. */}
+            <Card className="sm:flex-row sm:items-center gap-4">
               <div className="p-2.5 rounded-lg bg-[var(--input-bg)] text-blue-400 shrink-0">
                 <FileText size={20} />
               </div>
@@ -2100,7 +2174,7 @@ export default function TyreSpecifications() {
                 {policyBusy ? <RefreshCw size={15} className="animate-spin" /> : <FileText size={15} />}
                 {policyBusy ? 'Generating...' : 'Download Policy (PDF)'}
               </button>
-            </div>
+            </Card>
 
             {policyError && (
               <div className="bg-red-900/30 border border-red-700 text-red-300 text-sm px-4 py-2.5 rounded-lg flex items-center gap-2">
@@ -2116,6 +2190,92 @@ export default function TyreSpecifications() {
                 the Specification Library will populate the Approved Fitment Standards table.
               </div>
             )}
+
+            {/* Current Fleet Tyres by Size */}
+            <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
+              <div className="px-4 py-3 border-b border-[var(--input-border)] flex flex-col sm:flex-row sm:items-center gap-3">
+                <div className="flex-1 flex items-start gap-2.5">
+                  <div className="p-1.5 rounded-lg bg-[var(--input-bg)] text-purple-400 shrink-0 mt-0.5">
+                    <Gauge size={15} />
+                  </div>
+                  <div>
+                    <p className="text-[var(--text-primary)] font-medium text-sm">Current Fleet Tyres by Size</p>
+                    <p className="text-[var(--text-muted)] text-xs mt-0.5">
+                      Every tyre size currently fitted anywhere in the fleet, with the brands in use,
+                      the approved brand list and the ply rating, minimum tread, load index, speed
+                      index and recommended pressure that apply. Grouped from live tyre records
+                      directly, so it covers every vehicle type, site and country in scope. Included as
+                      an appendix in the downloaded policy PDF.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="relative">
+                    <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+                    <input
+                      value={sizeSearch}
+                      onChange={e => setSizeSearch(e.target.value)}
+                      placeholder="Search size, brand, type..."
+                      className="pl-8 pr-3 py-1.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-[var(--text-primary)] text-xs w-48 focus:border-blue-500 outline-none"
+                    />
+                  </div>
+                  <button
+                    onClick={exportSizeInventoryExcel}
+                    disabled={filteredSizeInventory.length === 0}
+                    title={filteredSizeInventory.length === 0 ? 'No rows to export' : `Exports ${filteredSizeInventory.length} size(s)`}
+                    className="flex items-center gap-1.5 bg-[var(--input-bg)] hover:bg-gray-700 text-[var(--text-secondary)] text-xs px-3 py-1.5 rounded-lg border border-[var(--input-border)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+                  >
+                    <FileSpreadsheet size={13} /> Export
+                  </button>
+                </div>
+              </div>
+
+              {loadingRecords ? (
+                <div className="p-6 text-center text-[var(--text-muted)] text-sm">Loading current tyre fitments...</div>
+              ) : filteredSizeInventory.length === 0 ? (
+                <div className="p-6 text-center text-[var(--text-muted)] text-sm">
+                  {sizeInventory.length === 0
+                    ? 'No current tyre fitments are on record yet for this scope.'
+                    : 'No sizes match your search.'}
+                </div>
+              ) : (
+                /* EnterpriseTable REFUSED: this panel already carries its own
+                   `sizeSearch` box and its own Excel export in the header
+                   directly above, both scoped to `filteredSizeInventory`. */
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-[var(--input-border)]">
+                        {['Tyre Size', 'Fitted Qty', 'Brands In Use', 'Approved Brands', 'Ply Rating', 'Min Tread (mm)', 'Load Idx', 'Speed', 'Pressure (PSI)', 'Vehicle Types', 'Non-Conforming'].map(h => (
+                          <th key={h} className="px-3 py-2 text-left text-[10px] uppercase tracking-wide text-[var(--text-muted)] font-medium whitespace-nowrap">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredSizeInventory.map(r => (
+                        <tr key={r.size} className="border-b border-[var(--input-border)] last:border-0 hover:bg-[var(--input-bg)]/40">
+                          <td className="px-3 py-2 text-[var(--text-primary)] text-xs font-semibold whitespace-nowrap">{r.size}</td>
+                          <td className="px-3 py-2 text-[var(--text-secondary)] text-xs">{r.count}</td>
+                          <td className="px-3 py-2 text-[var(--text-secondary)] text-xs max-w-[220px]" title={r.brandsLabel}>{r.brandsLabel}</td>
+                          <td className="px-3 py-2 text-[var(--text-secondary)] text-xs max-w-[220px]" title={r.approvedBrandsLabel}>{r.approvedBrandsLabel}</td>
+                          <td className="px-3 py-2 text-[var(--text-secondary)] text-xs whitespace-nowrap">{r.plyRating}</td>
+                          <td className="px-3 py-2 text-[var(--text-secondary)] text-xs whitespace-nowrap">{r.minTreadDepth}</td>
+                          <td className="px-3 py-2 text-[var(--text-secondary)] text-xs whitespace-nowrap">{r.minLoadIndex}</td>
+                          <td className="px-3 py-2 text-[var(--text-secondary)] text-xs whitespace-nowrap">{r.minSpeedIndex}</td>
+                          <td className="px-3 py-2 text-[var(--text-secondary)] text-xs whitespace-nowrap">{r.recommendedPressure}</td>
+                          <td className="px-3 py-2 text-[var(--text-secondary)] text-xs max-w-[200px]" title={r.vehicleTypesLabel}>{r.vehicleTypesLabel}</td>
+                          <td className="px-3 py-2 text-xs whitespace-nowrap">
+                            {r.nonConformingCount > 0
+                              ? <span className="text-orange-400 font-medium">{r.nonConformingCount}</span>
+                              : <span className="text-green-400">0</span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
 
             {/* Live preview */}
             <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
@@ -2149,6 +2309,10 @@ export default function TyreSpecifications() {
                           if (rows.length === 0) {
                             return <p className="text-[var(--text-dim)] text-xs">No approved standards recorded yet.</p>
                           }
+                          /* EnterpriseTable REFUSED: the columns are generated
+                             at RUNTIME from whatever shape each policy section
+                             carries (head / columns / an array-of-arrays), so
+                             there is no static column definition to hand it. */
                           return (
                             <div className="overflow-x-auto mt-2 border border-[var(--input-border)] rounded-lg">
                               <table className="w-full">
@@ -2187,8 +2351,9 @@ export default function TyreSpecifications() {
         {activeTab === 'advisor' && (
           <motion.div key="advisor" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
 
-            {/* Intro / method card */}
-            <div className="card flex flex-col lg:flex-row lg:items-center gap-4">
+            {/* Intro / method card. Responsive direction again - the column
+                base is Card's own, so only the `lg:` half is needed. */}
+            <Card className="lg:flex-row lg:items-center gap-4">
               <div className="p-2.5 rounded-lg bg-[var(--input-bg)] text-emerald-400 shrink-0">
                 <Scale size={20} />
               </div>
@@ -2218,7 +2383,7 @@ export default function TyreSpecifications() {
                   <Plus size={15} /> Add Quote
                 </button>
               </div>
-            </div>
+            </Card>
 
             {optionsError && (
               <div className="bg-red-900/30 border border-red-700 text-red-300 text-sm px-4 py-2.5 rounded-lg flex items-center gap-2">
@@ -2229,14 +2394,19 @@ export default function TyreSpecifications() {
             )}
 
             {loadingOptions ? (
-              <div className="card py-16 text-center">
+              <Card className="text-center" style={{ paddingBlock: 'var(--space-12)' }}>
                 <RefreshCw size={28} className="animate-spin text-[var(--text-dim)] mx-auto mb-3" />
                 <p className="text-[var(--text-muted)] text-sm">Loading supplier quotes...</p>
-              </div>
+              </Card>
             ) : advisorRecs.length === 0 ? (
               // Honest empty state: no quotes anywhere. Still useful via brand guidance.
               <div className="space-y-4">
-                <div className="card py-10 text-center">
+                {/* `py-10` is dead on a Card for the same reason as `py-16`
+                    above, so the block padding moves to `style`. The button
+                    already carries `mx-auto`, and an auto cross-axis margin
+                    beats the flex `stretch` default, so it keeps its natural
+                    width without needing `self-center`. */}
+                <Card className="text-center" style={{ paddingBlock: 'var(--space-10)' }}>
                   <DollarSign size={40} className="text-[var(--text-dim)] mx-auto mb-3" />
                   <p className="text-[var(--text-muted)] font-medium mb-1">No Supplier Quotes Yet</p>
                   <p className="text-[var(--text-dim)] text-sm mb-4 max-w-md mx-auto">
@@ -2248,20 +2418,22 @@ export default function TyreSpecifications() {
                       <Plus size={15} /> Add First Quote
                     </button>
                   )}
-                </div>
+                </Card>
 
                 {specs.length > 0 && (
                   <div className="space-y-4">
                     {specs.map(spec => (
-                      <div key={spec.id} className="card space-y-3">
+                      <Card key={spec.id} className="space-y-3">
                         <div className="flex items-center gap-2">
                           <Truck size={14} className="text-blue-400" />
                           <span className="text-[var(--text-primary)] font-medium text-sm">{spec.vehicle_type}</span>
                           <span className="text-xs text-[var(--text-muted)] bg-[var(--input-bg)] px-2 py-0.5 rounded-full">{spec.position}</span>
+                          {/* Says outright that this is guidance, not a ranking
+                              - there are no quotes behind it. */}
                           <span className="ml-auto text-[var(--text-dim)] text-xs flex items-center gap-1"><Info size={11} /> Brand-economics guidance</span>
                         </div>
                         <BrandGuidancePanel brands={spec.approved_brands} />
-                      </div>
+                      </Card>
                     ))}
                   </div>
                 )}
@@ -2273,7 +2445,7 @@ export default function TyreSpecifications() {
                   const cur = rec.currency
                   const valids = rec.ranked.filter(e => e.valid && e.lifecycleCpk != null)
                   return (
-                    <div key={g.key} className="card space-y-4">
+                    <Card key={g.key} className="space-y-4">
 
                       {/* Header + headline */}
                       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 border-b border-[var(--input-border)] pb-3">
@@ -2304,7 +2476,12 @@ export default function TyreSpecifications() {
                         </div>
                       )}
 
-                      {/* Ranked comparison table */}
+                      {/* Ranked comparison table. EnterpriseTable REFUSED: the
+                          row ORDER is the recommendation itself (the engine
+                          ranks by lifecycle CPK), so a sortable header would
+                          let a reader destroy the very thing being shown; and
+                          the cells are composite - an incomplete-quote caveat
+                          under the brand, a confidence pill, a badge cluster. */}
                       {valids.length > 0 ? (
                         <div className="overflow-x-auto border border-[var(--input-border)] rounded-lg">
                           <table className="w-full">
@@ -2377,7 +2554,7 @@ export default function TyreSpecifications() {
                           ))}
                         </div>
                       )}
-                    </div>
+                    </Card>
                   )
                 })}
               </div>
@@ -2406,6 +2583,10 @@ export default function TyreSpecifications() {
                   description="Changes to specifications will be tracked here."
                 />
               ) : (
+                /* EnterpriseTable REFUSED: an append-only audit trail read
+                   newest-first. Its order is the record, so offering sortable
+                   headers would misrepresent it, and it has no filter or export
+                   of its own for EnterpriseTable to replace. */
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>

@@ -318,6 +318,10 @@
     "cameraPermissionMessage": "حادثے کی تصویر کے لیے کیمرے تک رسائی کی اجازت دیں۔"
   },
   "modules": {
+    "checklistHistory": {
+      "checklistDate": "چیک لسٹ کی تاریخ",
+      "submittedOn": "موصول ہونے کی تاریخ"
+    },
     "common": {
       "add": "شامل کریں",
       "save": "محفوظ کریں",
@@ -385,7 +389,12 @@
       "primaryDashT": "ڈیش بورڈ کھولیں",
       "primaryDashS": "فلیٹ حادثات و دعوے",
       "primaryAlertsT": "الرٹس دیکھیں",
-      "primaryAlertsS": "فلیٹ ٹائر خطرات"
+      "primaryAlertsS": "فلیٹ ٹائر خطرات",
+      "qa": {
+        "approvals": { "label": "معائنوں کی منظوری" },
+        "checklistApprovals": { "label": "چیک لسٹ کی منظوری" },
+        "operationalApprovals": { "label": "عملی درخواستوں کی منظوری" }
+      }
     },
     "tasks": {
       "title": "اصلاحی اقدامات",

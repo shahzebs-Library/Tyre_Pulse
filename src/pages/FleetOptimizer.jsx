@@ -32,6 +32,7 @@ import {
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 const EMPTY_FORM = {
   scenario_name: '', asset_no: '', asset_type: '', utilization_pct: '',
@@ -55,15 +56,15 @@ const CONF_META = {
 const REC_FILTERS = ['keep', 'replace', 'redeploy', 'dispose', 'review']
 const CONF_FILTERS = ['high', 'medium', 'low']
 
-const fmtNum = (v) => (v == null || v === '' ? '—' : Number(v).toLocaleString())
-const fmtPct = (v) => (v == null || v === '' ? '—' : `${Number(v).toLocaleString()}%`)
+const fmtNum = (v) => (v == null || v === '' ? 'N/A' : Number(v).toLocaleString())
+const fmtPct = (v) => (v == null || v === '' ? 'N/A' : `${Number(v).toLocaleString()}%`)
 const fmtMoney = (v, cur = 'SAR') =>
-  v == null || v === '' ? '—' : `${cur} ${Math.round(Number(v)).toLocaleString()}`
-const fmtCpk = (v, cur = 'SAR') => (v == null ? '—' : `${cur} ${v.toFixed(2)}`)
+  v == null || v === '' ? 'N/A' : `${cur} ${Math.round(Number(v)).toLocaleString()}`
+const fmtCpk = (v, cur = 'SAR') => (v == null ? 'N/A' : `${cur} ${v.toFixed(2)}`)
 
 function RecBadge({ value }) {
   const m = REC_META[value]
-  if (!m) return <span className="text-[var(--text-muted)]">—</span>
+  if (!m) return <span className="text-[var(--text-muted)]">N/A</span>
   const Icon = m.icon
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border ${m.cls}`}>
@@ -72,7 +73,7 @@ function RecBadge({ value }) {
   )
 }
 function ConfBadge({ value }) {
-  if (!value) return <span className="text-[var(--text-muted)]">—</span>
+  if (!value) return <span className="text-[var(--text-muted)]">N/A</span>
   return (
     <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold border capitalize ${CONF_META[value] || CONF_META.low}`}>
       {value}
@@ -80,11 +81,6 @@ function ConfBadge({ value }) {
   )
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') ||
-    m.includes('schema cache') || m.includes('could not find the table')
-}
 
 export default function FleetOptimizer() {
   const { activeCountry } = useSettings()
@@ -317,7 +313,7 @@ export default function FleetOptimizer() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-2xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-2xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -356,7 +352,7 @@ export default function FleetOptimizer() {
 
         <div className="card">
           <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
-            <AlertTriangle size={15} className="text-amber-400" /> Under-utilised assets ({rows === null ? '—' : idle.length})
+            <AlertTriangle size={15} className="text-amber-400" /> Under-utilised assets ({rows === null ? 'N/A' : idle.length})
           </h3>
           {rows === null ? (
             <div className="h-24 bg-[var(--input-bg)] rounded animate-pulse" />
@@ -440,7 +436,7 @@ export default function FleetOptimizer() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={12} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {rows.length === 0 && !notProvisioned ? 'No scenarios modelled yet — create your first optimizer scenario.' : 'No scenarios match these filters.'}
+                  {rows.length === 0 && !notProvisioned ? 'No scenarios modelled yet. Create your first optimizer scenario.' : 'No scenarios match these filters.'}
                 </td></tr>
               ) : (
                 pager.pageRows.map((r) => {
@@ -450,15 +446,15 @@ export default function FleetOptimizer() {
                   return (
                     <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
                       <td className="px-4 py-2.5">
-                        <p className="font-medium text-[var(--text-primary)]">{r.asset_no || '—'}</p>
+                        <p className="font-medium text-[var(--text-primary)]">{r.asset_no || 'N/A'}</p>
                         {(r.asset_type || r.scenario_name) && <p className="text-[11px] text-[var(--text-muted)]">{[r.asset_type, r.scenario_name].filter(Boolean).join(' · ')}</p>}
                       </td>
                       <td className="px-4 py-2.5 font-semibold text-[var(--text-primary)]">{fmtPct(r.utilization_pct)}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtNum(r.annual_km)}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtMoney(r.annual_cost, cur)}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtCpk(costPerKm(r), cur)}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{r.age_years == null || r.age_years === '' ? '—' : `${Number(r.age_years)} yr`}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{r.downtime_days == null || r.downtime_days === '' ? '—' : `${Number(r.downtime_days)} d`}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{r.age_years == null || r.age_years === '' ? 'N/A' : `${Number(r.age_years)} yr`}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{r.downtime_days == null || r.downtime_days === '' ? 'N/A' : `${Number(r.downtime_days)} d`}</td>
                       <td className="px-4 py-2.5"><RecBadge value={r.recommendation} /></td>
                       <td className="px-4 py-2.5">
                         <span className={`inline-flex items-center gap-1 ${mismatch ? 'text-violet-300' : 'text-[var(--text-muted)]'}`}>
@@ -538,7 +534,7 @@ export default function FleetOptimizer() {
                 <div>
                   <label className="label">Recommendation</label>
                   <select className="input w-full" value={form.recommendation} onChange={(e) => set('recommendation', e.target.value)}>
-                    <option value="">— select —</option>
+                    <option value="">Select</option>
                     {REC_FILTERS.map((r) => <option key={r} value={r}>{REC_META[r].label}</option>)}
                   </select>
                   <p className="text-[11px] text-[var(--text-muted)] mt-1 flex items-center gap-1">
@@ -552,7 +548,7 @@ export default function FleetOptimizer() {
                 <div>
                   <label className="label">Confidence</label>
                   <select className="input w-full" value={form.confidence} onChange={(e) => set('confidence', e.target.value)}>
-                    <option value="">— select —</option>
+                    <option value="">Select</option>
                     {CONF_FILTERS.map((c) => <option key={c} value={c} className="capitalize">{c}</option>)}
                   </select>
                 </div>

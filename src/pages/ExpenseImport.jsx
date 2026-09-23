@@ -29,7 +29,7 @@ import { toUserMessage } from '../lib/safeError'
 import { parseWorkbook } from '../lib/import/parseWorkbook'
 import { rowsFromParsedSheet, summarizeRows, classifyLine } from '../lib/partsExpense'
 import {
-  insertPartsConsumption, countPartsConsumption, clearPartsConsumption,
+  importExpenseBatch, countPartsConsumption,
 } from '../lib/api/partsConsumption'
 
 const LARGE_FILE_ROWS = 60000
@@ -72,17 +72,19 @@ export default function ExpenseImport() {
   const [dragging, setDragging] = useState(false)
 
   const inputRef = useRef(null)
+  const requestRef = useRef(null)
+  const [skippedCount, setSkippedCount] = useState(0)
 
   const refreshStored = useCallback(async () => {
     try {
-      const n = await countPartsConsumption()
+      const n = await countPartsConsumption({ country })
       setStoredCount(n)
       setStoredError(null)
     } catch (err) {
       setStoredCount(null)
       setStoredError(toUserMessage(err, 'Could not read stored expense data.'))
     }
-  }, [])
+  }, [country])
 
   useEffect(() => { refreshStored() }, [refreshStored])
 
@@ -113,6 +115,7 @@ export default function ExpenseImport() {
     setError(null)
     setPhase('parsing')
     setFileName(file.name || '')
+    requestRef.current = null
     setRows([])
     try {
       const parsed = await parseWorkbook(file)
@@ -164,22 +167,31 @@ export default function ExpenseImport() {
     setPhase('importing')
     setProgress({ d: 0, t: rows.length })
     try {
-      if (replaceFirst) await clearPartsConsumption()
-      const res = await insertPartsConsumption(rows, {
-        country,
+      if (!requestRef.current) requestRef.current = crypto.randomUUID()
+      const res = await importExpenseBatch(rows, {
+        country, requestId: requestRef.current, replace: replaceFirst, expectedCount: storedCount,
         onProgress: (d, t) => setProgress({ d, t }),
       })
-      setImportedCount(res?.inserted ?? rows.length)
+      setImportedCount(res.inserted)
+      setSkippedCount(res.skipped || 0)
       setPhase('done')
       refreshStored()
     } catch (err) {
-      setError(toUserMessage(err, 'Import failed. Please try again.'))
+      if (err?.code === '40001') {
+        requestRef.current = null
+        await refreshStored()
+        setError('Stored expense data changed during upload. Review the refreshed replacement count before retrying.')
+      } else {
+        setError(toUserMessage(err, 'Import failed. Please try again with the same file to verify its outcome.'))
+      }
       setPhase('preview')
     }
-  }, [rows, replaceFirst, country, refreshStored])
+  }, [rows, replaceFirst, country, refreshStored, storedCount])
 
   const reset = useCallback(() => {
     setPhase('idle')
+    requestRef.current = null
+    setSkippedCount(0)
     setFileName('')
     setRows([])
     setError(null)
@@ -398,17 +410,16 @@ export default function ExpenseImport() {
               <input
                 type="checkbox"
                 checked={replaceFirst}
-                onChange={(e) => setReplaceFirst(e.target.checked)}
+                onChange={(e) => { setReplaceFirst(e.target.checked); requestRef.current = null }}
                 disabled={busy}
               />
-              Replace all existing expense data first
+              Replace existing expense data for {country || 'the selected country'}
             </label>
             {replaceFirst && (
               <div className="flex items-start gap-2 text-sm text-[var(--text-secondary)]">
                 <Trash2 className="h-4 w-4 mt-0.5 shrink-0" />
                 <p>
-                  Warning: this permanently deletes all stored expense rows for this organisation
-                  before importing the new file.
+                  This replaces {storedCount?.toLocaleString('en-US') ?? 'the stored'} rows in {country || 'the selected country'} after the full file is staged. If validation fails, existing data remains intact. Replaced rows are retained in a recovery archive.
                 </p>
               </div>
             )}
@@ -425,7 +436,7 @@ export default function ExpenseImport() {
             <div className="card p-4 space-y-2">
               <div className="flex items-center justify-between text-sm text-[var(--text-secondary)]">
                 <span className="inline-flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" /> Importing...
+                  <Loader2 className="h-4 w-4 animate-spin" /> {pct === 100 ? 'Applying verified import...' : 'Staging file...'}
                 </span>
                 <span>
                   {progress.d.toLocaleString('en-US')} / {progress.t.toLocaleString('en-US')} ({pct}%)
@@ -460,7 +471,7 @@ export default function ExpenseImport() {
           <div className="flex flex-col items-center text-center">
             <CheckCircle2 className="h-12 w-12 text-[var(--accent,#22c55e)]" />
             <p className="mt-3 text-lg font-semibold text-[var(--text-primary)]">
-              Imported {importedCount.toLocaleString('en-US')} rows
+              Imported {importedCount.toLocaleString('en-US')} rows{skippedCount > 0 ? `; ${skippedCount.toLocaleString('en-US')} duplicate rows skipped` : ''}
             </p>
             <p className="mt-1 text-sm text-[var(--text-tertiary)]">
               Amounts have been classified into Tyres / Spare / Oil.

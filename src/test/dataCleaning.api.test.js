@@ -31,7 +31,7 @@ const h = vi.hoisted(() => {
     state.last = b
     return b
   }
-  return { state, supabase: { from } }
+  return { state, supabase: { from, rpc: vi.fn(async () => state.result) } }
 })
 
 vi.mock('../lib/supabase', () => ({ supabase: h.supabase }))
@@ -41,6 +41,7 @@ const dc = await import('../lib/api/dataCleaning')
 beforeEach(() => {
   h.state.result = { data: [], error: null }
   h.state.last = null
+  h.supabase.rpc.mockClear()
 })
 
 describe('service layer - dataCleaning', () => {
@@ -99,19 +100,17 @@ describe('service layer - dataCleaning', () => {
     expect(h.state.last._calls.range).toEqual([50, 99])
   })
 
-  it('listCleanedRecords: cleaned=true, limit 500, NOT country-scoped', async () => {
-    await dc.listCleanedRecords()
-    expect(h.state.last._calls.eq).toContainEqual(['cleaned', true])
-    expect(h.state.last._calls.eq.find(([c]) => c === 'country')).toBeUndefined()
+  it('listCleanedRecords: scopes the selected country and site', async () => {
+    await dc.listCleanedRecords({ country: 'KSA', site: 'A' })
+    expect(h.state.last._calls.eq).toEqual(expect.arrayContaining([['cleaned', true], ['country', 'KSA'], ['site', 'A']]))
     expect(h.state.last._calls.limit).toBe(500)
   })
 
-  it('listPendingForApproveAll: cleaned=false, ranged, site optional, no country', async () => {
-    await dc.listPendingForApproveAll({ site: 'S1', from: 0, to: 499 })
-    expect(h.state.last._calls.select).toBe('id, description, remarks')
-    expect(h.state.last._calls.eq).toContainEqual(['cleaned', false])
-    expect(h.state.last._calls.eq).toContainEqual(['site', 'S1'])
-    expect(h.state.last._calls.eq.find(([c]) => c === 'country')).toBeUndefined()
+  it('Approve All reads only the selected country/site in a stable order', async () => {
+    await dc.listPendingForApproveAll({ country: 'KSA', site: 'S1', from: 0, to: 499 })
+    expect(h.state.last._calls.eq).toEqual(expect.arrayContaining([['cleaned', false], ['country', 'KSA'], ['site', 'S1']]))
+    expect(h.state.last._calls.select).toContain('cleaned')
+    expect(h.state.last._calls.order).toContainEqual(['id', undefined])
     expect(h.state.last._calls.range).toEqual([0, 499])
   })
 
@@ -147,51 +146,41 @@ describe('service layer - dataCleaning', () => {
     expect(h.state.last._calls.eq).toContainEqual(['country', 'KSA'])
   })
 
-  it('listRecentInspections reads inspections gte cutoff (never country-scoped)', async () => {
-    await dc.listRecentInspections({ cutoff: '2026-06-04' })
+  it('recent inspections use the same country as the tyre quality check', async () => {
+    await dc.listRecentInspections({ cutoff: '2026-06-04', country: 'KSA' })
     expect(h.state.last._table).toBe('inspections')
     expect(h.state.last._calls.gte).toEqual(['inspection_date', '2026-06-04'])
-    expect(h.state.last._calls.eq).toHaveLength(0)
+    expect(h.state.last._calls.eq).toContainEqual(['country', 'KSA'])
   })
 
-  it('updateTyreSerial patches tyre_serial by id', async () => {
-    await dc.updateTyreSerial('r1', 'SER-02')
-    expect(h.state.last._calls.update).toEqual({ tyre_serial: 'SER-02' })
-    expect(h.state.last._calls.eq).toContainEqual(['id', 'r1'])
+  const changes = [{ id: 'a', patch: { remarks: 'Reviewed' }, expected: { remarks: null } }]
+  it('writes only through the scoped atomic RPC and confirms exact IDs', async () => {
+    h.state.result = { data: { ids: ['a'] }, error: null }
+    expect(await dc.correctTyreRecords(changes, { country: 'KSA', site: 'S1', action: 'review' })).toEqual(['a'])
+    expect(h.supabase.rpc).toHaveBeenCalledWith('admin_clean_tyre_records', { p_changes: changes, p_country: 'KSA', p_site: 'S1', p_action: 'review' })
+    expect(h.state.last).toBeNull()
   })
 
-  it('updateTyreOdometer + updateTyreRemarks patch by id', async () => {
-    await dc.updateTyreOdometer('r2', { km_at_fitment: 10 })
-    expect(h.state.last._calls.update).toEqual({ km_at_fitment: 10 })
-    expect(h.state.last._calls.eq).toContainEqual(['id', 'r2'])
-
-    await dc.updateTyreRemarks('r3', '[NEEDS REVIEW] x')
-    expect(h.state.last._calls.update).toEqual({ remarks: '[NEEDS REVIEW] x' })
-    expect(h.state.last._calls.eq).toContainEqual(['id', 'r3'])
+  it('backend failure or missing migration fails closed with no table fallback', async () => {
+    h.state.result = { data: null, error: { message: 'Permission denied', code: '42501' } }
+    await expect(dc.correctTyreRecords(changes)).rejects.toMatchObject({ code: '42501' })
+    expect(h.state.last).toBeNull()
   })
 
-  it('upsertTyreRecords upserts on id conflict', async () => {
-    await dc.upsertTyreRecords([{ id: 'a' }, { id: 'b' }])
-    expect(h.state.last._calls.upsert).toEqual([{ id: 'a' }, { id: 'b' }])
-    expect(h.state.last._calls.upsertOpts).toEqual({ onConflict: 'id' })
+  it.each([null, {ids: []}, {ids: ['other']}, {ids: ['a', 'a']}])('incomplete confirmation fails instead of reporting success: %j', async data => {
+    h.state.result = { data, error: null }
+    await expect(dc.correctTyreRecords(changes)).rejects.toThrow('confirmation was incomplete')
   })
 
-  it('insertCleaningLog inserts entries into cleaning_log', async () => {
-    await dc.insertCleaningLog([{ tyre_record_id: 'a' }])
-    expect(h.state.last._table).toBe('cleaning_log')
-    expect(h.state.last._calls.insert).toEqual([{ tyre_record_id: 'a' }])
+  it('duplicate IDs are rejected before sending a mutation', async () => {
+    await expect(dc.correctTyreRecords([...changes,...changes])).rejects.toThrow('distinct')
+    expect(h.supabase.rpc).not.toHaveBeenCalled()
   })
 
-  it('resetTyreClassification clears classification back to pending', async () => {
-    await dc.resetTyreClassification('r4')
-    expect(h.state.last._calls.update).toEqual({ category: null, risk_level: null, remarks_cleaned: null, cleaned: false })
-    expect(h.state.last._calls.eq).toContainEqual(['id', 'r4'])
-  })
-
-  it('deleteCleaningLog deletes by tyre_record_id', async () => {
-    await dc.deleteCleaningLog('r5')
-    expect(h.state.last._table).toBe('cleaning_log')
-    expect(h.state.last._calls.delete).toBe(true)
-    expect(h.state.last._calls.eq).toContainEqual(['tyre_record_id', 'r5'])
+  it('classification and undo carry the original values and reviewed source text', () => {
+    const record = { id: 'a', category: 'Puncture', risk_level: 'Medium', remarks_cleaned: 'Puncture', cleaned: true, description: 'puncture', remarks: null }
+    const change = dc.classificationChange(record,null,true)
+    expect(change.patch).toEqual({ category: null, risk_level: null, remarks_cleaned: null, cleaned: false })
+    expect(change.expected).toEqual({ category: 'Puncture', risk_level: 'Medium', remarks_cleaned: 'Puncture', cleaned: true, description: 'puncture', remarks: null })
   })
 })

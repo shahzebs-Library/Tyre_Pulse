@@ -18,6 +18,7 @@
  */
 
 import { UserRole, isAdminOrAbove, isAdmin } from './types'
+import { APPROVAL_STAGES, canActOnStage } from './checklistApproval'
 
 // ── Module registry ─────────────────────────────────────────────────────────
 // The one place access is defined. `roles` = the roles allowed BY DEFAULT (admin
@@ -360,7 +361,10 @@ export const canReportIssue      = (r: UserRole | null | undefined) => moduleAll
 
 // These stay strictly role-based (management sign-off), unaffected by the removals.
 export const canReviewAccidents   = (r: UserRole | null | undefined) => isAdminOrAbove(r)
-export const canApproveChecklists = (r: UserRole | null | undefined) => isAdminOrAbove(r)
+// Queue access includes every signer in the shared ladder. Decisions still
+// check the current rung and the server enforces scope and signature rules.
+export const canApproveChecklists = (r: UserRole | null | undefined) =>
+  isAdminOrAbove(r) || APPROVAL_STAGES.some(stage => canActOnStage(stage.key, r))
 export const canManageUsers       = (r: UserRole | null | undefined) => isAdmin(r)
 export const canEditRecords       = (r: UserRole | null | undefined) => r === 'admin' || r === 'manager'
 

@@ -63,6 +63,19 @@ void main() {
           'template_id': 'tpl-1',
           'template_name': 'Workshop Daily Checklist',
           'template_version': 2,
+          'template_revision_id': 'rev-1',
+          'template_snapshot_status': 'exact',
+          'template_snapshot_captured_at': '2026-08-20T09:00:01.000Z',
+          'template_snapshot': <String, Object?>{
+            'template_id': 'tpl-1',
+            'fields': <Object?>[
+              <String, Object?>{
+                'id': 'q1',
+                'type': 'text',
+                'label': 'Original',
+              },
+            ],
+          },
           'title': 'WDC-TM514-2026-0001',
           'site': 'NHC',
           'asset_no': 'TM514',
@@ -96,6 +109,9 @@ void main() {
       expect(item.templateId, 'tpl-1');
       expect(item.templateName, 'Workshop Daily Checklist');
       expect(item.templateVersion, 2);
+      expect(item.templateRevisionId, 'rev-1');
+      expect(item.templateSnapshotStatus, 'exact');
+      expect(item.templateSnapshot['template_id'], 'tpl-1');
       expect(item.title, 'WDC-TM514-2026-0001');
       expect(item.site, 'NHC');
       expect(item.assetNo, 'TM514');

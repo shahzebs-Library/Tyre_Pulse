@@ -27,10 +27,13 @@ import {
   ArrowUp, ArrowDown, MapPin, ArrowUpDown, Activity, Clock,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import Card, { CardHeader } from '../components/ui/Card'
+import Modal from '../components/ui/Modal'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   listReadings, createReading, updateReading, deleteReading,
 } from '../lib/api/coldChain'
+import { probeRelation } from '../lib/api/_client'
 import {
   classifyTemp, summarizeColdChain, COLD_CHAIN_STATUS_META,
 } from '../lib/coldChain'
@@ -120,9 +123,17 @@ export default function ColdChain() {
       const data = await listReadings({ country: activeCountry })
       const list = Array.isArray(data) ? data : []
       setRows(list)
-      // listReadings degrades a missing table to [] without throwing; flag it so
-      // the "apply the migration" empty state can render instead of a bare table.
-      setNotProvisioned(false)
+      // listReadings degrades a missing table to [] without throwing, so the
+      // page can never learn from the list alone that `cold_chain_logs` is
+      // absent - which is why the banner below had no way to fire. Ask the
+      // database, and only on a CERTAIN answer (checked && !exists). An empty
+      // list on its own proves nothing: it is the ordinary "nothing logged
+      // yet" case, and claiming otherwise would send someone to the database
+      // for no reason.
+      if (list.length === 0) {
+        const { exists, checked } = await probeRelation('cold_chain_logs')
+        setNotProvisioned(checked && !exists)
+      }
       setUpdatedAt(new Date())
     } catch (err) {
       setError(toUserMessage(err, 'Could not load cold-chain readings.'))
@@ -313,6 +324,9 @@ export default function ColdChain() {
     setFormError(''); setShowModal(true)
   }
   const closeModal = () => { if (!saving) { setShowModal(false); setEditing(null) } }
+  // One guarded close for the delete dialog: Modal routes Escape, the backdrop
+  // and its X through this, so none of them can drop the dialog mid-delete.
+  const closeDelete = () => { if (!deleting) setConfirmDelete(null) }
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
 
   const previewStatus = useMemo(
@@ -396,7 +410,12 @@ export default function ColdChain() {
       />
 
       {notProvisioned && (
-        <div className="card border border-amber-800/50 flex items-start gap-3">
+        // `border border-amber-800/50` as CLASSES would be dead here: Card sets
+        // `border` inline and an inline declaration beats a plain class, so the
+        // tint is carried by `tone`. Card is `flex flex-col` and Tailwind emits
+        // .flex-col after .flex-row, so the row direction goes in `style`, which
+        // Card spreads last.
+        <Card tone="warn" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
           <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
           <div>
             <p className="text-amber-300 font-medium">Cold-Chain monitoring is not enabled on this database yet.</p>
@@ -404,17 +423,17 @@ export default function ColdChain() {
               Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V143_COLD_CHAIN_LOGS.sql</span>, then reload.
             </p>
           </div>
-        </div>
+        </Card>
       )}
 
       {error && (
-        <div className="card border border-red-800/50 flex items-start justify-between gap-3">
+        <Card tone="crit" className="items-start justify-between gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
           <div className="flex items-start gap-3">
             <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
             <div><p className="text-red-300 font-medium">Could not load cold-chain readings.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
           </div>
           <button onClick={load} className="btn-secondary text-sm shrink-0">Retry</button>
-        </div>
+        </Card>
       )}
 
       {/* KPI tiles */}
@@ -422,21 +441,21 @@ export default function ColdChain() {
         {kpis.map((k) => {
           const Icon = k.icon
           return (
-            <div key={k.label} className="card">
+            <Card key={k.label}>
               <div className="flex items-center justify-between">
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={15} className={k.tone} />
               </div>
               <p className={`text-2xl font-bold mt-1 ${k.tone}`}>{rows === null ? NA : k.value}</p>
-            </div>
+            </Card>
           )
         })}
       </div>
 
       {/* Charts row 1 */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="card">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Readings by status</h3>
+        <Card>
+          <CardHeader title="Readings by status" />
           <div className="h-64">
             {hasData
               ? <Doughnut data={donutData} options={donutOpts} />
@@ -448,21 +467,21 @@ export default function ColdChain() {
             <span className="font-semibold text-[var(--text-secondary)]">{analytics.compliancePct == null ? NA : `${analytics.compliancePct}%`}</span>{' '}
             within safe limits across {analytics.assetsMonitored} asset{analytics.assetsMonitored === 1 ? '' : 's'} / {analytics.sitesMonitored} site{analytics.sitesMonitored === 1 ? '' : 's'}.
           </p>
-        </div>
-        <div className="card lg:col-span-2">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-1.5"><Clock size={14} /> Temperature trend (daily)</h3>
+        </Card>
+        <Card className="lg:col-span-2">
+          <CardHeader icon={Clock} title="Temperature trend (daily)" />
           <div className="h-64">
             {hasData
               ? <Line data={trendData} options={trendOpts} />
               : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">{rows === null ? <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" /> : 'No dated readings to trend.'}</div>}
           </div>
-        </div>
+        </Card>
       </div>
 
       {/* Charts row 2 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="card">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Excursion distribution</h3>
+        <Card>
+          <CardHeader title="Excursion distribution" />
           <div className="h-56">
             {hasData
               ? <Bar data={distData} options={distOpts} />
@@ -473,21 +492,27 @@ export default function ColdChain() {
             <div><p className="text-xs text-[var(--text-muted)] flex items-center justify-center gap-0.5"><ArrowUp size={11} /> Above</p><p className="text-lg font-bold text-red-400">{analytics.distribution.above}</p></div>
             <div><p className="text-xs text-[var(--text-muted)] flex items-center justify-center gap-0.5"><ArrowDown size={11} /> Below</p><p className="text-lg font-bold text-sky-400">{analytics.distribution.below}</p></div>
           </div>
-        </div>
-        <div className="card">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Breaches by asset (worst first)</h3>
+        </Card>
+        <Card>
+          <CardHeader title="Breaches by asset (worst first)" />
           <div className="h-56">
             {topBreachAssets.length
               ? <Bar data={assetBarData} options={assetBarOpts} />
               : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">{rows === null ? <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" /> : 'No excursions recorded.'}</div>}
           </div>
-        </div>
+        </Card>
       </div>
 
       {/* Worst assets + excursion episodes */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="card !p-0 overflow-hidden">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] px-4 pt-4 pb-2 flex items-center gap-1.5"><MapPin size={14} /> Compliance by asset</h3>
+        {/* `pad="none" clip` reproduces the edge-to-edge crop the legacy
+            `.card !p-0 overflow-hidden` gave. Clipping is safe here: nothing
+            inside renders an out-of-flow DOM popover - the sticky header lives
+            in the inner scroller, which is unaffected. */}
+        <Card pad="none" clip>
+          <div style={{ padding: 'var(--pad-card)', paddingBottom: 'var(--space-2)' }}>
+            <CardHeader icon={MapPin} title="Compliance by asset" className="!mb-0" />
+          </div>
           <div className="overflow-x-auto max-h-72 overflow-y-auto">
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-[var(--surface-raised)]">
@@ -516,9 +541,11 @@ export default function ColdChain() {
               </tbody>
             </table>
           </div>
-        </div>
-        <div className="card !p-0 overflow-hidden">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] px-4 pt-4 pb-2 flex items-center gap-1.5"><Activity size={14} /> Excursion events</h3>
+        </Card>
+        <Card pad="none" clip>
+          <div style={{ padding: 'var(--pad-card)', paddingBottom: 'var(--space-2)' }}>
+            <CardHeader icon={Activity} title="Excursion events" className="!mb-0" />
+          </div>
           <div className="overflow-x-auto max-h-72 overflow-y-auto">
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-[var(--surface-raised)]">
@@ -552,11 +579,13 @@ export default function ColdChain() {
               </tbody>
             </table>
           </div>
-        </div>
+        </Card>
       </div>
 
-      {/* Filters */}
-      <div className="card space-y-3">
+      {/* Filters. Deliberately NOT clipped, but the native <select>s here would
+          be safe either way: the browser paints an option list as an OS-level
+          popup outside the page's overflow context. */}
+      <Card className="space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[200px]">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
@@ -583,10 +612,11 @@ export default function ColdChain() {
           {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
           <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {summary.total} readings</span>
         </div>
-      </div>
+      </Card>
 
-      {/* Register table */}
-      <div className="card overflow-hidden !p-0">
+      {/* Register table. Clipping is safe: the only popup inside is
+          TablePagination's rows-per-page native <select>. */}
+      <Card pad="none" clip>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -606,8 +636,16 @@ export default function ColdChain() {
                 [0, 1, 2, 3, 4].map((i) => <tr key={i} className="border-b border-[var(--input-border)]/50"><td colSpan={8} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>)
               ) : sorted.length === 0 ? (
                 <tr><td colSpan={8} className="px-4 py-12 text-center text-[var(--text-muted)]">
-                  <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {(rows.length === 0 && !notProvisioned) ? 'No readings logged yet. Log your first reading.' : 'No readings match these filters.'}
+                  {/* Now that notProvisioned can genuinely be true, this cell must
+                      not report a missing table as a filter miss. The banner
+                      above carries the migration instruction. */}
+                  {notProvisioned ? (
+                    <><AlertTriangle size={22} className="mx-auto mb-2 text-amber-400 opacity-80" />No readings, because the cold-chain table has not been provisioned yet.</>
+                  ) : rows.length === 0 ? (
+                    <><ThermometerSnowflake size={22} className="mx-auto mb-2 opacity-60" />No readings logged yet. Log your first reading.</>
+                  ) : (
+                    <><Filter size={22} className="mx-auto mb-2 opacity-60" />No readings match these filters.</>
+                  )}
                 </td></tr>
               ) : (
                 pager.pageRows.map((r) => {
@@ -643,16 +681,23 @@ export default function ColdChain() {
           </table>
         </div>
         <TablePagination {...pager} />
-      </div>
+      </Card>
 
-      {/* Create / Edit modal */}
+      {/* Create / Edit modal. The submit button stays INSIDE the <form> rather
+          than moving to Modal's `footer`: a footer button would need a
+          `form="..."` association to keep submitting, which is a behaviour
+          change, not a migration. `closeModal` already refuses to close while a
+          save is in flight, and Modal routes Escape, the backdrop and its own X
+          through that one guarded callback - the hand-rolled overlay guarded
+          only the backdrop. Modal also owns the height cap the `max-h-[90vh]`
+          was doing by hand, the focus trap, the scroll lock and the portal. */}
       {showModal && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" onClick={closeModal}>
-          <div className="card w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-[var(--text-primary)]">{editing ? 'Edit reading' : 'Log temperature reading'}</h3>
-              <button onClick={closeModal} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
-            </div>
+        <Modal
+          open
+          onClose={closeModal}
+          size="md"
+          title={editing ? 'Edit reading' : 'Log temperature reading'}
+        >
             <form onSubmit={submit} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -708,31 +753,36 @@ export default function ColdChain() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
+        </Modal>
       )}
 
-      {/* Delete confirm */}
+      {/* Delete confirm. No <form> here, so the actions belong in Modal's
+          `footer`, which pins them where a user can always reach them. The
+          legacy overlay guarded only its backdrop against closing mid-delete
+          and had no X at all; `closeDelete` is now the single guarded close
+          behind Escape, the backdrop and the X alike. */}
       {confirmDelete && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" onClick={() => !deleting && setConfirmDelete(null)}>
-          <div className="card w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-full bg-red-900/30 flex items-center justify-center shrink-0"><Trash2 size={18} className="text-red-400" /></div>
-              <div>
-                <h3 className="text-[var(--text-primary)] font-semibold">Delete this reading?</h3>
-                <p className="text-sm text-[var(--text-muted)] mt-1">
-                  {confirmDelete.asset_no || 'Reading'} at {confirmDelete.temperature_c == null ? NA : `${confirmDelete.temperature_c} C`} on {fmtDateTime(confirmDelete.recorded_at)}. This cannot be undone.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center justify-end gap-2 mt-5">
-              <button onClick={() => setConfirmDelete(null)} className="btn-secondary text-sm" disabled={deleting}>Cancel</button>
+        <Modal
+          open
+          onClose={closeDelete}
+          size="sm"
+          title="Delete this reading?"
+          footer={
+            <>
+              <button onClick={closeDelete} className="btn-secondary text-sm" disabled={deleting}>Cancel</button>
               <button onClick={doDelete} className="btn-danger text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={deleting}>
                 <Trash2 size={14} /> {deleting ? 'Deleting' : 'Delete'}
               </button>
-            </div>
+            </>
+          }
+        >
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-full bg-red-900/30 flex items-center justify-center shrink-0"><Trash2 size={18} className="text-red-400" /></div>
+            <p className="text-sm text-[var(--text-muted)]">
+              {confirmDelete.asset_no || 'Reading'} at {confirmDelete.temperature_c == null ? NA : `${confirmDelete.temperature_c} C`} on {fmtDateTime(confirmDelete.recorded_at)}. This cannot be undone.
+            </p>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   )

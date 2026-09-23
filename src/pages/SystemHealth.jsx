@@ -82,7 +82,7 @@ const OVERALL_BANNER = {
 }
 
 function formatLatency(ms) {
-  if (ms == null) return '—'
+  if (ms == null) return 'N/A'
   if (ms < 1000) return `${ms} ms`
   return `${(ms / 1000).toFixed(2)} s`
 }
@@ -103,7 +103,7 @@ function CheckTile({ check }) {
         </span>
       </div>
       <div className="flex items-center justify-between gap-2 text-xs text-muted">
-        <span className="truncate" title={check.detail}>{check.detail || '—'}</span>
+        <span className="truncate" title={check.detail}>{check.detail || 'N/A'}</span>
         <span className={cn('tabular-nums whitespace-nowrap font-medium', s.text)}>{formatLatency(check.latencyMs)}</span>
       </div>
     </div>
@@ -221,7 +221,7 @@ export default function SystemHealth() {
     <div className="space-y-6">
       <PageHeader
         title="System Health"
-        subtitle="Live status of database, storage, edge functions and auth"
+        subtitle="Read access, storage, remote authentication and function preflight checks; business workflows are not exercised"
         icon={Activity}
         onRefresh={refresh}
         refreshing={refreshing}

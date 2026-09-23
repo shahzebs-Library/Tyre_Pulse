@@ -6,7 +6,7 @@ const h = vi.hoisted(() => {
   const state = { tables: {}, calls: [] }
   const METHODS = [
     'select', 'eq', 'in', 'order', 'limit', 'or', 'range', 'neq', 'gte', 'lte',
-    'maybeSingle', 'single', 'insert', 'update', 'delete',
+    'maybeSingle', 'single', 'insert', 'update', 'delete', 'upsert',
   ]
   function makeBuilder(table) {
     const rec = { table, ops: [] }
@@ -15,8 +15,10 @@ const h = vi.hoisted(() => {
     for (const m of METHODS) {
       builder[m] = (...args) => { rec.ops.push([m, args]); return builder }
     }
-    builder.then = (resolve, reject) =>
-      Promise.resolve(state.tables[table] || { data: null, error: null }).then(resolve, reject)
+    builder.then = (resolve, reject) => {
+      const result = state.tables[table]
+      return Promise.resolve(Array.isArray(result) ? result.shift() : result || { data: null, error: null }).then(resolve, reject)
+    }
     return builder
   }
   return {
@@ -70,6 +72,26 @@ describe('listWashRecords', () => {
 })
 
 describe('createWashRecord', () => {
+  it('recovers an identical retry but refuses to discard changed details after an earlier save', async () => {
+    const input={asset_no:'A',wash_date:'2026-09-21',client_uuid:'key',wash_details:{version:1,chemical_status:'none',chemicals:[]}}
+    h.state.tables.wash_records={data:{id:'w1'}}
+    await api.createWashRecord(input)
+    const [payload]=opArgs(lastCall('wash_records'),'upsert')[0]
+    const existing={...payload,id:'w1',wash_details:{chemicals:[],chemical_status:'none',version:1}}
+    h.state.tables.wash_records=[{data:null},{data:existing}]
+    expect((await api.createWashRecord(input)).id).toBe('w1')
+    h.state.tables.wash_records=[{data:null},{data:existing}]
+    await expect(api.createWashRecord({...input,notes:'Changed after uncertain save'})).rejects.toThrow('already saved with different details')
+  })
+  it('uses a stable client key to ignore upload retries without overwriting evidence', async () => {
+    h.state.tables.wash_records = { data: { id: 'w1' }, error: null }
+    await api.createWashRecord({ asset_no: 'A', client_uuid: 'stable-key', wash_details: {version:1,chemical_status:'none',chemicals:[]} })
+    const [payload,options] = opArgs(lastCall('wash_records'),'upsert')[0]
+    expect(payload.client_uuid).toBe('stable-key')
+    expect(payload.wash_details.chemical_status).toBe('none')
+    expect(payload.created_by).toBeUndefined()
+    expect(options).toEqual({onConflict:'client_uuid',ignoreDuplicates:true})
+  })
   it('maps and coerces fields, validates vocab, requires asset_no', async () => {
     h.state.tables.wash_records = { data: { id: 'w2' }, error: null }
     const out = await api.createWashRecord({

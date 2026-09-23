@@ -167,6 +167,10 @@ abstract final class TpRouteGuards {
 
     // Field work.
     TpRouteId.newInspection: ModuleGuarded(RouteModule.inspect),
+    // Guarded like the capture screen, not left to the AuthenticatedOnly
+    // fallback: a plan names an asset, a site and the person expected to do
+    // the work, so it is inspection data and belongs behind the same module.
+    TpRouteId.myPlans: ModuleGuarded(RouteModule.inspect),
     TpRouteId.scanner: ModuleGuarded(RouteModule.scan),
     TpRouteId.serialSearch: ModuleGuarded(RouteModule.serial),
     TpRouteId.tyreChange: ModuleGuarded(RouteModule.tyreChange),

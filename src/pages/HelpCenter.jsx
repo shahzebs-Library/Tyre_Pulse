@@ -25,6 +25,7 @@ import {
 } from '../lib/api/support'
 import { FAQ_CATEGORIES, searchFaqs, groupFaqsByCategory, visibleFaqsForRole } from '../lib/help/faqs'
 import { toUserMessage } from '../lib/safeError'
+import { isMissingRelation } from '../lib/api/_client'
 
 const CATEGORY_META = {
   bug: { label: 'Bug / Error', icon: Bug, tint: 'text-red-400' },
@@ -52,10 +53,6 @@ function fmtDateTime(v) {
   if (!v) return '-'
   const d = new Date(v)
   return Number.isNaN(d.getTime()) ? '-' : d.toLocaleString()
-}
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') || m.includes('schema cache') || m.includes('could not find the table')
 }
 
 // ─── FAQ accordion ────────────────────────────────────────────────────────────
@@ -200,7 +197,7 @@ function ReportForm({ onSubmitted }) {
     return (
       <div className="card text-center py-10 space-y-3">
         <CheckCircle2 size={32} className="mx-auto text-green-400" />
-        <p className="text-[var(--text-primary)] font-semibold">Thanks — your issue has been sent.</p>
+        <p className="text-[var(--text-primary)] font-semibold">Thanks, your issue has been sent.</p>
         <p className="text-sm text-[var(--text-muted)]">Your administrator has been notified. Track progress under My tickets.</p>
         <button className="btn-secondary text-sm" onClick={() => setDone(false)}>Report another</button>
       </div>

@@ -4,7 +4,7 @@
  * Endpoint config lives in `app_settings` under key `webhook_endpoints`
  * (same non-secret JSON-blob pattern as erp.js / `erp_connection`):
  *   [{ id, url, events: ['workorder.created', ...] | ['*'], enabled,
- *      secret?, description, created_by, created_at }]
+ *      requires_server_signing?, description, created_by, created_at }]
  *
  * dispatchEvent(event) POSTs `{ id, type, occurred_at, payload }` to every
  * enabled endpoint subscribed to the event type. Fire-and-forget: 5s timeout,
@@ -15,10 +15,8 @@
  *   • https:// only — enforced at save time AND again at dispatch time (a row
  *     edited directly in the DB still can't target http/internal hosts).
  *   • Obvious internal/SSRF targets are blocked: localhost, 127.*, 10.*,
- *     172.16-31.*, 192.168.*, 169.254.*, 0.0.0.0, [::1], *.local, *.internal.
- *   • Optional HMAC-SHA256 signature (`X-TyrePulse-Signature`, hex) over the
- *     exact body via WebCrypto so receivers can verify authenticity. If
- *     crypto.subtle is unavailable the header is simply omitted.
+ *   Signed endpoints require a server-managed delivery service. Browser settings
+ *   never persist signing secrets, and legacy signed endpoints are blocked.
  *
  * HONEST LIMITATION: this dispatcher runs in the browser, so delivery is
  * best-effort — receivers must allow CORS (or use a relay such as n8n, a
@@ -26,6 +24,7 @@
  * while a user has the app open. The panel copy says so explicitly.
  */
 import { supabase } from './supabase'
+import { getConfiguration, saveConfiguration, configurationGeneration } from './configurationStore'
 import { addBreadcrumb } from './monitoring'
 
 const KEY = 'webhook_endpoints'
@@ -71,6 +70,7 @@ export function endpointAcceptsEvent(endpoint, eventType) {
 }
 
 // ── Config persistence (app_settings, erp.js pattern) ────────────────────────
+let cacheGeneration = -1
 let cache = { endpoints: null, fetchedAt: 0 }
 
 /** Drop the in-memory endpoint cache (used after saves and in tests). */
@@ -84,7 +84,7 @@ function sanitizeEndpoint(raw) {
     url: String(raw.url || '').trim().slice(0, 500),
     events: Array.isArray(raw.events) && raw.events.length ? raw.events.slice(0, 50) : ['*'],
     enabled: !!raw.enabled,
-    secret: raw.secret ? String(raw.secret).slice(0, 200) : null,
+    requires_server_signing: Boolean(raw.secret || raw.requires_server_signing),
     description: String(raw.description || '').slice(0, 200),
     created_by: raw.created_by ?? null,
     created_at: raw.created_at || new Date().toISOString(),
@@ -93,22 +93,24 @@ function sanitizeEndpoint(raw) {
 
 /** Read saved webhook endpoints (cached with a short TTL). Never throws. */
 export async function getWebhookEndpoints({ force = false } = {}) {
+  const generation = configurationGeneration()
+  if (cacheGeneration !== generation) { clearWebhookCache(); cacheGeneration = generation }
   const now = Date.now()
   if (!force && cache.endpoints && now - cache.fetchedAt < CACHE_TTL_MS) return cache.endpoints
   try {
-    const { data, error } = await supabase
-      .from('app_settings').select('value').eq('key', KEY).maybeSingle()
+    const { data, error } = await getConfiguration(supabase, 'app_settings', KEY)
     if (error) throw error
     let list = []
     if (data?.value) {
       const v = typeof data.value === 'string' ? JSON.parse(data.value) : data.value
       if (Array.isArray(v)) list = v.map(sanitizeEndpoint)
     }
+    if (generation !== configurationGeneration()) return []
     cache = { endpoints: list, fetchedAt: now }
     return list
   } catch (err) {
     console.warn('[webhooks] could not load endpoints (non-blocking):', err?.message || err)
-    return cache.endpoints || []
+    return generation === configurationGeneration() ? (cache.endpoints || []) : []
   }
 }
 
@@ -118,41 +120,25 @@ export async function getWebhookEndpoints({ force = false } = {}) {
  * Throws on validation/persistence failure so the panel can show the error.
  */
 export async function saveWebhookEndpoints(endpoints) {
-  const list = (Array.isArray(endpoints) ? endpoints : []).slice(0, MAX_ENDPOINTS).map(sanitizeEndpoint)
+  const generation = configurationGeneration()
+  const entries = Array.isArray(endpoints) ? endpoints : []
+  if (entries.some(endpoint => endpoint?.secret)) {
+    throw new Error('Signing secrets must be managed by the server. Browser webhook settings cannot store secrets.')
+  }
+  const list = entries.slice(0, MAX_ENDPOINTS).map(sanitizeEndpoint)
   for (const ep of list) {
     const check = validateWebhookUrl(ep.url)
     if (!check.ok) throw new Error(`${ep.url || '(empty)'}: ${check.reason}`)
   }
-  const { error } = await supabase.from('app_settings').upsert(
-    { key: KEY, value: JSON.stringify(list) }, { onConflict: 'key' },
-  )
+  const { error } = await saveConfiguration(supabase, 'app_settings', { key: KEY, value: JSON.stringify(list) })
   if (error) throw new Error(error.message || 'Could not save webhook endpoints.')
+  if (generation !== configurationGeneration()) throw new Error('Organisation changed. Reload webhook settings.')
+  cacheGeneration = generation
   cache = { endpoints: list, fetchedAt: Date.now() }
   return list
 }
 
 // ── Signing ───────────────────────────────────────────────────────────────────
-/**
- * Hex HMAC-SHA256 of `body` with `secret` via WebCrypto.
- * Returns null when crypto.subtle is unavailable (header is then omitted).
- */
-export async function signBody(secret, body) {
-  try {
-    const subtle = typeof crypto !== 'undefined' ? crypto.subtle : undefined
-    if (!subtle || !secret) return null
-    const enc = new TextEncoder()
-    const key = await subtle.importKey(
-      'raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'],
-    )
-    const sig = await subtle.sign('HMAC', key, enc.encode(body))
-    return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, '0')).join('')
-  } catch (err) {
-    console.warn('[webhooks] signing failed — sending unsigned:', err?.message || err)
-    return null
-  }
-}
-
-// ── Delivery ──────────────────────────────────────────────────────────────────
 async function deliverToEndpoint(endpoint, event) {
   // Re-validate at dispatch time: a row edited straight in the DB must still
   // never make the browser call an internal/plain-http target.
@@ -161,6 +147,9 @@ async function deliverToEndpoint(endpoint, event) {
     console.warn(`[webhooks] skipped "${endpoint.url}": ${check.reason}`)
     return { ok: false, reason: check.reason }
   }
+  if (endpoint.secret || endpoint.requires_server_signing) {
+    return { ok: false, reason: 'Server-managed signing is required. This endpoint cannot receive browser deliveries.' }
+  }
   const body = JSON.stringify({
     id: event.id,
     type: event.type,
@@ -168,15 +157,12 @@ async function deliverToEndpoint(endpoint, event) {
     payload: event.payload ?? {},
   })
   const headers = { 'Content-Type': 'application/json' }
-  if (endpoint.secret) {
-    const signature = await signBody(endpoint.secret, body)
-    if (signature) headers['X-TyrePulse-Signature'] = signature
-  }
   const controller = typeof AbortController !== 'undefined' ? new AbortController() : null
   const timer = controller ? setTimeout(() => controller.abort(), DISPATCH_TIMEOUT_MS) : null
   try {
     const res = await fetch(endpoint.url, {
       method: 'POST',
+      redirect: 'error',
       headers,
       body,
       signal: controller?.signal,

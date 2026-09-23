@@ -15,6 +15,7 @@ import {
 } from '../lib/checklist/checklistRoles'
 import { resolveChecklistIcon, checklistIconComponent } from '../lib/checklist/checklistIcons'
 import { toUserMessage } from '../lib/safeError'
+import { isMissingRelation } from '../lib/api/_client'
 
 /**
  * The template's icon, resolved rather than printed raw - `icon` holds an emoji
@@ -30,11 +31,6 @@ function TemplateIcon({ template }) {
 }
 
 // "Tables not deployed yet" heuristic — mirrors Billing.jsx / Checklists.jsx.
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') ||
-    m.includes('schema cache') || m.includes('could not find the table')
-}
 
 // ── Date helpers (null-safe) ────────────────────────────────────────────────
 const MS_DAY = 86400000
@@ -56,10 +52,10 @@ function dueDeltaDays(due) {
 }
 
 function fmtDate(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
   return Number.isNaN(d.getTime())
-    ? '—'
+    ? 'N/A'
     : d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
@@ -241,11 +237,12 @@ export default function MyChecklists() {
 
   const handleSkip = useCallback(async (a) => {
     if (!a?.id) return
-    if (!window.confirm(`Skip "${a.template_name || 'this checklist'}"? It will be marked skipped and removed from your to-do list.`)) return
+    const reason = window.prompt(`Why is "${a.template_name || 'this checklist'}" being skipped? This reason becomes part of the audit record.`)
+    if (!reason?.trim()) return
     setBusyId(a.id); setError('')
     try {
-      await skipAssignment(a.id)
-      setAssignments((prev) => prev.map((r) => r.id === a.id ? { ...r, status: 'skipped' } : r))
+      const updated = await skipAssignment(a.id, reason)
+      setAssignments((prev) => prev.map((r) => r.id === a.id ? { ...r, ...updated } : r))
       showToast('success', 'Assignment skipped.')
     } catch (err) {
       showToast('error', toUserMessage(err, 'Could not skip this assignment.'))
@@ -284,7 +281,7 @@ export default function MyChecklists() {
     <div className="space-y-6">
       <PageHeader
         title="My Checklists"
-        subtitle="Checklist assignments due to you — start, complete, or skip scheduled inspections."
+        subtitle="Checklist assignments due to you: start, complete, or skip scheduled inspections."
         icon={ClipboardCheck}
         badge={!loading && !missing ? `${kpis.overdue + kpis.pending} to do` : undefined}
         actions={headerActions}
@@ -413,7 +410,7 @@ export default function MyChecklists() {
           {kpis.overdue + kpis.pending === 0 ? (
             <>
               <CheckCircle2 size={36} className="mx-auto text-green-400" />
-              <p className="text-[var(--text-primary)] font-semibold">You're all caught up — no checklists due</p>
+              <p className="text-[var(--text-primary)] font-semibold">You're all caught up, no checklists due</p>
               <p className="text-sm text-[var(--text-muted)] max-w-md mx-auto">
                 Scheduled assignments will appear here as they come due. Browse published checklists to run one on demand.
               </p>
@@ -484,7 +481,7 @@ export default function MyChecklists() {
                             <Boxes size={12} /> {a.asset_no}
                           </span>
                         )}
-                        {!a.site && !a.asset_no && <span className="text-[var(--text-muted)]">—</span>}
+                        {!a.site && !a.asset_no && <span className="text-[var(--text-muted)]">N/A</span>}
                       </div>
                     </td>
                     <td className="table-cell whitespace-nowrap">

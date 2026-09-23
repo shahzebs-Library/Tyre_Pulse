@@ -28,6 +28,7 @@ import { safeHref } from '../lib/safeUrl'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 const EVENT_TYPES = [
   { value: 'collision', label: 'Collision' },
@@ -62,12 +63,12 @@ const EMPTY_FORM = {
 }
 
 const fmtSpeed = (v) =>
-  v == null || v === '' ? '—' : `${Number(v).toLocaleString()} km/h`
+  v == null || v === '' ? 'N/A' : `${Number(v).toLocaleString()} km/h`
 
 function fmtDateTime(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleString()
 }
 
 /** Convert a stored ISO timestamp to the value a datetime-local input expects. */
@@ -82,15 +83,10 @@ function toLocalInput(v) {
 function SeverityBadge({ value }) {
   const sev = String(value || '').toLowerCase()
   const cls = SEVERITY_BADGE[sev] || 'bg-[var(--input-bg)] text-[var(--text-muted)] border border-[var(--input-border)]'
-  const label = SEVERITIES.find((s) => s.value === sev)?.label || '—'
+  const label = SEVERITIES.find((s) => s.value === sev)?.label || 'N/A'
   return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${cls}`}>{label}</span>
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') ||
-    m.includes('schema cache') || m.includes('could not find the table')
-}
 
 export default function VideoTelematics() {
   const { activeCountry } = useSettings()
@@ -237,7 +233,7 @@ export default function VideoTelematics() {
     <div className="space-y-6">
       <PageHeader
         title="Video Telematics"
-        subtitle="Capture and triage AI-dashcam safety events — collisions, harsh braking, distraction, and more — per asset and driver, with severity, location, and video evidence for coaching and claims."
+        subtitle="Capture and triage AI-dashcam safety events (collisions, harsh braking, distraction, and more) per asset and driver, with severity, location, and video evidence for coaching and claims."
         icon={Video}
         onRefresh={load}
         refreshing={refreshing}
@@ -247,7 +243,7 @@ export default function VideoTelematics() {
             <button onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'dashcam_events')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileSpreadsheet size={14} /> Excel
             </button>
-            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Video Telematics — Dashcam Events', 'dashcam_events', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Video Telematics: Dashcam Events', 'dashcam_events', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileText size={14} /> PDF
             </button>
             <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5" disabled={notProvisioned}>
@@ -286,7 +282,7 @@ export default function VideoTelematics() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -374,14 +370,14 @@ export default function VideoTelematics() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={9} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {rows.length === 0 && !notProvisioned ? 'No events logged yet — log your first event.' : 'No events match these filters.'}
+                  {rows.length === 0 && !notProvisioned ? 'No events logged yet. Log your first event.' : 'No events match these filters.'}
                 </td></tr>
               ) : (
                 pager.pageRows.map((r) => (
                   <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                    <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.asset_no || '—'}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.driver_name || '—'}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{EVENT_TYPE_LABEL[r.event_type] || r.event_type || '—'}</td>
+                    <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.asset_no || 'N/A'}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.driver_name || 'N/A'}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{EVENT_TYPE_LABEL[r.event_type] || r.event_type || 'N/A'}</td>
                     <td className="px-4 py-2.5"><SeverityBadge value={r.severity} /></td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDateTime(r.event_at)}</td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtSpeed(r.speed_kmh)}</td>
@@ -395,7 +391,7 @@ export default function VideoTelematics() {
                         ? <a href={safeHref(r.video_url)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sky-400 hover:text-sky-300 text-xs" aria-label="Open video"><ExternalLink size={13} /> Clip</a>
                         : r.video_url
                           ? <span className="inline-flex items-center gap-1 text-[var(--text-muted)] text-xs"><ExternalLink size={13} /> Clip</span>
-                          : <span className="text-[var(--text-muted)]">—</span>}
+                          : <span className="text-[var(--text-muted)]">N/A</span>}
                     </td>
                     <td className="px-4 py-2.5">
                       <div className="flex items-center justify-end gap-1">
@@ -506,7 +502,7 @@ export default function VideoTelematics() {
               <div>
                 <h3 className="text-[var(--text-primary)] font-semibold">Delete this event?</h3>
                 <p className="text-sm text-[var(--text-muted)] mt-1">
-                  {confirmDelete.asset_no || 'Event'} · {EVENT_TYPE_LABEL[confirmDelete.event_type] || confirmDelete.event_type || '—'} · {fmtDateTime(confirmDelete.event_at)}. This can’t be undone.
+                  {confirmDelete.asset_no || 'Event'} · {EVENT_TYPE_LABEL[confirmDelete.event_type] || confirmDelete.event_type || 'N/A'} · {fmtDateTime(confirmDelete.event_at)}. This can’t be undone.
                 </p>
               </div>
             </div>

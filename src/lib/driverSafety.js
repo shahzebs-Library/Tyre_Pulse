@@ -453,13 +453,13 @@ export function computeDriverSafetyBand(d = {}) {
 
 /** Static coaching guidance keyed by event category (real advice, not data). */
 export const COACHING_TIPS = Object.freeze({
-  harsh_brake: 'Anticipate stops earlier — ease off the throttle 3–4 s before braking. Cuts brake heat and tyre scrub.',
+  harsh_brake: 'Anticipate stops earlier. Ease off the throttle 3 to 4 s before braking. Cuts brake heat and tyre scrub.',
   harsh_accel: 'Avoid jack-rabbit starts. Smooth acceleration limits tyre slip and drive-axle wear at launch.',
   harsh_corner: 'Reduce entry speed before the curve, not during. Lateral G-load is what burns shoulder tread.',
   speeding: 'Hold within the posted limit. Sustained high speed raises casing temperature and wear rate.',
-  overspeed: 'Sustained overspeed overheats tyres in GCC conditions — the top driver-attributable failure cause.',
+  overspeed: 'Sustained overspeed overheats tyres in GCC conditions, the top driver-attributable failure cause.',
   idling: 'Cut idle time. Prolonged idling wastes fuel and heat-soaks stationary tyres.',
-  fatigue: 'Enforce mandated rest breaks and rotate long hauls — fatigue events precede the most severe incidents.',
+  fatigue: 'Enforce mandated rest breaks and rotate long hauls. Fatigue events precede the most severe incidents.',
   other: 'Schedule a ride-along review to pinpoint the recurring behaviour.',
 })
 

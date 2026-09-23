@@ -7,7 +7,7 @@
  *    Engineering-KPI engine (kpiEngine.computeCpkFleet — never re-derived here),
  *    a peer percentile + performance band per asset (drill to /asset-management/:assetNo),
  *    a tyre-spend breakdown, a monthly CPK trend, GCC benchmark comparison and
- *    annual savings potential. Honest '—' wherever km/cost is missing.
+ *    annual savings potential. Honest 'N/A' wherever km/cost is missing.
  *
  *  • What-if calculator — the executive projection model (pure `src/lib/tco.js`
  *    computeTco): capital depreciation, fuel, maintenance, tyres, insurance and
@@ -26,6 +26,7 @@ import {
   PiggyBank, Download, FileText, Loader2, AlertTriangle, ArrowRight, TrendingUp,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import Card, { CardHeader } from '../components/ui/Card'
 import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import EmailPdfButton from '../components/EmailPdfButton'
 import { useSettings } from '../contexts/SettingsContext'
@@ -101,7 +102,7 @@ function FleetActuals() {
   const canonicalCpk = useMemo(() => computeCpkFleet(records), [records])
 
   const money = (v) => formatCurrencyCompact(v, activeCurrency)
-  const cpkStr = (v) => (v == null ? '—' : `${formatCurrency(v, activeCurrency, 3)}/km`)
+  const cpkStr = (v) => (v == null ? 'N/A' : `${formatCurrency(v, activeCurrency, 3)}/km`)
   const muted = chartMutedColor()
 
   const { assets, rollup, monthly, breakdown, savings, benchmarks, meta } = actuals
@@ -155,7 +156,7 @@ function FleetActuals() {
         { key: 'percentile', header: 'Percentile' },
         { key: 'band', header: 'Band' },
       ],
-      'Fleet Actuals — Per-Asset TCO',
+      'Fleet Actuals: Per-Asset TCO',
       'TyrePulse_FleetActuals_TCO',
       'landscape',
     )
@@ -171,7 +172,12 @@ function FleetActuals() {
   }
   if (error) {
     return (
-      <div className="card border border-red-500/30 flex items-start gap-3">
+      /* `border border-red-500/30` would be DEAD on a Card - Card writes
+         `border` inline and a plain utility loses to that - so the red edge
+         comes from `tone`. Card is also `flex flex-col`, and `.flex-col` is
+         emitted after `.flex-row`, so the row direction has to go in `style`,
+         which Card spreads last. */
+      <Card tone="crit" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
         <AlertTriangle className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
         <div>
           <p className="text-sm font-semibold text-red-300">Could not load fleet TCO data</p>
@@ -180,19 +186,24 @@ function FleetActuals() {
             <RotateCcw size={13} /> Retry
           </button>
         </div>
-      </div>
+      </Card>
     )
   }
   if (!records.length) {
     return (
-      <div className="card flex flex-col items-center justify-center py-20 text-center gap-2">
+      /* `py-20` would be DEAD on a Card - Card sets `padding` inline - so the
+         roominess an empty state exists for goes in `style`, which Card spreads
+         after its own `padding`, leaving the inline-axis padding intact. The
+         token scale stops at --space-12 (3rem), so the original 5rem is written
+         out rather than silently shrunk. */
+      <Card className="flex-col items-center justify-center text-center gap-2" style={{ paddingBlock: '5rem' }}>
         <Truck className="h-10 w-10 text-[var(--text-muted)]" />
         <p className="text-sm font-semibold text-[var(--text-secondary)]">No tyre records for this scope</p>
         <p className="text-xs text-[var(--text-muted)] max-w-sm">
           Fleet actuals derive from recorded tyre procurement and odometer readings. Add tyre records
           (or widen the country filter) to see per-asset cost of ownership.
         </p>
-      </div>
+      </Card>
     )
   }
 
@@ -200,7 +211,7 @@ function FleetActuals() {
     { label: 'Total tyre TCO', value: money(rollup.total_tco), icon: Wallet, tone: 'text-[var(--brand-bright)]' },
     {
       label: 'Fleet CPK (canonical)',
-      value: canonicalCpk.validCount ? cpkStr(canonicalCpk.fleetAvgCpk) : '—',
+      value: canonicalCpk.validCount ? cpkStr(canonicalCpk.fleetAvgCpk) : 'N/A',
       icon: Gauge,
       tone: 'text-sky-400',
       sub: canonicalCpk.validCount
@@ -213,22 +224,26 @@ function FleetActuals() {
 
   return (
     <div className="space-y-4">
-      {/* Data scope notes */}
+      {/* Data scope notes. BOTH are honesty affordances on a money page and are
+          reproduced verbatim: the first is the mixed-currency warning that stops
+          a blended cross-country total being read as one currency, the second
+          says the read was capped. `border border-amber-500/30` would be dead on
+          a Card, so the amber edge comes from `tone="warn"`. */}
       {activeCountry === 'All' && (
-        <div className="card border border-amber-500/30 flex items-start gap-2">
+        <Card tone="warn" className="items-start gap-[var(--space-2)]" style={{ flexDirection: 'row' }}>
           <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
           <p className="text-xs text-amber-300">
             Mixed currencies: tyre cost of ownership across countries is shown under one currency label. Pick a country for a single-currency total.
           </p>
-        </div>
+        </Card>
       )}
       {truncated && (
-        <div className="card border border-amber-500/30 flex items-start gap-2">
+        <Card tone="warn" className="items-start gap-[var(--space-2)]" style={{ flexDirection: 'row' }}>
           <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
           <p className="text-xs text-amber-300">
             Capped view: only the most recent 50,000 tyre records were loaded. Figures may be incomplete. Narrow the country to see full detail.
           </p>
-        </div>
+        </Card>
       )}
 
       {/* Headline KPIs */}
@@ -236,46 +251,50 @@ function FleetActuals() {
         {headline.map((h) => {
           const Icon = h.icon
           return (
-            <div key={h.label} className="card">
+            <Card key={h.label}>
               <div className="flex items-center justify-between">
                 <p className="text-xs text-[var(--text-muted)]">{h.label}</p>
                 <Icon size={15} className={h.tone} />
               </div>
               <p className={`text-2xl font-bold mt-1 ${h.tone}`}>{h.value}</p>
               {h.sub && <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{h.sub}</p>}
-            </div>
+            </Card>
           )
         })}
       </div>
 
-      {/* Charts */}
+      {/* Charts. Neither card is clipped: both hold a canvas that stays inside
+          its own box, and Card no longer clips by default. */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="card">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-1">Tyre spend by position</h3>
-          <p className="text-xs text-[var(--text-muted)] mb-3">
-            Actual procurement across {meta.recordCount.toLocaleString()} records
-          </p>
+        <Card>
+          <CardHeader
+            title="Tyre spend by position"
+            description={`Actual procurement across ${meta.recordCount.toLocaleString()} records`}
+          />
           <div className="h-56">
             {breakdown.length
               ? <Doughnut data={doughnut} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: muted, boxWidth: 12 } } } }} />
               : <div className="h-full grid place-items-center text-sm text-[var(--text-muted)]">No costed records.</div>}
           </div>
-        </div>
-        <div className="card">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-1">Monthly cost per km</h3>
-          <p className="text-xs text-[var(--text-muted)] mb-3">
-            From removal-month stints; gaps where km is unknown
-          </p>
+        </Card>
+        <Card>
+          <CardHeader
+            title="Monthly cost per km"
+            description="From removal-month stints; gaps where km is unknown"
+          />
           <div className="h-56">
             {monthly.some((m) => m.cpk != null)
               ? <Line data={trend} options={lineOpts} />
               : <div className="h-full grid place-items-center text-sm text-[var(--text-muted)]">No attributable km by month yet.</div>}
           </div>
-        </div>
+        </Card>
       </div>
 
-      {/* Per-asset table */}
-      <div className="card">
+      {/* Per-asset table. The header keeps its own bespoke row rather than moving
+          into CardHeader's `actions` slot: that slot is flex-shrink-0 and cannot
+          wrap, so three export buttons in it would push the card wider than a
+          phone instead of wrapping. */}
+      <Card>
         <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
           <h3 className="text-sm font-semibold text-[var(--text-primary)] inline-flex items-center gap-1.5">
             <BarChart3 size={15} className="text-[var(--brand-bright)]" /> Per-asset actual TCO
@@ -297,7 +316,7 @@ function FleetActuals() {
                     { key: 'percentile', header: 'Percentile' },
                     { key: 'band', header: 'Band' },
                   ],
-                  'Fleet Actuals — Per-Asset TCO',
+                  'Fleet Actuals: Per-Asset TCO',
                   'TyrePulse_FleetActuals_TCO',
                   'landscape',
                   '',
@@ -327,15 +346,15 @@ function FleetActuals() {
                   onClick={() => navigate(`/asset-management/${encodeURIComponent(a.asset_no)}`)}
                 >
                   <td className="py-2 pr-3 font-medium text-[var(--text-secondary)]">{a.asset_no}</td>
-                  <td className="py-2 pr-3 text-[var(--text-muted)]">{a.vehicle_type || '—'}</td>
+                  <td className="py-2 pr-3 text-[var(--text-muted)]">{a.vehicle_type || 'N/A'}</td>
                   <td className="py-2 pr-3 font-mono text-[var(--text-secondary)]">{money(a.tyre_procurement)}</td>
-                  <td className="py-2 pr-3 font-mono text-[var(--text-muted)]">{a.km > 0 ? a.km.toLocaleString() : '—'}</td>
+                  <td className="py-2 pr-3 font-mono text-[var(--text-muted)]">{a.km > 0 ? a.km.toLocaleString() : 'N/A'}</td>
                   <td className="py-2 pr-3 font-mono text-[var(--text-secondary)]">{cpkStr(a.cost_per_km)}</td>
-                  <td className="py-2 pr-3 font-mono text-[var(--text-muted)]">{a.percentile == null ? '—' : `P${a.percentile}`}</td>
+                  <td className="py-2 pr-3 font-mono text-[var(--text-muted)]">{a.percentile == null ? 'N/A' : `P${a.percentile}`}</td>
                   <td className="py-2 pr-3">
                     {a.band
                       ? <span className={`text-[11px] px-1.5 py-0.5 rounded border capitalize ${BAND_STYLE[a.band] || ''}`}>{a.band}</span>
-                      : <span className="text-[var(--text-muted)]">—</span>}
+                      : <span className="text-[var(--text-muted)]">N/A</span>}
                   </td>
                   <td className="py-2 pr-1 text-[var(--text-muted)]"><ArrowRight size={14} /></td>
                 </tr>
@@ -347,10 +366,12 @@ function FleetActuals() {
         {assets.length > 50 && (
           <p className="text-[11px] text-[var(--text-muted)] mt-2">Showing top 50 of {assets.length} assets by spend. Export for the full list.</p>
         )}
-      </div>
+      </Card>
 
-      {/* Savings potential */}
-      <div className="card">
+      {/* Savings potential. Bespoke header kept: the PiggyBank green and the
+          headline figure beside it are semantic, and CardHeader renders its icon
+          in --text-muted with no colour hook. */}
+      <Card>
         <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
           <h3 className="text-sm font-semibold text-[var(--text-primary)] inline-flex items-center gap-1.5">
             <PiggyBank size={15} className="text-green-400" /> Annual savings potential
@@ -378,11 +399,14 @@ function FleetActuals() {
             )
           })}
         </div>
-      </div>
+      </Card>
 
-      {/* GCC benchmarks */}
-      <div className="card">
-        <h3 className="text-sm font-semibold text-[var(--text-primary)] inline-flex items-center gap-1.5 mb-1">
+      {/* GCC benchmarks. Bespoke header kept for the same reason as above (the
+          sky TrendingUp is a semantic cue). `self-start` restores the
+          shrink-to-fit width this inline-flex heading had under `.card`, which
+          is a block; Card is a flex column and would stretch it. */}
+      <Card>
+        <h3 className="text-sm font-semibold text-[var(--text-primary)] inline-flex items-center gap-1.5 mb-1 self-start">
           <TrendingUp size={15} className="text-sky-400" /> GCC industry benchmarks
         </h3>
         <p className="text-xs text-[var(--text-muted)] mb-3">
@@ -403,10 +427,10 @@ function FleetActuals() {
                   <td className="py-2 pr-3 text-[var(--text-secondary)]">{b.type}</td>
                   <td className="py-2 pr-3 font-mono text-[var(--text-muted)]">{cpkStr(b.benchmarkCpk)}</td>
                   <td className="py-2 pr-3 font-mono text-[var(--text-secondary)]">{cpkStr(b.actualCpk)}</td>
-                  <td className="py-2 pr-3 font-mono text-[var(--text-muted)]">{b.assetCount || '—'}</td>
+                  <td className="py-2 pr-3 font-mono text-[var(--text-muted)]">{b.assetCount || 'N/A'}</td>
                   <td className="py-2 pr-3 font-mono">
                     {b.variancePct == null
-                      ? <span className="text-[var(--text-muted)]">—</span>
+                      ? <span className="text-[var(--text-muted)]">N/A</span>
                       : <span className={b.variancePct <= 0 ? 'text-green-400' : 'text-red-400'}>{b.variancePct > 0 ? '+' : ''}{b.variancePct}%</span>}
                   </td>
                 </tr>
@@ -414,7 +438,7 @@ function FleetActuals() {
             </tbody>
           </table>
         </div>
-      </div>
+      </Card>
 
       <p className="text-[11px] text-[var(--text-muted)]">
         Actuals cover recorded TYRE cost only. Labour, fuel and depreciation have no per-asset source in this
@@ -456,7 +480,11 @@ const DOWNTIME_FIELDS = [
 
 function InputGroup({ title, fields, inputs, set }) {
   return (
-    <div className="card">
+    /* The eyebrow heading is kept rather than swapped for CardHeader: this is a
+       form-group label in --text-muted at --fs-xs, not a card title, and
+       CardHeader would promote it to a --fs-md primary heading. `self-start` is
+       not needed - a plain <h3> is block-level and filled the width already. */
+    <Card>
       <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-3">{title}</h3>
       <div className="space-y-3">
         {fields.map(([label, key, step]) => (
@@ -473,7 +501,7 @@ function InputGroup({ title, fields, inputs, set }) {
           </div>
         ))}
       </div>
-    </div>
+    </Card>
   )
 }
 
@@ -535,41 +563,41 @@ function WhatIfCalculator() {
             {headline.map((h) => {
               const Icon = h.icon
               return (
-                <div key={h.label} className="card">
+                <Card key={h.label}>
                   <div className="flex items-center justify-between">
                     <p className="text-xs text-[var(--text-muted)]">{h.label}</p>
                     <Icon size={15} className={h.tone} />
                   </div>
                   <p className={`text-2xl font-bold mt-1 ${h.tone}`}>{h.value}</p>
-                </div>
+                </Card>
               )
             })}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="card">
-              <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-1">Cost breakdown</h3>
-              <p className="text-xs text-[var(--text-muted)] mb-3">
-                Lifetime {money(r.totalTco)} across {r.vehicles.toLocaleString()} vehicle(s) · {r.ownershipYears} yr
-              </p>
+            <Card>
+              <CardHeader
+                title="Cost breakdown"
+                description={<>Lifetime {money(r.totalTco)} across {r.vehicles.toLocaleString()} vehicle(s) · {r.ownershipYears} yr</>}
+              />
               <div className="h-56">
                 {r.breakdown.length
                   ? <Doughnut data={donut} options={{ ...chartOpts, scales: undefined }} />
                   : <div className="h-full grid place-items-center text-sm text-[var(--text-muted)]">Enter inputs to see costs.</div>}
               </div>
-            </div>
-            <div className="card">
-              <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Cost per year</h3>
+            </Card>
+            <Card>
+              <CardHeader title="Cost per year" />
               <div className="h-56">
                 {r.projection.length
                   ? <Bar data={proj} options={chartOpts} />
                   : <div className="h-full grid place-items-center text-sm text-[var(--text-muted)]">Set an ownership period.</div>}
               </div>
-            </div>
+            </Card>
           </div>
 
-          <div className="card">
-            <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Detail</h3>
+          <Card>
+            <CardHeader title="Detail" />
             <div className="grid grid-cols-2 md:grid-cols-3 gap-y-2 gap-x-6 text-sm">
               {[
                 ['Depreciation', money(r.depreciation)],
@@ -594,7 +622,7 @@ function WhatIfCalculator() {
             <p className="text-[11px] text-[var(--text-muted)] mt-4">
               A what-if estimate for planning; actual TCO varies by vehicle type, duty cycle, region and financing.
             </p>
-          </div>
+          </Card>
         </div>
       </div>
     </div>

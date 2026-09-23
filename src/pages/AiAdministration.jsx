@@ -45,6 +45,7 @@ import {
 import {
   listAiFeedback, createAiFeedback, updateAiFeedback, deleteAiFeedback,
 } from '../lib/api/aiFeedback'
+import { isMissingRelation } from '../lib/api/_client'
 
 const ADMIN_ROLES = new Set(['Admin'])
 
@@ -58,19 +59,13 @@ const TABS = [
 ]
 
 // ── formatting helpers ───────────────────────────────────────────────────────
-const fmtUSD = (v) => (v == null || v === '' ? '—' : `$${Number(v).toFixed(4)}`)
-const fmtNum = (v) => (v == null || v === '' ? '—' : Number(v).toLocaleString())
-const fmtBool = (v) => (v === true ? 'Yes' : v === false ? 'No' : '—')
+const fmtUSD = (v) => (v == null || v === '' ? 'N/A' : `$${Number(v).toFixed(4)}`)
+const fmtNum = (v) => (v == null || v === '' ? 'N/A' : Number(v).toLocaleString())
+const fmtBool = (v) => (v === true ? 'Yes' : v === false ? 'No' : 'N/A')
 const fmtDate = (v) => {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString()
-}
-
-function isMissingRelationErr(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('could not find the table') ||
-    m.includes('schema cache') || (m.includes('relation') && m.includes('ai_'))
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString()
 }
 
 // ── generic UI atoms ─────────────────────────────────────────────────────────
@@ -230,7 +225,7 @@ function useResource(loader, country) {
       // indistinguishable from a genuinely empty table; we only flag
       // not-provisioned on an explicit relation error below.
     } catch (err) {
-      if (isMissingRelationErr(err)) setNotProvisioned(true)
+      if (isMissingRelation(err)) setNotProvisioned(true)
       else setError(toUserMessage(err, 'Could not load records.'))
       setRows([])
     } finally {
@@ -316,10 +311,10 @@ function ModelsTab({ country }) {
       {error && <StatePanel tone="red" title="Couldn’t load models.">{error}</StatePanel>}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiTile label="Models configured" value={rows === null ? '—' : summary.total} Icon={Cpu} />
-        <KpiTile label="Active" value={rows === null ? '—' : summary.activeCount} Icon={CheckCircle2} tone="text-green-400" />
-        <KpiTile label="Default model" value={rows === null ? '—' : (summary.defaultModel?.key || 'None')} Icon={Sparkles} tone="text-amber-400" />
-        <KpiTile label="1M+1M call (default)" value={sampleCost == null ? '—' : fmtUSD(sampleCost)} Icon={Coins} tone="text-sky-400" />
+        <KpiTile label="Models configured" value={rows === null ? 'N/A' : summary.total} Icon={Cpu} />
+        <KpiTile label="Active" value={rows === null ? 'N/A' : summary.activeCount} Icon={CheckCircle2} tone="text-green-400" />
+        <KpiTile label="Default model" value={rows === null ? 'N/A' : (summary.defaultModel?.key || 'None')} Icon={Sparkles} tone="text-amber-400" />
+        <KpiTile label="1M+1M call (default)" value={sampleCost == null ? 'N/A' : fmtUSD(sampleCost)} Icon={Coins} tone="text-sky-400" />
       </div>
 
       <Toolbar
@@ -333,13 +328,13 @@ function ModelsTab({ country }) {
       <DataTable headers={[...HEADERS, '']} loading={rows === null} empty={filtered.length === 0} notProvisioned={notProvisioned}>
         {filtered.map((r) => (
           <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-            <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.key || '—'}</td>
-            <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.provider || '—'}</td>
-            <td className="px-4 py-2.5 text-[var(--text-secondary)] font-mono text-xs">{r.model_id || '—'}</td>
+            <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.key || 'N/A'}</td>
+            <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.provider || 'N/A'}</td>
+            <td className="px-4 py-2.5 text-[var(--text-secondary)] font-mono text-xs">{r.model_id || 'N/A'}</td>
             <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtUSD(r.input_price)}</td>
             <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtUSD(r.output_price)}</td>
             <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtNum(r.max_tokens)}</td>
-            <td className="px-4 py-2.5">{r.is_default ? <Badge ok yes="Default" /> : <span className="text-[var(--text-muted)] text-xs">—</span>}</td>
+            <td className="px-4 py-2.5">{r.is_default ? <Badge ok yes="Default" /> : <span className="text-[var(--text-muted)] text-xs">N/A</span>}</td>
             <td className="px-4 py-2.5"><Badge ok={r.active !== false} /></td>
             <td className="px-4 py-2.5">
               <div className="flex items-center justify-end gap-1">
@@ -449,10 +444,10 @@ function PromptsTab({ country }) {
       {error && <StatePanel tone="red" title="Couldn’t load prompts.">{error}</StatePanel>}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiTile label="Prompts" value={rows === null ? '—' : total} Icon={BookOpen} />
-        <KpiTile label="Active" value={rows === null ? '—' : activeCount} Icon={CheckCircle2} tone="text-green-400" />
-        <KpiTile label="Distinct agents" value={rows === null ? '—' : agentCount} Icon={Sparkles} tone="text-amber-400" />
-        <KpiTile label="Locales" value={rows === null ? '—' : LOCALES.length} Icon={FileText} tone="text-sky-400" />
+        <KpiTile label="Prompts" value={rows === null ? 'N/A' : total} Icon={BookOpen} />
+        <KpiTile label="Active" value={rows === null ? 'N/A' : activeCount} Icon={CheckCircle2} tone="text-green-400" />
+        <KpiTile label="Distinct agents" value={rows === null ? 'N/A' : agentCount} Icon={Sparkles} tone="text-amber-400" />
+        <KpiTile label="Locales" value={rows === null ? 'N/A' : LOCALES.length} Icon={FileText} tone="text-sky-400" />
       </div>
 
       <Toolbar
@@ -472,9 +467,9 @@ function PromptsTab({ country }) {
       <DataTable headers={[...HEADERS, '']} loading={rows === null} empty={filtered.length === 0} notProvisioned={notProvisioned}>
         {filtered.map((r) => (
           <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-            <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.agent || '—'}</td>
-            <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.name || '—'}</td>
-            <td className="px-4 py-2.5 text-[var(--text-secondary)] uppercase">{r.locale || '—'}</td>
+            <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.agent || 'N/A'}</td>
+            <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.name || 'N/A'}</td>
+            <td className="px-4 py-2.5 text-[var(--text-secondary)] uppercase">{r.locale || 'N/A'}</td>
             <td className="px-4 py-2.5 text-[var(--text-secondary)]">v{r.version ?? 1}</td>
             <td className="px-4 py-2.5"><Badge ok={r.active !== false} /></td>
             <td className="px-4 py-2.5">
@@ -621,14 +616,14 @@ function BudgetsTab({ country }) {
       {notProvisioned && <StatePanel title="AI budgets aren’t enabled yet.">Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V205_AI_ADMINISTRATION.sql</span>, then reload.</StatePanel>}
       {error && <StatePanel tone="red" title="Couldn’t load budgets.">{error}</StatePanel>}
       {!spend.available && !notProvisioned && (
-        <p className="text-xs text-[var(--text-muted)]">Live spend unavailable (no ai_token_logs access) — showing cap configuration only.</p>
+        <p className="text-xs text-[var(--text-muted)]">Live spend unavailable (no ai_token_logs access). Showing cap configuration only.</p>
       )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiTile label="Budgets" value={rows === null ? '—' : total} Icon={Wallet} />
-        <KpiTile label="Active" value={rows === null ? '—' : activeCount} Icon={CheckCircle2} tone="text-green-400" />
-        <KpiTile label="Hard stops" value={rows === null ? '—' : hardStops} Icon={ShieldAlert} tone="text-red-400" />
-        <KpiTile label="30d spend" value={spend.available ? fmtUSD(spend.byPeriod.monthly?.cost) : '—'} Icon={Coins} tone="text-sky-400" />
+        <KpiTile label="Budgets" value={rows === null ? 'N/A' : total} Icon={Wallet} />
+        <KpiTile label="Active" value={rows === null ? 'N/A' : activeCount} Icon={CheckCircle2} tone="text-green-400" />
+        <KpiTile label="Hard stops" value={rows === null ? 'N/A' : hardStops} Icon={ShieldAlert} tone="text-red-400" />
+        <KpiTile label="30d spend" value={spend.available ? fmtUSD(spend.byPeriod.monthly?.cost) : 'N/A'} Icon={Coins} tone="text-sky-400" />
       </div>
 
       <Toolbar
@@ -642,10 +637,10 @@ function BudgetsTab({ country }) {
       <DataTable headers={['Period', 'Cap', 'Utilisation', 'Hard stop', 'Scope', 'Active', '']} loading={rows === null} empty={filtered.length === 0} notProvisioned={notProvisioned}>
         {filtered.map((r) => {
           const status = spend.available ? budgetStatus(r, spendFor(r)) : null
-          const capLabel = r.cost_cap_usd != null ? fmtUSD(r.cost_cap_usd) : (r.token_cap != null ? `${fmtNum(r.token_cap)} tok` : '—')
+          const capLabel = r.cost_cap_usd != null ? fmtUSD(r.cost_cap_usd) : (r.token_cap != null ? `${fmtNum(r.token_cap)} tok` : 'N/A')
           return (
             <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-              <td className="px-4 py-2.5 font-medium text-[var(--text-primary)] capitalize">{r.period || '—'}</td>
+              <td className="px-4 py-2.5 font-medium text-[var(--text-primary)] capitalize">{r.period || 'N/A'}</td>
               <td className="px-4 py-2.5 text-[var(--text-secondary)]">{capLabel}</td>
               <td className="px-4 py-2.5 min-w-[140px]">
                 {status && status.cap > 0 ? (
@@ -657,7 +652,7 @@ function BudgetsTab({ country }) {
                       <div className={`h-1.5 rounded-full ${status.over ? 'bg-red-500' : 'bg-green-500'}`} style={{ width: `${Math.min(status.pct, 100).toFixed(1)}%` }} />
                     </div>
                   </div>
-                ) : <span className="text-[var(--text-muted)] text-xs">—</span>}
+                ) : <span className="text-[var(--text-muted)] text-xs">N/A</span>}
               </td>
               <td className="px-4 py-2.5">{r.hard_stop ? <Badge ok yes="Hard" /> : <span className="text-[var(--text-muted)] text-xs">Soft</span>}</td>
               <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.scope || 'org-wide'}</td>
@@ -777,10 +772,10 @@ function FeedbackTab({ country }) {
       {error && <StatePanel tone="red" title="Couldn’t load feedback.">{error}</StatePanel>}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiTile label="Feedback entries" value={rows === null ? '—' : total} Icon={Star} />
-        <KpiTile label="Avg rating" value={rows === null ? '—' : (avgRating == null ? '—' : avgRating.toFixed(2))} Icon={Star} tone="text-amber-400" />
-        <KpiTile label="Marked correct" value={rows === null ? '—' : correctCount} Icon={ThumbsUp} tone="text-green-400" />
-        <KpiTile label="Correct %" value={rows === null ? '—' : (correctPct == null ? '—' : `${correctPct.toFixed(0)}%`)} Icon={CheckCircle2} tone="text-sky-400" />
+        <KpiTile label="Feedback entries" value={rows === null ? 'N/A' : total} Icon={Star} />
+        <KpiTile label="Avg rating" value={rows === null ? 'N/A' : (avgRating == null ? 'N/A' : avgRating.toFixed(2))} Icon={Star} tone="text-amber-400" />
+        <KpiTile label="Marked correct" value={rows === null ? 'N/A' : correctCount} Icon={ThumbsUp} tone="text-green-400" />
+        <KpiTile label="Correct %" value={rows === null ? 'N/A' : (correctPct == null ? 'N/A' : `${correctPct.toFixed(0)}%`)} Icon={CheckCircle2} tone="text-sky-400" />
       </div>
 
       <Toolbar
@@ -795,10 +790,10 @@ function FeedbackTab({ country }) {
         {filtered.map((r) => (
           <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
             <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDate(r.created_at)}</td>
-            <td className="px-4 py-2.5 text-[var(--text-primary)] font-semibold">{r.rating == null ? '—' : `${r.rating}/5`}</td>
-            <td className="px-4 py-2.5">{r.correct == null ? <span className="text-[var(--text-muted)] text-xs">—</span> : <Badge ok={r.correct === true} yes="Correct" no="Wrong" />}</td>
-            <td className="px-4 py-2.5 text-[var(--text-secondary)] max-w-[320px] truncate" title={r.note || ''}>{r.note || '—'}</td>
-            <td className="px-4 py-2.5 text-[var(--text-muted)] font-mono text-xs truncate max-w-[160px]">{r.conversation_id || '—'}</td>
+            <td className="px-4 py-2.5 text-[var(--text-primary)] font-semibold">{r.rating == null ? 'N/A' : `${r.rating}/5`}</td>
+            <td className="px-4 py-2.5">{r.correct == null ? <span className="text-[var(--text-muted)] text-xs">N/A</span> : <Badge ok={r.correct === true} yes="Correct" no="Wrong" />}</td>
+            <td className="px-4 py-2.5 text-[var(--text-secondary)] max-w-[320px] truncate" title={r.note || ''}>{r.note || 'N/A'}</td>
+            <td className="px-4 py-2.5 text-[var(--text-muted)] font-mono text-xs truncate max-w-[160px]">{r.conversation_id || 'N/A'}</td>
             <td className="px-4 py-2.5">
               <div className="flex items-center justify-end gap-1">
                 <button onClick={() => openEdit(r)} className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Edit"><Pencil size={14} /></button>
@@ -813,7 +808,7 @@ function FeedbackTab({ country }) {
         <Modal title={modal.editing ? 'Edit feedback' : 'Log feedback'} onClose={() => setModal(null)} saving={saving}>
           <form onSubmit={submit} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Rating (1–5)"><input className="input w-full" type="number" step="1" min="1" max="5" placeholder="4" value={form.rating} onChange={(e) => set('rating', e.target.value)} /></Field>
+              <Field label="Rating (1 to 5)"><input className="input w-full" type="number" step="1" min="1" max="5" placeholder="4" value={form.rating} onChange={(e) => set('rating', e.target.value)} /></Field>
               <Field label="Correct?">
                 <select className="input w-full" value={form.correct} onChange={(e) => set('correct', e.target.value)}>
                   <option value="">Unspecified</option>

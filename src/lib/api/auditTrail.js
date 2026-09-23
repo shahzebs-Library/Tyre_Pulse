@@ -261,3 +261,66 @@ export function listAudit(sourceKey, opts) {
   if (sourceKey === 'console_sessions') return listConsoleAudit(opts)
   return listDataAudit(opts)
 }
+
+import { supabase } from './_client'
+
+export const AUDIT_EXPORT_CAP = 5000
+
+export function auditQuery({ dateFrom, dateTo, action, user } = {}) {
+  let query = supabase.from('audit_log_v2')
+    .select('*, profiles(full_name, username)', { count: 'exact' })
+    .order('created_at', { ascending: false }).order('id', { ascending: false })
+  if (dateFrom) query = query.gte('created_at', dateFrom)
+  if (dateTo) {
+    const nextDay = new Date(`${dateTo}T00:00:00Z`)
+    nextDay.setUTCDate(nextDay.getUTCDate() + 1)
+    query = query.lt('created_at', nextDay.toISOString())
+  }
+  if (action) query = query.eq('action', action)
+  if (user) query = query.eq('user_id', user)
+  return query
+}
+
+export function uploadHistoryQuery({ dateFrom, dateTo } = {}) {
+  let query = supabase.from('upload_history')
+    .select('*, profiles(full_name, username)', { count: 'exact' })
+    .order('uploaded_at', { ascending: false }).order('id', { ascending: false })
+  if (dateFrom) query = query.gte('uploaded_at', dateFrom)
+  if (dateTo) {
+    const nextDay = new Date(`${dateTo}T00:00:00Z`)
+    nextDay.setUTCDate(nextDay.getUTCDate() + 1)
+    query = query.lt('uploaded_at', nextDay.toISOString())
+  }
+  return query
+}
+
+export function matchesAuditSearch(row, search) {
+  const term = String(search || '').trim().toLowerCase()
+  return !term || [row.profiles?.full_name ?? row.profiles?.username, row.action, row.table_name]
+    .some(value => String(value || '').toLowerCase().includes(term))
+}
+
+/** Never download a successful-looking partial file after errors or truncation. */
+export async function readAuditExport({ upload = false, filters = {}, search = '' } = {}) {
+  const snapshot = new Date().toISOString()
+  const rows = []
+  let expected = null
+  for (let from = 0; from <= AUDIT_EXPORT_CAP; from += 1000) {
+    const query = upload ? uploadHistoryQuery(filters) : auditQuery(filters)
+    const { data, error, count } = await query
+      .lte(upload ? 'uploaded_at' : 'created_at', snapshot)
+      .range(from, Math.min(from + 999, AUDIT_EXPORT_CAP))
+    if (error) throw error
+    if (!Number.isSafeInteger(count) || count < 0) throw new Error('The server did not confirm the export total. Please retry.')
+    if (expected === null) expected = count
+    if (count !== expected) throw new Error('The records changed during export. Retry to obtain a complete file.')
+    if (count > AUDIT_EXPORT_CAP) throw new Error(`Export exceeds ${AUDIT_EXPORT_CAP.toLocaleString()} rows. Narrow the filters before exporting.`)
+    rows.push(...(data || []))
+    if (rows.length > AUDIT_EXPORT_CAP) throw new Error('Export limit exceeded. Narrow the filters before exporting.')
+    if (!data || data.length < 1000) {
+      if (expected !== null && rows.length !== expected) throw new Error('The server returned an incomplete export. Please retry.')
+      return upload ? rows : rows.filter(row => matchesAuditSearch(row, search))
+    }
+  }
+  throw new Error('Export limit reached. Narrow the filters before exporting.')
+}

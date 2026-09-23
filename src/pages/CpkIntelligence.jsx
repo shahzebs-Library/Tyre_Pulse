@@ -17,7 +17,7 @@
  * Data: get_fleet_cpk / get_cpk_drivers / get_brand_size_cpk. Maths live in the
  * pure engines (cpkModule, fleetCpkView, costIntelligence, cpkScenario, cpkDrivers).
  */
-import { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react'
 import {
   Gauge, Truck, Factory, FlaskConical, TrendingUp, Table2,
   FileSpreadsheet, FileText, RefreshCcw, Info, Milestone, Layers, AlertTriangle,
@@ -62,6 +62,7 @@ const TABS = [
 function num(v) { return Number.isFinite(Number(v)) ? Number(v) : 0 }
 
 export default function CpkIntelligence() {
+  const loadId = useRef(0)
   const { activeCountry } = useSettings()
 
   const initialCountry = activeCountry && activeCountry !== 'All' ? activeCountry : COUNTRIES[0]
@@ -84,18 +85,20 @@ export default function CpkIntelligence() {
   const [error, setError] = useState('')
 
   const load = useCallback(() => {
+    const request = ++loadId.current
     let cancelled = false
+    setFleetCpk({ perVehicle: [], byType: [], fleet: [] })
     setLoading(true)
     setError('')
     getFleetCpk({ country, from: bounds.from, to: bounds.to, strict: true })
-      .then((res) => { if (!cancelled) setFleetCpk(res || { perVehicle: [], byType: [], fleet: [] }) })
+      .then((res) => { if (!cancelled && request === loadId.current) setFleetCpk(res || { perVehicle: [], byType: [], fleet: [] }) })
       .catch((loadError) => {
-        if (!cancelled) {
+        if (!cancelled && request === loadId.current) {
           setFleetCpk({ perVehicle: [], byType: [], fleet: [] })
           setError(toUserMessage(loadError, 'Could not load CPK data.'))
         }
       })
-      .finally(() => { if (!cancelled) setLoading(false) })
+      .finally(() => { if (!cancelled && request === loadId.current) setLoading(false) })
     return () => { cancelled = true }
   }, [country, bounds.from, bounds.to])
 
@@ -108,6 +111,7 @@ export default function CpkIntelligence() {
   const [priceBasis, setPriceBasis] = useState(null)
   useEffect(() => {
     let cancelled = false
+    setPriceBasis(null)
     getTyrePriceBasis({ country })
       .then((b) => { if (!cancelled) setPriceBasis(b) })
       .catch(() => { if (!cancelled) setPriceBasis(null) })
@@ -123,6 +127,7 @@ export default function CpkIntelligence() {
   useEffect(() => {
     if (tab !== 'drivers' && tab !== 'brand') return
     let cancelled = false
+    setDrivers({ ok: false, windows: null, segments: [] }); setBrandRows([])
     setAdvLoading(true)
     setAdvancedError('')
     Promise.allSettled([

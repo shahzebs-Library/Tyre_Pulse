@@ -1,0 +1,118 @@
+# Tyre Pulse compact context
+
+This is the small startup map for coding agents. Keep it factual and brief.
+
+## Current direction
+
+Tyre Pulse is a commercial multi-tenant fleet, tyre, inspection, workshop, accident, reporting, and field-operations platform. The Flutter application under `tyre_pulse_flutter/` is the primary Android/iOS implementation. It must preserve actual vehicle artwork, tyre-position identifiers, offline field work, permissions, signatures, localization, RTL, dark mode, and platform parity.
+
+## Repository map
+
+| Area | Path | Notes |
+|---|---|---|
+| Web console | `src/` | React/Vite production web application |
+| Primary mobile | `tyre_pulse_flutter/` | Flutter Android and iOS |
+| Legacy mobile | `mobile/` | React Native behavioral reference; read-only by default |
+| Native Android | `tyre_pulse_app/` | Kotlin reference/alternate implementation |
+| Database/backend | `supabase/`, `MIGRATIONS_*.sql` | Supabase tables, RPCs, RLS, functions |
+| Marketing | `marketing/` | Next.js marketing site |
+| Services | `services/` | Supporting services |
+| CI | `.github/workflows/` | Required verification gates |
+
+## Sources of truth
+
+Use this order:
+
+1. Current production schema, migrations, RLS, RPCs, and Edge Functions.
+2. Existing working behavior and tests.
+3. Approved UI references and supplied production mocks.
+4. Current implementation in the target app.
+5. Old plans and handoff notes only when needed.
+
+Do not treat a proposal, mock value, old branch, or stale handoff as production truth.
+
+## Active repository state
+
+- Meter Logs completion (2026-09-12): PR #353 merged to main as `5eed38de`; production deployment `dpl_2sZ6hoh27oWPhhpy76xgesor1ehn` was READY. Migration `20260912094317_fix_web_meter_permissions_and_validation.sql` is applied to `jhssdmeruxtrlqnwfksc`; do not reapply it. Anyone with Meter Logs access can save and correct ordinary readings. Lower KM/hours save immediately for Admin review, without a confirmation checkbox or reducing current fleet totals. Flagged entries require an audited Admin/Super Admin review. Organisation/country/site scope remains enforced. Full CI run 34688451573 passed, including web/database tests and build; live rollback checks verified lower saves, unchanged totals and review permissions. This supersedes earlier meter deployment/test blockers below.
+- Sajid access (2026-09-12): granted `odometer_logs/view` to Sajid (username `Skambih`) through the existing per-user grant table. Effective database permissions verified: canSave=true, canCorrect=true, canReview=false. His role and scope were unchanged.
+- English-only release notes (user preference, 2026-09-12): do not add Arabic release notes. Commit `b8a777e3` is pushed to main; production deployment `dpl_CGdnR3iTrGQmsAvAQNYRJPngYGev` was READY. Published notes, rendering and manifest validation now require English only, including when the app language is Arabic. Nine focused release tests, full lint and production build passed.
+
+- Enterprise checklist governance (2026-09-21, branch `feature/checklist-enterprise-governance`): immutable template revisions/snapshots, assignment compliance, audited skips and web/Flutter snapshot review are implemented. Tenant governance now configures pilot country/site/window, supervisor and area-manager approval SLAs, severity-based corrective-action SLAs, exception evidence enforcement, GPS/signature requirements and review-only retention with legal holds. Schedule creation rejects empty scope; approval reporting shows configured targets and breaches. Baseline defaults are 24h supervisor/area-manager, corrective 24h/72h/168h/720h and seven-year retention, all tenant-editable. Pilot activation and actual site/asset schedules still require administrator selection; historical submissions remain `legacy_unavailable` and are never reconstructed. Plan: `audit/enterprise-checklist-governance-plan.md`.
+- Workshop checklist PDF layout (2026-09-12): `a3ab91e8` was pushed to remote `main`. `src/lib/checklistPdf.js` compacts unsigned signature entries to avoid an almost-empty second page and uses the recorded checklist date in filenames, with received-date fallback. Signed records retain full signature boxes; recorded answers, photos and fitness-conflict warnings remain intact. The three new layout/date/signature tests passed after correction; four related test files passed (28 tests), and focused ESLint passed. A one-page corrected copy of the supplied WDC-TM463-2026-0001 PDF is in Downloads as `Workshop Daily Checklist WDC-TM463-2026-0001 2026-08-24 corrected.pdf`; its original text/images and three unsigned entries were verified. Original PDF preserved. Production deployment of this commit was not verified; no mobile changes.
+
+- Installed Expo approvals (2026-09-12): fixes `8536a2bc`, `881c5a33` and `1acb332e` are on remote `main`. Restored workshop manager checklist access and separate approval shortcuts; added governed checklist/inspection review, operational work-order/tyre-change queues, delegation/reassignment/recovery and durable decision retries. Full mobile suite passed (549 tests); final focused notification/governed regressions passed (51 tests), final TypeScript check and Android/iOS bundle exports passed. Production OTA [run 34687917477](https://github.com/shahzebs-Library/Tyre_Pulse/actions/runs/34687917477) succeeded for runtime `1.6.0`; update group `27be85f1-ab26-4619-8c41-efaa3ab1e4a6`. Both production manifests served the final updates created `2026-09-12T10:16:53.644Z`. This supersedes the earlier history-only OTA below. Publication is verified; installation on every phone is not. Flutter remains unchanged/deferred.
+- Approval acceptance boundary (2026-09-12): authenticated production web check was under Shahzeb Rahman's account, not VINAY KUMAR T. It showed 21 workshop checklists and three inspections; a workshop review opened with answers, signatures and approve/return/reject controls. Current workshop records await supervisor sign-off before the area-manager stage. Read-only backend checks confirmed VINAY's scope and legacy decision eligibility; his browser session still needs verification. No real approval was submitted. Production had no approval policies or delegations; new policy activation still requires confirmed roles/order/scope and the existing independent second-administrator review. Do not mark manager acceptance or policy activation complete.
+
+- Administration migration verification (2026-09-12, project `jhssdmeruxtrlqnwfksc`): live registry confirms all nine Administration migrations (`20260910183846` through `20260910200002`, excluding separately listed approval migrations) and rollout follow-ups `20260912091451` / `20260912091652`; cleaning, tenant configuration, expense import, legacy reversal and landing-verification RPCs exist. Do not repeat the old claim that Administration migrations are undeployed or reapply completed work. At this check, the newer `20260912094317_fix_web_meter_permissions_and_validation.sql` was absent from the live registry and `vehicle_meter_permissions()` did not exist. That meter migration belongs to another chat's ongoing work; preserve it and recheck live status before deployment. User explicitly requested preserving completed work from other chats. Historical committed import references remain unresolved: fleet 602/602 in expected scope, tyre 0/1,419 and accident 0/11; do not restore or fabricate records from counts alone. Flutter rollout and authenticated end-to-end acceptance remain deferred/outstanding as detailed below.
+
+- Checklist history correction (2026-09-12): older workshop sheets were present but synced September 10/12. Live check found 12 August-dated sheets but only one received in August; receipt-date filtering excluded the other 11. Web commit `7adf98d0` is on remote `main` and deployed: month reports use recorded sheet dates across paged history, the list distinguishes checklist/received dates, and the silent 200-row register cap is removed. Historical records, signatures, photos and signed PDFs were not rewritten.
+- Inspection Planner completion: implementation is on `main` and deployed; the former Audit Trail missing exports are resolved. `7adf98d0` also fixes incomplete-history warnings when pagination crosses its ceiling. Verification: 56 planner/workflow tests, 13 pagination tests, focused checklist regressions, full web lint/build, and desktop dark/mobile light/Arabic RTL browser checks passed. Planner browser checks used fixture auth/data; production release/login were checked separately, not authenticated operational workflows.
+- Installed Expo phone history (2026-09-12): `ce608969` is on remote `main`. `mobile/` now displays template-derived Checklist date separately from Received date in English/Arabic/Urdu, fetches only date answers for listed records, and discards stale scope responses. 24 history tests, TypeScript checking and Android/iOS update-bundle exports passed. Production OTA publication succeeded through [GitHub run 34686403538](https://github.com/shahzebs-Library/Tyre_Pulse/actions/runs/34686403538); Android/iOS production manifests for runtime `1.6.0` served the update created `2026-09-12T09:41:25.327Z`. Local EAS CLI was not signed in; the existing GitHub workflow supplied release authentication. Publication is verified, installation on every phone is not. Flutter was not changed or released by this task.
+
+- Web release verified (2026-09-12): `b10434c3` was merged to `main` and Vercel deployment `dpl_Ernnwj4gDpH3UD9P2bXM7KaxvkbE` was READY with production aliases; release `2026.09.12.3`. Includes recovered web work, approval fixes, tenant capability rollout and checklist history by recorded sheet date (`7adf98d0`). Meter rows/filters/save-time validation, supervisor wash scheduling/quick log, vehicle/photo PDFs and filtered exports, scoped dashboard/Data Monitor access, report/anomaly corrections and release history are included. Do not restart completed work. Mobile checklist-date publication is verified separately in this file; later mobile commits require their own release checks.
+- Vehicle-specific PM setup (`b10434c3`): find and verify an exact fleet vehicle before creating/changing its plan; derive vehicle category and applicable meter, filter editable service templates, and calculate next due from last service plus interval. User wants intervals by vehicle and service, not a blanket fleet schedule. Each plan supports calendar plus one chosen meter (km OR hours), not three independent simultaneous thresholds. Template intervals are suggestions requiring operational confirmation. Verification: 51 focused PM tests passed; affected five tests passed after the final callback adjustment; web lint/build passed.
+- Remaining operational acceptance (2026-09-12): production had zero PM programs, PM service records, shifts, tyre-service events and published approval policies. Approved numeric intervals by vehicle/service and actual shift timings/sites/staff were not supplied; do not invent them. Policy publication is required to activate new approval routing. Authenticated browser journeys, physical QR checks and complete device-queue reconciliation are not certified. Flutter rollout remains explicitly deferred; preserve its WIP backup `6e88c856` and separate mobile work. Completed web rollout does not mean these operational/mobile items are complete.
+
+- Web/backend completion (2026-09-12): recovered web commit `cec8a221` was live; approval follow-up `d60a7954` is included in this rollout. Applied the governed approval, administration/configuration, import and accident-concurrency migrations, plus `20260912091451_bridge_tenant_capability_configuration` and `20260912091652_lock_approval_helper_search_paths`. Migration registry versions were aligned to repository filenames after MCP deployment. Capability saves/enforcement now use tenant settings; existing platform capability/feature-flag baselines are retained per existing tenant. Attributable company settings are retained; unknown-owner legacy configuration stays archived. Existing documents remain on legacy approval routes until a policy is explicitly published. PM/service/shift/tyre-service tables remain empty; approved operational setup is still required. Flutter rollout remains deferred by the user. Verification: 127 web regressions, 63 backend regressions, capability bridge and accident-concurrency regressions passed; web lint/build passed; live Admin/Fleet Supervisor/Data Monitor read/RBAC checks passed. Browser account journeys still need authenticated acceptance.
+- Approval Matrix retry (2026-09-12): current remote `main` contains the approval implementation. Focused Approval Matrix and operational web tests passed 50/50 in the final retry batch. A full web-suite retry reached one unrelated `src/test/vehicleMeters.page.test.jsx` failure (`combines vehicle type and meter applicability, preserves drafts, and clears all filters`) and then stalled after the worker exited; it was stopped safely. Do not claim a full-suite pass until that unrelated vehicle-meter failure and runner stall are resolved. Local `main` may have a documentation-only commit ahead of remote and an active uncommitted mobile/vehicle-meter worktree; preserve those changes.
+
+- Operational/report corrections (2026-09-10): commits `8dd9b215` and `bd7e066d` correct web module scope/history, inspection/checklist PDFs and anomaly calculations. User preference: corrected rules apply to new submissions and newly generated reports; preserve historical records, signed PDFs, signatures, photos and audit history. Never rewrite old evidence or guess replacement meter readings. Historical invalid values may be flagged for review. These are React web changes, not an installed-mobile rollout. PM intervals/shift timings and historical reading/photo corrections still need confirmed operational inputs.
+- Verification for those corrections: web lint/build and focused regressions passed. Latest full web run had 9,248 passes and four UI failures; all three affected files passed with one worker (25 tests). No second full-suite run was performed. Reviews: `audit/operational-module-review-2026-09-10.md` and `audit/checklist-report-review/review.md`.
+
+- Production React Native sync repair (2026-09-10): applied migrations `20260910095436_fix_meter_log_upsert_indexes` and `20260910095446_fix_mobile_queue_indexes_and_wash_permissions`. Full client_uuid indexes now support installed-client upserts for meter logs, checklists, accidents, and workshop events; Fleet Supervisor can insert washes within existing org/country/site restrictions. Isolated retry/RLS regression passed and live EXPLAIN verified all five indexes. TM651 mobile km/hour records were subsequently observed; delivery of every queued device record remains unconfirmed; repair_requests is still absent.
+- Web vehicle meter workspace (2026-09-10): `/odometer-logs` now supports applicable km/hours in one row, dated history, current-region filtering and audited corrections. Migration `20260910102622_web_vehicle_meter_workspace` is applied: atomic/idempotent save and correction RPCs use caller RLS and Admin checks. Frontend changes are included in the verified web release above. Database regression: `node --test supabase/tests/web_vehicle_meters.test.mjs`; focused web tests: `npm.cmd run test:run -- src/test/vehicleMeters.test.js src/test/vehicleMeters.page.test.jsx src/test/vehicleMeters.api.test.js`.
+- Web release notes: add a new newest-first entry to `src/data/releases.json` for each user-facing web release (English only and affected module keys; no customer data). `scripts/release-build.mjs` embeds the same versioned notes in the app and waiting service worker. The update prompt reads that worker directly; Settings > Update history shows the installed history, filtered by effective module access. Keep prior entries so users who skip releases see all applicable changes.
+- Default branch: `main`.
+- Home access (2026-09-10): operational users open `MyWorkspace`, whose links reuse the permitted sidebar catalog. Dashboard OFF issues no summary reads; ON uses count-only RLS-scoped reads for permitted fleet/washing/inspection modules. Admin/Super Admin retain the executive dashboard. Its eager preload is removed; the shell alert badge queries only allowed source modules. Permission/country changes discard old workspace state and abort its count requests. Existing database table permissions are unchanged; this is not a global RLS permission overhaul.
+- Separate security remediation (2026-09-09): client/report safeguards and reproducible test gates are implemented. Reviewed backend replacements and migrations in `supabase/security-rollout/` remain pending a coordinated rollout protecting installed clients; its tests exercise pending code, not production. This is separate from the applied web/backend migrations above. Anonymous login RPC abuse still needs a coordinated client rollout; image-size/pptxgenjs advisories and historical native signing-key rotation remain open.
+- Flutter UI, biometric login, real vehicle artwork, tyre layouts, field workflows, reports, maintenance, accidents, and approval presentation have already received substantial implementation.
+- Open PR #347 contains an asset-first Flutter checklist hub but is behind `main` and needs conflict resolution plus fresh CI.
+- Open PR #348 changes Flutter CI behavior and test artifacts; it requires GitHub Actions approval before it can be trusted or merged.
+- Vercel checks can fail because private organization repositories require an appropriate Vercel plan. Do not confuse that account-level limitation with an application compile failure.
+
+Always recheck GitHub before relying on this status section.
+
+## Common commands
+
+### Web console
+
+```bash
+npm ci
+npm run lint
+npm run test:run
+npm run build
+```
+
+Run a focused Vitest file while iterating when possible.
+
+### Flutter
+
+```bash
+cd tyre_pulse_flutter
+flutter pub get
+dart run build_runner build --delete-conflicting-outputs
+flutter gen-l10n
+dart format --set-exit-if-changed .
+flutter analyze --fatal-infos
+flutter test
+flutter build apk --debug
+flutter build ios --no-codesign
+```
+
+Generated output, formatting, analysis, tests, Android, and iOS are release gates. If the local machine lacks the toolchain, use CI and report that boundary.
+
+## Protected Flutter wiring
+
+Do not edit these without explicit human direction:
+
+- `lib/app/router/routes.dart`
+- `lib/app/router/app_router.dart`
+- `lib/app/router/route_access.dart`
+- `lib/app/router/shell_tabs.dart`
+- `lib/core/sync/command_registry.dart`
+- `lib/core/sync/queued_command_repository.dart`
+- `lib/core/sync/sync_engine.dart`
+
+## Definition of done
+
+A change is done only when the requested behavior exists, affected tests pass, required builds pass, no real data or artwork regressed, and any remaining blocker is explicitly named.

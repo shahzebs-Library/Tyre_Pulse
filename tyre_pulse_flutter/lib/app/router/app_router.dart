@@ -401,13 +401,20 @@ List<RouteBase> _buildRoutes() => <RouteBase>[
             ],
           ),
 
-          // 1 - Inspect.
+          // 1 - Inspect. Capturing an inspection and seeing the ones you have
+          // been asked to do are siblings, not parent and child: /inspect is
+          // not itself a route, and a plan is not a draft inspection.
           StatefulShellBranch(
             routes: <RouteBase>[
               _route(
                 TpRoutePaths.newInspection,
                 TpRouteId.newInspection,
                 NewInspectionRoute.parse,
+              ),
+              _route(
+                TpRoutePaths.myPlans,
+                TpRouteId.myPlans,
+                (TpRouteParameters _) => const MyPlansRoute(),
               ),
             ],
           ),

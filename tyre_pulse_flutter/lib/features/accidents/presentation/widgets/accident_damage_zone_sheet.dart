@@ -3,6 +3,10 @@
 /// The sheet owns no persistence or media I/O. It returns one immutable mark
 /// and exposes [AccidentDamagePhotoEditor] as the integration seam for the
 /// report's configurable evidence checklist (notably `photo_damage_closeup`).
+///
+/// Layout follows the owner's M9 area sheet: damage type chips in the shared
+/// `damageTypes` order, a Minor / Moderate / Major level, close-up photos,
+/// an optional 200-character note and one save action.
 library;
 
 import 'package:flutter/material.dart';
@@ -23,6 +27,11 @@ typedef AccidentDamagePhotoEditor = Future<List<String>?> Function(
 abstract final class AccidentDamageZoneSheetKeys {
   static const Key selectedAreaPanel = Key('accident.damage.selectedAreaPanel');
   static const Key damageType = Key('accident.damage.damageType');
+  static Key damageTypeChip(AccidentDamageType type) =>
+      Key('accident.damage.damageType.${type.name}');
+  static const Key level = Key('accident.damage.level');
+  static const Key note = Key('accident.damage.note');
+  static const Key noteCounter = Key('accident.damage.noteCounter');
   static const Key suggestion = Key('accident.damage.suggestion');
   static const Key confirmSuggestion =
       Key('accident.damage.suggestion.confirm');
@@ -108,7 +117,7 @@ class _AccidentDamageZoneSheetState extends State<_AccidentDamageZoneSheet> {
     text: widget.draft.areaLabel ?? '',
   );
   late final TextEditingController _note = TextEditingController(
-    text: widget.draft.note ?? '',
+    text: _clipNote(widget.draft.note ?? ''),
   );
   late final TextEditingController _correctionNote = TextEditingController(
     text: widget.draft.suggestion?.correctionNote ?? '',
@@ -128,6 +137,11 @@ class _AccidentDamageZoneSheetState extends State<_AccidentDamageZoneSheet> {
       (_suggestion == null ||
           _suggestionDecision != AccidentDamageSuggestionDecision.pending);
 
+  static String _clipNote(String raw) {
+    const int max = accidentDamageNoteMaxLength;
+    return raw.length <= max ? raw : raw.substring(0, max);
+  }
+
   @override
   void dispose() {
     _area.dispose();
@@ -139,144 +153,216 @@ class _AccidentDamageZoneSheetState extends State<_AccidentDamageZoneSheet> {
   @override
   Widget build(BuildContext context) {
     final AccidentCopy copy = AccidentCopy.of(context);
+    final TpPalette palette = TpPalette.of(context);
 
-    return SingleChildScrollView(
-      key: AccidentDamageZoneSheetKeys.selectedAreaPanel,
-      padding: const EdgeInsets.fromLTRB(
-        TpSpace.xl,
-        TpSpace.xs,
-        TpSpace.xl,
-        TpSpace.xl,
+    // The body scrolls; the actions stay pinned beneath it. With the type
+    // chips, level chips, photos and a 200-character note above them, "Save
+    // marked area" otherwise scrolls off a phone-height sheet and the mock's
+    // always-reachable action is lost.
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * 0.9,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          _SelectedPointHeader(
-            draft: widget.draft,
-            markerNumber: widget.markerNumber,
-            copy: copy,
-          ),
-          const SizedBox(height: TpSpace.lg),
-          TpInput(
-            label: copy('damage'),
-            controller: _area,
-            isRequired: true,
-            prefixIcon: Icons.place_outlined,
-            onChanged: (_) => _selectionChanged(),
-          ),
-          const SizedBox(height: TpSpace.md),
-          Text(
-            _localized(
-              context,
-              en: 'Damage type',
-              ar: 'نوع الضرر',
-              ur: 'نقصان کی قسم',
-            ),
-            style: Theme.of(context).textTheme.labelMedium,
-          ),
-          const SizedBox(height: TpSpace.xs),
-          DropdownButtonFormField<AccidentDamageType>(
-            key: AccidentDamageZoneSheetKeys.damageType,
-            initialValue: _damageType,
-            isExpanded: true,
-            decoration: const InputDecoration(
-              prefixIcon: Icon(Icons.car_crash_outlined),
-              contentPadding: EdgeInsets.symmetric(
-                horizontal: TpSpace.lg,
-                vertical: TpSpace.md,
+          Flexible(
+            child: SingleChildScrollView(
+              key: AccidentDamageZoneSheetKeys.selectedAreaPanel,
+              padding: const EdgeInsets.fromLTRB(
+                TpSpace.xl,
+                TpSpace.xs,
+                TpSpace.xl,
+                TpSpace.md,
               ),
-            ),
-            items: <DropdownMenuItem<AccidentDamageType>>[
-              for (final AccidentDamageType type in AccidentDamageType.values)
-                DropdownMenuItem<AccidentDamageType>(
-                  value: type,
-                  child: Text(accidentDamageTypeLabel(context, type)),
-                ),
-            ],
-            onChanged: (AccidentDamageType? value) {
-              if (value == null) return;
-              setState(() => _damageType = value);
-              _selectionChanged();
-            },
-          ),
-          const SizedBox(height: TpSpace.md),
-          Text(
-            copy('damageMarkSeverityLabel'),
-            style: Theme.of(context).textTheme.labelLarge,
-          ),
-          const SizedBox(height: TpSpace.xs),
-          TpSegmented<AccidentDamageSeverity>(
-            expanded: true,
-            value: _severity,
-            onChanged: (AccidentDamageSeverity value) =>
-                setState(() => _severity = value),
-            options: <TpSegmentedOption<AccidentDamageSeverity>>[
-              for (final AccidentDamageSeverity severity
-                  in AccidentDamageSeverity.values)
-                TpSegmentedOption<AccidentDamageSeverity>(
-                  value: severity,
-                  label: accidentDamageSeverityLabel(copy, severity),
-                ),
-            ],
-          ),
-          if (_suggestion
-              case final AccidentDamageSuggestion suggestion) ...<Widget>[
-            const SizedBox(height: TpSpace.md),
-            _SuggestionPanel(
-              suggestion: suggestion,
-              decision: _suggestionDecision,
-              onConfirm: _confirmSuggestion,
-              onCorrect: _markSuggestionCorrected,
-            ),
-            if (_suggestionDecision ==
-                AccidentDamageSuggestionDecision.corrected) ...<Widget>[
-              const SizedBox(height: TpSpace.md),
-              TpInput(
-                label: _localized(
-                  context,
-                  en: 'Correction note (optional)',
-                  ar: 'ملاحظة التصحيح (اختيارية)',
-                  ur: 'تصحیحی نوٹ (اختیاری)',
-                ),
-                controller: _correctionNote,
-                maxLines: 2,
-              ),
-            ],
-          ],
-          if (widget.photoEditor != null ||
-              _photoReferences.isNotEmpty) ...<Widget>[
-            const SizedBox(height: TpSpace.md),
-            _PhotoReferenceRow(
-              count: _photoReferences.length,
-              isBusy: _editingPhotos,
-              onPressed: widget.photoEditor == null ? null : _editPhotos,
-            ),
-            if (_photoError != null) ...<Widget>[
-              const SizedBox(height: TpSpace.xs),
-              Text(
-                _photoError!,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: TpPalette.of(context).critical.base,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  _SelectedPointHeader(
+                    draft: widget.draft,
+                    markerNumber: widget.markerNumber,
+                    copy: copy,
+                  ),
+                  const SizedBox(height: TpSpace.lg),
+                  TpInput(
+                    label: _localized(
+                      context,
+                      en: 'Area',
+                      ar: 'المنطقة',
+                      ur: 'حصہ',
                     ),
+                    controller: _area,
+                    isRequired: true,
+                    prefixIcon: Icons.place_outlined,
+                    onChanged: (_) => _selectionChanged(),
+                  ),
+                  const SizedBox(height: TpSpace.md),
+                  Text(
+                    _localized(
+                      context,
+                      en: 'Damage type',
+                      ar: 'نوع الضرر',
+                      ur: 'نقصان کی قسم',
+                    ),
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
+                  const SizedBox(height: TpSpace.xs),
+                  Wrap(
+                    key: AccidentDamageZoneSheetKeys.damageType,
+                    spacing: TpSpace.sm,
+                    runSpacing: TpSpace.xs,
+                    children: <Widget>[
+                      for (final AccidentDamageType type
+                          in AccidentDamageType.values)
+                        ChoiceChip(
+                          key: AccidentDamageZoneSheetKeys.damageTypeChip(type),
+                          label: Text(accidentDamageTypeLabel(context, type)),
+                          selected: _damageType == type,
+                          onSelected: (bool selected) {
+                            if (!selected) return;
+                            setState(() => _damageType = type);
+                            _selectionChanged();
+                          },
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: TpSpace.md),
+                  Text(
+                    _localized(
+                      context,
+                      en: 'Level',
+                      ar: 'المستوى',
+                      ur: 'درجہ',
+                    ),
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
+                  const SizedBox(height: TpSpace.xs),
+                  TpSegmented<AccidentDamageSeverity>(
+                    key: AccidentDamageZoneSheetKeys.level,
+                    expanded: true,
+                    value: _severity,
+                    onChanged: (AccidentDamageSeverity value) =>
+                        setState(() => _severity = value),
+                    options: <TpSegmentedOption<AccidentDamageSeverity>>[
+                      for (final AccidentDamageSeverity severity
+                          in AccidentDamageSeverity.values)
+                        TpSegmentedOption<AccidentDamageSeverity>(
+                          value: severity,
+                          label: accidentDamageLevelLabel(context, severity),
+                        ),
+                    ],
+                  ),
+                  if (_suggestion
+                      case final AccidentDamageSuggestion
+                          suggestion) ...<Widget>[
+                    const SizedBox(height: TpSpace.md),
+                    _SuggestionPanel(
+                      suggestion: suggestion,
+                      decision: _suggestionDecision,
+                      onConfirm: _confirmSuggestion,
+                      onCorrect: _markSuggestionCorrected,
+                    ),
+                    if (_suggestionDecision ==
+                        AccidentDamageSuggestionDecision.corrected) ...<Widget>[
+                      const SizedBox(height: TpSpace.md),
+                      TpInput(
+                        label: _localized(
+                          context,
+                          en: 'Correction note (optional)',
+                          ar: 'ملاحظة التصحيح (اختيارية)',
+                          ur: 'تصحیحی نوٹ (اختیاری)',
+                        ),
+                        controller: _correctionNote,
+                        maxLines: 2,
+                      ),
+                    ],
+                  ],
+                  const SizedBox(height: TpSpace.md),
+                  _PhotoReferenceRow(
+                    count: _photoReferences.length,
+                    isBusy: _editingPhotos,
+                    onPressed: widget.photoEditor == null ? null : _editPhotos,
+                  ),
+                  if (_photoError != null) ...<Widget>[
+                    const SizedBox(height: TpSpace.xs),
+                    Text(
+                      _photoError!,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: palette.critical.base,
+                          ),
+                    ),
+                  ],
+                  const SizedBox(height: TpSpace.md),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        _localized(
+                          context,
+                          en: 'Note (optional)',
+                          ar: 'ملاحظة (اختيارية)',
+                          ur: 'نوٹ (اختیاری)',
+                        ),
+                        style: Theme.of(context).textTheme.labelMedium,
+                      ),
+                      const SizedBox(height: TpSpace.xs),
+                      TextField(
+                        key: AccidentDamageZoneSheetKeys.note,
+                        controller: _note,
+                        maxLines: 2,
+                        maxLength: accidentDamageNoteMaxLength,
+                        textCapitalization: TextCapitalization.sentences,
+                        onChanged: (_) => setState(() {}),
+                        decoration: InputDecoration(
+                          filled: true,
+                          fillColor: palette.surface,
+                          // The live "n/200" counter is rendered once, below.
+                          counterText: '',
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: TpSpace.lg,
+                            vertical: TpSpace.md,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(TpRadius.md),
+                            borderSide: BorderSide(color: palette.borderStrong),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: TpSpace.xs),
+                      Align(
+                        alignment: AlignmentDirectional.centerEnd,
+                        child: Text(
+                          '${_note.text.length}/$accidentDamageNoteMaxLength',
+                          key: AccidentDamageZoneSheetKeys.noteCounter,
+                          style:
+                              Theme.of(context).textTheme.labelSmall?.copyWith(
+                                    color: palette.textMuted,
+                                  ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-            ],
-          ],
-          const SizedBox(height: TpSpace.md),
-          TpInput(
-            label: copy('damageMarkNoteLabel'),
-            controller: _note,
-            maxLines: 2,
-          ),
-          const SizedBox(height: TpSpace.lg),
-          _SheetActions(
-            hasExistingMark: widget.existing != null,
-            canSave: _canSave,
-            onRemove: () => Navigator.of(context).pop(
-              const AccidentDamageZoneSheetRemoved(),
             ),
-            onSave: _save,
-            copy: copy,
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              TpSpace.xl,
+              TpSpace.sm,
+              TpSpace.xl,
+              TpSpace.xl,
+            ),
+            child: _SheetActions(
+              hasExistingMark: widget.existing != null,
+              canSave: _canSave,
+              onRemove: () => Navigator.of(context).pop(
+                const AccidentDamageZoneSheetRemoved(),
+              ),
+              onSave: _save,
+            ),
           ),
         ],
       ),
@@ -360,11 +446,12 @@ class _AccidentDamageZoneSheetState extends State<_AccidentDamageZoneSheet> {
         correctionNote: _correctionNote.text,
       );
     }
+    final String note = _clipNote(_note.text.trim());
     return widget.draft.copyWith(
       damageType: _damageType,
       severity: _severity,
-      note: _note.text.trim(),
-      clearNote: _note.text.trim().isEmpty,
+      note: note,
+      clearNote: note.isEmpty,
       areaLabel: _area.text.trim(),
       photoReferences: _photoReferences,
       suggestion: suggestion,
@@ -393,6 +480,7 @@ class _SelectedPointHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
+    final AccidentDamagePerspective? perspective = draft.effectivePerspective;
     return Row(
       children: <Widget>[
         DecoratedBox(
@@ -440,9 +528,9 @@ class _SelectedPointHeader extends StatelessWidget {
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               Text(
-                draft.effectiveView == null
+                perspective == null
                     ? accidentDamageZoneLabel(copy, draft.zoneId)
-                    : accidentDamageViewLabel(copy, draft.effectiveView!),
+                    : accidentDamagePerspectiveLabel(context, perspective),
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: palette.textSecondary,
                     ),
@@ -629,54 +717,72 @@ class _PhotoReferenceRow extends StatelessWidget {
           TpSpace.xs,
           TpSpace.xs,
         ),
-        child: Row(
+        // Text and action stack vertically: on a 400px phone in Urdu the
+        // button label and the caption do not fit on one line.
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            Icon(
-              Icons.photo_camera_outlined,
-              size: TpSizing.iconMd,
-              color: palette.textSecondary,
-            ),
-            const SizedBox(width: TpSpace.sm),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    _localized(
-                      context,
-                      en: 'Close-up damage photos',
-                      ar: 'صور الضرر عن قرب',
-                      ur: 'نقصان کی قریبی تصاویر',
-                    ),
-                    style: Theme.of(context).textTheme.labelMedium,
-                  ),
-                  Text(
-                    _localized(
-                      context,
-                      en: '$count attached',
-                      ar: '$count مرفقة',
-                      ur: '$count منسلک',
-                    ),
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: palette.textMuted,
+            Row(
+              children: <Widget>[
+                Icon(
+                  Icons.photo_camera_outlined,
+                  size: TpSizing.iconMd,
+                  color: palette.textSecondary,
+                ),
+                const SizedBox(width: TpSpace.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        _localized(
+                          context,
+                          en: 'Close-up damage photos',
+                          ar: 'صور الضرر عن قرب',
+                          ur: 'نقصان کی قریبی تصاویر',
                         ),
+                        style: Theme.of(context).textTheme.labelMedium,
+                      ),
+                      Text(
+                        onPressed == null && count == 0
+                            ? _localized(
+                                context,
+                                en: 'Added from the evidence step',
+                                ar: 'تُضاف من خطوة الأدلة',
+                                ur: 'ثبوت کے مرحلے سے شامل کی جاتی ہیں',
+                              )
+                            : _localized(
+                                context,
+                                en: '$count attached',
+                                ar: '$count مرفقة',
+                                ur: '$count منسلک',
+                              ),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: palette.textMuted,
+                            ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-            TpButton.text(
-              key: AccidentDamageZoneSheetKeys.photoAction,
-              label: _localized(
-                context,
-                en: count == 0 ? 'Add' : 'Manage',
-                ar: count == 0 ? 'إضافة' : 'إدارة',
-                ur: count == 0 ? 'شامل کریں' : 'منظم کریں',
+            if (onPressed != null)
+              Align(
+                alignment: AlignmentDirectional.centerEnd,
+                child: TpButton.text(
+                  key: AccidentDamageZoneSheetKeys.photoAction,
+                  label: _localized(
+                    context,
+                    en: count == 0 ? 'Add close-up photo' : 'Add another',
+                    ar: count == 0 ? 'إضافة صورة قريبة' : 'إضافة أخرى',
+                    ur: count == 0 ? 'قریبی تصویر شامل کریں' : 'مزید شامل کریں',
+                  ),
+                  icon: Icons.add_a_photo_outlined,
+                  isCompact: true,
+                  isBusy: isBusy,
+                  onPressed: onPressed,
+                ),
               ),
-              icon: Icons.add_a_photo_outlined,
-              isCompact: true,
-              isBusy: isBusy,
-              onPressed: onPressed,
-            ),
           ],
         ),
       ),
@@ -690,21 +796,24 @@ class _SheetActions extends StatelessWidget {
     required this.canSave,
     required this.onRemove,
     required this.onSave,
-    required this.copy,
   });
 
   final bool hasExistingMark;
   final bool canSave;
   final VoidCallback onRemove;
   final VoidCallback onSave;
-  final AccidentCopy copy;
 
   @override
   Widget build(BuildContext context) {
     if (!hasExistingMark) {
       return TpButton.primary(
         key: AccidentDamageZoneSheetKeys.save,
-        label: copy('damageMarkSave'),
+        label: _localized(
+          context,
+          en: 'Save area and continue',
+          ar: 'حفظ المنطقة والمتابعة',
+          ur: 'حصہ محفوظ کریں اور جاری رکھیں',
+        ),
         icon: Icons.check,
         isFullWidth: true,
         onPressed: canSave ? onSave : null,
@@ -715,7 +824,12 @@ class _SheetActions extends StatelessWidget {
         Expanded(
           child: TpButton.danger(
             key: AccidentDamageZoneSheetKeys.remove,
-            label: copy('damageMarkRemove'),
+            label: _localized(
+              context,
+              en: 'Remove',
+              ar: 'إزالة',
+              ur: 'ہٹائیں',
+            ),
             icon: Icons.delete_outline,
             isCompact: true,
             onPressed: onRemove,
@@ -723,9 +837,15 @@ class _SheetActions extends StatelessWidget {
         ),
         const SizedBox(width: TpSpace.sm),
         Expanded(
+          flex: 2,
           child: TpButton.primary(
             key: AccidentDamageZoneSheetKeys.save,
-            label: copy('damageMarkSave'),
+            label: _localized(
+              context,
+              en: 'Save marked area',
+              ar: 'حفظ المنطقة المحددة',
+              ur: 'نشان زدہ حصہ محفوظ کریں',
+            ),
             icon: Icons.check,
             isCompact: true,
             onPressed: canSave ? onSave : null,
@@ -747,19 +867,16 @@ String accidentDamageTypeLabel(
     ('ar', AccidentDamageType.cracked) => 'متشقق',
     ('ar', AccidentDamageType.broken) => 'مكسور',
     ('ar', AccidentDamageType.missing) => 'مفقود',
+    ('ar', AccidentDamageType.bent) => 'منحنٍ',
     ('ar', AccidentDamageType.other) => 'أخرى',
     ('ur', AccidentDamageType.dent) => 'ڈینٹ',
     ('ur', AccidentDamageType.scratch) => 'خراش',
     ('ur', AccidentDamageType.cracked) => 'دراڑ',
     ('ur', AccidentDamageType.broken) => 'ٹوٹا ہوا',
     ('ur', AccidentDamageType.missing) => 'غائب',
+    ('ur', AccidentDamageType.bent) => 'مڑا ہوا',
     ('ur', AccidentDamageType.other) => 'دیگر',
-    (_, AccidentDamageType.dent) => 'Dent',
-    (_, AccidentDamageType.scratch) => 'Scratch',
-    (_, AccidentDamageType.cracked) => 'Cracked',
-    (_, AccidentDamageType.broken) => 'Broken',
-    (_, AccidentDamageType.missing) => 'Missing',
-    (_, AccidentDamageType.other) => 'Other',
+    (_, _) => accidentDamageTypeVocabLabel(type),
   };
 }
 

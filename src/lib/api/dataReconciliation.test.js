@@ -21,9 +21,9 @@ beforeEach(() => {
 })
 
 describe('service layer - data reconciliation', () => {
-  it('listOrphanAssets returns [] on error and the array on success', async () => {
+  it('listOrphanAssets rejects permission errors and returns the array on success', async () => {
     h.state.rpc = { data: null, error: { message: 'boom', code: '42501' } }
-    expect(await recon.listOrphanAssets()).toEqual([])
+    await expect(recon.listOrphanAssets()).rejects.toThrow()
     expect(h.state.lastRpc.name).toBe('recon_orphan_assets')
 
     const rows = [{ asset_no: 'A1', vehicle_type: 'Truck', country: 'KSA', tyre_count: 6 }]
@@ -31,9 +31,9 @@ describe('service layer - data reconciliation', () => {
     expect(await recon.listOrphanAssets()).toEqual(rows)
   })
 
-  it('listDuplicateTyres returns [] on error and the array on success', async () => {
+  it('listDuplicateTyres rejects backend errors and returns the array on success', async () => {
     h.state.rpc = { data: null, error: { message: 'boom' } }
-    expect(await recon.listDuplicateTyres()).toEqual([])
+    await expect(recon.listDuplicateTyres()).rejects.toThrow()
     expect(h.state.lastRpc.name).toBe('recon_duplicate_tyres')
 
     const rows = [{ serial_no: 'S1', asset_no: 'A1', row_count: 2, keep_id: 'k', remove_ids: ['r1'] }]
@@ -41,9 +41,9 @@ describe('service layer - data reconciliation', () => {
     expect(await recon.listDuplicateTyres()).toEqual(rows)
   })
 
-  it('listSerialConflicts returns [] on error and the array on success', async () => {
+  it('listSerialConflicts rejects backend errors and returns the array on success', async () => {
     h.state.rpc = { data: null, error: { message: 'boom' } }
-    expect(await recon.listSerialConflicts()).toEqual([])
+    await expect(recon.listSerialConflicts()).rejects.toThrow()
     expect(h.state.lastRpc.name).toBe('recon_serial_conflicts')
 
     const rows = [{ serial_no: 'S1', asset_count: 2, rows: [{ id: 'x', asset_no: 'A1', status: 'active', created_at: 't' }] }]

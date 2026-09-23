@@ -313,28 +313,27 @@ export default function CorrectiveActions() {
     [actions]
   )
 
-  const counts = useMemo(() => {
-    const c = { Open: 0, 'In Progress': 0, Closed: 0 }
-    actions.forEach(a => { if (c[a.status] !== undefined) c[a.status]++ })
-    return c
-  }, [actions])
-
-  const overdueCount = useMemo(() =>
-    actions.filter(a => overdueDays(a.due_date, a.status) !== null).length,
-    [actions]
-  )
-
-  const avgClose = useMemo(() => avgDaysToClose(actions), [actions])
-
-  const filtered = useMemo(() => {
-    let arr = actions
-    if (statusFilter)   arr = arr.filter(a => a.status === statusFilter)
-    if (priorityFilter) arr = arr.filter(a => a.priority === priorityFilter)
-    if (siteFilter)     arr = arr.filter(a => a.site === siteFilter)
-    if (overdueOnly)    arr = arr.filter(a => overdueDays(a.due_date, a.status) !== null)
+  /**
+   * One predicate, with an opt-out, so every tile and the table narrow the same
+   * way. `skip` names the dimension a figure REPORTS ON and must therefore not
+   * apply to itself: the Open/In Progress/Closed tiles ARE the status toggles
+   * and the Overdue tile IS the overdue toggle, so counting them over a set
+   * already narrowed by their own filter makes each one restate the table's row
+   * count the moment it is pressed, and stops it being a target you can aim at.
+   *
+   * Everything else (site, priority, search) DOES apply - these figures used to
+   * be computed over the raw `actions`, so filtering to one site left the tiles
+   * stating fleet-wide numbers above a table showing that site alone.
+   */
+  const narrow = useCallback((arr, skip) => {
+    let out = arr
+    if (skip !== 'status' && statusFilter) out = out.filter(a => a.status === statusFilter)
+    if (priorityFilter) out = out.filter(a => a.priority === priorityFilter)
+    if (siteFilter)     out = out.filter(a => a.site === siteFilter)
+    if (skip !== 'overdue' && overdueOnly) out = out.filter(a => overdueDays(a.due_date, a.status) !== null)
     if (search) {
       const q = search.toLowerCase()
-      arr = arr.filter(a =>
+      out = out.filter(a =>
         a.title?.toLowerCase().includes(q) ||
         a.assigned_to?.toLowerCase().includes(q) ||
         a.asset_no?.toLowerCase().includes(q) ||
@@ -343,6 +342,31 @@ export default function CorrectiveActions() {
         a.root_cause?.toLowerCase().includes(q)
       )
     }
+    return out
+  }, [statusFilter, priorityFilter, siteFilter, overdueOnly, search])
+
+  // The status tiles hold out the status filter; their denominator is the same
+  // base, so the breakdown bar's percentages add up to what the tiles show.
+  const statusBase = useMemo(() => narrow(actions, 'status'), [actions, narrow])
+  const counts = useMemo(() => {
+    const c = { Open: 0, 'In Progress': 0, Closed: 0 }
+    statusBase.forEach(a => { if (c[a.status] !== undefined) c[a.status]++ })
+    return c
+  }, [statusBase])
+
+  const overdueCount = useMemo(() =>
+    narrow(actions, 'overdue').filter(a => overdueDays(a.due_date, a.status) !== null).length,
+    [actions, narrow]
+  )
+
+  // Not a toggle, so it covers the fully filtered set.
+  const avgClose = useMemo(() => avgDaysToClose(narrow(actions, null)), [actions, narrow])
+
+  // True only while the tiles cover less than the whole register.
+  const scopeNarrowed = statusBase.length !== actions.length
+
+  const filtered = useMemo(() => {
+    const arr = narrow(actions, null)
     // Sort
     return [...arr].sort((a, b) => {
       if (sortBy === 'priority') return PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority]
@@ -354,7 +378,7 @@ export default function CorrectiveActions() {
       }
       return new Date(b.created_at) - new Date(a.created_at)
     })
-  }, [actions, statusFilter, priorityFilter, siteFilter, overdueOnly, search, sortBy])
+  }, [actions, narrow, sortBy])
   const actionsPager = usePagedRows(filtered)
 
   // ── Mutations ─────────────────────────────────────────────────────────────────
@@ -529,6 +553,16 @@ export default function CorrectiveActions() {
         )}
       </div>
 
+      {/* When the tiles cover a narrowed set, say so. A silently narrowed KPI is
+          the same defect one level down. */}
+      {scopeNarrowed && (
+        <p className="text-xs text-gray-500 -mt-1">
+          These figures cover the {statusBase.length} action{statusBase.length === 1 ? '' : 's'} matching
+          your site, priority and search filters, of {actions.length} in total. Each tile ignores its own
+          filter so it stays something you can aim at.
+        </p>
+      )}
+
       {/* Toolbar */}
       <div className="flex items-center gap-3 flex-wrap">
         {/* Search */}
@@ -654,9 +688,9 @@ export default function CorrectiveActions() {
             </div>
             <div className="space-y-2">
               {[
-                { label: 'Open', count: counts.Open, pct: actions.length ? Math.round(counts.Open / actions.length * 100) : 0, color: 'bg-red-500' },
-                { label: 'In Progress', count: counts['In Progress'], pct: actions.length ? Math.round(counts['In Progress'] / actions.length * 100) : 0, color: 'bg-yellow-500' },
-                { label: 'Closed', count: counts.Closed, pct: actions.length ? Math.round(counts.Closed / actions.length * 100) : 0, color: 'bg-green-500' },
+                { label: 'Open', count: counts.Open, pct: statusBase.length ? Math.round(counts.Open / statusBase.length * 100) : 0, color: 'bg-red-500' },
+                { label: 'In Progress', count: counts['In Progress'], pct: statusBase.length ? Math.round(counts['In Progress'] / statusBase.length * 100) : 0, color: 'bg-yellow-500' },
+                { label: 'Closed', count: counts.Closed, pct: statusBase.length ? Math.round(counts.Closed / statusBase.length * 100) : 0, color: 'bg-green-500' },
               ].map(row => (
                 <div key={row.label} className="flex items-center gap-2">
                   <span className="text-xs text-gray-400 w-20">{row.label}</span>

@@ -1,0 +1,291 @@
+[
+  {
+    "id": "2026.09.22.2",
+    "date": "2026-09-22",
+    "changes": [{
+      "modules": ["vehicle_washing"],
+      "text": {"en": "Vehicle washing no longer asks for or displays a wash checklist. Chemical, photo and entry-person details remain available in records and reports."}
+    }]
+  },
+  {
+    "id": "2026.09.22.1",
+    "date": "2026-09-22",
+    "changes": [{
+      "modules": ["vehicle_washing"],
+      "text": {"en": "Washing records now open immediately when their table row is selected, while PDF, asset, edit and delete controls continue to perform only their own actions."}
+    }]
+  },
+  {
+    "id": "2026.09.21.4",
+    "date": "2026-09-21",
+    "changes": [{
+      "modules": ["vehicle_washing"],
+      "text": {"en": "The washing log now uses the standard sortable SaaS table, keeps View record in the final column and limits the advanced filter choices to washing-specific record fields."}
+    }]
+  },
+  {
+    "id": "2026.09.21.3",
+    "date": "2026-09-21",
+    "changes": [{
+      "modules": ["checklists"],
+      "text": {"en": "Checklist history now identifies legacy sheets by the asset and site recorded inside them. Same-day checklist and receipt dates are shown once, while late-arriving sheets retain both dates."}
+    }]
+  },
+  {
+    "id": "2026.09.21.2",
+    "date": "2026-09-21",
+    "changes": [{
+      "modules": ["checklists", "approvals", "corrective_actions"],
+      "text": {"en": "Checklist governance now supports controlled pilot sites and dates, scoped schedules, configurable approval and corrective-action SLAs, evidence requirements, legal holds and retention review. Approval monitoring shows target hours and breached queues."}
+    }]
+  },
+  {
+    "id": "2026.09.21.1",
+    "date": "2026-09-21",
+    "changes": [{
+      "modules": ["vehicle_washing"],
+      "text": {"en": "Washing records now show who entered them, chemicals used and checklist results. Staff activity, expanded filters and exports help review entries, with one-click access to recorded evidence."}
+    }]
+  },
+  {
+    "id": "2026.09.12.4",
+    "date": "2026-09-12",
+    "changes": [
+      {
+        "modules": [
+          "odometer_logs"
+        ],
+        "text": {
+          "en": "Anyone with Meter Logs access can add readings and correct ordinary entries. Lower readings save for Admin review without reducing current fleet meters. Flagged readings require an audited Admin review."
+        }
+      }
+    ]
+  },
+  {
+    "id": "2026.09.12.3",
+    "date": "2026-09-12",
+    "changes": [{
+      "modules": ["pm_programs"],
+      "text": {
+        "en": "Maintenance plans can verify a fleet vehicle, show matching service templates and applicable meters, and calculate the next due date or reading from the last service and its interval."
+      }
+    }]
+  },
+  {
+    "id": "2026.09.12.2",
+    "date": "2026-09-12",
+    "changes": [
+      {
+        "modules": ["approvals", "work_orders", "tyre_records", "settings", "data_cleaning"],
+        "text": {
+          "en": "Approval, administration and import workflows now have their required backend services. Access Control capability saves use company settings while retaining existing permission rules and feature flags."
+        }
+      }
+    ]
+  },
+  {
+    "id": "2026.09.12.1",
+    "date": "2026-09-12",
+    "changes": [
+      {
+        "modules": ["checklists"],
+        "text": {
+          "en": "Monthly checklist history includes older sheets synced later, using the date recorded on the checklist. The submissions list distinguishes checklist and received dates."
+        }
+      },
+      {
+        "modules": ["inspection_planner"],
+        "text": {
+          "en": "Inspection planning now consistently warns when loaded history reaches its limit."
+        }
+      }
+    ]
+  },
+  {
+    "id": "2026.09.11.1",
+    "date": "2026-09-11",
+    "changes": [
+      {
+        "modules": ["approvals"],
+        "text": {
+          "en": "Approval reviews clear outdated permissions and show completed decisions accurately. Policy publishing checks the reviewed draft, stage deadlines and simulation results."
+        }
+      },
+      {
+        "modules": ["work_orders", "tyre_records"],
+        "text": {
+          "en": "Work-order approval requests retain the same retry after a refresh or reopening. Tyre changes recheck access, verify server receipts and show the approved operation before execution."
+        }
+      }
+    ]
+  },
+  {
+    "id": "2026.09.10.7",
+    "date": "2026-09-10",
+    "changes": [
+      {
+        "modules": ["inspection_planner"],
+        "text": {
+          "en": "Inspection planning has a searchable work queue, clearer appointment and coverage status, timezone-safe scheduling, bulk appointment previews, and visible validation and save errors."
+        }
+      }
+    ]
+  },
+  {
+    "id": "2026.09.10.6",
+    "date": "2026-09-10",
+    "changes": [
+      {
+        "modules": [
+          "inspections",
+          "tyre_records"
+        ],
+        "text": {
+          "en": "Inspection PDFs distinguish latest fleet estimates from inspection readings, flag unmapped wheel positions, and avoid false short-life tyre alerts."
+        }
+      },
+      {
+        "modules": [
+          "checklists",
+          "my_checklists"
+        ],
+        "text": {
+          "en": "Checklists flag contradictory fitness answers and invalid historical meters. New submissions reject negative meter readings, and signature headings stay with their signatures."
+        }
+      },
+      {
+        "modules": [
+          "tyre_records"
+        ],
+        "text": {
+          "en": "Anomaly scans separate countries and currencies, handle numeric costs correctly, and warn when workshop records are unavailable."
+        }
+      }
+    ]
+  },
+  {
+    "id": "2026.09.10.5",
+    "date": "2026-09-10",
+    "changes": [
+      {
+        "modules": [
+          "tyre_passport",
+          "serial_tracker",
+          "fleet_master"
+        ],
+        "text": {
+          "en": "Tyre and vehicle histories load more completely, respect the selected country, and report unavailable history."
+        }
+      },
+      {
+        "modules": [
+          "qr_labels",
+          "workshop_live",
+          "cpk_intelligence",
+          "predictive_maintenance"
+        ],
+        "text": {
+          "en": "Country changes discard outdated results, and operational pages follow module access settings."
+        }
+      },
+      {
+        "modules": [
+          "pm_programs",
+          "shifts"
+        ],
+        "text": {
+          "en": "Maintenance and shift lists include later records and report loading failures more clearly."
+        }
+      },
+      {
+        "modules": [
+          "tyre_records"
+        ],
+        "text": {
+          "en": "Filtered record downloads show errors for incomplete exports and prevent repeated download clicks."
+        }
+      }
+    ]
+  },
+  {
+    "id": "2026.09.10.4",
+    "date": "2026-09-10",
+    "changes": [
+      {
+        "modules": [],
+        "text": {
+          "en": "See what changed before updating, and find previous releases in Settings > Update history."
+        }
+      }
+    ]
+  },
+  {
+    "id": "2026.09.10.3",
+    "date": "2026-09-10",
+    "changes": [
+      {
+        "modules": [
+          "vehicle_washing"
+        ],
+        "text": {
+          "en": "Washing PDFs fit a single wash and three larger photos on one page, with clearer vehicle details."
+        }
+      },
+      {
+        "modules": [
+          "vehicle_washing"
+        ],
+        "text": {
+          "en": "Wash downloads follow the selected filters. Download messages can be closed and disappear automatically."
+        }
+      }
+    ]
+  },
+  {
+    "id": "2026.09.10.2",
+    "date": "2026-09-10",
+    "changes": [
+      {
+        "modules": [],
+        "text": {
+          "en": "Your home shows permitted modules and avoids loading unrelated dashboard data."
+        }
+      },
+      {
+        "modules": [
+          "fleet_master",
+          "inspections",
+          "work_orders",
+          "serial_tracker",
+          "accidents"
+        ],
+        "text": {
+          "en": "Data Monitor navigation, search and page access now follow the permissions saved in Settings."
+        }
+      }
+    ]
+  },
+  {
+    "id": "2026.09.10.1",
+    "date": "2026-09-10",
+    "changes": [
+      {
+        "modules": [
+          "odometer_logs",
+          "engine_hours"
+        ],
+        "text": {
+          "en": "Update kilometres and engine hours in the same vehicle row. Reading warnings appear when saving."
+        }
+      },
+      {
+        "modules": [
+          "vehicle_washing"
+        ],
+        "text": {
+          "en": "Fleet Supervisors can schedule and log vehicle washes. Export vehicle washing PDFs with uploaded photos."
+        }
+      }
+    ]
+  }
+]

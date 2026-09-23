@@ -1,0 +1,9 @@
+@media (max-width: 767px) {
+  .meter-entry-table, .meter-entry-table tbody { display: block; width: 100%; }
+  .meter-entry-table thead { display: none; }
+  .meter-entry-table tbody > tr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); padding: 0.5rem; }
+  .meter-entry-table td { display: block; min-width: 0; padding: 0.65rem; }
+  .meter-entry-table td:nth-child(1), .meter-entry-table td:nth-child(2),
+  .meter-entry-table td:nth-child(5), .meter-entry-table td:nth-child(6),
+  .meter-entry-table td[colspan] { grid-column: 1 / -1; }
+}

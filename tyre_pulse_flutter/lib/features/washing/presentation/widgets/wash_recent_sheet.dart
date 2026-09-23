@@ -17,7 +17,9 @@ import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
+import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/washing/data/wash_record.dart';
+import 'package:tyre_pulse/features/washing/presentation/widgets/wash_record_viewer.dart';
 import 'package:tyre_pulse/features/washing/washing_providers.dart';
 
 class WashRecentSheet extends ConsumerStatefulWidget {
@@ -31,6 +33,9 @@ class _WashRecentSheetState extends ConsumerState<WashRecentSheet> {
   bool _loading = true;
   AppError? _error;
   List<WashRecord> _washes = const <WashRecord>[];
+  String _search = '';
+  bool _mine = false;
+  int _loadTicket = 0;
 
   @override
   void initState() {
@@ -39,20 +44,22 @@ class _WashRecentSheetState extends ConsumerState<WashRecentSheet> {
   }
 
   Future<void> _load() async {
+    final ticket = ++_loadTicket;
     setState(() {
       _loading = true;
       _error = null;
+      _washes = const <WashRecord>[];
     });
     try {
       final List<WashRecord> washes =
           await ref.read(washRepositoryProvider).listRecentWashes();
-      if (!mounted) return;
+      if (!mounted || ticket != _loadTicket) return;
       setState(() {
         _washes = washes;
         _loading = false;
       });
     } on Object catch (error) {
-      if (!mounted) return;
+      if (!mounted || ticket != _loadTicket) return;
       final AppLocalizations l10n = AppLocalizations.of(context);
       setState(() {
         _error = _asAppError(error, l10n.washRecentLoadErrorMessage);
@@ -76,6 +83,14 @@ class _WashRecentSheetState extends ConsumerState<WashRecentSheet> {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
+    ref.listen(workspaceContextProvider, (previous, next) {
+      if (previous?.userId != next?.userId ||
+          previous?.companyId != next?.companyId ||
+          previous?.activeCountry != next?.activeCountry ||
+          previous?.activeSites != next?.activeSites) {
+        unawaited(_load());
+      }
+    });
 
     if (_loading) {
       return const SizedBox(height: 160, child: TpLoadingState());
@@ -93,17 +108,61 @@ class _WashRecentSheetState extends ConsumerState<WashRecentSheet> {
       );
     }
 
+    final l = AppLocalizations.of(context);
+    final userId = ref.watch(workspaceContextProvider)?.userId;
+    final visible = _washes
+        .where(
+          (w) =>
+              (!_mine || w.createdBy == userId) &&
+              [
+                w.assetNo,
+                w.site,
+                w.entryName,
+                w.entryUsername,
+                w.washType,
+                w.status,
+              ]
+                  .whereType<String>()
+                  .join(' ')
+                  .toLowerCase()
+                  .contains(_search.toLowerCase()),
+        )
+        .toList();
     return ConstrainedBox(
       constraints: BoxConstraints(
         maxHeight: MediaQuery.sizeOf(context).height * 0.6,
       ),
-      child: ListView.separated(
-        shrinkWrap: true,
-        padding: const EdgeInsets.symmetric(horizontal: TpSpace.lg),
-        itemCount: _washes.length,
-        separatorBuilder: (_, __) => const Divider(height: TpSpace.lg),
-        itemBuilder: (BuildContext context, int index) =>
-            _RecentWashRow(wash: _washes[index]),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: TextField(
+              decoration: InputDecoration(labelText: l.washSearchHistory),
+              onChanged: (v) => setState(() => _search = v),
+            ),
+          ),
+          SwitchListTile(
+            title: Text(l.washMyEntries),
+            value: _mine,
+            onChanged: (v) => setState(() => _mine = v),
+          ),
+          if (visible.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(l.washRecentEmptyMessage),
+            ),
+          Flexible(
+            child: ListView.separated(
+              shrinkWrap: true,
+              padding: const EdgeInsets.symmetric(horizontal: TpSpace.lg),
+              itemCount: visible.length,
+              separatorBuilder: (_, __) => const Divider(height: TpSpace.lg),
+              itemBuilder: (BuildContext context, int index) =>
+                  _RecentWashRow(wash: visible[index]),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -123,33 +182,47 @@ class _RecentWashRow extends StatelessWidget {
       if (wash.site != null) wash.site!,
     ];
 
-    return Row(
-      children: <Widget>[
-        Icon(Icons.local_car_wash_outlined, color: palette.textMuted),
-        const SizedBox(width: TpSpace.md),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(wash.assetNo, style: Theme.of(context).textTheme.titleSmall),
-              if (subtitleParts.isNotEmpty)
-                Text(
-                  subtitleParts.join(' · '),
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: palette.textMuted),
-                ),
-            ],
-          ),
+    return InkWell(
+      onTap: () => Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => WashRecordViewer(wash: wash),
         ),
-        if (wash.washType != null)
-          TpStatusChip(
-            status: TpStatus.neutral,
-            label: wash.washType!,
-            isCompact: true,
+      ),
+      child: Row(
+        children: <Widget>[
+          Icon(Icons.local_car_wash_outlined, color: palette.textMuted),
+          const SizedBox(width: TpSpace.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  wash.assetNo,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                Text(
+                  '${AppLocalizations.of(context).washEnteredByLabel}: ${wash.entryName ?? wash.entryUsername ?? wash.createdBy ?? AppLocalizations.of(context).washNotRecorded}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                if (subtitleParts.isNotEmpty)
+                  Text(
+                    subtitleParts.join(' · '),
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodySmall
+                        ?.copyWith(color: palette.textMuted),
+                  ),
+              ],
+            ),
           ),
-      ],
+          if (wash.washType != null)
+            TpStatusChip(
+              status: TpStatus.neutral,
+              label: wash.washType!,
+              isCompact: true,
+            ),
+        ],
+      ),
     );
   }
 }

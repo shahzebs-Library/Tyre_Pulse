@@ -17,6 +17,7 @@
 import { supabase } from '../supabase'
 import { applyCountry } from '../countryFilter'
 import { listTemplates as listAccidentReportTemplates } from './accidentReportTemplates'
+import { reportDateLabel } from '../exportUtils'
 
 // Select every column so the page keeps listing schedules even before V218 is
 // applied (the new fields simply read back undefined until the migration lands).
@@ -48,6 +49,7 @@ export const FREQUENCIES = [
 ]
 
 export const PERIODS = [
+  { value: 'yesterday', label: 'Yesterday (1 day)', days: 1 },
   { value: 'last_7',  label: 'Last 7 days',   days: 7 },
   { value: 'last_30', label: 'Last 30 days',  days: 30 },
   { value: 'last_90', label: 'Last 90 days',  days: 90 },
@@ -86,8 +88,12 @@ const DATASETS = {
   },
   inspection: {
     table: 'inspections', dateCol: 'inspection_date', title: 'Inspection Summary',
-    cols:    ['inspection_date', 'inspection_type', 'site', 'asset_no', 'inspector', 'status', 'severity', 'pressure_reading'],
-    headers: ['Date', 'Type', 'Site', 'Asset', 'Inspector', 'Status', 'Severity', 'Pressure'],
+    // vehicle_type + completed_date are additive to the raw projection - they
+    // back the "completed by tyre man / vehicle type" pivot the report builds
+    // alongside the record list (see tyreManVehicleTypeSummary in
+    // src/lib/inspectionCoverage.js), and both already exist on the table.
+    cols:    ['inspection_date', 'inspection_type', 'site', 'asset_no', 'vehicle_type', 'inspector', 'status', 'completed_date', 'severity', 'pressure_reading'],
+    headers: ['Date', 'Type', 'Site', 'Asset', 'Vehicle Type', 'Inspector', 'Status', 'Completed', 'Severity', 'Pressure'],
   },
   accidents: {
     table: 'accidents', dateCol: 'incident_date', title: 'Accident & Incident Report',
@@ -257,13 +263,28 @@ export function computeNextRun(form) {
   return next.toISOString()
 }
 
-const iso = (d) => d.toISOString().slice(0, 10)
+// Local calendar date, NOT `d.toISOString().slice(0,10)`. toISOString() converts
+// through UTC, and in any timezone west of UTC (most of the Americas), during
+// local evening hours "now"'s UTC calendar day is already tomorrow - so a
+// caller picking "Yesterday" would silently get today's date instead. Reading
+// the browser's own date fields keeps this matching what a person means by
+// "today"/"yesterday" in their own timezone, the same way reportDateLabel()
+// already does below.
+const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
 /** Resolve a coverage period to a concrete {from,to,label} (YYYY-MM-DD). */
 export function resolvePeriod(period, customFrom, customTo) {
   const to = new Date()
   const from = new Date()
   switch (period) {
+    // A single calendar day, yesterday's - the "what happened yesterday" run.
+    // from === to on purpose: the date-only column comparison (gte/lte) below
+    // then matches exactly that one day, nothing before or after it.
+    case 'yesterday': {
+      to.setDate(to.getDate() - 1)
+      const day = iso(to)
+      return { from: day, to: day, label: `Yesterday (${reportDateLabel(to)})` }
+    }
     case 'last_7':  from.setDate(to.getDate() - 7); break
     case 'last_90': from.setDate(to.getDate() - 90); break
     case 'mtd':     from.setDate(1); break

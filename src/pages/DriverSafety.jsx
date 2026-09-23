@@ -23,6 +23,8 @@ import {
   Wrench, GraduationCap, TrendingUp, Activity,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import Card, { CardHeader } from '../components/ui/Card'
+import Modal from '../components/ui/Modal'
 import EmailPdfButton from '../components/EmailPdfButton'
 import { useSettings } from '../contexts/SettingsContext'
 import {
@@ -37,6 +39,7 @@ import {
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 ChartJS.register(
   CategoryScale, LinearScale, PointElement, LineElement, BarElement,
@@ -78,8 +81,8 @@ const CATEGORY_LABEL = {
   idling: 'Excessive idling', fatigue: 'Fatigue', other: 'Other',
 }
 
-const pct = (v) => (v == null ? '—' : `${Math.round(v * 1000) / 10}%`)
-const kmFmt = (v) => (v == null || !Number.isFinite(v) ? '—' : `${Math.round(v).toLocaleString()} km`)
+const pct = (v) => (v == null ? 'N/A' : `${Math.round(v * 1000) / 10}%`)
+const kmFmt = (v) => (v == null || !Number.isFinite(v) ? 'N/A' : `${Math.round(v).toLocaleString()} km`)
 
 const EMPTY_FORM = {
   asset_no: '', driver_name: '', event_type: '', severity: '', event_at: '',
@@ -106,12 +109,12 @@ const SEVERITY_TONE = {
   low: 'text-green-400 bg-green-900/20 border border-green-800/50',
 }
 
-const num = (v) => (v == null || v === '' ? '—' : Number(v).toLocaleString())
+const num = (v) => (v == null || v === '' ? 'N/A' : Number(v).toLocaleString())
 
 function fmtDateTime(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleString()
 }
 
 function scoreTone(score) {
@@ -120,11 +123,6 @@ function scoreTone(score) {
   return 'text-red-400'
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') ||
-    m.includes('schema cache') || m.includes('could not find the table')
-}
 
 export default function DriverSafety() {
   const { activeCountry } = useSettings()
@@ -306,6 +304,9 @@ export default function DriverSafety() {
     setFormError(''); setShowModal(true)
   }
   const closeModal = () => { if (!saving) { setShowModal(false); setEditing(null) } }
+  // One guarded close for Escape, the backdrop and Modal's X, matching what the
+  // legacy overlay guarded on its backdrop.
+  const closeDelete = () => { if (!deleting) setConfirmDelete(null) }
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
 
   const submit = useCallback(async (e) => {
@@ -350,7 +351,7 @@ export default function DriverSafety() {
     <div className="space-y-6">
       <PageHeader
         title="Driver Safety Events"
-        subtitle="Track harsh braking, acceleration, cornering, speeding and fatigue events per driver — and score each driver on risk. Driver conduct drives tyre wear, fuel burn and accident exposure."
+        subtitle="Track harsh braking, acceleration, cornering, speeding and fatigue events per driver, and score each driver on risk. Driver conduct drives tyre wear, fuel burn and accident exposure."
         icon={ShieldAlert}
         onRefresh={load}
         refreshing={refreshing}
@@ -381,7 +382,11 @@ export default function DriverSafety() {
       />
 
       {notProvisioned && (
-        <div className="card border border-amber-800/50 flex items-start gap-3">
+        // `border border-amber-800/50` as classes would be DEAD here: Card sets
+        // `border` inline and inline beats a class, so the tint is carried by
+        // `tone`. Card is `flex flex-col` and Tailwind emits .flex-col after
+        // .flex-row, so the row direction goes in `style`, which Card spreads last.
+        <Card tone="warn" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
           <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
           <div>
             <p className="text-amber-300 font-medium">Driver safety tracking isn’t enabled on this database yet.</p>
@@ -389,28 +394,28 @@ export default function DriverSafety() {
               Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V170_DRIVER_SAFETY_EVENTS.sql</span>, then reload.
             </p>
           </div>
-        </div>
+        </Card>
       )}
 
       {error && (
-        <div className="card border border-red-800/50 flex items-start gap-3">
+        <Card tone="crit" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
           <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
           <div><p className="text-red-300 font-medium">Couldn’t load driver safety events.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
-        </div>
+        </Card>
       )}
 
       {/* KPI tiles */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-[var(--gap-grid)]">
         {kpis.map((k) => {
           const Icon = k.icon
           return (
-            <div key={k.label} className="card">
+            <Card key={k.label}>
               <div className="flex items-center justify-between">
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
-            </div>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
+            </Card>
           )
         })}
       </div>
@@ -456,8 +461,13 @@ export default function DriverSafety() {
       )}
 
       {tab === 'events' && (<>
-      {/* Driver risk scorecard */}
-      <div className="card overflow-hidden !p-0">
+      {/* Driver risk scorecard. `pad="none" clip` reproduces the edge-to-edge
+          crop the legacy `.card overflow-hidden !p-0` gave; nothing inside
+          renders a DOM popover, so clipping is safe. The header stays
+          hand-rolled rather than becoming CardHeader because it carries its own
+          px-4 py-3 and bottom rule inside a zero-padding card - CardHeader sets
+          no padding, so it would sit flush against the edge. */}
+      <Card pad="none" clip>
         <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--input-border)]">
           <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
             <ShieldCheck size={15} /> Driver risk scorecard
@@ -496,13 +506,13 @@ export default function DriverSafety() {
             </table>
           </div>
         )}
-      </div>
+      </Card>
 
-      {/* Event-type distribution */}
-      <div className="card">
-        <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
-          <Filter size={15} /> Events by type
-        </h3>
+      {/* Event-type distribution. This card holds its OWN dimension out of the
+          filter set (see filteredBase), so it can still be compared after a type
+          is picked. */}
+      <Card>
+        <CardHeader icon={Filter} title="Events by type" />
         {rows === null ? (
           <div className="h-12 bg-[var(--input-bg)] rounded animate-pulse" />
         ) : eventTypes.length === 0 ? (
@@ -517,10 +527,12 @@ export default function DriverSafety() {
             ))}
           </div>
         )}
-      </div>
+      </Card>
 
-      {/* Filters */}
-      <div className="card space-y-3">
+      {/* Filters. Left unclipped so any anchored popover added here later stays
+          visible; the country/type/severity controls are native <select>s, whose
+          option lists the browser paints outside this element regardless. */}
+      <Card className="space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[200px]">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
@@ -543,10 +555,12 @@ export default function DriverSafety() {
           {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
           <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {(rows || []).length}</span>
         </div>
-      </div>
+      </Card>
 
-      {/* Table */}
-      <div className="card overflow-hidden !p-0">
+      {/* Table. Clipping is safe: the only popup inside is TablePagination's
+          rows-per-page native <select>, whose option list the browser paints
+          outside this overflow context. */}
+      <Card pad="none" clip>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -560,20 +574,20 @@ export default function DriverSafety() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={8} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {rows.length === 0 && !notProvisioned ? 'No events logged yet — log your first event.' : 'No events match these filters.'}
+                  {rows.length === 0 && !notProvisioned ? 'No events logged yet. Log your first event.' : 'No events match these filters.'}
                 </td></tr>
               ) : (
                 pager.pageRows.map((r) => (
                   <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                    <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.driver_name || '—'}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.asset_no || '—'}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{EVENT_TYPE_LABEL[r.event_type] || r.event_type || '—'}</td>
+                    <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.driver_name || 'N/A'}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.asset_no || 'N/A'}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{EVENT_TYPE_LABEL[r.event_type] || r.event_type || 'N/A'}</td>
                     <td className="px-4 py-2.5">
                       {r.severity ? (
                         <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${SEVERITY_TONE[r.severity] || 'text-[var(--text-secondary)]'}`}>
                           {r.severity[0].toUpperCase() + r.severity.slice(1)}
                         </span>
-                      ) : '—'}
+                      ) : 'N/A'}
                     </td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDateTime(r.event_at)}</td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">
@@ -593,17 +607,21 @@ export default function DriverSafety() {
           </table>
         </div>
         <TablePagination {...pager} />
-      </div>
+      </Card>
       </>)}
 
-      {/* Create / Edit modal */}
+      {/* Create / Edit modal. `size="lg"` because the speed / limit / g-force /
+          penalty row is a 4-column grid that a narrower panel would crush. The
+          submit button stays INSIDE the <form> rather than moving to Modal's
+          `footer`: a footer button would need a `form="..."` association to keep
+          submitting, which is a behaviour change, not a migration. */}
       {showModal && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" onClick={closeModal}>
-          <div className="card w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-[var(--text-primary)]">{editing ? 'Edit safety event' : 'Log driver safety event'}</h3>
-              <button onClick={closeModal} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
-            </div>
+        <Modal
+          open
+          onClose={closeModal}
+          size="lg"
+          title={editing ? 'Edit safety event' : 'Log driver safety event'}
+        >
             <form onSubmit={submit} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -639,7 +657,7 @@ export default function DriverSafety() {
                 </div>
                 <div>
                   <label className="label">Location (optional)</label>
-                  <input className="input w-full" placeholder="e.g. Riyadh–Dammam Hwy km 210" value={form.location} maxLength={300} onChange={(e) => set('location', e.target.value)} />
+                  <input className="input w-full" placeholder="e.g. Riyadh to Dammam Hwy km 210" value={form.location} maxLength={300} onChange={(e) => set('location', e.target.value)} />
                 </div>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -678,31 +696,33 @@ export default function DriverSafety() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
+        </Modal>
       )}
 
-      {/* Delete confirm */}
+      {/* Delete confirm. No <form> here, so the actions belong in Modal's
+          `footer`, which pins them where a user can always reach them. */}
       {confirmDelete && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" onClick={() => !deleting && setConfirmDelete(null)}>
-          <div className="card w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-full bg-red-900/30 flex items-center justify-center shrink-0"><Trash2 size={18} className="text-red-400" /></div>
-              <div>
-                <h3 className="text-[var(--text-primary)] font-semibold">Delete this event?</h3>
-                <p className="text-sm text-[var(--text-muted)] mt-1">
-                  {confirmDelete.driver_name || 'Event'} · {EVENT_TYPE_LABEL[confirmDelete.event_type] || confirmDelete.event_type || '—'} · {fmtDateTime(confirmDelete.event_at)}. This can’t be undone.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center justify-end gap-2 mt-5">
-              <button onClick={() => setConfirmDelete(null)} className="btn-secondary text-sm" disabled={deleting}>Cancel</button>
+        <Modal
+          open
+          onClose={closeDelete}
+          size="sm"
+          title="Delete this event?"
+          footer={
+            <>
+              <button onClick={closeDelete} className="btn-secondary text-sm" disabled={deleting}>Cancel</button>
               <button onClick={doDelete} className="btn-danger text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={deleting}>
                 <Trash2 size={14} /> {deleting ? 'Deleting…' : 'Delete'}
               </button>
-            </div>
+            </>
+          }
+        >
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-full bg-red-900/30 flex items-center justify-center shrink-0"><Trash2 size={18} className="text-red-400" /></div>
+            <p className="text-sm text-[var(--text-muted)]">
+              {confirmDelete.driver_name || 'Event'} · {EVENT_TYPE_LABEL[confirmDelete.event_type] || confirmDelete.event_type || 'N/A'} · {fmtDateTime(confirmDelete.event_at)}. This can’t be undone.
+            </p>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   )
@@ -767,21 +787,21 @@ function ScorecardsTab({ loading, banded, coaching, trend }) {
   return (
     <div className="space-y-6">
       {/* Weekly trend chart */}
-      <div className="card">
-        <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
-          <TrendingUp size={15} /> Weekly event trend
-        </h3>
+      <Card>
+        <CardHeader icon={TrendingUp} title="Weekly event trend" />
         {loading ? (
           <div className="h-64 bg-[var(--input-bg)] rounded animate-pulse" />
         ) : (trend || []).length === 0 ? (
-          <p className="text-sm text-[var(--text-muted)] py-8 text-center">No dated events yet — log events with a timestamp to build the trend.</p>
+          <p className="text-sm text-[var(--text-muted)] py-8 text-center">No dated events yet. Log events with a timestamp to build the trend.</p>
         ) : (
           <div className="h-64"><Line data={chartData} options={chartOpts} /></div>
         )}
-      </div>
+      </Card>
 
-      {/* Weighted scorecard */}
-      <div className="card overflow-hidden !p-0">
+      {/* Weighted scorecard. `pad="none" clip` keeps the edge-to-edge crop; the
+          header keeps its own padding and bottom rule, which CardHeader (no
+          inline padding) could not reproduce inside a zero-padding card. */}
+      <Card pad="none" clip>
         <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--input-border)]">
           <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
             <Award size={15} /> Weighted driver scorecard
@@ -812,17 +832,17 @@ function ScorecardsTab({ loading, banded, coaching, trend }) {
                     <td className="px-4 py-2.5"><GradePill grade={d.grade} /></td>
                     <td className="px-4 py-2.5"><BandPill band={d.band} /></td>
                     <td className="px-4 py-2.5"><BandPill band={d.composite?.band} /></td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{CATEGORY_LABEL[d.weakestCategory] || d.weakestCategory || '—'}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{CATEGORY_LABEL[d.weakestCategory] || d.weakestCategory || 'N/A'}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         )}
-      </div>
+      </Card>
 
       {/* Coaching queue */}
-      <div className="card overflow-hidden !p-0">
+      <Card pad="none" clip>
         <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--input-border)]">
           <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
             <GraduationCap size={15} /> Coaching queue
@@ -832,7 +852,7 @@ function ScorecardsTab({ loading, banded, coaching, trend }) {
         {loading ? (
           <div className="p-4"><div className="h-16 bg-[var(--input-bg)] rounded animate-pulse" /></div>
         ) : (coaching || []).length === 0 ? (
-          <p className="px-4 py-8 text-sm text-[var(--text-muted)] text-center">Every tracked driver is in the good band — no coaching needed.</p>
+          <p className="px-4 py-8 text-sm text-[var(--text-muted)] text-center">Every tracked driver is in the good band. No coaching needed.</p>
         ) : (
           <div className="divide-y divide-[var(--input-border)]/50">
             {coaching.map((c) => (
@@ -855,7 +875,7 @@ function ScorecardsTab({ loading, banded, coaching, trend }) {
             ))}
           </div>
         )}
-      </div>
+      </Card>
     </div>
   )
 }
@@ -879,18 +899,23 @@ function CorrelationTab({ loading, correlation }) {
 
   return (
     <div className="space-y-6">
-      <div className="card border border-sky-900/30 flex items-start gap-3">
+      {/* The sky border was a CLASS on the legacy .card, which would be dead on
+          Card (border is inline); `tone="info"` is the one route to that tint.
+          Row direction goes in `style` - a .flex-row class loses to .flex-col. */}
+      <Card tone="info" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
         <Wrench size={18} className="text-sky-400 mt-0.5 shrink-0" />
         <div>
           <p className="text-[var(--text-primary)] font-medium">Driver ↔ tyre-damage correlation</p>
           <p className="text-[var(--text-muted)] text-sm mt-1">
             Joins each driver's tyre_records to surface driver-attributable damage (impact, cut, kerb, under-inflation, run-flat, overload), their real tyre CPK, and how often their tyres come off below the fleet median life
-            {median != null ? <> (<span className="font-mono text-[var(--text-primary)]">{kmFmt(median)}</span>)</> : null}. Drivers with no tyre history show “—”, never a guessed rate.
+            {median != null ? <> (<span className="font-mono text-[var(--text-primary)]">{kmFmt(median)}</span>)</> : null}. Drivers with no tyre history show “N/A”, never a guessed rate.
           </p>
         </div>
-      </div>
+      </Card>
 
-      <div className="card overflow-hidden !p-0">
+      {/* Clipping is safe: the only control in the header is an Excel export
+          button, not a popover. */}
+      <Card pad="none" clip>
         <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--input-border)]">
           <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
             <Wrench size={15} /> Per-driver tyre intelligence
@@ -907,7 +932,7 @@ function CorrelationTab({ loading, correlation }) {
           <div className="p-4"><div className="h-16 bg-[var(--input-bg)] rounded animate-pulse" /></div>
         ) : drivers.length === 0 ? (
           <p className="px-4 py-8 text-sm text-[var(--text-muted)] text-center">
-            No tyre_records carry a driver name yet — populate driver_name on tyre records to unlock this analysis.
+            No tyre_records carry a driver name yet. Populate driver_name on tyre records to unlock this analysis.
           </p>
         ) : (
           <div className="overflow-x-auto">
@@ -929,7 +954,7 @@ function CorrelationTab({ loading, correlation }) {
                       </span>
                       {d.driverCausedRemovalRate != null && <span className="text-[var(--text-muted)] text-xs ml-1">({d.driverCausedRemovals}/{d.removals})</span>}
                     </td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{d.driverCpk == null ? '—' : d.driverCpk.toLocaleString(undefined, { maximumFractionDigits: 3 })}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{d.driverCpk == null ? 'N/A' : d.driverCpk.toLocaleString(undefined, { maximumFractionDigits: 3 })}</td>
                     <td className="px-4 py-2.5">
                       <span className={d.prematureRemovalRate == null ? 'text-[var(--text-muted)]' : d.prematureRemovalRate >= 0.5 ? 'text-red-400 font-semibold' : d.prematureRemovalRate > 0 ? 'text-amber-400' : 'text-green-400'}>
                         {pct(d.prematureRemovalRate)}
@@ -942,7 +967,7 @@ function CorrelationTab({ loading, correlation }) {
             </table>
           </div>
         )}
-      </div>
+      </Card>
     </div>
   )
 }

@@ -21,9 +21,9 @@ describe('enterprise filter-gap rollout', () => {
 
   it('ExpenseImport display filters cannot reduce the rows submitted', () => {
     const source = read('ExpenseImport')
-    expect(source).toContain('await insertPartsConsumption(rows, {')
-    expect(source).not.toContain('insertPartsConsumption(previewRows')
-    expect(source).not.toContain('insertPartsConsumption(previewPager.pageRows')
+    expect(source).toContain('await importExpenseBatch(rows, {')
+    expect(source).not.toContain('importExpenseBatch(previewRows')
+    expect(source).not.toContain('importExpenseBatch(previewPager.pageRows')
   })
 
   it('MaintenanceCostBoard exports the full snapshot, never the visible page', () => {

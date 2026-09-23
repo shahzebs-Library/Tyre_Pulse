@@ -1,6 +1,10 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import { RefreshCw, Wifi, X } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { useAuth } from '../contexts/AuthContext'
+import { ReleaseNotes } from './ReleaseNotes'
+import { installedRelease, changesSince, readWaitingRelease } from '../lib/releases'
 import { useLanguage } from '../contexts/LanguageContext'
 
 const UPDATE_INTERVAL_MS = 15 * 60 * 1000 // 15 min - iOS throttles background timers
@@ -8,15 +12,22 @@ const UPDATE_INTERVAL_MS = 15 * 60 * 1000 // 15 min - iOS throttles background t
 export default function PwaUpdatePrompt() {
   const { t } = useLanguage()
   const registrationRef = useRef(null)
+  const auth = useAuth()
+  const [candidate, setCandidate] = useState(null)
+  const [release, setRelease] = useState(null)
+  const [notesLoading, setNotesLoading] = useState(false)
+  const [updateError, setUpdateError] = useState(false)
 
   const {
     offlineReady:  [offlineReady,  setOfflineReady],
     needRefresh:   [needRefresh,   setNeedRefresh],
     updateServiceWorker,
   } = useRegisterSW({
+    onNeedRefresh() { setCandidate(registrationRef.current?.waiting || null) },
     onRegisteredSW(_swUrl, registration) {
       if (!registration) return
       registrationRef.current = registration
+      if (registration.waiting) setCandidate(registration.waiting)
 
       // Periodic update poll - calls .update() on the ServiceWorkerRegistration
       // (previous bug: mistakenly called .update() on a fetch Response, never worked)
@@ -64,7 +75,24 @@ export default function PwaUpdatePrompt() {
     }
   }, [])
 
-  const doUpdate = () => updateServiceWorker(true) // sends SKIP_WAITING → new SW activates → reloads
+  useEffect(() => {
+    if (!needRefresh) { setRelease(null); return }
+    const worker = candidate || registrationRef.current?.waiting
+    if (!worker) return
+    const controller = new AbortController()
+    setRelease(null); setNotesLoading(true)
+    readWaitingRelease(worker, { signal: controller.signal }).then(manifest => {
+      if (controller.signal.aborted) return
+      setRelease(registrationRef.current?.waiting === worker ? manifest : null)
+      setNotesLoading(false)
+    })
+    return () => controller.abort()
+  }, [needRefresh, candidate])
+
+  const doUpdate = async () => {
+    setUpdateError(false)
+    try { await updateServiceWorker(true) } catch { setUpdateError(true) }
+  } // sends SKIP_WAITING → new SW activates → reloads
 
   if (!offlineReady && !needRefresh) return null
 
@@ -72,7 +100,7 @@ export default function PwaUpdatePrompt() {
     <div
       role="region"
       aria-label={t('pwa.notifications')}
-      className="fixed bottom-4 right-4 z-[9999] flex flex-col gap-2 max-w-sm w-full px-4 sm:px-0"
+      className="fixed bottom-4 right-4 z-[9999] flex flex-col gap-2 max-w-md w-full px-4 sm:px-0"
     >
       {offlineReady && !needRefresh && (
         <div
@@ -102,14 +130,21 @@ export default function PwaUpdatePrompt() {
           role="alertdialog"
           aria-live="assertive"
           aria-label={t('pwa.updateTitle')}
-          className="flex items-start gap-3 bg-slate-800 border border-blue-700/60 rounded-xl p-4 shadow-2xl"
+          className="flex items-start gap-3 bg-[var(--surface-raised)] text-[var(--text-primary)] border border-[var(--input-border)] rounded-xl p-4 shadow-2xl"
         >
           <span className="mt-0.5 flex-shrink-0 w-8 h-8 rounded-full bg-blue-900/50 flex items-center justify-center">
             <RefreshCw className="w-4 h-4 text-blue-400" />
           </span>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-slate-100">{t('pwa.updateTitle')}</p>
+            <p className="text-sm font-semibold">{t('pwa.updateTitle')}{release && <> &middot; <bdi>{release.releases[0].id}</bdi></>}</p>
             <p className="text-xs text-slate-400 mt-0.5">{t('pwa.updateBody')}</p>
+            {auth.profile && <div className="mt-3 max-h-64 overflow-y-auto">
+              {release ? <details open><summary className="cursor-pointer text-sm font-semibold">{t('pwa.whatsNew')}</summary><div className="mt-2"><ReleaseNotes releases={changesSince(release, installedRelease.releases[0].id)} /></div></details>
+                : <p className="text-xs text-[var(--text-muted)]">{t(notesLoading ? 'pwa.notesLoading' : 'pwa.notesUnavailable')}</p>}
+              <Link to="/settings#updates" onClick={() => setNeedRefresh(false)} className="mt-2 inline-block text-xs underline">{t('pwa.updateHistory')}</Link>
+            </div>}
+            <p className="text-xs mt-2 text-[var(--text-muted)]">{t('pwa.saveBeforeUpdate')}</p>
+            {updateError && <p role="alert" className="text-xs text-red-500">{t('pwa.updateFailed')}</p>}
             <div className="flex gap-2 mt-2.5">
               <button
                 onClick={doUpdate}

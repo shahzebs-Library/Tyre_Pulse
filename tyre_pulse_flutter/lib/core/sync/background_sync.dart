@@ -64,6 +64,7 @@ import 'package:flutter/widgets.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:tyre_pulse/app/config/app_config.dart';
 import 'package:tyre_pulse/core/database/app_database.dart';
+import 'package:tyre_pulse/core/database/dao/scoped_media_dao.dart';
 import 'package:tyre_pulse/core/network/supabase_bootstrap.dart';
 import 'package:tyre_pulse/core/storage/secure_slot_store_impl.dart';
 import 'package:tyre_pulse/core/storage/staged_secure_store.dart';
@@ -175,9 +176,15 @@ Future<bool> _runBackgroundSync() async {
     }
 
     final SupabaseClient client = Supabase.instance.client;
+    if (client.auth.currentUser?.id != workspace.userId) return true;
     final SyncEngine engine = SyncEngine(
       queueDao: db.queueDao,
-      mediaDao: db.mediaDao,
+      mediaDao: ScopedMediaDao(
+        db,
+        workspaceId: workspace.workspaceId,
+        userId: workspace.userId,
+        currentUserId: () => client.auth.currentUser?.id,
+      ),
       pusher: AccidentEvidenceCommandPusher(
         delegate: SupabaseCommandPusher(client),
         queueDao: db.queueDao,

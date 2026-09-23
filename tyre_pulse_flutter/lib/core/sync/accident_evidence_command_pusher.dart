@@ -28,11 +28,16 @@ final class AccidentEvidenceCommandPusher implements CommandPusher {
     required CommandPusher delegate,
     required QueueDao queueDao,
     required MediaDao mediaDao,
+    CommandType commandType = CommandType.reportAccident,
+    String bucket = 'accident-photos',
   })  : _delegate = delegate,
         _queueDao = queueDao,
-        _mediaDao = mediaDao;
+        _mediaDao = mediaDao,
+        _commandType = commandType,
+        _bucket = bucket;
 
-  static const String _bucket = 'accident-photos';
+  final String _bucket;
+  final CommandType _commandType;
 
   final CommandPusher _delegate;
   final QueueDao _queueDao;
@@ -45,7 +50,7 @@ final class AccidentEvidenceCommandPusher implements CommandPusher {
     String? matchValue,
     String? expectedPriorStatus,
   }) async {
-    if (spec.type != CommandType.reportAccident) {
+    if (spec.type != _commandType) {
       return _delegate.push(
         spec: spec,
         payload: payload,
@@ -100,8 +105,7 @@ final class AccidentEvidenceCommandPusher implements CommandPusher {
 
     final PendingCommand? command =
         await _queueDao.commandByIdempotencyKey(rawClientUuid);
-    if (command == null ||
-        command.commandType != CommandType.reportAccident.wireName) {
+    if (command == null || command.commandType != _commandType.wireName) {
       throw _evidenceFailure(
         'The accident command could not be matched to its local queue row.',
       );
@@ -249,7 +253,7 @@ SupabaseFailure _evidenceFailure(String technical, {Object? cause}) {
   return SupabaseFailure(
     error: AppError(
       kind: AppErrorKind.sync,
-      message: 'This accident report could not send its evidence safely. '
+      message: 'This entry could not send its evidence safely. '
           'It remains on this device and needs attention.',
       technical: technical,
       cause: cause,

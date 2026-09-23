@@ -74,6 +74,11 @@ import 'package:tyre_pulse/features/tasks/data/task_item.dart';
 import 'package:tyre_pulse/features/tasks/domain/task_board.dart';
 import 'package:tyre_pulse/features/tasks/presentation/tasks_copy.dart';
 
+/// Real local time in production; overridden for deterministic header goldens.
+final homeHeaderClockProvider = Provider<DateTime Function()>(
+  (Ref ref) => DateTime.now,
+);
+
 /// Stable finders for Home's responsive visual regions.
 @visibleForTesting
 abstract final class HomeScreenKeys {
@@ -98,6 +103,10 @@ const List<HomeSectionSpec> _kHomeSections = <HomeSectionSpec>[
   HomeSectionSpec(
     id: 'field',
     tiles: <HomeTileSpec>[
+      // First in the field section deliberately: "what am I supposed to do
+      // today" is the question a crew opens the app with, and until this tile
+      // existed the answer was only visible to whoever planned the work.
+      HomeTileSpec(id: 'myPlans', module: ModuleKey.inspect),
       HomeTileSpec(id: 'scanner', module: ModuleKey.scan),
       HomeTileSpec(id: 'serial', module: ModuleKey.serial),
       HomeTileSpec(id: 'meter', module: ModuleKey.meter),
@@ -636,7 +645,7 @@ class _DarkHomeDashboard extends StatelessWidget {
   }
 }
 
-class _DarkDashboardHeader extends StatelessWidget {
+class _DarkDashboardHeader extends ConsumerWidget {
   const _DarkDashboardHeader({
     required this.l10n,
     required this.fullName,
@@ -650,7 +659,8 @@ class _DarkDashboardHeader extends StatelessWidget {
   final VoidCallback onNotifications;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final DateTime now = ref.watch(homeHeaderClockProvider)();
     final TpPalette palette = TpPalette.of(context);
     final List<String> brandWords = l10n.appTitle.trim().split(
           RegExp(r'\s+'),
@@ -662,9 +672,9 @@ class _DarkDashboardHeader extends StatelessWidget {
     final String name = fullName?.trim().isNotEmpty == true
         ? fullName!.trim()
         : l10n.homeFallbackUser;
-    final String greeting = DateTime.now().hour < 12
+    final String greeting = now.hour < 12
         ? l10n.homeGoodMorning
-        : DateTime.now().hour < 17
+        : now.hour < 17
             ? l10n.homeGoodAfternoon
             : l10n.homeGoodEvening;
     final int? numericCount = int.tryParse(
@@ -747,7 +757,7 @@ class _DarkDashboardHeader extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         Text(
-          MaterialLocalizations.of(context).formatFullDate(DateTime.now()),
+          MaterialLocalizations.of(context).formatFullDate(now),
           style: Theme.of(context).textTheme.labelSmall?.copyWith(
                 color: palette.textSecondary,
               ),
@@ -1550,7 +1560,7 @@ class _PmvOperationsHero extends StatelessWidget {
   }
 }
 
-class _DashboardGreeting extends StatelessWidget {
+class _DashboardGreeting extends ConsumerWidget {
   const _DashboardGreeting({
     required this.l10n,
     required this.fullName,
@@ -1564,9 +1574,10 @@ class _DashboardGreeting extends StatelessWidget {
   final VoidCallback onSiteTap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final DateTime now = ref.watch(homeHeaderClockProvider)();
     final TpPalette palette = TpPalette.of(context);
-    final int hour = DateTime.now().hour;
+    final int hour = now.hour;
     final String greeting = hour < 12
         ? l10n.homeGoodMorning
         : hour < 17
@@ -3064,6 +3075,15 @@ class _QuickActionTile extends StatelessWidget {
         icon: Icons.history,
         approve: false,
       );
+    case 'myPlans':
+      return (
+        label: l10n.myPlansNavTitle,
+        icon: Icons.event_available_outlined,
+        // Not an approval queue: this is the crew's OWN work to do, so it must
+        // not borrow the approve styling that marks somebody else's work
+        // awaiting a signature.
+        approve: false,
+      );
     case 'reportIssue':
       return (
         label: l10n.homeReportIssueAction,
@@ -3285,6 +3305,9 @@ void _openHomeTile(BuildContext context, String id) {
       return;
     case 'checklistHistory':
       context.go(const ChecklistHistoryRoute().location);
+      return;
+    case 'myPlans':
+      context.go(const MyPlansRoute().location);
       return;
     case 'inspectionApprovals':
       context.go(const InspectionApprovalsRoute().location);

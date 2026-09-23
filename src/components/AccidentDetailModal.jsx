@@ -13,13 +13,14 @@
  * backward compatibility but is no longer used by the Accidents page.
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import {
   X, Plus, Trash2, Send, Lock, CheckCircle2, XCircle,
-  ShieldCheck, Hourglass, FileText, Wrench, MessageSquare, Briefcase, History, User, ClipboardList,
-  ArrowLeft, AlertOctagon, ChevronRight, Download, Loader2, ShieldAlert, Clock, Pencil,
-  GitBranch, MapPin, Ban, Hash, Users, FileDown, ListChecks, Share2,
+  ShieldCheck, Hourglass, FileText, Wrench, MessageSquare, History, User, ClipboardList,
+  ArrowLeft, AlertOctagon, ChevronLeft, ChevronRight, Download, Loader2, Clock, Pencil,
+  GitBranch, MapPin, Ban, Hash, Users, FileDown, ListChecks, Share2, Scale, FileCheck2, ClipboardCheck, Truck,
+  BadgeCheck,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
@@ -28,7 +29,6 @@ import { useTenant } from '../contexts/TenantContext'
 import { formatCurrency as _fmtCurrencyBase } from '../lib/formatters'
 import {
   canonSeverity, canonStatus, TERMINAL_STAGES,
-  CLAIM_STATUS_LABELS, CLAIM_STATUS_OPTS, RECOVERY_SOURCE_LABELS, RECOVERY_STATUS_LABELS,
   accidentSeverityPill, accidentStatusPill,
   SEVERITIES, toDbSeverity,
 } from '../lib/accidentVocab'
@@ -48,8 +48,16 @@ import CaseCompletionPanel from './accidents/CaseCompletionPanel'
 import CaseWorkstreamsPanel from './accidents/CaseWorkstreamsPanel'
 import CaseTeamDistributionPanel from './accidents/CaseTeamDistributionPanel'
 import CasePortalShare from './accidents/CasePortalShare'
+import CaseSlaHeader from './accidents/CaseSlaHeader'
+import LiabilityPaymentPanel from './accidents/LiabilityPaymentPanel'
+import InsuranceClaimPanel from './accidents/InsuranceClaimPanel'
+import WorkshopAssessmentPanel from './accidents/WorkshopAssessmentPanel'
+import HandoverPanel from './accidents/HandoverPanel'
+import DamageMapPanel from './accidents/DamageMapPanel'
+import FleetValidationPanel from './accidents/FleetValidationPanel'
 import AccidentInsurerRecord from './insurance/AccidentInsurerRecord'
 import { loadCase } from '../lib/api/accidentCase'
+import { CASE_FLOW } from '../lib/accidentCaseVocab'
 import { updateAccidentForPage } from '../lib/api/accidents'
 import { renderAccidentCasePdf } from '../lib/accidentCasePdf'
 import { toUserMessage } from '../lib/safeError'
@@ -61,20 +69,9 @@ import { toUserMessage } from '../lib/safeError'
 // (accidentSeverityPill / accidentStatusPill) so this detail page and the
 // register table render identical colours — no per-file badge map here.
 
-const RECOVERY_BADGE = {
-  pending:     'bg-yellow-900/50 text-yellow-300 border border-yellow-700/50',
-  partial:     'bg-blue-900/50 text-blue-300 border border-blue-700/50',
-  recovered:   'bg-green-900/50 text-green-300 border border-green-700/50',
-  written_off: 'bg-red-900/50 text-red-300 border border-red-700/50',
-}
-
-const CLAIM_BADGE = {
-  none:     'bg-gray-800 text-gray-300 border border-gray-600',
-  filed:    'bg-blue-900/50 text-blue-300 border border-blue-700/50',
-  approved: 'bg-green-900/50 text-green-300 border border-green-700/50',
-  rejected: 'bg-red-900/50 text-red-300 border border-red-700/50',
-  settled:  'bg-purple-900/50 text-purple-300 border border-purple-700/50',
-}
+// RECOVERY_BADGE / CLAIM_BADGE were only used by the retired Repair & Insurance
+// / Claim & Recovery tabs (see the "old tabs removed" note near the TABS array
+// below) — deleted along with them rather than kept as dead code.
 
 const PART_STATUSES = ['needed', 'ordered', 'received', 'fitted']
 const PART_LABELS = { needed: 'Needed', ordered: 'Ordered', received: 'Received', fitted: 'Fitted' }
@@ -122,24 +119,129 @@ function computeDelay(acc, closure) {
   return { delayed: days != null && days > DELAY_THRESHOLD_DAYS, days }
 }
 
+// Tab order follows the owner's mock case flow (accidentCaseVocab.CASE_FLOW):
+// Overview, then Workstream 1..7 in mock order, then the supporting tabs. The
+// numbered label is what the mock prints ("Workstream 3 of 7") so web and
+// Flutter read the same. Panels: FleetValidationPanel, WorkshopAssessmentPanel,
+// InsuranceClaimPanel, LiabilityPaymentPanel, DamageMapPanel, HandoverPanel,
+// AccidentCaseTimeline (own page, linked from Overview). The retired "Repair &
+// Insurance" / "Claim & Recovery" tabs stay retired - the accidents columns are
+// untouched, only removed from this screen; AccidentInsurerRecord lives under
+// Insurance Claim.
+const FLOW_TAB_KEY = {
+  fleet_validation: 'fleet_validation',
+  assessment: 'assessment',
+  insurance: 'insurance_claim',
+  liability: 'liability',
+  damage_map: 'damage_map',
+  handover: 'handover',
+}
+const FLOW_ICON = {
+  fleet_validation: BadgeCheck, assessment: ClipboardCheck, insurance: FileCheck2,
+  liability: Scale, damage_map: MapPin, handover: Truck,
+}
+const flowTabs = CASE_FLOW
+  .filter((s) => FLOW_TAB_KEY[s.key])
+  .map((s) => ({ key: FLOW_TAB_KEY[s.key], label: `${s.n}. ${s.label}`, title: `Workstream ${s.n} of ${CASE_FLOW.length}: ${s.label}`, icon: FLOW_ICON[s.key] }))
+
 const TABS = [
   { key: 'overview', label: 'Overview', icon: FileText },
-  // One tab per team: a row of team tabs (Fleet, HSE, Insurance, Workshop, Finance)
-  // switches the view, and the selected team shows its single progress bar plus only
-  // its own work, inputs and files. Elevated users assign owners inline; others
-  // read-only. (Rendered by CaseTeamDistributionPanel.)
+  ...flowTabs,
   { key: 'teams',    label: 'Teams', icon: Users },
-  // Interactive "who owns what" control: assign each workstream, set its status,
-  // and mark one Not Applicable. Elevated users get the controls; others read-only.
   { key: 'workstreams', label: 'Workstreams', icon: ListChecks },
   { key: 'tracker',  label: 'Tracker', icon: ClipboardList },
-  { key: 'repair',   label: 'Repair & Insurance', icon: ShieldAlert },
-  { key: 'claim',    label: 'Claim & Recovery', icon: Briefcase },
   { key: 'parts',    label: 'Parts & Repairs', icon: Wrench },
   { key: 'log',      label: 'Case Log', icon: MessageSquare },
   { key: 'activity', label: 'Activity', icon: History },
   { key: 'closure',  label: 'Closure', icon: Lock },
 ]
+
+/**
+ * ScrollableTabStrip — the case-detail tab bar with visible scroll arrows.
+ * With 14 tabs the strip overflows on any screen narrower than roughly
+ * 1300px, and a plain `overflow-x-auto` gives no hint that anything sits
+ * off-screen - several tabs (Mark Damage among them) were only reachable by
+ * already knowing to scroll. Arrows appear only on the side there is
+ * actually more to scroll to (checked on mount/resize/scroll), so nothing
+ * shows on a screen wide enough to fit every tab.
+ */
+function ScrollableTabStrip({ tabs, active, onChange }) {
+  const trackRef = useRef(null)
+  const [canLeft, setCanLeft] = useState(false)
+  const [canRight, setCanRight] = useState(false)
+
+  const updateEdges = useCallback(() => {
+    const el = trackRef.current
+    if (!el) return
+    setCanLeft(el.scrollLeft > 4)
+    setCanRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4)
+  }, [])
+
+  useEffect(() => {
+    updateEdges()
+    const el = trackRef.current
+    if (!el) return
+    el.addEventListener('scroll', updateEdges, { passive: true })
+    window.addEventListener('resize', updateEdges)
+    return () => {
+      el.removeEventListener('scroll', updateEdges)
+      window.removeEventListener('resize', updateEdges)
+    }
+  }, [updateEdges, tabs.length])
+
+  // Keep the active tab in view when it changes via any other route (e.g.
+  // a card elsewhere on the page jumps straight to a tab).
+  useEffect(() => {
+    const el = trackRef.current
+    if (!el) return
+    const btn = el.querySelector(`[data-tab-key="${active}"]`)
+    btn?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
+  }, [active])
+
+  function scrollBy(dir) {
+    trackRef.current?.scrollBy({ left: dir * 220, behavior: 'smooth' })
+  }
+
+  return (
+    <div className="relative flex items-center border-b border-gray-800">
+      {canLeft && (
+        <button
+          type="button"
+          onClick={() => scrollBy(-1)}
+          aria-label="Scroll tabs left"
+          className="absolute left-0 z-10 h-full px-1.5 bg-gradient-to-r from-[var(--bg-base,#0b0f0d)] via-[var(--bg-base,#0b0f0d)] to-transparent text-gray-400 hover:text-white"
+        >
+          <ChevronLeft size={16} />
+        </button>
+      )}
+      <div ref={trackRef} className="flex gap-1 px-4 overflow-x-auto scroll-smooth">
+        {tabs.map(({ key, label, title, icon: Icon }) => (
+          <button
+            key={key}
+            data-tab-key={key}
+            title={title || label}
+            onClick={() => onChange(key)}
+            className={`px-3 py-2.5 text-sm font-medium flex items-center gap-1.5 border-b-2 -mb-px whitespace-nowrap transition-colors shrink-0 ${
+              active === key ? 'border-green-500 text-green-400' : 'border-transparent text-gray-400 hover:text-white'
+            }`}
+          >
+            <Icon size={14} /> {label}
+          </button>
+        ))}
+      </div>
+      {canRight && (
+        <button
+          type="button"
+          onClick={() => scrollBy(1)}
+          aria-label="Scroll tabs right"
+          className="absolute right-0 z-10 h-full px-1.5 bg-gradient-to-l from-[var(--bg-base,#0b0f0d)] via-[var(--bg-base,#0b0f0d)] to-transparent text-gray-400 hover:text-white"
+        >
+          <ChevronRight size={16} />
+        </button>
+      )}
+    </div>
+  )
+}
 
 /**
  * AccidentDetailPage — full-page route component for `/accidents/:id`.
@@ -162,6 +264,7 @@ export default function AccidentDetailPage() {
  * the legacy overlay presentation for the compatibility wrapper below.
  */
 function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'page' }) {
+  const navigate = useNavigate()
   const { profile } = useAuth()
   const { activeCurrency } = useSettings()
   const { branding } = useTenant()
@@ -177,11 +280,21 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
   const [downloading, setDownloading] = useState(false)
   const [caseDownloading, setCaseDownloading] = useState(false)
 
-  const [tab, setTab] = useState('overview')
+  // A link may ask for a specific tab (`/accidents/:id?tab=damage_map`, or
+  // router state.openTab from the timeline page). Only a key the strip knows is
+  // honoured; anything else lands on Overview.
+  const location = useLocation()
+  const [tab, setTab] = useState(() => {
+    const fromState = location?.state?.openTab
+    const fromQuery = new URLSearchParams(location?.search || '').get('tab')
+    const wanted = fromState || fromQuery
+    return TABS.some((t) => t.key === wanted) ? wanted : 'overview'
+  })
   const [acc, setAcc] = useState(null)
   const [caseData, setCaseData] = useState(null)
   const [remarks, setRemarks] = useState([])
   const [parts, setParts] = useState([])
+  const [recoveredTotal, setRecoveredTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -207,14 +320,23 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
       // never wedge the whole loader on an unhandled rejection and leave the
       // page stuck on an infinite skeleton ("cannot open the record"). Loading
       // is ALWAYS cleared; failures surface as a clean message, never a hang.
-      const [aR, rR, pR] = await Promise.allSettled([
+      const [aR, rR, pR, cvR] = await Promise.allSettled([
         supabase.from('accidents').select('*').eq('id', accidentId).single(),
         supabase.from('accident_remarks').select('*').eq('accident_id', accidentId).order('created_at', { ascending: false }),
         supabase.from('accident_parts').select('*').eq('accident_id', accidentId).order('created_at', { ascending: true }),
+        // Live recoveries (accident_claim_recoveries, the Insurance Claim tab's
+        // own table) - the case header's "Recovered" tile reads THIS, never
+        // the static accidents.recovered_amount column, which nothing keeps in
+        // sync any more. Best-effort: an unprovisioned table degrades to 0.
+        supabase.from('accident_claim_recoveries').select('amount,status').eq('accident_id', accidentId),
       ])
       const a = aR.status === 'fulfilled' ? aR.value : { data: null, error: aR.reason }
       if (a.error || !a.data) { setErr(loadErrMsg(a.error) || 'Accident record not found.'); setLoading(false); return }
       setAcc(a.data)
+      const recoveryRows = (cvR.status === 'fulfilled' && !cvR.value?.error) ? (cvR.value.data ?? []) : []
+      setRecoveredTotal(
+        recoveryRows.filter((r) => r.status === 'recovered').reduce((s, r) => s + (Number(r.amount) || 0), 0),
+      )
       // The V417 case model (workstreams / closure gate) is best-effort and
       // country-scoped. loadCase NEVER throws for a missing relation — it degrades
       // to the plain accidents row with capabilities.casesModel === false — so this
@@ -227,9 +349,10 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
       // record still renders. A partial-load hint is surfaced non-fatally.
       const rOk = rR.status === 'fulfilled' && !rR.value?.error
       const pOk = pR.status === 'fulfilled' && !pR.value?.error
+      const cvOk = cvR.status === 'fulfilled' && !cvR.value?.error
       setRemarks(rOk ? (rR.value.data ?? []) : [])
       setParts(pOk ? (pR.value.data ?? []) : [])
-      setErr((!rOk || !pOk) ? 'Some case details (log / parts) could not be loaded. Showing the incident record only.' : '')
+      setErr((!rOk || !pOk || !cvOk) ? 'Some case details (log / parts / recoveries) could not be loaded. Showing the incident record only.' : '')
       setLoading(false)
     } catch (e) {
       // Belt-and-braces: even a synchronous throw clears the loader.
@@ -255,16 +378,6 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
       site: acc.site || '',
       location: acc.location || '',
       description: acc.description || '',
-      claim_status: acc.claim_status || 'none',
-      insurer: acc.insurer || '',
-      policy_no: acc.policy_no || '',
-      claim_amount: acc.claim_amount ?? '',
-      claim_approved_amount: acc.claim_approved_amount ?? '',
-      deductible: acc.deductible ?? '',
-      recovered_amount: acc.recovered_amount ?? '',
-      repair_cost: acc.repair_cost ?? '',
-      workshop_name: acc.workshop_name || '',
-      workshop_location: acc.workshop_location || '',
     })
     setErr('')
     setEditing(true)
@@ -274,16 +387,13 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
 
   const saveEdit = useCallback(async () => {
     if (!editForm || !acc) return
-    // '' -> null; a non-numeric entry drops to null rather than writing NaN.
-    const num = (v) => {
-      const s = String(v ?? '').trim()
-      if (s === '') return null
-      const n = Number(s)
-      return Number.isFinite(n) ? n : null
-    }
     const trimOrNull = (v) => (String(v ?? '').trim() || null)
     // severity is a CHECK-constrained lowercase token — always go through toDbSeverity,
-    // never write the display label straight to the column.
+    // never write the display label straight to the column. Claim/insurance/repair
+    // fields are DELIBERATELY not part of this quick-editor's payload any more -
+    // they are now owned by the dedicated Insurance Claim / Workshop Assessment /
+    // Dispatch & Handover tabs (separate tables), so this editor never re-saves a
+    // stale copy of a fact that has its own, more complete home.
     const patch = {
       incident_date: editForm.incident_date || null,
       severity: toDbSeverity(editForm.severity) || null,
@@ -291,16 +401,6 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
       site: trimOrNull(editForm.site),
       location: trimOrNull(editForm.location),
       description: trimOrNull(editForm.description),
-      claim_status: editForm.claim_status || null,
-      insurer: trimOrNull(editForm.insurer),
-      policy_no: trimOrNull(editForm.policy_no),
-      claim_amount: num(editForm.claim_amount),
-      claim_approved_amount: num(editForm.claim_approved_amount),
-      deductible: num(editForm.deductible),
-      recovered_amount: num(editForm.recovered_amount),
-      repair_cost: num(editForm.repair_cost),
-      workshop_name: trimOrNull(editForm.workshop_name),
-      workshop_location: trimOrNull(editForm.workshop_location),
     }
     setSavingEdit(true); setErr('')
     const { error } = await updateAccidentForPage(acc.id, patch)
@@ -362,14 +462,16 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
     }
   }, [caseData, company])
 
-  // Live financial rail — gross cost, recovered, net exposure.
+  // Live financial rail — gross cost, recovered, net exposure. Parts and
+  // Recovered ALWAYS read their live sources (partsTotal from accident_parts,
+  // recoveredTotal from accident_claim_recoveries) rather than the static
+  // accidents.parts_cost / recovered_amount columns, which nothing keeps in
+  // sync any more once a case is worked through the dedicated tabs.
   const money = useMemo(() => {
     const repair = Number(acc?.repair_cost) || 0
-    const partsC = Number(acc?.parts_cost) || partsTotal
-    const gross = repair + partsC
-    const recovered = Number(acc?.recovered_amount) || 0
-    return { gross, recovered, net: Math.max(0, gross - recovered) }
-  }, [acc, partsTotal])
+    const gross = repair + partsTotal
+    return { gross, recovered: recoveredTotal, net: Math.max(0, gross - recoveredTotal) }
+  }, [acc, partsTotal, recoveredTotal])
 
   async function runRpc(fn, args) {
     setBusy(true); setErr('')
@@ -442,19 +544,7 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
   ) : (
     <>
       {/* Tabs */}
-      <div className="flex gap-1 px-4 border-b border-gray-800 overflow-x-auto">
-        {TABS.map(({ key, label, icon: Icon }) => (
-          <button
-            key={key}
-            onClick={() => setTab(key)}
-            className={`px-3 py-2.5 text-sm font-medium flex items-center gap-1.5 border-b-2 -mb-px whitespace-nowrap transition-colors ${
-              tab === key ? 'border-green-500 text-green-400' : 'border-transparent text-gray-400 hover:text-white'
-            }`}
-          >
-            <Icon size={14} /> {label}
-          </button>
-        ))}
-      </div>
+      <ScrollableTabStrip tabs={TABS} active={tab} onChange={setTab} />
 
       {err && <div className="mx-6 mt-4 bg-red-900/30 border border-red-700 text-red-300 rounded-lg px-4 py-2 text-sm">{err}</div>}
 
@@ -477,6 +567,22 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
             <CopilotCard task="summarize_accident" context={{ accident: acc, remarks, parts }} />
             <OverviewTab acc={acc} fmtCurrency={fmtCurrency} />
             <CaseTimelineSection acc={acc} />
+            {/* The full timeline + notification delivery log + participants now live
+                on their own dedicated page (matches the mobile "Case timeline &
+                notifications" screen) - this is a link, not a re-embed, so the same
+                facts are never shown twice on this page. */}
+            <button
+              type="button"
+              onClick={() => navigate(`/accidents/${acc.id}/timeline`)}
+              className="w-full rounded-lg border border-[var(--input-border)] px-3 py-3 flex items-center gap-3 text-left hover:border-[var(--text-muted)]"
+            >
+              <ListChecks size={16} className="text-[var(--text-muted)] shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-[var(--text-primary)]">Case timeline &amp; notifications</p>
+                <p className="text-xs text-[var(--text-muted)]">Full activity log, notification delivery, and participants</p>
+              </div>
+              <ChevronRight size={16} className="text-[var(--text-muted)] shrink-0" />
+            </button>
           </div>
         )}
         {tab === 'teams'     && (
@@ -494,9 +600,77 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
             onChanged={() => { load(); onChanged?.() }}
           />
         )}
+        {tab === 'fleet_validation' && (
+          <FleetValidationPanel
+            accidentId={acc.id}
+            workstreams={caseData?.workstreams || []}
+            onNavigateTab={setTab}
+            elevated={elevated}
+            acc={acc}
+            onChanged={() => { load(); onChanged?.() }}
+          />
+        )}
+        {tab === 'liability' && (
+          <LiabilityPaymentPanel
+            accidentId={acc.id}
+            workstreams={caseData?.workstreams || []}
+            onNavigateTab={setTab}
+            elevated={elevated}
+            acc={acc}
+            onChanged={() => { load(); onChanged?.() }}
+          />
+        )}
+        {tab === 'insurance_claim' && (
+          <div className="space-y-4">
+            <InsuranceClaimPanel
+              accidentId={acc.id}
+              workstreams={caseData?.workstreams || []}
+              onNavigateTab={setTab}
+              elevated={elevated}
+              acc={acc}
+              fmtCurrency={fmtCurrency}
+              onChanged={() => { load(); onChanged?.() }}
+            />
+            {/* What the insurer has already recorded for this case, from the
+                separate insurer-maintained claim register - read-only, moved
+                here from the now-retired Claim & Recovery tab. */}
+            <AccidentInsurerRecord accident={acc} />
+          </div>
+        )}
+        {tab === 'assessment' && (
+          <WorkshopAssessmentPanel
+            accidentId={acc.id}
+            workstreams={caseData?.workstreams || []}
+            onNavigateTab={setTab}
+            elevated={elevated}
+            acc={acc}
+            fmtCurrency={fmtCurrency}
+            onChanged={() => { load(); onChanged?.() }}
+          />
+        )}
+        {tab === 'handover' && (
+          <HandoverPanel
+            accidentId={acc.id}
+            workstreams={caseData?.workstreams || []}
+            onNavigateTab={setTab}
+            elevated={elevated}
+            acc={acc}
+            onChanged={() => { load(); onChanged?.() }}
+          />
+        )}
+        {tab === 'damage_map' && (
+          <DamageMapPanel
+            accidentId={acc.id}
+            acc={acc}
+            workstreams={caseData?.workstreams || []}
+            onNavigateTab={setTab}
+            vehicleType={acc.vehicle_type}
+            assetNo={acc.asset_no}
+            elevated={elevated}
+            onChanged={() => { load(); onChanged?.() }}
+          />
+        )}
         {tab === 'tracker'   && <TrackerTab acc={acc} elevated={elevated} onEditIncident={startEdit} editLocked={editLocked} />}
-        {tab === 'repair'    && <RepairInsuranceTab acc={acc} elevated={elevated} fmtCurrency={fmtCurrency} onEditIncident={startEdit} editLocked={editLocked} />}
-        {tab === 'claim'     && <ClaimTab acc={acc} elevated={elevated} fmtCurrency={fmtCurrency} onEditIncident={startEdit} editLocked={editLocked} />}
         {tab === 'parts'     && <PartsTab acc={acc} parts={parts} partsTotal={partsTotal} elevated={elevated} profile={profile} reload={() => { load(); onChanged?.() }} setErr={setErr} fmtCurrency={fmtCurrency} />}
         {tab === 'log'       && <LogTab acc={acc} remarks={remarks} profile={profile} reload={load} setErr={setErr} />}
         {tab === 'activity'  && <ActivityTab accidentId={acc.id} />}
@@ -614,6 +788,7 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
                 <DelayBadge />
                 {wf.isActive && <span className="badge text-xs bg-purple-900/50 text-purple-300 border border-purple-700/50 flex items-center gap-1"><Lock size={10} /> In approval</span>}
               </div>
+              <CaseSlaHeader acc={acc} workstreams={caseData?.workstreams} />
             </div>
           </div>
           <div className="grid grid-cols-3 gap-4 rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)]/50 px-4 py-3">
@@ -810,7 +985,7 @@ function WorkflowStageSection({ acc, elevated, isAdmin, locked, reload, setErr }
             >
               <option value="">{isAdmin ? 'Select a stage...' : 'Select next step...'}</option>
               {options.map((k) => (
-                <option key={k} value={k}>{stageLabel(k)}{stageDept(k) ? ` — ${stageDept(k)}` : ''}</option>
+                <option key={k} value={k}>{stageLabel(k)}{stageDept(k) ? ` (${stageDept(k)})` : ''}</option>
               ))}
             </select>
           </div>
@@ -882,11 +1057,12 @@ function OverviewTab({ acc, fmtCurrency }) {
         <KV label="Severity" value={acc.severity} />
         <KV label="Status" value={acc.status} />
         <KV label="Country" value={acc.country} />
-        <KV label="Repair cost" value={acc.repair_cost != null ? fmtCurrency(acc.repair_cost) : '-'} />
-        <KV label="Parts cost" value={acc.parts_cost != null ? fmtCurrency(acc.parts_cost) : '-'} />
-        <KV label="Insurance claim no" value={acc.insurance_claim_no} />
         <KV label="Inspector" value={acc.inspector} />
         <KV label="Reported" value={acc.created_at ? new Date(acc.created_at).toLocaleString() : '-'} />
+        {/* Repair cost / Parts cost / Insurance claim no removed - each now has
+            its own live, current home (Workshop Assessment's "Actual repair
+            cost", the Parts & Repairs total, the Insurance Claim tab's claim
+            no) and this static snapshot could silently disagree with them. */}
       </div>
       {acc.description && (
         <div>
@@ -955,7 +1131,7 @@ function CaseTimelineSection({ acc }) {
           {loadErr && <p className="text-xs text-red-400 mt-2">{loadErr}</p>}
           {rows.length === 0 && !loadErr && (
             <p className="text-xs text-gray-500 mt-2">
-              No status changes recorded yet — durations start tracking from the next update.
+              No status changes recorded yet. Durations start tracking from the next update.
             </p>
           )}
           {steps.length > 0 && (
@@ -1028,107 +1204,11 @@ function TrackerTab({ acc, elevated, onEditIncident, editLocked }) {
   )
 }
 
-// ── Repair & Insurance — Case Management (V219 GCC fields) ─────────────────────
-// Read-only view of damage/fault classification, Najm + Taqdeer report state,
-// GCC liability ratio, repair route, case workflow and workshop financials.
-// Updates happen exclusively through the ONE unified incident form on the
-// Accidents page (Edit Incident) — the former per-tab edit form was removed.
-function RepairInsuranceTab({ acc, elevated, fmtCurrency, onEditIncident, editLocked }) {
-  return (
-    <div className="space-y-4">
-      <div>
-        <p className="text-xs font-semibold text-gray-400 mb-2">Classification & Reports</p>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          <KV label="Damage class" value={acc.damage_class} />
-          <KV label="Fault status" value={acc.fault_status} highlight />
-          <KV label="GCC liability" value={acc.gcc_liability_ratio != null ? `${acc.gcc_liability_ratio}%` : '-'} highlight />
-          <KV label="Najm" value={acc.najm_status} />
-          <KV label="Najm fault" value={acc.najm_fault} />
-          <KV label="Taqdeer" value={acc.taqdeer_status} />
-          <KV label="Taqdeer no" value={acc.taqdeer_no} />
-        </div>
-      </div>
-      <div>
-        <p className="text-xs font-semibold text-gray-400 mb-2">Workflow</p>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          <KV label="Repair type" value={acc.repair_type} />
-          <KV label="Current status" value={acc.current_status} highlight />
-          <KV label="Next step" value={acc.next_step} />
-        </div>
-      </div>
-      <div>
-        <p className="text-xs font-semibold text-gray-400 mb-2">Workshop & Financials</p>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          <KV label="Workshop" value={acc.workshop_name} />
-          <KV label="Workshop location" value={acc.workshop_location} />
-          <KV label="Quotation" value={acc.workshop_quotation != null ? fmtCurrency(acc.workshop_quotation) : '-'} />
-          <KV label="Discount" value={acc.discount_pct != null ? `${acc.discount_pct}%` : '-'} />
-          <KV label="Final amount" value={acc.final_amount != null ? fmtCurrency(acc.final_amount) : '-'} highlight />
-          <KV label="Estimated damage" value={acc.estimated_damage_cost != null ? fmtCurrency(acc.estimated_damage_cost) : '-'} />
-          <KV label="Repair cost" value={acc.repair_cost != null ? fmtCurrency(acc.repair_cost) : '-'} />
-        </div>
-      </div>
-      <div>
-        <p className="text-xs font-semibold text-gray-400 mb-2">Release</p>
-        <div className="grid grid-cols-2 gap-3">
-          <KV label="Expected release" value={acc.expected_release_date} />
-          <KV label="Actual release" value={acc.release_date} highlight />
-        </div>
-      </div>
-      <EditIncidentHint elevated={elevated} onEdit={onEditIncident} locked={editLocked} />
-    </div>
-  )
-}
-
-// Read-only claim & recovery view. Updates happen exclusively through the ONE
-// unified incident form on the Accidents page (Edit Incident) — the former
-// per-tab edit form was removed to eliminate the duplicate update path.
-function ClaimTab({ acc, elevated, fmtCurrency, onEditIncident, editLocked }) {
-  const grossCost = (Number(acc.repair_cost) || 0) + (Number(acc.parts_cost) || 0)
-  const netCost = Math.max(0, grossCost - (Number(acc.recovered_amount) || 0))
-
-  return (
-    <div className="space-y-4">
-      <div className="flex gap-2">
-        <span className={`badge text-xs ${CLAIM_BADGE[acc.claim_status ?? 'none']}`}>{CLAIM_STATUS_LABELS[acc.claim_status ?? 'none']}</span>
-        <span className={`badge text-xs ${RECOVERY_BADGE[acc.recovery_status] ?? 'bg-[var(--input-bg)] text-[var(--text-dim)]'}`}>Recovery: {RECOVERY_STATUS_LABELS[acc.recovery_status] ?? acc.recovery_status ?? 'N/A'}</span>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <KV label="Responsible party" value={acc.responsible_party} />
-        <KV label="Liable party" value={acc.liable_party} />
-        <KV label="Who pays" value={acc.payer} highlight />
-        <KV label="Driver" value={acc.driver_name} />
-        <KV label="Insurer" value={acc.insurer} />
-        <KV label="Policy / Claim no" value={acc.policy_no} />
-        <KV label="Claim amount" value={acc.claim_amount != null ? fmtCurrency(acc.claim_amount) : '-'} />
-        <KV label="Approved" value={acc.claim_approved_amount != null ? fmtCurrency(acc.claim_approved_amount) : '-'} />
-      </div>
-      <div>
-        <p className="text-xs font-semibold text-gray-400 mb-2">Cost Recovery</p>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          <KV label="Deductible" value={acc.deductible != null ? fmtCurrency(acc.deductible) : '-'} />
-          <KV label="Recovered amount" value={acc.recovered_amount != null ? fmtCurrency(acc.recovered_amount) : '-'} highlight />
-          <KV label="Recovery status" value={RECOVERY_STATUS_LABELS[acc.recovery_status] ?? acc.recovery_status} />
-          <KV label="Recovery source" value={RECOVERY_SOURCE_LABELS[acc.recovery_source ?? 'none']} />
-          <KV label="Recovery date" value={acc.recovery_date} />
-          <KV label="Recovery reference" value={acc.recovery_reference} />
-          <KV label="Amount transfer" value={acc.amount_transfer != null ? fmtCurrency(acc.amount_transfer) : '-'} />
-        </div>
-      </div>
-      <div className="grid grid-cols-3 gap-3 rounded-lg border border-gray-700 bg-gray-800/40 p-3">
-        <div><p className="text-[11px] uppercase tracking-wide text-gray-500">Gross cost</p><p className="text-sm font-semibold text-gray-200">{fmtCurrency(grossCost)}</p></div>
-        <div><p className="text-[11px] uppercase tracking-wide text-gray-500">Recovered</p><p className="text-sm font-semibold text-green-400">{fmtCurrency(Number(acc.recovered_amount) || 0)}</p></div>
-        <div><p className="text-[11px] uppercase tracking-wide text-gray-500">Net cost</p><p className="text-sm font-semibold text-orange-400">{fmtCurrency(netCost)}</p></div>
-      </div>
-
-      {/* What the insurer has already recorded for this case. Read only, and a
-          separate record from the claim fields above - neither overwrites the other. */}
-      <AccidentInsurerRecord accident={acc} />
-
-      <EditIncidentHint elevated={elevated} onEdit={onEditIncident} locked={editLocked} />
-    </div>
-  )
-}
+// RepairInsuranceTab and ClaimTab (the former "Repair & Insurance" and
+// "Claim & Recovery" tabs) were RETIRED here - see the note beside the TABS
+// array above for why. Their fields are covered by the Responsibility &
+// Payment / Insurance Claim / Workshop Assessment tabs; AccidentInsurerRecord
+// (the one non-duplicated piece) now renders on the Insurance Claim tab.
 
 function ActivityTab({ accidentId }) {
   const [rows, setRows] = useState(null)
@@ -1473,36 +1553,10 @@ function InlineEditForm({ form, setForm, onSave, onCancel, saving, err }) {
         </div>
       </section>
 
-      <section className="space-y-3 border-t border-[var(--input-border)] pt-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">Claim &amp; recovery</p>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          <div>
-            <label className="label">Claim status</label>
-            <select className="input" value={form.claim_status} onChange={e => set('claim_status', e.target.value)}>
-              {CLAIM_STATUS_OPTS.map(s => <option key={s} value={s}>{CLAIM_STATUS_LABELS[s] || s}</option>)}
-            </select>
-          </div>
-          <Inp label="Insurer" value={form.insurer} onChange={v => set('insurer', v)} />
-          <Inp label="Policy / Claim no" value={form.policy_no} onChange={v => set('policy_no', v)} />
-          <Inp label="Claim amount" type="number" value={form.claim_amount} onChange={v => set('claim_amount', v)} />
-          <Inp label="Approved amount" type="number" value={form.claim_approved_amount} onChange={v => set('claim_approved_amount', v)} />
-          <Inp label="Deductible" type="number" value={form.deductible} onChange={v => set('deductible', v)} />
-          <Inp label="Recovered amount" type="number" value={form.recovered_amount} onChange={v => set('recovered_amount', v)} />
-        </div>
-      </section>
-
-      <section className="space-y-3 border-t border-[var(--input-border)] pt-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">Repair</p>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          <Inp label="Repair cost" type="number" value={form.repair_cost} onChange={v => set('repair_cost', v)} />
-          <Inp label="Workshop" value={form.workshop_name} onChange={v => set('workshop_name', v)} />
-          <Inp label="Workshop location" value={form.workshop_location} onChange={v => set('workshop_location', v)} />
-        </div>
-      </section>
-
       <p className="text-[11px] text-[var(--text-muted)]">
-        Workflow stage, closure and Vehicle Off Road are managed from the Overview and Closure tabs. For the full
-        GCC case form (documents, liability, Najm/Taqdeer) open this record on the Accidents register.
+        Workflow stage, closure and Vehicle Off Road are managed from the Overview and Closure tabs. Responsibility,
+        the insurance claim, the workshop assessment and dispatch/handover each have their own tab above - edit
+        those facts there, not here, so there is only ever one place that holds the current value.
       </p>
     </div>
   )

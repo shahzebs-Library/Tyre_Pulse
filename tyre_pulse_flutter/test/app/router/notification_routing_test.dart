@@ -63,6 +63,37 @@ void main() {
   });
 
   group('order between the entity buckets', () {
+    test('a planned inspection opens MY PLANS, not an approval queue', () {
+      // Two buckets below would each swallow this, and both landings are
+      // wrong: "assign" sends it to the workshop board, "inspection" sends it
+      // to somebody else's approval queue and asks this person to sign work
+      // they have not done.
+      expect(
+        route(type: 'plan_assigned', entityType: 'inspection_plan'),
+        const MyPlansRoute(),
+      );
+    });
+
+    test('a plan assignment routes on the TYPE alone', () {
+      // A row the server did not attribute carries no entity_type, so
+      // entityKey falls back to the type - which contains "assign" and would
+      // otherwise open the workshop board.
+      expect(route(type: 'plan_assigned'), const MyPlansRoute());
+    });
+
+    test('a plan id is NOT used to open a detail screen', () {
+      // The id names an `inspection_schedules` row, not an inspection, so a
+      // detail route would find nothing. The list is the honest landing.
+      expect(
+        route(
+          type: 'plan_assigned',
+          entityType: 'inspection_plan',
+          entityId: '11111111-1111-1111-1111-111111111111',
+        ),
+        const MyPlansRoute(),
+      );
+    });
+
     test('a checklist assignment is a CHECKLIST, not workshop work', () {
       // The workshop bucket matches "assign", so checklist must be tested
       // first or `checklist_assignment` is swallowed by it.
@@ -182,6 +213,7 @@ void main() {
       // were computed. This resolves each returned route instead.
       const Set<String> realPaths = <String>{
         TpRoutePaths.newInspection,
+        TpRoutePaths.myPlans,
         TpRoutePaths.profile,
         TpRoutePaths.washing,
         TpRoutePaths.checklists,
@@ -195,6 +227,8 @@ void main() {
 
       const List<String> entityTypes = <String>[
         'inspection_reminder',
+        'inspection_plan',
+        'plan_assigned',
         'sync_success',
         'wash_due',
         'approval_decision',

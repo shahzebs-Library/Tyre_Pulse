@@ -195,3 +195,24 @@ describe('reading language', () => {
     expect(createSubmission.mock.calls[0][0].answers.q1).toBe('Not OK')
   })
 })
+
+describe('report-driven submission corrections', () => {
+  it('blocks a negative meter on an older template that omitted min', async () => {
+    TEMPLATE = { id: 't1', name: 'Daily', version: 1, require_signature: false, fields: [{ id: 'hours', type: 'number', label: 'Hour meter reading' }] }
+    render(<ChecklistRun />)
+    fireEvent.change(await screen.findByRole('spinbutton'), { target: { value: '-3' } })
+    fireEvent.click(screen.getByRole('button', { name: /Submit checklist/i }))
+    await screen.findByText(/cannot be negative/i)
+    expect(createSubmission).not.toHaveBeenCalled()
+  })
+  it('blocks fitness certification when an unresolved Not OK answer remains', async () => {
+    TEMPLATE = { id: 't1', name: 'Daily', version: 1, require_signature: false, fields: [
+      { id: 'guard', type: 'select', label: 'Safety guards', options: ['OK', 'Not OK'], default: 'Not OK' },
+      { id: 'fit', type: 'select', label: 'Certifies that machine is fit for operation', options: ['Yes', 'No'], default: 'Yes' },
+    ] }
+    render(<ChecklistRun />)
+    fireEvent.click(await screen.findByRole('button', { name: /Submit checklist/i }))
+    await screen.findByText(/Fitness certification conflicts/i)
+    expect(createSubmission).not.toHaveBeenCalled()
+  })
+})

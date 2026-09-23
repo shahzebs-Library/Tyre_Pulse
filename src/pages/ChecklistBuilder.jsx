@@ -228,7 +228,7 @@ function OptionsEditor({ options, onChange }) {
       <label className={LABEL_CLS}>Options</label>
       <div className="space-y-2">
         {list.length === 0 && (
-          <p className="text-xs text-[var(--text-muted)] italic">No options yet — add at least one.</p>
+          <p className="text-xs text-[var(--text-muted)] italic">No options yet. Add at least one.</p>
         )}
         {list.map((opt, i) => (
           <div key={i} className="flex items-center gap-2">
@@ -614,7 +614,7 @@ function ConditionEditor({ field, allFields, onChange }) {
               className={INPUT_CLS}
               aria-label="Reference field"
             >
-              <option value="">— Select a field —</option>
+              <option value="">Select a field</option>
               {sources.map((f) => (
                 <option key={f.id} value={f.id}>
                   {String(f.label || '').trim() || 'Untitled field'}
@@ -640,7 +640,7 @@ function ConditionEditor({ field, allFields, onChange }) {
                 className={INPUT_CLS}
                 aria-label="Condition value"
               >
-                <option value="">— Select a value —</option>
+                <option value="">Select a value</option>
                 {valueChoices.map((c) => (
                   <option key={c.value} value={c.value}>{c.label}</option>
                 ))}
@@ -771,7 +771,7 @@ function ScoringEditor({ field, onChange }) {
             step="1"
             value={weightVal ?? ''}
             onChange={(e) => set('weight', e.target.value === '' ? null : Math.max(0, Number(e.target.value)))}
-            placeholder="—"
+            placeholder="None"
             className={INPUT_CLS}
           />
         </div>
@@ -946,7 +946,7 @@ function FieldRow({ field, index, total, expanded, error, allFields, scored, tem
                   type="number"
                   value={field.min ?? ''}
                   onChange={(e) => set('min', e.target.value === '' ? null : Number(e.target.value))}
-                  placeholder="—"
+                  placeholder="None"
                   className={INPUT_CLS}
                 />
               </div>
@@ -956,7 +956,7 @@ function FieldRow({ field, index, total, expanded, error, allFields, scored, tem
                   type="number"
                   value={field.max ?? ''}
                   onChange={(e) => set('max', e.target.value === '' ? null : Number(e.target.value))}
-                  placeholder="—"
+                  placeholder="None"
                   className={INPUT_CLS}
                 />
               </div>
@@ -971,7 +971,7 @@ function FieldRow({ field, index, total, expanded, error, allFields, scored, tem
               <div className="min-w-0">
                 <p className="text-xs font-semibold text-[var(--text-primary)]">Live reference field</p>
                 <p className="text-[11px] text-[var(--text-muted)] leading-snug mt-0.5">
-                  Filled from your real {refMeta.noun} at check time — no options to configure here.
+                  Filled from your real {refMeta.noun} at check time. No options to configure here.
                 </p>
               </div>
             </div>
@@ -1319,7 +1319,7 @@ function FieldLibraryPanel({ onAdd }) {
         <span className="flex-1 min-w-0">
           <span className="block text-sm font-semibold text-[var(--text-primary)]">Add from library</span>
           <span className="block text-[11px] text-[var(--text-muted)] leading-snug">
-            Curated tyre, vehicle &amp; safety fields — one click to add.
+            Curated tyre, vehicle &amp; safety fields, one click to add.
           </span>
         </span>
         <ChevronDown className={`w-4 h-4 shrink-0 text-[var(--text-muted)] transition-transform ${open ? 'rotate-180' : ''}`} />
@@ -1867,7 +1867,7 @@ export default function ChecklistBuilder() {
     setImportNote(null)
 
     if (file.size === 0) {
-      setImportError('That file is empty — export the sheet again and retry.')
+      setImportError('That file is empty. Export the sheet again and retry.')
       return
     }
     if (file.size > MAX_IMPORT_BYTES) {
@@ -1884,7 +1884,7 @@ export default function ChecklistBuilder() {
       try {
         wb = XLSX.read(buf, { type: 'array' })
       } catch {
-        setImportError('Could not read that file — upload a valid .xlsx, .xls or .csv.')
+        setImportError('Could not read that file. Upload a valid .xlsx, .xls or .csv.')
         return
       }
 
@@ -1913,8 +1913,8 @@ export default function ChecklistBuilder() {
       if (!built?.template) {
         setImportError(
           sawSheetError
-            ? "Couldn't find Category / Sub Category columns — check the sheet."
-            : "Couldn't build a checklist from that file — check the sheet has Category & Sub Category columns.",
+            ? "Couldn't find Category / Sub Category columns. Check the sheet."
+            : "Couldn't build a checklist from that file. Check the sheet has Category & Sub Category columns.",
         )
         return
       }
@@ -1941,7 +1941,7 @@ export default function ChecklistBuilder() {
           'Review, edit and publish when ready.',
       )
     } catch (err) {
-      setImportError(toUserMessage(err, 'Import failed — please try a different file.'))
+      setImportError(toUserMessage(err, 'Import failed. Please try a different file.'))
     } finally {
       setImporting(false)
     }
@@ -2329,7 +2329,7 @@ export default function ChecklistBuilder() {
                   onChange={(e) => set('category', e.target.value)}
                   className={INPUT_CLS}
                 >
-                  <option value="">— Select —</option>
+                  <option value="">Select</option>
                   {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
@@ -2511,7 +2511,7 @@ export default function ChecklistBuilder() {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-[var(--text-primary)]">Import from Excel/CSV</p>
                   <p className="text-[11px] text-[var(--text-muted)] leading-snug">
-                    Upload a maintenance sheet — Category · Sub Category · Date Interval · Symptoms columns.
+                    Upload a maintenance sheet: Category · Sub Category · Date Interval · Symptoms columns.
                     A one-time import builds a ready-to-edit checklist you can review &amp; publish.
                   </p>
                 </div>

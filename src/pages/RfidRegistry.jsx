@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Radio, Tag, Truck, MapPin, AlertCircle, CheckCircle,
-  X, Plus, Search, Filter, RefreshCw, Edit, Trash2,
+  Plus, Search, Filter, RefreshCw, Edit, Trash2,
   Eye, Calendar, Package, Battery, Signal, Activity,
   ChevronRight, ChevronDown, Download, Upload,
   BarChart3, Clock, Shield, Wrench, Loader2, History,
@@ -10,6 +10,8 @@ import {
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import PageHeader from '../components/ui/PageHeader'
+import Card, { CardHeader, CardBody } from '../components/ui/Card'
+import Modal from '../components/ui/Modal'
 import RfidScanner from '../components/RfidScanner'
 import { toUserMessage } from '../lib/safeError'
 import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
@@ -321,13 +323,17 @@ export default function RfidRegistry() {
       />
 
       {error && (
-        <div className="card border border-red-500/30 flex items-center gap-3">
+        // The red edge is the `crit` tone, not a border-* class: Card writes its
+        // border inline, so `border-red-500/30` would render nothing at all.
+        // Row direction is inline for the same reason - `.flex-col` on the card
+        // is emitted after `.flex-row` and would win.
+        <Card tone="crit" className="items-center gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
           <AlertCircle size={18} className="text-red-400 shrink-0" />
           <p className="text-sm text-red-300 flex-1">{error}</p>
           <button onClick={handleRefresh} disabled={refreshing} className="btn-secondary text-xs inline-flex items-center gap-1.5 disabled:opacity-50">
             <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} /> Retry
           </button>
-        </div>
+        </Card>
       )}
 
       {/* Tab Navigation */}
@@ -355,39 +361,39 @@ export default function RfidRegistry() {
           className="space-y-4"
         >
           {/* Stats Grid */}
+          {/* `pad="tight"` IS the old `p-4`: --pad-card-tight resolves to
+              --space-4 = 1rem. A `p-4` class here would be dead. */}
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-            <div className="card p-4 text-center">
+            <Card pad="tight" className="text-center">
               <p className="text-2xl font-bold text-[var(--text-primary)]">{stats.totalTags}</p>
               <p className="text-xs text-[var(--text-muted)] mt-1">Total Tags</p>
-            </div>
-            <div className="card p-4 text-center">
+            </Card>
+            <Card pad="tight" className="text-center">
               <p className="text-2xl font-bold text-green-400">{stats.attachedTags}</p>
               <p className="text-xs text-[var(--text-muted)] mt-1">Attached</p>
-            </div>
-            <div className="card p-4 text-center">
+            </Card>
+            <Card pad="tight" className="text-center">
               <p className="text-2xl font-bold text-blue-400">{stats.availableTags}</p>
               <p className="text-xs text-[var(--text-muted)] mt-1">Available</p>
-            </div>
-            <div className="card p-4 text-center">
+            </Card>
+            <Card pad="tight" className="text-center">
               <p className="text-2xl font-bold text-red-400">{stats.lostTags}</p>
               <p className="text-xs text-[var(--text-muted)] mt-1">Lost/Damaged</p>
-            </div>
-            <div className="card p-4 text-center">
+            </Card>
+            <Card pad="tight" className="text-center">
               <p className="text-2xl font-bold text-green-400">{stats.activeReaders}/{stats.totalReaders}</p>
               <p className="text-xs text-[var(--text-muted)] mt-1">Readers Active</p>
-            </div>
-            <div className="card p-4 text-center">
+            </Card>
+            <Card pad="tight" className="text-center">
               <p className="text-2xl font-bold text-yellow-400">{stats.alertsOpen}</p>
               <p className="text-xs text-[var(--text-muted)] mt-1">Open Alerts</p>
-            </div>
+            </Card>
           </div>
 
           {/* Quick Actions */}
-          <div className="card p-4">
-            <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
-              <Activity size={15} className="text-green-400" /> Quick Actions
-            </h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Card pad="tight">
+            <CardHeader title="Quick Actions" icon={Activity} />
+            <CardBody className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <button
                 onClick={() => { setActiveTab('tags'); openTagForm() }}
                 className="flex flex-col items-center gap-2 p-4 rounded-xl bg-brand-primary/10 border border-brand-primary/20 hover:bg-brand-primary/20 transition-colors"
@@ -416,12 +422,14 @@ export default function RfidRegistry() {
                 <AlertCircle size={24} className="text-red-400" />
                 <span className="text-xs font-medium text-[var(--text-primary)]">View Alerts</span>
               </button>
-            </div>
-          </div>
+            </CardBody>
+          </Card>
 
           {/* Recent Alerts */}
           {alerts.filter(a => !a.resolved_at).slice(0, 5).length > 0 && (
-            <div className="card p-0">
+            // pad="none" so the header strip and the divided list keep running
+            // edge to edge; a `p-0` class on a Card would be dead.
+            <Card pad="none">
               <div className="px-4 py-3 border-b border-white/5">
                 <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
                   <AlertCircle size={15} className="text-red-400" /> Recent Alerts
@@ -442,7 +450,7 @@ export default function RfidRegistry() {
                   </div>
                 ))}
               </div>
-            </div>
+            </Card>
           )}
         </motion.div>
       )}
@@ -480,7 +488,11 @@ export default function RfidRegistry() {
           </div>
 
           {/* Tags Table */}
-          <div className="card overflow-hidden p-0">
+          {/* `clip` is the deliberate opt-in to overflow:hidden so the table
+              crops to the card radius. Safe here: the only popup inside is
+              TablePagination's NATIVE <select>, which the browser paints
+              outside the page's overflow context. */}
+          <Card pad="none" clip>
             {loading ? (
               <div className="flex items-center justify-center py-12 text-[var(--text-muted)]">Loading tags...</div>
             ) : (
@@ -536,7 +548,7 @@ export default function RfidRegistry() {
                 <TablePagination {...tagsPager} />
               </div>
             )}
-          </div>
+          </Card>
         </motion.div>
       )}
 
@@ -562,7 +574,7 @@ export default function RfidRegistry() {
           {/* Readers Grid */}
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
             {readersPager.pageRows.map(reader => (
-                <div key={reader.id} className="card p-4 space-y-3">
+                <Card key={reader.id} pad="tight" className="space-y-3">
                   <div className="flex items-start justify-between">
                     <div>
                       <h3 className="font-semibold text-[var(--text-primary)]">{reader.name}</h3>
@@ -592,7 +604,7 @@ export default function RfidRegistry() {
                       <p className="text-[var(--text-primary)]">{reader.firmware_version || '-'}</p>
                     </div>
                   </div>
-                </div>
+                </Card>
               ))}
           </div>
           <TablePagination {...readersPager} />
@@ -612,7 +624,7 @@ export default function RfidRegistry() {
             </button>
           </div>
 
-          <div className="card overflow-hidden p-0">
+          <Card pad="none" clip>
             {loading ? (
               <div className="flex items-center justify-center py-12 text-[var(--text-muted)]">Loading alerts...</div>
             ) : (
@@ -662,7 +674,7 @@ export default function RfidRegistry() {
               </div>
             )}
             {!loading && filteredAlerts.length > 0 && <TablePagination {...alertsPager} />}
-          </div>
+          </Card>
         </motion.div>
       )}
 
@@ -684,7 +696,7 @@ export default function RfidRegistry() {
             </button>
           </div>
 
-          <div className="card overflow-hidden p-0">
+          <Card pad="none" clip>
             {loading ? (
               <div className="flex items-center justify-center py-12 text-[var(--text-muted)]">Loading history...</div>
             ) : (
@@ -725,101 +737,86 @@ export default function RfidRegistry() {
               </div>
             )}
             {!loading && filteredHistory.length > 0 && <TablePagination {...historyPager} />}
-          </div>
+          </Card>
         </motion.div>
       )}
 
-      {/* Tag Form Modal */}
-      <AnimatePresence>
-        {showTagForm && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[80] flex items-center justify-center p-4"
-            style={{ background: 'rgba(0,0,0,0.8)' }}
-          >
-            <motion.div
-              initial={{ opacity: 0, y: 20, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 20, scale: 0.95 }}
-              className="card max-w-md w-full p-6 space-y-4"
-            >
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-bold text-[var(--text-primary)]">
-                  {editingTag ? 'Edit RFID Tag' : 'Add New RFID Tag'}
-                </h3>
-                <button onClick={closeTagForm} className="p-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
-                  <X size={18} />
-                </button>
-              </div>
-
-              <div className="space-y-3">
-                <div>
-                  <label className="text-xs font-semibold text-[var(--text-muted)] uppercase">Tag UID *</label>
-                  <input
-                    type="text"
-                    className="input w-full mt-1"
-                    value={tagFormData.tag_uid}
-                    onChange={e => setTagFormData({ ...tagFormData, tag_uid: e.target.value })}
-                    placeholder="Enter RFID tag UID"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-[var(--text-muted)] uppercase">EPC Code</label>
-                  <input
-                    type="text"
-                    className="input w-full mt-1"
-                    value={tagFormData.tag_epc}
-                    onChange={e => setTagFormData({ ...tagFormData, tag_epc: e.target.value })}
-                    placeholder="Optional EPC code"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-[var(--text-muted)] uppercase">Tag Type</label>
-                  <select
-                    className="input w-full mt-1"
-                    value={tagFormData.tag_type}
-                    onChange={e => setTagFormData({ ...tagFormData, tag_type: e.target.value })}
-                  >
-                    <option value="UHF">UHF</option>
-                    <option value="HF">HF</option>
-                    <option value="NFC">NFC</option>
-                    <option value="Barcode">Barcode</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-[var(--text-muted)] uppercase">Manufacturer</label>
-                  <input
-                    type="text"
-                    className="input w-full mt-1"
-                    value={tagFormData.manufacturer}
-                    onChange={e => setTagFormData({ ...tagFormData, manufacturer: e.target.value })}
-                    placeholder="e.g. Impinj, Zebra"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-[var(--text-muted)] uppercase">Site</label>
-                  <input
-                    type="text"
-                    className="input w-full mt-1"
-                    value={tagFormData.site}
-                    onChange={e => setTagFormData({ ...tagFormData, site: e.target.value })}
-                    placeholder="Assign to site"
-                  />
-                </div>
-              </div>
-
-              <div className="flex gap-2 pt-2">
-                <button onClick={closeTagForm} className="flex-1 btn-secondary">Cancel</button>
-                <button onClick={saveTag} className="flex-1 btn-primary" disabled={!tagFormData.tag_uid}>
-                  Save Tag
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
+      {/* Tag Form Modal.
+          The fields are PAGE state (tagFormData), which is exactly the case the
+          hand-rolled overlay could not serve: Modal + useDialogBehavior hold
+          onClose in a ref, so an inline arrow is safe and focus is not pulled
+          out of the field on every keystroke. There is no <form> element here,
+          so the actions belong in the footer slot without a behaviour change. */}
+      <Modal
+        open={showTagForm}
+        onClose={closeTagForm}
+        title={editingTag ? 'Edit RFID Tag' : 'Add New RFID Tag'}
+        size="md"
+        footer={(
+          <>
+            <button onClick={closeTagForm} className="btn-secondary">Cancel</button>
+            <button onClick={saveTag} className="btn-primary" disabled={!tagFormData.tag_uid}>
+              Save Tag
+            </button>
+          </>
         )}
-      </AnimatePresence>
+      >
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs font-semibold text-[var(--text-muted)] uppercase">Tag UID *</label>
+            <input
+              type="text"
+              className="input w-full mt-1"
+              value={tagFormData.tag_uid}
+              onChange={e => setTagFormData({ ...tagFormData, tag_uid: e.target.value })}
+              placeholder="Enter RFID tag UID"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-[var(--text-muted)] uppercase">EPC Code</label>
+            <input
+              type="text"
+              className="input w-full mt-1"
+              value={tagFormData.tag_epc}
+              onChange={e => setTagFormData({ ...tagFormData, tag_epc: e.target.value })}
+              placeholder="Optional EPC code"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-[var(--text-muted)] uppercase">Tag Type</label>
+            <select
+              className="input w-full mt-1"
+              value={tagFormData.tag_type}
+              onChange={e => setTagFormData({ ...tagFormData, tag_type: e.target.value })}
+            >
+              <option value="UHF">UHF</option>
+              <option value="HF">HF</option>
+              <option value="NFC">NFC</option>
+              <option value="Barcode">Barcode</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-[var(--text-muted)] uppercase">Manufacturer</label>
+            <input
+              type="text"
+              className="input w-full mt-1"
+              value={tagFormData.manufacturer}
+              onChange={e => setTagFormData({ ...tagFormData, manufacturer: e.target.value })}
+              placeholder="e.g. Impinj, Zebra"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-[var(--text-muted)] uppercase">Site</label>
+            <input
+              type="text"
+              className="input w-full mt-1"
+              value={tagFormData.site}
+              onChange={e => setTagFormData({ ...tagFormData, site: e.target.value })}
+              placeholder="Assign to site"
+            />
+          </div>
+        </div>
+      </Modal>
 
       {/* RFID Scanner Modal */}
       <AnimatePresence>

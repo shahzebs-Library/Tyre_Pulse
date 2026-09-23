@@ -682,9 +682,9 @@ function buildPresentByUser(attendance) {
 export async function loadLiveBoard({ site, country } = {}) {
   const [technicians, jobs, events, assignments, shifts, attendance] = await Promise.all([
     listTechnicians({ site, country }).catch(() => []),
-    listOpenJobs({ site, country }).catch(() => []),
-    listEvents({ site, country }).catch(() => []),
-    listAssignments({ active: true, site, country }).catch(() => []),
+    listOpenJobs({ site, country }),
+    listEvents({ site, country }),
+    listAssignments({ active: true, site, country }),
     loadTodayShifts({ site, country }).catch(() => []),
     loadTodayAttendance({ site }).catch(() => []),
   ])

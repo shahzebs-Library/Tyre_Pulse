@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'security/verify-*']
   pull_request:
 
 concurrency:
@@ -17,16 +17,53 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
       - run: npm ci
+      # The web checklist icon contract uses the locked mobile Ionicons map.
+      - run: npm ci --prefix mobile --ignore-scripts
       # Lint gates the build: no-undef + react/jsx-no-undef are the two rules
       # that catch a ReferenceError a clean vite build and a green suite both
       # miss ("StudioBoundary is not defined" shipped exactly this way -
       # lint existed but never ran in CI).
       - run: npm run lint
       - run: npm run test:run
+      - run: npm run test:database
       - run: npx vite build
+
+  report_engine:
+    name: Report engine — tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/report-engine
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: services/report-engine/package-lock.json
+      - run: npm ci
+      - run: npm test
+
+  marketing:
+    name: Marketing — lint, tests and build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: marketing
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: marketing/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
 
   mobile:
     name: Mobile — typecheck + tests

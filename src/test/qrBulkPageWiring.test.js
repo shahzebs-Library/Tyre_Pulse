@@ -85,7 +85,7 @@ describe('QR detail spreadsheet', () => {
   it('selects those columns from the register, or every cell would be blank', () => {
     // PostgREST returns only what is asked for: an export column with no
     // matching select renders an empty sheet that looks like missing data.
-    const select = src.slice(src.indexOf("from('vehicle_fleet')"), src.indexOf("from('vehicle_fleet')") + 700)
+    const select = src.slice(src.indexOf("countryQuery('vehicle_fleet'"), src.indexOf("countryQuery('vehicle_fleet'") + 700)
     for (const col of ['registration_no', 'chassis_no', 'make', 'model', 'current_km', 'ops_status', 'country']) {
       expect(select).toContain(col)
     }

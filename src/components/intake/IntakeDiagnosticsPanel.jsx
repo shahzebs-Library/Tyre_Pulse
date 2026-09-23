@@ -58,7 +58,7 @@ function CheckRow({ check }) {
     <div className={`flex items-start gap-2.5 rounded-lg border px-3 py-2 ${meta.row}`}>
       <Icon size={16} className={`shrink-0 mt-0.5 ${meta.icon}`} aria-hidden="true" />
       <div className="min-w-0">
-        <p className="text-sm font-medium text-[var(--text-primary)]">{check?.title || '—'}</p>
+        <p className="text-sm font-medium text-[var(--text-primary)]">{check?.title || 'N/A'}</p>
         {check?.detail && <p className="text-xs text-[var(--text-secondary)] mt-0.5">{check.detail}</p>}
         {check?.hint && (
           <p className="text-[11px] text-[var(--text-muted)] mt-1 flex items-start gap-1">
@@ -257,7 +257,7 @@ function ValidateBody({ validation, actions, openSet, toggle }) {
         issues={v.blocking}
         openSet={openSet}
         toggle={toggle}
-        emptyLabel="No blocking errors — this batch can be committed."
+        emptyLabel="No blocking errors. This batch can be committed."
         emptyTone="ok"
       />
 
@@ -277,7 +277,7 @@ function ValidateBody({ validation, actions, openSet, toggle }) {
         <div className="bg-amber-900/15 border border-amber-700/40 rounded-xl p-4 space-y-3">
           <p className="text-sm text-amber-300 flex items-center gap-2">
             <ShieldAlert size={15} className="shrink-0" aria-hidden="true" />
-            {fmt(errorCount)} error row(s) detected — choose how to resolve them before committing.
+            {fmt(errorCount)} error row(s) detected. Choose how to resolve them before committing.
           </p>
           <div className="flex flex-wrap items-center gap-2">
             {canForce && (
@@ -307,7 +307,7 @@ function ValidateBody({ validation, actions, openSet, toggle }) {
           {canForce && (
             <p className="text-[11px] text-amber-300/80">
               Forcing bypasses validation: flagged rows are pushed to the commit and may still fail their own
-              per-row insert. Elevated approvers only — every override is audited.
+              per-row insert. Elevated approvers only. Every override is audited.
             </p>
           )}
         </div>
@@ -333,7 +333,7 @@ function ResultBody({ commit, openSet, toggle }) {
           <div>
             <p className="text-sm font-semibold">Commit stalled</p>
             <p className="text-xs text-red-200/90 mt-0.5">
-              The commit did not run to completion. Re-run it — already committed rows are skipped automatically.
+              The commit did not run to completion. Re-run it. Already committed rows are skipped automatically.
             </p>
           </div>
         </div>
@@ -345,7 +345,7 @@ function ResultBody({ commit, openSet, toggle }) {
         <div>
           <p className={`text-sm font-semibold ${meta.text}`}>{c.headline || `Status: ${c.status || 'unknown'}`}</p>
           {c.partial && (
-            <p className="text-xs text-amber-300/90 mt-0.5">Partial commit — some rows were not committed.</p>
+            <p className="text-xs text-amber-300/90 mt-0.5">Partial commit. Some rows were not committed.</p>
           )}
         </div>
       </div>

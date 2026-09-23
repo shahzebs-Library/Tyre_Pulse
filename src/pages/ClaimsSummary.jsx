@@ -80,9 +80,9 @@ function monthLabel(ym) {
   return `${names[(Number(m) || 1) - 1]} ${String(y).slice(2)}`
 }
 function fmtDate(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toISOString().slice(0, 10)
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toISOString().slice(0, 10)
 }
 
 // ── Presentational bits ───────────────────────────────────────────────────────
@@ -113,7 +113,7 @@ function ChartCard({ title, subtitle, children, height = 260 }) {
 export default function ClaimsSummary() {
   const { activeCountry, activeCurrency, appSettings } = useSettings() || {}
   const ccy = activeCurrency || 'SAR'
-  const money = useCallback((v) => (v == null || v === '' ? '—' : formatCurrencyCompact(v, ccy)), [ccy])
+  const money = useCallback((v) => (v == null || v === '' ? 'N/A' : formatCurrencyCompact(v, ccy)), [ccy])
 
   const [rows, setRows] = useState(null)
   const [error, setError] = useState('')
@@ -209,7 +209,7 @@ export default function ClaimsSummary() {
   }), [a])
 
   const agingChart = useMemo(() => ({
-    labels: ['0–30 d', '31–60 d', '61–90 d', '90+ d'],
+    labels: ['0 to 30 d', '31 to 60 d', '61 to 90 d', '90+ d'],
     datasets: [{
       label: 'Open claims',
       data: [a.aging['0-30'].count, a.aging['31-60'].count, a.aging['61-90'].count, a.aging['90+'].count],
@@ -272,7 +272,7 @@ export default function ClaimsSummary() {
     <div className="space-y-6">
       <PageHeader
         title="Claims Summary"
-        subtitle="Live insurance-claims intelligence over accident records — value, recovery, liability, ageing and delays."
+        subtitle="Live insurance-claims intelligence over accident records: value, recovery, liability, ageing and delays."
         icon={ShieldAlert}
         onRefresh={load}
         refreshing={refreshing}
@@ -356,11 +356,11 @@ export default function ClaimsSummary() {
             <Kpi label="Total claims" value={a.total} sub={`${a.open} open · ${a.closed} closed`} icon={ShieldAlert} accent="text-indigo-400" />
             <Kpi label="Delayed" value={a.delayed} sub="past expected release" icon={Clock} tone={a.delayed ? 'text-red-400' : 'text-emerald-400'} accent={a.delayed ? 'text-red-400' : 'text-emerald-400'} />
             <Kpi label="Total claimed" value={money(a.claimed)} sub={`avg ${money(a.avgClaim)}`} icon={DollarSign} accent="text-blue-400" />
-            <Kpi label="Approved" value={money(a.approved)} sub={a.approvalRate == null ? '—' : `${a.approvalRate}% of claimed`} icon={ShieldCheck} tone="text-violet-300" accent="text-violet-400" />
-            <Kpi label="Recovered" value={money(a.recovered)} sub={a.recoveryRate == null ? '—' : `${a.recoveryRate}% recovery`} icon={TrendingUp} tone="text-emerald-400" accent="text-emerald-400" />
+            <Kpi label="Approved" value={money(a.approved)} sub={a.approvalRate == null ? 'N/A' : `${a.approvalRate}% of claimed`} icon={ShieldCheck} tone="text-violet-300" accent="text-violet-400" />
+            <Kpi label="Recovered" value={money(a.recovered)} sub={a.recoveryRate == null ? 'N/A' : `${a.recoveryRate}% recovery`} icon={TrendingUp} tone="text-emerald-400" accent="text-emerald-400" />
             <Kpi label="Net exposure" value={money(a.netExposure)} sub="after recoveries" icon={Wallet} tone={a.netExposure ? 'text-red-400' : 'text-emerald-400'} accent="text-red-400" />
             <Kpi label="Outstanding" value={money(a.outstanding)} sub="approved, not recovered" icon={Percent} tone={a.outstanding ? 'text-amber-400' : 'text-emerald-400'} accent="text-amber-400" />
-            <Kpi label="Avg cycle" value={a.avgCycleDays == null ? '—' : `${a.avgCycleDays} d`} sub="incident → release" icon={Gauge} accent="text-cyan-400" />
+            <Kpi label="Avg cycle" value={a.avgCycleDays == null ? 'N/A' : `${a.avgCycleDays} d`} sub="incident → release" icon={Gauge} accent="text-cyan-400" />
           </div>
 
           {/* Charts */}
@@ -557,15 +557,15 @@ function ClaimsTable({ claims, money }) {
               return (
                 <tr key={r.id || i} className={`border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40 ${delayed ? 'bg-red-950/20' : ''}`}>
                   <td className="px-3 py-2 text-[var(--text-secondary)] whitespace-nowrap">{fmtDate(r.incident_date)}</td>
-                  <td className="px-3 py-2 text-[var(--text-primary)] whitespace-nowrap">{r.asset_no || '—'}</td>
-                  <td className="px-3 py-2 text-[var(--text-secondary)] whitespace-nowrap">{r.site || '—'}</td>
-                  <td className="px-3 py-2 text-[var(--text-secondary)] whitespace-nowrap">{r.insurer || '—'}{r.policy_no ? <span className="text-[var(--text-muted)]"> · {r.policy_no}</span> : ''}</td>
-                  <td className="px-3 py-2 text-[var(--text-secondary)] whitespace-nowrap">{(r.gcc_liability_ratio ?? '') === '' ? '—' : `${Number(r.gcc_liability_ratio)}%`}</td>
-                  <td className="px-3 py-2 text-[var(--text-secondary)] whitespace-nowrap">{r.fault_status || '—'}</td>
+                  <td className="px-3 py-2 text-[var(--text-primary)] whitespace-nowrap">{r.asset_no || 'N/A'}</td>
+                  <td className="px-3 py-2 text-[var(--text-secondary)] whitespace-nowrap">{r.site || 'N/A'}</td>
+                  <td className="px-3 py-2 text-[var(--text-secondary)] whitespace-nowrap">{r.insurer || 'N/A'}{r.policy_no ? <span className="text-[var(--text-muted)]"> · {r.policy_no}</span> : ''}</td>
+                  <td className="px-3 py-2 text-[var(--text-secondary)] whitespace-nowrap">{(r.gcc_liability_ratio ?? '') === '' ? 'N/A' : `${Number(r.gcc_liability_ratio)}%`}</td>
+                  <td className="px-3 py-2 text-[var(--text-secondary)] whitespace-nowrap">{r.fault_status || 'N/A'}</td>
                   <td className="px-3 py-2 whitespace-nowrap">{badge(r)}</td>
                   <td className="px-3 py-2 font-medium text-[var(--text-primary)] whitespace-nowrap">{money(r.claim_amount)}</td>
-                  <td className="px-3 py-2 text-violet-300 whitespace-nowrap">{r.claim_approved_amount ? money(r.claim_approved_amount) : '—'}</td>
-                  <td className="px-3 py-2 text-emerald-400 whitespace-nowrap">{r.recovered_amount ? money(r.recovered_amount) : '—'}</td>
+                  <td className="px-3 py-2 text-violet-300 whitespace-nowrap">{r.claim_approved_amount ? money(r.claim_approved_amount) : 'N/A'}</td>
+                  <td className="px-3 py-2 text-emerald-400 whitespace-nowrap">{r.recovered_amount ? money(r.recovered_amount) : 'N/A'}</td>
                   <td className={`px-3 py-2 whitespace-nowrap ${delayed ? 'text-red-300 font-medium' : 'text-[var(--text-secondary)]'}`}>{fmtDate(r.expected_release_date)}</td>
                 </tr>
               )

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildPolicySections, renderTyreSpecPolicyPdf } from './tyreSpecPolicy'
+import { buildPolicySections, renderTyreSpecPolicyPdf, buildSizeInventoryRows } from './tyreSpecPolicy'
 
 // ASCII-only guard: reject em/en dashes, arrows, curly quotes, middle dots.
 const BANNED = /[–—→←‘’“”·]/
@@ -99,5 +99,91 @@ describe('buildPolicySections', () => {
 describe('renderTyreSpecPolicyPdf', () => {
   it('is a function', () => {
     expect(typeof renderTyreSpecPolicyPdf).toBe('function')
+  })
+})
+
+// ── Current fleet tyre inventory by size ────────────────────────────────────
+
+const SAMPLE_FITMENTS = [
+  { size: '315/80R22.5', brand: 'Michelin', vehicleType: 'Rigid Truck', position: 'Steer', site: 'Riyadh', specStatus: 'Approved' },
+  { size: '315/80 R22.5', brand: 'Bridgestone', vehicleType: 'Rigid Truck', position: 'Steer', site: 'Riyadh', specStatus: 'Approved' },
+  { size: '315/80r22.5', brand: 'CheapCo', vehicleType: 'Tr-Mixer', position: 'Drive', site: 'Jeddah', specStatus: 'Non-Approved Brand' },
+  { size: '295/80R22.5', brand: 'Continental', vehicleType: 'Bus', position: 'Drive', site: 'Riyadh', specStatus: 'Approved' },
+  { size: '', brand: 'NoSizeCo', vehicleType: 'Bus', position: 'Drive', site: 'Riyadh', specStatus: 'No Spec Defined' },
+  { size: '11R22.5', brand: 'Unknown', vehicleType: null, position: 'Trailer', site: null, specStatus: 'No Spec Defined' },
+]
+
+describe('buildSizeInventoryRows', () => {
+  it('groups fitments by normalised size regardless of spacing/case', () => {
+    const rows = buildSizeInventoryRows({ complianceRows: SAMPLE_FITMENTS, specs: SAMPLE_SPECS })
+    const big = rows.find((r) => r.size.replace(/\s/g, '').toUpperCase() === '315/80R22.5')
+    expect(big).toBeTruthy()
+    expect(big.count).toBe(3) // three differently-spelled 315/80R22.5 fitments collapse to one row
+  })
+
+  it('cross-references approved brands, ply, tread, load and speed from matching specs', () => {
+    const rows = buildSizeInventoryRows({ complianceRows: SAMPLE_FITMENTS, specs: SAMPLE_SPECS })
+    const big = rows.find((r) => r.count === 3)
+    expect(big.approvedBrands).toEqual(['Bridgestone', 'Michelin'])
+    expect(big.plyRating).toBe('16 PR')
+    expect(big.minTreadDepth).toBe('3')
+    expect(big.minLoadIndex).toBe('154')
+    expect(big.minSpeedIndex).toBe('M')
+    expect(big.specCount).toBe(1)
+  })
+
+  it('flags a brand fitted at a size but not on the approved list for that size', () => {
+    const rows = buildSizeInventoryRows({ complianceRows: SAMPLE_FITMENTS, specs: SAMPLE_SPECS })
+    const big = rows.find((r) => r.count === 3)
+    expect(big.brandsFittedNotApproved).toEqual(['CheapCo'])
+    expect(big.compliance.nonApprovedBrand).toBe(1)
+    expect(big.compliance.approved).toBe(2)
+    expect(big.nonConformingCount).toBe(1)
+  })
+
+  it('renders N/A (never fabricates) for a size with no matching specification', () => {
+    const rows = buildSizeInventoryRows({ complianceRows: SAMPLE_FITMENTS, specs: SAMPLE_SPECS })
+    const orphan = rows.find((r) => r.size === '11R22.5')
+    expect(orphan).toBeTruthy()
+    expect(orphan.plyRating).toBe('N/A')
+    expect(orphan.approvedBrandsLabel).toBe('N/A')
+    expect(orphan.vehicleTypesLabel).toBe('N/A') // vehicleType was null on that fitment
+    expect(orphan.brandsFittedNotApproved).toEqual([]) // no approved list -> nothing to flag
+  })
+
+  it('ignores fitments with no size and sorts by fitted quantity descending', () => {
+    const rows = buildSizeInventoryRows({ complianceRows: SAMPLE_FITMENTS, specs: SAMPLE_SPECS })
+    expect(rows.every((r) => r.size !== '')).toBe(true)
+    expect(rows[0].count).toBeGreaterThanOrEqual(rows[1].count)
+  })
+
+  it('with no fitments or no specs returns [] without throwing', () => {
+    expect(buildSizeInventoryRows()).toEqual([])
+    expect(buildSizeInventoryRows({ complianceRows: [], specs: SAMPLE_SPECS })).toEqual([])
+    // 3 distinct non-empty sizes across SAMPLE_FITMENTS: 315/80R22.5, 295/80R22.5, 11R22.5.
+    expect(buildSizeInventoryRows({ complianceRows: SAMPLE_FITMENTS, specs: [] })).toHaveLength(3)
+  })
+})
+
+describe('buildPolicySections appendix (current fleet tyre inventory)', () => {
+  it('adds an appendix section built from the compliance rows, never fabricating values', () => {
+    const sections = buildPolicySections({ specs: SAMPLE_SPECS, complianceRows: SAMPLE_FITMENTS })
+    const appendix = sections.find((s) => /Current Fleet Tyre Inventory by Size/.test(s.title))
+    expect(appendix).toBeTruthy()
+    expect(appendix.table.head).toEqual([
+      'Tyre Size', 'Fitted Qty', 'Brands In Use', 'Approved Brands',
+      'Ply Rating', 'Min Tread (mm)', 'Load Idx', 'Speed', 'Pressure (PSI)', 'Non-Conforming',
+    ])
+    expect(appendix.table.rows.length).toBe(3)
+    const all = JSON.stringify(sections)
+    expect(BANNED.test(all)).toBe(false)
+  })
+
+  it('with no compliance rows shows an honest empty appendix, no throw, count unchanged', () => {
+    const sections = buildPolicySections({ specs: SAMPLE_SPECS })
+    const appendix = sections.find((s) => /Current Fleet Tyre Inventory by Size/.test(s.title))
+    expect(appendix).toBeTruthy()
+    expect(appendix.table.rows).toHaveLength(1)
+    expect(appendix.table.rows[0][0]).toMatch(/No current tyre fitments on record/i)
   })
 })

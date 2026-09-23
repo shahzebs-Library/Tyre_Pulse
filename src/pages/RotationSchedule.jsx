@@ -24,6 +24,8 @@ import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
+import Card, { CardHeader } from '../components/ui/Card'
+import Modal from '../components/ui/Modal'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import EmptyState from '../components/EmptyState'
 import { formatDate } from '../lib/formatters'
@@ -363,6 +365,13 @@ function StatusBadge({ status }) {
 }
 
 // ── Rotation History Drawer ────────────────────────────────────────────────────
+// DELIBERATELY NOT `Modal`. This is a full-height right-hand RAIL on the
+// `tp-drawer-panel` contract, and that contract is keyed on the DOM shape:
+// index.css widens it with `.fixed.inset-0 > .tp-drawer-panel`, which
+// `dialogFit.test.jsx` pins. Modal portals its own centred panel capped at
+// 92dvh, so converting would break that selector AND turn a rail into a box -
+// a layout change, not a migration. Same call as the drawers WorkOrders and
+// RepairRequests kept for the same reason.
 function RotationDrawer({ vehicle, onClose }) {
   if (!vehicle) return null
 
@@ -400,12 +409,11 @@ function RotationDrawer({ vehicle, onClose }) {
           </div>
 
           <div className="p-6 space-y-6">
-            {/* Position tread depth visual */}
-            <div className="card">
-              <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
-                <Gauge size={15} className="text-blue-400" />
-                Tread Depth by Position
-              </h3>
+            {/* Position tread depth visual. The section icons in this drawer are
+                decorative - they differ by SHAPE, not by status - so they take
+                CardHeader's muted default rather than a semantic tone. */}
+            <Card>
+              <CardHeader title="Tread Depth by Position" icon={Gauge} />
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {treadPositions.map(pos => {
                   const depths = vehicle.treadByPos?.[pos]
@@ -439,14 +447,11 @@ function RotationDrawer({ vehicle, onClose }) {
                   Steer-Drive tread imbalance of {vehicle.wearImbalance.toFixed(1)} mm, rotation recommended
                 </div>
               )}
-            </div>
+            </Card>
 
             {/* Rotation events timeline */}
-            <div className="card">
-              <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
-                <RotateCcw size={15} className="text-green-400" />
-                Detected Rotation Events
-              </h3>
+            <Card>
+              <CardHeader title="Detected Rotation Events" icon={RotateCcw} />
               {vehicle.rotationEvents.length === 0 ? (
                 <div className="text-center py-6 text-[var(--text-muted)] text-sm">No rotation history detected for this vehicle</div>
               ) : (
@@ -484,14 +489,13 @@ function RotationDrawer({ vehicle, onClose }) {
                   ))}
                 </div>
               )}
-            </div>
+            </Card>
 
-            {/* Active tyres table */}
-            <div className="card">
-              <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
-                <Layers size={15} className="text-purple-400" />
-                Active Tyres ({vehicle.activeTyreCount})
-              </h3>
+            {/* Active tyres. The table is REFUSED for EnterpriseTable: five
+                columns of read-only detail inside a drawer, no search, no
+                export, no pagination - the kit table would add all three. */}
+            <Card>
+              <CardHeader title={`Active Tyres (${vehicle.activeTyreCount})`} icon={Layers} />
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
@@ -519,7 +523,7 @@ function RotationDrawer({ vehicle, onClose }) {
                   </tbody>
                 </table>
               </div>
-            </div>
+            </Card>
           </div>
         </motion.div>
       </motion.div>
@@ -560,98 +564,91 @@ function ScheduleModal({ vehicle, onClose, onSave }) {
     }
   }
 
+  // ONE guarded close for every path. The hand-rolled version had no in-flight
+  // guard at all, so the backdrop and the X could both drop a save in progress
+  // while the Save button sat correctly disabled. Escape, backdrop, X and
+  // Cancel now agree, which is the divergence Modal exists to remove.
+  const close = () => { if (!saving) onClose() }
+
   return (
-    <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
-        onClick={onClose}
-      >
-        <motion.div
-          initial={{ scale: 0.95, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.95, opacity: 0 }}
-          className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-2xl w-full max-w-md"
-          onClick={e => e.stopPropagation()}
-        >
-          <div className="flex items-center justify-between p-5 border-b border-[var(--input-border)]">
-            <div className="flex items-center gap-2 text-[var(--text-primary)] font-semibold">
-              <RotateCcw size={16} className="text-green-400" />
-              Schedule Rotation - {vehicle?.asset}
-            </div>
-            <button onClick={onClose} className="p-1.5 hover:bg-[var(--input-bg)] rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
-              <X size={16} />
-            </button>
+    // There is no <form> element here - the buttons are onClick handlers - so
+    // the actions belong in Modal's footer slot rather than in the body.
+    <Modal
+      open
+      onClose={close}
+      size="md"
+      title={
+        <span className="flex items-center gap-2">
+          <RotateCcw size={16} className="text-green-400" />
+          Schedule Rotation - {vehicle?.asset}
+        </span>
+      }
+      footer={
+        <>
+          <button onClick={close} disabled={saving} className="btn-secondary flex-1">
+            Cancel
+          </button>
+          <button onClick={handleSave} disabled={saving} className="btn-primary flex-1">
+            {saving ? 'Saving...' : 'Save to Schedule'}
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <div>
+          <label className="block text-xs text-[var(--text-muted)] mb-1.5">Scheduled Date</label>
+          <input
+            type="date"
+            value={date}
+            onChange={e => setDate(e.target.value)}
+            className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs text-[var(--text-muted)] mb-1.5">Priority</label>
+          <select
+            value={priority}
+            onChange={e => setPriority(e.target.value)}
+            className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500"
+          >
+            {['Critical', 'High', 'Medium', 'Low'].map(p => (
+              <option key={p} value={p}>{p}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs text-[var(--text-muted)] mb-1.5">Notes</label>
+          <textarea
+            value={notes}
+            onChange={e => setNotes(e.target.value)}
+            rows={3}
+            placeholder="Optional workshop notes..."
+            className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-primary)] text-sm resize-none focus:outline-none focus:border-blue-500 placeholder-gray-600"
+          />
+        </div>
+
+        <div className="bg-[var(--input-bg)] rounded-lg p-3 grid grid-cols-2 gap-3 text-xs">
+          <div>
+            <div className="text-[var(--text-muted)]">Current km</div>
+            <div className="text-[var(--text-primary)] font-medium">{fmt(vehicle?.currentKm)}</div>
           </div>
-
-          <div className="p-5 space-y-4">
-            <div>
-              <label className="block text-xs text-[var(--text-muted)] mb-1.5">Scheduled Date</label>
-              <input
-                type="date"
-                value={date}
-                onChange={e => setDate(e.target.value)}
-                className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs text-[var(--text-muted)] mb-1.5">Priority</label>
-              <select
-                value={priority}
-                onChange={e => setPriority(e.target.value)}
-                className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500"
-              >
-                {['Critical', 'High', 'Medium', 'Low'].map(p => (
-                  <option key={p} value={p}>{p}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs text-[var(--text-muted)] mb-1.5">Notes</label>
-              <textarea
-                value={notes}
-                onChange={e => setNotes(e.target.value)}
-                rows={3}
-                placeholder="Optional workshop notes..."
-                className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-primary)] text-sm resize-none focus:outline-none focus:border-blue-500 placeholder-gray-600"
-              />
-            </div>
-
-            <div className="bg-[var(--input-bg)] rounded-lg p-3 grid grid-cols-2 gap-3 text-xs">
-              <div>
-                <div className="text-[var(--text-muted)]">Current km</div>
-                <div className="text-[var(--text-primary)] font-medium">{fmt(vehicle?.currentKm)}</div>
-              </div>
-              <div>
-                <div className="text-[var(--text-muted)]">Site</div>
-                <div className="text-[var(--text-primary)] font-medium">{vehicle?.site}</div>
-              </div>
-              <div>
-                <div className="text-[var(--text-muted)]">Status</div>
-                <StatusBadge status={vehicle?.status} />
-              </div>
-              <div>
-                <div className="text-[var(--text-muted)]">Since Last Rotation</div>
-                <div className="text-[var(--text-primary)] font-medium">{vehicle?.sinceLastKm != null ? `${fmt(vehicle.sinceLastKm)} km` : '-'}</div>
-              </div>
-            </div>
+          <div>
+            <div className="text-[var(--text-muted)]">Site</div>
+            <div className="text-[var(--text-primary)] font-medium">{vehicle?.site}</div>
           </div>
-
-          <div className="flex gap-3 p-5 border-t border-[var(--input-border)]">
-            <button onClick={onClose} className="btn-secondary flex-1">
-              Cancel
-            </button>
-            <button onClick={handleSave} disabled={saving} className="btn-primary flex-1">
-              {saving ? 'Saving...' : 'Save to Schedule'}
-            </button>
+          <div>
+            <div className="text-[var(--text-muted)]">Status</div>
+            <StatusBadge status={vehicle?.status} />
           </div>
-        </motion.div>
-      </motion.div>
-    </AnimatePresence>
+          <div>
+            <div className="text-[var(--text-muted)]">Since Last Rotation</div>
+            <div className="text-[var(--text-primary)] font-medium">{vehicle?.sinceLastKm != null ? `${fmt(vehicle.sinceLastKm)} km` : '-'}</div>
+          </div>
+        </div>
+      </div>
+    </Modal>
   )
 }
 
@@ -1052,7 +1049,9 @@ export default function RotationSchedule() {
       />
 
         {/* ── Interval Config ──────────────────────────────────────────────── */}
-        <div className="card">
+        {/* The responsive flex-col/sm:flex-row lives on an INNER div, so Card's
+            own flex-col never competes with it. */}
+        <Card>
           <div className="flex flex-col sm:flex-row sm:items-center gap-4">
             <div className="flex items-center gap-2 text-sm font-medium text-[var(--text-primary)] min-w-max">
               <Settings2 size={15} className="text-blue-400" />
@@ -1087,18 +1086,18 @@ export default function RotationSchedule() {
               <span>Recalculates all metrics in real-time</span>
             </div>
           </div>
-        </div>
+        </Card>
 
         {/* ── KPI Cards ───────────────────────────────────────────────────── */}
         {noData ? (
-          <div className="card">
+          <Card>
             <EmptyState
               illustration="module/tyres"
               icon={RotateCcw}
               title="No tyre records found"
               description="Upload tyre data to begin tracking rotation compliance."
             />
-          </div>
+          </Card>
         ) : (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -1341,15 +1340,15 @@ export default function RotationSchedule() {
             {activeTab === 'charts' && (
               <motion.div key="charts" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                  {/* Rotation Activity Trend */}
-                  <div className="card">
-                    <div className="flex items-center justify-between mb-4">
-                      <h2 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
-                        <TrendingUp size={15} className="text-green-400" />
-                        Monthly Rotation Activity
-                      </h2>
-                      <span className="text-xs text-[var(--text-muted)]">Last 12 months · Detected rotations</span>
-                    </div>
+                  {/* Rotation Activity Trend. `level={2}` keeps the h2 the old
+                      markup had, so the page's heading outline is unchanged. */}
+                  <Card>
+                    <CardHeader
+                      title="Monthly Rotation Activity"
+                      icon={TrendingUp}
+                      level={2}
+                      actions={<span className="text-xs text-[var(--text-muted)]">Last 12 months · Detected rotations</span>}
+                    />
                     {trendChartData ? (
                       <div className="h-64">
                         <Line
@@ -1366,16 +1365,11 @@ export default function RotationSchedule() {
                     ) : (
                       <div className="h-64 flex items-center justify-center text-[var(--text-muted)] text-sm">No rotation events detected in the last 12 months</div>
                     )}
-                  </div>
+                  </Card>
 
                   {/* Site Compliance */}
-                  <div className="card">
-                    <div className="flex items-center justify-between mb-4">
-                      <h2 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
-                        <Building2 size={15} className="text-blue-400" />
-                        Site Compliance Comparison
-                      </h2>
-                    </div>
+                  <Card>
+                    <CardHeader title="Site Compliance Comparison" icon={Building2} level={2} />
                     {siteChartData ? (
                       <div className="h-64">
                         <Bar
@@ -1394,15 +1388,12 @@ export default function RotationSchedule() {
                     ) : (
                       <div className="h-64 flex items-center justify-center text-[var(--text-muted)] text-sm">No site data available</div>
                     )}
-                  </div>
+                  </Card>
                 </div>
 
                 {/* Status Distribution */}
-                <div className="card">
-                  <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
-                    <Layers size={15} className="text-purple-400" />
-                    Fleet Status Distribution
-                  </h2>
+                <Card>
+                  <CardHeader title="Fleet Status Distribution" icon={Layers} level={2} />
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                     {Object.entries(STATUS_CFG).map(([status, cfg]) => {
                       const count = analytics.vehicles.filter(v => v.status === status).length
@@ -1419,7 +1410,7 @@ export default function RotationSchedule() {
                       )
                     })}
                   </div>
-                </div>
+                </Card>
               </motion.div>
             )}
 
@@ -1430,11 +1421,8 @@ export default function RotationSchedule() {
               <motion.div key="impact" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                   {/* Life comparison chart */}
-                  <div className="card">
-                    <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
-                      <BarChart3 size={15} className="text-green-400" />
-                      Tyre Life: Rotated vs Non-Rotated
-                    </h2>
+                  <Card>
+                    <CardHeader title="Tyre Life: Rotated vs Non-Rotated" icon={BarChart3} level={2} />
                     {impactChartData ? (
                       <div className="h-64">
                         <Bar
@@ -1452,14 +1440,16 @@ export default function RotationSchedule() {
                     ) : (
                       <div className="h-64 flex items-center justify-center text-[var(--text-muted)] text-sm">Insufficient removal records to compare tyre life</div>
                     )}
-                  </div>
+                  </Card>
 
-                  {/* Impact metrics */}
-                  <div className="card space-y-4">
-                    <h2 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
-                      <DollarSign size={15} className="text-yellow-400" />
-                      Rotation Impact Analysis
-                    </h2>
+                  {/* Impact metrics. `!mb-0` on the header is the documented
+                      idiom: CardHeader writes marginBottom inline, and without
+                      the override it would stack on top of this card's own
+                      space-y-4 and double the gap. `!important` in a stylesheet
+                      does beat a normal inline declaration, which is why this
+                      one case is allowed to use it. */}
+                  <Card className="space-y-4">
+                    <CardHeader title="Rotation Impact Analysis" icon={DollarSign} iconTone="warn" level={2} className="!mb-0" />
                     {analytics.avgLifeWith && analytics.avgLifeWithout ? (
                       <>
                         <div className="grid grid-cols-2 gap-4">
@@ -1514,16 +1504,24 @@ export default function RotationSchedule() {
                         <span className="text-green-400">{activeCurrency} {fmt(analytics.costSavings)}</span>
                       </div>
                     </div>
-                  </div>
+                  </Card>
                 </div>
 
-                {/* Position Wear Balance Analysis */}
-                <div className="card">
-                  <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
-                    <Gauge size={15} className="text-orange-400" />
-                    Position Wear Balance Analysis
-                    <span className="text-xs text-[var(--text-muted)] font-normal ml-2">Vehicles with &gt; {WEAR_IMBALANCE_MM}mm steer-drive imbalance</span>
-                  </h2>
+                {/* Position Wear Balance Analysis. The qualifier moves out of
+                    the <h2> and into CardHeader's `description`, so the heading
+                    a screen reader announces is the heading, not the heading
+                    plus a footnote. The table below is REFUSED for
+                    EnterpriseTable: it is a top-20 slice with composite cells
+                    (two buttons that open the drawer and the schedule dialog)
+                    and no search or export of its own to preserve. */}
+                <Card>
+                  <CardHeader
+                    title="Position Wear Balance Analysis"
+                    description={`Vehicles with > ${WEAR_IMBALANCE_MM}mm steer-drive imbalance`}
+                    icon={Gauge}
+                    iconTone="warn"
+                    level={2}
+                  />
                   {(() => {
                     const imbalanced = analytics.vehicles.filter(v => v.wearImbalance != null && v.wearImbalance > WEAR_IMBALANCE_MM)
                       .sort((a, b) => b.wearImbalance - a.wearImbalance)
@@ -1575,7 +1573,7 @@ export default function RotationSchedule() {
                       </div>
                     )
                   })()}
-                </div>
+                </Card>
               </motion.div>
             )}
 
@@ -1627,16 +1625,27 @@ export default function RotationSchedule() {
                     </button>
                   </div>
                 ) : schedLoading ? (
-                  <div className="card p-12 text-center">
-                    <RotateCcw size={32} className="text-blue-400 animate-spin mx-auto mb-3" />
-                    <p className="text-[var(--text-muted)] text-sm">Loading scheduled rotations...</p>
-                  </div>
+                  // `p-12` WOULD BE DEAD on a Card - padding is written inline
+                  // and a plain class loses to it, silently collapsing these two
+                  // states back to --pad-card. The roominess is the whole point
+                  // of an empty state, so it moves to an inner element. Same in
+                  // the sibling branch below. "Loading" and "nothing scheduled"
+                  // stay separate states: an unfinished read must never read as
+                  // an empty schedule.
+                  <Card>
+                    <div className="text-center" style={{ padding: 'var(--space-12)' }}>
+                      <RotateCcw size={32} className="text-blue-400 animate-spin mx-auto mb-3" />
+                      <p className="text-[var(--text-muted)] text-sm">Loading scheduled rotations...</p>
+                    </div>
+                  </Card>
                 ) : schedules.length === 0 ? (
-                  <div className="card p-12 text-center">
-                    <Calendar size={40} className="text-[var(--text-dim)] mx-auto mb-3" />
-                    <p className="text-[var(--text-muted)] font-medium">No rotations scheduled yet</p>
-                    <p className="text-[var(--text-muted)] text-sm mt-1">Click "Schedule" on overdue vehicles or use auto-schedule above.</p>
-                  </div>
+                  <Card>
+                    <div className="text-center" style={{ padding: 'var(--space-12)' }}>
+                      <Calendar size={40} className="text-[var(--text-dim)] mx-auto mb-3" />
+                      <p className="text-[var(--text-muted)] font-medium">No rotations scheduled yet</p>
+                      <p className="text-[var(--text-muted)] text-sm mt-1">Click "Schedule" on overdue vehicles or use auto-schedule above.</p>
+                    </div>
+                  </Card>
                 ) : (
                   <>
                     {/* Group by priority */}
@@ -1763,7 +1772,14 @@ export default function RotationSchedule() {
       {/* ── Scheduled Rotation Approval Drawer ─────────────────────────────────
           Wires the shared Approval & Workflow Engine onto a single scheduled
           rotation (tyre_rotation entity). Smart rule support: cost / due_date /
-          positions / site travel in the context payload. */}
+          positions / site travel in the context payload.
+
+          DELIBERATELY NOT `Modal`, for the same reason as RotationDrawer above:
+          this is a `tp-drawer-panel` rail whose wide-screen sizing rule in
+          index.css is `.fixed.inset-0 > .tp-drawer-panel`, a direct-child
+          selector that only holds while the panel stays inside this overlay.
+          Modal portals a centred 92dvh box instead, so converting would both
+          break that selector and change the layout. */}
       <AnimatePresence>
         {detailSchedule && (
           <motion.div

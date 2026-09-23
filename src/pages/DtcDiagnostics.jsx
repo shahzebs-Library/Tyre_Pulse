@@ -19,6 +19,8 @@ import {
   Filter, Save, Loader2, FileSpreadsheet, FileText, Repeat, Layers, Hash, Clock,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import Card, { CardHeader, CardBody } from '../components/ui/Card'
+import Modal from '../components/ui/Modal'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   listDtcCodes, createDtcCode, updateDtcCode, deleteDtcCode,
@@ -29,6 +31,7 @@ import { colorAt, categorical, withAlpha } from '../lib/reportColors'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 ChartJS.register(ArcElement, Tooltip, Legend, BarElement, CategoryScale, LinearScale)
 
@@ -43,10 +46,6 @@ const STATUS_META = {
   cleared: { label: 'Cleared', cls: 'bg-green-900/40 text-green-300 border border-green-700/50', color: '#22c55e' },
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') || m.includes('schema cache') || m.includes('could not find the table')
-}
 function fmtDate(v) {
   if (!v) return 'N/A'
   const d = new Date(v)
@@ -91,20 +90,25 @@ function CodeModal({ open, initial, onClose, onSaved, country }) {
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onMouseDown={onClose}>
-      <form
-        onSubmit={submit}
-        onMouseDown={(e) => e.stopPropagation()}
-        className="card w-full max-w-2xl max-h-[90vh] overflow-y-auto space-y-4"
-      >
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
-            <Cpu size={18} className="text-[var(--brand-bright)]" />
-            {editing ? 'Edit diagnostic code' : 'Log diagnostic code'}
-          </h2>
-          <button type="button" onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
-        </div>
-
+    // Modal owns the backdrop, Escape, the focus trap, the scroll lock and the
+    // viewport height cap, so the hand-rolled overlay, the stopPropagation
+    // guard and `max-h-[90vh] overflow-y-auto` are all gone.
+    //
+    // The submit button stays INSIDE the form rather than moving to Modal's
+    // `footer`: out there it would need a `form="..."` association to keep
+    // submitting, which is a behaviour change, not a layout one.
+    <Modal
+      open={open}
+      onClose={onClose}
+      size="md"
+      title={(
+        <span className="inline-flex items-center gap-2">
+          <Cpu size={18} className="text-[var(--brand-bright)]" />
+          {editing ? 'Edit diagnostic code' : 'Log diagnostic code'}
+        </span>
+      )}
+    >
+      <form onSubmit={submit} className="space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="label">Asset number *</label>
@@ -163,7 +167,7 @@ function CodeModal({ open, initial, onClose, onSaved, country }) {
           </button>
         </div>
       </form>
-    </div>
+    </Modal>
   )
 }
 
@@ -171,25 +175,28 @@ function CodeModal({ open, initial, onClose, onSaved, country }) {
 function DeleteConfirm({ row, onCancel, onConfirm, busy }) {
   if (!row) return null
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onMouseDown={onCancel}>
-      <div className="card w-full max-w-md space-y-4" onMouseDown={(e) => e.stopPropagation()}>
-        <div className="flex items-center gap-2">
-          <div className="w-10 h-10 rounded-xl bg-red-900/30 flex items-center justify-center shrink-0"><Trash2 size={18} className="text-red-400" /></div>
-          <div>
-            <h3 className="font-bold text-[var(--text-primary)]">Delete diagnostic code?</h3>
-            <p className="text-sm text-[var(--text-muted)] mt-0.5">
-              {row.code ? <span className="font-mono">{row.code}</span> : 'This code'} on <span className="font-medium">{row.asset_no}</span> will be permanently removed.
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center justify-end gap-2">
+    // No form here, so the actions belong in Modal's pinned `footer`.
+    <Modal
+      open
+      onClose={onCancel}
+      size="sm"
+      title="Delete diagnostic code?"
+      footer={(
+        <>
           <button type="button" onClick={onCancel} className="btn-secondary text-sm">Cancel</button>
           <button type="button" onClick={onConfirm} disabled={busy} className="btn-danger text-sm inline-flex items-center gap-2 disabled:opacity-60">
             {busy ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />} Delete
           </button>
-        </div>
+        </>
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <div className="w-10 h-10 rounded-xl bg-red-900/30 flex items-center justify-center shrink-0"><Trash2 size={18} className="text-red-400" /></div>
+        <p className="text-sm text-[var(--text-muted)]">
+          {row.code ? <span className="font-mono">{row.code}</span> : 'This code'} on <span className="font-medium">{row.asset_no}</span> will be permanently removed.
+        </p>
       </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -413,7 +420,12 @@ export default function DtcDiagnostics() {
       />
 
       {missing && (
-        <div className="card border border-amber-800/50 flex items-start gap-3">
+        // The tint comes from `tone`, not a `border-*` class: Card sets
+        // `border`/`borderColor` INLINE and a plain utility loses to that, so
+        // `border border-amber-800/50` here would render nothing at all. And
+        // Card is `flex flex-col` — Tailwind emits .flex-col after .flex-row,
+        // so the row direction goes in `style`, which Card spreads last.
+        <Card tone="warn" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
           <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
           <div>
             <p className="text-amber-300 font-medium">DTC diagnostics are not enabled on this database yet.</p>
@@ -421,47 +433,50 @@ export default function DtcDiagnostics() {
               Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V160_DTC_CODES.sql</span>, then reload.
             </p>
           </div>
-        </div>
+        </Card>
       )}
 
       {error && (
-        <div className="card border border-red-800/50 flex items-start gap-3">
+        <Card tone="crit" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
           <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
           <div><p className="text-red-300 font-medium">Could not load diagnostic codes.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
-        </div>
+        </Card>
       )}
 
       {/* KPI tiles */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-[var(--gap-grid)]">
         {kpis.map((k) => {
           const Icon = k.icon
           return (
-            <div key={k.label} className="card">
+            <Card key={k.label}>
               <div className="flex items-center justify-between">
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
               <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
-            </div>
+            </Card>
           )
         })}
       </div>
 
       {/* Chart */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="card lg:col-span-1">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Codes by severity</h3>
-          <div className="h-64">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-[var(--gap-grid)]">
+        <Card className="lg:col-span-1">
+          <CardHeader level={3} title="Codes by severity" />
+          <CardBody style={{ height: '16rem' }}>
             {rows && summary.total ? <Doughnut data={donutData} options={donutOpts} /> : (
               <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">
                 {rows === null ? <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" /> : 'No codes logged.'}
               </div>
             )}
-          </div>
-        </div>
+          </CardBody>
+        </Card>
 
-        {/* Filters + summary */}
-        <div className="card lg:col-span-2 space-y-3">
+        {/* Filters + summary. Deliberately NOT `clip`: three native <select>
+            dropdowns live here. A native select paints its option list as an
+            OS-level popup outside the page's overflow context, so clipping
+            would not touch it either way — but the card has nothing to crop. */}
+        <Card className="lg:col-span-2 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative flex-1 min-w-[200px]">
               <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
@@ -487,53 +502,55 @@ export default function DtcDiagnostics() {
             <span className="badge px-2 py-0.5 rounded bg-[var(--input-bg)]">Cleared: {summary.byStatus.cleared}</span>
             <span className="ml-auto">{filtered.length} of {summary.total}</span>
           </div>
-        </div>
+        </Card>
       </div>
 
       {/* ── Fault analytics ─────────────────────────────────────────────── */}
       {rows !== null && (summary.total > 0 ? (
         <>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div className="card">
-              <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Codes by severity</h3>
-              <div className="h-56"><Bar data={severityBarData} options={barOpts(false)} /></div>
-            </div>
-            <div className="card">
-              <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Active vs cleared</h3>
-              <div className="h-56"><Doughnut data={statusData} options={donutOpts} /></div>
-            </div>
-            <div className="card">
-              <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Faults by system</h3>
-              <div className="h-56">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-[var(--gap-grid)]">
+            <Card>
+              <CardHeader level={3} title="Codes by severity" />
+              <CardBody style={{ height: '14rem' }}><Bar data={severityBarData} options={barOpts(false)} /></CardBody>
+            </Card>
+            <Card>
+              <CardHeader level={3} title="Active vs cleared" />
+              <CardBody style={{ height: '14rem' }}><Doughnut data={statusData} options={donutOpts} /></CardBody>
+            </Card>
+            <Card>
+              <CardHeader level={3} title="Faults by system" />
+              <CardBody style={{ height: '14rem' }}>
                 {bySystem.length ? <Bar data={systemBarData} options={barOpts(true)} /> : (
                   <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No system data recorded.</div>
                 )}
-              </div>
-            </div>
+              </CardBody>
+            </Card>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-[var(--gap-grid)]">
             {/* Top recurring codes chart */}
-            <div className="card lg:col-span-2">
-              <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-1 flex items-center gap-2">
-                <Repeat size={15} className="text-orange-400" /> Top recurring faults
-              </h3>
-              <p className="text-xs text-[var(--text-muted)] mb-3">Same code reappearing on the same asset (two or more times).</p>
-              <div className="h-64">
+            <Card className="lg:col-span-2">
+              <CardHeader
+                level={3}
+                icon={Repeat}
+                title="Top recurring faults"
+                description="Same code reappearing on the same asset (two or more times)."
+              />
+              <CardBody style={{ height: '16rem' }}>
                 {topRecurring.length ? <Bar data={recurringBarData} options={barOpts(true)} /> : (
                   <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No recurring faults detected.</div>
                 )}
-              </div>
-            </div>
+              </CardBody>
+            </Card>
 
             {/* Ageing of open codes */}
-            <div className="card">
-              <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-1 flex items-center gap-2">
-                <Clock size={15} className="text-sky-400" /> Open code ageing
-              </h3>
-              <p className="text-xs text-[var(--text-muted)] mb-3">
-                {ageing.openTotal ? `${ageing.openTotal} open, avg ${ageing.avgDays ?? 'N/A'}d, oldest ${ageing.oldestDays ?? 'N/A'}d` : 'No open codes.'}
-              </p>
+            <Card>
+              <CardHeader
+                level={3}
+                icon={Clock}
+                title="Open code ageing"
+                description={ageing.openTotal ? `${ageing.openTotal} open, avg ${ageing.avgDays ?? 'N/A'}d, oldest ${ageing.oldestDays ?? 'N/A'}d` : 'No open codes.'}
+              />
               <div className="space-y-2">
                 {Object.entries(ageing.buckets).map(([label, n]) => {
                   const pct = ageing.openTotal ? Math.round((n / ageing.openTotal) * 100) : 0
@@ -547,12 +564,17 @@ export default function DtcDiagnostics() {
                   )
                 })}
               </div>
-            </div>
+            </Card>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Worst assets by fault burden */}
-            <div className="card !p-0 overflow-hidden">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-[var(--gap-grid)]">
+            {/* Worst assets by fault burden.
+                KEPT as raw table markup on purpose: the asset cell is a button
+                that applies the page filter and scrolls to the register, and
+                the burden cell is tinted by the row's own worst severity.
+                EnterpriseTable would flatten both into plain cells and add a
+                second search box beside the page's own. */}
+            <Card pad="none" clip>
               <div className="px-4 py-3 border-b border-[var(--input-border)] flex items-center gap-2">
                 <Wrench size={15} className="text-orange-400" />
                 <h3 className="text-sm font-semibold text-[var(--text-primary)]">Worst assets by fault burden</h3>
@@ -583,10 +605,13 @@ export default function DtcDiagnostics() {
                   </table>
                 </div>
               )}
-            </div>
+            </Card>
 
-            {/* Recurring codes table */}
-            <div className="card !p-0 overflow-hidden">
+            {/* Recurring codes table.
+                KEPT as raw markup: the code cell is tinted by that group's
+                worst severity, and the list is deliberately capped at 50 with
+                its own scroll rather than paged. */}
+            <Card pad="none" clip>
               <div className="px-4 py-3 border-b border-[var(--input-border)] flex items-center gap-2">
                 <Repeat size={15} className="text-orange-400" />
                 <h3 className="text-sm font-semibold text-[var(--text-primary)]">Repeat offenders</h3>
@@ -615,12 +640,13 @@ export default function DtcDiagnostics() {
                   </table>
                 </div>
               )}
-            </div>
+            </Card>
           </div>
 
-          {/* Data quality */}
+          {/* Data quality. `border border-amber-800/40` would be DEAD against
+              Card's inline border, so the tint comes from `tone`. */}
           {dq.flaggedRows > 0 && (
-            <div className="card border border-amber-800/40">
+            <Card tone="warn">
               <div className="flex items-center gap-2 mb-2">
                 <Layers size={15} className="text-amber-400" />
                 <h3 className="text-sm font-semibold text-[var(--text-primary)]">Data quality</h3>
@@ -633,13 +659,19 @@ export default function DtcDiagnostics() {
                 {dq.counts.unknownSeverity > 0 && <span className="badge px-2 py-0.5 rounded bg-[var(--input-bg)]">Unknown severity: {dq.counts.unknownSeverity}</span>}
                 {dq.counts.unknownStatus > 0 && <span className="badge px-2 py-0.5 rounded bg-[var(--input-bg)]">Unknown status: {dq.counts.unknownStatus}</span>}
               </div>
-            </div>
+            </Card>
           )}
         </>
       ) : null)}
 
-      {/* Table */}
-      <div className="card overflow-hidden !p-0">
+      {/* Register table.
+          KEPT as raw markup on purpose: it already owns usePagedRows +
+          TablePagination and the page-level Excel/PDF export above, and its
+          cells are composite (severity and status badges, a recurrence badge
+          whose "N/A" is a real distinction from a count, and per-row edit and
+          delete buttons). EnterpriseTable would bring a second search box
+          beside the page's own and a competing export. */}
+      <Card pad="none" clip>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -692,7 +724,7 @@ export default function DtcDiagnostics() {
           </table>
         </div>
         <TablePagination {...pager} />
-      </div>
+      </Card>
 
       <CodeModal
         open={modalOpen}

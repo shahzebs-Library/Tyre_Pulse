@@ -7,7 +7,7 @@
  * their own drawn signature + name and locking the record - or RETURN it with a
  * note that re-opens it to the field.
  */
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import {
   View, Text, ScrollView, TextInput, TouchableOpacity,
   StyleSheet, Alert, ActivityIndicator, StatusBar, Platform, KeyboardAvoidingView,
@@ -31,6 +31,8 @@ import {
 } from '../../../../lib/inspectionApprovals'
 
 import { withModuleGuard } from '../../../../components/ModuleGuard'
+import { ApprovalReview, getApprovalReview } from '../../../../lib/governedApprovals'
+import GovernedApprovalPanel from '../../../../components/GovernedApprovalPanel'
 import { backTo } from '../../../../lib/goBack'
 
 export default withModuleGuard(InspectionApprovalReviewScreen, 'approvals')
@@ -48,6 +50,8 @@ function InspectionApprovalReviewScreen() {
   const [insp, setInsp] = useState<InspectionApprovalItem | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [policyReview, setPolicyReview] = useState<ApprovalReview | null>(null)
+  const reviewRequest = useRef(0)
 
   const [approverSig, setApproverSig] = useState<string | null>(null)
   // Who signs is NOT typed any more - `decide_inspection_approval` derives the
@@ -67,17 +71,23 @@ function InspectionApprovalReviewScreen() {
   }, [router])
 
   const load = useCallback(async () => {
+    const current = ++reviewRequest.current
+    setLoading(true)
     setLoadError(null)
     try {
-      setInsp(await getInspectionForApproval(id))
+      const review = await getApprovalReview('inspection', id)
+      const document = review.mode === 'enforced' ? review.document as InspectionApprovalItem : await getInspectionForApproval(id)
+      if (current !== reviewRequest.current) return
+      setPolicyReview(review.mode === 'enforced' ? review : null)
+      setInsp(document)
     } catch (e: any) {
-      setLoadError(toUserMessage(e, 'Could not load this inspection.'))
+      if (current === reviewRequest.current) setLoadError(toUserMessage(e, 'Could not load this inspection.'))
     } finally {
-      setLoading(false)
+      if (current === reviewRequest.current) setLoading(false)
     }
-  }, [id])
+  }, [id, profile?.id, profile?.role, profile?.country, profile?.site])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { load(); return () => { reviewRequest.current += 1 } }, [load])
 
   const { width: screenW } = useWindowDimensions()
 
@@ -301,7 +311,7 @@ function InspectionApprovalReviewScreen() {
           </View>
 
           {/* Decision */}
-          {decided ? (
+          {policyReview ? <GovernedApprovalPanel review={policyReview} onRefresh={load} /> : decided ? (
             /* A decided inspection SHOWS what was signed rather than offering the
                pad again. Re-opening a signed record used to present an empty
                approver box, which invites a second signature over a decision that

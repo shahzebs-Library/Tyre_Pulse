@@ -26,6 +26,7 @@ import { summariseCallouts, byType, responseMinutes, resolutionMinutes } from '.
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 const BREAKDOWN_TYPES = ['tyre', 'engine', 'electrical', 'brakes', 'transmission', 'accident', 'fuel', 'other']
 const SEVERITIES = ['low', 'medium', 'high', 'critical']
@@ -55,10 +56,10 @@ const STATUS_LABEL = {
   resolved: 'Resolved', cancelled: 'Cancelled',
 }
 
-const titleCase = (v) => (v ? String(v).charAt(0).toUpperCase() + String(v).slice(1) : '—')
+const titleCase = (v) => (v ? String(v).charAt(0).toUpperCase() + String(v).slice(1) : 'N/A')
 
 const fmtMinutes = (m) => {
-  if (m == null) return '—'
+  if (m == null) return 'N/A'
   if (m < 60) return `${m} min`
   const h = Math.floor(m / 60)
   const r = m % 60
@@ -66,12 +67,12 @@ const fmtMinutes = (m) => {
 }
 
 const fmtCost = (v, cur) =>
-  v == null || v === '' ? '—' : `${cur ? `${cur} ` : ''}${Number(v).toLocaleString()}`
+  v == null || v === '' ? 'N/A' : `${cur ? `${cur} ` : ''}${Number(v).toLocaleString()}`
 
 function fmtDateTime(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleString()
 }
 
 /** timestamptz → value for a <input type="datetime-local"> (local time, no tz). */
@@ -83,11 +84,6 @@ function toLocalInput(v) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') ||
-    m.includes('schema cache') || m.includes('could not find the table')
-}
 
 export default function BreakdownCallouts() {
   const { activeCountry } = useSettings()
@@ -244,7 +240,7 @@ export default function BreakdownCallouts() {
     <div className="space-y-6">
       <PageHeader
         title="Breakdown Callouts"
-        subtitle="Log and track roadside assistance and breakdown events per asset — response, resolution, cost, and provider performance for availability and downtime analytics."
+        subtitle="Log and track roadside assistance and breakdown events per asset: response, resolution, cost, and provider performance for availability and downtime analytics."
         icon={LifeBuoy}
         onRefresh={load}
         refreshing={refreshing}
@@ -293,7 +289,7 @@ export default function BreakdownCallouts() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -314,7 +310,7 @@ export default function BreakdownCallouts() {
               <div key={t.type} className="rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)]/40 px-3 py-2">
                 <p className="text-xs text-[var(--text-muted)]">{titleCase(t.type)}</p>
                 <p className="text-sm font-semibold text-[var(--text-primary)]">{t.count} callout{t.count === 1 ? '' : 's'}</p>
-                <p className="text-[11px] text-[var(--text-muted)]">{t.cost > 0 ? fmtCost(t.cost) : '—'}</p>
+                <p className="text-[11px] text-[var(--text-muted)]">{t.cost > 0 ? fmtCost(t.cost) : 'N/A'}</p>
               </div>
             ))}
           </div>
@@ -366,23 +362,23 @@ export default function BreakdownCallouts() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={9} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {rows.length === 0 && !notProvisioned ? 'No callouts logged yet — log your first breakdown callout.' : 'No callouts match these filters.'}
+                  {rows.length === 0 && !notProvisioned ? 'No callouts logged yet. Log your first breakdown callout.' : 'No callouts match these filters.'}
                 </td></tr>
               ) : (
                 pager.pageRows.map((r) => (
                   <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                    <td className="px-4 py-2.5 font-medium text-[var(--text-primary)] whitespace-nowrap">{r.callout_no || '—'}</td>
-                    <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.asset_no || '—'}</td>
+                    <td className="px-4 py-2.5 font-medium text-[var(--text-primary)] whitespace-nowrap">{r.callout_no || 'N/A'}</td>
+                    <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.asset_no || 'N/A'}</td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)]">{titleCase(r.breakdown_type)}</td>
                     <td className="px-4 py-2.5">
                       {r.severity
                         ? <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-medium ${SEVERITY_BADGE[r.severity] || 'bg-slate-700/40 text-slate-200'}`}>{titleCase(r.severity)}</span>
-                        : <span className="text-[var(--text-muted)]">—</span>}
+                        : <span className="text-[var(--text-muted)]">N/A</span>}
                     </td>
                     <td className="px-4 py-2.5">
                       {r.status
                         ? <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-medium ${STATUS_BADGE[r.status] || 'bg-slate-700/40 text-slate-200'}`}>{STATUS_LABEL[r.status] || r.status}</span>
-                        : <span className="text-[var(--text-muted)]">—</span>}
+                        : <span className="text-[var(--text-muted)]">N/A</span>}
                     </td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDateTime(r.reported_at)}</td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtMinutes(responseMinutes(r))}</td>

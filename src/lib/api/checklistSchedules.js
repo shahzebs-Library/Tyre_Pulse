@@ -7,9 +7,9 @@
 import { supabase, unwrap, applyCountry } from './_client'
 
 const SCHED_COLS =
-  'id,organisation_id,country,template_id,name,cadence,sites,asset_nos,assignee_role,start_date,next_due,active,created_by,created_at,updated_at'
+  'id,organisation_id,country,template_id,name,cadence,sites,asset_nos,assignee_role,start_date,end_date,next_due,pilot,active,created_by,created_at,updated_at'
 const ASSIGN_COLS =
-  'id,country,schedule_id,template_id,template_name,site,asset_no,assignee_role,due_date,status,submission_id,completed_at,created_at,updated_at'
+  'id,country,schedule_id,template_id,template_name,site,asset_no,assignee_role,due_date,status,submission_id,completed_at,skip_reason,skipped_by,skipped_at,created_at,updated_at'
 
 // ── Schedules ───────────────────────────────────────────────────────────────
 
@@ -34,7 +34,9 @@ export async function createSchedule(values) {
     assignee_role: values.assignee_role ?? null,
     country: values.country ?? null,
     start_date: values.start_date ?? undefined,
+    end_date: values.end_date ?? null,
     next_due: values.next_due ?? values.start_date ?? undefined,
+    pilot: values.pilot ?? false,
     active: values.active ?? true,
   }
   Object.keys(payload).forEach((k) => payload[k] === undefined && delete payload[k])
@@ -60,6 +62,48 @@ export async function generateNow() {
   return unwrap(await supabase.rpc('generate_checklist_assignments'))
 }
 
+/** Assignment-based compliance. An empty result means no schedule denominator exists. */
+export async function getComplianceMonitor({ from, to, country, site, templateId } = {}) {
+  return unwrap(await supabase.rpc('checklist_compliance_monitor', {
+    p_from: from ?? null,
+    p_to: to ?? null,
+    p_country: country ?? null,
+    p_site: site ?? null,
+    p_template_id: templateId ?? null,
+  })) || []
+}
+
+/** Pending approval age by current stage. SLA thresholds are configured elsewhere. */
+export async function getApprovalAgeMonitor({ country, templateId } = {}) {
+  return unwrap(await supabase.rpc('checklist_approval_sla_monitor', {
+    p_country: country ?? null,
+    p_template_id: templateId ?? null,
+  })) || []
+}
+
+/** Tenant-owned pilot, SLA, evidence and retention controls. */
+export async function getChecklistGovernancePolicy() {
+  return unwrap(await supabase.rpc('get_checklist_governance_policy')) || {}
+}
+
+export async function saveChecklistGovernancePolicy(policy) {
+  return unwrap(await supabase.rpc('save_checklist_governance_policy', {
+    p_policy: policy || {},
+  }))
+}
+
+export async function getChecklistRetentionMonitor() {
+  const rows = unwrap(await supabase.rpc('checklist_retention_monitor')) || []
+  return Array.isArray(rows) ? (rows[0] || null) : rows
+}
+
+export async function getChecklistEvidencePolicyMonitor({ from, to } = {}) {
+  return unwrap(await supabase.rpc('checklist_evidence_policy_monitor', {
+    p_from: from ?? null,
+    p_to: to ?? null,
+  })) || []
+}
+
 // ── Assignments ─────────────────────────────────────────────────────────────
 
 export async function listAssignments({ country, status, templateId, scheduleId, limit = 300 } = {}) {
@@ -82,7 +126,9 @@ export async function completeAssignment(id, submissionId) {
     .eq('id', id).select(ASSIGN_COLS).single())
 }
 
-export async function skipAssignment(id) {
+export async function skipAssignment(id, reason) {
+  const skipReason = String(reason || '').trim()
+  if (!skipReason) throw new Error('A reason is required to skip this checklist assignment.')
   return unwrap(await supabase.from('checklist_assignments')
-    .update({ status: 'skipped' }).eq('id', id).select(ASSIGN_COLS).single())
+    .update({ status: 'skipped', skip_reason: skipReason }).eq('id', id).select(ASSIGN_COLS).single())
 }

@@ -21,6 +21,8 @@ import {
   PieChart, BarChart3, Percent, ArrowDownUp,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import Card, { CardHeader, CardBody } from '../components/ui/Card'
+import Modal from '../components/ui/Modal'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   listCertifications, createCertification, updateCertification, deleteCertification,
@@ -33,6 +35,7 @@ import { colorAt, categorical, withAlpha } from '../lib/reportColors'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { probeRelation } from '../lib/api/_client'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
 
@@ -45,10 +48,6 @@ const STATUS_STYLES = {
   revoked: 'bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]',
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') || m.includes('schema cache') || m.includes('could not find the table')
-}
 function fmtDate(v) {
   if (!v) return 'N/A'
   const d = new Date(v)
@@ -104,12 +103,26 @@ export default function Certifications() {
     setRefreshing(true); setError(''); setMissing(false)
     try {
       const data = await listCertifications({ country: activeCountry })
-      setRows(Array.isArray(data) ? data : [])
+      const list = Array.isArray(data) ? data : []
+      setRows(list)
+      // `listCertifications` DEGRADES a missing table to [] rather than throwing,
+      // so the catch below could NEVER see one - which left this compliance page
+      // inviting the user to "record a licence" into a table that is not there.
+      // Probe only when the list is empty, and believe only a DEFINITE answer:
+      // an unknown result must not render "apply the migration".
+      if (list.length === 0) {
+        const { exists, checked } = await probeRelation('certifications')
+        setMissing(checked && !exists)
+      } else {
+        setMissing(false)
+      }
       setNow(Date.now())
       setUpdatedAt(new Date())
     } catch (err) {
-      if (isMissingRelation(err)) { setMissing(true); setRows([]) }
-      else { setError(toUserMessage(err, 'Could not load certifications.')); setRows([]) }
+      // A real failure only. The missing-table case is handled above by the
+      // probe, because the service never lets it reach here.
+      setError(toUserMessage(err, 'Could not load certifications.'))
+      setRows([])
     } finally {
       setRefreshing(false)
     }
@@ -117,7 +130,31 @@ export default function Certifications() {
 
   useEffect(() => { load() }, [load])
 
-  const analytics = useMemo(() => buildCertAnalytics(rows || [], now), [rows, now])
+  /**
+   * The SCOPE the tiles and the three charts cover: subject + free-text search.
+   *
+   * Status, certificate type and the expiry dates are deliberately held out,
+   * because each is the dimension a figure on this page REPORTS ON - the status
+   * doughnut and the Valid/Expiring/Expired tiles are status readings, the
+   * by-type bar is a type reading, and the renewal pipeline is a time reading.
+   * Narrowing any of them by its own filter makes it restate the choice the
+   * reader just made. Subject and search are not reported on by anything, so
+   * they DO apply: without them the tiles stated register-wide figures above a
+   * table narrowed to one driver or one search.
+   */
+  const analyticsScope = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return (rows || []).filter((r) => {
+      if (subjectFilter !== 'all' && r.subject_type !== subjectFilter) return false
+      if (q) {
+        const hay = `${r.subject_name || ''} ${r.cert_type || ''} ${r.cert_number || ''} ${r.issuer || ''}`.toLowerCase()
+        if (!hay.includes(q)) return false
+      }
+      return true
+    })
+  }, [rows, subjectFilter, search])
+
+  const analytics = useMemo(() => buildCertAnalytics(analyticsScope, now), [analyticsScope, now])
   const enriched = useMemo(() => enrichCertifications(rows || [], now), [rows, now])
 
   const certTypes = useMemo(() => {
@@ -318,8 +355,13 @@ export default function Certifications() {
         }
       />
 
+      {/* `border border-amber-800/50` was DEAD here: Card sets `border` inline and
+          a plain utility class loses to it, so the amber edge simply never
+          rendered. `tone` is the one route that reaches the border. The row
+          direction is inline for the same reason in reverse - Card is
+          `flex flex-col`, and an unprefixed `flex-row` class cannot beat it. */}
       {missing && (
-        <div className="card border border-amber-800/50 flex items-start gap-3">
+        <Card tone="warn" className="items-start gap-3" style={{ flexDirection: 'row' }}>
           <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
           <div>
             <p className="text-amber-300 font-medium">Certifications are not enabled on this database yet.</p>
@@ -327,23 +369,30 @@ export default function Certifications() {
               Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V136_CERTIFICATIONS.sql</span>, then reload.
             </p>
           </div>
-        </div>
+        </Card>
       )}
 
       {error && (
-        <div className="card border border-red-800/50 flex items-start gap-3">
+        <Card tone="crit" className="items-start gap-3" style={{ flexDirection: 'row' }}>
           <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
           <div className="flex-1">
             <p className="text-red-300 font-medium">Something went wrong.</p>
             <p className="text-[var(--text-muted)] text-sm mt-1">{error}</p>
           </div>
           <button onClick={load} className="btn-secondary text-sm">Retry</button>
-        </div>
+        </Card>
       )}
 
-      {/* Renewal banner */}
+      {/* Renewal banner. The old `!py-3` survived (an !important stylesheet rule
+          does beat an inline declaration) but it is retired anyway: the padding
+          longhands below are spread after Card's `padding` shorthand, so they
+          win on their own without an !important that the next nesting breaks. */}
       {(analytics.expiredCount > 0 || analytics.expiringSoonCount > 0) && (
-        <div className="card border border-amber-800/50 flex items-center gap-3 !py-3">
+        <Card
+          tone="warn"
+          className="items-center gap-3"
+          style={{ flexDirection: 'row', paddingTop: 'var(--space-3)', paddingBottom: 'var(--space-3)' }}
+        >
           <Clock size={16} className="text-amber-400 shrink-0" />
           <span className="text-sm text-amber-200">
             {analytics.expiredCount > 0 && (<><span className="font-semibold">{analytics.expiredCount}</span> expired</>)}
@@ -352,7 +401,7 @@ export default function Certifications() {
             {' '}require renewal.
             {analytics.pipeline.overdue > 0 && ` ${analytics.pipeline.overdue} overdue in the pipeline.`}
           </span>
-        </div>
+        </Card>
       )}
 
       {/* KPI tiles */}
@@ -360,59 +409,67 @@ export default function Certifications() {
         {kpis.map((k) => {
           const Icon = k.icon
           return (
-            <div key={k.label} className="card">
+            <Card key={k.label}>
               <div className="flex items-center justify-between">
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
               <p className={`text-2xl font-bold mt-1 ${k.tone}`}>{loading ? 'N/A' : k.value}</p>
               {k.sub && !loading && <p className="text-[11px] text-[var(--text-muted)] mt-0.5 truncate">{k.sub}</p>}
-            </div>
+            </Card>
           )
         })}
       </div>
 
+      {/* When the tiles and charts cover a narrowed set, say so. */}
+      {!loading && analyticsScope.length !== (rows || []).length && (
+        <p className="text-xs text-[var(--text-muted)] -mt-1">
+          These figures cover the {analyticsScope.length} certificate{analyticsScope.length === 1 ? '' : 's'} matching
+          your subject and search filters, of {(rows || []).length} tracked. The status, type and expiry filters are
+          not applied here, so the status, type and renewal views stay readable.
+        </p>
+      )}
+
       {/* Charts */}
       {!missing && !empty && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="card">
-            <div className="flex items-center gap-2 mb-3">
-              <PieChart size={16} className="text-sky-400" />
-              <h3 className="text-sm font-semibold text-[var(--text-primary)]">Status distribution</h3>
-            </div>
-            <div className="h-64">
+          {/* `iconTone` is why CardHeader is usable here at all: these three
+              icons carry meaning (sky = a status reading, amber = time, green =
+              a breakdown), and a kit that forced them all to muted would be the
+              worse choice on exactly the cards whose colour says something.
+              The chart well keeps a DEFINITE height - chart.js sizes from its
+              parent under maintainAspectRatio:false. */}
+          <Card>
+            <CardHeader title="Status distribution" icon={PieChart} iconTone="info" />
+            <CardBody style={{ height: '16rem' }}>
               {loading ? <div className="h-full bg-[var(--input-bg)] rounded animate-pulse" />
                 : analytics.total > 0 ? <Doughnut data={statusDoughnut} options={doughnutOpts} />
                 : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No certifications yet.</div>}
-            </div>
-          </div>
-          <div className="card">
-            <div className="flex items-center gap-2 mb-3">
-              <CalendarClock size={16} className="text-amber-400" />
-              <h3 className="text-sm font-semibold text-[var(--text-primary)]">Renewal pipeline (next {analytics.pipeline.horizon} months)</h3>
-            </div>
-            <div className="h-64">
+            </CardBody>
+          </Card>
+          <Card>
+            <CardHeader title={`Renewal pipeline (next ${analytics.pipeline.horizon} months)`} icon={CalendarClock} iconTone="warn" />
+            <CardBody style={{ height: '16rem' }}>
               {loading ? <div className="h-full bg-[var(--input-bg)] rounded animate-pulse" />
                 : analytics.pipeline.months.some((m) => m.count > 0) ? <Bar data={pipelineBar} options={chartAxis} />
                 : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No upcoming expiries in this window.</div>}
-            </div>
-          </div>
-          <div className="card lg:col-span-2">
-            <div className="flex items-center gap-2 mb-3">
-              <BarChart3 size={16} className="text-emerald-400" />
-              <h3 className="text-sm font-semibold text-[var(--text-primary)]">By certification type</h3>
-            </div>
-            <div className="h-64">
+            </CardBody>
+          </Card>
+          <Card className="lg:col-span-2">
+            <CardHeader title="By certification type" icon={BarChart3} iconTone="good" />
+            <CardBody style={{ height: '16rem' }}>
               {loading ? <div className="h-full bg-[var(--input-bg)] rounded animate-pulse" />
                 : analytics.byType.length > 0 ? <Bar data={typeBar} options={{ ...chartAxis, indexAxis: 'y' }} />
                 : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No certification types recorded.</div>}
-            </div>
-          </div>
+            </CardBody>
+          </Card>
         </div>
       )}
 
-      {/* Filters */}
-      <div className="card space-y-3">
+      {/* Filters. Deliberately NOT `clip`: these are native <select>s, whose
+          option list the browser paints as an OS-level popup outside the page's
+          overflow context, so there is nothing here for a card to cut off. */}
+      <Card className="space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[200px]">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
@@ -448,10 +505,13 @@ export default function Certifications() {
           {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
           <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {analytics.total}</span>
         </div>
-      </div>
+      </Card>
 
-      {/* Table */}
-      <div className="card overflow-hidden !p-0">
+      {/* Table. `!p-0` is retired to `pad="none"` and `overflow-hidden` to
+          `clip`, which is the one legitimate use: the table must be cropped to
+          the card radius. TablePagination's rows-per-page control is a native
+          <select>, so clipping cannot reach it. */}
+      <Card pad="none" clip>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -506,103 +566,110 @@ export default function Certifications() {
           </table>
         </div>
         <TablePagination {...pager} />
-      </div>
+      </Card>
 
-      {/* Create / edit modal */}
-      {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => !saving && setModalOpen(false)}>
-          <div className="card w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold text-[var(--text-primary)]">{editing ? 'Edit certification' : 'New certification'}</h2>
-              <button onClick={() => !saving && setModalOpen(false)} className="p-1.5 rounded-lg hover:bg-[var(--input-bg)] text-[var(--text-muted)]"><X size={18} /></button>
+      {/* Create / edit dialog. Every close path - Escape, the backdrop and the
+          X - now runs through ONE guarded `onClose`, so a save in flight cannot
+          be dismissed from any of them. `submit` clears `saving` in a `finally`,
+          so the dialog can never be left unclosable. The submit button stays
+          INSIDE the form rather than moving to `footer`, or it would stop
+          submitting it. */}
+      <Modal
+        open={modalOpen}
+        onClose={() => { if (!saving) setModalOpen(false) }}
+        title={editing ? 'Edit certification' : 'New certification'}
+        size="md"
+      >
+        <form onSubmit={submit} className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="label">Subject type</label>
+              <select className="input w-full" value={form.subject_type} onChange={(e) => setField('subject_type', e.target.value)}>
+                {SUBJECT_TYPES.map((s) => <option key={s} value={s}>{SUBJECT_LABELS[s]}</option>)}
+              </select>
             </div>
-            <form onSubmit={submit} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="label">Subject type</label>
-                  <select className="input w-full" value={form.subject_type} onChange={(e) => setField('subject_type', e.target.value)}>
-                    {SUBJECT_TYPES.map((s) => <option key={s} value={s}>{SUBJECT_LABELS[s]}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="label">Subject name<span className="text-red-400"> *</span></label>
-                  <input className="input w-full" placeholder="e.g. J. Smith / Truck 42" value={form.subject_name} maxLength={200} onChange={(e) => setField('subject_name', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Certification type</label>
-                  <input className="input w-full" placeholder="e.g. HGV licence, ADR permit" value={form.cert_type} maxLength={120} onChange={(e) => setField('cert_type', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Certificate number</label>
-                  <input className="input w-full" value={form.cert_number} maxLength={120} onChange={(e) => setField('cert_number', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Issuer</label>
-                  <input className="input w-full" placeholder="Issuing authority" value={form.issuer} maxLength={200} onChange={(e) => setField('issuer', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Status</label>
-                  <select className="input w-full" value={form.status} onChange={(e) => setField('status', e.target.value)}>
-                    <option value="valid">Valid</option>
-                    <option value="expiring">Expiring soon</option>
-                    <option value="expired">Expired</option>
-                    <option value="revoked">Revoked</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="label">Issue date</label>
-                  <input type="date" className="input w-full" value={form.issue_date || ''} onChange={(e) => setField('issue_date', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Expiry date</label>
-                  <input type="date" className="input w-full" value={form.expiry_date || ''} onChange={(e) => setField('expiry_date', e.target.value)} />
-                </div>
-              </div>
-              <div>
-                <label className="label">Notes</label>
-                <textarea className="input w-full min-h-[90px] resize-y" value={form.notes} maxLength={4000} onChange={(e) => setField('notes', e.target.value)} />
-              </div>
-              {formError && (
-                <div className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
-                  <AlertTriangle size={15} className="mt-0.5 shrink-0" /> {formError}
-                </div>
-              )}
-              <div className="flex items-center gap-3">
-                <button type="submit" disabled={saving} className="btn-primary inline-flex items-center gap-2 disabled:opacity-60">
-                  {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
-                  {saving ? 'Saving' : editing ? 'Save changes' : 'Create certification'}
-                </button>
-                <button type="button" onClick={() => setModalOpen(false)} disabled={saving} className="btn-secondary">Cancel</button>
-              </div>
-            </form>
+            <div>
+              <label className="label">Subject name<span className="text-red-400"> *</span></label>
+              <input className="input w-full" placeholder="e.g. J. Smith / Truck 42" value={form.subject_name} maxLength={200} onChange={(e) => setField('subject_name', e.target.value)} />
+            </div>
+            <div>
+              <label className="label">Certification type</label>
+              <input className="input w-full" placeholder="e.g. HGV licence, ADR permit" value={form.cert_type} maxLength={120} onChange={(e) => setField('cert_type', e.target.value)} />
+            </div>
+            <div>
+              <label className="label">Certificate number</label>
+              <input className="input w-full" value={form.cert_number} maxLength={120} onChange={(e) => setField('cert_number', e.target.value)} />
+            </div>
+            <div>
+              <label className="label">Issuer</label>
+              <input className="input w-full" placeholder="Issuing authority" value={form.issuer} maxLength={200} onChange={(e) => setField('issuer', e.target.value)} />
+            </div>
+            <div>
+              <label className="label">Status</label>
+              <select className="input w-full" value={form.status} onChange={(e) => setField('status', e.target.value)}>
+                <option value="valid">Valid</option>
+                <option value="expiring">Expiring soon</option>
+                <option value="expired">Expired</option>
+                <option value="revoked">Revoked</option>
+              </select>
+            </div>
+            <div>
+              <label className="label">Issue date</label>
+              <input type="date" className="input w-full" value={form.issue_date || ''} onChange={(e) => setField('issue_date', e.target.value)} />
+            </div>
+            <div>
+              <label className="label">Expiry date</label>
+              <input type="date" className="input w-full" value={form.expiry_date || ''} onChange={(e) => setField('expiry_date', e.target.value)} />
+            </div>
           </div>
-        </div>
-      )}
-
-      {/* Delete confirmation */}
-      {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => !deleting && setConfirmDelete(null)}>
-          <div className="card w-full max-w-md" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-xl bg-red-900/30 flex items-center justify-center shrink-0">
-                <ShieldOff size={20} className="text-red-400" />
-              </div>
-              <div className="flex-1">
-                <h3 className="text-base font-bold text-[var(--text-primary)]">Delete certification?</h3>
-                <p className="text-sm text-[var(--text-muted)] mt-1">
-                  This permanently removes the record for <span className="font-medium text-[var(--text-secondary)]">{confirmDelete.subject_name}</span>. This cannot be undone.
-                </p>
-              </div>
+          <div>
+            <label className="label">Notes</label>
+            <textarea className="input w-full min-h-[90px] resize-y" value={form.notes} maxLength={4000} onChange={(e) => setField('notes', e.target.value)} />
+          </div>
+          {formError && (
+            <div className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
+              <AlertTriangle size={15} className="mt-0.5 shrink-0" /> {formError}
             </div>
-            <div className="flex items-center justify-end gap-3 mt-5">
-              <button onClick={() => setConfirmDelete(null)} disabled={deleting} className="btn-secondary">Cancel</button>
+          )}
+          <div className="flex items-center gap-3">
+            <button type="submit" disabled={saving} className="btn-primary inline-flex items-center gap-2 disabled:opacity-60">
+              {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+              {saving ? 'Saving' : editing ? 'Save changes' : 'Create certification'}
+            </button>
+            <button type="button" onClick={() => { if (!saving) setModalOpen(false) }} disabled={saving} className="btn-secondary">Cancel</button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Delete confirmation. This one is form-less, so the buttons belong in
+          `footer`. The hand-rolled version had NO close control at all beside
+          Cancel; Modal adds Escape and an X, and both are held behind the same
+          `deleting` guard the backdrop already had. */}
+      {confirmDelete && (
+        <Modal
+          open
+          onClose={() => { if (!deleting) setConfirmDelete(null) }}
+          title="Delete certification?"
+          size="sm"
+          footer={(
+            <>
+              <button onClick={() => { if (!deleting) setConfirmDelete(null) }} disabled={deleting} className="btn-secondary">Cancel</button>
               <button onClick={doDelete} disabled={deleting} className="btn-primary bg-red-600 hover:bg-red-500 border-red-600 inline-flex items-center gap-2 disabled:opacity-60">
                 {deleting ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
                 {deleting ? 'Deleting' : 'Delete'}
               </button>
+            </>
+          )}
+        >
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-red-900/30 flex items-center justify-center shrink-0">
+              <ShieldOff size={20} className="text-red-400" />
             </div>
+            <p className="text-sm text-[var(--text-muted)] flex-1">
+              This permanently removes the record for <span className="font-medium text-[var(--text-secondary)]">{confirmDelete.subject_name}</span>. This cannot be undone.
+            </p>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   )

@@ -1,10 +1,13 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useLayoutEffect, useRef } from 'react'
 import { ShieldCheck, Play, Loader2, Lock } from 'lucide-react'
 import { useEntityWorkflow } from '../../hooks/useEntityWorkflow'
 import ApprovalStatusBadge from './ApprovalStatusBadge'
 import ApprovalAction from './ApprovalAction'
 import ApprovalTrail from './ApprovalTrail'
 import { toUserMessage } from '../../lib/safeError'
+import { isGovernedApproval } from '../../lib/approvalInbox'
+import ApprovalReview from './ApprovalReview'
+import { useLanguage } from '../../contexts/LanguageContext'
 
 /**
  * EntityApprovalPanel — drop-in approval block for any module page.
@@ -30,14 +33,19 @@ export default function EntityApprovalPanel({
   title = 'Approval',
 }) {
   const wf = useEntityWorkflow(entityType, entityId, { context, entityLabel })
+  const { language } = useLanguage()
   const [pickDef, setPickDef] = useState('')
   const [msg, setMsg] = useState(null)
+  const [reviewOpen, setReviewOpen] = useState(false)
+  const governed = isGovernedApproval(wf.instance)
 
   // Surface state to the parent so it can lock its form — in an effect (never
   // during render). A ref keeps an inline onStateChange out of the deps.
   const onStateChangeRef = useRef(onStateChange)
-  useEffect(() => { onStateChangeRef.current = onStateChange })
-  useEffect(() => {
+  useLayoutEffect(() => { onStateChangeRef.current = onStateChange })
+  // Propagate the edit lock before paint, including when data resolves during
+  // a busy render. A passive effect can briefly expose an enabled mutation.
+  useLayoutEffect(() => {
     onStateChangeRef.current?.({ isActive: wf.isActive, isLocked: wf.isLocked, status: wf.status })
   }, [wf.isActive, wf.isLocked, wf.status])
 
@@ -119,7 +127,12 @@ export default function EntityApprovalPanel({
 
           <ApprovalTrail events={wf.events} />
 
-          {wf.canAct && wf.currentStep && (
+          {governed && ['inspection', 'checklist'].includes(entityType) && (
+            <button type="button" className="btn-primary min-h-11" onClick={() => setReviewOpen(true)}>
+              {language === 'ar' ? 'مراجعة سجل الاعتماد' : 'Review approval record'}
+            </button>
+          )}
+          {!governed && wf.canAct && wf.currentStep && (
             <div className="pt-2 border-t border-[var(--border-dim)]">
               <p className="text-xs text-[var(--text-muted)] mb-2">
                 Your action on step “{wf.currentStep.name}”
@@ -137,6 +150,8 @@ export default function EntityApprovalPanel({
       {msg && (
         <p className={`text-xs ${msg.ok ? 'text-[var(--accent)]' : 'text-red-400'}`}>{msg.text}</p>
       )}
+      {reviewOpen && governed && <ApprovalReview entityType={entityType} entityId={String(entityId)}
+        title={entityLabel || title} onClose={() => setReviewOpen(false)} onActed={wf.refresh} />}
     </div>
   )
 }

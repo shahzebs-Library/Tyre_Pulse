@@ -124,7 +124,7 @@ class _ChecklistApprovalSignaturePadState
   Future<void> _onStrokeEnd() async {
     if (_controller.isEmpty) return;
     final Uint8List? pngBytes = await _controller.toPngBytes();
-    if (pngBytes == null) return;
+    if (!mounted || pngBytes == null) return;
     final String dataUrl = 'data:image/png;base64,${base64Encode(pngBytes)}';
     final String strokesJson = jsonEncode(
       _controller.points

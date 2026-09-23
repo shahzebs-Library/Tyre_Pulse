@@ -25,6 +25,7 @@ import { summariseRoutePlans, computeSavings } from '../lib/routePlans'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 const EMPTY_FORM = {
   plan_name: '', asset_no: '', driver_name: '', plan_date: '', stops_count: '',
@@ -42,21 +43,16 @@ const STATUS_STYLES = {
 }
 
 const fmtKm = (v) =>
-  v == null || v === '' ? '—' : `${Number(v).toLocaleString(undefined, { maximumFractionDigits: 1 })} km`
+  v == null || v === '' ? 'N/A' : `${Number(v).toLocaleString(undefined, { maximumFractionDigits: 1 })} km`
 
-const fmtInt = (v) => (v == null || v === '' ? '—' : Number(v).toLocaleString())
+const fmtInt = (v) => (v == null || v === '' ? 'N/A' : Number(v).toLocaleString())
 
 function fmtDate(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString()
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') ||
-    m.includes('schema cache') || m.includes('could not find the table')
-}
 
 export default function RouteOptimization() {
   const { activeCountry } = useSettings()
@@ -216,7 +212,7 @@ export default function RouteOptimization() {
     <div className="space-y-6">
       <PageHeader
         title="Route Optimization"
-        subtitle="Plan and optimise fleet routes — compare naive vs optimised distance to bank the kilometres, fuel, and tyre wear you save."
+        subtitle="Plan and optimise fleet routes: compare naive vs optimised distance to bank the kilometres, fuel, and tyre wear you save."
         icon={Navigation}
         onRefresh={load}
         refreshing={refreshing}
@@ -265,7 +261,7 @@ export default function RouteOptimization() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -306,7 +302,7 @@ export default function RouteOptimization() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={9} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {rows.length === 0 && !notProvisioned ? 'No route plans yet — create your first plan.' : 'No route plans match these filters.'}
+                  {rows.length === 0 && !notProvisioned ? 'No route plans yet. Create your first plan.' : 'No route plans match these filters.'}
                 </td></tr>
               ) : (
                 pager.pageRows.map((r) => {
@@ -315,16 +311,16 @@ export default function RouteOptimization() {
                   return (
                     <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
                       <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">
-                        {r.plan_name || '—'}
+                        {r.plan_name || 'N/A'}
                         {r.driver_name && <span className="block text-[11px] text-[var(--text-muted)]">{r.driver_name}</span>}
                       </td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.asset_no || '—'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.asset_no || 'N/A'}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDate(r.plan_date)}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtInt(r.stops_count)}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtKm(r.total_distance_km)}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtKm(r.optimized_distance_km)}</td>
                       <td className="px-4 py-2.5 font-semibold text-green-400 whitespace-nowrap">
-                        {savedKm > 0 ? `${fmtKm(savedKm)}` : '—'}
+                        {savedKm > 0 ? `${fmtKm(savedKm)}` : 'N/A'}
                         {savedKm > 0 && <span className="block text-[11px] text-[var(--text-muted)] font-normal">{savingsPct.toFixed(1)}%</span>}
                       </td>
                       <td className="px-4 py-2.5">

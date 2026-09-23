@@ -37,20 +37,52 @@ function isFatalInsertError(error) {
   )
 }
 
-/** Count of rows currently stored (org-scoped by RLS). */
-export async function countPartsConsumption() {
-  const { count, error } = await supabase
-    .from('parts_consumption').select('id', { count: 'exact', head: true })
+/** Count the exact tenant/country scope used by the atomic import. */
+export async function countPartsConsumption({ country } = {}) {
+  if (!country || country === 'All') throw new Error('Select one country to read and import expense data.')
+  const { data, error } = await supabase.rpc('expense_import_count', { p_country: country })
   if (error) throw error
-  return count || 0
+  if (!Number.isSafeInteger(data) || data < 0) throw new Error('The server did not return the stored expense count.')
+  return data
 }
 
-/** Delete every row in this org's parts_consumption (used before a clean re-import). */
-export async function clearPartsConsumption() {
-  const { error } = await supabase
-    .from('parts_consumption').delete().not('id', 'is', null)
-  if (error) throw error
-  return true
+/** Stage bounded chunks, then commit the entire country-scoped import atomically.
+ * Keep requestId unchanged on retry: the server returns the original receipt.
+ */
+export async function importExpenseBatch(rows, { country, requestId, replace = false, expectedCount = null, onProgress } = {}) {
+  if (!country || country === 'All') throw new Error('Select one country before importing expenses.')
+  if (!requestId || !Array.isArray(rows) || rows.length < 1 || rows.length > 300000) {
+    throw new Error('Choose a file with 1 to 300,000 rows.')
+  }
+  const clean = rows.map((row) => {
+    if (row.country && row.country !== country) throw new Error('The file country differs from the selected country. Select the original country or upload the file again.')
+    const out = { country }
+    for (const field of PARTS_FIELDS) out[field] = row[field] === '' || row[field] == null ? null : String(row[field])
+    return out
+  })
+  async function call(name, params) {
+    const { data, error } = await supabase.rpc(name, params)
+    if (error) throw error
+    if (data?.ok !== true) throw new Error('The server did not confirm the expense import. Retry with the same file.')
+    return data
+  }
+  const begun = await call('begin_expense_import', {
+    p_request_id: requestId, p_country: country, p_replace: replace,
+    p_rows: clean.length, p_expected_count: expectedCount,
+  })
+  function receipt(result) {
+    if (result?.ok !== true || !Number.isInteger(result.inserted) || !Number.isInteger(result.skipped)
+      || result.inserted < 0 || result.skipped < 0 || result.inserted + result.skipped !== clean.length || result.failed !== 0) {
+      throw new Error('The server returned an incomplete import receipt. Retry with the same file to verify the outcome.')
+    }
+    return result
+  }
+  if (begun.result) return receipt(begun.result)
+  for (let i = 0; i < clean.length; i += INSERT_CHUNK) {
+    await call('stage_expense_import', { p_request_id: requestId, p_chunk: i / INSERT_CHUNK, p_rows: clean.slice(i, i + INSERT_CHUNK) })
+    onProgress?.(Math.min(i + INSERT_CHUNK, clean.length), clean.length)
+  }
+  return receipt(await call('commit_expense_import', { p_request_id: requestId }))
 }
 
 /**

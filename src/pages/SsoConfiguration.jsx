@@ -30,6 +30,7 @@ import {
 import { summariseSso, byProtocol, certStatus, certDaysRemaining, parseDomains } from '../lib/ssoConfig'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 const EMPTY_FORM = {
   connection_name: '', protocol: 'saml', idp_provider: '', idp_entity_id: '',
@@ -73,16 +74,11 @@ const PROTOCOL_LABEL = { saml: 'SAML 2.0', oidc: 'OpenID Connect', oauth2: 'OAut
 const titleize = (s) => (s ? String(s).charAt(0).toUpperCase() + String(s).slice(1) : '')
 
 function fmtDate(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString()
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') ||
-    m.includes('schema cache') || m.includes('could not find the table')
-}
 
 function Badge({ text, cls }) {
   return (
@@ -254,7 +250,7 @@ export default function SsoConfiguration() {
     <div className="space-y-6">
       <PageHeader
         title="SSO Configuration"
-        subtitle="Manage single-sign-on identity-provider connections (SAML, OIDC, OAuth2) for the tenant — federate authentication with your corporate IdP, enforce SSO, and govern JIT provisioning."
+        subtitle="Manage single-sign-on identity-provider connections (SAML, OIDC, OAuth2) for the tenant: federate authentication with your corporate IdP, enforce SSO, and govern JIT provisioning."
         icon={ShieldCheck}
         onRefresh={load}
         refreshing={refreshing}
@@ -303,7 +299,7 @@ export default function SsoConfiguration() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -411,7 +407,7 @@ export default function SsoConfiguration() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={8} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {rows.length === 0 && !notProvisioned ? 'No SSO connections yet — add your first identity-provider connection.' : 'No connections match these filters.'}
+                  {rows.length === 0 && !notProvisioned ? 'No SSO connections yet. Add your first identity-provider connection.' : 'No connections match these filters.'}
                 </td></tr>
               ) : (
                 pager.pageRows.map((r) => {
@@ -424,14 +420,14 @@ export default function SsoConfiguration() {
                       <td className="px-4 py-2.5">
                         <div className="font-medium text-[var(--text-primary)] flex items-center gap-1.5">
                           {r.enforce_sso && <Lock size={12} className="text-indigo-400" aria-label="SSO enforced" />}
-                          {r.connection_name || '—'}
+                          {r.connection_name || 'N/A'}
                         </div>
                         {r.idp_entity_id && <div className="text-[11px] text-[var(--text-muted)] truncate max-w-[220px]">{r.idp_entity_id}</div>}
                       </td>
                       <td className="px-4 py-2.5"><Badge text={PROTOCOL_LABEL[r.protocol || 'unknown'] || r.protocol} cls={PROTOCOL_BADGE[r.protocol || 'unknown'] || PROTOCOL_BADGE.unknown} /></td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.idp_provider || '—'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.idp_provider || 'N/A'}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)]">
-                        {domains.length === 0 ? '—' : (
+                        {domains.length === 0 ? 'N/A' : (
                           <div className="flex flex-wrap gap-1 max-w-[220px]">
                             {domains.slice(0, 3).map((d) => <span key={d} className="text-[11px] px-1.5 py-0.5 rounded bg-[var(--input-bg)] text-[var(--text-secondary)]">{d}</span>)}
                             {domains.length > 3 && <span className="text-[11px] text-[var(--text-muted)]">+{domains.length - 3}</span>}
@@ -546,7 +542,7 @@ export default function SsoConfiguration() {
 
               <div className="flex items-start gap-2 text-[11px] text-[var(--text-muted)] bg-[var(--input-bg)]/40 border border-[var(--input-border)] rounded-lg px-3 py-2">
                 <KeyRound size={13} className="mt-0.5 shrink-0 text-amber-400" />
-                Never store private keys or client secrets here — this record holds public connection metadata only. Keep signing keys in your secrets manager.
+                Never store private keys or client secrets here. This record holds public connection metadata only. Keep signing keys in your secrets manager.
               </div>
 
               {formError && (

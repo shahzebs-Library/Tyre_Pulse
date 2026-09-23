@@ -173,7 +173,9 @@ function detectDataQuality(tyreRecords = [], thresholds = {}) {
  * @param {{badgeOnly?:boolean}} [opts]
  * @returns {Promise<Alert[]>}
  */
-export async function detectAlerts(supabase, country = null, { badgeOnly = false } = {}) {
+export async function detectAlerts(supabase, country = null, { badgeOnly = false, allowedModules = null } = {}) {
+  const canRead = key => allowedModules === null || allowedModules.includes(key)
+  const empty = { data: [] }
   const alerts = []
   const now    = new Date()
 
@@ -187,6 +189,7 @@ export async function detectAlerts(supabase, country = null, { badgeOnly = false
   // ── Fetch data in parallel with optional country filter ───────────────────
   const [stockRes, budgetRes, actionsRes, tyreRes, inspRes, fullTyreRes] = await Promise.all([
     (() => {
+      if (!canRead('stock')) return empty
       const q = supabase.from('stock_records').select(badgeOnly ? STOCK_BADGE_COLS : STOCK_COLS)
       // Ordering is presentation only (the result is re-sorted by severity), so
       // the badge skips it. It stays on the page path to keep the listed order of
@@ -194,10 +197,11 @@ export async function detectAlerts(supabase, country = null, { badgeOnly = false
       return withCountry(badgeOnly ? q : q.order('site'), country)
     })(),
     // Skipped for the badge: every BUDGET_OVERAGE alert is INFO.
-    badgeOnly
+    (badgeOnly || !canRead('budgets'))
       ? Promise.resolve({ data: [] })
       : withCountry(supabase.from('budgets').select('*').eq('year', now.getFullYear()), country),
     (() => {
+      if (!canRead('corrective_actions')) return empty
       let q = withCountry(
         supabase
           .from('corrective_actions')
@@ -208,7 +212,7 @@ export async function detectAlerts(supabase, country = null, { badgeOnly = false
       if (actionCutoff) q = q.lt('due_date', actionCutoff)
       return q
     })(),
-    withCountry(
+    !canRead('tyre_records') ? empty : withCountry(
       supabase.from('tyre_records')
         .select(SPIKE_COLS)
         .order('created_at', { ascending: false })
@@ -218,7 +222,7 @@ export async function detectAlerts(supabase, country = null, { badgeOnly = false
     // Paged rather than a bare select: `inspections` grows per inspection, and a
     // silently truncated read here would UNDER-report the badge, which is the one
     // direction a safety count must never be wrong in.
-    fetchAllPages((from, to) => withCountry(
+    !canRead('inspections') ? empty : fetchAllPages((from, to) => withCountry(
       supabase.from('inspections')
         .select(badgeOnly ? INSPECTION_BADGE_COLS : INSPECTION_COLS)
         .neq('status', 'Done')
@@ -233,7 +237,7 @@ export async function detectAlerts(supabase, country = null, { badgeOnly = false
     // 1,000 (the server caps every response at 1000), so half the intended
     // recent-tyre window never reached the alert rules. `id` is the tiebreak -
     // issue_date is a date, not a unique key.
-    fetchAllPages((from, to) => withCountry(
+    !canRead('tyre_records') ? empty : fetchAllPages((from, to) => withCountry(
       supabase.from('tyre_records')
         .select(badgeOnly ? TYRE_BADGE_COLS : TYRE_COLS)
         .order('issue_date', { ascending: false }).order('id')
@@ -429,8 +433,8 @@ export async function detectAlerts(supabase, country = null, { badgeOnly = false
  * @param {Set<string>} [dismissed]
  * @returns {Promise<number>}
  */
-export async function detectAlertBadgeCount(supabase, country = null, dismissed = new Set()) {
-  const found = await detectAlerts(supabase, country, { badgeOnly: true })
+export async function detectAlertBadgeCount(supabase, country = null, dismissed = new Set(), allowedModules = null) {
+  const found = await detectAlerts(supabase, country, { badgeOnly: true, allowedModules })
   return found.filter(
     (a) => !dismissed.has(a.id) && (a.severity === SEVERITY.CRITICAL || a.severity === SEVERITY.HIGH),
   ).length

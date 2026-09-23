@@ -7,6 +7,7 @@ import { formatCurrency as _fmtCurrencyBase } from '../lib/formatters'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { AXLE_GROUPS, GROUP_ICONS, normalizePosition } from '../lib/tyrePositions'
 import PageHeader from '../components/ui/PageHeader'
+import Card, { CardHeader } from '../components/ui/Card'
 import EmailPdfButton from '../components/EmailPdfButton'
 import {
   MapPin, Download, FileText, AlertTriangle, CheckCircle,
@@ -549,7 +550,10 @@ export default function PositionIntelligence() {
         }
       />
       {/* ── Filters ────────────────────────────────────────────────────────── */}
-      <div className="card flex flex-wrap items-center gap-3">
+      {/* Card is flex-col by default and Tailwind emits .flex-col after
+          .flex-row, so a row here has to come from `style`, which Card spreads
+          last. `flex-wrap` and `gap-3` are plain classes Card never sets. */}
+      <Card className="flex-wrap items-center gap-3" style={{ flexDirection: 'row' }}>
         {/* Country chips */}
         <div className="flex items-center gap-1">
           {COUNTRIES_ALL.map(c => (
@@ -623,16 +627,24 @@ export default function PositionIntelligence() {
         </button>
 
         <span className="ml-auto text-xs text-gray-500">{totalRecords.toLocaleString()} records</span>
-      </div>
+      </Card>
 
       {/* ── Capped-view note (millions-row safety cap) ── */}
       {capped && (
-        <div className="card py-2.5 flex items-center gap-2 border-yellow-700/40 bg-yellow-950/15">
+        /* The old `py-2.5 border-yellow-700/40 bg-yellow-950/15` was dead here:
+           Card sets padding, border and background inline and inline wins. The
+           amber signal is carried by `tone="warn"` (border tint) instead. */
+        <Card
+          tone="warn"
+          pad="tight"
+          className="items-center gap-2"
+          style={{ flexDirection: 'row', paddingBlock: 'var(--space-3)' }}
+        >
           <AlertTriangle size={14} className="text-yellow-400 flex-shrink-0" />
           <p className="text-xs text-yellow-200/80">
             Capped view: showing the most recent 50,000 tyre records for this scope. Narrow the country or date range for the full dataset.
           </p>
-        </div>
+        </Card>
       )}
 
       {/* ── Section 1: Position Summary Cards ──────────────────────────────── */}
@@ -645,16 +657,21 @@ export default function PositionIntelligence() {
             const badge = statusBadge(p.failureRate)
             const isWorst = worstPos && p.position === worstPos.position && p.count > 0
             const isBest = bestPos && p.position === bestPos.position && p.count > 0 && !isWorst
-            const borderCls = isWorst
-              ? 'border-red-500/60'
-              : isBest
-              ? 'border-green-500/60'
-              : ''
+            // `border-red-500/60` would be dead on a Card (Card sets borderColor
+            // inline). The worst/best signal is the border TINT, which is what
+            // `tone` is for.
+            const tone = isWorst ? 'crit' : isBest ? 'good' : 'default'
 
             return (
-              <div
+              /* Kept as a div, not `as="button"`: these tiles are block content
+                 (invalid inside a button) and they duplicate the real tab row
+                 below, which already gives keyboard users the same action.
+                 `interactive` supplies the cursor and hover the old
+                 `cursor-pointer transition-colors` provided. */
+              <Card
+                interactive
                 key={p.position}
-                className={`card cursor-pointer transition-colors ${borderCls}`}
+                tone={tone}
                 onClick={() => setActiveTab(p.position)}
               >
                 <div className="flex items-center justify-between mb-2">
@@ -704,7 +721,7 @@ export default function PositionIntelligence() {
                     </div>
                   </>
                 )}
-              </div>
+              </Card>
             )
           })}
         </div>
@@ -718,8 +735,8 @@ export default function PositionIntelligence() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
           {/* Chart 1: CPK by Position (horizontal bar) */}
-          <div className="card">
-            <p className="text-xs font-semibold text-[var(--text-primary)] mb-3">CPK by Position ({activeCurrency}/km)</p>
+          <Card>
+            <CardHeader title={`CPK by Position (${activeCurrency}/km)`} />
             <div style={{ height: 260 }}>
               <Bar
                 data={cpkChartData}
@@ -749,11 +766,11 @@ export default function PositionIntelligence() {
               />
             </div>
             <p className="text-[10px] text-gray-600 mt-1">Green &lt;1.0 | Yellow 1.0-2.0 | Red ≥2.0</p>
-          </div>
+          </Card>
 
           {/* Chart 2: Failure Rate by Position */}
-          <div className="card">
-            <p className="text-xs font-semibold text-[var(--text-primary)] mb-3">Failure Rate by Position (%)</p>
+          <Card>
+            <CardHeader title="Failure Rate by Position (%)" />
             <div style={{ height: 260 }}>
               <Bar
                 data={failureChartData}
@@ -778,11 +795,11 @@ export default function PositionIntelligence() {
               />
             </div>
             <p className="text-[10px] text-gray-600 mt-1">Red &gt;25% | Yellow &gt;15% | Green ≤15%</p>
-          </div>
+          </Card>
 
           {/* Chart 3: Avg KM Life by Position */}
-          <div className="card">
-            <p className="text-xs font-semibold text-[var(--text-primary)] mb-3">Average Tyre Life by Position (km)</p>
+          <Card>
+            <CardHeader title="Average Tyre Life by Position (km)" />
             {kmLifeChartData.labels.length === 0 ? (
               <div className="flex items-center justify-center h-[260px] text-gray-600 text-xs">No km data available</div>
             ) : (
@@ -810,12 +827,17 @@ export default function PositionIntelligence() {
                 />
               </div>
             )}
-          </div>
+          </Card>
 
           {/* Chart 4: Cost Distribution (doughnut) */}
-          <div className="card">
-            <p className="text-xs font-semibold text-[var(--text-primary)] mb-1">Cost Distribution by Position</p>
-            <p className="text-[10px] text-gray-600 mb-3">Cost by position is from tyre records; the authoritative fleet total is from the expense grid.</p>
+          <Card>
+            {/* The sub-line is an honesty note about where this cost comes
+                from, not decoration - it moves into CardHeader's description
+                slot so it stays directly under the title. */}
+            <CardHeader
+              title="Cost Distribution by Position"
+              description="Cost by position is from tyre records; the authoritative fleet total is from the expense grid."
+            />
             {costDoughnutData.labels.length === 0 ? (
               <div className="flex items-center justify-center h-[260px] text-gray-600 text-xs">No cost data available</div>
             ) : (
@@ -840,7 +862,7 @@ export default function PositionIntelligence() {
                 />
               </div>
             )}
-          </div>
+          </Card>
 
         </div>
       </div>
@@ -851,7 +873,9 @@ export default function PositionIntelligence() {
           <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
             <Activity size={15} className="text-green-400" /> Site × Position Failure Rate Heat Map
           </h2>
-          <div className="card overflow-x-auto">
+          {/* `overflow-x-auto` is a plain class Card never sets inline, so it
+              still applies; the card scrolls the wide matrix exactly as before. */}
+          <Card className="overflow-x-auto">
             <table className="min-w-full text-xs">
               <thead>
                 <tr>
@@ -892,7 +916,7 @@ export default function PositionIntelligence() {
               </tbody>
             </table>
             <p className="text-[10px] text-gray-600 mt-2">Red = high failure rate. Blank cells = no data.</p>
-          </div>
+          </Card>
         </div>
       )}
 
@@ -927,7 +951,12 @@ export default function PositionIntelligence() {
         </div>
 
         {activeMetrics && activeMetrics.count === 0 ? (
-          <div className="card text-center py-8 text-gray-600 text-sm">No data for {activeTab} position</div>
+          /* `py-8` and `text-gray-600` would BOTH be dead on a Card - it sets
+             padding and color inline. The roominess moves to `style`, the muted
+             colour onto the inner <p>. */
+          <Card className="text-center" style={{ paddingBlock: 'var(--space-8)' }}>
+            <p className="text-sm text-gray-600">No data for {activeTab} position</p>
+          </Card>
         ) : activeMetrics && (
           <div className="space-y-4">
 
@@ -963,10 +992,12 @@ export default function PositionIntelligence() {
                   color: activeMetrics.highRiskCount > 0 ? 'text-red-400' : 'text-gray-400',
                 },
               ].map(stat => (
-                <div key={stat.label} className="card py-3 px-4">
+                /* `py-3 px-4` is dead on a Card; `pad="tight"` is the
+                   density-aware step that replaces it. */
+                <Card key={stat.label} pad="tight">
                   <p className="text-[10px] text-gray-500 mb-1">{stat.label}</p>
                   <p className={`text-sm font-bold ${stat.color}`}>{stat.value}</p>
-                </div>
+                </Card>
               ))}
             </div>
 
@@ -974,8 +1005,8 @@ export default function PositionIntelligence() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
               {/* Brands table */}
-              <div className="card lg:col-span-2 overflow-x-auto">
-                <p className="text-xs font-semibold text-[var(--text-primary)] mb-3">Brand Performance - {activeTab}</p>
+              <Card className="lg:col-span-2 overflow-x-auto">
+                <CardHeader title={`Brand Performance - ${activeTab}`} />
                 {activeMetrics.brands.length === 0 ? (
                   <p className="text-xs text-gray-600 italic">No brand data</p>
                 ) : (
@@ -1012,10 +1043,12 @@ export default function PositionIntelligence() {
                     </tbody>
                   </table>
                 )}
-              </div>
+              </Card>
 
               {/* Recommendation box */}
-              <div className="card border-amber-700/40 bg-amber-950/20">
+              {/* `border-amber-700/40 bg-amber-950/20` cannot win against Card's
+                  inline border/background; `tone="warn"` carries the signal. */}
+              <Card tone="warn">
                 <div className="flex items-start gap-2 mb-3">
                   <AlertTriangle size={15} className="text-amber-400 mt-0.5 flex-shrink-0" />
                   <p className="text-xs font-semibold text-amber-300">Engineering Recommendation</p>
@@ -1047,13 +1080,13 @@ export default function PositionIntelligence() {
                     </div>
                   </div>
                 )}
-              </div>
+              </Card>
             </div>
 
             {/* 4. Worst assets at this position */}
             {activeMetrics.worstAssets.length > 0 && (
-              <div className="card overflow-x-auto">
-                <p className="text-xs font-semibold text-[var(--text-primary)] mb-3">Worst Assets - {activeTab} (Top 5 by CPK)</p>
+              <Card className="overflow-x-auto">
+                <CardHeader title={`Worst Assets - ${activeTab} (Top 5 by CPK)`} />
                 <table className="min-w-full text-xs">
                   <thead>
                     <tr>
@@ -1086,7 +1119,7 @@ export default function PositionIntelligence() {
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </Card>
             )}
 
           </div>
@@ -1100,13 +1133,19 @@ export default function PositionIntelligence() {
         </h2>
 
         {correctiveRecs.length === 0 ? (
-          <div className="card flex items-center gap-3 py-4 border-green-700/40 bg-green-950/20">
+          /* Row direction has to come from `style` (Card is flex-col and
+             .flex-col is emitted after .flex-row); the green tint is `tone`. */
+          <Card
+            tone="good"
+            className="items-center gap-3"
+            style={{ flexDirection: 'row', paddingBlock: 'var(--space-4)' }}
+          >
             <CheckCircle size={18} className="text-green-400 flex-shrink-0" />
             <div>
               <p className="text-sm font-semibold text-green-300">All Positions Within Acceptable Parameters</p>
               <p className="text-xs text-green-400/70 mt-0.5">No positions currently exceed the 20% failure rate threshold.</p>
             </div>
-          </div>
+          </Card>
         ) : (
           <div className="space-y-3">
             {correctiveRecs.map(p => {
@@ -1122,7 +1161,7 @@ export default function PositionIntelligence() {
               const multiplier = fleetAvgFailure > 0 ? (p.failureRate / fleetAvgFailure).toFixed(1) : '-'
 
               return (
-                <div key={p.position} className={`card border ${severity === 'Critical' ? 'border-red-700/40 bg-red-950/15' : 'border-yellow-700/40 bg-yellow-950/15'}`}>
+                <Card key={p.position} tone={severity === 'Critical' ? 'crit' : 'warn'}>
                   <div className="flex flex-col md:flex-row md:items-start gap-4">
                     <div className="flex items-center gap-3 min-w-[180px]">
                       <span className="text-2xl">{POSITION_ICONS[p.position]}</span>
@@ -1141,13 +1180,18 @@ export default function PositionIntelligence() {
                       </p>
                       <p className="text-xs text-gray-400 leading-relaxed">{p.recommendation}</p>
                     </div>
-                    <div className="card bg-black/20 border-0 py-2 px-3 min-w-[160px] text-center">
+                    {/* A nested callout. `bg-black/20 border-0 py-2 px-3` was
+                        all dead against Card's inline background/border/padding,
+                        so this now uses the primitive's own tight step and
+                        standard surface. `min-w-[160px]` still applies - Card
+                        never sets min-width. */}
+                    <Card pad="tight" className="min-w-[160px] text-center">
                       <p className="text-[10px] text-gray-500 mb-0.5">Est. Potential Savings</p>
                       <p className="text-sm font-bold text-green-300">{fmtCurrency(potentialSavings, activeCurrency)}</p>
                       <p className="text-[9px] text-gray-600 mt-0.5">30% failure reduction</p>
-                    </div>
+                    </Card>
                   </div>
-                </div>
+                </Card>
               )
             })}
           </div>

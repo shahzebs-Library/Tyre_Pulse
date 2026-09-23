@@ -392,6 +392,8 @@ void main() {
     'Tri-mixer': 'assets/vehicle_photos/tri_mixer_top_down.webp',
     'Line pump': 'assets/vehicle_photos/line_pump_top_down_v2.png',
     'Concrete pump': 'assets/vehicle_photos/concrete_pump_top_down.webp',
+    'Bus':
+        'assets/vehicle_multiview_views/generic_staff_bus_five_view_v1_top.png',
   }.entries) {
     testWidgets(
       '${vehicle.key} capture uses its orthographic production photo',
@@ -413,6 +415,14 @@ void main() {
           find.byKey(ValueKey<String>(vehicle.value)),
           findsOneWidget,
         );
+        if (vehicle.value.contains('vehicle_multiview_views')) {
+          final Finder image = find.byKey(ValueKey<String>(vehicle.value));
+          expect(tester.widget<Image>(image).fit, BoxFit.cover);
+          final RotatedBox rotation = tester.widget<RotatedBox>(
+            find.ancestor(of: image, matching: find.byType(RotatedBox)).first,
+          );
+          expect(rotation.quarterTurns, 2);
+        }
         expect(
           find.byKey(
             const ValueKey<String>('assets/vehicle_photos/concrete_pump.png'),
@@ -423,6 +433,19 @@ void main() {
       },
     );
   }
+
+  test('heavy vehicles keep truthful SVGs until verified top views exist', () {
+    for (final MapEntry<TyreDiagramBodyKey, String> fallback
+        in <TyreDiagramBodyKey, String>{
+      TyreDiagramBodyKey.canter: 'assets/vehicle_diagram/canter.svg',
+      TyreDiagramBodyKey.tata: 'assets/vehicle_diagram/tata.svg',
+      TyreDiagramBodyKey.ashokLeyland:
+          'assets/vehicle_diagram/ashok_leyland.svg',
+    }.entries) {
+      expect(tyreDiagramVehiclePhotoSpec(fallback.key), isNull);
+      expect(tyreDiagramBodyAsset(fallback.key), fallback.value);
+    }
+  });
 
   testWidgets(
     'capture keeps concrete-pump rear Inner and Outer controls joined by axle',
@@ -453,11 +476,6 @@ void main() {
             (Widget widget) =>
                 widget is TpIdentifierText && widget.value == value,
           );
-      // The capture labels are the canonical GCC position codes -
-      // legacyPositionCode('Concrete pump', 'R1Lo') resolves through
-      // _kLegacyBase to 'LHR1-O' (Left-Hand Rear-axle-1 Outer), and the
-      // three siblings likewise: R1Li -> LHR1-I, R1Ri -> RHR1-I,
-      // R1Ro -> RHR1-O.
       expect(identifier('LHR1-O'), findsOneWidget);
       expect(identifier('LHR1-I'), findsOneWidget);
       expect(identifier('RHR1-I'), findsOneWidget);

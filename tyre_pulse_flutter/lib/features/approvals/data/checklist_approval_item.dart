@@ -52,7 +52,9 @@ const String checklistApprovalListColumns =
 /// screen. Verbatim against `mobile/lib/checklists.ts`'s own
 /// `SUBMISSION_COLS` constant.
 const String checklistApprovalFullColumns =
-    'id,template_id,template_name,template_version,title,site,asset_no,'
+    'id,template_id,template_name,template_version,template_revision_id,'
+    'template_snapshot,template_snapshot_status,template_snapshot_captured_at,'
+    'title,site,asset_no,'
     'status,answers,photos,notes,signatures,signature_data,printed_name,'
     'submitted_by,submitted_at,score_pct,score_passed,approval_status,'
     'document_no,approver_name,approver_signature,approved_at,'
@@ -119,6 +121,12 @@ final class ChecklistApprovalItem {
       templateId: _asString(row['template_id']),
       templateName: _asString(row['template_name']),
       templateVersion: _asInt(row['template_version']),
+      templateRevisionId: _asString(row['template_revision_id']),
+      templateSnapshot: _asJsonMap(row['template_snapshot']),
+      templateSnapshotStatus: _asString(row['template_snapshot_status']),
+      templateSnapshotCapturedAt: _asString(
+        row['template_snapshot_captured_at'],
+      ),
       title: _asString(row['title']),
       site: _asString(row['site']),
       assetNo: _asString(row['asset_no']),
@@ -151,6 +159,10 @@ final class ChecklistApprovalItem {
     this.templateId,
     this.templateName,
     this.templateVersion,
+    this.templateRevisionId,
+    this.templateSnapshot = const <String, Object?>{},
+    this.templateSnapshotStatus,
+    this.templateSnapshotCapturedAt,
     this.title,
     this.site,
     this.assetNo,
@@ -186,6 +198,13 @@ final class ChecklistApprovalItem {
   final String? templateId;
   final String? templateName;
   final int? templateVersion;
+  final String? templateRevisionId;
+
+  /// Immutable template evidence stamped by the server. Empty on the queue's
+  /// lean projection and on historical rows whose revision is unavailable.
+  final Map<String, Object?> templateSnapshot;
+  final String? templateSnapshotStatus;
+  final String? templateSnapshotCapturedAt;
   final String? title;
   final String? site;
   final String? assetNo;

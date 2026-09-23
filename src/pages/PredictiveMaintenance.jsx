@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, Fragment } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from 'react'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
@@ -559,6 +559,7 @@ function DetailRow({ k, v }) {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function PredictiveMaintenance() {
+  const loadId = useRef(0)
   const { activeCurrency, activeCountry } = useSettings()
 
   const [records, setRecords]         = useState([])
@@ -582,6 +583,8 @@ export default function PredictiveMaintenance() {
 
   // ── Data loading ─────────────────────────────────────────────────────────────
   const loadData = useCallback(async () => {
+    const request = ++loadId.current
+    setRecords([]); setFleetMaster([]); setFleetMasterAvailable(false)
     setLoading(true)
     setError(null)
     // Null-safe country scoping (mirrors the app-wide applyCountry convention):
@@ -603,6 +606,7 @@ export default function PredictiveMaintenance() {
         .order('issue_date', { ascending: false }))
         .range(from, to))
 
+      if (request !== loadId.current) return
       if (tyreErr) throw tyreErr
       setRecords(tyreData || [])
 
@@ -614,6 +618,7 @@ export default function PredictiveMaintenance() {
           .select('asset_no,site,vehicle_type,expected_km_per_tyre,monthly_tyre_budget,current_km')
           .order('asset_no').order('id')).range(from, to), { max: 20000 })
 
+        if (request !== loadId.current) return
         if (fleetErr) {
           setFleetMaster([])
           setFleetMasterAvailable(false)
@@ -622,17 +627,20 @@ export default function PredictiveMaintenance() {
           setFleetMasterAvailable(true)
         }
       } catch {
+        if (request !== loadId.current) return
         setFleetMaster([])
         setFleetMasterAvailable(false)
       }
     } catch (err) {
+      if (request !== loadId.current) return
       setError(toUserMessage(err, 'Failed to load data'))
     } finally {
-      setLoading(false)
+      if (request === loadId.current) setLoading(false)
     }
   }, [activeCountry])
 
-  useEffect(() => { loadData() }, [loadData])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Invalidate the current request on cleanup.
+  useEffect(() => { loadData(); return () => { loadId.current++ } }, [loadData])
 
   // ── Fleet-level computed constants (canonical lib) ───────────────────────────
   const fleetStats = useMemo(() => computeFleetStats(records), [records])
@@ -1480,11 +1488,11 @@ export default function PredictiveMaintenance() {
                     },
                     {
                       title: 'G2 · Min-of-Three Forecast',
-                      body: `Days-to-replace = min(tread-wear, km-lifecycle, age). Km-lifecycle uses avg tyre life (${fmt(fleetStats.avgKmLife, 0)} km fallback) ÷ daily km. Age is measured from fitment_date to the ${MAX_AGE_YEARS}yr GCC guideline — an APPROXIMATION, as pre-fitment shelf age is unknown (no manufacture_date). The limiting-factor column shows which bound wins.`,
+                      body: `Days-to-replace = min(tread-wear, km-lifecycle, age). Km-lifecycle uses avg tyre life (${fmt(fleetStats.avgKmLife, 0)} km fallback) ÷ daily km. Age is measured from fitment_date to the ${MAX_AGE_YEARS}yr GCC guideline, an APPROXIMATION, as pre-fitment shelf age is unknown (no manufacture_date). The limiting-factor column shows which bound wins.`,
                     },
                     {
                       title: 'G3 · Weibull Failure Risk',
-                      body: `Reliability R(t)=exp(−(km/η)^2.2) with a brand η table (Michelin 135k … default 110k km). Composite 0–100 risk = failure-prob×40 + tread(≤30) + age(≤15) + pressure(≤15). Pressure uses the single ${PRESSURE_TARGET_PSI} psi deviation only (no TPMS series) and is flagged when absent — never fabricated.`,
+                      body: `Reliability R(t)=exp(−(km/η)^2.2) with a brand η table (Michelin 135k … default 110k km). Composite 0 to 100 risk = failure-prob×40 + tread(≤30) + age(≤15) + pressure(≤15). Pressure uses the single ${PRESSURE_TARGET_PSI} psi deviation only (no TPMS series) and is flagged when absent, never fabricated.`,
                     },
                     {
                       title: 'G4 · Cohort Life Distribution',
@@ -1492,11 +1500,11 @@ export default function PredictiveMaintenance() {
                     },
                     {
                       title: 'G5 · Confidence',
-                      body: 'Per-asset confidence = min(1, completed samples ÷ 6). Cohort CI half-width = 30/√n (±3–35pp). Attached to every prediction and risk row so thin-history estimates are labelled, not overstated.',
+                      body: 'Per-asset confidence = min(1, completed samples ÷ 6). Cohort CI half-width = 30/√n (±3 to 35pp). Attached to every prediction and risk row so thin-history estimates are labelled, not overstated.',
                     },
                     {
                       title: 'Cost & Fleet Master',
-                      body: `${fleetMasterAvailable ? 'vehicle_fleet loaded — expected km/tyre, current_km and budgets used.' : 'vehicle_fleet unavailable — tyre_records history only.'} Cost uses the tyre's cost_per_tyre, else asset mean, else fleet average (${fmtCurrency(fleetStats.avgCost, activeCurrency)}). No fabricated costs.`,
+                      body: `${fleetMasterAvailable ? 'vehicle_fleet loaded: expected km/tyre, current_km and budgets used.' : 'vehicle_fleet unavailable, tyre_records history only.'} Cost uses the tyre's cost_per_tyre, else asset mean, else fleet average (${fmtCurrency(fleetStats.avgCost, activeCurrency)}). No fabricated costs.`,
                     },
                   ].map(item => (
                     <div key={item.title} className="bg-[var(--input-bg)]/40 rounded-lg p-3">

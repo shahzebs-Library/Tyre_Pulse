@@ -43,6 +43,7 @@ import {
   Gauge, Clock, Layers, AlertTriangle,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import Card, { CardHeader } from '../components/ui/Card'
 import DateField from '../components/ui/DateField'
 import ReportingScopeBar from '../components/shell/ReportingScopeBar'
 import YearlyTrendPanel from '../components/expense/YearlyTrendPanel'
@@ -156,20 +157,27 @@ const DOUGHNUT_OPTS = {
 /** Colourful KPI tile. */
 function Kpi({ label, value, accent = ACCENTS.primary, sub }) {
   return (
-    <div className="card" style={{ borderTop: `3px solid ${accent}` }}>
+    // The coloured top edge is passed through `style`, which Card spreads LAST -
+    // so it wins over the primitive's own borderTop. Card's boolean `accent`
+    // prop is a different thing from this colour prop and is deliberately unused.
+    <Card style={{ borderTop: `3px solid ${accent}` }}>
       <p className="text-2xl font-bold" style={{ color: accent }}>{value}</p>
       <p className="text-xs text-[var(--text-muted)] mt-1">{label}</p>
       {sub ? <p className="text-[11px] text-[var(--text-dim)] mt-0.5">{sub}</p> : null}
-    </div>
+    </Card>
   )
 }
 
 function ChartCard({ title, children, refCb }) {
   return (
-    <div className="card">
-      <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">{title}</h3>
+    <Card>
+      <CardHeader title={title} />
+      {/* The ref MUST stay on this inner div: the PDF export reads
+          chartRefs.current[key].querySelector('canvas'), and the 240px height is
+          what makes maintainAspectRatio:false render at all. CardBody forwards
+          no ref, so it is deliberately not used here. */}
       <div style={{ height: 240 }} ref={refCb}>{children}</div>
-    </div>
+    </Card>
   )
 }
 
@@ -669,10 +677,10 @@ export default function BoardOverview() {
 
       {/* Reporting scope: which countries this report aggregates. Separate from
           the working context in the top bar, and it drives every query below. */}
-      <div className="card p-3 space-y-2">
+      <Card pad="tight" className="space-y-2">
         <ReportingScopeBar />
         {currencyNote && <p className="text-[11px] text-[var(--text-muted)]">{currencyNote}</p>}
-      </div>
+      </Card>
 
       {/* Section toggles + actions */}
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -730,15 +738,19 @@ export default function BoardOverview() {
         </p>
       )}
 
-      {error && <div className="card border border-red-700/50 text-red-300 text-sm">{error}</div>}
+      {/* tone="crit" rather than a border-* class: Card sets its border inline,
+          so `border border-red-700/50` would have been silently dead here. The
+          roomy py-10 of the three states below moves to an inner div for the
+          same reason - a padding utility on a Card cannot win. */}
+      {error && <Card tone="crit" className="text-red-300 text-sm">{error}</Card>}
       {!hasScope ? (
-        <div className="card text-center text-[var(--text-muted)] py-10">
-          No countries are selected in the reporting scope, so there is nothing to report on.
-        </div>
+        <Card className="text-center text-[var(--text-muted)]">
+          <div className="py-10">No countries are selected in the reporting scope, so there is nothing to report on.</div>
+        </Card>
       ) : loading ? (
-        <div className="card text-center text-[var(--text-muted)] py-10">Loading the board overview...</div>
+        <Card className="text-center text-[var(--text-muted)]"><div className="py-10">Loading the board overview...</div></Card>
       ) : !hasAny ? (
-        <div className="card text-center text-[var(--text-muted)] py-10">No data yet for {scopeTitle}. Records will appear here as they are captured.</div>
+        <Card className="text-center text-[var(--text-muted)]"><div className="py-10">No data yet for {scopeTitle}. Records will appear here as they are captured.</div></Card>
       ) : (
         <>
           {truncated && (
@@ -830,7 +842,7 @@ export default function BoardOverview() {
           {sections.costSplit && (
             <section className="space-y-3">
               <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2"><Wallet size={15} /> Tyres vs Maintenance</h2>
-              <div className="card">
+              <Card>
                 {costLoading ? (
                   <div className="text-center text-[var(--text-muted)] py-8">Loading the cost split...</div>
                 ) : costError ? (
@@ -882,12 +894,13 @@ export default function BoardOverview() {
                         ))}
                       </div>
                     </div>
+                    {/* Definite height + the PDF capture ref, both unchanged. */}
                     <div style={{ height: 240 }} ref={setRef('costSplit')}>
                       <Bar data={stylize(costChart, 'bar')} options={chartBase(costMixed)} />
                     </div>
                   </>
                 )}
-              </div>
+              </Card>
             </section>
           )}
 
@@ -901,18 +914,22 @@ export default function BoardOverview() {
                 Km for road assets, engine-hours for plant. Currency stays per country. Window: last 365 days.
               </p>
               {fleetCpkLoading ? (
-                <div className="card text-center text-[var(--text-muted)] py-8">Computing unit-aware CPK...</div>
+                <Card className="text-center text-[var(--text-muted)]"><div className="py-8">Computing unit-aware CPK...</div></Card>
               ) : !cpkHasData ? (
-                <div className="card text-center text-[var(--text-muted)] py-8">
-                  No CPK data for the selected scope. CPK needs measured distance (odometer) or engine-hours plus expense data.
-                </div>
+                <Card className="text-center text-[var(--text-muted)]">
+                  <div className="py-8">No CPK data for the selected scope. CPK needs measured distance (odometer) or engine-hours plus expense data.</div>
+                </Card>
               ) : (
                 <>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {cpkFleetTiles.map((tile, i) => {
                       const isHours = tile.unit === 'engine_hours'
                       return (
-                        <div key={`${tile.country}-${tile.unit}-${i}`} className="card border border-[var(--input-border)] flex flex-col gap-2">
+                        // Card is already `flex flex-col` and owns its border, so
+                        // the old `border border-[var(--input-border)] flex
+                        // flex-col` would have been dead weight - only the gap
+                        // is carried over.
+                        <Card key={`${tile.country}-${tile.unit}-${i}`} className="gap-2">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-1.5 min-w-0">
                               {isHours ? <Clock size={14} className="text-amber-400 shrink-0" /> : <Gauge size={14} className="text-[var(--accent)] shrink-0" />}
@@ -935,18 +952,22 @@ export default function BoardOverview() {
                           <p className="text-[10px] text-[var(--text-muted)]">
                             {fmtDistance(tile.distance, tile.unit)} measured | Coverage {fmtCoverage(tile.coveragePct)}
                           </p>
-                        </div>
+                        </Card>
                       )
                     })}
                   </div>
 
                   {cpkTopTypes.length > 0 && (
-                    <div className="card overflow-x-auto">
-                      <div className="flex items-center gap-2 mb-3">
-                        <Layers size={15} className="text-[var(--text-muted)]" />
-                        <h3 className="text-sm font-medium text-[var(--text-secondary)]">Worst asset types by CPK</h3>
-                        <span className="text-xs text-[var(--text-muted)] ml-auto">top {cpkTopTypes.length}</span>
-                      </div>
+                    // `overflow-x-auto` survives because Card sets no overflow of
+                    // its own - it is NOT one of the inline properties, so the
+                    // class is live. The table keeps its own markup: see the
+                    // note on why EnterpriseTable is refused here.
+                    <Card className="overflow-x-auto">
+                      <CardHeader
+                        icon={Layers}
+                        title="Worst asset types by CPK"
+                        actions={<span className="text-xs text-[var(--text-muted)]">top {cpkTopTypes.length}</span>}
+                      />
                       <table className="w-full text-xs">
                         <thead>
                           <tr className="text-left border-b border-[var(--input-border)]">
@@ -977,7 +998,7 @@ export default function BoardOverview() {
                           })}
                         </tbody>
                       </table>
-                    </div>
+                    </Card>
                   )}
                 </>
               )}
@@ -1009,16 +1030,24 @@ export default function BoardOverview() {
             <section className="space-y-3">
               <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2"><Lightbulb size={15} /> Recommendations</h2>
               {recs.length === 0 ? (
-                <div className="card text-sm text-[var(--text-muted)]">No critical issues stand out this period. Maintain inspection cadence and monitor the trends above.</div>
+                <Card className="text-sm text-[var(--text-muted)]">No critical issues stand out this period. Maintain inspection cadence and monitor the trends above.</Card>
               ) : (
                 <div className="space-y-2">
                   {recs.map((r, i) => {
                     const c = r.level === 'high' ? ACCENTS.risk : r.level === 'medium' ? ACCENTS.watch : ACCENTS.good
                     return (
-                      <div key={i} className="card flex items-start gap-3" style={{ borderLeft: `3px solid ${c}` }}>
+                      // ROW, not column. Card is `flex flex-col` and Tailwind
+                      // emits .flex-col after .flex-row, so the direction has to
+                      // come from `style`. `items-start` is kept: it is what
+                      // stops the level badge stretching to the row height.
+                      <Card
+                        key={i}
+                        className="items-start gap-3"
+                        style={{ flexDirection: 'row', borderLeft: `3px solid ${c}` }}
+                      >
                         <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded" style={{ background: `${c}22`, color: c }}>{r.level}</span>
                         <p className="text-sm text-[var(--text-secondary)]">{r.text}</p>
-                      </div>
+                      </Card>
                     )
                   })}
                 </div>

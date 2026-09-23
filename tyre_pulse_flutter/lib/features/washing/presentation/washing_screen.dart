@@ -62,6 +62,8 @@ import 'package:tyre_pulse/features/scanning/presentation/asset_camera_scanner_d
 import 'package:tyre_pulse/features/washing/data/wash_photo_capture.dart';
 import 'package:tyre_pulse/features/washing/data/wash_record.dart';
 import 'package:tyre_pulse/features/washing/data/wash_repository.dart';
+import 'package:tyre_pulse/features/washing/domain/wash_details.dart';
+import 'package:tyre_pulse/features/washing/presentation/widgets/wash_details_form.dart';
 import 'package:tyre_pulse/features/washing/presentation/widgets/wash_photo_gallery.dart';
 import 'package:tyre_pulse/features/washing/presentation/widgets/wash_recent_sheet.dart';
 import 'package:tyre_pulse/features/washing/washing_providers.dart';
@@ -94,11 +96,13 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
   final TextEditingController _notesController = TextEditingController();
 
   bool _siteTouched = false;
+  String? _entryName;
   Timer? _lookupDebounce;
   VehicleAsset? _master;
   String? _vehicleType;
   String? _washType;
   String _status = kWashDefaultStatus;
+  Map<String, dynamic> _washDetails = emptyWashDetails();
   final List<String> _photoPaths = <String>[];
   bool _capturingPhoto = false;
   bool _submitting = false;
@@ -140,6 +144,7 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
     final String? name =
         await ref.read(washRepositoryProvider).currentUserDisplayName(userId);
     if (!mounted || name == null || name.trim().isEmpty) return;
+    setState(() => _entryName = name.trim());
     if (_operatorController.text.trim().isEmpty) {
       _operatorController.text = name.trim();
     }
@@ -249,6 +254,10 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
       return;
     }
 
+    if (!validWashDetails(_washDetails)) {
+      _showSnack(l10n.washEvidenceRequired);
+      return;
+    }
     setState(() => _submitting = true);
     try {
       await ref.read(washRepositoryProvider).submitWash(
@@ -273,10 +282,11 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
                   ? null
                   : _notesController.text.trim(),
               photoLocalPaths: _photoPaths,
+              washDetails: _washDetails,
             ),
           );
       if (!mounted) return;
-      _showSnack(l10n.washSavedMessage);
+      _showSnack(l10n.washSavedOnDevice);
       _resetForm();
     } on Object {
       if (!mounted) return;
@@ -306,6 +316,7 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
       _vehicleType = null;
       _washType = null;
       _status = kWashDefaultStatus;
+      _washDetails = emptyWashDetails();
       _photoPaths.clear();
       _sessionKey = _uuid.v4();
     });
@@ -443,6 +454,15 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
           _WashAuditContext(
             operatorName: _operatorController.text,
             dateLabel: _nowLabel(),
+          ),
+          Text(
+            '${l10n.washEnteredByLabel}: ${_entryName ?? ref.watch(workspaceContextProvider)?.userId ?? l10n.washNotRecorded}',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          WashDetailsForm(
+            key: ValueKey(_sessionKey),
+            value: _washDetails,
+            onChanged: (v) => setState(() => _washDetails = v),
           ),
           const SizedBox(height: TpSpace.md),
           _WashTypeSelector(

@@ -1,8 +1,8 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
   CalendarDays, Download, FileSpreadsheet, RefreshCw, AlertTriangle, Loader2,
 } from 'lucide-react'
-import { listSubmissions } from '../../lib/api/checklists'
+import { listMonthlySubmissions } from '../../lib/api/checklists'
 import {
   monthlyGrid, monthlySummary, monthlyExportRows, cellText, isNotOk,
 } from '../../lib/checklistMonthly'
@@ -13,7 +13,6 @@ import { toUserMessage } from '../../lib/safeError'
 
 // PostgREST caps a response at 1000 rows whatever the limit says, so this is the
 // real ceiling of one read - not a number we chose.
-const READ_LIMIT = 1000
 
 /**
  * The month as the paper sheet shows it: checks down, days across.
@@ -33,43 +32,36 @@ export default function MonthlyGridPanel({ template, country, branding, company 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState('')
-  const [capped, setCapped] = useState(false)
+  const request = useRef(0)
+  const cancelLoad = useCallback(() => { request.current++ }, [])
 
   const templateId = template?.id || null
 
   const load = useCallback(async () => {
+    const current = ++request.current
     if (!templateId) { setRows([]); return }
     setLoading(true); setError('')
     try {
-      // Bounded to the month being drawn, SERVER-side. Reading every submission
-      // this template has ever had and filtering in the browser is what made the
-      // cap dangerous: a month is at most 31 days of submissions, so bounded it
-      // cannot reach the cap and an empty column means what it says.
-      const last = new Date(Date.UTC(year, month, 0)).getUTCDate()
-      const mm = String(month).padStart(2, '0')
-      const list = await listSubmissions({
+      const list = await listMonthlySubmissions({
         templateId,
         country,
-        from: `${year}-${mm}-01`,
-        to: `${year}-${mm}-${String(last).padStart(2, '0')}`,
-        limit: READ_LIMIT,
+        fields: template.fields,
+        year,
+        month,
       })
       const got = Array.isArray(list) ? list : []
+      if (current !== request.current) return
       setRows(got)
-      // A capped read is dangerous HERE specifically: this grid's whole claim is
-      // that an empty column means nobody checked the machine. If the newest
-      // submissions filled the cap, older days would read as missed when they
-      // were in fact recorded - the report would invent the very gap it exists
-      // to find. So a capped read is stated, not swallowed.
-      setCapped(got.length >= READ_LIMIT)
     } catch (err) {
+      if (current !== request.current) return
+      setRows([])
       setError(toUserMessage(err, 'Could not load this month.'))
     } finally {
-      setLoading(false)
+      if (current === request.current) setLoading(false)
     }
-  }, [templateId, country, year, month])
+  }, [templateId, template?.fields, country, year, month])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { load(); return cancelLoad }, [load, cancelLoad])
 
   const assets = useMemo(() => {
     const set = new Set()
@@ -78,7 +70,7 @@ export default function MonthlyGridPanel({ template, country, branding, company 
   }, [rows])
 
   useEffect(() => {
-    if (!asset && assets.length) setAsset(assets[0])
+    if (!assets.includes(asset)) setAsset(assets[0] || '')
   }, [assets, asset])
 
   const forAsset = useMemo(
@@ -161,14 +153,14 @@ export default function MonthlyGridPanel({ template, country, branding, company 
           </button>
           <button
             onClick={downloadExcel}
-            disabled={!!busy || !grid.rows.length}
+            disabled={!!busy || loading || !!error || !grid.rows.length}
             className="btn-secondary text-xs inline-flex items-center gap-1.5 disabled:opacity-60"
           >
             <FileSpreadsheet size={13} /> Excel
           </button>
           <button
             onClick={downloadPdf}
-            disabled={!!busy || !grid.rows.length}
+            disabled={!!busy || loading || !!error || !grid.rows.length}
             className="btn-primary text-xs inline-flex items-center gap-1.5 disabled:opacity-60"
           >
             {busy === 'pdf' ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />} PDF
@@ -176,19 +168,13 @@ export default function MonthlyGridPanel({ template, country, branding, company 
         </div>
       </div>
 
-      {capped && (
-        <div className="text-xs rounded-lg px-3 py-2" style={{ background: 'rgba(245,158,11,0.1)', color: '#f59e0b' }}>
-          This checklist has more submissions than one read returns, so a day shown as missed may
-          in fact have been recorded. Narrow by country, or read the month for a smaller template.
-        </div>
-      )}
-
       {error && (
         <div className="text-sm rounded-lg px-3 py-2 flex items-center gap-2" style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444' }}>
           <AlertTriangle className="w-4 h-4" /> {error}
         </div>
       )}
 
+      {!error && !loading && <>
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         {[
           ['Days recorded', String(summary.submitted)],
@@ -289,6 +275,7 @@ export default function MonthlyGridPanel({ template, country, branding, company 
           </div>
         </div>
       )}
+      </>}
     </div>
   )
 }

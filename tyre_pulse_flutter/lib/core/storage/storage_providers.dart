@@ -41,3 +41,10 @@ final Provider<PrivateStorageReferenceResolver>
     ref.watch(supabaseClientProvider),
   ),
 );
+
+final privateStorageImageUrlProvider =
+    FutureProvider.autoDispose.family<String, String>(
+  (ref, reference) =>
+      ref.watch(privateStorageReferenceResolverProvider).resolve(reference),
+  retry: (int retryCount, Object error) => null,
+);

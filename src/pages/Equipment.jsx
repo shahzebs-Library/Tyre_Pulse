@@ -36,6 +36,7 @@ import { colorAt, withAlpha, ACCENTS } from '../lib/reportColors'
 import { toUserMessage } from '../lib/safeError'
 import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
 
@@ -72,10 +73,6 @@ function fmtYears(v) {
   return `${v.toFixed(1)}y`
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') || m.includes('schema cache') || m.includes('could not find the table')
-}
 
 // ─── Create / edit modal ──────────────────────────────────────────────────────
 function EquipmentModal({ initial, onClose, onSaved }) {

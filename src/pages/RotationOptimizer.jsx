@@ -39,7 +39,7 @@ const STATUS_META = {
 }
 const URGENCY_BAR = { critical: '#f87171', warning: '#fb923c', advisory: '#38bdf8' }
 
-const fmt = (n) => (n == null ? '—' : n)
+const fmt = (n) => (n == null ? 'N/A' : n)
 const treadTone = (mm) =>
   mm == null ? 'text-[var(--text-muted)]' : mm < 1.6 ? 'text-red-400' : mm < 4 ? 'text-amber-400' : 'text-emerald-400'
 
@@ -51,7 +51,7 @@ function BalanceRing({ score }) {
   const color = score == null ? '#64748b' : pct >= 75 ? '#34d399' : pct >= 50 ? '#fbbf24' : '#f87171'
   const dash = (pct / 100) * c
   return (
-    <div className="relative w-14 h-14 shrink-0" title="Wear-balance score (0–100)">
+    <div className="relative w-14 h-14 shrink-0" title="Wear-balance score (0 to 100)">
       <svg viewBox="0 0 56 56" className="w-full h-full -rotate-90">
         <circle cx="28" cy="28" r={r} fill="none" stroke="var(--input-border)" strokeWidth="6" />
         {score != null && (
@@ -59,7 +59,7 @@ function BalanceRing({ score }) {
         )}
       </svg>
       <div className="absolute inset-0 flex items-center justify-center">
-        <span className="text-sm font-bold text-[var(--text-primary)]">{score == null ? '—' : score}</span>
+        <span className="text-sm font-bold text-[var(--text-primary)]">{score == null ? 'N/A' : score}</span>
       </div>
     </div>
   )
@@ -155,7 +155,7 @@ export default function RotationOptimizer() {
     { label: 'Assets analysed', value: summary.assetsAnalyzed, icon: Truck, tone: 'text-[var(--text-primary)]' },
     { label: 'Need rotation', value: summary.assetsNeedingRotation, icon: RotateCcw, tone: 'text-amber-400' },
     { label: 'Critical (safety)', value: summary.criticalAssets ?? 0, icon: ShieldAlert, tone: 'text-red-400' },
-    { label: 'Avg wear balance', value: summary.avgWearBalance == null ? '—' : `${summary.avgWearBalance}/100`, icon: Scale, tone: 'text-[var(--text-primary)]' },
+    { label: 'Avg wear balance', value: summary.avgWearBalance == null ? 'N/A' : `${summary.avgWearBalance}/100`, icon: Scale, tone: 'text-[var(--text-primary)]' },
   ]
 
   // Top imbalanced assets for the fleet chart (highest tread spread first).
@@ -212,7 +212,7 @@ export default function RotationOptimizer() {
         action: s.reason || '',
       }))
     }
-    return [{ ...base, from: '', to: '', tyre: '', delta: '', benefit_km: '', impact: '', action: a.narrative || 'No rotation required — wear is balanced.' }]
+    return [{ ...base, from: '', to: '', tyre: '', delta: '', benefit_km: '', impact: '', action: a.narrative || 'No rotation required. Wear is balanced.' }]
   })
 
   const clearFilters = () => { setPriorityFilter('all'); setSiteFilter(''); setSearch('') }
@@ -256,7 +256,7 @@ export default function RotationOptimizer() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -266,7 +266,7 @@ export default function RotationOptimizer() {
       <div className="card border border-[var(--input-border)] flex items-start gap-2.5 py-2.5">
         <Info size={15} className="text-[var(--text-muted)] mt-0.5 shrink-0" />
         <p className="text-xs text-[var(--text-muted)] leading-relaxed">
-          Axle roles (steer / drive / trailer) are <span className="text-[var(--text-secondary)]">inferred from each tyre's free-text position label</span> — this dataset has no per-axle, side, or inner/outer wheel data and a single tread value per tyre. Steer-imbalance checks are therefore <span className="text-[var(--text-secondary)]">heuristic</span>; the <span className="text-red-300">below-legal-minimum ({'<'}1.6mm)</span> check is exact. No values are estimated where a signal is missing.
+          Axle roles (steer / drive / trailer) are <span className="text-[var(--text-secondary)]">inferred from each tyre's free-text position label</span>. This dataset has no per-axle, side, or inner/outer wheel data and a single tread value per tyre. Steer-imbalance checks are therefore <span className="text-[var(--text-secondary)]">heuristic</span>; the <span className="text-red-300">below-legal-minimum ({'<'}1.6mm)</span> check is exact. No values are estimated where a signal is missing.
         </p>
       </div>
 
@@ -346,7 +346,7 @@ export default function RotationOptimizer() {
                     </div>
                     <div className="text-right hidden md:block">
                       <p className="text-xs text-[var(--text-muted)]">range</p>
-                      <p className="text-sm text-[var(--text-secondary)]">{fmt(a.stats.min)}–{fmt(a.stats.max)}mm</p>
+                      <p className="text-sm text-[var(--text-secondary)]">{fmt(a.stats.min)} to {fmt(a.stats.max)}mm</p>
                     </div>
                     <span className={`badge text-[11px] px-2 py-0.5 rounded shrink-0 inline-flex items-center gap-1 ${(STATUS_META[a.overallStatus] || STATUS_META.good).cls}`}>
                       {a.overallStatus === 'critical' ? <ShieldAlert size={11} /> : a.overallStatus === 'good' ? <ShieldCheck size={11} /> : <AlertTriangle size={11} />}
@@ -398,7 +398,7 @@ export default function RotationOptimizer() {
                               </span>
                               <div className="ml-auto flex items-center gap-1.5">
                                 <span className="text-[11px] px-1.5 py-0.5 rounded bg-emerald-900/30 text-emerald-300 border border-emerald-800/50">+{s.tread_delta_mm}mm · ~{Number(s.expected_benefit_km).toLocaleString()} km</span>
-                                <span className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-indigo-900/30 text-indigo-300 border border-indigo-800/50" title="Impact score (0–100)"><Zap size={11} /> {s.impact_score}</span>
+                                <span className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-indigo-900/30 text-indigo-300 border border-indigo-800/50" title="Impact score (0 to 100)"><Zap size={11} /> {s.impact_score}</span>
                               </div>
                             </div>
                           </div>
@@ -406,7 +406,7 @@ export default function RotationOptimizer() {
                       </div>
                     ) : a.overallStatus !== 'critical' && (
                       <div className="flex items-center gap-2 text-sm text-green-300">
-                        <CheckCircle2 size={15} /> {a.reason || 'Wear is balanced — no rotation required.'}
+                        <CheckCircle2 size={15} /> {a.reason || 'Wear is balanced. No rotation required.'}
                       </div>
                     )}
 
@@ -427,15 +427,15 @@ export default function RotationOptimizer() {
                               const isMax = tr != null && tr === a.stats.max
                               return (
                                 <tr key={t.id} className="border-b border-[var(--input-border)]/50">
-                                  <td className="px-3 py-2 font-mono text-xs text-[var(--text-primary)]">{serialOf(t) || '—'}</td>
-                                  <td className="px-3 py-2 text-[var(--text-secondary)]">{positionOf(t) || '—'}</td>
-                                  <td className="px-3 py-2 text-[var(--text-secondary)]">{t.brand || '—'}{t.size ? ` · ${t.size}` : ''}</td>
+                                  <td className="px-3 py-2 font-mono text-xs text-[var(--text-primary)]">{serialOf(t) || 'N/A'}</td>
+                                  <td className="px-3 py-2 text-[var(--text-secondary)]">{positionOf(t) || 'N/A'}</td>
+                                  <td className="px-3 py-2 text-[var(--text-secondary)]">{t.brand || 'N/A'}{t.size ? ` · ${t.size}` : ''}</td>
                                   <td className="px-3 py-2">
                                     <span className={isMin ? 'text-red-400 font-semibold' : isMax ? 'text-green-400 font-semibold' : 'text-[var(--text-secondary)]'}>
-                                      {tr == null ? '—' : `${tr}mm`}{isMin ? ' ▼' : isMax ? ' ▲' : ''}
+                                      {tr == null ? 'N/A' : `${tr}mm`}{isMin ? ' ▼' : isMax ? ' ▲' : ''}
                                     </span>
                                   </td>
-                                  <td className="px-3 py-2 text-[var(--text-secondary)]">{t.total_km != null ? Number(t.total_km).toLocaleString() : '—'}</td>
+                                  <td className="px-3 py-2 text-[var(--text-secondary)]">{t.total_km != null ? Number(t.total_km).toLocaleString() : 'N/A'}</td>
                                 </tr>
                               )
                             })}

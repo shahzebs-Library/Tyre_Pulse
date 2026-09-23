@@ -29,6 +29,32 @@ void main() {
   });
 
   group('PrivateStorageReferenceResolver', () {
+    test('re-signs legacy inspection URLs only from the configured backend',
+        () async {
+      final paths = <String>[];
+      final resolver = PrivateStorageReferenceResolver(
+        (bucket, path, ttl) async {
+          paths.add('$bucket/$path');
+          return 'https://signed.test/photo';
+        },
+        storageOrigin: Uri.parse('https://project.supabase.co'),
+      );
+      expect(
+        await resolver.resolve(
+          'https://project.supabase.co/storage/v1/object/public/tyre-photos/inspections/a%20b.jpg',
+        ),
+        'https://signed.test/photo',
+      );
+      expect(paths, ['tyre-photos/inspections/a b.jpg']);
+      await expectLater(
+        resolver.resolve(
+          'https://attacker.test/storage/v1/object/public/tyre-photos/private.jpg',
+        ),
+        throwsA(isA<FormatException>()),
+      );
+      expect(paths, hasLength(1));
+    });
+
     test('signs through the injected authenticated storage capability',
         () async {
       String? bucket;

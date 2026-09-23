@@ -11,39 +11,29 @@
  * surfacing. Do NOT rename an RPC or reshape its `p_*` argument object here - the
  * enforcement lives in Postgres.
  *
- * Read paths (listOrphanAssets / listDuplicateTyres / listSerialConflicts) never
- * throw: they return [] on a null payload or any RPC error so the console can
- * degrade to an honest empty state. The backfill and merge write paths surface
- * the ServiceError so the UI can report a failed mutation.
+ * Read paths return [] only for a successful empty payload. All RPC errors
+ * throw ServiceError so a failed check cannot appear healthy.
  */
 import { supabase, unwrap } from './_client'
 
 /**
  * List tyres whose asset is missing from `vehicle_fleet` (orphaned assets) via
- * the `recon_orphan_assets` RPC. Never throws - returns [] on a null payload or
- * any RPC error.
+ * the `recon_orphan_assets` RPC. Returns [] for a successful empty payload; throws on RPC errors.
  *
  * @returns {Promise<Array<{
  *   asset_no: string,
  *   vehicle_type: string,
  *   country: string,
  *   tyre_count: number
- * }>>} orphan-asset rows (empty array when none or on error)
+ * }>>} orphan-asset rows (empty array when none)
  */
 export async function listOrphanAssets() {
-  try {
-    const { data, error } = await supabase.rpc('recon_orphan_assets')
-    if (error) return []
-    return Array.isArray(data) ? data : []
-  } catch {
-    return []
-  }
+  return unwrap(await supabase.rpc('recon_orphan_assets')) ?? []
 }
 
 /**
  * List fully-identical duplicate tyre rows (byte-identical, safe to merge) via
- * the `recon_duplicate_tyres` RPC. Never throws - returns [] on a null payload
- * or any RPC error.
+ * the `recon_duplicate_tyres` RPC. Returns [] for a successful empty payload; throws on RPC errors.
  *
  * @returns {Promise<Array<{
  *   serial_no: string,
@@ -51,38 +41,25 @@ export async function listOrphanAssets() {
  *   row_count: number,
  *   keep_id: string,
  *   remove_ids: string[]
- * }>>} duplicate-group rows (empty array when none or on error)
+ * }>>} duplicate-group rows (empty array when none)
  */
 export async function listDuplicateTyres() {
-  try {
-    const { data, error } = await supabase.rpc('recon_duplicate_tyres')
-    if (error) return []
-    return Array.isArray(data) ? data : []
-  } catch {
-    return []
-  }
+  return unwrap(await supabase.rpc('recon_duplicate_tyres')) ?? []
 }
 
 /**
  * List serial-number conflicts - a tyre serial that appears against more than
  * one asset (INFORMATIONAL: normally a tyre that moved between vehicles, not a
- * fault) via the `recon_serial_conflicts` RPC. Never throws - returns [] on a
- * null payload or any RPC error.
+ * fault) via the `recon_serial_conflicts` RPC. Returns [] for a successful empty payload; throws on RPC errors.
  *
  * @returns {Promise<Array<{
  *   serial_no: string,
  *   asset_count: number,
  *   rows: Array<{ id: string, asset_no: string, status: string, created_at: string }>
- * }>>} serial-conflict rows (empty array when none or on error)
+ * }>>} serial-conflict rows (empty array when none)
  */
 export async function listSerialConflicts() {
-  try {
-    const { data, error } = await supabase.rpc('recon_serial_conflicts')
-    if (error) return []
-    return Array.isArray(data) ? data : []
-  } catch {
-    return []
-  }
+  return unwrap(await supabase.rpc('recon_serial_conflicts')) ?? []
 }
 
 /**

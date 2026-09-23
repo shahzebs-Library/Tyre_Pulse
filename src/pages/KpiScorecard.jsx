@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
+import Card from '../components/ui/Card'
 import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import DateField from '../components/ui/DateField'
 import SectionTabs, { KPI_TABS } from '../components/ui/SectionTabs'
@@ -404,14 +405,22 @@ export default function KpiScorecard() {
   if (error && !records.length) return (
     <div className="space-y-5">
       <PageHeader title={t('kpiscorecard.title')} subtitle={t('kpiscorecard.errorSubtitle')} icon={Target} />
-      <div className="card py-16 flex flex-col items-center gap-3">
-        <AlertTriangle size={40} className="text-red-400" />
-        <p className="text-red-300 font-medium">{t('kpiscorecard.states.errorTitle')}</p>
-        <p className="text-[var(--panel-ink-4)] text-sm">{error}</p>
-        <button onClick={load} className="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors">
-          <RefreshCw size={16} /> {t('kpiscorecard.states.retry')}
-        </button>
-      </div>
+      {/* The old `py-16` was the whole point of this empty state and would be
+          DEAD on a Card - padding is inline there. The roominess moves to an
+          inner element on the spacing scale instead. */}
+      <Card>
+        <div
+          className="flex flex-col items-center gap-3"
+          style={{ paddingTop: 'var(--space-12)', paddingBottom: 'var(--space-12)' }}
+        >
+          <AlertTriangle size={40} className="text-red-400" />
+          <p className="text-red-300 font-medium">{t('kpiscorecard.states.errorTitle')}</p>
+          <p className="text-[var(--panel-ink-4)] text-sm">{error}</p>
+          <button onClick={load} className="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors">
+            <RefreshCw size={16} /> {t('kpiscorecard.states.retry')}
+          </button>
+        </div>
+      </Card>
     </div>
   )
 
@@ -614,7 +623,10 @@ export default function KpiScorecard() {
 
       {/* Target editor */}
       {editing && (
-        <div className="card border border-yellow-700/50">
+        // The amber edge that marked "you are editing targets" was a
+        // border-* class; on a Card that renders nothing, so it becomes the
+        // `warn` tone - the one route Card leaves open for a tint.
+        <Card tone="warn">
           <p className="text-sm font-medium text-yellow-400 mb-4">{t('kpiscorecard.targetEditor.title')}</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             {Object.entries(KPI_LABELS).map(([key, { unit }]) => (
@@ -629,7 +641,7 @@ export default function KpiScorecard() {
               </div>
             ))}
           </div>
-        </div>
+        </Card>
       )}
 
       {/* ── OVERVIEW TAB ── */}
@@ -691,7 +703,7 @@ export default function KpiScorecard() {
                 yoyFormat={fmtCurrency}
               />
               {costTrend.reg && (
-                <div className="card">
+                <Card>
                   <p className="text-xs text-[var(--panel-ink-3)] mb-1">{t('kpiscorecard.cards.forecastNextMonth')}</p>
                   <p className="text-xl font-bold text-yellow-400 tabular-nums">
                     {fmtCurrency(Math.max(0, Math.round(costTrend.reg.predict(months.length))))}
@@ -703,7 +715,7 @@ export default function KpiScorecard() {
                       slope: Math.round(costTrend.reg.slope).toLocaleString(),
                     })}
                   </p>
-                </div>
+                </Card>
               )}
             </div>
           )}
@@ -713,24 +725,25 @@ export default function KpiScorecard() {
 
           {/* Charts */}
           <div className="space-y-6">
-            <div className="card">
+            <Card>
               <h3 className="text-sm font-medium text-[var(--panel-ink-3)] mb-4">
                 {t('kpiscorecard.charts.monthlyCostVsTarget')}{showYoY ? t('kpiscorecard.charts.lyOverlaySuffix') : ''}
               </h3>
               <div style={{ height: 320 }}>
                 <Line data={costChartData} options={chartOpts()} />
               </div>
-            </div>
-            <div className="card">
+            </Card>
+            <Card>
               <h3 className="text-sm font-medium text-[var(--panel-ink-3)] mb-4">{t('kpiscorecard.charts.highRiskVsTarget')}</h3>
               <div style={{ height: 260 }}>
                 <Line data={highRiskChartData} options={chartOpts()} />
               </div>
-            </div>
+            </Card>
           </div>
 
-          {/* Monthly table */}
-          <div className="card overflow-x-auto">
+          {/* Monthly table. `overflow-x-auto` stays a CLASS on purpose: Card
+              sets no overflow inline, so it is live - unlike padding or border. */}
+          <Card className="overflow-x-auto">
             <h3 className="text-sm font-medium text-[var(--panel-ink-3)] mb-4">{t('kpiscorecard.table.monthlyActualsTitle')}</h3>
             <table className="w-full text-sm">
               <thead>
@@ -800,14 +813,14 @@ export default function KpiScorecard() {
                 })}
               </tbody>
             </table>
-          </div>
+          </Card>
           <TablePagination {...actualsPager} />
         </>
       )}
 
       {/* ── BY SITE TAB ── */}
       {activeMainTab === 'sites' && (
-        <div className="card overflow-x-auto">
+        <Card className="overflow-x-auto">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-medium text-[var(--panel-ink-3)]">
               {t('kpiscorecard.sites.title', { month: currentMonthStr })}
@@ -892,7 +905,7 @@ export default function KpiScorecard() {
             </table>
           )}
           <TablePagination {...sitePager} />
-        </div>
+        </Card>
       )}
     </div>
   )
@@ -911,20 +924,23 @@ export default function KpiScorecard() {
  */
 function PmKpiGroup({ state, summary }) {
   if (state?.loading) {
+    // Card is `flex flex-col` and Tailwind emits `.flex-col` after `.flex-row`,
+    // so a `flex-row` class could never win - the direction has to be inline.
     return (
-      <div className="card flex items-center gap-2 text-sm text-[var(--panel-ink-3)]">
+      <Card className="items-center gap-2 text-sm text-[var(--panel-ink-3)]" style={{ flexDirection: 'row' }}>
         <Wrench size={16} className="text-[var(--panel-ink-4)]" />
         Loading preventive maintenance KPIs...
-      </div>
+      </Card>
     )
   }
 
   if (state?.error) {
+    // Same row-direction rule, plus: the red edge is `tone`, never border-*.
     return (
-      <div className="card border border-red-700/40 flex items-center gap-2 text-sm text-red-300">
+      <Card tone="crit" className="items-center gap-2 text-sm text-red-300" style={{ flexDirection: 'row' }}>
         <AlertTriangle size={16} className="text-red-400" />
         Preventive maintenance KPIs are unavailable right now.
-      </div>
+      </Card>
     )
   }
 
@@ -949,8 +965,11 @@ function PmKpiGroup({ state, summary }) {
           <ArrowRight size={13} />
         </Link>
       </div>
+      {/* Every verdict edge below is `tone`, not a border-* class. Card writes
+          its border inline, so the pass/fail colour would simply vanish - the
+          exact defect the design-system ratchet was added to catch. */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className={`card border ${compliancePassing ? 'border-green-700/40' : 'border-red-700/50'}`}>
+        <Card tone={compliancePassing ? 'good' : 'crit'}>
           <div className="flex items-center justify-between">
             <p className="text-xs text-[var(--panel-ink-3)]">PM Compliance</p>
             <ClipboardCheck size={15} className={compliancePassing ? 'text-green-400' : 'text-red-400'} />
@@ -963,9 +982,9 @@ function PmKpiGroup({ state, summary }) {
               ? 'No active plans to measure'
               : `${summary.active - summary.overdue} of ${summary.active} on schedule`}
           </p>
-        </div>
+        </Card>
 
-        <div className={`card border ${summary.overdue > 0 ? 'border-red-700/50' : 'border-gray-700/40'}`}>
+        <Card tone={summary.overdue > 0 ? 'crit' : 'default'}>
           <div className="flex items-center justify-between">
             <p className="text-xs text-[var(--panel-ink-3)]">PM Overdue</p>
             <AlertTriangle size={15} className={summary.overdue > 0 ? 'text-red-400' : 'text-[var(--panel-ink-4)]'} />
@@ -974,9 +993,9 @@ function PmKpiGroup({ state, summary }) {
             {summary.overdue}
           </p>
           <p className="text-xs text-[var(--panel-ink-4)] mt-1">Active plans past due</p>
-        </div>
+        </Card>
 
-        <div className={`card border ${summary.dueSoon > 0 ? 'border-amber-700/50' : 'border-gray-700/40'}`}>
+        <Card tone={summary.dueSoon > 0 ? 'warn' : 'default'}>
           <div className="flex items-center justify-between">
             <p className="text-xs text-[var(--panel-ink-3)]">PM Due Soon</p>
             <CalendarClock size={15} className={summary.dueSoon > 0 ? 'text-amber-400' : 'text-[var(--panel-ink-4)]'} />
@@ -985,9 +1004,9 @@ function PmKpiGroup({ state, summary }) {
             {summary.dueSoon}
           </p>
           <p className="text-xs text-[var(--panel-ink-4)] mt-1">Approaching next service</p>
-        </div>
+        </Card>
 
-        <div className="card border border-gray-700/40">
+        <Card>
           <div className="flex items-center justify-between">
             <p className="text-xs text-[var(--panel-ink-3)]">Active PM Plans</p>
             <Wrench size={15} className="text-blue-400" />
@@ -1000,7 +1019,7 @@ function PmKpiGroup({ state, summary }) {
               ? `${summary.total} total on file`
               : 'All plans active'}
           </p>
-        </div>
+        </Card>
       </div>
     </div>
   )
@@ -1017,7 +1036,10 @@ function KpiCard({ label, actual, target, format, invert, higherIsBad, prev, yoy
     : null
 
   return (
-    <div className={`card border ${passing ? 'border-green-700/40' : 'border-red-700/50'}`}>
+    // The green-or-red edge IS the pass/fail verdict, so it has to be `tone`:
+    // a border-* class on a Card renders nothing and the verdict would be
+    // carried by the PASS/FAIL pill alone.
+    <Card tone={passing ? 'good' : 'crit'}>
       <p className="text-xs text-[var(--panel-ink-3)]">{label}</p>
       <p className={`text-xl font-bold mt-1 tabular-nums ${passing ? 'text-green-400' : 'text-red-400'}`}>
         {format(actual)}
@@ -1045,6 +1067,6 @@ function KpiCard({ label, actual, target, format, invert, higherIsBad, prev, yoy
           </span>
         </p>
       )}
-    </div>
+    </Card>
   )
 }

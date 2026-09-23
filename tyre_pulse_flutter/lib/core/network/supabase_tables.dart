@@ -48,6 +48,26 @@ abstract final class SupabaseTables {
   /// approvals queue a QUERY rather than an endpoint.
   static const String inspections = 'inspections';
 
+  /// Planned inspections - what a crew is SUPPOSED to do, as opposed to
+  /// [inspections], which is what they did.
+  ///
+  /// VERIFIED 2026-09-21 against the live database, not transcribed from an
+  /// artifact: the table already existed, and migration
+  /// `20260921074351_inspection_plan_adherence.sql` (applied and recorded in
+  /// `supabase_migrations`) added `assigned_to`, `team`, `plan_ref` and
+  /// `grace_days` to it. 244 real plans were loaded under
+  /// `plan_ref = 'PLAN-20260921-BACKLOG-KSA'`. RLS was read directly: SELECT is
+  /// open to any approved member and then narrowed by RESTRICTIVE org and
+  /// country isolation, so a plain `.eq('assigned_to', me)` read is already
+  /// scoped to this user's own tenant without the client asserting anything.
+  ///
+  /// Adherence (done / missed / due) is DERIVED server-side by
+  /// `get_schedule_adherence()` and is deliberately NOT stored on this table -
+  /// a stored state goes stale the moment an inspection lands. The phone reads
+  /// the plan rows and computes the same states locally through
+  /// `InspectionPlanState`, which is a MIRROR of that SQL.
+  static const String inspectionSchedules = 'inspection_schedules';
+
   static const String accidents = 'accidents';
 
   /// User profile. `country` and `sites` are `text[]`, NOT scalars - the type
@@ -102,6 +122,41 @@ abstract final class SupabaseTables {
   static const String accidentParts = 'accident_parts';
   static const String accidentCaseWorkstreams = 'accident_case_workstreams';
 
+  /// Live schema/RLS verified; docs/accident-module/02_DATA_MODEL.sql and 14_INSURANCE.sql.
+  static const String accidentInsuranceClaims = 'accident_insurance_claims';
+
+  /// Live since V417 (docs/accident-module/02_DATA_MODEL.sql). The vendor
+  /// contact columns on this table come from the 2026-09-16 parity migration,
+  /// which is AUTHORED, NOT APPLIED - a reader must catch a schema mismatch.
+  static const String accidentRepairOrders = 'accident_repair_orders';
+
+  /// Live since V417. The legacy accepted/rejected handover decision.
+  static const String accidentHandoverInspections =
+      'accident_handover_inspections';
+
+  /// Live since V417 (12_SLA_ENGINE.sql).
+  static const String accidentSlaInstances = 'accident_sla_instances';
+
+  /// Live since V417 (11_NOTIFICATIONS.sql). Notes, emails and calls on a case.
+  static const String accidentCaseCommunications =
+      'accident_case_communications';
+
+  /// Live since V417 (13_EVIDENCE.sql).
+  static const String accidentEvidence = 'accident_evidence';
+
+  /// AUTHORED, NOT APPLIED: `supabase/migrations/20260916130000_accident_mock_
+  /// field_parity.sql`. One row per dispatch leg. Every reader of this table
+  /// must treat a 42P01 as "not provisioned yet", never as an empty leg.
+  static const String accidentDispatches = 'accident_dispatches';
+
+  /// Live since V417 (14_INSURANCE.sql / 15_REPAIR_FINANCE.sql /
+  /// 02_DATA_MODEL.sql). Read by the mock M4/M5 workspaces. Columns the
+  /// 2026-09-16 parity migration adds are read defensively.
+  static const String accidentClaimRecoveries = 'accident_claim_recoveries';
+  static const String accidentLiabilityAssessments =
+      'accident_liability_assessments';
+  static const String accidentDamageAssessments = 'accident_damage_assessments';
+
   /// VERIFIED real (artifact 02 section 1: referenced by 20 migrations) and
   /// carried by the `ENGINE_HOURS_LOG` offline command in artifact 06 section
   /// 2. Listed apart from the block above only because artifact 02's call-site
@@ -115,6 +170,7 @@ abstract final class SupabaseTables {
   static const Set<String> all = <String>{
     vehicleFleet,
     inspections,
+    inspectionSchedules,
     accidents,
     profiles,
     tyreRecords,
@@ -144,6 +200,15 @@ abstract final class SupabaseTables {
     accidentRemarks,
     accidentParts,
     accidentCaseWorkstreams,
+    accidentInsuranceClaims,
+    accidentEvidence,
+    accidentHandoverInspections,
+    accidentSlaInstances,
+    accidentClaimRecoveries,
+    accidentLiabilityAssessments,
+    accidentDamageAssessments,
+    accidentRepairOrders,
+    accidentCaseCommunications,
     engineHoursLogs,
   };
 
@@ -242,6 +307,24 @@ abstract final class SupabaseRpcs {
   /// paged every tyre record into device memory.
   static const String getMobileAnalytics = 'get_mobile_analytics';
 
+  /// Inspection plans in a window, each already joined to the inspection that
+  /// fulfilled it, with the resulting state.
+  ///
+  /// VERIFIED 2026-09-21: created by migration
+  /// `20260921074351_inspection_plan_adherence.sql`, SECURITY INVOKER, granted
+  /// to `authenticated`, anon revoked by `20260921084516`. Signature
+  /// `(p_country text, p_from date, p_to date)`.
+  ///
+  /// THE PHONE CALLS THIS RATHER THAN COMPUTING STATE ITSELF, and that is the
+  /// whole point: done / started / missed / due is already defined ONCE in SQL
+  /// `inspection_plan_state()` and mirrored ONCE in the web engine
+  /// (`src/lib/schedulePlan.js`). A third copy in Dart would be a third thing
+  /// to keep in step, and the matching rule it would have to reproduce (an
+  /// inspection on that vehicle inside the plan's grace window) is exactly the
+  /// kind of rule that drifts silently. The phone parses `plan_state`; it does
+  /// not re-derive it.
+  static const String getScheduleAdherence = 'get_schedule_adherence';
+
   static const String getReportSnapshotAuthed = 'get_report_snapshot_authed';
   static const String getAccidentAudit = 'get_accident_audit';
 
@@ -273,6 +356,7 @@ abstract final class SupabaseRpcs {
     referenceAssetOptions,
     referenceSiteOptions,
     getMobileAnalytics,
+    getScheduleAdherence,
     getReportSnapshotAuthed,
     getAccidentAudit,
   };
@@ -286,6 +370,14 @@ abstract final class SupabaseRpcs {
   static const Set<String> setReturning = <String>{
     referenceAssetOptions,
     referenceSiteOptions,
+
+    /// Returns one row per PLAN in the requested window, so it is capped at
+    /// 1000 like any other read. The phone bounds it by asking for a short
+    /// window (see `InspectionPlanRepository.myPlans`) rather than paging,
+    /// because one crew member's few weeks of work is tens of rows, not
+    /// thousands - but the ceiling is real and the repository reports when a
+    /// result touches it rather than quietly showing a short list.
+    getScheduleAdherence,
   };
 }
 

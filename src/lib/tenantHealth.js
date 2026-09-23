@@ -17,6 +17,7 @@
  *    a network (see src/test/tenantHealth.test.js).
  */
 import { supabase } from './supabase'
+import { fetchAllPages } from './fetchAll'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -284,42 +285,47 @@ function sinceIso(days = WINDOW_DAYS) {
   return new Date(Date.now() - days * 86_400_000).toISOString()
 }
 
+/** Read every page within a fixed observation window. Never aggregate a truncated sample. */
+async function completeRows(build, limit) {
+  const { data, error, truncated } = await fetchAllPages(
+    (from, to) => build().order('created_at', { ascending: false }).order('id').range(from, to),
+    { max: limit + 1, concurrency: 1 },
+  )
+  if (error) throw error
+  if (truncated || data.length > limit) throw new Error(`More than ${limit.toLocaleString()} rows match this report. Totals are unavailable because the report limit was reached.`)
+  return data
+}
+
 /** profiles: totals, role split, approval + lock state, 30-day signups. */
 export async function fetchUserStats() {
-  const { data, error } = await supabase
-    .from('profiles')
+  const through = new Date().toISOString()
+  const data = await completeRows(() => supabase.from('profiles')
     .select('id, full_name, username, role, approved, locked, created_at')
-    .order('created_at', { ascending: false })
-    .limit(PROFILE_ROW_LIMIT)
-  if (error) throw error
-  return shapeUserStats(data ?? [])
+    .lte('created_at', through), PROFILE_ROW_LIMIT)
+  return shapeUserStats(data)
 }
 
-/** audit_log_v2 (last 30 days): events/day, active users, top actions/tables. */
+async function auditRows(days) {
+  const since = sinceIso(days)
+  const through = new Date().toISOString()
+  return completeRows(() => supabase.from('audit_log_v2')
+    .select('id, user_id, action, table_name, created_at')
+    .gte('created_at', since).lte('created_at', through), ACTIVITY_ROW_LIMIT)
+}
+
+/** All audit events in the observation window, or an explicit unavailable result. */
 export async function fetchActivityStats(days = WINDOW_DAYS) {
-  const { data, error } = await supabase
-    .from('audit_log_v2')
-    .select('user_id, action, table_name, created_at')
-    .gte('created_at', sinceIso(days))
-    .order('created_at', { ascending: false })
-    .limit(ACTIVITY_ROW_LIMIT)
-  if (error) throw error
-  return shapeActivityStats(data ?? [], days)
+  return shapeActivityStats(await auditRows(days), days)
 }
 
-/**
- * ai_token_logs (last 30 days) — same columns AiCostMonitor selects.
- * An empty table is a valid state (feature not wired yet), not an error.
- */
+/** AI usage over all matching rows, never a silently capped subset. */
 export async function fetchAiUsage(days = WINDOW_DAYS) {
-  const { data, error } = await supabase
-    .from('ai_token_logs')
+  const since = sinceIso(days)
+  const through = new Date().toISOString()
+  const data = await completeRows(() => supabase.from('ai_token_logs')
     .select('id, model, feature, prompt_tokens, completion_tokens, cost_usd, created_at')
-    .gte('created_at', sinceIso(days))
-    .order('created_at', { ascending: false })
-    .limit(AI_LOG_ROW_LIMIT)
-  if (error) throw error
-  return shapeAiUsage(data ?? [], days)
+    .gte('created_at', since).lte('created_at', through), AI_LOG_ROW_LIMIT)
+  return shapeAiUsage(data, days)
 }
 
 /** Head-count every growth table in parallel; per-table failures isolated. */
@@ -330,7 +336,8 @@ export async function fetchDataGrowth() {
         .from(table)
         .select('id', { count: 'exact', head: true })
       if (error) throw error
-      return { table, label, count: count ?? 0, error: null }
+      if (!Number.isInteger(count) || count < 0) throw new Error('Exact count was not returned')
+      return { table, label, count, error: null }
     }),
   )
   const tables = settled.map((s, i) =>
@@ -338,19 +345,14 @@ export async function fetchDataGrowth() {
       ? s.value
       : { ...GROWTH_TABLES[i], count: null, error: s.reason?.message ?? 'Query failed' },
   )
-  const totalRecords = tables.reduce((sum, t) => sum + (t.count ?? 0), 0)
-  return { tables, totalRecords }
+  const complete = tables.every(table => !table.error)
+  const totalRecords = complete ? tables.reduce((sum, table) => sum + table.count, 0) : null
+  return { tables, totalRecords, complete }
 }
 
 /** Module adoption from 30-day audit activity (table_name → module). */
 export async function fetchModuleAdoption(days = WINDOW_DAYS) {
-  const { data, error } = await supabase
-    .from('audit_log_v2')
-    .select('table_name')
-    .gte('created_at', sinceIso(days))
-    .limit(ACTIVITY_ROW_LIMIT)
-  if (error) throw error
-  return buildModuleAdoption(data ?? [])
+  return buildModuleAdoption(await auditRows(days))
 }
 
 // ── Orchestration ─────────────────────────────────────────────────────────────
@@ -362,12 +364,13 @@ export async function fetchModuleAdoption(days = WINDOW_DAYS) {
  * table, etc.). Returns { users, activity, ai, growth, adoption, generatedAt }.
  */
 export async function runTenantReport(days = WINDOW_DAYS) {
+  const audit = auditRows(days)
   const slices = [
     ['users',    fetchUserStats()],
-    ['activity', fetchActivityStats(days)],
+    ['activity', audit.then(rows => shapeActivityStats(rows, days))],
     ['ai',       fetchAiUsage(days)],
     ['growth',   fetchDataGrowth()],
-    ['adoption', fetchModuleAdoption(days)],
+    ['adoption', audit.then(rows => buildModuleAdoption(rows))],
   ]
   const settled = await Promise.allSettled(slices.map(([, p]) => p))
   const report = { generatedAt: new Date().toISOString(), windowDays: days }

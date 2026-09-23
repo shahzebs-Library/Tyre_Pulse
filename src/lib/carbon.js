@@ -291,7 +291,7 @@ export function intensityBand(intensityKgPerKm) {
     if (intensityKgPerKm <= threshold) {
       return {
         band,
-        label: `${label} — ${intensityKgPerKm.toFixed(2)} kg CO₂/km`,
+        label: `${label}, ${intensityKgPerKm.toFixed(2)} kg CO₂/km`,
         urgency,
         intensityKgPerKm: round(intensityKgPerKm, 3),
       }

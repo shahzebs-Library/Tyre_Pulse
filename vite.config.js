@@ -1,22 +1,60 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { releaseBuild } from './scripts/release-build.mjs'
+import { assertPublicEnv } from './src/lib/publicEnvSecurity.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  assertPublicEnv(loadEnv(mode, process.cwd(), 'VITE_'))
+  const release = releaseBuild()
+  return {
+  define: { 'import.meta.env.TP_RELEASE': JSON.stringify(release.manifest) },
   plugins: [
     react(),
+    release.plugin,
     VitePWA({
       // 'prompt': a new deploy is DETECTED automatically (PwaUpdatePrompt polls
       // every 15 min + on refocus) but does NOT hijack the page. The new worker
       // WAITS; the "New version available" toast appears so a user finishes their
-      // work first, and PwaUpdatePrompt also applies the waiting update quietly
-      // when the tab goes hidden (so kiosks / TVs still self-heal, nobody is
-      // stranded on a stale build). Previously 'autoUpdate' + skipWaiting force
+      // work first. Hidden tabs never activate a waiting update. Previously 'autoUpdate' + skipWaiting force
       // reloaded the page mid-work and bypassed the toast entirely.
+      /**
+       * SERVICE WORKER RETIREMENT, STAGE 1 OF 2.
+       *
+       * WHY. Measured 2026-09-21: 19 people have ever created an inspection and
+       * 18 of them carry the Android app, 1,342 of 1,348 inspections were signed
+       * through the mobile capture path, and 127 devices are active. Field work
+       * moved to the store app, so the browser service worker was precaching
+       * 56 MB per user (37 MB of it vehicle artwork swept in by the png glob)
+       * to serve a workflow almost nobody performs in a browser any more.
+       *
+       * WHAT IS NOT LOST. Offline inspection capture survives this. The queue in
+       * src/lib/offlineQueue.js is IndexedDB backed and already guards its
+       * Background Sync registration behind a feature test; Layout.jsx flushes it
+       * on mount, on the window 'online' event, and on reopen. Only background
+       * retry while the tab is CLOSED goes away, which was Chromium only and
+       * never worked on iOS at all.
+       *
+       * WHY SELF DESTROYING RATHER THAN DELETING THE PLUGIN. A service worker
+       * already installed in someone's browser keeps running and keeps serving
+       * its old precached build; removing the plugin never reaches those
+       * browsers. This ships a worker whose only job is to unregister itself and
+       * drop every cache. Leave it in place for a release, then delete the plugin
+       * block, PwaUpdatePrompt and the service worker half of chunkRecovery.
+       *
+       * ORDER MATTERS: this must go out BEFORE the app moves to
+       * app.tyrepulse.app. If the marketing site takes www while workers are
+       * still installed there, they are torn down only when /sw.js starts
+       * 404ing, which is uncontrolled and hard to diagnose from a bug report.
+       *
+       * The web app manifest is deliberately KEPT. It costs nothing, and it is
+       * what lets an already installed icon keep opening the app.
+       */
+      selfDestroying: true,
       registerType: 'prompt',
       injectRegister: 'auto',
       includeAssets: [
@@ -84,6 +122,7 @@ export default defineConfig({
         prefer_related_applications: false,
       },
       workbox: {
+        importScripts: [release.filename],
         // Allow large bundles — our app code exceeds the 2MB default
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,ttf,eot,json,webmanifest}'],
@@ -259,13 +298,25 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.js'],
     // Heavy jsdom render tests (e.g. the workflow panels) can exceed the 5s
     // default under parallel CPU load — give them headroom to avoid flakiness.
-    testTimeout: 20000,
+    //
+    // Raised 20s -> 45s on 2026-09-21. The suite is now 693 files, and a full
+    // run reported 9 failures of which every one passed in isolation: 5 were
+    // "Test timed out in 20000ms", 2 were waitFor render tests failing to find
+    // an element they do find when run alone, and 1 was a worker that could not
+    // start at all under the load. Measured on that run, jsdom environment
+    // setup alone cost 4,389s across the suite, so a render test can genuinely
+    // wait tens of seconds for CPU before its own work begins.
+    //
+    // This is headroom for contention, NOT permission to write slow tests. A
+    // real hang still fails, just 25s later. If a single test needs more, pass
+    // a per-test timeout rather than raising this again.
+    testTimeout: 45000,
     // services/** has its own Node (node:test) suite, and mobile/** has its own
     // jest project (both run as separate CI jobs) — keep them out of vitest.
     // mobile tests use jest.mock to stub react-native at the module boundary,
     // which vitest does not honour, so collecting them here fails on parsing
     // react-native itself. They are NOT skipped: the mobile CI job runs them.
-    exclude: ['**/.claude/**', '**/node_modules/**', '**/dist/**', '**/services/**', '**/mobile/**'],
+    exclude: ['**/.claude/**', '**/node_modules/**', '**/dist/**', '**/services/**', '**/mobile/**', '**/marketing/**', '**/supabase/tests/**'],
     // Hermetic test env: modules that construct the Supabase client at import
     // time (src/lib/supabase.js) need the two public vars present. These are
     // dummy placeholders — no real project is contacted in unit tests. Only
@@ -284,4 +335,5 @@ export default defineConfig({
       { find: /.*\/agent-toolset\/skills\.mjs$/,  replacement: path.resolve(__dirname, 'src/stubs/empty.js') },
     ],
   },
+  }
 })

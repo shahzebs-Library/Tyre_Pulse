@@ -260,6 +260,7 @@ export default function AppLayout() {
       <Tabs.Screen name="overview"        options={{ href: null }} />
       <Tabs.Screen name="inspection/[id]" options={{ href: null }} />
       <Tabs.Screen name="inspection/approvals/index" options={{ href: null }} />
+      <Tabs.Screen name="approvals" options={{ href: null }} />
       <Tabs.Screen name="inspection/approvals/[id]" options={{ href: null }} />
       <Tabs.Screen name="accident/report" options={{ href: null }} />
       <Tabs.Screen name="accident/[id]"   options={{ href: null }} />

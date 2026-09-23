@@ -26,6 +26,7 @@ import { summariseHandovers, byCondition, damageCount } from '../lib/handoverRep
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 const EMPTY_FORM = {
   asset_no: '', report_no: '', handover_type: 'checkout', from_driver: '', to_driver: '',
@@ -45,13 +46,13 @@ const CONDITION_META = {
 }
 const CLEANLINESS_OPTIONS = ['clean', 'acceptable', 'dirty']
 
-const fmtKm = (v) => (v == null || v === '' ? '—' : `${Number(v).toLocaleString()} km`)
-const fmtPct = (v) => (v == null || v === '' ? '—' : `${Number(v)}%`)
+const fmtKm = (v) => (v == null || v === '' ? 'N/A' : `${Number(v).toLocaleString()} km`)
+const fmtPct = (v) => (v == null || v === '' ? 'N/A' : `${Number(v)}%`)
 
 function fmtDateTime(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleString()
 }
 /** timestamptz → value for <input type="datetime-local">. */
 function toLocalInput(v) {
@@ -62,15 +63,10 @@ function toLocalInput(v) {
   return new Date(d.getTime() - off * 60000).toISOString().slice(0, 16)
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') ||
-    m.includes('schema cache') || m.includes('could not find the table')
-}
 
 function TypeBadge({ type }) {
   const meta = TYPE_META[type]
-  if (!meta) return <span className="text-[var(--text-muted)]">—</span>
+  if (!meta) return <span className="text-[var(--text-muted)]">N/A</span>
   const Icon = meta.icon
   return (
     <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${meta.cls}`}>
@@ -80,7 +76,7 @@ function TypeBadge({ type }) {
 }
 function ConditionBadge({ rating }) {
   const meta = CONDITION_META[rating]
-  if (!meta) return <span className="text-[var(--text-muted)]">—</span>
+  if (!meta) return <span className="text-[var(--text-muted)]">N/A</span>
   return <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${meta.cls}`}>{meta.label}</span>
 }
 
@@ -233,7 +229,7 @@ export default function VehicleHandover() {
     <div className="space-y-6">
       <PageHeader
         title="Vehicle Handover"
-        subtitle="Record check-in / check-out condition reports each time a vehicle changes hands between drivers — the accountability basis for damage attribution, cost recovery, and downtime analysis."
+        subtitle="Record check-in / check-out condition reports each time a vehicle changes hands between drivers: the accountability basis for damage attribution, cost recovery, and downtime analysis."
         icon={ClipboardCheck}
         onRefresh={load}
         refreshing={refreshing}
@@ -282,7 +278,7 @@ export default function VehicleHandover() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -362,22 +358,22 @@ export default function VehicleHandover() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={9} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {rows.length === 0 && !notProvisioned ? 'No handover reports recorded yet — record your first handover.' : 'No reports match these filters.'}
+                  {rows.length === 0 && !notProvisioned ? 'No handover reports recorded yet. Record your first handover.' : 'No reports match these filters.'}
                 </td></tr>
               ) : (
                 pager.pageRows.map((r) => (
                   <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
                     <td className="px-4 py-2.5">
-                      <div className="font-medium text-[var(--text-primary)]">{r.asset_no || '—'}</div>
+                      <div className="font-medium text-[var(--text-primary)]">{r.asset_no || 'N/A'}</div>
                       {r.report_no && <div className="text-[11px] text-[var(--text-muted)]">{r.report_no}</div>}
                     </td>
                     <td className="px-4 py-2.5"><TypeBadge type={r.handover_type} /></td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)]">
                       <div className="flex items-center gap-1.5 whitespace-nowrap">
                         <Users size={13} className="text-[var(--text-muted)] shrink-0" />
-                        <span>{r.from_driver || '—'}</span>
+                        <span>{r.from_driver || 'N/A'}</span>
                         <ArrowLeftRight size={12} className="text-[var(--text-muted)] shrink-0" />
-                        <span>{r.to_driver || '—'}</span>
+                        <span>{r.to_driver || 'N/A'}</span>
                       </div>
                     </td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDateTime(r.handover_at)}</td>
@@ -515,7 +511,7 @@ export default function VehicleHandover() {
               <div>
                 <h3 className="text-[var(--text-primary)] font-semibold">Delete this handover report?</h3>
                 <p className="text-sm text-[var(--text-muted)] mt-1">
-                  {confirmDelete.asset_no || 'Report'} · {TYPE_META[confirmDelete.handover_type]?.label || '—'} · {fmtDateTime(confirmDelete.handover_at)}. This can’t be undone.
+                  {confirmDelete.asset_no || 'Report'} · {TYPE_META[confirmDelete.handover_type]?.label || 'N/A'} · {fmtDateTime(confirmDelete.handover_at)}. This can’t be undone.
                 </p>
               </div>
             </div>

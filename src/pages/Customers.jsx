@@ -25,6 +25,7 @@ import { summarizeCustomers, isValidEmail } from '../lib/customers'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 const STATUS_META = {
   active: { label: 'Active', cls: 'bg-green-900/40 text-green-300 border border-green-700/50' },
@@ -36,11 +37,6 @@ const EMPTY_FORM = {
   address: '', site: '', status: 'active', notes: '',
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') ||
-    m.includes('schema cache') || m.includes('could not find the table')
-}
 
 // ─── Create / edit modal ──────────────────────────────────────────────────────
 function CustomerModal({ open, initial, onClose, onSaved, country }) {
@@ -293,7 +289,7 @@ export default function Customers() {
     <div className="space-y-6">
       <PageHeader
         title="Customers"
-        subtitle="Your customer registry — accounts, contacts and classification, country-scoped."
+        subtitle="Your customer registry: accounts, contacts and classification, country-scoped."
         icon={Building2}
         onRefresh={load}
         refreshing={refreshing}
@@ -342,7 +338,7 @@ export default function Customers() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -383,7 +379,7 @@ export default function Customers() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={6} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   {missing ? (
-                    <><Building2 size={22} className="mx-auto mb-2 opacity-60" />No customers yet — apply the migration to get started.</>
+                    <><Building2 size={22} className="mx-auto mb-2 opacity-60" />No customers yet. Apply the migration to get started.</>
                   ) : hasFilters ? (
                     <><Filter size={22} className="mx-auto mb-2 opacity-60" />No customers match these filters.</>
                   ) : (
@@ -405,16 +401,16 @@ export default function Customers() {
                         <div className="font-medium text-[var(--text-primary)]">{r.name}</div>
                         {r.address && <div className="text-xs text-[var(--text-muted)] truncate max-w-[240px]">{r.address}</div>}
                       </td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.customer_type || '—'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.customer_type || 'N/A'}</td>
                       <td className="px-4 py-2.5">
                         <div className="space-y-0.5">
                           {r.contact_name && <div className="text-[var(--text-secondary)] flex items-center gap-1.5"><User size={12} className="text-[var(--text-muted)]" />{r.contact_name}</div>}
                           {r.email && <div className="text-xs text-[var(--text-muted)] flex items-center gap-1.5"><Mail size={11} />{r.email}</div>}
                           {r.phone && <div className="text-xs text-[var(--text-muted)] flex items-center gap-1.5"><Phone size={11} />{r.phone}</div>}
-                          {!r.contact_name && !r.email && !r.phone && <span className="text-[var(--text-muted)]">—</span>}
+                          {!r.contact_name && !r.email && !r.phone && <span className="text-[var(--text-muted)]">N/A</span>}
                         </div>
                       </td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.site || '—'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.site || 'N/A'}</td>
                       <td className="px-4 py-2.5"><span className={`badge text-[11px] px-2 py-0.5 rounded ${status.cls}`}>{status.label}</span></td>
                       <td className="px-4 py-2.5">
                         <div className="flex items-center justify-end gap-1">

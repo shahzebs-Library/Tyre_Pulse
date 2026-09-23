@@ -11,12 +11,13 @@
  * Mirrors odometerLogs.js: explicit column lists (least-privilege selects),
  * null-safe country scoping, input validation, and graceful degradation. A
  * missing relation (org has not run a migration, or a table isn't provisioned)
- * degrades to an empty array for that entity so the page can still render.
+ * is reported per entity while successful groups remain available.
  *
  * RLS enforces org isolation; this layer never trusts client input blindly.
  */
 import { supabase, unwrap, applyCountry } from './_client'
 import { toFiniteNumber } from '../advancedSearch'
+import { toUserMessage } from '../safeError'
 
 export const COLS =
   'id,organisation_id,country,name,entity,query_text,filters,result_count,' +
@@ -57,19 +58,6 @@ const LIVE_TARGETS = {
   },
 }
 
-/** True when the failure is "table does not exist yet" (pre-migration). */
-function isMissingRelation(err) {
-  const code = err?.code || err?.cause?.code
-  const msg = String(err?.message || err?.cause?.message || '').toLowerCase()
-  return (
-    code === '42P01' || code === 'PGRST205' ||
-    msg.includes('does not exist') ||
-    msg.includes('could not find the table') ||
-    msg.includes('schema cache') ||
-    (msg.includes('relation') && msg.includes('saved_searches'))
-  )
-}
-
 const asText = (v, max) => (v == null || v === '' ? null : String(v).trim().slice(0, max))
 const asBool = (v) => v === true || v === 'true' || v === 1 || v === '1'
 
@@ -77,23 +65,12 @@ const asBool = (v) => v === true || v === 'true' || v === 1 || v === '1'
 
 /**
  * List saved searches for the active country. Pinned first, then newest.
- * Returns [] when the table has not been provisioned yet.
+ * Backend failures are surfaced; an empty array means the query succeeded.
  * @param {{ country?:string, limit?:number }} [opts]
  */
 export async function listSavedSearches({ country, limit = 500 } = {}) {
-  try {
-    let q = supabase.from('saved_searches').select(COLS)
-    q = applyCountry(q, country)
-    return unwrap(
-      await q
-        .order('pinned', { ascending: false })
-        .order('created_at', { ascending: false })
-        .limit(limit),
-    ) || []
-  } catch (err) {
-    if (isMissingRelation(err)) return []
-    throw err
-  }
+  const q = applyCountry(supabase.from('saved_searches').select(COLS), country)
+  return unwrap(await q.order('pinned', { ascending: false }).order('created_at', { ascending: false }).order('id').limit(limit)) || []
 }
 
 export async function getSavedSearch(id) {
@@ -171,64 +148,45 @@ export async function markSavedSearchRun(id, resultCount) {
 // ── Live global search ───────────────────────────────────────────────────────
 
 /**
- * Run one entity's live query, guarded so a missing table yields [] rather than
- * aborting the whole search. Applies country scoping and an ilike on the
+ * Run one entity's live query with an exact count and explicit failures. Applies country scoping and an ilike on the
  * entity's display column.
  */
 async function queryEntity(key, term, country, limitPer) {
   const target = LIVE_TARGETS[key]
-  if (!target) return []
-  try {
-    let q = supabase.from(target.table).select(target.cols)
-    q = applyCountry(q, country)
-    q = q.ilike(target.searchCol, `%${term}%`)
-    return unwrap(await q.order(target.order, { ascending: false }).limit(limitPer)) || []
-  } catch (err) {
-    if (isMissingRelation(err)) return []
-    // A column-not-found on the display column also degrades gracefully rather
-    // than failing the entire multi-entity search.
-    const msg = String(err?.message || '').toLowerCase()
-    if (msg.includes('column') && msg.includes('does not exist')) return []
-    throw err
-  }
+  let query = applyCountry(supabase.from(target.table).select(target.cols, { count: 'exact' }), country)
+  query = query.ilike(target.searchCol, `%${term}%`)
+  const result = await query.order(target.order, { ascending: false }).order('id').limit(limitPer)
+  const rows = unwrap(result) || []
+  const count = Number.isInteger(result.count) && result.count >= rows.length ? result.count : null
+  return { rows, count, truncated: count === null ? rows.length >= limitPer : count > rows.length }
 }
 
-/**
- * Live cross-entity search. Queries the real operational tables for `term`
- * (ilike on each entity's display column), scoped to `country`. When `entity`
- * is one of the concrete entities, only that table is queried; 'all' (or an
- * unknown value) queries every table in parallel.
- *
- * Each entity is independently guarded so a missing/unprovisioned table simply
- * returns [] for that group instead of failing the whole request.
- *
- * @param {{ term:string, entity?:string, country?:string, limitPer?:number }} opts
- * @returns {Promise<{ assets:object[], tyres:object[], workOrders:object[],
- *                     inspections:object[], total:number }>}
- */
+/** Return successful groups plus explicit failures and exact-count coverage. */
 export async function runGlobalSearch({ term, entity = 'all', country, limitPer = 25 } = {}) {
   const clean = String(term ?? '').trim()
-  const empty = { assets: [], tyres: [], workOrders: [], inspections: [], total: 0 }
+  const empty = { assets: [], tyres: [], workOrders: [], inspections: [], total: 0, totalMatches: null, complete: false, errors: {}, coverage: {} }
   if (!clean) return empty
-
-  const per = Math.max(1, Math.min(200, toFiniteNumber(limitPer) ?? 25))
+  const per = Math.max(1, Math.min(200, Math.floor(toFiniteNumber(limitPer) ?? 25)))
   const want = VALID_ENTITIES.has(entity) ? entity : 'all'
-  const run = (key) => (want === 'all' || want === key)
-    ? queryEntity(key, clean, country, per)
-    : Promise.resolve([])
-
-  const [assets, tyres, workOrders, inspections] = await Promise.all([
-    run('assets'),
-    run('tyres'),
-    run('work_orders'),
-    run('inspections'),
-  ])
-
-  return {
-    assets,
-    tyres,
-    workOrders,
-    inspections,
-    total: assets.length + tyres.length + workOrders.length + inspections.length,
-  }
+  const keys = Object.keys(LIVE_TARGETS).filter(key => want === 'all' || want === key)
+  const settled = await Promise.allSettled(keys.map(key => queryEntity(key, clean, country, per)))
+  const out = { ...empty, complete: true, totalMatches: 0 }
+  settled.forEach((result, index) => {
+    const entityKey = keys[index]
+    const key = entityKey === 'work_orders' ? 'workOrders' : entityKey
+    if (result.status === 'rejected') {
+      out.errors[key] = toUserMessage(result.reason, 'This search could not be completed.')
+      out.coverage[key] = { status: 'error', count: null, returned: 0, truncated: false }
+      out.complete = false
+      return
+    }
+    const { rows, count, truncated } = result.value
+    out[key] = rows
+    out.total += rows.length
+    out.coverage[key] = { status: 'ok', count, returned: rows.length, truncated }
+    if (count === null) out.complete = false
+    else out.totalMatches += count
+  })
+  if (!out.complete) out.totalMatches = null
+  return out
 }

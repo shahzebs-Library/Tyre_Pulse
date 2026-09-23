@@ -475,12 +475,14 @@ export default function VehicleHistory() {
     let cancelled = false
     async function loadRelated() {
       const [actRes, rcaRes, insRes, tyreRes] = await Promise.all([
-        vehicleHistoryApi.listAssetActions(selected),
-        vehicleHistoryApi.listAssetRca(selected),
-        vehicleHistoryApi.listAssetInspections(selected),
-        vehicleHistoryApi.listAssetTyreRecords(selected),
+        vehicleHistoryApi.listAssetActions(selected, { country: activeCountry }),
+        vehicleHistoryApi.listAssetRca(selected, { country: activeCountry }),
+        vehicleHistoryApi.listAssetInspections(selected, { country: activeCountry }),
+        vehicleHistoryApi.listAssetTyreRecords(selected, { country: activeCountry }),
       ])
       if (cancelled) return
+      const failed = [actRes, rcaRes, insRes, tyreRes].find(r => r.error)
+      if (failed) setError(toUserMessage(failed.error, 'Some related asset history could not be loaded.'))
       setRelatedActions(actRes.data || [])
       setRelatedRca(rcaRes.data || [])
       setRelatedInspections(insRes.data || [])
@@ -494,9 +496,10 @@ export default function VehicleHistory() {
       )
       setTyrePositions(latestPerPosition)
     }
-    loadRelated()
+    setRelatedActions([]); setRelatedRca([]); setRelatedInspections([]); setTyrePositions([])
+    loadRelated().catch(err => { if (!cancelled) setError(toUserMessage(err, 'Could not load related asset history.')) })
     return () => { cancelled = true }
-  }, [selected])
+  }, [selected, activeCountry])
 
   if (loading) {
     return (

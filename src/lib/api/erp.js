@@ -5,6 +5,7 @@
  * edge-function secret (see docs/ERP_INTEGRATION.md) so it can't leak client-side.
  */
 import { supabase, unwrap } from './_client'
+import { getConfiguration, saveConfiguration } from '../configurationStore'
 import { validateErpConfig } from '../erpReliability'
 
 const KEY = 'erp_connection'
@@ -40,21 +41,19 @@ export const DEFAULT_ERP = Object.freeze({
 /** Read the saved ERP connection config (or defaults). */
 export async function getErpConnection() {
   const rows = unwrap(
-    await supabase.from('app_settings').select('value').eq('key', KEY).maybeSingle(),
+    await getConfiguration(supabase, 'app_settings', KEY),
   )
   if (!rows?.value) return { ...DEFAULT_ERP }
   try {
     const v = typeof rows.value === 'string' ? JSON.parse(rows.value) : rows.value
     return { ...DEFAULT_ERP, ...v }
-  } catch { return { ...DEFAULT_ERP } }
+  } catch { throw new Error('Stored ERP configuration is invalid. Ask an administrator to repair it before saving.') }
 }
 
 /** Save the ERP connection config (admins only, enforced by app_settings RLS). */
 export async function saveErpConnection(config) {
   const clean = { ...validateErpConfig(config), updated_at: new Date().toISOString() }
-  const { error } = await supabase.from('app_settings').upsert(
-    { key: KEY, value: JSON.stringify(clean) }, { onConflict: 'key' },
-  )
+  const { error } = await saveConfiguration(supabase, 'app_settings', { key: KEY, value: JSON.stringify(clean) })
   if (error) throw new Error(error.message || 'Could not save the ERP connection.')
   return clean
 }

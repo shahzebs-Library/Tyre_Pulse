@@ -8,17 +8,90 @@ import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_report_intake.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
-import 'package:tyre_pulse/features/assets/presentation/widgets/selected_vehicle_card.dart';
+import 'package:tyre_pulse/features/assets/presentation/vehicle_photo_resolver.dart';
+
+/// The wizard pages are the validation groups themselves, numbered by
+/// `reportWizardSteps`, so there is exactly one "Step N of 7" in the app.
+/// The alias keeps existing callers and tests readable.
+typedef AccidentIntakePage = AccidentReportStep;
+
+/// The exact fleet-master note printed under the locked fields (M7).
+const String accidentFleetMasterLockNote =
+    'These details are sourced from fleet master and cannot be edited here. '
+    'If any detail is incorrect, please update it in the fleet system.';
+
+/// The sub-text under "Where did the incident occur?" (M7).
+const String accidentIncidentSiteHelp =
+    'Select the site/location of this incident. This may be different from '
+    "the asset's home site.";
+
+/// Wide capture canvas for the image-led intake pages.
+class AccidentIntakeCanvas extends StatelessWidget {
+  const AccidentIntakeCanvas({
+    required this.title,
+    required this.icon,
+    required this.child,
+    this.eyebrow,
+    this.subtitle,
+    super.key,
+  });
+  final String title;
+  final String? eyebrow;
+  final String? subtitle;
+  final IconData icon;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        if (eyebrow?.isNotEmpty == true) ...<Widget>[
+          Text(
+            eyebrow!,
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: palette.primary,
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+          const SizedBox(height: TpSpace.xs),
+        ],
+        Text(title, style: Theme.of(context).textTheme.headlineSmall),
+        if (subtitle?.isNotEmpty == true) ...<Widget>[
+          const SizedBox(height: TpSpace.xs),
+          Text(subtitle!, style: Theme.of(context).textTheme.bodyMedium),
+        ],
+        const SizedBox(height: TpSpace.md),
+        child,
+      ],
+    );
+  }
+}
 
 abstract final class AccidentReportIntakeKeys {
   static const ValueKey<String> progress =
       ValueKey<String>('accident.report.progress');
+  static const ValueKey<String> eyebrow =
+      ValueKey<String>('accident.report.eyebrow');
   static ValueKey<String> step(AccidentReportStep step) =>
       ValueKey<String>('accident.report.step.${step.name}');
   static ValueKey<String> evidence(String key) =>
       ValueKey<String>('accident.report.evidence.$key');
   static const ValueKey<String> assetMaster =
       ValueKey<String>('accident.report.assetMaster');
+  static const ValueKey<String> matchCount =
+      ValueKey<String>('accident.report.matchCount');
+  static const ValueKey<String> matchOverflow =
+      ValueKey<String>('accident.report.matchOverflow');
+  static ValueKey<String> matchRow(String assetId) =>
+      ValueKey<String>('accident.report.match.$assetId');
+  static const ValueKey<String> incidentSite =
+      ValueKey<String>('accident.report.incidentSite');
+  static ValueKey<String> siteChip(String site) =>
+      ValueKey<String>('accident.report.siteChip.$site');
+  static const ValueKey<String> lockNote =
+      ValueKey<String>('accident.report.lockNote');
 }
 
 class AccidentReportProgress extends StatelessWidget {
@@ -31,76 +104,41 @@ class AccidentReportProgress extends StatelessWidget {
   final AccidentReportStep current;
   final ValueChanged<AccidentReportStep> onSelect;
 
-  static const Map<AccidentReportStep, String> labels =
-      <AccidentReportStep, String>{
-    AccidentReportStep.incident: 'Incident',
-    AccidentReportStep.peopleAuthority: 'People',
-    AccidentReportStep.damage: 'Damage',
-    AccidentReportStep.evidenceDocuments: 'Evidence',
-    AccidentReportStep.review: 'Review',
-  };
-
   @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
-    final int currentIndex = current.index;
     return Semantics(
       key: AccidentReportIntakeKeys.progress,
       container: true,
-      label: 'Step ${currentIndex + 1} of ${AccidentReportStep.values.length}: '
-          '${labels[current]}',
+      label: current.eyebrow,
       child: TpCard(
         padding: const EdgeInsets.all(TpSpace.md),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Row(
-              children: <Widget>[
-                Expanded(
-                  child: Text(
-                    'Step ${currentIndex + 1} of '
-                    '${AccidentReportStep.values.length}',
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: palette.primary,
-                          fontWeight: FontWeight.w800,
-                        ),
+            Text(
+              current.eyebrow,
+              key: AccidentReportIntakeKeys.eyebrow,
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: palette.primary,
+                    fontWeight: FontWeight.w800,
                   ),
-                ),
-                Text(
-                  labels[current]!,
-                  style: Theme.of(context).textTheme.labelMedium,
-                ),
-              ],
             ),
             const SizedBox(height: TpSpace.sm),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(TpRadius.pill),
-              child: LinearProgressIndicator(
-                minHeight: 7,
-                value: (currentIndex + 1) / AccidentReportStep.values.length,
-                backgroundColor: palette.surfaceSunken,
-                color: palette.primary,
-              ),
-            ),
-            const SizedBox(height: TpSpace.sm),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: <Widget>[
-                  for (final AccidentReportStep step
-                      in AccidentReportStep.values) ...<Widget>[
-                    _StepDot(
-                      step: step,
-                      label: labels[step]!,
-                      selected: step == current,
-                      completed: step.index < currentIndex,
-                      onTap: () => onSelect(step),
-                    ),
-                    if (step != AccidentReportStep.values.last)
-                      const SizedBox(width: TpSpace.xs),
-                  ],
+            Wrap(
+              spacing: TpSpace.xs,
+              runSpacing: TpSpace.xs,
+              children: <Widget>[
+                for (final AccidentReportStep step
+                    in AccidentReportStep.values) ...<Widget>[
+                  _StepDot(
+                    step: step,
+                    selected: step == current,
+                    completed: step.index < current.index,
+                    onTap: () => onSelect(step),
+                  ),
                 ],
-              ),
+              ],
             ),
           ],
         ),
@@ -112,14 +150,12 @@ class AccidentReportProgress extends StatelessWidget {
 class _StepDot extends StatelessWidget {
   const _StepDot({
     required this.step,
-    required this.label,
     required this.selected,
     required this.completed,
     required this.onTap,
   });
 
   final AccidentReportStep step;
-  final String label;
   final bool selected;
   final bool completed;
   final VoidCallback onTap;
@@ -132,7 +168,7 @@ class _StepDot extends StatelessWidget {
     return Semantics(
       button: true,
       selected: selected,
-      label: '${step.index + 1}. $label',
+      label: '${step.number}. ${step.label}',
       child: Material(
         color: selected || completed ? palette.primary : palette.surfaceAlt,
         borderRadius: BorderRadius.circular(TpRadius.pill),
@@ -146,6 +182,7 @@ class _StepDot extends StatelessWidget {
               vertical: TpSpace.xs,
             ),
             child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: <Widget>[
                 Icon(
                   completed ? Icons.check_rounded : Icons.circle,
@@ -154,7 +191,7 @@ class _StepDot extends StatelessWidget {
                 ),
                 const SizedBox(width: 4),
                 Text(
-                  label,
+                  step.label,
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
                         color: foreground,
                         fontWeight:
@@ -241,6 +278,116 @@ class AccidentDraftStatus extends StatelessWidget {
   }
 }
 
+/// One Step 1 match row (M7): vehicle illustration, asset no, type and a
+/// plate chip. The illustration is the shared fleet artwork resolver; an
+/// asset with no artwork shows its class icon, never a placeholder image.
+class AccidentAssetMatchRow extends StatelessWidget {
+  const AccidentAssetMatchRow({
+    required this.asset,
+    required this.unavailableLabel,
+    required this.onTap,
+    this.selected = false,
+    super.key,
+  });
+
+  final VehicleAsset asset;
+  final String unavailableLabel;
+  final VoidCallback onTap;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final String? photo = vehiclePhotoAsset(asset);
+    final String identity = asset.displayIdentity ?? unavailableLabel;
+    final String? plate = _clean(asset.registrationNo);
+    final String details = <String?>[
+      asset.vehicleType,
+      asset.make,
+      asset.model,
+      asset.site,
+    ]
+        .whereType<String>()
+        .map((String value) => value.trim())
+        .where((String value) => value.isNotEmpty)
+        .join(' · ');
+    final TpPalette palette = TpPalette.of(context);
+    return TpCard(
+      key: AccidentReportIntakeKeys.matchRow(asset.id),
+      padding: EdgeInsets.zero,
+      child: Material(
+        color: Colors.transparent,
+        child: ListTile(
+          selected: selected,
+          selectedTileColor: palette.primarySoft,
+          onTap: onTap,
+          contentPadding: const EdgeInsets.all(TpSpace.sm),
+          leading: Container(
+            width: 78,
+            height: 62,
+            clipBehavior: Clip.antiAlias,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: palette.surfaceAlt,
+              borderRadius: BorderRadius.circular(TpRadius.sm),
+            ),
+            child: photo == null
+                ? Icon(
+                    vehicleFallbackIcon(asset),
+                    color: palette.primary,
+                    size: 32,
+                  )
+                : Image.asset(
+                    photo,
+                    fit: BoxFit.contain,
+                    width: double.infinity,
+                    height: double.infinity,
+                    semanticLabel: identity,
+                  ),
+          ),
+          title: Directionality(
+            textDirection: TextDirection.ltr,
+            child: Text(
+              identity,
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
+          ),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              if (details.isNotEmpty)
+                Text(
+                  details,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              if (plate != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: TpSpace.xs),
+                  child: Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: TpStatusChip(
+                      status: TpStatus.neutral,
+                      label: plate,
+                      icon: Icons.badge_outlined,
+                      isCompact: true,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          trailing:
+              Icon(selected ? Icons.check_circle : Icons.chevron_right_rounded),
+        ),
+      ),
+    );
+  }
+}
+
+/// M7 "Asset loaded from fleet master" card plus the read-only auto-filled
+/// lock fields. Every value is the register's own; a missing value reads
+/// [unavailableLabel], never a guess.
 class AccidentFleetMasterCard extends StatelessWidget {
   const AccidentFleetMasterCard({
     required this.asset,
@@ -257,6 +404,7 @@ class AccidentFleetMasterCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final String? photo = vehiclePhotoAsset(asset);
     final String meter = asset.currentKm == null
         ? unavailableLabel
         : '${formatVehicleOdometer(asset.currentKm!)} km';
@@ -265,6 +413,19 @@ class AccidentFleetMasterCard extends StatelessWidget {
         .map((String value) => value.trim())
         .where((String value) => value.isNotEmpty)
         .join(' ');
+    final TpPalette palette = TpPalette.of(context);
+    final String assetNo =
+        _shown(asset.assetNo ?? asset.fleetNumber, unavailableLabel);
+    final List<(String, String)> cardRows = <(String, String)>[
+      ('Asset no', assetNo),
+      ('Vehicle type', _shown(asset.vehicleType, unavailableLabel)),
+      ('Plate', _shown(asset.registrationNo, unavailableLabel)),
+      ('Make / model', _shown(makeModel, unavailableLabel)),
+      ('Site (home)', _shown(asset.site, unavailableLabel)),
+      ('Country', _shown(asset.country, unavailableLabel)),
+      ('Current meter', meter),
+      ('Status', _shown(asset.status, unavailableLabel)),
+    ];
     return Column(
       key: AccidentReportIntakeKeys.assetMaster,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -275,7 +436,7 @@ class AccidentFleetMasterCard extends StatelessWidget {
             const SizedBox(width: TpSpace.sm),
             Expanded(
               child: Text(
-                'Fleet master match',
+                'Asset loaded from fleet master',
                 style: Theme.of(context).textTheme.titleSmall,
               ),
             ),
@@ -287,24 +448,97 @@ class AccidentFleetMasterCard extends StatelessWidget {
           ],
         ),
         const SizedBox(height: TpSpace.sm),
-        SelectedVehicleCard(
-          asset: asset,
-          changeLabel: changeLabel,
-          unavailableLabel: unavailableLabel,
-          onChange: onChange,
-          meterValue: meter,
+        TpCard(
+          padding: const EdgeInsets.all(TpSpace.sm),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              SizedBox(
+                key: const ValueKey<String>('accident.report.assetPhoto'),
+                height: 164,
+                child: photo != null
+                    ? Image.asset(
+                        photo,
+                        fit: BoxFit.contain,
+                        semanticLabel:
+                            asset.displayIdentity ?? unavailableLabel,
+                      )
+                    : Icon(vehicleFallbackIcon(asset), size: 72),
+              ),
+              const SizedBox(height: TpSpace.xs),
+              for (final (String label, String value) in cardRows)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Expanded(
+                        child: Text(
+                          label,
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: palette.textMuted,
+                                  ),
+                        ),
+                      ),
+                      Expanded(
+                        flex: 2,
+                        child: label == 'Asset no' || label == 'Plate'
+                            ? TpIdentifierText(
+                                value,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(fontWeight: FontWeight.w700),
+                              )
+                            : Text(
+                                value,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(fontWeight: FontWeight.w700),
+                              ),
+                      ),
+                    ],
+                  ),
+                ),
+              const SizedBox(height: TpSpace.xs),
+              Align(
+                alignment: AlignmentDirectional.centerEnd,
+                child: TextButton.icon(
+                  onPressed: onChange,
+                  icon: const Icon(Icons.swap_horiz_rounded),
+                  label: Text(changeLabel),
+                ),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: TpSpace.md),
+        Row(
+          children: <Widget>[
+            Icon(
+              Icons.lock_outline,
+              size: TpSizing.iconSm,
+              color: palette.textMuted,
+            ),
+            const SizedBox(width: TpSpace.xs),
+            Expanded(
+              child: Text(
+                'Auto-filled from fleet master',
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: TpSpace.sm),
         LayoutBuilder(
           builder: (BuildContext context, BoxConstraints constraints) {
             final bool compact = constraints.maxWidth < 560;
             final List<Widget> values = <Widget>[
               ReadOnlyAssetValue(
-                label: 'Asset no.',
-                value: _shown(
-                  asset.assetNo ?? asset.fleetNumber,
-                  unavailableLabel,
-                ),
+                label: 'Asset no',
+                value: assetNo,
                 identifier: true,
               ),
               ReadOnlyAssetValue(
@@ -321,17 +555,13 @@ class AccidentFleetMasterCard extends StatelessWidget {
                 value: _shown(asset.vehicleType, unavailableLabel),
               ),
               ReadOnlyAssetValue(
-                label: 'Home site',
+                label: 'Site (home)',
                 value: _shown(asset.site, unavailableLabel),
               ),
               ReadOnlyAssetValue(label: 'Current meter', value: meter),
               ReadOnlyAssetValue(
-                label: 'Fleet status',
+                label: 'Status',
                 value: _shown(asset.status, unavailableLabel),
-              ),
-              ReadOnlyAssetValue(
-                label: 'Assigned driver',
-                value: _shown(asset.operatorName, unavailableLabel),
               ),
             ];
             if (compact) {
@@ -365,6 +595,14 @@ class AccidentFleetMasterCard extends StatelessWidget {
               ],
             );
           },
+        ),
+        const SizedBox(height: TpSpace.xs),
+        Text(
+          accidentFleetMasterLockNote,
+          key: AccidentReportIntakeKeys.lockNote,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: palette.textSecondary,
+              ),
         ),
       ],
     );
@@ -438,6 +676,90 @@ class ReadOnlyAssetValue extends StatelessWidget {
       ),
     );
   }
+}
+
+/// M7 "Where did the incident occur?" - a free-text incident site with the
+/// known fleet sites offered as one-tap choices. The text is the report's
+/// `site`; the chips only fill it.
+class AccidentIncidentSiteSelector extends StatelessWidget {
+  const AccidentIncidentSiteSelector({
+    required this.controller,
+    required this.knownSites,
+    required this.onSiteChosen,
+    this.homeSite,
+    super.key,
+  });
+
+  final TextEditingController controller;
+
+  /// Distinct site names from the loaded fleet cache, already sorted.
+  final List<String> knownSites;
+
+  /// Called when a chip fills the field, so the host records a user edit.
+  final ValueChanged<String> onSiteChosen;
+
+  /// The selected asset's home site, labelled on its chip.
+  final String? homeSite;
+
+  @override
+  Widget build(BuildContext context) {
+    final String current = controller.text.trim();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Text(
+          'Where did the incident occur?',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: TpSpace.xs),
+        Text(
+          accidentIncidentSiteHelp,
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: TpSpace.sm),
+        TpInput(
+          key: AccidentReportIntakeKeys.incidentSite,
+          label: 'Incident site',
+          controller: controller,
+          isRequired: true,
+          prefixIcon: Icons.location_on_outlined,
+          hint: 'Site or location name',
+        ),
+        if (knownSites.isNotEmpty) ...<Widget>[
+          const SizedBox(height: TpSpace.sm),
+          Wrap(
+            spacing: TpSpace.xs,
+            runSpacing: TpSpace.xs,
+            children: <Widget>[
+              for (final String site in knownSites)
+                ChoiceChip(
+                  key: AccidentReportIntakeKeys.siteChip(site),
+                  label: Text(
+                    site == homeSite?.trim() ? '$site (home)' : site,
+                  ),
+                  selected: site == current,
+                  onSelected: (bool selected) {
+                    if (selected) onSiteChosen(site);
+                  },
+                ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// Distinct, sorted site names from the loaded fleet, bounded so a large
+/// register does not render hundreds of chips.
+List<String> knownSitesFrom(List<VehicleAsset> assets, {int limit = 24}) {
+  final Set<String> sites = <String>{};
+  for (final VehicleAsset asset in assets) {
+    final String? site = _clean(asset.site);
+    if (site != null) sites.add(site);
+  }
+  final List<String> sorted = sites.toList()..sort();
+  return List<String>.unmodifiable(sorted.take(limit < 0 ? 0 : limit));
 }
 
 class AccidentYesNoField extends StatelessWidget {
@@ -771,7 +1093,9 @@ class AccidentReviewRow extends StatelessWidget {
       );
 }
 
-String _shown(String? value, String fallback) {
+String _shown(String? value, String fallback) => _clean(value) ?? fallback;
+
+String? _clean(String? value) {
   final String clean = value?.trim() ?? '';
-  return clean.isEmpty ? fallback : clean;
+  return clean.isEmpty ? null : clean;
 }

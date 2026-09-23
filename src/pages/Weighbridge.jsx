@@ -25,6 +25,7 @@ import { summariseTickets, netWeight, overloadKg, isOverweight } from '../lib/we
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 const EMPTY_FORM = {
   ticket_no: '', asset_no: '', driver_name: '', site: '', weighed_at: '',
@@ -43,15 +44,15 @@ const STATUS_TONE = {
 }
 
 const fmtKg = (v) =>
-  v == null || v === '' ? '—' : `${Math.round(Number(v)).toLocaleString()} kg`
+  v == null || v === '' ? 'N/A' : `${Math.round(Number(v)).toLocaleString()} kg`
 
 const fmtTonnes = (v) =>
   v == null ? '0 t' : `${(Number(v) / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })} t`
 
 function fmtDateTime(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleString()
 }
 
 /** value → <input type="datetime-local"> string, trimmed to minutes. */
@@ -63,11 +64,6 @@ function toLocalInput(v) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') ||
-    m.includes('schema cache') || m.includes('could not find the table')
-}
 
 export default function Weighbridge() {
   const { activeCountry } = useSettings()
@@ -143,7 +139,7 @@ export default function Weighbridge() {
     { label: 'Tickets', value: summary.totalTickets, icon: Activity, tone: 'text-[var(--text-primary)]' },
     { label: 'Total net weight', value: fmtTonnes(summary.totalNetKg), icon: Package, tone: 'text-sky-400' },
     { label: 'Overweight tickets', value: summary.overweightCount, icon: ShieldAlert, tone: summary.overweightCount > 0 ? 'text-red-400' : 'text-green-400' },
-    { label: 'Max overload', value: summary.maxOverloadKg > 0 ? fmtKg(summary.maxOverloadKg) : '—', icon: AlertTriangle, tone: 'text-amber-400' },
+    { label: 'Max overload', value: summary.maxOverloadKg > 0 ? fmtKg(summary.maxOverloadKg) : 'N/A', icon: AlertTriangle, tone: 'text-amber-400' },
   ]
 
   // ── Export ───────────────────────────────────────────────────────────────
@@ -221,7 +217,7 @@ export default function Weighbridge() {
     <div className="space-y-6">
       <PageHeader
         title="Weighbridge Tickets"
-        subtitle="Record gross / tare / net and per-axle weights per asset, flag overweight vehicles, and retain a compliance trail — the load basis for tyre-life and reliability analytics."
+        subtitle="Record gross / tare / net and per-axle weights per asset, flag overweight vehicles, and retain a compliance trail: the load basis for tyre-life and reliability analytics."
         icon={Scale}
         onRefresh={load}
         refreshing={refreshing}
@@ -270,7 +266,7 @@ export default function Weighbridge() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -334,15 +330,15 @@ export default function Weighbridge() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={7} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {rows.length === 0 && !notProvisioned ? 'No tickets recorded yet — record your first weighbridge ticket.' : 'No tickets match these filters.'}
+                  {rows.length === 0 && !notProvisioned ? 'No tickets recorded yet. Record your first weighbridge ticket.' : 'No tickets match these filters.'}
                 </td></tr>
               ) : (
                 pager.pageRows.map((r) => {
                   const over = overloadKg(r)
                   return (
                     <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{r.ticket_no || '—'}</td>
-                      <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.asset_no || '—'}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{r.ticket_no || 'N/A'}</td>
+                      <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.asset_no || 'N/A'}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDateTime(r.weighed_at)}</td>
                       <td className="px-4 py-2.5 font-semibold text-[var(--text-primary)] whitespace-nowrap">
                         {fmtKg(netWeight(r))}
@@ -356,7 +352,7 @@ export default function Weighbridge() {
                       <td className="px-4 py-2.5">
                         {r.status
                           ? <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_TONE[r.status] || 'bg-slate-700/40 text-slate-300'}`}>{r.status.charAt(0).toUpperCase() + r.status.slice(1)}</span>
-                          : <span className="text-[var(--text-muted)]">—</span>}
+                          : <span className="text-[var(--text-muted)]">N/A</span>}
                       </td>
                       <td className="px-4 py-2.5">
                         <div className="flex items-center justify-end gap-1">
@@ -431,7 +427,7 @@ export default function Weighbridge() {
                 <div>
                   <label className="label">Status</label>
                   <select className="input w-full" value={form.status} onChange={(e) => set('status', e.target.value)}>
-                    <option value="">—</option>
+                    <option value="">None</option>
                     {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
                   </select>
                 </div>

@@ -33,6 +33,7 @@ import {
 } from '../lib/marketplace'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const LISTING_CATEGORIES = ['tyre', 'retread', 'parts', 'service', 'other']
@@ -73,23 +74,18 @@ const RFQ_STATUS_BADGE = {
 // ── Formatting helpers ───────────────────────────────────────────────────────
 const titleCase = (s) => (s ? String(s).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : '')
 const fmtMoney = (v, currency = 'SAR') =>
-  v == null || v === '' ? '—' : `${currency} ${Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
-const fmtNum = (v) => (v == null || v === '' ? '—' : Number(v).toLocaleString())
-const fmtRating = (v) => (v == null || v === '' ? '—' : Number(v).toFixed(1))
+  v == null || v === '' ? 'N/A' : `${currency} ${Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+const fmtNum = (v) => (v == null || v === '' ? 'N/A' : Number(v).toLocaleString())
+const fmtRating = (v) => (v == null || v === '' ? 'N/A' : Number(v).toFixed(1))
 function fmtDate(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString()
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') ||
-    m.includes('schema cache') || m.includes('could not find the table')
-}
 
 function Badge({ value, map }) {
-  if (!value) return <span className="text-[var(--text-muted)]">—</span>
+  if (!value) return <span className="text-[var(--text-muted)]">N/A</span>
   const cls = map[value] || 'bg-slate-800/40 text-slate-300 border-slate-700/50'
   return (
     <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${cls}`}>
@@ -198,13 +194,13 @@ export default function SupplierMarketplace() {
     { label: 'Active', value: listingSummary.activeCount, icon: BadgeCheck, tone: 'text-green-400' },
     { label: 'In stock', value: listingSummary.inStockCount, icon: Boxes, tone: 'text-sky-400' },
     { label: 'Suppliers', value: listingSummary.distinctSuppliers, icon: Building2, tone: 'text-violet-400' },
-    { label: 'Avg rating', value: listingSummary.avgRating == null ? '—' : listingSummary.avgRating.toFixed(1), icon: Star, tone: 'text-amber-400' },
+    { label: 'Avg rating', value: listingSummary.avgRating == null ? 'N/A' : listingSummary.avgRating.toFixed(1), icon: Star, tone: 'text-amber-400' },
   ]
   const rfqKpis = [
     { label: 'Total RFQs', value: rfqSummary.totalRfqs, icon: ShoppingCart, tone: 'text-[var(--text-primary)]' },
     { label: 'Open', value: rfqSummary.openCount, icon: Send, tone: 'text-sky-400' },
     { label: 'Awarded', value: rfqSummary.awardedCount, icon: Award, tone: 'text-green-400' },
-    { label: 'Avg responses', value: rfqSummary.avgResponses == null ? '—' : rfqSummary.avgResponses, icon: Layers, tone: 'text-violet-400' },
+    { label: 'Avg responses', value: rfqSummary.avgResponses == null ? 'N/A' : rfqSummary.avgResponses, icon: Layers, tone: 'text-violet-400' },
     { label: 'Potential saving', value: fmtMoney(Math.round(totalPotentialSaving)), icon: TrendingUp, tone: 'text-amber-400' },
   ]
   const kpis = isListings ? listingKpis : rfqKpis
@@ -323,7 +319,7 @@ export default function SupplierMarketplace() {
     <div className="space-y-6">
       <PageHeader
         title="Supplier Marketplace"
-        subtitle="Compare supplier tyre, retread and parts listings, and run buyer RFQs end-to-end — a measurable sourcing funnel from need to award."
+        subtitle="Compare supplier tyre, retread and parts listings, and run buyer RFQs end-to-end: a measurable sourcing funnel from need to award."
         icon={Store}
         onRefresh={load}
         refreshing={refreshing}
@@ -397,7 +393,7 @@ export default function SupplierMarketplace() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-2xl font-bold mt-1 ${k.tone}`}>{loadingTab ? '—' : k.value}</p>
+              <p className={`text-2xl font-bold mt-1 ${k.tone}`}>{loadingTab ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -507,7 +503,7 @@ export default function SupplierMarketplace() {
                   <td colSpan={isListings ? 9 : 10} className="px-4 py-12 text-center text-[var(--text-muted)]">
                     <Filter size={22} className="mx-auto mb-2 opacity-60" />
                     {totalRows === 0 && !notProvisioned
-                      ? (isListings ? 'No listings yet — add your first supplier listing.' : 'No RFQs yet — raise your first RFQ.')
+                      ? (isListings ? 'No listings yet. Add your first supplier listing.' : 'No RFQs yet. Raise your first RFQ.')
                       : 'No records match these filters.'}
                   </td>
                 </tr>
@@ -515,19 +511,19 @@ export default function SupplierMarketplace() {
                 pager.pageRows.map((r) => (
                   <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
                     <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">
-                      {r.supplier || '—'}
+                      {r.supplier || 'N/A'}
                       {r.listing_no && <span className="block text-[11px] text-[var(--text-muted)]">{r.listing_no}</span>}
                     </td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)]">
-                      {r.product_name || '—'}
+                      {r.product_name || 'N/A'}
                       {(r.brand || r.size_spec) && <span className="block text-[11px] text-[var(--text-muted)]">{[r.brand, r.size_spec].filter(Boolean).join(' · ')}</span>}
                     </td>
                     <td className="px-4 py-2.5"><Badge value={r.category} map={CATEGORY_BADGE} /></td>
                     <td className="px-4 py-2.5 font-semibold text-[var(--text-primary)] whitespace-nowrap">{fmtMoney(r.unit_price, r.currency || 'SAR')}</td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtNum(r.moq)}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{r.lead_time_days == null || r.lead_time_days === '' ? '—' : `${fmtNum(r.lead_time_days)} d`}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{r.lead_time_days == null || r.lead_time_days === '' ? 'N/A' : `${fmtNum(r.lead_time_days)} d`}</td>
                     <td className="px-4 py-2.5 whitespace-nowrap">
-                      {r.rating == null || r.rating === '' ? <span className="text-[var(--text-muted)]">—</span> : (
+                      {r.rating == null || r.rating === '' ? <span className="text-[var(--text-muted)]">N/A</span> : (
                         <span className="inline-flex items-center gap-1 text-amber-400 font-medium"><Star size={12} className="fill-amber-400" /> {fmtRating(r.rating)}</span>
                       )}
                     </td>
@@ -548,9 +544,9 @@ export default function SupplierMarketplace() {
                   const saving = potentialSaving(r)
                   return (
                     <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                      <td className="px-4 py-2.5 font-medium text-[var(--text-primary)] whitespace-nowrap">{r.rfq_no || '—'}</td>
+                      <td className="px-4 py-2.5 font-medium text-[var(--text-primary)] whitespace-nowrap">{r.rfq_no || 'N/A'}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)]">
-                        {r.product_name || '—'}
+                        {r.product_name || 'N/A'}
                         {r.category && <span className="block text-[11px] text-[var(--text-muted)]">{r.category}</span>}
                       </td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtNum(r.quantity)}</td>
@@ -559,7 +555,7 @@ export default function SupplierMarketplace() {
                       <td className="px-4 py-2.5 whitespace-nowrap">
                         {saving > 0
                           ? <span className="text-green-400 font-semibold">{fmtMoney(saving, r.currency || 'SAR')}</span>
-                          : <span className="text-[var(--text-muted)]">—</span>}
+                          : <span className="text-[var(--text-muted)]">N/A</span>}
                       </td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDate(r.needed_by)}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)]">
@@ -647,7 +643,7 @@ export default function SupplierMarketplace() {
                       <input className="input w-full" type="number" step="1" min="0" placeholder="14" value={form.lead_time_days} onChange={(e) => set('lead_time_days', e.target.value)} />
                     </div>
                     <div>
-                      <label className="label">Rating (0–5)</label>
+                      <label className="label">Rating (0 to 5)</label>
                       <input className="input w-full" type="number" step="0.1" min="0" max="5" placeholder="4.5" value={form.rating} onChange={(e) => set('rating', e.target.value)} />
                     </div>
                     <div>

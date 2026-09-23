@@ -1,0 +1,13 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Driver workspace local verification</title></head><body><div id="root"></div><script type="module">
+import React from 'react';
+import {createRoot} from 'react-dom/client';
+import {MemoryRouter} from 'react-router-dom';
+import DriverWorkspace from '/src/pages/DriverWorkspace.jsx';
+import {LanguageProvider} from '/src/contexts/LanguageContext.jsx';
+import {supabase} from '/src/lib/supabase.js';
+import '/src/index.css';
+const fine={id:'00000000-0000-0000-0000-000000000010',driver_id:'00000000-0000-0000-0000-000000000001',notice_reference:'LOCAL TEST NOTICE',authority:'Test authority',amount:500,currency:'SAR',paid_amount:100,status:'open',response_status:'awaiting_response',version:1,incident_at:'2026-09-01T09:00:00Z',due_date:'2026-09-30',description:'Local test notice for interface verification only.',assignment_reason:'Test assignment verified against a fixture.',asset_no:'TEST VEHICLE',responses:[],evidence:[]};
+const data={driver:{id:fine.driver_id,driver_name:'Local test driver',driver_id:'TEST001',site:'Test site',country:'KSA'},can_respond:true,can_review:false,can_manage:false,fines:[fine],balances:[{currency:'SAR',outstanding:400}],assignments:[{id:'test-assignment',supervisor_name:'Test supervisor',manager_name:'Test manager',asset_no:'TEST VEHICLE',starts_at:'2026-09-01T00:00:00Z',ends_at:null,reason:'Local fixture assignment'}],records:[],events:[],work:[]};
+supabase.rpc=async(name,args)=>name==='driver_workspace'?{data:args?.p_driver_id?data:{drivers:[{...data.driver,open_fines:1,awaiting_response:1,access:'driver',user_id:'test'}],can_manage:false},error:null}:name==='driver_workspace_command'?{data:{id:fine.id},error:null}:{data:[],error:null};
+createRoot(document.getElementById('root')).render(React.createElement(LanguageProvider,null,React.createElement(MemoryRouter,{initialEntries:['/driver-workspace?driver='+fine.driver_id]},React.createElement('p',null,'Local fixture — no production data'),React.createElement(DriverWorkspace))));
+</script></body></html>

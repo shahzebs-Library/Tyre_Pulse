@@ -108,6 +108,134 @@ function sortSpecs(specs) {
   })
 }
 
+// ── Current fleet tyre inventory, grouped by tyre size ──────────────────────
+// Groups tyres directly by their OWN fitted size (not by vehicle type), so it
+// works for every vehicle type, position, site and country in scope without
+// depending on how well vehicle-type derivation happens to be populated.
+// Specification values (ply rating, minimum tread, load index, speed index,
+// recommended pressure, approved brands) are cross-referenced from every
+// `tyre_specifications` row whose approved_sizes lists that size - a size can
+// be approved for more than one vehicle type/position, so every distinct
+// value actually found is shown rather than picking one arbitrarily.
+
+function normSize(size) {
+  return String(size || '').replace(/\s+/g, '').toUpperCase()
+}
+
+/** Count occurrences of each non-empty string in `items`, most frequent first. */
+function tally(items) {
+  const counts = {}
+  for (const raw of items) {
+    const v = raw == null ? '' : String(raw).trim()
+    if (!v) continue
+    counts[v] = (counts[v] || 0) + 1
+  }
+  return Object.entries(counts)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([label, count]) => ({ label, count }))
+}
+
+/** "Brand A (12), Brand B (5), +3 more" - never fabricates, caps at `cap` entries. */
+function labelWithCounts(tallied, cap = 8) {
+  if (!tallied.length) return 'N/A'
+  const shown = tallied.slice(0, cap).map((t) => (t.count > 1 ? `${t.label} (${t.count})` : t.label))
+  const extra = tallied.length - cap
+  return extra > 0 ? `${shown.join(', ')}, +${extra} more` : shown.join(', ')
+}
+
+/** Distinct non-empty values, numerically sorted when every value is a number. */
+function distinctSorted(items) {
+  const vals = [...new Set(items.map((v) => (v == null ? '' : String(v).trim())).filter(Boolean))]
+  const allNumeric = vals.length > 0 && vals.every((v) => v !== '' && Number.isFinite(Number(v)))
+  return allNumeric ? vals.sort((a, b) => Number(a) - Number(b)) : vals.sort()
+}
+
+/**
+ * Build one row per DISTINCT currently-fitted tyre size.
+ * PURE - safe to unit-test. No fabrication: a value with no matching spec or
+ * no fitted tyres renders 'N/A' rather than a guess.
+ *
+ * @param {{complianceRows?: Array<object>, specs?: Array<object>}} opts
+ *   `complianceRows` - current tyre fitments, each carrying at least
+ *     { size, brand, vehicleType?, position?, site?, specStatus? }.
+ *   `specs` - the approved-fitment library rows (approved_sizes/approved_brands/
+ *     ply_rating/min_load_index/min_speed_index/recommended_pressure/min_tread_depth).
+ * @returns {Array<object>} sorted by fitted quantity descending, then by size.
+ */
+export function buildSizeInventoryRows({ complianceRows = [], specs = [] } = {}) {
+  const rows = Array.isArray(complianceRows) ? complianceRows.filter(Boolean) : []
+  const specList = Array.isArray(specs) ? specs.filter(Boolean) : []
+
+  const groups = new Map()
+  for (const r of rows) {
+    const key = normSize(r?.size)
+    if (!key) continue
+    if (!groups.has(key)) groups.set(key, { key, display: cell(r.size), items: [] })
+    groups.get(key).items.push(r)
+  }
+
+  const out = []
+  for (const g of groups.values()) {
+    const items = g.items
+    const brandsTally = tally(items.map((i) => i.brand))
+    const vehicleTypes = distinctSorted(items.map((i) => i.vehicleType))
+    const positions = distinctSorted(items.map((i) => i.position))
+    const sites = distinctSorted(items.map((i) => i.site))
+
+    const matchingSpecs = specList.filter((s) =>
+      Array.isArray(pick(s, ['approved_sizes', 'sizes'])) &&
+      pick(s, ['approved_sizes', 'sizes']).some((sz) => normSize(sz) === g.key))
+
+    const approvedBrands = distinctSorted(matchingSpecs.flatMap((s) => pick(s, ['approved_brands', 'brands']) || []))
+    const plyValues = distinctSorted(matchingSpecs.map((s) => pick(s, ['ply_rating', 'ply', 'star_rating'])))
+    const loadValues = distinctSorted(matchingSpecs.map((s) => pick(s, ['min_load_index', 'load_index', 'load_idx'])))
+    const speedValues = distinctSorted(matchingSpecs.map((s) => pick(s, ['min_speed_index', 'speed_index', 'speed_rating', 'speed'])))
+    const pressureValues = distinctSorted(matchingSpecs.map((s) => pick(s, ['recommended_pressure', 'pressure', 'pressure_psi'])))
+    const treadValues = distinctSorted(matchingSpecs.map((s) => pick(s, ['min_tread_depth', 'min_tread', 'tread_min'])))
+
+    const compliance = { approved: 0, nonStandardSize: 0, nonApprovedBrand: 0, multipleViolations: 0, noSpec: 0 }
+    for (const i of items) {
+      switch (i.specStatus) {
+        case 'Approved': compliance.approved += 1; break
+        case 'Non-Standard Size': compliance.nonStandardSize += 1; break
+        case 'Non-Approved Brand': compliance.nonApprovedBrand += 1; break
+        case 'Multiple Violations': compliance.multipleViolations += 1; break
+        default: compliance.noSpec += 1
+      }
+    }
+
+    const approvedLower = new Set(approvedBrands.map((b) => b.toLowerCase()))
+    const brandsFittedNotApproved = approvedBrands.length > 0
+      ? distinctSorted(items.map((i) => i.brand).filter((b) => b && !approvedLower.has(String(b).trim().toLowerCase())))
+      : []
+
+    out.push({
+      size: g.display,
+      count: items.length,
+      brands: brandsTally,
+      brandsLabel: labelWithCounts(brandsTally),
+      vehicleTypes,
+      vehicleTypesLabel: vehicleTypes.length ? vehicleTypes.join(', ') : 'N/A',
+      positions,
+      positionsLabel: positions.length ? positions.join(', ') : 'N/A',
+      sites,
+      approvedBrands,
+      approvedBrandsLabel: approvedBrands.length ? approvedBrands.join(', ') : 'N/A',
+      specCount: matchingSpecs.length,
+      plyRating: plyValues.length ? plyValues.join(', ') : 'N/A',
+      minLoadIndex: loadValues.length ? loadValues.join(', ') : 'N/A',
+      minSpeedIndex: speedValues.length ? speedValues.join(', ') : 'N/A',
+      recommendedPressure: pressureValues.length ? pressureValues.join(', ') : 'N/A',
+      minTreadDepth: treadValues.length ? treadValues.join(', ') : 'N/A',
+      compliance,
+      nonConformingCount: compliance.nonStandardSize + compliance.nonApprovedBrand + compliance.multipleViolations,
+      brandsFittedNotApproved,
+    })
+  }
+
+  return out.sort((a, b) => b.count - a.count || a.size.localeCompare(b.size))
+}
+
 /**
  * Build the ordered array of numbered policy sections.
  * PURE - no jsPDF, no DOM. Safe to unit-test and to reuse for other renderers.
@@ -116,6 +244,7 @@ function sortSpecs(specs) {
  */
 export function buildPolicySections({
   specs = [],
+  complianceRows = [],
   company = 'TyrePulse',
   country = null,
   generatedBy = '',
@@ -124,6 +253,7 @@ export function buildPolicySections({
   const scope = country && String(country).trim() ? String(country).trim() : 'All Countries'
   const list = Array.isArray(specs) ? specs.filter(Boolean) : []
   const sorted = sortSpecs(list)
+  const sizeInventory = buildSizeInventoryRows({ complianceRows, specs: list })
 
   // Section 4 table: honest rows, honest empty state.
   const fitmentRows = sorted.length
@@ -271,6 +401,38 @@ export function buildPolicySections({
         'This is a CONTROLLED DOCUMENT. Do not use printed copies beyond their effective revision.',
       ],
     },
+    {
+      n: '11',
+      title: 'Appendix: Current Fleet Tyre Inventory by Size',
+      body: sizeInventory.length
+        ? [
+            'The following inventory groups every currently recorded tyre fitment by tyre size,',
+            'read directly from live tyre records rather than by vehicle type, so every size in',
+            'the fleet is represented regardless of vehicle classification.',
+            'For each size it shows the brands actually in service, the approved brand list and the',
+            'specification values (ply rating, minimum tread, load index, speed index, recommended',
+            'pressure) that apply, drawn from every approved fitment standard listing that size, and',
+            'how many fitments of that size are currently non-conforming.',
+            `Scope: ${scope}.`,
+          ]
+        : [
+            'No current tyre fitment data was available when this document was generated. This',
+            'appendix populates automatically from live tyre records once fitments are on file.',
+          ],
+      table: {
+        head: [
+          'Tyre Size', 'Fitted Qty', 'Brands In Use', 'Approved Brands',
+          'Ply Rating', 'Min Tread (mm)', 'Load Idx', 'Speed', 'Pressure (PSI)', 'Non-Conforming',
+        ],
+        rows: sizeInventory.length
+          ? sizeInventory.map((r) => [
+              cell(r.size), cell(r.count), cell(r.brandsLabel), cell(r.approvedBrandsLabel),
+              cell(r.plyRating), cell(r.minTreadDepth), cell(r.minLoadIndex), cell(r.minSpeedIndex),
+              cell(r.recommendedPressure), cell(r.nonConformingCount),
+            ])
+          : [['No current tyre fitments on record', 'N/A', 'N/A', 'N/A', 'N/A', 'N/A', 'N/A', 'N/A', 'N/A', 'N/A']],
+      },
+    },
   ]
 
   return sections
@@ -282,6 +444,7 @@ export function buildPolicySections({
  */
 export async function renderTyreSpecPolicyPdf({
   specs = [],
+  complianceRows = [],
   company = 'TyrePulse',
   branding = null,
   country = null,
@@ -296,7 +459,7 @@ export async function renderTyreSpecPolicyPdf({
   const brand = await resolvePdfBrand(branding)
   const date = new Date()
   const scope = country && String(country).trim() ? String(country).trim() : 'All Countries'
-  const sections = buildPolicySections({ specs, company, country, generatedBy, date })
+  const sections = buildPolicySections({ specs, complianceRows, company, country, generatedBy, date })
 
   const pageW = doc.internal.pageSize.getWidth()
   const pageH = doc.internal.pageSize.getHeight()

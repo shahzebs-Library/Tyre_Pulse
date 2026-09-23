@@ -36,6 +36,8 @@ This service is **optional**. The app ships a fully working client-side exporter
 
 Charts are captured on the client (`canvas.toDataURL('image/png')`) so the PDF shows the **exact** on-screen chart.
 
+Logos can use `logo_data` with a PNG/JPEG/GIF/WebP base64 data URL. Remote logos require `REPORT_LOGO_ORIGINS`, a comma-separated list of exact HTTPS origins controlled by your organization (for example, your public image CDN). Do not allow customer-controlled hosts, private DNS names, or proxy endpoints. Remote requests default to denied; redirects and non-raster responses are blocked. An unconfigured remote logo makes the service reject the export so the web application's existing client-side fallback can run.
+
 ## Run locally
 
 ```bash
@@ -70,7 +72,8 @@ docker run -p 8080:8080 tyrepulse-report-engine
 2. Set env vars:
    - `PORT` (default 8080)
    - `REPORT_API_KEY` — if set, callers must send header `X-Report-Key: <key>`
-   - `ALLOWED_ORIGIN` — CORS allow-list, comma-separated (e.g. `https://tyrepulse.app`); `*` by default
+   - `ALLOWED_ORIGIN` — CORS allow-list, comma-separated (e.g. `https://tyrepulse.app`); no cross-origin access by default
+   - `REPORT_LOGO_ORIGINS` — trusted public HTTPS image origins; empty by default
    - `REPORT_MAX_CONCURRENCY` — bounded Chromium concurrency (default 3)
 3. Point the frontend at it:
    - `VITE_REPORT_SERVICE_URL=https://reports.yourhost.com`

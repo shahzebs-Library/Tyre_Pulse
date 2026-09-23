@@ -30,6 +30,7 @@ import {
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
+import Card, { CardHeader, CardBody } from '../components/ui/Card'
 import Modal from '../components/ui/Modal'
 import StudioBoundary from '../components/present/StudioBoundary'
 import { useSettings } from '../contexts/SettingsContext'
@@ -133,13 +134,31 @@ function DowntimeCell({ entry }) {
   return <span className="text-[var(--text-secondary)] text-xs">{note || 'Back in service'}</span>
 }
 
-/** A headline number. Clickable tiles apply a filter rather than just informing. */
+/**
+ * A headline number. Clickable tiles apply a filter rather than just informing.
+ *
+ * `interactive` is what carries the clickable affordance now: it adds the
+ * pointer cursor AND a focus-visible ring the hand-rolled version never had.
+ *
+ * The selected border is a `style` longhand rather than `border-blue-500`,
+ * because Card sets `border`/`borderColor` INLINE and a plain utility class is
+ * a normal declaration that loses to it - the class would render nothing. It is
+ * only present when the tile is active: passing `borderColor: undefined` would
+ * REMOVE Card's own value (React drops undefined style props) and leave the
+ * border falling back to currentColor.
+ *
+ * `transition-colors` is gone because `.tp-card` already transitions
+ * border-color and box-shadow, which is the only thing that moves here.
+ */
 function Tile({ label, value, sub, tone = 'quiet', onClick, active, icon: Icon }) {
   const Cmp = onClick ? 'button' : 'div'
   return (
-    <Cmp
+    <Card
+      as={Cmp}
       onClick={onClick}
-      className={`card text-left w-full transition-colors ${onClick ? 'hover:border-blue-600/50 cursor-pointer' : ''} ${active ? 'border-blue-500' : ''}`}
+      interactive={!!onClick}
+      className="text-left w-full"
+      style={active ? { borderColor: '#3b82f6' } : undefined}
     >
       <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-[var(--text-muted)]">
         {Icon && <Icon size={13} />} {label}
@@ -148,7 +167,7 @@ function Tile({ label, value, sub, tone = 'quiet', onClick, active, icon: Icon }
         {value}
       </div>
       {sub && <div className="mt-0.5 text-xs text-[var(--text-muted)]">{sub}</div>}
-    </Cmp>
+    </Card>
   )
 }
 
@@ -499,17 +518,22 @@ export default function AssetDisposals() {
       />
 
       {notProvisioned && (
-        <div className="card border border-amber-800/50 flex items-start gap-3">
+        // The amber tint comes from `tone`, not `border border-amber-800/50`:
+        // Card sets `border`/`borderColor` INLINE and a plain utility loses to
+        // that, so the class would render nothing. And Card is `flex flex-col`
+        // - Tailwind emits .flex-col after .flex-row, so the row direction goes
+        // in `style`, which Card spreads last.
+        <Card tone="warn" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
           <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
           <div>
             <p className="text-amber-300 font-medium">Asset Disposal is not enabled on this database yet.</p>
             <p className="text-[var(--text-muted)] text-sm mt-1">The disposal register has not been created here. Nothing is missing from your data.</p>
           </div>
-        </div>
+        </Card>
       )}
 
       {(readFailed || error) && (
-        <div className="card border border-red-800/50 flex items-start gap-3">
+        <Card tone="crit" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
           <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
           <div className="flex-1">
             <p className="text-red-300 font-medium">The disposal register could not be loaded.</p>
@@ -520,20 +544,20 @@ export default function AssetDisposals() {
           <button onClick={() => load(true)} className="btn-secondary text-sm inline-flex items-center gap-1.5">
             <RefreshCw size={14} /> Retry
           </button>
-        </div>
+        </Card>
       )}
 
       {loading && (
-        <div className="card flex items-center gap-2 text-[var(--text-muted)]">
+        <Card className="items-center gap-[var(--space-2)] text-[var(--text-muted)]" style={{ flexDirection: 'row' }}>
           <Loader2 size={16} className="animate-spin" /> Loading the disposal register...
-        </div>
+        </Card>
       )}
 
       {!loading && register?.ok && rows.length === 0 && (
-        <div className="card text-[var(--text-muted)]">
+        <Card className="text-[var(--text-muted)]">
           <p className="text-[var(--text-primary)] font-medium">No machines are on the disposal list.</p>
           <p className="text-sm mt-1">The register was read successfully and it is empty. Upload a committee sheet to start one.</p>
-        </div>
+        </Card>
       )}
 
       {!loading && register?.ok && rows.length > 0 && (
@@ -571,7 +595,7 @@ export default function AssetDisposals() {
 
           {/* ── Findings ─────────────────────────────────────────────────── */}
           {findings.length > 0 && (
-            <div className="card space-y-2">
+            <Card className="space-y-2">
               <div className="flex items-center gap-2 text-[var(--text-secondary)]">
                 <Info size={15} /> <span className="text-sm font-medium">What this list says</span>
               </div>
@@ -583,11 +607,15 @@ export default function AssetDisposals() {
                   </li>
                 ))}
               </ul>
-            </div>
+            </Card>
           )}
 
-          {/* ── Filters (shared by both tabs) ────────────────────────────── */}
-          <div className="card space-y-3">
+          {/* ── Filters (shared by both tabs) ──────────────────────────────
+              Deliberately NOT `clip`: eight native <select> dropdowns live in
+              here. A native select paints its option list as an OS-level popup
+              outside the page's overflow context so clipping could not reach
+              it either way, but there is nothing here to crop. */}
+          <Card className="space-y-3">
             <div className="flex items-center gap-2">
               <div className="relative flex-1 min-w-0">
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
@@ -673,7 +701,7 @@ export default function AssetDisposals() {
                 </label>
               </div>
             )}
-          </div>
+          </Card>
 
           {/* ── Tabs ─────────────────────────────────────────────────────── */}
           <div className="flex items-center gap-2 border-b border-[var(--input-border)]">
@@ -694,7 +722,7 @@ export default function AssetDisposals() {
 
           {tab === 'reliability' && (
             <StudioBoundary>
-              <Suspense fallback={<div className="card text-[var(--text-muted)]">Loading the reliability view...</div>}>
+              <Suspense fallback={<Card className="text-[var(--text-muted)]">Loading the reliability view...</Card>}>
                 <ReliabilityPanel
                   rows={filtered}
                   reliability={reliability}
@@ -711,7 +739,7 @@ export default function AssetDisposals() {
 
           {tab === 'replacement' && (
             <StudioBoundary>
-              <Suspense fallback={<div className="card text-[var(--text-muted)]">Loading the replacement view...</div>}>
+              <Suspense fallback={<Card className="text-[var(--text-muted)]">Loading the replacement view...</Card>}>
                 <ReplacementPanel
                   rows={filtered}
                   benchmarks={benchmarks}
@@ -727,42 +755,43 @@ export default function AssetDisposals() {
           {tab === 'register' && (
           <>
           {/* ── Charts ───────────────────────────────────────────────────── */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className="card">
-              <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-3">Machines by asset type</h3>
-              <div className="h-64">{byType.length ? <Bar data={barData(byType, 'Machines')} options={chartOpts()} /> : <p className="text-sm text-[var(--text-muted)]">Nothing to chart for this selection.</p>}</div>
-            </div>
-            <div className="card">
-              <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-3">Machines by region</h3>
-              <div className="h-64">{byRegion.length ? <Bar data={barData(byRegion, 'Machines')} options={chartOpts()} /> : <p className="text-sm text-[var(--text-muted)]">Nothing to chart for this selection.</p>}</div>
-            </div>
-            <div className="card">
-              <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-3">Condition</h3>
-              <div className="h-64">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-[var(--gap-grid)]">
+            <Card>
+              <CardHeader level={3} title="Machines by asset type" />
+              <CardBody style={{ height: '16rem' }}>{byType.length ? <Bar data={barData(byType, 'Machines')} options={chartOpts()} /> : <p className="text-sm text-[var(--text-muted)]">Nothing to chart for this selection.</p>}</CardBody>
+            </Card>
+            <Card>
+              <CardHeader level={3} title="Machines by region" />
+              <CardBody style={{ height: '16rem' }}>{byRegion.length ? <Bar data={barData(byRegion, 'Machines')} options={chartOpts()} /> : <p className="text-sm text-[var(--text-muted)]">Nothing to chart for this selection.</p>}</CardBody>
+            </Card>
+            <Card>
+              <CardHeader level={3} title="Condition" />
+              <CardBody style={{ height: '16rem' }}>
                 {byCondition.length
                   ? <Doughnut data={conditionData} options={chartOpts({ plugins: { legend: { display: true, position: 'right', labels: { color: 'var(--text-secondary)', boxWidth: 12 } } } })} />
                   : <p className="text-sm text-[var(--text-muted)]">Nothing to chart for this selection.</p>}
-              </div>
-            </div>
-            <div className="card">
-              <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-3">
-                Lifetime spend by asset type {currency && <span className="text-[var(--text-muted)]">({currency})</span>}
-              </h3>
-              <div className="h-64">
+              </CardBody>
+            </Card>
+            <Card>
+              <CardHeader
+                level={3}
+                title={<>Lifetime spend by asset type {currency && <span className="text-[var(--text-muted)]">({currency})</span>}</>}
+              />
+              <CardBody style={{ height: '16rem' }}>
                 {totals.mixedCurrency
                   ? <p className="text-sm text-[var(--text-muted)]">This selection carries more than one currency, so spend is not charted as a single total.</p>
                   : spendByTypeData.hasData
                     ? <Bar data={spendByTypeData.data} options={chartOpts()} />
                     : <p className="text-sm text-[var(--text-muted)]">No spend is recorded against these machines.</p>}
-              </div>
-            </div>
+              </CardBody>
+            </Card>
           </div>
 
           {/* Age bands read as a strip rather than a chart: five buckets do not
               need axes, and "Year not recorded" has to stay visible. */}
-          <div className="card">
-            <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-3">Age</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          <Card>
+            <CardHeader level={3} title="Age" />
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-[var(--space-3)]">
               {ages.map((b) => (
                 <div key={b.key} className="rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2">
                   <div className="text-lg font-semibold tabular-nums text-[var(--text-primary)]">{fmtNum(b.count)}</div>
@@ -773,7 +802,7 @@ export default function AssetDisposals() {
             <p className="text-xs text-[var(--text-muted)] mt-2">
               Age is worked out from the model year. {fmtNum(totals.agedKnown)} of {fmtNum(totals.assets)} machines carry one.
             </p>
-          </div>
+          </Card>
 
           {/* ── Down long enough to consider ─────────────────────────────
               The link between the two registers that actually carries value.
@@ -781,7 +810,14 @@ export default function AssetDisposals() {
               always on screen is a panel nobody reads. It proposes only; adding
               a machine to the disposal list stays the committee's decision. */}
           {missingCandidates.length > 0 && (
-            <div className="card p-4 border border-amber-500/30">
+            // `p-4` and `border border-amber-500/30` would BOTH be dead against
+            // Card's inline padding and border. `pad="tight"` is the exact same
+            // 1rem at default density (--pad-card-tight = --space-4) and, unlike
+            // the literal, it also compresses under compact density; the tint
+            // comes from `tone`.
+            //
+            // Not `clip`: the TablePagination below holds a native <select>.
+            <Card pad="tight" tone="warn">
               <div className="flex items-center gap-2 mb-1">
                 <Wrench size={15} className="text-amber-300 shrink-0" />
                 <h3 className="text-sm font-medium text-[var(--text-primary)]">
@@ -822,11 +858,19 @@ export default function AssetDisposals() {
                 </table>
                 <TablePagination {...candidatesPager} />
               </div>
-            </div>
+            </Card>
           )}
 
-          {/* ── Register table ───────────────────────────────────────────── */}
-          <div className="card p-0 overflow-hidden">
+          {/* ── Register table ─────────────────────────────────────────────
+              KEPT as raw markup on purpose: it already owns usePagedRows +
+              TablePagination and the page's own Excel / workbook / PDF exports
+              above, and nearly every cell is composite - Badge pills for
+              disposition, condition and status, a region/site pair in one
+              cell, the DowntimeCell whose "Not recorded" is a deliberate
+              distinction from zero days, and a per-row History button beside a
+              whole-row click target. EnterpriseTable would flatten those and
+              add a second search box beside the page's own. */}
+          <Card pad="none" clip>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-[var(--input-bg)] text-[var(--text-muted)]">
@@ -882,7 +926,7 @@ export default function AssetDisposals() {
               </table>
               <TablePagination {...disposalsPager} />
             </div>
-          </div>
+          </Card>
           </>
           )}
         </>

@@ -1,7 +1,9 @@
-/// The compact five-view damage mapper embedded in the accident report form.
+/// The damage mapper embedded in the accident report form (mocks M8-M10).
 ///
 /// Marks remain owned by the report screen. This widget owns only the active
-/// fixed orthographic view and the selected-area editor lifecycle.
+/// perspective chip, the selected-area card and the editor lifecycle. The
+/// chips follow the shared `familyViewOrder` for the selected asset's family;
+/// an unknown family gets the generic five views, never a borrowed one.
 library;
 
 import 'dart:async';
@@ -19,10 +21,23 @@ import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
 
 @visibleForTesting
 abstract final class AccidentDamageMapSectionKeys {
+  /// The chip for one perspective (`front_left` is its own chip).
+  static Key perspectiveTab(AccidentDamagePerspective perspective) =>
+      Key('accident.damage.view.${perspective.token}');
+
+  /// The chip for a plain orthographic side - kept for callers that only
+  /// know the view.
   static Key viewTab(AccidentDamageView view) =>
-      Key('accident.damage.view.${view.name}');
+      perspectiveTab(AccidentDamagePerspective.fromView(view));
+  static const Key viewChips = Key('accident.damage.viewChips');
   static const Key diagram = Key('accident.damage.diagram');
+  static const Key selectedSummary = Key('accident.damage.selectedSummary');
+  static const Key selectedEdit = Key('accident.damage.selected.edit');
+  static const Key selectedRemove = Key('accident.damage.selected.remove');
+  static const Key marksToggle = Key('accident.damage.marksToggle');
   static const Key marksSummary = Key('accident.damage.marksSummary');
+  static const Key viewAll = Key('accident.damage.viewAll');
+  static const Key addArea = Key('accident.damage.addArea');
   static Key markRow(String markId) => Key('accident.damage.mark.$markId');
   static Key editMark(String markId) =>
       Key('accident.damage.mark.$markId.edit');
@@ -36,14 +51,6 @@ typedef AccidentDamageSuggestionResolver = FutureOr<AccidentDamageSuggestion?>
   AccidentDamagePoint point,
   VehicleAsset? vehicle,
 );
-
-const List<AccidentDamageView> _viewOrder = <AccidentDamageView>[
-  AccidentDamageView.left,
-  AccidentDamageView.right,
-  AccidentDamageView.front,
-  AccidentDamageView.rear,
-  AccidentDamageView.top,
-];
 
 class AccidentDamageMapSection extends StatefulWidget {
   const AccidentDamageMapSection({
@@ -72,7 +79,101 @@ class AccidentDamageMapSection extends StatefulWidget {
 }
 
 class _AccidentDamageMapSectionState extends State<AccidentDamageMapSection> {
-  AccidentDamageView _view = AccidentDamageView.left;
+  late AccidentDamagePerspective _perspective = _perspectives.first;
+  String? _selectedMarkId;
+  bool _reviewExpanded = true;
+
+  AccidentDamageAssetClass get _assetClass => widget.vehicle == null
+      ? AccidentDamageAssetClass.legacy
+      : accidentDamageAssetClassFor(
+          assetNo: widget.vehicle!.assetNo,
+          vehicleType: widget.vehicle!.vehicleType,
+          make: widget.vehicle!.make,
+          model: widget.vehicle!.model,
+        );
+
+  String get _family => accidentDamageFamilyFor(
+        assetClass: _assetClass,
+        assetNo: widget.vehicle?.assetNo,
+        vehicleType: widget.vehicle?.vehicleType,
+        make: widget.vehicle?.make,
+        model: widget.vehicle?.model,
+      );
+
+  List<AccidentDamagePerspective> get _perspectives =>
+      accidentDamagePerspectivesFor(_family);
+
+  AccidentDamageView get _view => _perspective.baseView;
+
+  @override
+  void didUpdateWidget(covariant AccidentDamageMapSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // A different asset opens on its own family's first view (a pump on
+    // Top, a road vehicle on Left); keeping the previous asset's view would
+    // land the reporter on a side that means nothing for the new one.
+    if (oldWidget.vehicle?.id != widget.vehicle?.id) {
+      _perspective = _perspectives.first;
+      _selectedMarkId = null;
+    }
+  }
+
+  Future<void> _addArea() async {
+    final AccidentCopy copy = AccidentCopy.of(context);
+    final List<AccidentDamageZone> zones = accidentDamageZonesFor(
+      _view,
+      assetClass: _assetClass,
+    ).where((zone) => widget.map.markFor(zone.id) == null).toList();
+    final AccidentDamageZone? zone =
+        await showModalBottomSheet<AccidentDamageZone>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: <Widget>[
+            Padding(
+              padding: const EdgeInsets.all(TpSpace.md),
+              child: Text(
+                _localized(
+                  context,
+                  en: 'Add another area',
+                  ar: 'إضافة منطقة أخرى',
+                  ur: 'ایک اور حصہ شامل کریں',
+                ),
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            if (zones.isEmpty)
+              Padding(
+                padding: const EdgeInsets.all(TpSpace.md),
+                child: Text(
+                  _localized(
+                    context,
+                    en: 'All areas in this view are marked. '
+                        'Choose another view.',
+                    ar: 'تم تحديد كل المناطق في هذا المنظر. اختر منظراً آخر.',
+                    ur: 'اس منظر کے تمام حصے نشان زد ہیں۔ دوسرا منظر چنیں۔',
+                  ),
+                ),
+              ),
+            for (final AccidentDamageZone zone in zones)
+              ListTile(
+                title: Text(accidentDamageZoneLabel(copy, zone.id)),
+                onTap: () => Navigator.of(context).pop(zone),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || zone == null) return;
+    await _tapPoint(
+      AccidentDamagePoint(
+        view: zone.view,
+        normalizedX: zone.left + zone.width / 2,
+        normalizedY: zone.top + zone.height / 2,
+      ),
+    );
+  }
 
   Future<void> _tapPoint(AccidentDamagePoint point) async {
     final AccidentCopy copy = AccidentCopy.of(context);
@@ -80,6 +181,7 @@ class _AccidentDamageMapSectionState extends State<AccidentDamageMapSection> {
       point.view,
       point.normalizedX,
       point.normalizedY,
+      assetClass: _assetClass,
     );
 
     // The artwork includes whitespace, shadows and background. Those pixels
@@ -101,6 +203,11 @@ class _AccidentDamageMapSectionState extends State<AccidentDamageMapSection> {
     final AccidentDamageMark draft = AccidentDamageMark(
       zoneId: zone.id,
       view: zone.view,
+      // An angled chip (bus Front-left) is recorded as its own perspective;
+      // a plain side is fully described by the view.
+      perspective: existing != null
+          ? existing.perspective
+          : (_perspective.isAngled ? _perspective : null),
       normalizedX: existing?.normalizedX ?? point.normalizedX,
       normalizedY: existing?.normalizedY ?? point.normalizedY,
       // Component identity comes from the audited zone catalog, not from a
@@ -142,9 +249,10 @@ class _AccidentDamageMapSectionState extends State<AccidentDamageMapSection> {
     if (!mounted || result == null) return;
     switch (result) {
       case AccidentDamageZoneSheetSaved(mark: final AccidentDamageMark mark):
+        setState(() => _selectedMarkId = mark.zoneId);
         widget.onChanged(widget.map.withMark(mark));
       case AccidentDamageZoneSheetRemoved():
-        widget.onChanged(widget.map.withoutMark(draft.zoneId));
+        _removeMark(draft.zoneId);
     }
   }
 
@@ -154,21 +262,111 @@ class _AccidentDamageMapSectionState extends State<AccidentDamageMapSection> {
         markerNumber: widget.map.markerNumberFor(mark.zoneId),
       );
 
+  void _removeMark(String zoneId) {
+    if (_selectedMarkId == zoneId) {
+      setState(() => _selectedMarkId = null);
+    }
+    widget.onChanged(widget.map.withoutMark(zoneId));
+  }
+
+  void _selectPerspective(AccidentDamagePerspective perspective) {
+    setState(() {
+      _perspective = perspective;
+      _selectedMarkId = null;
+    });
+  }
+
+  Future<void> _viewAllMarks() async {
+    final AccidentCopy copy = AccidentCopy.of(context);
+    final AccidentDamageMark? chosen =
+        await showModalBottomSheet<AccidentDamageMark>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (BuildContext context) => SafeArea(
+        top: false,
+        child: SizedBox(
+          height: MediaQuery.sizeOf(context).height * .7,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  TpSpace.lg,
+                  0,
+                  TpSpace.lg,
+                  TpSpace.sm,
+                ),
+                child: Text(
+                  _markedAreasLabel(context, widget.map.count),
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.symmetric(horizontal: TpSpace.lg),
+                  children: <Widget>[
+                    for (int index = 0;
+                        index < widget.map.marks.length;
+                        index++)
+                      _DamageMarkSummary(
+                        number: index + 1,
+                        mark: widget.map.marks[index],
+                        copy: copy,
+                        onEdit: () =>
+                            Navigator.of(context).pop(widget.map.marks[index]),
+                        onRemove: null,
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!mounted || chosen == null) return;
+    final AccidentDamagePerspective? perspective = chosen.effectivePerspective;
+    if (perspective != null && _perspectives.contains(perspective)) {
+      setState(() {
+        _perspective = perspective;
+        _selectedMarkId = chosen.zoneId;
+      });
+    }
+    await _editMark(chosen);
+  }
+
+  AccidentDamageZone? _zoneOf(String zoneId) {
+    for (final AccidentDamageZone zone
+        in accidentDamageZonesFor(_view, assetClass: _assetClass)) {
+      if (zone.id == zoneId) return zone;
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final AccidentCopy copy = AccidentCopy.of(context);
     final List<AccidentDamageMark> marks = widget.map.marks;
+    final List<AccidentDamageMark> visibleMarks = marks
+        .where((mark) => mark.effectivePerspective == _perspective)
+        .toList();
+    final AccidentDamageMark? selected = visibleMarks
+            .where((mark) => mark.zoneId == _selectedMarkId)
+            .firstOrNull ??
+        visibleMarks.firstOrNull;
+    final String? selectedLabel = selected == null
+        ? null
+        : selected.areaLabel ?? accidentDamageZoneLabel(copy, selected.zoneId);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        Text(copy('damageMapHint')),
-        const SizedBox(height: TpSpace.md),
-        _DamageViewSelector(
-          selected: _view,
-          copy: copy,
+        _PerspectiveChips(
+          perspectives: _perspectives,
+          selected: _perspective,
           map: widget.map,
-          onSelected: (AccidentDamageView view) => setState(() => _view = view),
+          onSelected: _selectPerspective,
         ),
         const SizedBox(height: TpSpace.sm),
         KeyedSubtree(
@@ -178,16 +376,53 @@ class _AccidentDamageMapSectionState extends State<AccidentDamageMapSection> {
             map: widget.map,
             vehicle: widget.vehicle,
             onPointTap: _tapPoint,
+            selectedZoneId: selected?.zoneId,
+            selectedAreaLabel: selectedLabel,
+            selectedMarkNumber: selected == null
+                ? null
+                : widget.map.markerNumberFor(selected.zoneId),
+            hatchedZone: selected == null ? null : _zoneOf(selected.zoneId),
+            perspectiveBadge: _perspective.isAngled
+                ? accidentDamagePerspectiveLabel(context, _perspective)
+                : null,
           ),
         ),
-        const SizedBox(height: TpSpace.md),
+        if (selected != null) ...<Widget>[
+          const SizedBox(height: TpSpace.sm),
+          _SelectedAreaCard(
+            mark: selected,
+            label: selectedLabel!,
+            onEdit: () => unawaited(_editMark(selected)),
+            onRemove: () => _removeMark(selected.zoneId),
+          ),
+        ],
+        const SizedBox(height: TpSpace.sm),
+        TpButton.secondary(
+          key: AccidentDamageMapSectionKeys.addArea,
+          label: _localized(
+            context,
+            en: 'Add another area',
+            ar: 'إضافة منطقة أخرى',
+            ur: 'ایک اور حصہ شامل کریں',
+          ),
+          icon: Icons.add_circle_outline,
+          onPressed: () => unawaited(_addArea()),
+          isFullWidth: true,
+        ),
+        const SizedBox(height: TpSpace.xs),
         Text(
-          widget.map.isEmpty
-              ? copy('damageMapNoneMarked')
-              : '${widget.map.count} ${copy('damageMapZonesLabel')}',
+          copy('damageMapHint'),
           style: Theme.of(context).textTheme.bodySmall,
         ),
-        if (marks.isNotEmpty) ...<Widget>[
+        const SizedBox(height: TpSpace.md),
+        _MarksHeader(
+          count: marks.length,
+          expanded: _reviewExpanded,
+          onToggle: marks.isEmpty
+              ? null
+              : () => setState(() => _reviewExpanded = !_reviewExpanded),
+        ),
+        if (marks.isNotEmpty && _reviewExpanded) ...<Widget>[
           const SizedBox(height: TpSpace.sm),
           Column(
             key: AccidentDamageMapSectionKeys.marksSummary,
@@ -198,11 +433,25 @@ class _AccidentDamageMapSectionState extends State<AccidentDamageMapSection> {
                   mark: marks[index],
                   copy: copy,
                   onEdit: () => unawaited(_editMark(marks[index])),
-                  onRemove: () => widget.onChanged(
-                    widget.map.withoutMark(marks[index].zoneId),
-                  ),
+                  onRemove: () => _removeMark(marks[index].zoneId),
                 ),
             ],
+          ),
+        ],
+        if (marks.isNotEmpty) ...<Widget>[
+          const SizedBox(height: TpSpace.xs),
+          TpButton.text(
+            key: AccidentDamageMapSectionKeys.viewAll,
+            label: _localized(
+              context,
+              en: 'View all ${marks.length} marked '
+                  '${marks.length == 1 ? 'area' : 'areas'}',
+              ar: 'عرض كل المناطق المحددة (${marks.length})',
+              ur: 'تمام ${marks.length} نشان زدہ حصے دیکھیں',
+            ),
+            icon: Icons.list_alt_outlined,
+            onPressed: () => unawaited(_viewAllMarks()),
+            isFullWidth: true,
           ),
         ],
       ],
@@ -210,23 +459,24 @@ class _AccidentDamageMapSectionState extends State<AccidentDamageMapSection> {
   }
 }
 
-class _DamageViewSelector extends StatelessWidget {
-  const _DamageViewSelector({
+class _PerspectiveChips extends StatelessWidget {
+  const _PerspectiveChips({
+    required this.perspectives,
     required this.selected,
-    required this.copy,
     required this.map,
     required this.onSelected,
   });
 
-  final AccidentDamageView selected;
-  final AccidentCopy copy;
+  final List<AccidentDamagePerspective> perspectives;
+  final AccidentDamagePerspective selected;
   final AccidentDamageMap map;
-  final ValueChanged<AccidentDamageView> onSelected;
+  final ValueChanged<AccidentDamagePerspective> onSelected;
 
   @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
     return DecoratedBox(
+      key: AccidentDamageMapSectionKeys.viewChips,
       decoration: BoxDecoration(
         border: Border.all(color: palette.border),
         borderRadius: BorderRadius.circular(TpRadius.md),
@@ -235,7 +485,9 @@ class _DamageViewSelector extends StatelessWidget {
         borderRadius: BorderRadius.circular(TpRadius.md - 1),
         child: Row(
           children: <Widget>[
-            for (int index = 0; index < _viewOrder.length; index++) ...<Widget>[
+            for (int index = 0;
+                index < perspectives.length;
+                index++) ...<Widget>[
               if (index > 0)
                 SizedBox(
                   width: 1,
@@ -243,15 +495,18 @@ class _DamageViewSelector extends StatelessWidget {
                   child: ColoredBox(color: palette.border),
                 ),
               Expanded(
-                child: _DamageViewButton(
-                  key: AccidentDamageMapSectionKeys.viewTab(
-                    _viewOrder[index],
+                child: _PerspectiveChip(
+                  key: AccidentDamageMapSectionKeys.perspectiveTab(
+                    perspectives[index],
                   ),
-                  view: _viewOrder[index],
-                  selected: selected == _viewOrder[index],
-                  label: accidentDamageViewLabel(copy, _viewOrder[index]),
-                  count: map.exactCountForView(_viewOrder[index]),
-                  onTap: () => onSelected(_viewOrder[index]),
+                  perspective: perspectives[index],
+                  selected: selected == perspectives[index],
+                  label: accidentDamagePerspectiveLabel(
+                    context,
+                    perspectives[index],
+                  ),
+                  count: map.countForPerspective(perspectives[index]),
+                  onTap: () => onSelected(perspectives[index]),
                 ),
               ),
             ],
@@ -262,9 +517,9 @@ class _DamageViewSelector extends StatelessWidget {
   }
 }
 
-class _DamageViewButton extends StatelessWidget {
-  const _DamageViewButton({
-    required this.view,
+class _PerspectiveChip extends StatelessWidget {
+  const _PerspectiveChip({
+    required this.perspective,
     required this.selected,
     required this.label,
     required this.count,
@@ -272,7 +527,7 @@ class _DamageViewButton extends StatelessWidget {
     super.key,
   });
 
-  final AccidentDamageView view;
+  final AccidentDamagePerspective perspective;
   final bool selected;
   final String label;
   final int count;
@@ -300,7 +555,7 @@ class _DamageViewButton extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: <Widget>[
                   Icon(
-                    _viewIcon(view),
+                    _perspectiveIcon(perspective),
                     size: TpSizing.iconSm,
                     color: selected ? palette.primary : palette.textMuted,
                   ),
@@ -328,15 +583,164 @@ class _DamageViewButton extends StatelessWidget {
   }
 }
 
-IconData _viewIcon(AccidentDamageView view) => switch (view) {
-      AccidentDamageView.left ||
-      AccidentDamageView.right =>
+IconData _perspectiveIcon(AccidentDamagePerspective perspective) =>
+    switch (perspective) {
+      AccidentDamagePerspective.left ||
+      AccidentDamagePerspective.right =>
         Icons.airport_shuttle_outlined,
-      AccidentDamageView.front ||
-      AccidentDamageView.rear =>
+      AccidentDamagePerspective.frontLeft => Icons.rotate_left_outlined,
+      AccidentDamagePerspective.front ||
+      AccidentDamagePerspective.rear =>
         Icons.directions_car_outlined,
-      AccidentDamageView.top => Icons.crop_portrait_outlined,
+      AccidentDamagePerspective.top => Icons.crop_portrait_outlined,
     };
+
+/// The mock's selected-area card: label, "type · level · photos", Edit and
+/// Remove.
+class _SelectedAreaCard extends StatelessWidget {
+  const _SelectedAreaCard({
+    required this.mark,
+    required this.label,
+    required this.onEdit,
+    required this.onRemove,
+  });
+
+  final AccidentDamageMark mark;
+  final String label;
+  final VoidCallback onEdit;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final String photos = _localized(
+      context,
+      en: mark.photoCount == 1 ? '1 photo' : '${mark.photoCount} photos',
+      ar: '${mark.photoCount} صور',
+      ur: '${mark.photoCount} تصاویر',
+    );
+    return TpCard(
+      key: AccidentDamageMapSectionKeys.selectedSummary,
+      padding: const EdgeInsets.all(TpSpace.md),
+      borderColor: palette.primary,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Text(
+            _localized(
+              context,
+              en: 'Selected area · $label',
+              ar: 'المنطقة المحددة · $label',
+              ur: 'منتخب حصہ · $label',
+            ),
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          const SizedBox(height: TpSpace.xs),
+          Text(
+            '${accidentDamageTypeLabel(context, mark.damageType)} · '
+            '${accidentDamageLevelLabel(context, mark.severity)} · '
+            '$photos',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: palette.textSecondary,
+                ),
+          ),
+          const SizedBox(height: TpSpace.sm),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: TpButton.secondary(
+                  key: AccidentDamageMapSectionKeys.selectedEdit,
+                  label: _localized(
+                    context,
+                    en: 'Edit',
+                    ar: 'تعديل',
+                    ur: 'ترمیم',
+                  ),
+                  icon: Icons.edit_outlined,
+                  isCompact: true,
+                  onPressed: onEdit,
+                ),
+              ),
+              const SizedBox(width: TpSpace.sm),
+              Expanded(
+                child: TpButton.danger(
+                  key: AccidentDamageMapSectionKeys.selectedRemove,
+                  label: _localized(
+                    context,
+                    en: 'Remove',
+                    ar: 'إزالة',
+                    ur: 'ہٹائیں',
+                  ),
+                  icon: Icons.delete_outline,
+                  isCompact: true,
+                  onPressed: onRemove,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// "N marked areas · Review list" - the collapsible header of the list.
+class _MarksHeader extends StatelessWidget {
+  const _MarksHeader({
+    required this.count,
+    required this.expanded,
+    required this.onToggle,
+  });
+
+  final int count;
+  final bool expanded;
+  final VoidCallback? onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final String title = count == 0
+        ? _localized(
+            context,
+            en: 'No areas marked yet',
+            ar: 'لم تُحدد أي منطقة بعد',
+            ur: 'ابھی کوئی حصہ نشان زد نہیں',
+          )
+        : '${_markedAreasLabel(context, count)} · '
+            '${_localized(
+            context,
+            en: 'Review list',
+            ar: 'قائمة المراجعة',
+            ur: 'جائزہ فہرست',
+          )}';
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        key: AccidentDamageMapSectionKeys.marksToggle,
+        onTap: onToggle,
+        borderRadius: BorderRadius.circular(TpRadius.sm),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: TpSpace.xs),
+          child: Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+              ),
+              if (onToggle != null)
+                Icon(
+                  expanded ? Icons.expand_less : Icons.expand_more,
+                  color: palette.textMuted,
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class _DamageMarkSummary extends StatelessWidget {
   const _DamageMarkSummary({
@@ -351,13 +755,14 @@ class _DamageMarkSummary extends StatelessWidget {
   final AccidentDamageMark mark;
   final AccidentCopy copy;
   final VoidCallback onEdit;
-  final VoidCallback onRemove;
+  final VoidCallback? onRemove;
 
   @override
   Widget build(BuildContext context) {
-    final AccidentDamageView? view = mark.effectiveView;
+    final AccidentDamagePerspective? perspective = mark.effectivePerspective;
     final String location = <String>[
-      if (view != null) accidentDamageViewLabel(copy, view),
+      if (perspective != null)
+        accidentDamagePerspectiveLabel(context, perspective),
       mark.areaLabel ?? accidentDamageZoneLabel(copy, mark.zoneId),
     ].join(' • ');
     final TpStatus tone = switch (mark.severity) {
@@ -445,7 +850,7 @@ class _DamageMarkSummary extends StatelessWidget {
             children: <Widget>[
               TpStatusChip(
                 status: tone,
-                label: accidentDamageSeverityLabel(copy, mark.severity),
+                label: accidentDamageLevelLabel(context, mark.severity),
                 isCompact: true,
               ),
               Row(
@@ -453,19 +858,30 @@ class _DamageMarkSummary extends StatelessWidget {
                 children: <Widget>[
                   IconButton(
                     key: AccidentDamageMapSectionKeys.editMark(mark.zoneId),
-                    tooltip: _editDamageLabel(context),
+                    tooltip: _localized(
+                      context,
+                      en: 'Edit damage',
+                      ar: 'تعديل الضرر',
+                      ur: 'نقصان میں ترمیم کریں',
+                    ),
                     visualDensity: VisualDensity.compact,
                     icon: const Icon(Icons.edit_outlined),
                     onPressed: onEdit,
                   ),
-                  IconButton(
-                    key: AccidentDamageMapSectionKeys.removeMark(mark.zoneId),
-                    tooltip: copy('damageMarkRemove'),
-                    visualDensity: VisualDensity.compact,
-                    color: palette.critical.base,
-                    icon: const Icon(Icons.delete_outline),
-                    onPressed: onRemove,
-                  ),
+                  if (onRemove != null)
+                    IconButton(
+                      key: AccidentDamageMapSectionKeys.removeMark(mark.zoneId),
+                      tooltip: _localized(
+                        context,
+                        en: 'Remove',
+                        ar: 'إزالة',
+                        ur: 'ہٹائیں',
+                      ),
+                      visualDensity: VisualDensity.compact,
+                      color: palette.critical.base,
+                      icon: const Icon(Icons.delete_outline),
+                      onPressed: onRemove,
+                    ),
                 ],
               ),
             ],
@@ -501,12 +917,12 @@ class _SummaryMeta extends StatelessWidget {
   }
 }
 
-String _editDamageLabel(BuildContext context) =>
-    switch (Localizations.localeOf(context).languageCode) {
-      'ar' => 'تعديل الضرر',
-      'ur' => 'نقصان میں ترمیم کریں',
-      _ => 'Edit damage',
-    };
+String _markedAreasLabel(BuildContext context, int count) => _localized(
+      context,
+      en: count == 1 ? '1 marked area' : '$count marked areas',
+      ar: '$count مناطق محددة',
+      ur: '$count نشان زدہ حصے',
+    );
 
 String _suggestionDecisionLabel(
   BuildContext context,
@@ -525,3 +941,15 @@ String _suggestionDecisionLabel(
     (_, AccidentDamageSuggestionDecision.corrected) => 'Corrected',
   };
 }
+
+String _localized(
+  BuildContext context, {
+  required String en,
+  required String ar,
+  required String ur,
+}) =>
+    switch (Localizations.localeOf(context).languageCode) {
+      'ar' => ar,
+      'ur' => ur,
+      _ => en,
+    };

@@ -28,6 +28,7 @@ import {
   Title, Tooltip as ChartTooltip, Legend, Filler,
 } from 'chart.js'
 import PageHeader from '../components/ui/PageHeader'
+import Card, { CardHeader } from '../components/ui/Card'
 import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import { useSettings } from '../contexts/SettingsContext'
 import { formatCurrencyCompact, formatCurrency, formatDate } from '../lib/formatters'
@@ -198,21 +199,26 @@ export default function TyrePassport() {
   const navigate = useNavigate()
   const { activeCountry, activeCurrency } = useSettings()
   const [bundle, setBundle] = useState(null)
+  const loadId = useRef(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [tab, setTab] = useState('overview')
 
   const load = useCallback(async (sn) => {
-    if (!sn) { setBundle(null); return }
+    const request = ++loadId.current
+    setBundle(null)
+    if (!sn) { setLoading(false); return }
     setLoading(true); setError('')
     try {
-      setBundle(await getPassportBundle(sn, { country: activeCountry }))
+      const result = await getPassportBundle(sn, { country: activeCountry })
+      if (request === loadId.current) setBundle(result)
     } catch (err) {
-      setError(toUserMessage(err, 'Could not load this tyre.')); setBundle({ records: [] })
-    } finally { setLoading(false) }
+      if (request === loadId.current) { setError(toUserMessage(err, 'Could not load this tyre.')); setBundle(null) }
+    } finally { if (request === loadId.current) setLoading(false) }
   }, [activeCountry])
 
-  useEffect(() => { if (serial) load(serial) }, [serial, load])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Invalidate the current request on cleanup.
+  useEffect(() => { load(serial); return () => { loadId.current++ } }, [serial, load])
   useEffect(() => { setTab('overview') }, [serial])
 
   const passport = useMemo(() => {
@@ -339,34 +345,42 @@ export default function TyrePassport() {
         ) : null}
       />
 
+      {/* No `clip` on either search card: SearchBox renders an absolutely
+          positioned results popover that must be able to escape the card. */}
       {!serial && (
-        <div className="card space-y-3">
+        <Card className="space-y-3">
           <p className="text-sm text-[var(--text-secondary)]">Enter a serial number to open its passport.</p>
           <SearchBox country={activeCountry} onPick={(sn) => navigate(`/tyre-passport/${encodeURIComponent(sn)}`)} />
-        </div>
+        </Card>
       )}
 
+      {/* Honest incompleteness notice — this passport is missing history. */}
+      {!!bundle?.unavailableSources?.length && <Card as="p" role="alert" tone="warn" className="text-sm text-amber-500">Some history could not be loaded: {bundle.unavailableSources.join(', ')}. This passport is incomplete; refresh to try again.</Card>}
       {serial && (
         <>
-          <div className="card"><SearchBox country={activeCountry} onPick={(sn) => navigate(`/tyre-passport/${encodeURIComponent(sn)}`)} /></div>
+          <Card><SearchBox country={activeCountry} onPick={(sn) => navigate(`/tyre-passport/${encodeURIComponent(sn)}`)} /></Card>
 
           {loading ? (
-            <div className="card animate-pulse h-40" />
+            <Card className="animate-pulse h-40" />
           ) : error ? (
-            <div className="card border border-red-800/50 flex items-start gap-3">
-              <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
-              <div><p className="text-red-300 font-medium">Could not load this tyre.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
-            </div>
+            <Card tone="crit">
+              <div className="flex items-start gap-[var(--space-3)]">
+                <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
+                <div><p className="text-red-300 font-medium">Could not load this tyre.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
+              </div>
+            </Card>
           ) : !passport ? (
-            <div className="card text-center py-12 space-y-2">
+            // Card sets `padding` inline, so `py-12` would be dead here and this
+            // empty state would silently collapse. Tokens, applied inline.
+            <Card className="text-center space-y-2" style={{ paddingTop: 'var(--space-12)', paddingBottom: 'var(--space-12)' }}>
               <Package size={30} className="mx-auto text-[var(--text-muted)]" />
               <p className="text-[var(--text-primary)] font-semibold">No records for {serial}.</p>
               <p className="text-sm text-[var(--text-muted)]">Check the serial or try a different one.</p>
-            </div>
+            </Card>
           ) : (
             <>
               {/* Identity + health header */}
-              <div className="card">
+              <Card>
                 <div className="flex items-start justify-between gap-4 flex-wrap">
                   <div className="flex items-start gap-5">
                     <HealthRing score={passport.health.overall} risk={passport.health.risk} />
@@ -417,7 +431,7 @@ export default function TyrePassport() {
                     ))}
                   </p>
                 )}
-              </div>
+              </Card>
 
               {/* Tabs */}
               <div className="flex items-center gap-1 border-b border-[var(--input-border)] overflow-x-auto">
@@ -442,19 +456,25 @@ export default function TyrePassport() {
 
               {/* Overview */}
               {tab === 'overview' && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div className="card">
-                    <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-1 flex items-center gap-2"><HeartPulse size={15} /> Health breakdown</h3>
-                    <p className="text-xs text-[var(--text-muted)] mb-4">Weighted 0 to 100 score. Signals without a source in this dataset are shown as "no data" and use a neutral baseline.</p>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-[var(--gap-grid)]">
+                  <Card>
+                    {/* The description is an honesty affordance: it says what the
+                        score does NOT know. Kept verbatim. */}
+                    <CardHeader
+                      level={2}
+                      icon={HeartPulse}
+                      title="Health breakdown"
+                      description={'Weighted 0 to 100 score. Signals without a source in this dataset are shown as "no data" and use a neutral baseline.'}
+                    />
                     <div className="space-y-3">
                       {Object.entries(passport.health.components).map(([key, c]) => (
                         <ScoreBar key={key} label={COMPONENT_LABELS[key] || key} score={c.score} hasData={c.hasData} />
                       ))}
                     </div>
-                  </div>
+                  </Card>
 
-                  <div className="card">
-                    <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2"><TrendingDown size={15} /> Wear intelligence</h3>
+                  <Card>
+                    <CardHeader level={2} icon={TrendingDown} title="Wear intelligence" />
                     <div className="grid grid-cols-2 gap-3">
                       {[
                         { label: 'Tread remaining', value: passport.wear.treadRemainingPct == null ? NA : `${passport.wear.treadRemainingPct}%` },
@@ -471,11 +491,11 @@ export default function TyrePassport() {
                     {passport.wear.readingCount <= 1 && (
                       <p className="text-[11px] text-[var(--text-muted)] mt-3">Wear rate needs at least two tread readings over distance; only {passport.wear.readingCount} reading available.</p>
                     )}
-                  </div>
+                  </Card>
 
                   {/* Predictions */}
-                  <div className="card">
-                    <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2"><Activity size={15} /> Predictions</h3>
+                  <Card>
+                    <CardHeader level={2} icon={Activity} title="Predictions" />
                     <div className="grid grid-cols-2 gap-3">
                       {[
                         { label: 'Projected life left', value: passport.predictions.projectedRemainingKm == null ? NA : `${passport.predictions.projectedRemainingKm.toLocaleString()} km` },
@@ -492,11 +512,11 @@ export default function TyrePassport() {
                         ? 'This tyre is removed / scrapped, so no forward projection is made.'
                         : 'Projections are computed only from the observed wear rate and average daily distance; they are omitted (N/A) when not derivable.'}
                     </p>
-                  </div>
+                  </Card>
 
                   {/* Cost breakdown */}
-                  <div className="card">
-                    <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2"><DollarSign size={15} /> Cost breakdown</h3>
+                  <Card>
+                    <CardHeader level={2} icon={DollarSign} title="Cost breakdown" />
                     <div className="space-y-2 text-sm">
                       {[
                         ['Purchase', passport.costBreakdown.purchase],
@@ -517,11 +537,11 @@ export default function TyrePassport() {
                         <span className="text-[var(--text-primary)] font-medium">{passport.costBreakdown.netCpk == null ? NA : passport.costBreakdown.netCpk}</span>
                       </div>
                     </div>
-                  </div>
+                  </Card>
 
                   {/* Lifecycle statistics */}
-                  <div className="card lg:col-span-2">
-                    <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2"><Layers size={15} /> Lifecycle statistics</h3>
+                  <Card className="lg:col-span-2">
+                    <CardHeader level={2} icon={Layers} title="Lifecycle statistics" />
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
                       {[
                         { label: 'Records', value: passport.stats.recordCount, icon: Package },
@@ -540,18 +560,21 @@ export default function TyrePassport() {
                         )
                       })}
                     </div>
-                  </div>
+                  </Card>
                 </div>
               )}
 
-              {/* Journey */}
+              {/* Journey. `pad="none"` for the edge-to-edge table, but NO `clip`:
+                  TablePagination carries a native rows-per-page <select>. */}
               {tab === 'journey' && (
-                <div className="card overflow-hidden !p-0">
-                  <div className="px-4 py-3 border-b border-[var(--input-border)] flex items-center gap-2">
-                    <Milestone size={15} className="text-[var(--text-muted)]" />
-                    <h3 className="text-sm font-semibold text-[var(--text-primary)]">Cross-vehicle journey</h3>
-                    <span className="text-xs text-[var(--text-muted)]">{passport.journey.length} stint(s) across {passport.distinctVehicles} vehicle(s)</span>
-                  </div>
+                <Card pad="none">
+                  <CardHeader
+                    level={2}
+                    icon={Milestone}
+                    title="Cross-vehicle journey"
+                    description={`${passport.journey.length} stint(s) across ${passport.distinctVehicles} vehicle(s)`}
+                    className="!mb-0 px-[var(--space-4)] py-[var(--space-3)] border-b border-[var(--border-dim)]"
+                  />
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
@@ -581,25 +604,30 @@ export default function TyrePassport() {
                     </table>
                   </div>
                   <TablePagination {...journeyPager} />
-                </div>
+                </Card>
               )}
 
-              {/* Wear curve */}
+              {/* Wear curve. Padded, so the canvas never reaches the radius and
+                  `clip` would only arm the clipping hazard for a later menu. */}
               {tab === 'wear' && (
-                <div className="card">
-                  <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-1 flex items-center gap-2"><BarChart3 size={15} /> Tread depth over time</h3>
-                  <p className="text-xs text-[var(--text-muted)] mb-4">Combines tread readings from fitment records and service events.</p>
+                <Card>
+                  <CardHeader
+                    level={2}
+                    icon={BarChart3}
+                    title="Tread depth over time"
+                    description="Combines tread readings from fitment records and service events."
+                  />
                   {wearChart ? (
                     <div className="h-72"><Line data={wearChart.data} options={wearChart.options} /></div>
                   ) : (
                     <Empty icon={BarChart3} title="No tread readings recorded for this tyre yet." />
                   )}
-                </div>
+                </Card>
               )}
 
-              {/* Service & repairs */}
+              {/* Service & repairs — no `clip`, TablePagination holds a <select>. */}
               {tab === 'service' && (
-                <div className="card overflow-hidden !p-0">
+                <Card pad="none">
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
@@ -627,17 +655,19 @@ export default function TyrePassport() {
                     </table>
                   </div>
                   <TablePagination {...servicePager} />
-                </div>
+                </Card>
               )}
 
-              {/* Warranty */}
+              {/* Warranty — both tables keep their pagination, so neither is clipped. */}
               {tab === 'warranty' && (
                 <div className="space-y-6">
-                  <div className="card overflow-hidden !p-0">
-                    <div className="px-4 py-3 border-b border-[var(--input-border)] flex items-center gap-2">
-                      <ShieldCheck size={15} className="text-[var(--text-muted)]" />
-                      <h3 className="text-sm font-semibold text-[var(--text-primary)]">Warranty claims</h3>
-                    </div>
+                  <Card pad="none">
+                    <CardHeader
+                      level={2}
+                      icon={ShieldCheck}
+                      title="Warranty claims"
+                      className="!mb-0 px-[var(--space-4)] py-[var(--space-3)] border-b border-[var(--border-dim)]"
+                    />
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>
@@ -663,14 +693,16 @@ export default function TyrePassport() {
                       </table>
                     </div>
                     <TablePagination {...warrantyPager} />
-                  </div>
+                  </Card>
 
                   {passport.retreadClaims.length > 0 && (
-                    <div className="card overflow-hidden !p-0">
-                      <div className="px-4 py-3 border-b border-[var(--input-border)] flex items-center gap-2">
-                        <Recycle size={15} className="text-[var(--text-muted)]" />
-                        <h3 className="text-sm font-semibold text-[var(--text-primary)]">Retread claims</h3>
-                      </div>
+                    <Card pad="none">
+                      <CardHeader
+                        level={2}
+                        icon={Recycle}
+                        title="Retread claims"
+                        className="!mb-0 px-[var(--space-4)] py-[var(--space-3)] border-b border-[var(--border-dim)]"
+                      />
                       <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                           <thead>
@@ -694,15 +726,16 @@ export default function TyrePassport() {
                         </table>
                       </div>
                       <TablePagination {...retreadPager} />
-                    </div>
+                    </Card>
                   )}
                 </div>
               )}
 
-              {/* Data quality */}
+              {/* Data quality. This whole tab is an honesty affordance: it reports
+                  what is NOT known about the tyre. Content unchanged. */}
               {tab === 'quality' && (
-                <div className="card">
-                  <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2"><ClipboardCheck size={15} /> Data quality audit</h3>
+                <Card>
+                  <CardHeader level={2} icon={ClipboardCheck} title="Data quality audit" />
                   {passport.dataQuality.length === 0 ? (
                     <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
                       <CheckCircle2 size={16} /> All checks passed. No data-quality issues detected for this tyre.
@@ -721,7 +754,7 @@ export default function TyrePassport() {
                     </ul>
                   )}
                   <p className="text-[11px] text-[var(--text-muted)] mt-4">Checks: impossible cross-vehicle date overlap, tread readings that increase over time, and stints missing fitment or removal odometer.</p>
-                </div>
+                </Card>
               )}
             </>
           )}

@@ -199,7 +199,7 @@ export function buildTemplateFromRows(rows, opts = {}) {
     label: 'Inspection interval',
     required: true,
     options: intervals.length ? intervals : ['Monthly', 'Quarterly', 'Semi-annual', 'Annual'],
-    help: 'Pick the interval — only the checks due for it are shown.',
+    help: 'Pick the interval. Only the checks due for it are shown.',
   })
 
   // The vehicle-type selector (only when the sheet scopes items by vehicle).
@@ -210,7 +210,7 @@ export function buildTemplateFromRows(rows, opts = {}) {
       label: 'Vehicle type',
       required: true,
       options: vehicleTypes.map((v) => v.label),
-      help: 'Pick the vehicle type — points specific to other vehicles stay hidden.',
+      help: 'Pick the vehicle type. Points specific to other vehicles stay hidden.',
     })
   }
   const labelForCode = (code) => (VEHICLE_TYPES.find((v) => v.code === code)?.label || code)

@@ -26,9 +26,9 @@ describe('fuelCards pure lib - maskCardNumber', () => {
   })
 
   it('degrades gracefully on empty/nullish input', () => {
-    expect(maskCardNumber('')).toBe('—')
-    expect(maskCardNumber(null)).toBe('—')
-    expect(maskCardNumber(undefined)).toBe('—')
+    expect(maskCardNumber('')).toBe('N/A')
+    expect(maskCardNumber(null)).toBe('N/A')
+    expect(maskCardNumber(undefined)).toBe('N/A')
   })
 })
 

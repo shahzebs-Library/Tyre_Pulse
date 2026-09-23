@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   CHARTS, KPIS, TABLE_COLS, BLOCK_TYPES, BLOCK_DEFAULTS, CHART_OPTS, CHART_JS_TYPE,
   REPORT_LIBRARY, STARTER, makeBlock, buildReportContext, buildInsights,
-  fmtCell, cellValue, caseAgeDays, isChartEmpty, isClosedRow, normalizeConfig,
+  fmtCell, cellValue, caseAgeDays, caseAgeLabel, isChartEmpty, isClosedRow, normalizeConfig,
   VALUE_LABELS_PLUGIN, makeValueLabelsPlugin, summarizeChartData,
   PALETTES, PALETTE, PALETTE_KEYS, styleChartData, chartWidthFraction, packChartRows,
   chartOptionsFor, tableRows, tableExportMatrix, tableFilterLabel, TABLE_FILTER_OPTS, canonFault,
@@ -136,6 +136,20 @@ describe('accidentReport catalog integrity', () => {
     // honest null without an incident date; plain columns pass through
     expect(caseAgeDays({ status: 'Open' }, now)).toBeNull()
     expect(cellValue('site', { site: 'Riyadh' }, now)).toBe('Riyadh')
+  })
+
+  it('caseAgeLabel is the same open/settled duration as caseAgeDays, just to the hour', () => {
+    const now = new Date('2026-07-14T12:00:00Z').getTime()
+    // 10 days exactly at 12:00 vs a start at 06:00 -> 10d 6h.
+    expect(caseAgeLabel({ incident_date: '2026-07-04T06:00:00Z', status: 'Open' }, now)).toBe('10d 6h')
+    // under a day -> hours only, no "0d" prefix.
+    expect(caseAgeLabel({ incident_date: '2026-07-14T09:00:00Z', status: 'Open' }, now)).toBe('3h')
+    // settled with no release date has no honest duration.
+    expect(caseAgeLabel({ incident_date: '2026-06-01', status: 'closed' }, now)).toBeNull()
+    expect(caseAgeLabel({ status: 'Open' }, now)).toBeNull()
+    // whole-day figure must always agree with caseAgeDays for the same input.
+    const rec = { incident_date: '2026-06-01', release_date: '2026-06-21', status: 'closed' }
+    expect(caseAgeLabel(rec, now)).toBe(`${caseAgeDays(rec, now)}d 0h`)
   })
 
   it('avg days-open KPIs and the caseAge chart derive honestly from records', () => {

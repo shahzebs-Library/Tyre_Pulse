@@ -455,7 +455,7 @@ export default function DriverDetail() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
                 <Field label={t('driver.detail.profile.name')} value={driver.name} />
-                <Field label={t('driver.detail.profile.rank')} value={driver.rank != null ? `#${driver.rank}` : '—'} />
+                <Field label={t('driver.detail.profile.rank')} value={driver.rank != null ? `#${driver.rank}` : 'N/A'} />
                 <Field label={t('driver.detail.profile.performance')} value={badge.label} />
                 <Field label={t('driver.detail.profile.sites')} value={uniqueValues(driver.records, 'site')} />
                 <Field label={t('driver.detail.profile.countries')} value={uniqueValues(driver.records, 'country')} />
@@ -509,7 +509,7 @@ export default function DriverDetail() {
               <StatTile label={t('driver.detail.stats.totalTyres')} value={driver.totalTyres} />
               <StatTile label={t('driver.detail.stats.highRisk')} value={driver.highRiskCount} accent={driver.highRiskCount > 0 ? 'text-red-400' : undefined} />
               <StatTile label={t('driver.detail.stats.riskScore')} value={driver.riskScore} />
-              <StatTile label={t('driver.detail.stats.rank')} value={driver.rank != null ? `#${driver.rank}` : '—'} />
+              <StatTile label={t('driver.detail.stats.rank')} value={driver.rank != null ? `#${driver.rank}` : 'N/A'} />
             </div>
           </div>
         )}
@@ -614,7 +614,7 @@ function Field({ label, value }) {
   return (
     <div>
       <p className="text-[11px] text-[var(--text-dim)] mb-0.5">{label}</p>
-      <p className="text-[var(--text-primary)] font-medium">{value || '—'}</p>
+      <p className="text-[var(--text-primary)] font-medium">{value || 'N/A'}</p>
     </div>
   )
 }

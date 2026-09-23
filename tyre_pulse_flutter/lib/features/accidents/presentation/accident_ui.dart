@@ -186,7 +186,9 @@ class AccidentSection extends StatelessWidget {
               ],
             ),
             const SizedBox(height: TpSpace.lg),
-            child,
+            // Checklist rows paint ink on the nearest Material; give them one
+            // above the card surface so the debug check accepts the tree.
+            Material(type: MaterialType.transparency, child: child),
           ],
         ),
       );

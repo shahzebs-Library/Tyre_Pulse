@@ -12,6 +12,10 @@ if (missingCredentials && requireAuth) {
   console.error('Authenticated E2E blocked: set E2E_USER_IDENTIFIER and E2E_USER_PASSWORD for a dedicated approved test user.')
   process.exit(2)
 }
+if (requireAuth && !assetNo) {
+  console.error('Authenticated E2E blocked: set E2E_ASSET_NO to an existing asset visible to the dedicated test user.')
+  process.exit(2)
+}
 
 const browser = await chromium.launch({ headless: process.env.E2E_HEADLESS !== '0' })
 const context = await browser.newContext({

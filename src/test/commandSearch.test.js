@@ -67,11 +67,14 @@ describe('isCommandVisible', () => {
     expect(isCommandVisible({ path: '/zzz-unmapped' }, manager, denyAll)).toBe(true)
   })
 
-  it('Data Monitor Officer only sees accidents + settings', () => {
+  it('Data Monitor Officer follows effective module access, including revokes', () => {
     const dmo = { role: 'Data Monitor Officer' }
-    expect(isCommandVisible({ path: '/accidents' }, dmo, allowAll)).toBe(true)
-    expect(isCommandVisible({ path: '/settings' }, dmo, allowAll)).toBe(true)
-    expect(isCommandVisible({ path: '/analytics', roles: ['Admin', 'Manager', 'Director'] }, dmo, allowAll)).toBe(false)
+    const permissions = key => ['accidents', 'inspections', 'serial_tracker', 'work_orders'].includes(key)
+    expect(isCommandVisible({ path: '/accidents' }, dmo, permissions)).toBe(true)
+    expect(isCommandVisible({ path: '/settings' }, dmo, permissions)).toBe(true)
+    expect(isCommandVisible({ path: '/serial-tracker', adminOnly: true }, dmo, permissions)).toBe(true)
+    expect(isCommandVisible({ path: '/fleet-master' }, dmo, permissions, new Set(['fleet_master']))).toBe(false)
+    expect(isCommandVisible({ path: '/report-builder', adminOnly: true }, dmo, allowAll)).toBe(false)
   })
 
   it('a custom role is deny-by-default, gated through the matrix', () => {
@@ -106,8 +109,8 @@ describe('visibleCommands', () => {
     expect(visible.some((c) => c.path === '/tyres')).toBe(true)
   })
 
-  it('Inspector sees only the inspection surface', () => {
-    const visible = visibleCommands([...NAV_COMMANDS, ...ACTION_COMMANDS], inspector, allowAll)
+  it('Inspector without Meter Logs access sees only the inspection surface', () => {
+    const visible = visibleCommands([...NAV_COMMANDS, ...ACTION_COMMANDS], inspector, key => key !== 'odometer_logs')
     expect(visible.length).toBeGreaterThan(0)
     expect(visible.every((c) => c.path === '/inspections' || c.path === '/settings')).toBe(true)
   })
@@ -168,10 +171,14 @@ describe('visibleRecordSources', () => {
     expect(ids).not.toContain('stock')
   })
 
-  it('Data Monitor Officer searches accidents only', () => {
+  it('Data Monitor Officer searches only sources with effective access', () => {
     const dmo = { role: 'Data Monitor Officer' }
-    const ids = visibleRecordSources(RECORD_SOURCES, dmo, allowAll).map((s) => s.id)
-    expect(ids).toEqual(['accidents'])
+    const permissions = key => ['accidents', 'inspections', 'serial_tracker', 'work_orders'].includes(key)
+    const ids = visibleRecordSources(RECORD_SOURCES, dmo, permissions, new Set(['fleet_master'])).map((s) => s.id)
+    expect(ids).toContain('accidents')
+    expect(ids).toContain('inspections')
+    expect(ids).toContain('work-orders')
+    for (const denied of ['vehicles', 'tyres', 'stock', 'suppliers', 'purchase-orders']) expect(ids).not.toContain(denied)
   })
 
   it('every record source declares a table, a select, fields and an access gate', () => {
@@ -399,4 +406,12 @@ describe('mapRecordRows', () => {
       expect(mapRecordRows(source(id), [])).toEqual([])
     })
   })
+})
+
+it('Meter Logs follows module access for any role', () => {
+  const command = NAV_COMMANDS.find(c => c.path === '/odometer-logs')
+  for (const role of ['Inspector','Driver','Fleet Supervisor','Manager','Custom Meter Clerk']) {
+    expect(isCommandVisible(command, { role }, key => key === 'odometer_logs')).toBe(true)
+    expect(isCommandVisible(command, { role }, () => false)).toBe(false)
+  }
 })

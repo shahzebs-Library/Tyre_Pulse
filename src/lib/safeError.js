@@ -27,7 +27,7 @@ const CODE_MESSAGES = {
 }
 
 const PERMISSION_MESSAGE = 'You do not have permission to do that.'
-const NETWORK_MESSAGE = 'Network error — check your connection.'
+const NETWORK_MESSAGE = 'Network error. Check your connection.'
 
 // Substrings that indicate the message came from the database / PostgREST layer
 // and therefore must never be echoed back to the user verbatim.

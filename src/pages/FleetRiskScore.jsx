@@ -147,7 +147,7 @@ export default function FleetRiskScore() {
   }
   const worst10 = tyreRows.slice(0, 10)
   const barData = {
-    labels: worst10.map((r) => r.serial || r.asset_no || '—'),
+    labels: worst10.map((r) => r.serial || r.asset_no || 'N/A'),
     datasets: [{
       label: 'Safety score',
       data: worst10.map((r) => r.risk_score),
@@ -191,7 +191,7 @@ export default function FleetRiskScore() {
 
   const kpis = [
     { label: 'Tyres scored', value: summary.total_scored, icon: Gauge, tone: 'text-[var(--text-primary)]' },
-    { label: 'Fleet avg', value: summary.total_scored ? summary.fleet_average_score : '—', icon: ShieldCheck, tone: 'text-[var(--brand-bright)]' },
+    { label: 'Fleet avg', value: summary.total_scored ? summary.fleet_average_score : 'N/A', icon: ShieldCheck, tone: 'text-[var(--brand-bright)]' },
     { label: 'Critical', value: byLevel.critical, icon: AlertTriangle, tone: 'text-red-400' },
     { label: 'High', value: byLevel.high, icon: ShieldAlert, tone: 'text-orange-400' },
     { label: 'Medium', value: byLevel.medium, icon: Info, tone: 'text-amber-400' },
@@ -206,7 +206,7 @@ export default function FleetRiskScore() {
     <div className="space-y-6">
       <PageHeader
         title="Fleet Risk Score"
-        subtitle="Per-tyre 0–100 safety score (higher = safer) from tread, pressure, in-service age, mileage and inspection — banded and ranked worst-first."
+        subtitle="Per-tyre 0 to 100 safety score (higher = safer) from tread, pressure, in-service age, mileage and inspection, banded and ranked worst-first."
         icon={ShieldAlert}
         onRefresh={load}
         refreshing={refreshing}
@@ -250,7 +250,7 @@ export default function FleetRiskScore() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-2xl font-bold mt-1 ${k.tone}`}>{data === null ? '—' : k.value}</p>
+              <p className={`text-2xl font-bold mt-1 ${k.tone}`}>{data === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -267,7 +267,7 @@ export default function FleetRiskScore() {
             <span><strong>KM</strong> {RISK_WEIGHTS.km}%</span>
             <span><strong>Inspection</strong> {RISK_WEIGHTS.inspection}%</span>
           </div>
-          <p>Age uses <strong>in-service</strong> age (since fitment) — the DOT manufacture date is not captured, so tyres stored before fitment read younger than true age. Inspection has no per-tyre inspection-date source, so it applies the engine's neutral default to every tyre. Scores are safety scores: lower is riskier.</p>
+          <p>Age uses <strong>in-service</strong> age (since fitment). The DOT manufacture date is not captured, so tyres stored before fitment read younger than true age. Inspection has no per-tyre inspection-date source, so it applies the engine's neutral default to every tyre. Scores are safety scores: lower is riskier.</p>
         </div>
       </div>
 
@@ -346,10 +346,10 @@ function TyreTable({ loading, rows, total }) {
               pager.pageRows.map((r, idx) => (
                 <tr key={r.id ?? `${r.serial}-${idx}`} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
                   <td className="px-4 py-2.5 text-[var(--text-muted)] tabular-nums">{pager.from + idx}</td>
-                  <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{r.serial || '—'}</td>
-                  <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)]">{r.asset_no || '—'}</td>
-                  <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.position || '—'}</td>
-                  <td className="px-4 py-2.5 text-[var(--text-secondary)]">{[r.brand, r.size].filter(Boolean).join(' ') || '—'}</td>
+                  <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{r.serial || 'N/A'}</td>
+                  <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)]">{r.asset_no || 'N/A'}</td>
+                  <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.position || 'N/A'}</td>
+                  <td className="px-4 py-2.5 text-[var(--text-secondary)]">{[r.brand, r.size].filter(Boolean).join(' ') || 'N/A'}</td>
                   <td className="px-4 py-2.5"><span className={`text-[11px] px-2 py-0.5 rounded ${BAND_STYLES[r.risk_level]}`}>{RISK_LEVEL_META[r.risk_level]?.label || r.risk_level}</span></td>
                   <td className="px-4 py-2.5 w-40"><ScoreBar score={r.risk_score} /></td>
                   <td className="px-4 py-2.5">
@@ -411,7 +411,7 @@ function VehicleTable({ loading, rows, total }) {
                 <tr key={r.asset_no} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
                   <td className="px-4 py-2.5 text-[var(--text-muted)] tabular-nums">{pager.from + idx}</td>
                   <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{r.asset_no}</td>
-                  <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.site || '—'}</td>
+                  <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.site || 'N/A'}</td>
                   <td className="px-4 py-2.5 text-[var(--text-secondary)] tabular-nums">{r.tyre_count}</td>
                   <td className="px-4 py-2.5"><span className={`text-[11px] px-2 py-0.5 rounded ${BAND_STYLES[r.vehicle_risk_level]}`}>{RISK_LEVEL_META[r.vehicle_risk_level]?.label || r.vehicle_risk_level}</span></td>
                   <td className="px-4 py-2.5 w-44"><ScoreBar score={r.worst_score} /></td>
@@ -419,7 +419,7 @@ function VehicleTable({ loading, rows, total }) {
                   <td className="px-4 py-2.5 text-[var(--text-secondary)]">
                     {r.worst_tyre?.serial
                       ? <span className="font-mono text-xs">{r.worst_tyre.serial}{r.worst_tyre.position ? ` · ${r.worst_tyre.position}` : ''}</span>
-                      : '—'}
+                      : 'N/A'}
                   </td>
                 </tr>
               ))

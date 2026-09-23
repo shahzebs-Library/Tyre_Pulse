@@ -6,11 +6,9 @@
  * (least-privilege select) and null-safe country scoping, mirroring
  * batteries.js / support.js.
  *
- * When the table has not been migrated yet, listShifts degrades to [] so the
- * page can surface an "apply MIGRATIONS_V149_SHIFTS.sql" hint instead of
- * throwing.
+ * Read failures propagate so unavailable data is not presented as an empty list.
  */
-import { supabase, unwrap, applyCountry, isMissingRelation } from './_client'
+import { supabase, unwrap, applyCountry, isMissingRelation, fetchAllPages } from './_client'
 
 export const COLS =
   'id,organisation_id,country,person_name,role,shift_date,start_time,end_time,' +
@@ -21,26 +19,17 @@ export const SHIFT_STATUS_VALUES = ['scheduled', 'completed', 'absent', 'cancell
 
 /**
  * List shifts (upcoming first: by shift_date desc, then created_at desc).
- * Optional country / status filters. Returns [] when the table is missing so
- * the UI can prompt for the migration rather than error.
+ * Optional country / status filters. Read failures propagate to the page.
  */
-export async function listShifts({ country, status, limit = 500 } = {}) {
-  try {
+export async function listShifts({ country, status } = {}) {
+  const result = await fetchAllPages((from, to) => {
     let q = supabase.from('shifts').select(COLS)
     if (status) q = q.eq('status', status)
-    q = applyCountry(q, country)
-    return (
-      unwrap(
-        await q
-          .order('shift_date', { ascending: false, nullsFirst: false })
-          .order('created_at', { ascending: false })
-          .limit(limit),
-      ) || []
-    )
-  } catch (err) {
-    if (isMissingRelation(err)) return []
-    throw err
-  }
+    return applyCountry(q, country).order('shift_date', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: false }).order('id').range(from, to)
+  }, { max: 50000 })
+  if (result.truncated) throw new Error('Too many shifts to load completely. Narrow the country selection.')
+  return unwrap(result) || []
 }
 
 export async function getShift(id) {

@@ -253,7 +253,7 @@ export function detectDuplicateTrailers(combos = []) {
     for (const t of parseTrailerList(c?.trailer_nos)) {
       const key = t.toLowerCase()
       if (!map.has(key)) map.set(key, { trailer: t, combinations: [] })
-      map.get(key).combinations.push({ id: c?.id ?? null, name: c?.name || c?.prime_mover_no || '—' })
+      map.get(key).combinations.push({ id: c?.id ?? null, name: c?.name || c?.prime_mover_no || 'N/A' })
     }
   }
   return [...map.values()].filter((e) => e.combinations.length > 1)

@@ -100,7 +100,7 @@ const SAMPLE = {
   inspection_type: ['Pre-trip', 'Monthly'],
   inspector: ['Khalid A.', 'Sara N.'],
   tyre_serial: ['SN-100045', 'SN-100046'],
-  findings: ['Tread within limit', 'Low pressure — reinflated'],
+  findings: ['Tread within limit', 'Low pressure, reinflated'],
   odometer_km: ['132000', '98000'],
   // work order
   work_order_no: ['WO-2021-3310', 'WO-2021-3311'],

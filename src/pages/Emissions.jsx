@@ -27,6 +27,7 @@ import {
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 const EMPTY_FORM = {
   asset_no: '', certificate_no: '', test_date: '', expiry_date: '', test_center: '',
@@ -41,26 +42,21 @@ const RESULT_OPTIONS = [
 ]
 
 function fmtDate(v) {
-  if (!v) return '—'
+  if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString()
 }
 
 const fmtNum = (v, suffix = '') =>
-  v == null || v === '' ? '—' : `${Number(v).toLocaleString()}${suffix}`
+  v == null || v === '' ? 'N/A' : `${Number(v).toLocaleString()}${suffix}`
 
 function fmtMoney(v, currency) {
-  if (v == null || v === '') return '—'
+  if (v == null || v === '') return 'N/A'
   const n = Number(v)
-  if (Number.isNaN(n)) return '—'
+  if (Number.isNaN(n)) return 'N/A'
   return `${currency ? `${currency} ` : ''}${n.toLocaleString()}`
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') ||
-    m.includes('schema cache') || m.includes('could not find the table')
-}
 
 // ── Presentation for the pass/fail result and the certificate expiry status ──
 const RESULT_BADGE = {
@@ -78,7 +74,7 @@ const EXPIRY_BADGE = {
 
 function ResultBadge({ value }) {
   const meta = RESULT_BADGE[String(value || '').toLowerCase()]
-  if (!meta) return <span className="text-[var(--text-muted)]">—</span>
+  if (!meta) return <span className="text-[var(--text-muted)]">N/A</span>
   const { Icon } = meta
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${meta.cls}`}>
@@ -256,7 +252,7 @@ export default function Emissions() {
     <div className="space-y-6">
       <PageHeader
         title="Emissions Tests"
-        subtitle="Track vehicle emissions / smog certificates per asset — gas readings, pass/fail results, and certificate expiry that governs regulatory compliance."
+        subtitle="Track vehicle emissions / smog certificates per asset: gas readings, pass/fail results, and certificate expiry that governs regulatory compliance."
         icon={Wind}
         onRefresh={load}
         refreshing={refreshing}
@@ -305,7 +301,7 @@ export default function Emissions() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? '—' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -408,13 +404,13 @@ export default function Emissions() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={8} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {rows.length === 0 && !notProvisioned ? 'No emissions tests recorded yet — record your first test.' : 'No tests match these filters.'}
+                  {rows.length === 0 && !notProvisioned ? 'No emissions tests recorded yet. Record your first test.' : 'No tests match these filters.'}
                 </td></tr>
               ) : (
                 pager.pageRows.map((r) => (
                   <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                    <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.asset_no || '—'}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.certificate_no || '—'}</td>
+                    <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.asset_no || 'N/A'}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.certificate_no || 'N/A'}</td>
                     <td className="px-4 py-2.5"><ResultBadge value={r.result} /></td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDate(r.test_date)}</td>
                     <td className="px-4 py-2.5 whitespace-nowrap">
@@ -423,7 +419,7 @@ export default function Emissions() {
                         <ExpiryBadge status={expiryStatus(r, nowMs)} days={daysUntilExpiry(r, nowMs)} />
                       </div>
                     </td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.test_center || '—'}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.test_center || 'N/A'}</td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtMoney(r.cost, r.currency)}</td>
                     <td className="px-4 py-2.5">
                       <div className="flex items-center justify-end gap-1">
@@ -472,7 +468,7 @@ export default function Emissions() {
                 <div>
                   <label className="label">Result</label>
                   <select className="input w-full" value={form.result} onChange={(e) => set('result', e.target.value)}>
-                    <option value="">—</option>
+                    <option value="">None</option>
                     {RESULT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
                 </div>

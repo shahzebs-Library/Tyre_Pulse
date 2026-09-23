@@ -13,21 +13,18 @@ import { isValueField } from '../lib/checklist/fieldTypes'
 import { CHECKLIST_LANGS } from '../lib/checklist/checklistI18n'
 import { resolveChecklistIcon, checklistIconComponent } from '../lib/checklist/checklistIcons'
 import { roleTargetLabel } from '../lib/checklist/checklistRoles'
-import { gridFields } from '../lib/checklistMonthly'
+import { gridFields, submissionDate, submissionTarget } from '../lib/checklistMonthly'
 import { renderChecklistPdf } from '../lib/checklistPdf'
 import { toUserMessage } from '../lib/safeError'
 import { useTenant } from '../contexts/TenantContext'
 import ChecklistViewerDrawer from '../components/checklist/ChecklistViewerDrawer'
 import MonthlyGridPanel from '../components/checklist/MonthlyGridPanel'
 import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
+import { isMissingRelation } from '../lib/api/_client'
 
 const ELEVATED = ['admin', 'manager', 'director']
 
 // The friendly "tables not deployed yet" heuristic — mirrors Billing.jsx.
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') || m.includes('schema cache') || m.includes('could not find the table')
-}
 
 const STATUS_BADGE = {
   submitted: 'bg-sky-900/40 text-sky-300 border border-sky-700/50',
@@ -67,6 +64,23 @@ function fmtDate(v) {
   return Number.isNaN(d.getTime()) ? '-' : d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
+function ChecklistDates({ submission, template }) {
+  const date = submissionDate(submission, template?.fields)
+  const sheetDate = date.basis === 'sheet_date'
+    ? `${date.year}-${String(date.month).padStart(2, '0')}-${String(date.day).padStart(2, '0')}`
+    : null
+  const receivedValue = submission.submitted_at || submission.created_at
+  const receivedDate = receivedValue ? String(receivedValue).slice(0, 10) : null
+  if (!sheetDate) return <div>Received: {fmtDate(receivedValue)}</div>
+  if (sheetDate === receivedDate) {
+    return <div className="text-[var(--text-primary)]">Checklist date: {fmtDate(`${sheetDate}T12:00:00`)}</div>
+  }
+  return <>
+    <div className="text-[var(--text-primary)]">Checklist date: {fmtDate(`${sheetDate}T12:00:00`)}</div>
+    <div>Received: {fmtDate(receivedValue)}</div>
+  </>
+}
+
 const TABS = [
   { key: 'templates', label: 'Templates', icon: Layers },
   { key: 'submissions', label: 'Recent Submissions', icon: Inbox },
@@ -95,6 +109,7 @@ export default function Checklists() {
 
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('all')
+  const [evidenceFilter, setEvidenceFilter] = useState('all')
   // The submission open in the quick viewer, if any.
   const [viewId, setViewId] = useState(null)
   // The language of the printed sheet, chosen at download time - the floor copy
@@ -111,7 +126,7 @@ export default function Checklists() {
     try {
       const [tpls, subs] = await Promise.all([
         listTemplates({ status: 'published', country: activeCountry }),
-        listSubmissions({ country: activeCountry }).catch(() => []),
+        listSubmissions({ country: activeCountry }),
       ])
       setTemplates(Array.isArray(tpls) ? tpls : [])
       setSubmissions(Array.isArray(subs) ? subs : [])
@@ -146,10 +161,18 @@ export default function Checklists() {
     const byTemplate = templateParam
       ? submissions.filter((s) => String(s.template_id) === templateParam)
       : submissions
-    if (!q) return byTemplate
-    return byTemplate.filter((s) =>
-      [s.template_name, s.title, s.asset_no, s.site, s.status].filter(Boolean).some((v) => String(v).toLowerCase().includes(q)))
-  }, [submissions, search, templateParam])
+    const byEvidence = evidenceFilter === 'all' ? byTemplate
+      : evidenceFilter === 'gap'
+        ? byTemplate.filter((s) => s.template_snapshot_status !== 'exact')
+        : byTemplate.filter((s) => s.template_snapshot_status === evidenceFilter)
+    if (!q) return byEvidence
+    return byEvidence.filter((s) => {
+      const template = templates.find((t) => String(t.id) === String(s.template_id))
+      const target = submissionTarget(s, template?.fields)
+      return [s.template_name, s.title, target.assetNo, target.site, s.status]
+        .filter(Boolean).some((v) => String(v).toLowerCase().includes(q))
+    })
+  }, [submissions, templates, search, templateParam, evidenceFilter])
   const submissionsPager = usePagedRows(filteredSubmissions)
 
   // Name the template we were sent to look at, so a filtered-to-nothing list
@@ -204,7 +227,7 @@ export default function Checklists() {
     <div className="space-y-6">
       <PageHeader
         title="Checklists"
-        subtitle="Published inspection and compliance checklists — fill, submit, and route for approval."
+        subtitle="Published inspection and compliance checklists: fill, submit, and route for approval."
         icon={ClipboardList}
         actions={headerActions}
         onRefresh={load}
@@ -245,6 +268,18 @@ export default function Checklists() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
+        {tab === 'submissions' && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-[var(--text-muted)]">Evidence</span>
+            <select className="input py-2" value={evidenceFilter} onChange={(e) => setEvidenceFilter(e.target.value)}>
+              <option value="all">All evidence</option>
+              <option value="exact">Exact revision</option>
+              <option value="gap">Evidence gaps</option>
+              <option value="legacy_unavailable">Legacy unavailable</option>
+              <option value="missing_revision">Missing revision</option>
+            </select>
+          </div>
+        )}
         {tab === 'submissions' && (
           <div className="flex items-center gap-2">
             <span className="text-xs text-[var(--text-muted)]">PDF language</span>
@@ -446,12 +481,15 @@ export default function Checklists() {
                   <th className="table-header text-left">Checklist</th>
                   <th className="table-header text-left">Asset / Site</th>
                   <th className="table-header text-left">Status</th>
-                  <th className="table-header text-left">Submitted</th>
+                  <th className="table-header text-left">Checklist / received date</th>
                   <th className="table-header"></th>
                 </tr>
               </thead>
               <tbody>
-                {submissionsPager.pageRows.map((s) => (
+                {submissionsPager.pageRows.map((s) => {
+                  const template = templates.find((t) => String(t.id) === String(s.template_id))
+                  const target = submissionTarget(s, template?.fields)
+                  return (
                   <tr
                     key={s.id}
                     // Opens in place rather than navigating away. Reading a
@@ -467,14 +505,19 @@ export default function Checklists() {
                       )}
                     </td>
                     <td className="table-cell">
-                      <div className="text-[var(--text-primary)]">{s.asset_no || '-'}</div>
-                      <div className="text-xs text-[var(--text-muted)]">{[s.site, s.country].filter(Boolean).join(' · ') || '-'}</div>
+                      <div className="text-[var(--text-primary)]">{target.assetNo || '-'}</div>
+                      <div className="text-xs text-[var(--text-muted)]">{[target.site, s.country].filter(Boolean).join(' · ') || '-'}</div>
                     </td>
                     <td className="table-cell">
                       <span className={`badge text-xs ${statusBadge(s.status)}`}>{prettyStatus(s.status)}</span>
+                      <div className={`text-[11px] mt-1 ${s.template_snapshot_status === 'exact' ? 'text-green-400' : 'text-amber-400'}`}>
+                        {s.template_snapshot_status === 'exact' ? 'Exact template evidence'
+                          : s.template_snapshot_status === 'missing_revision' ? 'Template revision missing'
+                            : 'Legacy evidence unavailable'}
+                      </div>
                     </td>
                     <td className="table-cell whitespace-nowrap text-[var(--text-muted)]">
-                      {fmtDate(s.submitted_at || s.created_at)}
+                      <ChecklistDates submission={s} template={template} />
                     </td>
                     <td className="table-cell text-right whitespace-nowrap">
                       <button
@@ -489,7 +532,8 @@ export default function Checklists() {
                       <ChevronRight size={16} className="text-[var(--text-muted)] inline" />
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
             <TablePagination {...submissionsPager} />

@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // Shared, hoisted Supabase mock: chainable, thenable query builder recording
-// the table queried, plus auth.getSession and storage.from().list stubs.
+// the table queried, plus auth.getUser and storage.from().list stubs.
 // Mirrors src/test/notifications.test.js conventions.
 const h = vi.hoisted(() => {
   const state = {
     result:        { data: [], error: null },
-    sessionResult: { data: { session: null }, error: null },
+    sessionResult: { data: { user: { id: 'test-user' } }, error: null },
     storageResult: { data: [], error: null },
     tables:        [],
     buckets:       [],
@@ -23,7 +23,7 @@ const h = vi.hoisted(() => {
   }
   const supabase = {
     from,
-    auth: { getSession: () => Promise.resolve(state.sessionResult) },
+    auth: { getUser: () => Promise.resolve(state.sessionResult) },
     storage: {
       from(bucket) {
         state.buckets.push(bucket)
@@ -55,7 +55,7 @@ const {
 
 beforeEach(() => {
   h.state.result        = { data: [], error: null }
-  h.state.sessionResult = { data: { session: null }, error: null }
+  h.state.sessionResult = { data: { user: { id: 'test-user' } }, error: null }
   h.state.storageResult = { data: [], error: null }
   h.state.tables        = []
   h.state.buckets       = []
@@ -194,10 +194,10 @@ describe('checkDatabase / checkTable', () => {
 })
 
 describe('checkAuth', () => {
-  it('is ok when getSession resolves (even without a session)', async () => {
+  it('is ok only when remote Auth verifies the user', async () => {
     const r = await checkAuth()
     expect(r.status).toBe(STATUS.OK)
-    expect(r.detail).toMatch(/no session/i)
+    expect(r.detail).toMatch(/verified by Auth/i)
   })
 
   it('is degraded on an auth error response', async () => {
@@ -275,10 +275,28 @@ describe('runAllChecks', () => {
     expect(edge.every((c) => c.status === STATUS.DOWN && /404/.test(c.detail))).toBe(true)
   })
 
-  it('treats a 401 CORS-passing response as reachable', async () => {
+  it('marks a denied preflight degraded rather than healthy', async () => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ status: 401 })))
     const { checks } = await runAllChecks()
     const edge = checks.filter((c) => c.group === 'edge')
-    expect(edge.every((c) => c.status === STATUS.OK)).toBe(true)
+    expect(edge.every((c) => c.status === STATUS.DEGRADED)).toBe(true)
+  })
+})
+
+
+describe('health cannot be inferred from failure responses', () => {
+  it('does not claim remote auth health without a verified user', async () => {
+    h.state.sessionResult = { data: { user: null }, error: null }
+    expect((await checkAuth()).status).toBe(STATUS.DEGRADED)
+  })
+  it('reports Auth server errors as down', async () => {
+    h.state.sessionResult = { data: null, error: { status: 503, message: 'Unavailable' } }
+    expect((await checkAuth()).status).toBe(STATUS.DOWN)
+  })
+  it.each([500, 502, 503])('reports HTTP %s edge failures as down', async status => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://test-project.supabase.co')
+    vi.stubGlobal('fetch', vi.fn(async () => ({ status })))
+    const { checks } = await runAllChecks()
+    expect(checks.filter(check => check.group === 'edge').every(check => check.status === STATUS.DOWN)).toBe(true)
   })
 })

@@ -37,11 +37,11 @@ export const EXPIRY_SOON_DAYS = 30
  * @returns {string}
  */
 export function maskCardNumber(num) {
-  if (num == null) return '—'
+  if (num == null) return 'N/A'
   const digits = String(num).replace(/\D/g, '')
   if (!digits) {
     const s = String(num).trim()
-    return s ? `•••• ${s.slice(-4)}` : '—'
+    return s ? `•••• ${s.slice(-4)}` : 'N/A'
   }
   if (digits.length <= 4) return digits
   return `•••• ${digits.slice(-4)}`

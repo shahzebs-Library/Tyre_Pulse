@@ -253,6 +253,7 @@ String _compact(String s) =>
 const Map<String, String> _kAssetPrefixLayout = <String, String>{
   'TM': 'Tri-mixer',
   'MP': 'Concrete pump',
+  'CP': 'Concrete pump',
   'WL': 'Wheel loader',
   'SL': 'Skid loader',
   'PL': 'Pickup',
@@ -313,6 +314,15 @@ String? _resolveOne(String? vt) {
 
   // Keyword fallback - covers the real fleet's vehicle_type spellings
   // (Tr-Mixer, Wheel_Loader, Line/Spider/Stationary Pump, Placing Boom, ...).
+  // Identified pickup models precede generic make and "tri" matches: Triton
+  // is not a transit mixer and Xenon is not a dual-rear-wheel Tata truck.
+  if (s.contains('triton') ||
+      s.contains('xenon') ||
+      compact.contains('l200') ||
+      compact.contains('maxust60') ||
+      s.contains('double cab')) {
+    return 'Pickup';
+  }
   if (s.contains('tri') || s.contains('mixer') || s.contains('transit')) {
     return 'Tri-mixer';
   }
@@ -376,6 +386,25 @@ String? _resolveOne(String? vt) {
 /// by a prefix guessed from the asset number.
 String resolveVehicleType(String? vehicleType, [String? assetNo]) {
   return _resolveOne(vehicleType) ?? _resolveOne(assetNo) ?? 'Pickup';
+}
+
+/// Field-based fleet resolution. Only identified pickup models override an
+/// imported type; a make alone cannot prove a body or axle configuration.
+String resolveVehicleTypeFor({
+  String? vehicleType,
+  String? assetNo,
+  String? make,
+  String? model,
+}) {
+  final String identity = <String?>[make, model].whereType<String>().join(' ');
+  final String compact = _compact(identity);
+  if (compact.contains('triton') ||
+      compact.contains('xenon') ||
+      compact.contains('l200') ||
+      compact.contains('maxust60')) {
+    return 'Pickup';
+  }
+  return resolveVehicleType(vehicleType, assetNo);
 }
 
 // Legacy diagram-id -> canonical GCC position code (type-aware).

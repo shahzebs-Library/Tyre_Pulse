@@ -42,6 +42,7 @@ import {
   RETREAD_CLAIM_STATUSES, RETREAD_CLAIM_STATUS_META,
 } from '../lib/retreadClaimsAnalytics'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { isMissingRelation } from '../lib/api/_client'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement,
@@ -94,11 +95,6 @@ const EMPTY_FORM = {
   claim_date: '', cost: '', amount_recovered: '', status: 'open', notes: '',
 }
 
-function isMissingRelation(err) {
-  const m = String(err?.message || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('relation') ||
-    m.includes('schema cache') || m.includes('could not find the table')
-}
 function fmtDate(v) {
   if (!v) return 'N/A'
   const d = new Date(v)

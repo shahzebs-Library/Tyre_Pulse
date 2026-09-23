@@ -38,10 +38,8 @@ jobs:
       #      with anything but the established one, so the "helpful" fallback could only
       #      ever produce an artifact that cannot be shipped.
       #
-      # The key now comes from a secret. The committed tyre_pulse_app/release.jks is
-      # still accepted as a fallback so this pipeline keeps working today, but it is
-      # COMPROMISED - it and its password are in git history - and should be rotated:
-      # Play Console -> Setup -> App signing -> request upload key reset.
+      # Signing uses private secrets only. The historical committed upload key
+      # still requires rotation through Play Console before another release.
       - name: Load signing keystore
         id: load_keystore
         working-directory: tyre_pulse_app
@@ -52,9 +50,6 @@ jobs:
           if [ -n "${KEYSTORE_SECRET:-}" ]; then
             echo "Using keystore from ANDROID_KEYSTORE_BASE64 secret."
             echo "keystore_base64=${KEYSTORE_SECRET}" >> "$GITHUB_OUTPUT"
-          elif [ -f release.jks ]; then
-            echo "::warning::No ANDROID_KEYSTORE_BASE64 secret set - falling back to the keystore committed in the repository. That key is public in git history; rotate it via Play Console -> App signing -> upload key reset, then store it as a secret."
-            echo "keystore_base64=$(base64 -w 0 release.jks)" >> "$GITHUB_OUTPUT"
           else
             echo "::error::No signing key available. Set the ANDROID_KEYSTORE_BASE64 secret (base64 of your upload keystore)."
             echo "A key is NOT generated here on purpose: a new key produces an artifact Play will reject, which looks like a build problem rather than a signing one."
@@ -87,12 +82,9 @@ jobs:
         with:
           releaseDirectory: tyre_pulse_app/app/build/outputs/bundle/prodRelease
           signingKeyBase64: ${{ steps.load_keystore.outputs.keystore_base64 }}
-          # Secrets first; the literals are the values already baked into the committed
-          # keystore, kept only so this pipeline still runs. Set ANDROID_KEY_ALIAS,
-          # ANDROID_KEYSTORE_PASSWORD and ANDROID_KEY_PASSWORD and these fall away.
-          alias: ${{ secrets.ANDROID_KEY_ALIAS || 'tyre-pulse-key' }}
-          keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD || 'tyre_pulse_pass' }}
-          keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD || 'tyre_pulse_pass' }}
+          alias: ${{ secrets.ANDROID_KEY_ALIAS }}
+          keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
 
       - name: Upload AAB Artifact

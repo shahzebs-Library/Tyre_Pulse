@@ -287,18 +287,16 @@ describe('serialization: parseLayoutsValue', () => {
 
 describe('persistence wrappers (mock supabase)', () => {
   function mockSupabase({ value = null, error = null, upsertError = null } = {}) {
-    const upsert = vi.fn().mockResolvedValue({ error: upsertError })
-    const maybeSingle = vi.fn().mockResolvedValue({ data: value == null ? null : { value }, error })
-    const chain = { select: vi.fn(() => chain), eq: vi.fn(() => chain), maybeSingle, upsert }
-    return { from: vi.fn(() => chain), _chain: chain }
+    return { rpc: vi.fn(async (name, args) => name === 'save_organisation_configuration'
+      ? { data: { saved: args.p_values.length }, error: upsertError }
+      : { data: value == null ? [] : [{ value }], error }) }
   }
 
   it('fetchLayouts reads app_settings by key and parses defensively', async () => {
     const layouts = [makeLayout({ name: 'Saved', createdBy: 'u1' })]
     const sb = mockSupabase({ value: JSON.stringify(layouts) })
     const rows = await fetchLayouts(sb)
-    expect(sb.from).toHaveBeenCalledWith('app_settings')
-    expect(sb._chain.eq).toHaveBeenCalledWith('key', DASHBOARD_LAYOUTS_KEY)
+    expect(sb.rpc).toHaveBeenCalledWith('get_organisation_configuration', { p_namespace: 'app_settings', p_key: DASHBOARD_LAYOUTS_KEY })
     expect(rows).toHaveLength(1)
     expect(rows[0].name).toBe('Saved')
   })
@@ -315,10 +313,10 @@ describe('persistence wrappers (mock supabase)', () => {
     const saved = await saveLayouts(sb, dirty)
     expect(saved).toHaveLength(1)
     expect(saved[0].widgets).toEqual([{ widgetId: 'total-vehicles', w: 4, h: 'md' }])
-    const arg = sb._chain.upsert.mock.calls[0][0]
+    const arg = sb.rpc.mock.calls[0][1].p_values[0]
     expect(arg.key).toBe(DASHBOARD_LAYOUTS_KEY)
     expect(JSON.parse(arg.value)).toHaveLength(1)
-    expect(sb._chain.upsert.mock.calls[0][1]).toEqual({ onConflict: 'key' })
+    expect(sb.rpc.mock.calls[0][0]).toBe('save_organisation_configuration')
   })
 
   it('saveLayouts surfaces upsert failures', async () => {

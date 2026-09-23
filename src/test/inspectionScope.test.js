@@ -70,6 +70,11 @@ describe('inspectionMatchesFilters', () => {
     expect(out.map(r => r.id)).toEqual([1, 5])
   })
 
+  it('matches a pasted asset number with surrounding whitespace', () => {
+    expect(scopeInspections(rows, { search: '  tm001  ' }).map(r => r.id)).toEqual([1])
+    expect(scopeInspections(rows, { search: '   ' })).toHaveLength(rows.length)
+  })
+
   it('EXCLUDES a site the register cannot place, rather than sweeping it into the chosen region', () => {
     const out = scopeInspections(rows, { ...ALL, region: 'CENTRAL' }, { regionOf })
     expect(out.map(r => r.id)).toEqual([1, 2, 4, 5])
@@ -257,7 +262,7 @@ describe('Inspections.jsx wires the tiles to the filtered rows', () => {
     // "We could not look" and "there is nothing" are opposite facts.
     expect(src).toMatch(/const unreadable = !!loadError/)
     expect(src).toMatch(/const num = \(v\) => \(unreadable \? null : v\)/)
-    expect(src).toMatch(/setLoadError/)
+    expect(src).toMatch(/error: loadError, reload: load } = useInspectionRegister/)
   })
 })
 
@@ -269,11 +274,20 @@ describe('Inspections.jsx sign-off', () => {
   const src = readFileSync(join(process.cwd(), 'src/pages/Inspections.jsx'), 'utf8').replace(/\r\n/g, '\n')
 
   it('offers the sign-off controls only to someone allowed to sign', () => {
-    expect(src).toMatch(/const canApproveInspection = Boolean\(/)
-    // Reuses the app's existing approver role set rather than a new hardcoded list.
-    expect(src).toMatch(/const APPROVER_ROLES = \[\.\.\.ANALYTICS_ROLES, 'Maintenance Supervisor', 'Tyre Data Collector'\]/)
-    expect(src).toMatch(/APPROVER_ROLES\.includes\(profile\?\.role\)/)
-    expect(src).toMatch(/hasCapability\?\.\('inspections', 'approve'\)/)
+    // CONTRACT CHANGED, deliberately. This used to pin a local
+    // `APPROVER_ROLES = [...ANALYTICS_ROLES, 'Maintenance Supervisor', 'Tyre
+    // Data Collector']` plus an `inspections:approve` capability - a set that
+    // matched neither direction of the RPC's own list. It admitted Manager,
+    // Director and Maintenance Supervisor, whom `decide_inspection_approval`
+    // refuses, and omitted PMV Manager and both area-manager roles, whom it
+    // accepts; a capability grant could only ever produce a failing button,
+    // because the RPC never consults one. The gate now comes from the single
+    // mirror in src/lib/inspectionApproval.js, whose own suite holds it to the
+    // migration text.
+    expect(src).toMatch(/const canApproveInspection = canSignInspection\(profile\?\.role, \{ isSuperAdmin \}\)/)
+    expect(src).toMatch(/from '\.\.\/lib\/inspectionApproval'/)
+    expect(src).not.toMatch(/APPROVER_ROLES/)
+    expect(src).not.toMatch(/hasCapability\?\.\('inspections', 'approve'\)/)
     // Both decisions, and the pad itself, sit behind it.
     expect(src).toMatch(/approval_status !== 'approved' && canApproveInspection &&/)
     expect(src).toMatch(/showApproverPad && canApproveInspection &&/)

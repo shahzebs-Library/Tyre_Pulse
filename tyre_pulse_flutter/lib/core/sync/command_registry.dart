@@ -501,6 +501,8 @@ abstract final class CommandRegistry {
         'status',
         'notes',
         'photos',
+        'wash_details',
+        'captured_at',
       },
     ),
     CommandType.workshopEvent: CommandSpec(

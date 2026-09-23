@@ -20,9 +20,12 @@
  * table the moment the last chip is unticked reads as lost data, and there is no
  * way back from it except knowing to re-tick something.
  */
+const isAllSelection = (value) => typeof value === 'string' && value.trim().toLowerCase() === 'all'
+const isChosenValue = (value) => value != null && value !== '' && !isAllSelection(value)
+
 export function isSelectionActive(sel) {
-  if (Array.isArray(sel)) return sel.filter((v) => v != null && v !== '' && v !== 'all').length > 0
-  return sel != null && sel !== '' && sel !== 'all'
+  if (Array.isArray(sel)) return sel.filter(isChosenValue).length > 0
+  return isChosenValue(sel)
 }
 
 /**
@@ -37,7 +40,7 @@ export function selectionMatches(sel, value, norm = null) {
   if (!isSelectionActive(sel)) return true
   const f = typeof norm === 'function' ? norm : (v) => (v == null ? '' : String(v))
   const want = (Array.isArray(sel) ? sel : [sel])
-    .filter((v) => v != null && v !== '' && v !== 'all')
+    .filter(isChosenValue)
     .map((v) => f(v))
   const got = f(value)
   if (got === '' || got == null) return false
@@ -47,7 +50,7 @@ export function selectionMatches(sel, value, norm = null) {
 /** The chosen values as a clean array ([] when the selection is not narrowing). */
 export function selectionValues(sel) {
   if (!isSelectionActive(sel)) return []
-  return (Array.isArray(sel) ? sel : [sel]).filter((v) => v != null && v !== '' && v !== 'all')
+  return (Array.isArray(sel) ? sel : [sel]).filter(isChosenValue)
 }
 
 /**

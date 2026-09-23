@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__Supabase",
+      "mcp__supabase"
+    ]
+  },
+  "extraKnownMarketplaces": {
+    "ux-skill": {
+      "source": {
+        "source": "github",
+        "repo": "Laith0003/ux-skill"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "ux@ux-skill": true
+  }
+}

@@ -1,10 +1,6 @@
--- STATUS: AUTHORED, NOT YET APPLIED. The authoring session had no way to reach
--- the database: `npx supabase projects list` returns LegacyPlatformAuthRequiredError
--- (no access token), and while the Supabase MCP server connects, every call
--- needs an interactive approval the session could not obtain. Apply with
--- `supabase db query --linked --project-ref jhssdmeruxtrlqnwfksc --file <this>`
--- (after `supabase login`), or by pasting the body into the Supabase SQL editor,
--- or via the MCP apply tool from an interactive session. Then run VERIFY below.
+-- STATUS: APPLIED 2026-09-23 via the Supabase MCP (recorded as
+-- `wash_details_optional_checklist`). VERIFY below returned t,t,t,f,f,f, and the
+-- applied body differs from 20260921085115 only in the `checklist` lines.
 --
 -- WHY: 20260921085115_washing_activity_and_evidence.sql added the CHECK
 -- `wash_details_valid` over `valid_wash_details(wash_details)`, whose third

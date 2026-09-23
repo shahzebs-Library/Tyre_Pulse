@@ -73,6 +73,10 @@ function initWithSdk(key) {
       mask_all_text: true,
       mask_all_element_attributes: true,
       persistence: 'localStorage+cookie',
+      // Keep everything inside the npm bundle. The CSP allows scripts only from
+      // 'self', so lazy extensions fetched from PostHog's asset host would be
+      // blocked anyway; disabling them avoids noisy CSP violations.
+      disable_external_dependency_loading: true,
       // Strip query strings (possible tokens) from any URL PostHog records.
       sanitize_properties: (props) => {
         try {

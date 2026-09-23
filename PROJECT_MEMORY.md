@@ -55,6 +55,22 @@ batching stops them being started at all.
 
 ---
 
+# ⚑ SESSION 2026-09-23 — SECURITY/ENGINEERING SWEEP OF MAIN. Migration `20260923090000` APPLIED LIVE.
+- **Anon-executable SECURITY DEFINER sweep**: only 2 functions outside the V500 10-fn allowlist -
+  `notify_inspection_plan_assignment/_reassignment()` (trigger fns from 20260921160000, never revoked PUBLIC).
+  Revoked from PUBLIC then anon/authenticated (V500 order); verified f,f,f,f and both triggers still enabled.
+- **CHECKED AND CLEAN, do not re-raise:** 0 public tables with RLS off; 0 anon table grants; 0 TRUNCATE/TRIGGER
+  grants (V379 held). The `stg_*`/`expenses_*` "USING(true)" write policies are RESTRICTIVE, so they grant
+  nothing; `expenses_ksa/uae/egypt`, `stg_wo_lines`, `stg_tyre_brand` have NO permissive policy = deny-all for
+  authenticated (Table Editor loads run as service role). `inspection_plan_state` has no pinned search_path but
+  is INVOKER plain SQL - pinning it would block inlining; leave it.
+- **npm audit (prod) 2 high -> 0**: `overrides.image-size ^2.0.4`. Safe because pptxgenjs 3.12 declares
+  image-size but its dist NEVER imports it (grep = 0 refs), unlike `npm audit fix --force` which downgrades
+  pptxgenjs. Lockfile hand-narrowed to image-size + dropped `queue` - a plain `npm install` on this npm strips
+  every `libc` field (unrelated churn), so do not commit that.
+
+---
+
 # ⚑ SESSION 2026-09-22 — THE PROVISIONING BANNER: 4 PAGES COULD NOT MAKE THE STATEMENT, NOT 9.
 # No migration. Commit `fef966fb` on `feature/accident-case-web-redesign`, 8 files.
 

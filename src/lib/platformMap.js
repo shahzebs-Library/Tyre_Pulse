@@ -60,6 +60,7 @@ export const CONSOLE_DESCRIPTIONS = {
   '/console/compliance': 'SOC 2 and ISO 27001 readiness: 20 controls evaluated from live evidence, manual attestations with expiry, and a downloadable evidence pack.',
   '/console/approvals': 'Four-eyes approval: a second super admin must approve data cleanup, backup restore and bulk role changes before they run. Off until you turn it on.',
   '/console/tenant-export': 'Export one company\'s full dataset (37 tables) to Excel or JSON with a required reason and an audit record. States exactly which tables were truncated or failed.',
+  '/console/incidents': 'Platform incidents and status: open an incident from an error or alert, post updates, see time to acknowledge and resolve, and the live platform status.',
   '/console/audit-integrity': 'Tamper-evident audit logs: every day is sealed with a hash chain, verify on demand, and export the full log.',
   '/console/access-reviews': 'Periodic access certification: snapshot every user, decide keep, modify or revoke, apply the revokes and export the evidence.',
   '/console/security-audit': 'Live security checks with a score, weekly scan, alerts on new findings and the break-glass trail.',

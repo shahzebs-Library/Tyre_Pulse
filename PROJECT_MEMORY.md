@@ -55,6 +55,34 @@ batching stops them being started at all.
 
 ---
 
+# ⚑ SESSION 2026-09-24 (part 2) — CONSOLE ROUND 2: GOVERNANCE MODULES. All migrations APPLIED LIVE + verified.
+All super-admin, under /console, built on the console kit + shared charts. Each RPC: DEFINER, search_path=public,
+is_super_admin() -> 42501, revoke PUBLIC then anon, grant authenticated; each write audits to console_sessions.
+- **Access Reviews** `/console/access-reviews` (20260924100000). **Session revocation** "Sign out everywhere" on
+  Users (edge fn `admin-revoke-sessions`, 20260924101000; access tokens stay valid up to ~1h after revoke).
+- **Audit Integrity** `/console/audit-integrity` (hash-chained seals, 20260924102000).
+- **API Keys** `/console/api-keys` (20260924112000); revoke is break-glass (20260924113000). `developer_api_keys` is
+  a separate UNUSED table (retire candidate).
+- **Compliance** `/console/compliance` (20260924111000 attestations): 20 SOC2/ISO controls from live evidence;
+  unreadable source = unknown, never pass; manual controls need expiring attestations.
+- **Approvals (four-eyes)** `/console/approvals` (20260924110000): gates admin_data_cleanup_run,
+  backup_restore_missing, admin_bulk_set_role. **OFF by default** (`system_config.dual_control_enabled`, guarded
+  by trigger; change only via admin_set_dual_control). CHECK decided_by <> requested_by. Off needs approval unless
+  last super admin (break-glass).
+- **Tenant Export** `/console/tenant-export` (20260924114000): 37-table safelist, keyset paging, job logged before
+  any file. Browser ceiling truncates the 4 biggest tables; full dump needs a server job (open).
+- **Incidents** `/console/incidents` (20260924115000): platform_incidents + updates, status machine mirrored in
+  `src/lib/platformIncidents.js` (change BOTH), MTTA/MTTR null when unmeasurable, sev1/sev2 notify super admins.
+  NOTE: `src/lib/incidents.js` / `api/incidents.js` are the EXISTING safety IncidentReports service, not this.
+- **Honest console reads**: delivery/system logs/AI usage/audit trail/data browser/material master/duplicate
+  batches now page past 1,000 and throw instead of returning []. Still "never throw" by design (next
+  candidates): dataTrustOps, lineageOps, metricRegistry, tyreLearning, reconBrand, reconDupKeys, backups,
+  selfHealing, automationHealth.
+- OPEN: SSO enforcement, IP allowlist, JIT elevation, server-side tenant dump, Sentry as an incident signal.
+  NOT verified in a browser.
+
+---
+
 # ⚑ SESSION 2026-09-24 — ENTERPRISE CONSOLE PASS: SUPER-ADMIN ONLY, SECURITY AUDIT CENTER, CHARTS.
 Owner: all administration stays under the super-admin console, no company-admin tier; "enterprise level",
 fix bad UI, professional charts, security audits inside the console. Two migrations APPLIED LIVE.

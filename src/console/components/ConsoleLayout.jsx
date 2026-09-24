@@ -43,6 +43,7 @@ export const NAV_GROUPS = [
       { to: '/console/support-sessions', label: 'Support Sessions', icon: LifeBuoy },
       { to: '/console/api-keys',       label: 'API Keys',         icon: KeyRound },
       { to: '/console/compliance',     label: 'Compliance',       icon: ClipboardCheck },
+      { to: '/console/approvals',      label: 'Approvals',        icon: Scale },
     ],
   },
   {

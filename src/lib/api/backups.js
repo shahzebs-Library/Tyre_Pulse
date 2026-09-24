@@ -15,6 +15,7 @@
  * DESTRUCTIVE "restore missing rows" recovery path.
  */
 import { supabase, unwrap } from './_client'
+import { isApprovalRequiredError, APPROVAL_REQUIRED_MESSAGE } from '../dualControl'
 
 /**
  * True when the failure is "the RPC / table is not provisioned yet"
@@ -107,10 +108,11 @@ export async function restorePreview(snapshotId, table) {
  * @returns {Promise<{ table: string, restored: number }>} count of rows re-added
  */
 export async function restoreMissing(snapshotId, table) {
-  return unwrap(
-    await supabase.rpc('backup_restore_missing', {
+  const res = await supabase.rpc('backup_restore_missing', {
       p_snapshot_id: snapshotId,
       p_table: table,
-    }),
-  )
+    })
+  // Dual control: a gated action says plainly that it needs a second approval.
+  if (res?.error && isApprovalRequiredError(res.error)) throw new Error(APPROVAL_REQUIRED_MESSAGE)
+  return unwrap(res)
 }

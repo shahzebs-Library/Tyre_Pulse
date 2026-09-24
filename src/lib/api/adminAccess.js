@@ -12,6 +12,7 @@
  * lives in Postgres.
  */
 import { supabase, unwrap } from './_client'
+import { isApprovalRequiredError, APPROVAL_REQUIRED_MESSAGE } from '../dualControl'
 
 /**
  * Resolve one user's full effective access matrix (role + per-module role/grant
@@ -155,12 +156,13 @@ export async function bulkSetGrant({
  * @returns {Promise<number>} count of users whose role actually changed
  */
 export async function bulkSetRole(userIds, role) {
-  return unwrap(
-    await supabase.rpc('admin_bulk_set_role', {
+  const res = await supabase.rpc('admin_bulk_set_role', {
       p_user_ids: userIds,
       p_role: role,
-    }),
-  )
+    })
+  // Dual control: a gated action says plainly that it needs a second approval.
+  if (res?.error && isApprovalRequiredError(res.error)) throw new Error(APPROVAL_REQUIRED_MESSAGE)
+  return unwrap(res)
 }
 
 /**

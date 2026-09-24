@@ -9,6 +9,7 @@
  */
 import { supabase } from './_client'
 import { toUserMessage } from '../safeError'
+import { isApprovalRequiredError, APPROVAL_REQUIRED_MESSAGE } from '../dualControl'
 
 /** All cleanup targets with total rows + oldest/newest date. */
 export async function listCleanupTargets() {
@@ -27,7 +28,11 @@ export async function previewCleanup(key, before) {
 /** Delete rows of `key` older than `before`. Snapshots first; returns {deleted, snapshot}. */
 export async function runCleanup(key, before) {
   const { data, error } = await supabase.rpc('admin_data_cleanup_run', { p_key: key, p_before: before })
-  if (error) throw new Error(toUserMessage(error, 'Could not run the cleanup.'))
+  if (error) {
+    // Dual control: say plainly that a second super admin must approve first.
+    if (isApprovalRequiredError(error)) throw new Error(APPROVAL_REQUIRED_MESSAGE)
+    throw new Error(toUserMessage(error, 'Could not run the cleanup.'))
+  }
   return data || { deleted: 0 }
 }
 

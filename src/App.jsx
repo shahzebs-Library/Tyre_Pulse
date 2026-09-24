@@ -39,15 +39,12 @@ const ConsoleLogin         = lazy(() => import('./console/pages/ConsoleLogin'))
 const ConsoleDashboard     = lazy(() => import('./console/pages/ConsoleDashboard'))
 const ConsoleOrganisations = lazy(() => import('./console/pages/ConsoleOrganisations'))
 const ConsoleUsers         = lazy(() => import('./console/pages/ConsoleUsers'))
-const ConsolePermissions   = lazy(() => import('./console/pages/ConsolePermissions'))
 const ConsoleAIUsage       = lazy(() => import('./console/pages/ConsoleAIUsage'))
-const ConsoleAuditLog      = lazy(() => import('./console/pages/ConsoleAuditLog'))
 const ConsoleAnnouncements = lazy(() => import('./console/pages/ConsoleAnnouncements'))
 const ConsoleSystemConfig  = lazy(() => import('./console/pages/ConsoleSystemConfig'))
 const ConsoleReportAppearance = lazy(() => import('./console/pages/ConsoleReportAppearance'))
 const ConsoleSystemHealth  = lazy(() => import('./console/pages/ConsoleSystemHealth'))
 const ConsoleBackups       = lazy(() => import('./console/pages/ConsoleBackups'))
-const ConsoleAdminRoles    = lazy(() => import('./console/pages/ConsoleAdminRoles'))
 const ConsoleAuditTrail    = lazy(() => import('./console/pages/ConsoleAuditTrail'))
 const ConsoleAlertRules    = lazy(() => import('./console/pages/ConsoleAlertRules'))
 const ConsoleModuleControl = lazy(() => import('./console/pages/ConsoleModuleControl'))
@@ -80,6 +77,7 @@ const ConsoleSupportSessions = lazy(() => import('./console/pages/ConsoleSupport
 const ConsoleAccountDeletions = lazy(() => import('./console/pages/ConsoleAccountDeletions'))
 const ConsoleControlCenter = lazy(() => import('./console/pages/ConsoleControlCenter'))
 const ConsoleDataOps = lazy(() => import('./console/pages/ConsoleDataOps'))
+const ConsoleSecurityAudit = lazy(() => import('./console/pages/ConsoleSecurityAudit'))
 
 // Console admin pages built in parallel by other agents. Resolved via
 // import.meta.glob so this build succeeds whether or not the files exist yet: a
@@ -99,7 +97,6 @@ function lazyConsolePage(name, label) {
 }
 const ConsoleAccessControl = lazyConsolePage('ConsoleAccessControl', 'Access Control')
 const ConsoleSecurity      = lazyConsolePage('ConsoleSecurity', 'Security')
-const ConsoleSystem        = lazyConsolePage('ConsoleSystem', 'System')
 
 // ── Lazy page imports ─────────────────────────────────────────────────────
 const Login                  = lazy(() => import('./pages/Login'))
@@ -918,9 +915,9 @@ export default function App() {
           <Route index                element={<ConsoleDashboard />} />
           <Route path="organisations" element={<ConsoleOrganisations />} />
           <Route path="users"         element={<ConsoleUsers />} />
-          <Route path="permissions"   element={<ConsolePermissions />} />
+          <Route path="permissions"   element={<Navigate to="/console/access?tab=roles" replace />} />
           <Route path="ai-usage"      element={<ConsoleAIUsage />} />
-          <Route path="audit"         element={<ConsoleAuditLog />} />
+          <Route path="audit"         element={<Navigate to="/console/audit-trail" replace />} />
           <Route path="announcements" element={<ConsoleAnnouncements />} />
           <Route path="config"        element={<ConsoleSystemConfig />} />
           <Route path="appearance"    element={<ConsoleReportAppearance />} />
@@ -928,7 +925,8 @@ export default function App() {
           <Route path="control-center" element={<ConsoleControlCenter />} />
           <Route path="data-ops"      element={<ConsoleDataOps />} />
           <Route path="backups"       element={<ConsoleBackups />} />
-          <Route path="admin-roles"   element={<ConsoleAdminRoles />} />
+          <Route path="admin-roles"   element={<Navigate to="/console/users" replace />} />
+          <Route path="security-audit" element={<ConsoleSecurityAudit />} />
           <Route path="audit-trail"   element={<ConsoleAuditTrail />} />
           <Route path="alert-rules"   element={<ConsoleAlertRules />} />
           <Route path="module-control" element={<ConsoleModuleControl />} />
@@ -963,7 +961,7 @@ export default function App() {
           <Route path="access"        element={<ConsoleAuthBridge><Suspense fallback={<ConsoleModulePlaceholder label="Access Control" />}><ConsoleAccessControl /></Suspense></ConsoleAuthBridge>} />
           <Route path="ai-admin"      element={<ConsoleAuthBridge><Suspense fallback={<ConsoleModulePlaceholder label="AI Administration" />}><AiAdministration /></Suspense></ConsoleAuthBridge>} />
           <Route path="security"      element={<ConsoleAuthBridge><Suspense fallback={<ConsoleModulePlaceholder label="Security" />}><ConsoleSecurity /></Suspense></ConsoleAuthBridge>} />
-          <Route path="system"        element={<ConsoleAuthBridge><Suspense fallback={<ConsoleModulePlaceholder label="System" />}><ConsoleSystem /></Suspense></ConsoleAuthBridge>} />
+          <Route path="system"        element={<Navigate to="/console/health" replace />} />
           <Route path="*"             element={<Navigate to="/console" replace />} />
         </Route>
 

@@ -77,7 +77,7 @@ describe('shaping + search', () => {
     expect(webCapabilitySections([{ label: 'G', items: [{ key: '/a', label: 'A' }] }]))
       .toEqual([{ label: 'G', items: [{ label: 'A', to: '/a' }] }])
     expect(BACKEND_CAPABILITIES.length).toBeGreaterThan(4)
-    expect(filterBackendCapabilities(BACKEND_CAPABILITIES, 'row security').some((i) => i.to === '/console/security')).toBe(true)
+    expect(filterBackendCapabilities(BACKEND_CAPABILITIES, 'row security').some((i) => i.to === '/console/security-audit')).toBe(true)
   })
 
   it('platformCounts totals every surface', () => {

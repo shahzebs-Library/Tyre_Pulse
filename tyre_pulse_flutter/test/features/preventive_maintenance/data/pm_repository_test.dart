@@ -24,10 +24,9 @@ void main() {
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     subscription = server.listen((HttpRequest request) async {
       requests.add(request.uri);
-      final int offset =
-          int.parse(request.uri.queryParameters['offset'] ?? '0');
-      final int limit =
-          int.parse(request.uri.queryParameters['limit'] ?? '1000');
+      final Map<String, String> params = request.uri.queryParameters;
+      final int offset = int.parse(params['offset'] ?? '0');
+      final int limit = int.parse(params['limit'] ?? '1000');
       request.response.headers.contentType = ContentType.json;
       if (failSecondPage && offset > 0) {
         request.response.statusCode = HttpStatus.forbidden;
@@ -37,15 +36,16 @@ void main() {
         }));
       } else {
         final int end = offset + limit < 1001 ? offset + limit : 1001;
-        request.response.write(jsonEncode(<Map<String, Object?>>[
-          for (int index = offset; index < end; index++)
-            <String, Object?>{
-              'id': 'plan-$index',
-              'name': 'Maintenance $index',
-              'status': 'active',
-              'next_due': '2026-09-24',
-            },
-        ]));
+        final List<Map<String, Object?>> rows = <Map<String, Object?>>[];
+        for (int index = offset; index < end; index++) {
+          rows.add(<String, Object?>{
+            'id': 'plan-$index',
+            'name': 'Maintenance $index',
+            'status': 'active',
+            'next_due': '2026-09-24',
+          });
+        }
+        request.response.write(jsonEncode(rows));
       }
       await request.response.close();
     });
@@ -75,7 +75,7 @@ void main() {
     }
   });
 
-  test('a failed later page cannot become a successful partial register', () async {
+  test('rejects a failed later page', () async {
     failSecondPage = true;
     await expectLater(
       repository.listActive(country: 'KSA'),

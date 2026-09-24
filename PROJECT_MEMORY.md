@@ -55,6 +55,52 @@ batching stops them being started at all.
 
 ---
 
+# ⚑ SESSION 2026-09-24 — ENTERPRISE CONSOLE PASS: SUPER-ADMIN ONLY, SECURITY AUDIT CENTER, CHARTS.
+Owner: all administration stays under the super-admin console, no company-admin tier; "enterprise level",
+fix bad UI, professional charts, security audits inside the console. Two migrations APPLIED LIVE.
+- **`20260924090000` access writers super-admin only.** `set_module_permissions`, `save_access_control_matrix`,
+  `admin_update_profile`, `admin_mobile_user_action` admitted any plain `Admin`. The matrix writers write the
+  GLOBAL (org_id NULL) role matrix every org reads, so one company's Admin could change "Manager" for all
+  companies. 0 plain Admins existed, so nobody lost access. Anchored whitespace-tolerant replace that aborts
+  unless each anchor matches once (a literal replace found 0 on the first try: `pg_get_functiondef` line breaks).
+- **`20260924091000` Security Audit Center.** `admin_security_posture()` = 14 live catalog checks (RLS off,
+  anon table grants, anon DEFINER fns outside the 10-fn allowlist, unpinned search_path, owner-rights views,
+  TRUNCATE grants, super admins without verified MFA, super-admin count 2-5, plain Admins, locked sign-ins,
+  public buckets, RLS-no-policy info, extensions in public, leaked-password = `manual`, since SQL cannot read
+  it) + score. `security_scan_runs` history, weekly pg_cron `security-audit-weekly` (Sun 05:00 UTC), alerts
+  only on NEW findings vs the previous run (baseline seeded with the known `extensions_public`). Live score 99.
+  **Break-glass:** trigger on `console_sessions` notifies every super admin on console `login` and a fixed list
+  of risky actions; trigger on `access_audit` entity `super_admin` raises a critical log + notification.
+  Verified rolled back: login + bulk_set_role = 4 notifications (2 supers x 2), `update_user` = none; a Manager
+  calling the posture RPC is refused 42501.
+- **Page `/console/security-audit`** (nav group "Security"): score ring, open findings by severity, activity
+  tiles, filterable check list with why/affected/fix, score trend, break-glass trail, Excel export.
+- **Shared console charts `src/console/components/ui/charts.jsx`** (TrendChart / BarsChart / ShareChart /
+  ScoreRing / Legend): theme-aware (re-render on html.light flip), one axis, recessive grid, stated empty state,
+  sr-only summary. Pure shapers `src/lib/consoleCharts.js` (zero-filled `dailySeries`, `topShare`). USE THESE for
+  any new console chart.
+- **Two pages could never show data:** Console Dashboard's AI panel and the whole AI Usage page read
+  `ai_usage_log` (0 rows; AI Usage also selected columns that table lacks). Both now read `ai_token_logs` via
+  `lib/api/aiOps` (the single AI reader). Dashboard rebuilt with kit + charts (security score, 30-day signups,
+  users by role, platform data, 30-day AI trend); AI Usage rebuilt (calls/cost/failures trend, spend by model,
+  calls by feature, recent failures, export).
+- **Retired with redirects:** Audit Log (subset of Audit Trail), System hub (linked to main-app pages),
+  Permissions stub, Admin Roles (stored levels never enforced). Nav regrouped: Overview / Security / People and
+  access / Data trust / Data operations / Automation and AI / Configuration.
+- **Not mixed any more:** hosted main-app pages (Access Control, AI Admin, Sign-in & SSO) take the console
+  palette through `.console-root` token re-pointing in index.css; one h1 style for every console page; light
+  mode status tints for green/amber/blue/purple badges.
+- **FOUND, NOT MINE, NOT APPLIED:** `next_rfr_no`, `convert_repair_request_to_job_card`,
+  `get_material_issue_summary` are called by `repairRequests.js` / `materialIssue.js` but do not exist live;
+  their migrations are `MIGRATIONS_V608_REPAIR_REQUEST_RFR.sql` / `V609_STORE_MATERIAL_ISSUE.sql` from another
+  session. Those screens error until applied. Owner decision.
+- **NOT VERIFIED IN A BROWSER:** build clean, 9,031/9,032 tests (the 1 is the known mobile node_modules test).
+  The console needs a super-admin sign-in to view.
+- STILL OPEN from the owner-side list: enable leaked-password protection (Supabase Auth dashboard) - now shown
+  as a `manual` check on the Security Audit page.
+
+---
+
 # ⚑ SESSION 2026-09-23 — SECURITY/ENGINEERING SWEEP OF MAIN. Migration `20260923090000` APPLIED LIVE.
 - **Anon-executable SECURITY DEFINER sweep**: only 2 functions outside the V500 10-fn allowlist -
   `notify_inspection_plan_assignment/_reassignment()` (trigger fns from 20260921160000, never revoked PUBLIC).

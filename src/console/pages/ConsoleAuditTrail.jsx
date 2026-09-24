@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  ShieldCheck, Search, RefreshCw, Download, ChevronRight, ChevronDown, Info,
+  ShieldCheck, RefreshCw, Download, ChevronRight, ChevronDown, Info, Activity, Users,
 } from 'lucide-react'
+import {
+  Panel, PanelHeader, Note, StatTile, Badge, Btn, Segmented, SearchInput, Select, Toolbar,
+  Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, Code,
+} from '../components/ui'
+import { TrendChart, ShareChart } from '../components/ui/charts'
+import { dailySeries, topShare } from '../../lib/consoleCharts'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import {
   AUDIT_SOURCES, listDataAudit, listAccessAudit, listConsoleAudit,
@@ -12,7 +18,13 @@ import { toUserMessage } from '../../lib/safeError'
 // Read-only unified audit viewer (Module 6). Reads three independently-owned
 // audit tables (data changes, access control, console actions) through the
 // auditTrail service, which normalises every row to one common shape. No writes.
+//
+// The action dropdown used to be built from the rows currently loaded, so once
+// an action was picked the list shrank to that one action and the only way to
+// pick another was to clear the filter first. Actions seen for a source are now
+// remembered for the session, so the list stays whole while filtering.
 
+const PAGE_LIMIT = 200
 const SINCE_OPTIONS = [
   { key: '24h', label: 'Last 24 hours', days: 1 },
   { key: '7d', label: 'Last 7 days', days: 7 },
@@ -58,7 +70,7 @@ function JsonBlock({ label, value }) {
       {empty ? (
         <p className="text-xs text-gray-600 italic">No values</p>
       ) : (
-        <pre className="text-[11px] text-gray-300 bg-gray-800 rounded-lg p-2.5 overflow-x-auto max-h-56">
+        <pre className="text-[11px] text-gray-300 bg-gray-900 border border-gray-800 rounded-lg p-2.5 overflow-x-auto max-h-56">
           {typeof value === 'string' ? value : JSON.stringify(value, null, 2)}
         </pre>
       )}
@@ -77,6 +89,7 @@ export default function ConsoleAuditTrail() {
   const [actionFilter, setActionFilter] = useState('')
   const [since, setSince] = useState('7d')
   const [expanded, setExpanded] = useState(null)
+  const [seenActions, setSeenActions] = useState({})
 
   const meta = SOURCE_META[sourceKey] || SOURCE_META.audit_log_v2
 
@@ -88,12 +101,18 @@ export default function ConsoleAuditTrail() {
       const data = await meta.list({
         action: actionFilter || undefined,
         since: sinceIso(since),
-        limit: 200,
+        limit: PAGE_LIMIT,
       })
-      setRows(Array.isArray(data) ? data : [])
-    } catch {
+      const list = Array.isArray(data) ? data : []
+      setRows(list)
+      setSeenActions((prev) => {
+        const cur = new Set(prev[sourceKey] || [])
+        list.forEach((r) => { if (r.action) cur.add(r.action) })
+        return { ...prev, [sourceKey]: [...cur].sort() }
+      })
+    } catch (err) {
       setRows([])
-      setError('Could not load audit entries. Please try again.')
+      setError(toUserMessage(err, 'Could not load audit entries. Please try again.'))
     } finally {
       setLoading(false)
     }
@@ -111,10 +130,12 @@ export default function ConsoleAuditTrail() {
   }
 
   // Distinct actions in the loaded set drive the action dropdown.
-  const actionOptions = useMemo(
-    () => [...new Set(rows.map((r) => r.action).filter(Boolean))].sort(),
-    [rows],
-  )
+  const actionOptions = useMemo(() => {
+    const set = new Set(seenActions[sourceKey] || [])
+    rows.forEach((r) => { if (r.action) set.add(r.action) })
+    if (actionFilter) set.add(actionFilter)
+    return [...set].sort()
+  }, [rows, seenActions, sourceKey, actionFilter])
 
   // Free-text search across actor / action / target / detail.
   const filtered = useMemo(() => {
@@ -151,171 +172,155 @@ export default function ConsoleAuditTrail() {
     }
   }
 
+  const capped = rows.length >= PAGE_LIMIT
+  const sinceOpt = SINCE_OPTIONS.find((o) => o.key === since)
+  const trendDays = sinceOpt?.days == null ? 30 : Math.max(7, Math.min(90, sinceOpt.days))
+  const trend = useMemo(() => dailySeries(filtered, (r) => r.when, trendDays), [filtered, trendDays])
+  const actionShare = useMemo(
+    () => topShare(filtered, (r) => (r.action ? r.action.replace(/_/g, ' ') : 'N/A'), 5),
+    [filtered],
+  )
+  const actorCount = useMemo(() => new Set(filtered.map((r) => r.actor).filter(Boolean)).size, [filtered])
+  const scopeNote = capped
+    ? `Covers the latest ${PAGE_LIMIT} entries loaded, not every entry in the period`
+    : `Covers all ${rows.length} entries in the period`
+  const sourceLabel = AUDIT_SOURCES.find((s) => s.key === sourceKey)?.label || 'Audit'
+
   return (
     <div className="space-y-5 max-w-7xl">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
+      <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-white flex items-center gap-2">
-            <ShieldCheck size={18} className="text-orange-400" /> Audit Trail
-          </h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            Read only history across data changes, access control and console actions.
-          </p>
+          <h1 className="flex items-center gap-2"><ShieldCheck size={18} className="text-orange-400" /> Audit Trail</h1>
+          <p className="text-xs text-gray-500 mt-1">Read only history across data changes, access control and console actions.</p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={onExport} disabled={filtered.length === 0}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 text-gray-400 hover:text-white text-xs border border-gray-700 disabled:opacity-40 transition-colors">
-            <Download size={12} /> Export Excel
-          </button>
-          <button onClick={load} disabled={loading}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 text-gray-400 hover:text-white text-xs border border-gray-700 disabled:opacity-50 transition-colors">
-            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Refresh
-          </button>
+          <Btn icon={Download} onClick={onExport} disabled={filtered.length === 0}>Export Excel</Btn>
+          <Btn icon={RefreshCw} onClick={load} busy={loading}>Refresh</Btn>
         </div>
+      </header>
+
+      <Segmented size="md" value={sourceKey} onChange={switchSource}
+        options={AUDIT_SOURCES.map((s) => ({ key: s.key, label: s.label }))} />
+
+      <Note icon={Info}>{meta.help}</Note>
+
+      {capped && !loading && !error && (
+        <Note icon={Info} tone="warning">
+          Showing the latest {PAGE_LIMIT} entries for this source and period. Narrow the period or pick an action to see older entries.
+        </Note>
+      )}
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <StatTile label="Entries shown" value={loading ? 'N/A' : filtered.length.toLocaleString()}
+          sub={capped ? `Latest ${PAGE_LIMIT} loaded` : `${sinceOpt?.label || 'Period'}`} icon={ShieldCheck} />
+        <StatTile label="Distinct actors" value={loading ? 'N/A' : actorCount} icon={Users} />
+        <StatTile label="Distinct actions" value={loading ? 'N/A' : new Set(filtered.map((r) => r.action).filter(Boolean)).size} icon={Activity} />
+        <StatTile label="Most recent" value={loading || !filtered.length ? 'N/A' : fmtWhen(filtered[0]?.when)} />
       </div>
 
-      {/* Source segmented control */}
-      <div className="flex flex-wrap items-center gap-1.5 p-1 rounded-xl bg-gray-900/60 border border-gray-800 w-fit">
-        {AUDIT_SOURCES.map((s) => (
-          <button key={s.key} onClick={() => switchSource(s.key)}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-              sourceKey === s.key
-                ? 'bg-orange-500 text-white'
-                : 'text-gray-400 hover:text-white hover:bg-gray-800'
-            }`}>
-            {s.label}
-          </button>
-        ))}
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Panel className="lg:col-span-2">
+          <PanelHeader icon={Activity} title="Events per day" subtitle={`${sourceLabel}, last ${trendDays} days. ${scopeNote}.`} />
+          {loading ? <LoadingState rows={3} /> : (
+            <TrendChart labels={trend.labels} series={[{ label: 'Events', values: trend.values }]} height={190}
+              summary={`${trend.total} ${sourceLabel} events in the last ${trendDays} days`}
+              emptyText="No audit events in this window." />
+          )}
+        </Panel>
+        <Panel>
+          <PanelHeader icon={Activity} title="Events by action" subtitle={scopeNote} />
+          {loading ? <LoadingState rows={3} /> : (
+            <ShareChart parts={actionShare} height={150}
+              summary={actionShare.map((p) => `${p.label} ${p.value}`).join(', ')}
+              emptyText="No audit events to break down." center={{ value: filtered.length, label: 'Events' }} />
+          )}
+        </Panel>
       </div>
 
-      {/* Plain-English source help */}
-      <div className="flex items-start gap-2 text-xs text-gray-500 bg-gray-900/40 border border-gray-800 rounded-lg px-3 py-2">
-        <Info size={13} className="mt-0.5 flex-shrink-0 text-gray-600" />
-        <span>{meta.help}</span>
-      </div>
-
-      {/* Filters */}
-      <div className="flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-48">
-          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search actor, action, target, detail..."
-            className="w-full h-9 bg-gray-800 border border-gray-700 rounded-lg pl-8 pr-3 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-orange-500" />
-        </div>
-        <select value={actionFilter} onChange={(e) => setActionFilter(e.target.value)}
-          className="h-9 bg-gray-800 border border-gray-700 rounded-lg px-3 text-xs text-gray-300 focus:outline-none focus:border-orange-500">
-          <option value="">All actions</option>
-          {actionOptions.map((a) => <option key={a} value={a}>{a.replace(/_/g, ' ')}</option>)}
-        </select>
-        <select value={since} onChange={(e) => setSince(e.target.value)}
-          className="h-9 bg-gray-800 border border-gray-700 rounded-lg px-3 text-xs text-gray-300 focus:outline-none focus:border-orange-500">
-          {SINCE_OPTIONS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
-        </select>
+      <Toolbar>
+        <SearchInput value={search} onChange={setSearch} placeholder="Search actor, action, target, detail" className="flex-1 min-w-48" />
+        <Select value={actionFilter} onChange={setActionFilter} placeholder="All actions" className="w-52"
+          options={actionOptions.map((a) => ({ value: a, label: a.replace(/_/g, ' ') }))} />
+        <Select value={since} onChange={setSince} className="w-40"
+          options={SINCE_OPTIONS.map((o) => ({ value: o.key, label: o.label }))} />
         {hasFilters && (
-          <button onClick={() => { setSearch(''); setActionFilter(''); setSince('7d') }}
-            className="h-9 px-3 rounded-lg text-xs text-gray-500 hover:text-white bg-gray-800 border border-gray-700 transition-colors">
-            Clear
-          </button>
+          <Btn variant="quiet" onClick={() => { setSearch(''); setActionFilter(''); setSince('7d') }}>Clear</Btn>
         )}
-      </div>
+      </Toolbar>
 
-      {/* Body */}
       {loading ? (
-        <div className="flex items-center justify-center h-48">
-          <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
-        </div>
+        <LoadingState label="Loading audit entries" />
       ) : error ? (
-        <div className="flex flex-col items-center justify-center h-48 text-gray-500">
-          <p className="text-sm mb-3">{error}</p>
-          <button onClick={load}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 text-gray-300 hover:text-white text-xs border border-gray-700 transition-colors">
-            <RefreshCw size={12} /> Retry
-          </button>
-        </div>
+        <ErrorState message={error} onRetry={load} />
       ) : filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-48 text-gray-600">
-          <ShieldCheck size={32} className="mb-2 opacity-30" />
-          <p className="text-sm">No audit entries for these filters</p>
-        </div>
+        <Panel>
+          <EmptyState icon={ShieldCheck} title="No audit entries for these filters"
+            reason={rows.length ? 'Entries exist for this period, but none match the search.' : 'Nothing was recorded in this source for the chosen period and action.'} />
+        </Panel>
       ) : (
-        <div className="rounded-xl border border-gray-800 overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-2 bg-gray-900/60 border-b border-gray-800">
-            <p className="text-[11px] text-gray-500">{filtered.length.toLocaleString()} entries</p>
+        <Panel flush>
+          <div className="px-4 py-2.5 flex items-center justify-between">
+            <p className="text-[11px] text-gray-500">{filtered.length.toLocaleString()} entries{capped ? ` (latest ${PAGE_LIMIT} loaded)` : ''}</p>
+            {canDiff && <p className="text-[11px] text-gray-600">Click a row to see before and after values</p>}
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-gray-800 bg-gray-900/60">
-                  {canDiff && <th className="w-8 px-3 py-3" />}
-                  <th className="text-left px-4 py-3 text-gray-500 font-semibold uppercase tracking-wider">Time</th>
-                  <th className="text-left px-4 py-3 text-gray-500 font-semibold uppercase tracking-wider">Actor</th>
-                  <th className="text-left px-4 py-3 text-gray-500 font-semibold uppercase tracking-wider">Action</th>
-                  <th className="text-left px-4 py-3 text-gray-500 font-semibold uppercase tracking-wider">Target</th>
-                  <th className="text-left px-4 py-3 text-gray-500 font-semibold uppercase tracking-wider">Detail</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((r, i) => {
-                  const key = `${r.source}-${r.id ?? i}`
-                  const isOpen = expanded === key
-                  return (
-                    <FragmentRow
-                      key={key}
-                      row={r}
-                      rowKey={key}
-                      isOpen={isOpen}
-                      canDiff={canDiff}
-                      onToggle={() => setExpanded(isOpen ? null : key)}
-                    />
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
+          <Table className="border-0 rounded-none">
+            <THead>
+              {canDiff && <Th className="w-8" />}
+              <Th>Time</Th>
+              <Th>Actor</Th>
+              <Th>Action</Th>
+              <Th>Target</Th>
+              <Th>Detail</Th>
+            </THead>
+            <tbody>
+              {filtered.map((r, i) => {
+                const key = `${r.source}-${r.id ?? i}`
+                const isOpen = expanded === key
+                return (
+                  <FragmentRow
+                    key={key}
+                    row={r}
+                    rowKey={key}
+                    isOpen={isOpen}
+                    canDiff={canDiff}
+                    onToggle={() => setExpanded(isOpen ? null : key)}
+                  />
+                )
+              })}
+            </tbody>
+          </Table>
+        </Panel>
       )}
     </div>
   )
 }
 
 function FragmentRow({ row, rowKey, isOpen, canDiff, onToggle }) {
-  const clickable = canDiff
   return (
     <>
-      <tr
-        className={`border-b border-gray-800/60 hover:bg-gray-800/20 transition-colors ${clickable ? 'cursor-pointer' : ''}`}
-        onClick={clickable ? onToggle : undefined}>
+      <Tr onClick={canDiff ? onToggle : undefined}>
         {canDiff && (
-          <td className="px-3 py-2.5 text-gray-600">
+          <Td className="text-gray-600">
             {isOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-          </td>
+          </Td>
         )}
-        <td className="px-4 py-2.5 text-gray-500 whitespace-nowrap">{fmtWhen(row.when)}</td>
-        <td className="px-4 py-2.5 text-gray-300 max-w-[220px] truncate" title={row.actor || ''}>
-          {row.actor || 'N/A'}
+        <Td nowrap className="text-gray-500 tabular-nums">{fmtWhen(row.when)}</Td>
+        <Td className="text-gray-300 max-w-[220px] truncate">
+          <span title={row.actor || ''}>{row.actor || 'N/A'}</span>
           {row.role && <span className="ml-1.5 text-[10px] text-gray-600">({row.role})</span>}
-        </td>
-        <td className="px-4 py-2.5">
-          <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded border font-semibold capitalize whitespace-nowrap bg-gray-800 text-gray-300 border-gray-700">
-            {(row.action || 'N/A').replace(/_/g, ' ')}
-          </span>
-        </td>
-        <td className="px-4 py-2.5 text-gray-400 max-w-[220px] truncate" title={row.target || ''}>
-          {row.target || 'N/A'}
-        </td>
-        <td className="px-4 py-2.5 text-gray-500 max-w-xs truncate" title={row.detail || ''}>
-          {row.detail || 'N/A'}
-        </td>
-      </tr>
+        </Td>
+        <Td><Badge>{(row.action || 'N/A').replace(/_/g, ' ')}</Badge></Td>
+        <Td className="text-gray-400 max-w-[220px] truncate"><span title={row.target || ''}>{row.target || 'N/A'}</span></Td>
+        <Td className="text-gray-500 max-w-xs truncate"><span title={row.detail || ''}>{row.detail || 'N/A'}</span></Td>
+      </Tr>
       {canDiff && isOpen && (
-        <tr key={`${rowKey}-exp`} className="border-b border-gray-800/40 bg-gray-900/30">
+        <tr key={`${rowKey}-exp`} className="border-t border-gray-800/40 bg-gray-900/30">
           <td colSpan={6} className="px-6 py-3">
             <div className="flex flex-col sm:flex-row gap-4">
               <JsonBlock label="Before" value={row.old} />
               <JsonBlock label="After" value={row.new} />
             </div>
-            {row.id != null && <p className="text-[10px] text-gray-700 mt-2">Entry ID: {String(row.id)}</p>}
+            {row.id != null && <p className="text-[10px] text-gray-600 mt-2">Entry ID: <Code>{String(row.id)}</Code></p>}
           </td>
         </tr>
       )}

@@ -18,6 +18,7 @@
  */
 import { supabase, unwrap } from './_client'
 import { adminUpdateProfile } from './users'
+import { fetchAllPages } from '../fetchAll'
 
 const SESSION_COLS =
   'id, admin_id, action, target_id, target_type, details, ip_address, created_at'
@@ -27,41 +28,43 @@ const DEVICE_COLS =
 
 /**
  * Recent console activity (audit trail). Super-admin readable; RLS is the
- * boundary. Returns [] on any error.
+ * boundary. Throws on error so the page can say it could not load.
  *
  * @param {object} [params]
  * @param {number} [params.limit=200]  max rows
  * @returns {Promise<Array<object>>}
  */
 export async function listConsoleSessions({ limit = 200 } = {}) {
-  try {
-    const { data, error } = await supabase
-      .from('console_sessions')
-      .select(SESSION_COLS)
-      .order('created_at', { ascending: false })
-      .limit(limit)
-    if (error) return []
-    return Array.isArray(data) ? data : []
-  } catch {
-    return []
-  }
+  // An error is thrown, not swallowed: an empty list would tell a super admin
+  // "no console activity" when the truth is "we could not look".
+  const { data, error } = await supabase
+    .from('console_sessions')
+    .select(SESSION_COLS)
+    .order('created_at', { ascending: false })
+    .limit(limit)
+  if (error) throw error
+  return Array.isArray(data) ? data : []
 }
 
 /**
  * Lean profiles projection for the Users & Devices table. `has_device` is
  * derived (push_token present) so the raw token is never surfaced to the UI.
- * Returns [] on any error.
+ * Throws on error.
  *
  * @returns {Promise<Array<object>>}
  */
 export async function listUserDevices() {
-  try {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select(DEVICE_COLS)
-      .order('last_login_at', { ascending: false, nullsFirst: false })
-    if (error) return []
-    return (Array.isArray(data) ? data : []).map((r) => ({
+  // Paged: profiles already passes 700 rows and a bare select stops at the
+  // server's 1000-row cap, which would silently drop users from the list and
+  // every count built on it. The id tiebreak keeps page boundaries stable.
+  const { data, error } = await fetchAllPages((from, to) => supabase
+    .from('profiles')
+    .select(DEVICE_COLS)
+    .order('last_login_at', { ascending: false, nullsFirst: false })
+    .order('id')
+    .range(from, to), { max: 50000 })
+  if (error) throw error
+  return (Array.isArray(data) ? data : []).map((r) => ({
       id: r.id,
       full_name: r.full_name,
       username: r.username,
@@ -73,10 +76,7 @@ export async function listUserDevices() {
       login_count: r.login_count,
       has_device: r.push_token != null && r.push_token !== '',
       push_token_updated_at: r.push_token_updated_at,
-    }))
-  } catch {
-    return []
-  }
+  }))
 }
 
 /**

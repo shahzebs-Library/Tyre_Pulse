@@ -15,12 +15,22 @@
  * change app_current_org() or retarget reads to the inspected org (a deliberate,
  * separate follow-up). Super-admin only (the whole /console is gated). No raw
  * Supabase errors reach the UI; no em/en dashes.
+ *
+ * A session row whose expires_at has passed but was never ended still carries
+ * active=true in the table. The list used to call those "Active", which told the
+ * reader an authorization was open when it had already lapsed; they now read
+ * "Expired".
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  LifeBuoy, ShieldCheck, Clock, Play, Square, RefreshCw, AlertTriangle,
-  Loader2, Eye, Pencil, Building2,
+  LifeBuoy, ShieldCheck, Clock, Play, Square, RefreshCw, Eye, Pencil, Building2, Timer,
 } from 'lucide-react'
+import {
+  Panel, PanelHeader, Note, StatTile, Badge, Btn, Segmented, Select, Toolbar,
+  Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState,
+} from '../components/ui'
+import { TrendChart } from '../components/ui/charts'
+import { dailySeries } from '../../lib/consoleCharts'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import { supabase } from '../../lib/api/_client'
 import {
@@ -29,6 +39,29 @@ import {
 import { toUserMessage } from '../../lib/safeError'
 
 const DURATIONS = [15, 30, 60, 120, 240]
+const RECENT_LIMIT = 50
+const TREND_DAYS = 30
+
+/** active | expired | ended, from the row itself and the current clock. */
+export function sessionState(row, nowMs = Date.now()) {
+  if (!row) return 'ended'
+  if (row.ended_at || row.active === false) return 'ended'
+  const exp = row.expires_at ? new Date(row.expires_at).getTime() : NaN
+  if (Number.isFinite(exp) && exp <= nowMs) return 'expired'
+  return 'active'
+}
+
+const STATE_BADGE = {
+  active: { label: 'Active', tone: 'good' },
+  expired: { label: 'Expired', tone: 'warning' },
+  ended: { label: 'Ended', tone: 'quiet' },
+}
+
+function ModeBadge({ mode }) {
+  return mode === 'edit'
+    ? <Badge tone="warning" icon={Pencil}>Edit</Badge>
+    : <Badge tone="default" icon={Eye}>Read only</Badge>
+}
 
 const fmtDateTime = (v) => {
   if (!v) return 'N/A'
@@ -73,7 +106,7 @@ export default function ConsoleSupportSessions() {
       .from('support_sessions')
       .select('id, target_org_id, reason, mode, started_at, expires_at, ended_at, active, created_at')
       .order('created_at', { ascending: false })
-      .limit(50)
+      .limit(RECENT_LIMIT)
     if (err) throw err
     return data || []
   }, [])
@@ -138,50 +171,59 @@ export default function ConsoleSupportSessions() {
 
   const remaining = current ? minutesLeft(current.expires_at, nowMs) : null
 
+  const stats = useMemo(() => {
+    const orgsSeen = new Set()
+    let edit = 0; let open = 0; let durTotal = 0; let durN = 0
+    recent.forEach((r) => {
+      if (r.target_org_id) orgsSeen.add(r.target_org_id)
+      if (r.mode === 'edit') edit += 1
+      if (sessionState(r, nowMs) === 'active') open += 1
+      const s = new Date(r.started_at).getTime()
+      const e = new Date(r.ended_at || r.expires_at).getTime()
+      if (Number.isFinite(s) && Number.isFinite(e) && e >= s) { durTotal += (e - s) / 60000; durN += 1 }
+    })
+    return { orgs: orgsSeen.size, edit, open, avgMin: durN ? Math.round(durTotal / durN) : null }
+  }, [recent, nowMs])
+
+  const trend = useMemo(() => dailySeries(recent, (r) => r.started_at || r.created_at, TREND_DAYS), [recent])
+  const capped = recent.length >= RECENT_LIMIT
+
   return (
-    <div className="space-y-5 max-w-5xl">
-      <div className="flex items-center justify-between">
+    <div className="space-y-5 max-w-7xl">
+      <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-white flex items-center gap-2">
-            <LifeBuoy size={18} className="text-orange-400" /> Support Sessions
-          </h1>
-          <p className="text-sm text-gray-500 mt-0.5">Authorize a time-boxed, audited window to inspect one customer organisation during a support engagement.</p>
+          <h1 className="flex items-center gap-2"><LifeBuoy size={18} className="text-orange-400" /> Support Sessions</h1>
+          <p className="text-xs text-gray-500 mt-1">Authorize a time-boxed, audited window to inspect one customer organisation during a support engagement.</p>
         </div>
-        <button onClick={load} disabled={loading}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 text-gray-400 hover:text-white text-xs border border-gray-700 disabled:opacity-50">
-          <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Refresh
-        </button>
+        <Btn icon={RefreshCw} onClick={load} busy={loading}>Refresh</Btn>
+      </header>
+
+      <Note icon={ShieldCheck} tone="accent">
+        Starting a session records and audits the authorization only. It does not yet retarget what data your reads return. Every start and end is logged.
+      </Note>
+
+      <ErrorState message={error} onRetry={load} />
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <StatTile label="Sessions listed" value={loading ? 'N/A' : recent.length}
+          sub={capped ? `Latest ${RECENT_LIMIT} only` : 'All on record'} icon={Clock} />
+        <StatTile label="Open now" value={loading ? 'N/A' : stats.open} tone={stats.open ? 'accent' : 'default'} icon={Eye} />
+        <StatTile label="Edit mode" value={loading ? 'N/A' : stats.edit} tone={stats.edit ? 'warning' : 'default'}
+          sub="Sessions that allowed changes" icon={Pencil} />
+        <StatTile label="Average length" value={loading || stats.avgMin == null ? 'N/A' : `${stats.avgMin}m`}
+          sub={loading ? undefined : `${stats.orgs} organisation${stats.orgs === 1 ? '' : 's'} inspected`} icon={Timer} />
       </div>
 
-      <div className="flex items-start gap-2 px-4 py-2.5 rounded-xl bg-sky-950/30 border border-sky-800/40">
-        <ShieldCheck size={14} className="text-sky-400 flex-shrink-0 mt-0.5" />
-        <p className="text-xs text-sky-200">Starting a session records and audits the authorization only. It does not yet retarget what data your reads return. Every start and end is logged.</p>
-      </div>
-
-      {error && (
-        <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-950/40 border border-red-800/50">
-          <AlertTriangle size={13} className="text-red-400 flex-shrink-0" />
-          <p className="text-xs text-red-300">{error}</p>
-        </div>
-      )}
-
-      {/* Active session */}
-      {current && (
-        <div className="rounded-xl border border-orange-800/50 bg-orange-950/20 p-4">
+      {current ? (
+        <Panel tone="accent">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
-                style={{ background: 'rgba(249,115,22,0.15)', border: '1px solid rgba(249,115,22,0.3)' }}>
+              <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-orange-500/15 border border-orange-700/50">
                 <Eye size={16} className="text-orange-400" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-white flex items-center gap-2">
-                  Inspecting {nameFor(current.target_org_id)}
-                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold border ${
-                    current.mode === 'edit'
-                      ? 'text-amber-300 border-amber-800/50 bg-amber-900/20'
-                      : 'text-gray-300 border-gray-700 bg-gray-800/50'
-                  }`}>{current.mode === 'edit' ? 'EDIT' : 'READ ONLY'}</span>
+                <p className="text-sm font-semibold text-gray-100 flex items-center gap-2">
+                  Inspecting {nameFor(current.target_org_id)} <ModeBadge mode={current.mode} />
                 </p>
                 <p className="text-[11px] text-gray-400 mt-0.5 flex items-center gap-1">
                   <Clock size={10} />
@@ -193,134 +235,103 @@ export default function ConsoleSupportSessions() {
                 </p>
               </div>
             </div>
-            <button onClick={handleEnd} disabled={ending}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white disabled:opacity-40"
-              style={{ background: 'linear-gradient(135deg,#dc2626,#ef4444)' }}>
-              {ending ? <Loader2 size={12} className="animate-spin" /> : <Square size={12} />} End session
-            </button>
+            <Btn variant="danger" icon={Square} busy={ending} onClick={handleEnd}>End session</Btn>
           </div>
-          {current.reason && <p className="text-[11px] text-gray-400 mt-3 border-t border-orange-900/40 pt-2">Reason: {current.reason}</p>}
-        </div>
-      )}
-
-      {/* Start form */}
-      {!current && (
-        <div className="rounded-xl border border-gray-800 p-4 space-y-4">
-          <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-            <Play size={14} className="text-orange-400" /> Start a support session
-          </h3>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className="block text-[11px] font-semibold text-gray-400 mb-1.5">Target organisation</label>
-              <div className="relative">
-                <Building2 size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
-                <select value={targetOrg} onChange={(e) => setTargetOrg(e.target.value)}
-                  className="w-full h-9 bg-gray-800/80 border border-gray-700 rounded-lg pl-8 pr-3 text-xs text-white focus:outline-none focus:border-orange-500">
-                  <option value="">Select an organisation</option>
-                  {(orgs || []).map((o) => (
-                    <option key={o.id} value={o.id}>{o.name}</option>
-                  ))}
-                </select>
+          {current.reason && <p className="text-[11px] text-gray-400 mt-3 border-t border-orange-800/40 pt-2">Reason: {current.reason}</p>}
+        </Panel>
+      ) : (
+        <Panel>
+          <PanelHeader icon={Play} title="Start a support session"
+            subtitle="Pick one organisation, say why, and choose how long the window stays open." />
+          <div className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="flex items-center gap-1 text-[11px] font-semibold text-gray-400 mb-1.5">
+                  <Building2 size={12} className="text-gray-500" /> Target organisation
+                </label>
+                <Select value={targetOrg} onChange={setTargetOrg} placeholder="Select an organisation"
+                  options={(orgs || []).map((o) => ({ value: o.id, label: o.name }))} />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-gray-400 mb-1.5">Duration</label>
+                <Segmented value={minutes} onChange={setMinutes}
+                  options={DURATIONS.map((m) => ({ key: m, label: `${m}m` }))} />
               </div>
             </div>
 
             <div>
-              <label className="block text-[11px] font-semibold text-gray-400 mb-1.5">Duration (minutes)</label>
-              <div className="flex flex-wrap gap-1.5">
-                {DURATIONS.map((m) => (
-                  <button key={m} type="button" onClick={() => setMinutes(m)}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] border ${minutes === m ? 'bg-orange-600 border-orange-500 text-white' : 'bg-gray-800 border-gray-700 text-gray-300 hover:text-white'}`}>
-                    {m}m
-                  </button>
-                ))}
-              </div>
+              <label className="block text-[11px] font-semibold text-gray-400 mb-1.5">Reason (required)</label>
+              <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2}
+                placeholder="Why you need to inspect this organisation"
+                className="w-full bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-gray-700 resize-none" />
             </div>
-          </div>
 
-          <div>
-            <label className="block text-[11px] font-semibold text-gray-400 mb-1.5">Reason (required)</label>
-            <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2}
-              placeholder="Why you need to inspect this organisation"
-              className="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-orange-500 resize-none" />
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-semibold text-gray-400 mb-1.5">Mode</label>
-            <div className="flex gap-1.5">
-              <button type="button" onClick={() => setMode('read_only')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] border ${mode === 'read_only' ? 'bg-orange-600 border-orange-500 text-white' : 'bg-gray-800 border-gray-700 text-gray-300 hover:text-white'}`}>
-                <Eye size={12} /> Read only
-              </button>
-              <button type="button" onClick={() => setMode('edit')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] border ${mode === 'edit' ? 'bg-amber-600 border-amber-500 text-white' : 'bg-gray-800 border-gray-700 text-gray-300 hover:text-white'}`}>
-                <Pencil size={12} /> Edit
-              </button>
+            <div>
+              <label className="block text-[11px] font-semibold text-gray-400 mb-1.5">Mode</label>
+              <Segmented value={mode} onChange={setMode} options={[
+                { key: 'read_only', label: 'Read only', hint: 'Inspect without changing anything' },
+                { key: 'edit', label: 'Edit', hint: 'Allows changes; use only when needed' },
+              ]} />
             </div>
-          </div>
 
-          <button onClick={handleStart} disabled={starting || !targetOrg || !reason.trim()}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white disabled:opacity-40"
-            style={{ background: 'linear-gradient(135deg,#ea580c,#f97316)' }}>
-            {starting ? <><Loader2 size={12} className="animate-spin" /> Starting...</> : <><Play size={12} /> Start session</>}
-          </button>
-        </div>
+            <Toolbar>
+              <Btn variant="primary" size="md" icon={Play} busy={starting}
+                disabled={!targetOrg || !reason.trim()} onClick={handleStart}>
+                {starting ? 'Starting...' : 'Start session'}
+              </Btn>
+            </Toolbar>
+          </div>
+        </Panel>
       )}
 
-      {/* Recent sessions */}
-      <div className="rounded-xl border border-gray-800 overflow-hidden">
-        <div className="px-4 py-2.5 border-b border-gray-800 text-xs font-semibold text-gray-300 flex items-center gap-2">
-          <Clock size={13} className="text-gray-500" /> Recent sessions
-        </div>
-        {loading ? (
-          <div className="flex items-center justify-center h-40">
-            <Loader2 className="w-7 h-7 text-orange-500 animate-spin" />
-          </div>
-        ) : recent.length === 0 ? (
-          <div className="text-center text-sm text-gray-500 py-14">No support sessions yet.</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-left text-[10px] uppercase tracking-wider text-gray-600 border-b border-gray-800/60">
-                  <th className="px-4 py-2 font-semibold">Organisation</th>
-                  <th className="px-4 py-2 font-semibold">Mode</th>
-                  <th className="px-4 py-2 font-semibold">Reason</th>
-                  <th className="px-4 py-2 font-semibold">Started</th>
-                  <th className="px-4 py-2 font-semibold">Ended</th>
-                  <th className="px-4 py-2 font-semibold">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-800/60">
-                {recent.map((r) => (
-                  <tr key={r.id} className="hover:bg-black/20">
-                    <td className="px-4 py-2.5 text-gray-200 font-medium">{nameFor(r.target_org_id)}</td>
-                    <td className="px-4 py-2.5">
-                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold border ${
-                        r.mode === 'edit'
-                          ? 'text-amber-300 border-amber-800/50 bg-amber-900/20'
-                          : 'text-gray-400 border-gray-700 bg-gray-800/50'
-                      }`}>{r.mode === 'edit' ? 'EDIT' : 'READ ONLY'}</span>
-                    </td>
-                    <td className="px-4 py-2.5 text-gray-400 max-w-[220px] truncate" title={r.reason || ''}>{r.reason || 'N/A'}</td>
-                    <td className="px-4 py-2.5 text-gray-400">{fmtDateTime(r.started_at)}</td>
-                    <td className="px-4 py-2.5 text-gray-400">{r.ended_at ? fmtDateTime(r.ended_at) : 'N/A'}</td>
-                    <td className="px-4 py-2.5">
-                      {r.active && !r.ended_at ? (
-                        <span className="inline-flex items-center gap-1 text-[10px] text-green-300">
-                          <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" /> Active
-                        </span>
-                      ) : (
-                        <span className="text-[10px] text-gray-500">Ended</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+      <Panel>
+        <PanelHeader icon={Clock} title="Sessions started per day"
+          subtitle={capped
+            ? `Last ${TREND_DAYS} days, drawn from the latest ${RECENT_LIMIT} sessions only`
+            : `Last ${TREND_DAYS} days, ${trend.total} session${trend.total === 1 ? '' : 's'} in the window`} />
+        {loading ? <LoadingState rows={3} /> : (
+          <TrendChart labels={trend.labels} series={[{ label: 'Sessions', values: trend.values }]} height={170}
+            summary={`${trend.total} support sessions started in the last ${TREND_DAYS} days`}
+            emptyText="No support sessions started in the last 30 days." />
         )}
-      </div>
+      </Panel>
+
+      <Panel flush>
+        <div className="p-4 pb-2">
+          <PanelHeader icon={Clock} title="Recent sessions"
+            subtitle={capped ? `The latest ${RECENT_LIMIT} sessions, newest first` : 'Every session on record, newest first'} />
+        </div>
+        {loading ? <div className="px-4"><LoadingState label="Loading sessions" /></div> : recent.length === 0 ? (
+          <EmptyState title="No support sessions yet"
+            reason={error ? 'The session list could not be read, so nothing is shown.' : 'No super admin has opened a support window yet.'} />
+        ) : (
+          <Table className="border-0 rounded-none">
+            <THead>
+              <Th>Organisation</Th>
+              <Th>Mode</Th>
+              <Th>Reason</Th>
+              <Th>Started</Th>
+              <Th>Ended</Th>
+              <Th>Status</Th>
+            </THead>
+            <tbody>
+              {recent.map((r) => {
+                const st = STATE_BADGE[sessionState(r, nowMs)]
+                return (
+                  <Tr key={r.id}>
+                    <Td className="text-gray-200 font-medium">{nameFor(r.target_org_id)}</Td>
+                    <Td><ModeBadge mode={r.mode} /></Td>
+                    <Td className="text-gray-400 max-w-[240px] truncate"><span title={r.reason || ''}>{r.reason || 'N/A'}</span></Td>
+                    <Td nowrap className="text-gray-400">{fmtDateTime(r.started_at)}</Td>
+                    <Td nowrap className="text-gray-400">{r.ended_at ? fmtDateTime(r.ended_at) : 'N/A'}</Td>
+                    <Td><Badge tone={st.tone}>{st.label}</Badge></Td>
+                  </Tr>
+                )
+              })}
+            </tbody>
+          </Table>
+        )}
+      </Panel>
     </div>
   )
 }

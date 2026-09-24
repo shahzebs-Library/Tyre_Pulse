@@ -1,7 +1,7 @@
 -- ============================================================================
 -- V609. Store Material Issue / Return (MIS / MRT) as a first-class document.
 --
--- STATUS: AUTHORED - NOT YET APPLIED.
+-- STATUS: APPLIED LIVE 2026-09-24 (migration v609_store_material_issue), verified: MRT line 4 x 250 = -1000, summary ok. Trigger fns revoked from PUBLIC/anon/authenticated.
 --   Nothing in this file has been run against jhssdmeruxtrlqnwfksc. Every
 --   statement was PARSED and BEHAVIOURALLY EXERCISED inside a
 --   `begin; ... rollback;` transaction on the live database (see VERIFY at the

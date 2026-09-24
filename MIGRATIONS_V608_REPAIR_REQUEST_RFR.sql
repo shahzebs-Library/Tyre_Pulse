@@ -2,7 +2,7 @@
 -- V608. Repair Request (RFR) - the request a driver or operator raises BEFORE
 --       a job card exists, and the governed conversion into one.
 --
--- STATUS: AUTHORED - NOT YET APPLIED.
+-- STATUS: APPLIED LIVE 2026-09-24 (migration v608_repair_request_rfr), verified: RFR GC/RFR/0001/0926 minted, site normalised.
 --   Nothing in this file has been run against jhssdmeruxtrlqnwfksc. Every
 --   statement below was PARSED and BEHAVIOURALLY EXERCISED inside a
 --   `begin; ... rollback;` transaction on the live database (see the VERIFY

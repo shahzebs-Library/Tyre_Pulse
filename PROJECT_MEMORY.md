@@ -90,10 +90,14 @@ fix bad UI, professional charts, security audits inside the console. Two migrati
 - **Not mixed any more:** hosted main-app pages (Access Control, AI Admin, Sign-in & SSO) take the console
   palette through `.console-root` token re-pointing in index.css; one h1 style for every console page; light
   mode status tints for green/amber/blue/purple badges.
-- **FOUND, NOT MINE, NOT APPLIED:** `next_rfr_no`, `convert_repair_request_to_job_card`,
-  `get_material_issue_summary` are called by `repairRequests.js` / `materialIssue.js` but do not exist live;
-  their migrations are `MIGRATIONS_V608_REPAIR_REQUEST_RFR.sql` / `V609_STORE_MATERIAL_ISSUE.sql` from another
-  session. Those screens error until applied. Owner decision.
+- **V608 + V609 APPLIED LIVE (owner: "I always give access in Supabase" - do not ask before applying reviewed
+  migrations).** Repair Requests (RFR, `repair_requests` + `next_rfr_no` + `convert_repair_request_to_job_card`) and
+  Store Material Issue/Return (`material_issues` + lines + `get_material_issue_summary`) had client code calling
+  RPCs that did not exist. Verified rolled back as the super admin: RFR `GC/RFR/0001/0926` minted and site
+  `nhc-st` -> `NHC`; MRT `GC/MRT/0001/0926`, 4 x 250 = -1000; summary ok; security audit 0 failing. The 5 new
+  trigger functions were revoked from PUBLIC/anon/authenticated (they need no EXECUTE grant).
+- **OWNER RULE (2026-09-24): do not ask before applying a DB change the owner has asked for or that finishes
+  reviewed work.** Apply, verify, report. Still ask only for irreversible data deletion.
 - **NOT VERIFIED IN A BROWSER:** build clean, 9,031/9,032 tests (the 1 is the known mobile node_modules test).
   The console needs a super-admin sign-in to view.
 - STILL OPEN from the owner-side list: enable leaked-password protection (Supabase Auth dashboard) - now shown

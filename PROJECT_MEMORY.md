@@ -79,6 +79,13 @@ batching stops them being started at all.
 - **Tooling:** `ux@ux-skill` plugin enabled in `.claude/settings.json`; `scripts/claude-env-setup.sh` installs the
   ux-skill engine (from git, PyPI lags) and BUILDS codebase-memory-mcp from source (proxy blocks GitHub release
   downloads, which both its npm and PyPI wrappers use). Point the cloud env setup script at it.
+- **CLOSED CLEAN:** all of the above merged as PR #362 (`69722f7d`); production deploy READY on that sha (verified).
+  A parallel session then merged 2 marketing fixes (main tip `7278f8ce`). Nothing unpushed.
+- **OPEN, owner-side only:** (1) `VITE_POSTHOG_KEY`/`HOST` in Vercel; (2) cloud env setup script ->
+  `bash scripts/claude-env-setup.sh`; (3) `21st.dev` not in the network allowlist, so the `magic` MCP cannot connect;
+  lowercase `supabase` MCP (mcp.supabase.com) is also blocked - use the capital-S `Supabase` connector, which works.
+  (4) GitHub Dependabot shows 3 alerts on main (2 high, 1 moderate) = mobile build-time expo/metro/image-size;
+  fixing needs an Expo major upgrade, deferred while mobile builds are frozen.
 
 ---
 

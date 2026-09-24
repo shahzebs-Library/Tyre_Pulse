@@ -1,4 +1,4 @@
-﻿import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import VehicleReservations from '../pages/VehicleReservations'
 
@@ -38,4 +38,3 @@ describe('reservation load states', () => {
     expect(screen.getAllByText('Current country plan').length).toBeGreaterThan(0)
   })
 })
-

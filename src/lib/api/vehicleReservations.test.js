@@ -1,4 +1,4 @@
-﻿import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { findConflicts } from '../vehicleReservations'
 
@@ -65,4 +65,3 @@ describe('reservation register completeness', () => {
     expect(await listVehicleReservations()).toEqual([])
   })
 })
-

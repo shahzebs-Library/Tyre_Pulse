@@ -56,6 +56,7 @@ export const CONSOLE_DESCRIPTIONS = {
   '/console/audit-trail': 'One searchable trail of every change across the system, with before/after.',
   '/console/security': 'Security posture and sign-on configuration.',
   '/console/config': 'The global switches: maintenance mode, registration, exports, session rules.',
+  '/console/audit-integrity': 'Tamper-evident audit logs: every day is sealed with a hash chain, verify on demand, and export the full log.',
   '/console/access-reviews': 'Periodic access certification: snapshot every user, decide keep, modify or revoke, apply the revokes and export the evidence.',
   '/console/security-audit': 'Live security checks with a score, weekly scan, alerts on new findings and the break-glass trail.',
   '/console/module-control': 'Turn any module Live / Maintenance / Off across the whole app.',

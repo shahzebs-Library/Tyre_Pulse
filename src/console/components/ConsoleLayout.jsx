@@ -6,7 +6,7 @@ import {
   Globe, Menu, X, AlertTriangle, Layers, Smartphone, Palette, Activity,
   DatabaseBackup, UserCog, History, BellRing, Boxes, HeartPulse, Search, Truck, Trash2, CopyX, FileClock,
   LayoutList, Bug, Wand2, LifeBuoy, Eye, UserX, Brain, ShieldCheck, Sparkles, Scale, GitBranch, Rocket,
-  Map, Command, UserCheck,
+  Map, Command, UserCheck, Fingerprint,
 } from 'lucide-react'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import Console2FAModal from './Console2FAModal'
@@ -37,6 +37,7 @@ export const NAV_GROUPS = [
     items: [
       { to: '/console/security-audit', label: 'Security Audit',   icon: ShieldCheck },
       { to: '/console/audit-trail',    label: 'Audit Trail',      icon: History },
+      { to: '/console/audit-integrity', label: 'Audit Integrity', icon: Fingerprint },
       { to: '/console/sessions',       label: 'Sessions & Devices', icon: Smartphone },
       { to: '/console/security',       label: 'Sign-in & SSO',    icon: AlertTriangle },
       { to: '/console/support-sessions', label: 'Support Sessions', icon: LifeBuoy },

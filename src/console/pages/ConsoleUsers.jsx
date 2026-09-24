@@ -18,7 +18,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   Users, Lock, Unlock, CheckCircle, RefreshCw, Edit2, Key, AlertTriangle,
   Shield, MoreVertical, UserCheck, UserX, Globe, CheckSquare, Square, UserCog,
-  ShieldCheck, MapPin, Plus, Smartphone, Monitor, UserPlus, PieChart,
+  ShieldCheck, MapPin, Plus, Smartphone, Monitor, UserPlus, PieChart, LogOut,
 } from 'lucide-react'
 import {
   Panel, PanelHeader, Note, StatTile, ProportionBar, Badge, Code, Btn, SearchInput, Select, Toolbar,
@@ -38,6 +38,7 @@ import {
   canEmailReset, adminSetUserPassword,
 } from '../../lib/api/adminAccess'
 import { listDataSiteOptions } from '../../lib/api/sites'
+import { revokeUserSessions, ACCESS_TOKEN_NOTE } from '../../lib/api/sessionRevocation'
 // Site scope semantics (V309): no sites = NO site-scoped access; an explicit
 // 'ALL' / '*' sentinel = org-wide. Admins/super always see everything.
 // Single source: src/lib/scopeSentinel.js (shared with the invariant tests).
@@ -101,6 +102,11 @@ export default function ConsoleUsers() {
   const [actionMenu, setActionMenu] = useState(null)
   const [editModal, setEditModal] = useState(null)
   const [resetModal, setResetModal] = useState(null)
+  const [revokeModal, setRevokeModal] = useState(null)
+  const [revokeReason, setRevokeReason] = useState('')
+  const [revokeLock, setRevokeLock] = useState(false)
+  const [revokeBusy, setRevokeBusy] = useState(false)
+  const [revokeError, setRevokeError] = useState('')
   // Web-access deny confirmation (blocking web login on an account).
   const [webModal, setWebModal] = useState(null)
   const [webBusy, setWebBusy]   = useState(false)
@@ -295,6 +301,21 @@ export default function ConsoleUsers() {
     loadSiteOptions()
     return () => { cancelled = true }
   }, [])
+
+  function closeRevoke() {
+    setRevokeModal(null); setRevokeReason(''); setRevokeLock(false); setRevokeError('')
+  }
+
+  async function doRevoke() {
+    if (!revokeModal) return
+    setRevokeBusy(true); setRevokeError('')
+    const res = await revokeUserSessions(revokeModal.id, { reason: revokeReason.trim(), lock: revokeLock })
+    setRevokeBusy(false)
+    if (!res.ok) { setRevokeError(res.error); return }
+    closeRevoke()
+    flashToast(`Signed out of ${res.sessionsRevoked} session${res.sessionsRevoked === 1 ? '' : 's'}${res.locked ? ' and locked' : ''}.`)
+    if (res.locked) load()
+  }
 
   function flashToast(msg) {
     setToast(msg)
@@ -786,6 +807,8 @@ export default function ConsoleUsers() {
             danger={menuUser.web_access !== false} />
           <MenuItem icon={Key} label="Reset password"
             onClick={() => { setResetModal(menuUser); setResetSent(false); closeMenu() }} />
+          <MenuItem icon={LogOut} label="Sign out everywhere" danger
+            onClick={() => { setRevokeModal(menuUser); closeMenu() }} />
           <MenuItem icon={ShieldCheck} label="Manage grants"
             onClick={() => { closeMenu(); navigate('/console/access?tab=grants') }} />
         </div>
@@ -933,6 +956,39 @@ export default function ConsoleUsers() {
             {bulkEffect === 'grant' ? 'Grant' : 'Revoke'} <Code>{bulkCapability}</Code> on <Code>{moduleLabel(bulkModule)}</Code> for {selected.size} users. Only view is enforced today; other capabilities are stored.
           </Note>
         </div>
+      </Modal>
+
+      {/* Revoke all sessions modal */}
+      <Modal open={!!revokeModal} width="max-w-md" title="Sign out everywhere"
+        subtitle={revokeModal?.full_name || revokeModal?.email} onClose={closeRevoke}
+        footer={revokeModal && (
+          <>
+            <Btn onClick={closeRevoke} disabled={revokeBusy}>Cancel</Btn>
+            <Btn variant="danger" icon={LogOut} onClick={doRevoke} busy={revokeBusy}
+              disabled={revokeReason.trim().length < 3}>
+              {revokeLock ? 'Sign out and lock' : 'Sign out everywhere'}
+            </Btn>
+          </>
+        )}>
+        {revokeModal && (
+          <div className="space-y-3">
+            <p className="text-xs text-gray-400">
+              Ends every web and mobile session for this user. They must sign in again.
+            </p>
+            <Note icon={AlertTriangle} tone="warning">{ACCESS_TOKEN_NOTE}</Note>
+            <label className="block">
+              <span className="text-[11px] uppercase tracking-wide text-gray-500">Reason (recorded in the audit trail)</span>
+              <input type="text" value={revokeReason} maxLength={500}
+                onChange={(e) => { setRevokeReason(e.target.value); setRevokeError('') }}
+                placeholder="For example: lost phone" className={`${INPUT} mt-1`} />
+            </label>
+            <label className="flex items-center gap-2 text-xs text-gray-300">
+              <input type="checkbox" checked={revokeLock} onChange={(e) => setRevokeLock(e.target.checked)} />
+              Also lock the account so they cannot sign in again
+            </label>
+            {revokeError && <p className="text-[11px] text-amber-400">{revokeError}</p>}
+          </div>
+        )}
       </Modal>
 
       {/* Password reset modal */}

@@ -1,5 +1,5 @@
 /**
- * ConsoleSecurity — super-admin security hub.
+ * ConsoleSecurity - super-admin security hub.
  *
  * The route (/console/security in App.jsx) is bridge-wrapped in
  * <ConsoleAuthBridge>, so the main-app useAuth() resolves to a super-admin value
@@ -11,13 +11,14 @@
  * No logic is re-implemented here; each tab renders the canonical page verbatim.
  */
 import { useState } from 'react'
-import { ShieldAlert, KeyRound, Fingerprint } from 'lucide-react'
+import { ShieldAlert } from 'lucide-react'
 import SecurityCenter from '../../pages/SecurityCenter'
 import SsoConfiguration from '../../pages/SsoConfiguration'
+import { Segmented } from '../components/ui'
 
 const TABS = [
-  { key: 'security', label: 'Security Center', icon: Fingerprint, desc: 'Sessions, login history and security events', Component: SecurityCenter },
-  { key: 'sso',      label: 'SSO Configuration', icon: KeyRound,  desc: 'SAML and OIDC identity providers', Component: SsoConfiguration },
+  { key: 'security', label: 'Security Center',   desc: 'Sessions, login history and security events', Component: SecurityCenter },
+  { key: 'sso',      label: 'SSO Configuration', desc: 'SAML and OIDC identity providers',            Component: SsoConfiguration },
 ]
 
 export default function ConsoleSecurity() {
@@ -26,40 +27,31 @@ export default function ConsoleSecurity() {
   const Active = tab.Component
 
   return (
-    <div className="space-y-5">
-      {/* Header */}
-      <div className="flex items-center gap-2.5">
-        <div className="w-9 h-9 rounded-lg bg-red-900/30 border border-red-800/40 flex items-center justify-center">
-          <ShieldAlert size={17} className="text-red-400" />
-        </div>
+    <div className="space-y-5 max-w-7xl">
+      <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-white">Security</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Account security, session control and single sign-on</p>
+          <h1>
+            <ShieldAlert size={18} className="text-orange-400" /> Security
+          </h1>
+          <p className="text-xs text-gray-500 mt-1">Account security, session control and single sign-on.</p>
         </div>
+      </header>
+
+      <div className="space-y-2">
+        <Segmented
+          size="md"
+          value={active}
+          onChange={setActive}
+          options={TABS.map((t) => ({ key: t.key, label: t.label, hint: t.desc }))}
+        />
+        <p className="text-xs text-gray-500">{tab.desc}</p>
       </div>
 
-      {/* Tabs */}
-      <div role="tablist" className="flex flex-wrap gap-2 border-b border-gray-800 pb-3">
-        {TABS.map(t => {
-          const Icon = t.icon
-          const on = t.key === active
-          return (
-            <button key={t.key} role="tab" aria-selected={on} onClick={() => setActive(t.key)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-colors border ${
-                on ? 'bg-orange-950/50 text-orange-300 border-orange-800/50'
-                   : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:text-white'
-              }`}>
-              <Icon size={13} />
-              <span>{t.label}</span>
-            </button>
-          )
-        })}
-      </div>
-      <p className="text-xs text-gray-600 -mt-2">{tab.desc}</p>
-
-      {/* Panel — main-app pages are light-themed; frame them on a light surface */}
-      <div role="tabpanel" aria-label={tab.label}
-        className="rounded-2xl bg-white text-gray-900 border border-gray-200 shadow-sm overflow-hidden">
+      {/* The hosted pages render on the console surface, as they do under Access
+          Control. They used to sit in a hard-coded white frame, but inside
+          .console-root the theme tokens (and the console h1 rule) are the dark
+          console palette, so their titles and body text were near-white on white. */}
+      <div role="tabpanel" aria-label={tab.label}>
         <Active />
       </div>
     </div>

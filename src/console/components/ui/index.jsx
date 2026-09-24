@@ -187,15 +187,23 @@ export function Btn({ children, onClick, variant = 'ghost', size = 'sm', icon: I
  * Tabs with their counts on them. A tab whose count you cannot see until you
  * click it is a guess, and the count is usually the reason to click.
  */
-export function Segmented({ options = [], value, onChange, size = 'sm' }) {
+export function Segmented({ options = [], value, onChange, size = 'sm', ariaLabel, role = 'tablist', disabled = false }) {
   const pad = size === 'md' ? 'px-3.5 py-2 text-sm' : 'px-3 py-1.5 text-xs'
+  // Announced as tabs by default (a Segmented almost always switches views);
+  // pass role="group" when it is a plain choice. `disabled` on the whole
+  // control or on one option blocks a change while a save is in flight.
+  const itemRole = role === 'tablist' ? 'tab' : undefined
   return (
-    <div className="inline-flex flex-wrap gap-1 p-1 rounded-lg bg-gray-900/70 border border-gray-800">
+    <div role={role} aria-label={ariaLabel}
+      className="inline-flex flex-wrap gap-1 p-1 rounded-lg bg-gray-900/70 border border-gray-800">
       {options.map((o) => {
         const on = o.key === value
+        const off = disabled || o.disabled
         return (
-          <button key={o.key} onClick={() => onChange?.(o.key)} title={o.hint}
-            className={`rounded-md inline-flex items-center gap-1.5 transition-colors ${pad} ${
+          <button key={o.key} type="button" onClick={() => { if (!off) onChange?.(o.key) }} title={o.hint}
+            role={itemRole} aria-selected={itemRole ? on : undefined} aria-pressed={itemRole ? undefined : on}
+            disabled={off}
+            className={`rounded-md inline-flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${pad} ${
               on ? 'bg-orange-500/20 text-orange-200 border border-orange-600/50'
                  : 'border border-transparent text-gray-500 hover:text-gray-300 hover:bg-gray-800/60'}`}>
             {o.label}

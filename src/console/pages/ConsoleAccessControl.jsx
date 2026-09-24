@@ -19,8 +19,9 @@ import { Suspense, lazy, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   ShieldCheck, KeyRound, UserCog, UserCheck, Eye, Globe,
-  Layers, ScrollText, Fingerprint, Loader2, Wand2, SlidersHorizontal, Repeat2,
+  Layers, ScrollText, Fingerprint, Wand2, SlidersHorizontal, Repeat2,
 } from 'lucide-react'
+import { Segmented, LoadingState } from '../components/ui'
 
 import PermissionMatrix from '../../pages/PermissionMatrix'
 import CustomRolesManager from '../../pages/CustomRolesManager'
@@ -53,12 +54,7 @@ const TABS = [
 const DEFAULT_TAB = 'manager'
 
 function TabFallback() {
-  return (
-    <div className="card flex items-center justify-center py-16">
-      <Loader2 size={22} className="animate-spin text-[var(--brand-bright)]" />
-      <span className="ml-2 text-sm text-[var(--text-muted)]">Loading section...</span>
-    </div>
-  )
+  return <LoadingState label="Loading section" rows={4} />
 }
 
 export default function ConsoleAccessControl() {
@@ -79,54 +75,36 @@ export default function ConsoleAccessControl() {
     setParams(next, { replace: true })
   }
 
+  const tabOptions = useMemo(
+    () => TABS.map((t) => {
+      const Icon = t.icon
+      return {
+        key: t.key,
+        hint: t.desc,
+        label: <><Icon size={13} aria-hidden="true" />{t.label}</>,
+      }
+    }),
+    [],
+  )
+
   return (
-    <div className="space-y-5">
-      {/* Header */}
-      <div className="flex items-start gap-2.5">
-        <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-[var(--brand-subtle,rgba(34,197,94,0.12))] shrink-0">
-          <ShieldCheck size={20} className="text-[var(--brand-bright)]" />
-        </div>
-        <div className="min-w-0">
-          <h1 className="text-h2">Access Control</h1>
-          <p className="text-xs text-[var(--text-muted)]">
-            One home for role permissions, custom roles, per-user grants, effective access,
-            country scope, bulk changes, the access audit trail and account security. Super
-            Admin controls apply platform wide.
+    <div className="space-y-5 max-w-7xl">
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1>
+            <ShieldCheck size={18} className="text-orange-400" /> Access Control
+          </h1>
+          <p className="text-xs text-gray-500 mt-1 max-w-3xl">
+            One home for role permissions, custom roles, per-user grants, effective access, country scope, bulk
+            changes, the access audit trail and account security. Super Admin controls apply platform wide.
           </p>
         </div>
-      </div>
+      </header>
 
-      {/* Tab bar */}
-      <div
-        className="flex flex-wrap gap-1.5 p-1 rounded-xl bg-[var(--surface-1)] w-fit max-w-full overflow-x-auto"
-        style={{ border: '1px solid var(--border-dim)' }}
-        role="tablist"
-        aria-label="Access Control sections"
-      >
-        {TABS.map((t) => {
-          const Icon = t.icon
-          const on = t.key === active
-          return (
-            <button
-              key={t.key}
-              type="button"
-              role="tab"
-              aria-selected={on}
-              onClick={() => selectTab(t.key)}
-              title={t.desc}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
-                on
-                  ? 'bg-[var(--surface-3)] text-[var(--brand-bright)]'
-                  : 'text-[var(--text-secondary)] hover:text-[var(--brand-bright)]'
-              }`}
-              style={on ? { border: '1px solid var(--border-bright)' } : { border: '1px solid transparent' }}
-            >
-              <Icon size={15} />
-              <span>{t.label}</span>
-            </button>
-          )
-        })}
-      </div>
+      <nav aria-label="Access Control sections" className="space-y-2">
+        <Segmented options={tabOptions} value={active} onChange={selectTab} />
+        <p className="text-xs text-gray-500">{activeTab.desc}</p>
+      </nav>
 
       {/* Active panel */}
       <div role="tabpanel" aria-label={activeTab.label}>

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ListTree, Save, RotateCcw, ArrowUp, ArrowDown, Eye, EyeOff,
-  FolderInput, Pencil, CheckCircle, AlertCircle, Menu,
+  FolderInput, Pencil, CheckCircle2, Menu, Undo2,
 } from 'lucide-react'
 import { NAV_CATALOG } from '../../components/Layout'
 import {
@@ -10,6 +10,10 @@ import {
 import { getNavLayout, saveNavLayout } from '../../lib/api/navLayout'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import { toUserMessage } from '../../lib/safeError'
+import {
+  Panel, PanelHeader, Note, StatTile, Badge, Code, Btn, SearchInput, Toolbar,
+  LoadingState, EmptyState, ErrorState, Modal,
+} from '../components/ui'
 
 /**
  * Navigation Customizer (super-admin, console). Reorder nav groups, reorder items
@@ -17,9 +21,14 @@ import { toUserMessage } from '../../lib/safeError'
  * groups/items. Persisted org-wide to system_config.nav_layout and applied to the
  * main-app sidebar by Layout.jsx via applyNavLayout.
  *
- * HIDING IS COSMETIC menu tidiness — a hidden item is still route-reachable and
+ * HIDING IS COSMETIC menu tidiness - a hidden item is still route-reachable and
  * still governed by RBAC/flags; this screen never changes access, only the menu.
  */
+
+// Small square icon button in the console gray family (slate stays dark in
+// light mode, so it is not used here).
+const ICON_BTN = 'w-7 h-7 flex items-center justify-center rounded-md border border-gray-800 text-gray-400 hover:bg-gray-800 hover:text-gray-200 transition-colors disabled:opacity-30 disabled:cursor-not-allowed'
+
 export default function ConsoleNavigation() {
   const { logAction } = useConsoleAuth()
   const [model, setModel] = useState(null)      // editor tree [{key,label,defaultLabel,hidden,items:[{key,label,hidden}]}]
@@ -29,6 +38,8 @@ export default function ConsoleNavigation() {
   const [error, setError] = useState('')
   const [dirty, setDirty] = useState(false)
   const [renaming, setRenaming] = useState(null) // group key being renamed
+  const [search, setSearch] = useState('')
+  const [confirmReset, setConfirmReset] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true); setError(''); setSaved(false)
@@ -54,6 +65,28 @@ export default function ConsoleNavigation() {
     () => (model ? applyNavLayout(NAV_CATALOG, editorModelToLayout(model)) : []),
     [model],
   )
+
+  const stats = useMemo(() => {
+    const groups = model || []
+    let items = 0; let hiddenItems = 0; let renamed = 0
+    for (const g of groups) {
+      if (g.label !== g.defaultLabel) renamed += 1
+      for (const it of g.items) { items += 1; if (it.hidden) hiddenItems += 1 }
+    }
+    return {
+      groups: groups.length,
+      hiddenGroups: groups.filter((g) => g.hidden).length,
+      items,
+      hiddenItems,
+      renamed,
+      visibleItems: preview.reduce((a, g) => a + g.items.length, 0),
+    }
+  }, [model, preview])
+
+  const q = search.trim().toLowerCase()
+  const matches = (it) => !q
+    || String(it.label || '').toLowerCase().includes(q)
+    || String(it.key || '').toLowerCase().includes(q)
 
   function mutate(next) { setModel(next); setDirty(true); setSaved(false) }
 
@@ -119,6 +152,7 @@ export default function ConsoleNavigation() {
   }
 
   async function handleReset() {
+    setConfirmReset(false)
     setSaving(true); setError(''); setSaved(false)
     try {
       await saveNavLayout({ version: 1, groups: [], items: [] })
@@ -132,122 +166,190 @@ export default function ConsoleNavigation() {
     }
   }
 
-  const iconBtn = 'w-7 h-7 flex items-center justify-center rounded-md border border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed'
-
   return (
-    <div className="space-y-5 max-w-6xl">
-      <div className="flex items-start justify-between flex-wrap gap-3">
+    <div className="space-y-5 max-w-7xl">
+      <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-white flex items-center gap-2"><ListTree size={20} className="text-orange-400" /> Navigation Customizer</h1>
-          <p className="text-sm text-slate-400 mt-1 max-w-2xl">
-            Reorder the main-app sidebar, move items between groups, rename groups, and hide clutter. Applies org-wide.
-            Hiding is menu tidiness only. A hidden item is still reachable and access is still governed by roles and permissions.
+          <h1>
+            <ListTree size={18} className="text-orange-400" /> Navigation Customizer
+          </h1>
+          <p className="text-xs text-gray-500 mt-1 max-w-2xl">
+            Reorder the main-app sidebar, move items between groups, rename groups and hide clutter. Applies org-wide.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={handleReset} disabled={saving || loading}
-            className="text-xs px-3 py-1.5 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800 inline-flex items-center gap-1.5 disabled:opacity-50">
-            <RotateCcw size={13} /> Reset to defaults
-          </button>
-          <button onClick={handleSave} disabled={saving || loading || !dirty}
-            className="text-sm px-4 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white font-semibold inline-flex items-center gap-1.5 disabled:opacity-50">
-            <Save size={14} /> {saving ? 'Saving...' : 'Save layout'}
-          </button>
-        </div>
-      </div>
+        <Toolbar>
+          {dirty && <Badge tone="warning">Unsaved changes</Badge>}
+          <Btn icon={Undo2} onClick={load} disabled={saving || loading || !dirty} title="Discard unsaved changes">
+            Discard
+          </Btn>
+          <Btn icon={RotateCcw} onClick={() => setConfirmReset(true)} disabled={saving || loading}>
+            Reset to defaults
+          </Btn>
+          <Btn variant="primary" icon={Save} onClick={handleSave} busy={saving} disabled={loading || !dirty}>
+            Save layout
+          </Btn>
+        </Toolbar>
+      </header>
 
-      {error && <div className="rounded-lg border border-red-800 bg-red-950/40 text-red-300 text-sm px-4 py-2 inline-flex items-center gap-2"><AlertCircle size={15} /> {error}</div>}
-      {saved && <div className="rounded-lg border border-emerald-800 bg-emerald-950/40 text-emerald-300 text-sm px-4 py-2 inline-flex items-center gap-2"><CheckCircle size={15} /> Navigation saved. The sidebar uses it now; other users pick it up on their next load.</div>}
+      <Note icon={EyeOff}>
+        Hiding is menu tidiness only. A hidden item is still reachable by its address, and access is still
+        governed by roles and permissions.
+      </Note>
+
+      <ErrorState message={error} onRetry={!model ? load : undefined} />
+      {saved && (
+        <Note icon={CheckCircle2} tone="accent">
+          Navigation saved. The sidebar uses it now; other users pick it up on their next load.
+        </Note>
+      )}
 
       {loading ? (
-        <div className="text-slate-400 text-sm py-16 text-center">Loading navigation...</div>
+        <LoadingState label="Loading navigation" rows={6} />
       ) : !model || model.length === 0 ? (
-        <div className="text-slate-400 text-sm py-16 text-center">No navigation groups found.</div>
+        <Panel>
+          <EmptyState
+            icon={ListTree}
+            title={error ? 'Navigation could not be loaded' : 'No navigation groups found'}
+            reason={error
+              ? 'The saved layout could not be read, so nothing is shown. Retry above.'
+              : 'The sidebar catalog has no groups to arrange.'}
+          />
+        </Panel>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
-          {/* Editor */}
-          <div className="lg:col-span-2 space-y-3">
-            {model.map((g, gIdx) => (
-              <div key={g.key} className={`rounded-xl border ${g.hidden ? 'border-slate-800 bg-slate-900/40 opacity-70' : 'border-slate-700 bg-slate-800/40'}`}>
-                <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-700/60">
-                  <Menu size={14} className="text-slate-500 flex-shrink-0" />
-                  {renaming === g.key ? (
-                    <input
-                      autoFocus
-                      defaultValue={g.label}
-                      onBlur={(e) => { renameGroup(gIdx, e.target.value); setRenaming(null) }}
-                      onKeyDown={(e) => { if (e.key === 'Enter') { renameGroup(gIdx, e.target.value); setRenaming(null) } if (e.key === 'Escape') setRenaming(null) }}
-                      className="flex-1 min-w-0 bg-slate-900 border border-slate-600 rounded px-2 py-1 text-sm text-white focus:border-orange-500 focus:outline-none"
-                    />
-                  ) : (
-                    <button onClick={() => setRenaming(g.key)} className="flex-1 min-w-0 text-left inline-flex items-center gap-1.5 group">
-                      <span className="text-sm font-semibold text-white truncate">{g.label}</span>
-                      {g.label !== g.defaultLabel && <span className="text-[10px] text-orange-400/80 flex-shrink-0">(was {g.defaultLabel})</span>}
-                      <Pencil size={11} className="text-slate-500 group-hover:text-slate-300 flex-shrink-0" />
-                    </button>
-                  )}
-                  <span className="text-[11px] text-slate-500 flex-shrink-0">{g.items.filter((i) => !i.hidden).length}/{g.items.length}</span>
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    <button className={iconBtn} title="Move group up" disabled={gIdx === 0} onClick={() => moveGroup(gIdx, -1)}><ArrowUp size={13} /></button>
-                    <button className={iconBtn} title="Move group down" disabled={gIdx === model.length - 1} onClick={() => moveGroup(gIdx, 1)}><ArrowDown size={13} /></button>
-                    <button className={iconBtn} title={g.hidden ? 'Show group' : 'Hide group'} onClick={() => toggleGroupHidden(gIdx)}>
-                      {g.hidden ? <EyeOff size={13} className="text-slate-500" /> : <Eye size={13} className="text-emerald-400" />}
-                    </button>
-                  </div>
-                </div>
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <StatTile label="Groups" value={stats.groups}
+              sub={stats.hiddenGroups ? `${stats.hiddenGroups} hidden` : 'None hidden'} />
+            <StatTile label="Menu items" value={stats.items} />
+            <StatTile label="Shown in sidebar" value={stats.visibleItems} tone="accent"
+              sub="Before role filtering" />
+            <StatTile label="Hidden items" value={stats.hiddenItems} tone={stats.hiddenItems ? 'warning' : 'default'}
+              sub={stats.renamed ? `${stats.renamed} groups renamed` : 'No groups renamed'} />
+          </div>
 
-                <div className="p-2 space-y-1">
-                  {g.items.length === 0 && <p className="text-[11px] text-slate-600 px-2 py-1">No items.</p>}
-                  {g.items.map((it, iIdx) => (
-                    <div key={it.key} className={`flex items-center gap-2 px-2 py-1 rounded-lg ${it.hidden ? 'opacity-45' : 'hover:bg-slate-800/60'}`}>
-                      <span className="text-[13px] text-slate-200 truncate flex-1 min-w-0">{it.label}</span>
-                      <span className="text-[10px] text-slate-600 font-mono truncate max-w-[120px] hidden sm:inline">{it.key}</span>
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        <button className={iconBtn} title="Move up" disabled={iIdx === 0} onClick={() => moveItem(gIdx, iIdx, -1)}><ArrowUp size={12} /></button>
-                        <button className={iconBtn} title="Move down" disabled={iIdx === g.items.length - 1} onClick={() => moveItem(gIdx, iIdx, 1)}><ArrowDown size={12} /></button>
-                        <div className="relative inline-flex items-center">
-                          <FolderInput size={12} className="absolute left-1.5 text-slate-500 pointer-events-none" />
-                          <select
-                            value={g.key}
-                            onChange={(e) => moveItemToGroup(gIdx, iIdx, e.target.value)}
-                            title="Move to group"
-                            className="appearance-none h-7 pl-6 pr-2 rounded-md border border-slate-700 bg-slate-900 text-[11px] text-slate-300 hover:text-white focus:border-orange-500 focus:outline-none max-w-[130px]"
-                          >
-                            {groupOptions.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
-                          </select>
-                        </div>
-                        <button className={iconBtn} title={it.hidden ? 'Show item' : 'Hide item'} onClick={() => toggleItemHidden(gIdx, iIdx)}>
-                          {it.hidden ? <EyeOff size={12} className="text-slate-500" /> : <Eye size={12} className="text-emerald-400" />}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+            {/* Editor */}
+            <div className="lg:col-span-2 space-y-3">
+              <SearchInput value={search} onChange={setSearch} placeholder="Filter items by name or key" />
+              {model.map((g, gIdx) => {
+                const shown = g.items.map((it, iIdx) => ({ it, iIdx })).filter(({ it }) => matches(it))
+                if (q && shown.length === 0) return null
+                return (
+                  <Panel key={g.key} flush className={g.hidden ? 'opacity-70' : ''}>
+                    <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-800">
+                      <Menu size={14} className="text-gray-600 flex-shrink-0" />
+                      {renaming === g.key ? (
+                        <input
+                          autoFocus
+                          defaultValue={g.label}
+                          aria-label={`Rename ${g.defaultLabel}`}
+                          onBlur={(e) => { renameGroup(gIdx, e.target.value); setRenaming(null) }}
+                          onKeyDown={(e) => { if (e.key === 'Enter') { renameGroup(gIdx, e.target.value); setRenaming(null) } if (e.key === 'Escape') setRenaming(null) }}
+                          className="flex-1 min-w-0 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm text-gray-100 focus:border-orange-600 focus:outline-none"
+                        />
+                      ) : (
+                        <button onClick={() => setRenaming(g.key)} title="Rename group"
+                          className="flex-1 min-w-0 text-left inline-flex items-center gap-1.5 group">
+                          <span className="text-sm font-semibold text-gray-100 truncate">{g.label}</span>
+                          {g.label !== g.defaultLabel && <Badge tone="accent">was {g.defaultLabel}</Badge>}
+                          <Pencil size={11} className="text-gray-600 group-hover:text-gray-300 flex-shrink-0" />
                         </button>
+                      )}
+                      {g.hidden && <Badge tone="quiet" icon={EyeOff}>Hidden</Badge>}
+                      <span className="text-[11px] text-gray-500 tabular-nums flex-shrink-0"
+                        title="Visible items of total items">
+                        {g.items.filter((i) => !i.hidden).length}/{g.items.length}
+                      </span>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <button className={ICON_BTN} title="Move group up" aria-label="Move group up" disabled={gIdx === 0} onClick={() => moveGroup(gIdx, -1)}><ArrowUp size={13} /></button>
+                        <button className={ICON_BTN} title="Move group down" aria-label="Move group down" disabled={gIdx === model.length - 1} onClick={() => moveGroup(gIdx, 1)}><ArrowDown size={13} /></button>
+                        <button className={ICON_BTN} title={g.hidden ? 'Show group' : 'Hide group'} aria-label={g.hidden ? 'Show group' : 'Hide group'} onClick={() => toggleGroupHidden(gIdx)}>
+                          {g.hidden ? <EyeOff size={13} className="text-gray-600" /> : <Eye size={13} className="text-emerald-400" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="p-2 space-y-1">
+                      {g.items.length === 0 && <p className="text-[11px] text-gray-600 px-2 py-1">No items.</p>}
+                      {shown.map(({ it, iIdx }) => (
+                        <div key={it.key} className={`flex items-center gap-2 px-2 py-1 rounded-lg ${it.hidden ? 'opacity-50' : 'hover:bg-gray-800/60'}`}>
+                          <span className="text-[13px] text-gray-200 truncate flex-1 min-w-0">{it.label}</span>
+                          {it.hidden && <Badge tone="quiet">Hidden</Badge>}
+                          <span className="hidden sm:inline max-w-[140px] truncate"><Code>{it.key}</Code></span>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <button className={ICON_BTN} title="Move up" aria-label="Move item up" disabled={iIdx === 0} onClick={() => moveItem(gIdx, iIdx, -1)}><ArrowUp size={12} /></button>
+                            <button className={ICON_BTN} title="Move down" aria-label="Move item down" disabled={iIdx === g.items.length - 1} onClick={() => moveItem(gIdx, iIdx, 1)}><ArrowDown size={12} /></button>
+                            <div className="relative inline-flex items-center">
+                              <FolderInput size={12} className="absolute left-1.5 text-gray-600 pointer-events-none" />
+                              <select
+                                value={g.key}
+                                onChange={(e) => moveItemToGroup(gIdx, iIdx, e.target.value)}
+                                title="Move to group"
+                                aria-label="Move to group"
+                                className="appearance-none h-7 pl-6 pr-2 rounded-md border border-gray-800 bg-gray-900 text-[11px] text-gray-300 hover:text-gray-100 focus:border-gray-700 focus:outline-none max-w-[130px]"
+                              >
+                                {groupOptions.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+                              </select>
+                            </div>
+                            <button className={ICON_BTN} title={it.hidden ? 'Show item' : 'Hide item'} aria-label={it.hidden ? 'Show item' : 'Hide item'} onClick={() => toggleItemHidden(gIdx, iIdx)}>
+                              {it.hidden ? <EyeOff size={12} className="text-gray-600" /> : <Eye size={12} className="text-emerald-400" />}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </Panel>
+                )
+              })}
+              {q && model.every((g) => !g.items.some(matches)) && (
+                <Panel>
+                  <EmptyState title="No items match" reason={`No menu item name or key contains "${search.trim()}".`}
+                    action={<Btn onClick={() => setSearch('')}>Clear filter</Btn>} />
+                </Panel>
+              )}
+            </div>
+
+            {/* Live preview */}
+            <div className="lg:sticky lg:top-4">
+              <Panel>
+                <PanelHeader title="Live preview" subtitle="Menu structure only. Each user still sees only what their role allows." />
+                <div className="max-h-[70vh] overflow-y-auto pr-1">
+                  {preview.length === 0 ? (
+                    <EmptyState icon={EyeOff} title="Everything hidden" reason="Every group or item is hidden, so the sidebar would be empty." />
+                  ) : preview.map((g) => (
+                    <div key={g.key} className="mb-3">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">{g.label}</p>
+                      <div className="space-y-0.5">
+                        {g.items.map((it) => (
+                          <div key={it.to} className="text-[12px] text-gray-300 px-2 py-1 rounded-md bg-gray-800/40 truncate">{it.label}</div>
+                        ))}
                       </div>
                     </div>
                   ))}
                 </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Live preview */}
-          <div className="space-y-2 lg:sticky lg:top-4">
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Live preview</p>
-            <div className="rounded-xl border border-slate-700 bg-slate-900/60 p-3 max-h-[70vh] overflow-y-auto">
-              {preview.length === 0 ? (
-                <p className="text-slate-500 text-xs">Everything hidden.</p>
-              ) : preview.map((g) => (
-                <div key={g.key} className="mb-3">
-                  <p className="text-[9.5px] font-bold uppercase tracking-[0.11em] text-slate-500 mb-1">{g.label}</p>
-                  <div className="space-y-0.5">
-                    {g.items.map((it) => (
-                      <div key={it.to} className="text-[12px] text-slate-300 px-2 py-1 rounded-md bg-slate-800/40 truncate">{it.label}</div>
-                    ))}
-                  </div>
-                </div>
-              ))}
+              </Panel>
             </div>
-            <p className="text-[11px] text-slate-500">Preview shows menu structure only. Each user still sees only the items their role and permissions allow.</p>
           </div>
-        </div>
+        </>
       )}
+
+      <Modal
+        open={confirmReset}
+        title="Reset navigation to defaults"
+        onClose={() => setConfirmReset(false)}
+        width="max-w-md"
+        footer={(
+          <>
+            <Btn onClick={() => setConfirmReset(false)}>Cancel</Btn>
+            <Btn variant="danger" icon={RotateCcw} onClick={handleReset}>Reset for everyone</Btn>
+          </>
+        )}
+      >
+        <p className="text-xs text-gray-300 leading-relaxed">
+          This clears every custom group order, rename, move and hidden item for the whole organisation and
+          saves the built-in sidebar straight away. It cannot be undone from here.
+        </p>
+      </Modal>
     </div>
   )
 }

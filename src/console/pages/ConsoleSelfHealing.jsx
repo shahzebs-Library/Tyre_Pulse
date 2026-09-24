@@ -1,9 +1,9 @@
 /**
  * ConsoleSelfHealing - super-admin Self-Healing console (Admin Control Module 2).
  *
- * A pure console page (navy + orange theme, useConsoleAuth gate). It SCANS the
- * platform read-only and FLAGS data-integrity issues, then offers only the SAFE,
- * already-guarded fixes that live in the reconciliation layer:
+ * A pure console page (useConsoleAuth gate). It SCANS the platform read-only and
+ * FLAGS data-integrity issues, then offers only the SAFE, already-guarded fixes
+ * that live in the reconciliation layer:
  *   - Orphan assets      -> backfill the missing asset row (safe insert)
  *   - Duplicate tyres    -> merge byte-identical rows (server refuses non-identical)
  *   - Serial conflicts   -> READ-ONLY (a serial on two assets is a legitimate tyre
@@ -17,7 +17,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Wand2, RefreshCw, ShieldAlert, ShieldCheck, CheckCircle2, AlertTriangle,
-  Info, Link2Off, Copy, Shuffle, Clock, Activity,
+  Info, Link2Off, Copy, Shuffle, Clock, Activity, BarChart3,
 } from 'lucide-react'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import {
@@ -26,28 +26,17 @@ import {
 } from '../../lib/api/selfHealing'
 import { detectStaleGroups, summarizeFindings } from '../../lib/selfHealing'
 import { toUserMessage } from '../../lib/safeError'
+import {
+  Panel, PanelHeader, Note, StatTile, Badge, Btn, Code,
+  LoadingState, EmptyState, ErrorState, Modal,
+} from '../components/ui'
+import { BarsChart, STATUS, useChartTheme } from '../components/ui/charts'
 
 // ── Presentation helpers ──────────────────────────────────────────────────────
 
-function InfoDot({ text }) {
-  return (
-    <span className="inline-flex align-middle ml-1 text-gray-600 hover:text-gray-300 cursor-help" title={text}>
-      <Info size={11} />
-    </span>
-  )
-}
-
-const SEV_TEXT = { warning: 'text-amber-400', info: 'text-blue-300', critical: 'text-red-400' }
-const SEV_RING = {
-  warning: 'border-amber-500/30 bg-amber-500/5',
-  info: 'border-blue-500/30 bg-blue-500/5',
-  critical: 'border-red-500/30 bg-red-500/5',
-}
-const SEV_BADGE = {
-  warning: 'text-amber-300 bg-amber-900/30 border-amber-700/40',
-  info: 'text-blue-300 bg-blue-900/30 border-blue-700/40',
-  critical: 'text-red-300 bg-red-900/40 border-red-700/40',
-}
+const SEV_TONE = { warning: 'warning', info: 'info', critical: 'danger' }
+const SEV_COLOR = { warning: 'medium', info: 'low', critical: 'critical' }
+const ANOMALY_TONE = { high: 'danger', medium: 'warning', low: 'quiet' }
 
 const CARD_META = {
   orphans: {
@@ -78,10 +67,17 @@ function fmtDate(v) {
   return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString()
 }
 
+function fmtDateTime(v) {
+  if (!v) return 'N/A'
+  const d = new Date(v)
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleString()
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function ConsoleSelfHealing() {
   const { admin } = useConsoleAuth()
+  const theme = useChartTheme()
 
   const [scan, setScan]       = useState(null)   // { orphans, duplicates, serialConflicts, stale, anomalies }
   const [summary, setSummary] = useState(null)
@@ -90,13 +86,13 @@ export default function ConsoleSelfHealing() {
   const [error, setError]         = useState(null)
   const [busyKey, setBusyKey]     = useState(null) // which fix is running
   const [notice, setNotice]       = useState(null)
+  const [pending, setPending]     = useState(null) // fix awaiting confirmation
 
   const mountedRef = useRef(true)
 
   const runScan = useCallback(async () => {
     setScanning(true)
     setError(null)
-    setNotice(null)
     try {
       const [base, anomalies] = await Promise.all([runScans(), scanAnomalies()])
       const stale = detectStaleGroups(base.staleRows, { now: Date.now() })
@@ -126,16 +122,24 @@ export default function ConsoleSelfHealing() {
     return () => { mountedRef.current = false }
   }, [runScan])
 
+  const rescan = () => { setNotice(null); runScan() }
+
   // ── Safe fix handlers (each confirms first, then re-scans) ──
-  async function withFix(key, confirmMsg, fn, okMsg) {
+  function askFix(key, title, message, fn, okMsg) {
     if (busyKey) return
-    if (!window.confirm(confirmMsg)) return
-    setBusyKey(key)
+    setPending({ key, title, message, fn, okMsg })
+  }
+
+  async function confirmFix() {
+    const p = pending
+    if (!p || busyKey) return
+    setPending(null)
+    setBusyKey(p.key)
     setError(null)
     setNotice(null)
     try {
-      const result = await fn()
-      if (mountedRef.current) setNotice(typeof okMsg === 'function' ? okMsg(result) : okMsg)
+      const result = await p.fn()
+      if (mountedRef.current) setNotice(typeof p.okMsg === 'function' ? p.okMsg(result) : p.okMsg)
       await runScan()
     } catch (err) {
       if (mountedRef.current) setError(toUserMessage(err, 'That fix could not be applied.'))
@@ -144,22 +148,25 @@ export default function ConsoleSelfHealing() {
     }
   }
 
-  const backfillOne = (assetNo) => withFix(
+  const backfillOne = (assetNo) => askFix(
     `orphan:${assetNo}`,
+    'Backfill this asset?',
     `Create the missing fleet record for asset "${assetNo}"? This is a safe insert and removes nothing.`,
     () => applyBackfillOrphan(assetNo),
     `Asset "${assetNo}" was added to the fleet list.`,
   )
 
-  const backfillAll = () => withFix(
+  const backfillAll = () => askFix(
     'orphan:all',
-    'Create fleet records for every orphaned asset? This is a safe insert and removes nothing.',
+    'Backfill every orphaned asset?',
+    `Create fleet records for all ${scan?.orphans?.length || 0} orphaned assets? This is a safe insert and removes nothing.`,
     () => applyBackfillAllOrphans(),
     (n) => `${n || 0} asset${n === 1 ? '' : 's'} added to the fleet list.`,
   )
 
-  const mergeOne = (row) => withFix(
+  const mergeOne = (row) => askFix(
     `dup:${row.keep_id}`,
+    'Merge identical copies?',
     `Merge ${((row.remove_ids || []).length) + 1} identical copies of tyre "${row.serial_no || row.asset_no || ''}" into one? Only truly identical rows are removed; the server rejects the merge otherwise.`,
     () => applyMergeDuplicate(row.keep_id, row.remove_ids || []),
     (n) => `${n || 0} duplicate row${n === 1 ? '' : 's'} removed.`,
@@ -170,12 +177,20 @@ export default function ConsoleSelfHealing() {
     [summary],
   )
 
+  const colors = STATUS[theme]
+  const findingBars = useMemo(
+    () => (summary?.items || []).map(i => ({
+      label: i.label, value: i.count, color: colors[SEV_COLOR[i.severity] || 'low'],
+    })),
+    [summary, colors],
+  )
+
   if (!admin) {
     return (
-      <div className="max-w-md mx-auto mt-16 rounded-xl border border-red-800/40 bg-red-950/20 p-8 text-center">
-        <ShieldAlert size={22} className="text-red-400 mx-auto mb-3" />
-        <h1 className="text-lg font-bold text-white">Restricted</h1>
-        <p className="text-sm text-gray-400 mt-1">Self-Healing is reserved for system administrators.</p>
+      <div className="max-w-md mx-auto mt-16">
+        <Panel tone="danger">
+          <EmptyState icon={ShieldAlert} title="Restricted" reason="Self-Healing is reserved for system administrators." />
+        </Panel>
       </div>
     )
   }
@@ -183,87 +198,92 @@ export default function ConsoleSelfHealing() {
   const nothingToHeal = summary && summary.total === 0
 
   return (
-    <div className="space-y-6 max-w-7xl">
+    <div className="space-y-5 max-w-7xl">
       {/* Header */}
-      <div className="flex items-center justify-between gap-4">
+      <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-white flex items-center gap-2">
+          <h1 className="flex items-center gap-2">
             <Wand2 size={18} className="text-orange-400" /> Self-Healing
           </h1>
-          <p className="text-sm text-gray-500 mt-0.5">
+          <p className="text-xs text-gray-500 mt-1">
             Scans for data issues and offers only safe, non-destructive fixes
-            {scannedAt && <span className="text-gray-600"> | last scan {fmtDate(scannedAt)} {new Date(scannedAt).toLocaleTimeString()}</span>}
+            {scannedAt && <span> | last scan {fmtDateTime(scannedAt)}</span>}
           </p>
         </div>
-        <button onClick={runScan} disabled={scanning}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-orange-600/20 text-orange-300 hover:bg-orange-600/30 text-xs border border-orange-700/40 transition-colors disabled:opacity-50">
-          <RefreshCw size={12} className={scanning ? 'animate-spin' : ''} /> {scanning ? 'Scanning...' : 'Scan now'}
-        </button>
-      </div>
+        <Btn variant="primary" icon={RefreshCw} onClick={rescan} busy={scanning}>
+          {scanning ? 'Scanning' : 'Scan now'}
+        </Btn>
+      </header>
 
       {/* Safety note */}
-      <div className="rounded-lg border border-emerald-800/40 bg-emerald-950/20 px-4 py-3 text-xs text-emerald-200/90 flex items-start gap-2">
-        <ShieldCheck size={14} className="text-emerald-400 mt-0.5 flex-shrink-0" />
-        <span>
-          These actions are safe and non-destructive. The scan only reads data. Fixes are limited to
-          backfilling a missing asset and merging exact-duplicate rows, and both are guarded on the
-          server. Serial conflicts, stale sites and anomalies are flagged for review only, never
-          changed automatically.
-        </span>
-      </div>
+      <Note icon={ShieldCheck} tone="accent">
+        These actions are safe and non-destructive. The scan only reads data. Fixes are limited to
+        backfilling a missing asset and merging exact-duplicate rows, and both are guarded on the
+        server. Serial conflicts, stale sites and anomalies are flagged for review only, never
+        changed automatically.
+      </Note>
 
-      {error && (
-        <div className="rounded-lg border border-red-800/40 bg-red-950/20 px-4 py-3 text-sm text-red-300">{error}</div>
-      )}
+      <ErrorState message={error} onRetry={rescan} />
       {notice && (
-        <div className="rounded-lg border border-emerald-800/40 bg-emerald-950/20 px-4 py-3 text-sm text-emerald-300 flex items-center gap-2">
-          <CheckCircle2 size={14} /> {notice}
-        </div>
+        <Note icon={CheckCircle2} tone="accent">{notice}</Note>
       )}
 
-      {/* Summary strip */}
+      {/* Summary strip + chart */}
       {summary && (
-        <div className="grid grid-cols-3 gap-3">
-          <SummaryTile label="Total findings" value={summary.total} tone={summary.total > 0 ? 'amber' : 'green'}
-            tip="How many data issues the last scan found in total." />
-          <SummaryTile label="Warnings" value={summary.bySeverity.warning} tone={summary.bySeverity.warning > 0 ? 'amber' : 'green'}
-            tip="Issues worth acting on, some with a safe one-click fix." />
-          <SummaryTile label="For review" value={summary.bySeverity.info} tone="blue"
-            tip="Informational items to check by hand. Nothing is changed automatically." />
+        <div className="grid gap-4 lg:grid-cols-3">
+          <div className="grid grid-cols-3 lg:grid-cols-1 gap-3">
+            <div title="How many data issues the last scan found in total.">
+              <StatTile label="Total findings" value={summary.total} tone={summary.total > 0 ? 'warning' : 'good'} icon={Wand2} />
+            </div>
+            <div title="Issues worth acting on, some with a safe one-click fix.">
+              <StatTile label="Warnings" value={summary.bySeverity.warning} tone={summary.bySeverity.warning > 0 ? 'warning' : 'good'} icon={AlertTriangle} />
+            </div>
+            <div title="Informational items to check by hand. Nothing is changed automatically.">
+              <StatTile label="For review" value={summary.bySeverity.info} tone="default" icon={Info} />
+            </div>
+          </div>
+          <Panel className="lg:col-span-2">
+            <PanelHeader icon={BarChart3} title="Findings by check"
+              subtitle="Bars are coloured by severity: amber is a warning, grey is review only." />
+            <BarsChart
+              bars={findingBars}
+              summary={findingBars.map(b => `${b.label} ${b.value}`).join(', ')}
+              emptyText="The last scan found nothing to show."
+            />
+          </Panel>
         </div>
       )}
 
       {/* Empty / loading / findings */}
       {scanning && !scan ? (
-        <p className="text-xs text-gray-600 py-8 text-center">Running scans...</p>
+        <Panel><LoadingState label="Running scans" /></Panel>
       ) : nothingToHeal ? (
-        <div className="rounded-2xl border border-emerald-800/40 bg-emerald-950/10 p-10 text-center">
-          <ShieldCheck size={26} className="text-emerald-400 mx-auto mb-3" />
-          <h2 className="text-lg font-bold text-white">Nothing needs healing - all clear</h2>
-          <p className="text-sm text-gray-400 mt-1">The last scan found no data issues across the platform.</p>
-        </div>
+        <Panel>
+          <EmptyState icon={ShieldCheck} title="Nothing needs healing, all clear"
+            reason="The last scan found no data issues across the platform." />
+        </Panel>
       ) : scan ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Orphan assets - fixable */}
           <FindingCard meta={itemsByKey.orphans} icon={CARD_META.orphans.Icon} tip={CARD_META.orphans.tip}
             action={itemsByKey.orphans?.fixable && (
-              <button onClick={backfillAll} disabled={!!busyKey}
-                className="text-[11px] px-2.5 py-1 rounded-lg bg-orange-600/20 text-orange-300 hover:bg-orange-600/30 border border-orange-700/40 disabled:opacity-40">
-                {busyKey === 'orphan:all' ? 'Fixing...' : 'Backfill all'}
-              </button>
+              <Btn size="xs" variant="primary" onClick={backfillAll} disabled={!!busyKey && busyKey !== 'orphan:all'}
+                busy={busyKey === 'orphan:all'}>
+                Backfill all
+              </Btn>
             )}>
             <RowList
               rows={scan.orphans} empty="No orphaned assets."
               render={(r) => (
                 <div key={r.asset_no} className="flex items-center justify-between gap-3 py-1.5 border-b border-gray-800/60 last:border-0">
-                  <div className="min-w-0">
-                    <span className="text-xs text-gray-200 font-medium">{r.asset_no}</span>
-                    <span className="text-[10px] text-gray-600 ml-2">{r.vehicle_type || 'unknown type'} | {r.tyre_count} tyre{r.tyre_count === 1 ? '' : 's'}</span>
+                  <div className="min-w-0 flex items-center gap-2">
+                    <Code>{r.asset_no}</Code>
+                    <span className="text-[11px] text-gray-500 truncate">{r.vehicle_type || 'unknown type'} | {r.tyre_count} tyre{r.tyre_count === 1 ? '' : 's'}</span>
                   </div>
-                  <button onClick={() => backfillOne(r.asset_no)} disabled={!!busyKey}
-                    className="text-[11px] text-orange-400 hover:text-orange-300 whitespace-nowrap disabled:opacity-40">
-                    {busyKey === `orphan:${r.asset_no}` ? 'Fixing...' : 'Backfill'}
-                  </button>
+                  <Btn size="xs" onClick={() => backfillOne(r.asset_no)} disabled={!!busyKey && busyKey !== `orphan:${r.asset_no}`}
+                    busy={busyKey === `orphan:${r.asset_no}`}>
+                    Backfill
+                  </Btn>
                 </div>
               )}
             />
@@ -275,14 +295,14 @@ export default function ConsoleSelfHealing() {
               rows={scan.duplicates} empty="No exact-duplicate tyre rows."
               render={(r) => (
                 <div key={r.keep_id || `${r.serial_no}:${r.asset_no}`} className="flex items-center justify-between gap-3 py-1.5 border-b border-gray-800/60 last:border-0">
-                  <div className="min-w-0">
-                    <span className="text-xs text-gray-200 font-medium">{r.serial_no || '(no serial)'}</span>
-                    <span className="text-[10px] text-gray-600 ml-2">asset {r.asset_no || 'N/A'} | {r.row_count} identical copies</span>
+                  <div className="min-w-0 flex items-center gap-2">
+                    <Code>{r.serial_no || 'No serial'}</Code>
+                    <span className="text-[11px] text-gray-500 truncate">asset {r.asset_no || 'N/A'} | {r.row_count} identical copies</span>
                   </div>
-                  <button onClick={() => mergeOne(r)} disabled={!!busyKey}
-                    className="text-[11px] text-orange-400 hover:text-orange-300 whitespace-nowrap disabled:opacity-40">
-                    {busyKey === `dup:${r.keep_id}` ? 'Merging...' : 'Merge'}
-                  </button>
+                  <Btn size="xs" onClick={() => mergeOne(r)} disabled={!!busyKey && busyKey !== `dup:${r.keep_id}`}
+                    busy={busyKey === `dup:${r.keep_id}`}>
+                    Merge
+                  </Btn>
                 </div>
               )}
             />
@@ -290,16 +310,16 @@ export default function ConsoleSelfHealing() {
 
           {/* Serial conflicts - read only */}
           <FindingCard meta={itemsByKey.serialConflicts} icon={CARD_META.serialConflicts.Icon} tip={CARD_META.serialConflicts.tip} readOnly>
-            <p className="text-[11px] text-blue-300/80 mb-2 flex items-start gap-1.5">
-              <Info size={11} className="mt-0.5 flex-shrink-0" />
+            <p className="text-[11px] text-gray-400 mb-2 flex items-start gap-1.5">
+              <Info size={11} className="mt-0.5 shrink-0 text-gray-500" />
               These are legitimate tyre movements between vehicles, not errors. Review only, no fix applied.
             </p>
             <RowList
               rows={scan.serialConflicts} empty="No serial conflicts."
               render={(r) => (
-                <div key={r.serial_no} className="py-1.5 border-b border-gray-800/60 last:border-0">
-                  <span className="text-xs text-gray-200 font-medium">{r.serial_no}</span>
-                  <span className="text-[10px] text-gray-600 ml-2">seen on {r.asset_count} assets</span>
+                <div key={r.serial_no} className="flex items-center justify-between gap-3 py-1.5 border-b border-gray-800/60 last:border-0">
+                  <Code>{r.serial_no}</Code>
+                  <span className="text-[11px] text-gray-500">seen on {r.asset_count} assets</span>
                 </div>
               )}
             />
@@ -312,7 +332,7 @@ export default function ConsoleSelfHealing() {
               render={(r) => (
                 <div key={r.group} className="flex items-center justify-between gap-3 py-1.5 border-b border-gray-800/60 last:border-0">
                   <span className="text-xs text-gray-200 font-medium">{r.group}</span>
-                  <span className="text-[10px] text-gray-600 whitespace-nowrap">quiet {r.daysStale}d | last {fmtDate(r.lastSeen)}</span>
+                  <span className="text-[11px] text-gray-500 whitespace-nowrap">quiet {r.daysStale}d | last {fmtDate(r.lastSeen)}</span>
                 </div>
               )}
             />
@@ -324,7 +344,9 @@ export default function ConsoleSelfHealing() {
               rows={scan.anomalies} empty="No unusual tyre patterns detected." max={12}
               render={(a) => (
                 <div key={a.id} className="flex items-start gap-2 py-1.5 border-b border-gray-800/60 last:border-0">
-                  <AlertTriangle size={12} className={`mt-0.5 flex-shrink-0 ${a.severity === 'high' ? 'text-red-400' : a.severity === 'medium' ? 'text-amber-400' : 'text-gray-500'}`} />
+                  <Badge tone={ANOMALY_TONE[a.severity] || 'quiet'}>
+                    <span className="capitalize">{a.severity || 'low'}</span>
+                  </Badge>
                   <span className="text-[11px] text-gray-300">{a.message}</span>
                 </div>
               )}
@@ -337,57 +359,63 @@ export default function ConsoleSelfHealing() {
         Self-Healing reuses the existing data reconciliation checks. It never deletes non-identical rows,
         never merges tyres that moved between vehicles, and always asks for confirmation before a fix.
       </p>
+
+      <Modal
+        open={!!pending}
+        title={pending?.title || 'Apply fix?'}
+        subtitle="Guarded on the server. The scan runs again once it finishes."
+        onClose={() => setPending(null)}
+        width="max-w-md"
+        footer={(
+          <>
+            <Btn onClick={() => setPending(null)}>Cancel</Btn>
+            <Btn variant="primary" icon={Wand2} onClick={confirmFix}>Apply fix</Btn>
+          </>
+        )}
+      >
+        <p className="text-sm text-gray-300">{pending?.message}</p>
+      </Modal>
     </div>
   )
 }
 
 // ── Sub components ─────────────────────────────────────────────────────────────
 
-function SummaryTile({ label, value, tone, tip }) {
-  const text = tone === 'amber' ? 'text-amber-400' : tone === 'blue' ? 'text-blue-300' : 'text-emerald-400'
-  const ring = tone === 'amber' ? 'border-amber-500/30 bg-amber-500/5'
-    : tone === 'blue' ? 'border-blue-500/30 bg-blue-500/5' : 'border-emerald-500/30 bg-emerald-500/5'
-  return (
-    <div className={`rounded-xl border p-4 ${ring}`}>
-      <p className="text-[10px] uppercase tracking-wider text-gray-500 flex items-center">
-        {label}<InfoDot text={tip} />
-      </p>
-      <p className={`text-2xl font-black mt-1 ${text}`}>{value}</p>
-    </div>
-  )
-}
-
 function FindingCard({ meta, icon: Icon, tip, action, children, readOnly, wide }) {
   const sev = meta?.severity || 'info'
   const count = meta?.count ?? 0
   return (
-    <div className={`rounded-xl border ${SEV_RING[sev] || SEV_RING.info} p-4 ${wide ? 'lg:col-span-2' : ''}`}>
-      <div className="flex items-center gap-2 mb-3">
-        <Icon size={15} className={SEV_TEXT[sev] || SEV_TEXT.info} />
-        <span className="text-sm font-semibold text-white flex items-center">
-          {meta?.label || 'Findings'}<InfoDot text={tip} />
-        </span>
-        <span className={`text-[10px] px-1.5 py-0.5 rounded border font-semibold capitalize ${SEV_BADGE[sev] || SEV_BADGE.info}`}>{sev}</span>
-        <span className="text-lg font-black text-white ml-1">{count}</span>
-        {readOnly && <span className="text-[10px] text-gray-600 ml-1">review only</span>}
-        <span className="ml-auto">{action}</span>
-      </div>
+    <Panel className={wide ? 'lg:col-span-2' : ''} tone={sev === 'warning' && count > 0 ? 'warning' : undefined}>
+      <PanelHeader
+        icon={Icon}
+        tone={sev === 'warning' && count > 0 ? 'warning' : 'default'}
+        title={(
+          <span className="inline-flex items-center gap-2 flex-wrap" title={tip}>
+            {meta?.label || 'Findings'}
+            <span className="tabular-nums text-gray-100">{count}</span>
+            <Badge tone={SEV_TONE[sev] || 'info'}><span className="capitalize">{sev}</span></Badge>
+            {readOnly && <Badge tone="quiet">Review only</Badge>}
+          </span>
+        )}
+        subtitle={tip}
+        actions={action || null}
+      />
       {children}
-    </div>
+    </Panel>
   )
 }
 
 function RowList({ rows, render, empty, max = 8 }) {
   const list = Array.isArray(rows) ? rows : []
   if (list.length === 0) {
-    return <p className="text-[11px] text-gray-600 py-2">{empty}</p>
+    return <p className="text-[11px] text-gray-500 py-2">{empty}</p>
   }
   const shown = list.slice(0, max)
   return (
     <div>
       {shown.map(render)}
       {list.length > shown.length && (
-        <p className="text-[10px] text-gray-600 pt-2">+ {list.length - shown.length} more</p>
+        <p className="text-[11px] text-gray-500 pt-2">+ {list.length - shown.length} more</p>
       )}
     </div>
   )

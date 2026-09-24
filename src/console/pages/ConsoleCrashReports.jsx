@@ -1,10 +1,11 @@
 /**
  * ConsoleCrashReports - super-admin Crash & Error Reports (Sentry) console page.
  *
- * Pure console page (navy + orange theme, useConsoleAuth gate). Surfaces the live
- * Sentry issue stream (mobile crashes + web errors) INSIDE /console with triage:
- * summary tiles, search + project + period filters, a full issue-detail drawer
- * (stack trace + device/OS/release/user tags), and Resolve / Ignore / Reopen.
+ * Pure console page (useConsoleAuth gate). Surfaces the live Sentry issue stream
+ * (mobile crashes + web errors) INSIDE /console with triage: summary tiles,
+ * issues-by-level and top-issues charts, search + project + period filters, a
+ * full issue-detail dialog (stack trace + device/OS/release/user tags), and
+ * Resolve / Ignore / Reopen / Assign / Comment.
  *
  * The Sentry auth token is entered once in Connection and stored SERVER-SIDE only
  * (deny-all cron_config via a super-admin RPC); it is never returned to the client.
@@ -13,9 +14,9 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Bug, RefreshCw, Settings, AlertTriangle, ExternalLink, Users, Activity,
-  ShieldAlert, CheckCircle2, Save, Loader2, Info, Search, X, Check, EyeOff, RotateCcw,
-  Smartphone, Cpu, UserPlus, MessageSquare, Send, Clock,
+  Bug, RefreshCw, Settings, ExternalLink, Users, Activity,
+  ShieldAlert, CheckCircle2, Save, Info, Check, EyeOff, RotateCcw,
+  Smartphone, Cpu, UserPlus, MessageSquare, Send, Clock, BarChart3,
 } from 'lucide-react'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import {
@@ -25,6 +26,11 @@ import {
 } from '../../lib/api/sentryCrashes'
 import { safeHref } from '../../lib/safeUrl'
 import { toUserMessage } from '../../lib/safeError'
+import {
+  Panel, PanelHeader, Note, StatTile, Badge, Btn, Code, Segmented, SearchInput, Select, Toolbar,
+  LoadingState, EmptyState, ErrorState, Modal,
+} from '../components/ui'
+import { BarsChart, STATUS, useChartTheme } from '../components/ui/charts'
 
 const PERIODS = [
   { key: '24h', label: 'Last 24h' }, { key: '7d', label: 'Last 7 days' },
@@ -37,15 +43,24 @@ const PRESETS = [
   { key: 'is:ignored', label: 'Ignored' },
   { key: '', label: 'All' },
 ]
-const LEVEL_STYLE = {
-  fatal:   'border-red-500/40 bg-red-500/10 text-red-300',
-  error:   'border-orange-500/40 bg-orange-500/10 text-orange-300',
-  warning: 'border-amber-500/40 bg-amber-500/10 text-amber-300',
-  info:    'border-blue-500/40 bg-blue-500/10 text-blue-300',
-  debug:   'border-gray-500/40 bg-gray-500/10 text-gray-300',
-}
-// Tags worth surfacing prominently in the detail drawer.
+// Sentry level -> badge tone + chart status colour + order in the level chart.
+const LEVELS = [
+  { key: 'fatal', label: 'Fatal', tone: 'danger', color: 'critical' },
+  { key: 'error', label: 'Error', tone: 'accent', color: 'high' },
+  { key: 'warning', label: 'Warning', tone: 'warning', color: 'medium' },
+  { key: 'info', label: 'Info', tone: 'info', color: 'low' },
+  { key: 'debug', label: 'Debug', tone: 'quiet', color: 'low' },
+]
+const LEVEL_BY_KEY = Object.fromEntries(LEVELS.map((l) => [l.key, l]))
+const levelMeta = (lvl) => LEVEL_BY_KEY[lvl] || LEVEL_BY_KEY.error
+const STATUS_TONE = { resolved: 'good', ignored: 'quiet', unresolved: 'default' }
+/** The edge proxy asks Sentry for one page of this many issues. */
+const ISSUE_PAGE = 50
+// Tags worth surfacing prominently in the detail dialog.
 const KEY_TAGS = ['release', 'environment', 'os', 'os.name', 'device', 'device.family', 'device.class', 'level', 'handled', 'mechanism', 'transaction']
+
+const INPUT = 'w-full px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 placeholder-gray-600 focus:border-gray-700 focus:outline-none'
+const nf = new Intl.NumberFormat('en-US')
 
 function timeAgo(iso) {
   if (!iso) return 'N/A'
@@ -59,17 +74,14 @@ function timeAgo(iso) {
   return new Date(iso).toLocaleDateString()
 }
 
-function Tile({ label, value, tint }) {
-  return (
-    <div className="rounded-xl border border-gray-800 bg-gray-900/50 px-3.5 py-2.5">
-      <div className={`text-lg font-bold ${tint || 'text-white'}`}>{value}</div>
-      <div className="text-[11px] text-gray-400">{label}</div>
-    </div>
-  )
+function shorten(text, n = 48) {
+  const s = String(text || '')
+  return s.length > n ? `${s.slice(0, n - 3)}...` : s
 }
 
 export default function ConsoleCrashReports() {
   const { admin } = useConsoleAuth()
+  const theme = useChartTheme()
 
   const [status, setStatus] = useState(null)
   const [statusLoading, setStatusLoading] = useState(true)
@@ -155,6 +167,24 @@ export default function ConsoleCrashReports() {
     return { total: issues.length, fatal, errors, users, events }
   }, [issues])
 
+  const colors = STATUS[theme]
+  // Issues per level, in severity order. Levels Sentry did not report stay out
+  // of the chart rather than showing as a row of zero bars.
+  const levelBars = useMemo(() => {
+    const counts = new Map()
+    for (const i of issues) counts.set(i.level || 'error', (counts.get(i.level || 'error') || 0) + 1)
+    const known = LEVELS.filter((l) => counts.get(l.key)).map((l) => ({ label: l.label, value: counts.get(l.key), color: colors[l.color] }))
+    const other = [...counts.entries()].filter(([k]) => !LEVEL_BY_KEY[k]).map(([k, v]) => ({ label: k, value: v, color: colors.low }))
+    return [...known, ...other]
+  }, [issues, colors])
+  // The heaviest issues by event count: where the crashes actually come from.
+  const topBars = useMemo(() => [...issues]
+    .filter((i) => (i.count || 0) > 0)
+    .sort((a, b) => (b.count || 0) - (a.count || 0))
+    .slice(0, 8)
+    .map((i) => ({ label: shorten(i.shortId ? `${i.shortId} ${i.title}` : i.title, 44), value: i.count || 0, color: colors[levelMeta(i.level).color] })),
+  [issues, colors])
+
   const onSave = async () => {
     setSaving(true); setError(''); setNotice('')
     try {
@@ -232,242 +262,251 @@ export default function ConsoleCrashReports() {
   const submitSearch = (e) => { e?.preventDefault?.(); setActiveQuery(queryText.trim()) }
   const applyPreset = (q) => { setQueryText(q); setActiveQuery(q) }
 
+  const closeDetail = () => { setDetailFor(null); setDetail(null) }
+
   if (!admin) return null
 
-  return (
-    <div className="space-y-5">
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-white flex items-center gap-2">
-            <Bug size={20} className="text-orange-400" /> Crash &amp; Error Reports
-          </h1>
-          <p className="text-sm text-gray-400 mt-0.5">Live Sentry issues from the mobile app and web, with triage.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setShowSetup(s => !s)}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700">
-            <Settings size={15} /> Connection
-          </button>
-          <button onClick={loadIssues} disabled={loading || !status?.configured}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-orange-500/90 hover:bg-orange-500 text-white disabled:opacity-50">
-            {loading ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />} Refresh
-          </button>
-        </div>
-      </div>
+  const connected = status?.configured === true
+  const setupOpen = showSetup || (!statusLoading && !connected)
+  const memberOptions = [{ value: '', label: 'Unassigned' }, ...members.map(m => ({ value: m.userId, label: m.name }))]
 
-      {notice && <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/30 text-green-300 text-sm"><CheckCircle2 size={15} /> {notice}</div>}
-      {error && <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 text-sm"><AlertTriangle size={15} /> {error}</div>}
+  return (
+    <div className="space-y-5 max-w-7xl">
+      {/* Header */}
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="flex items-center gap-2">
+            <Bug size={18} className="text-orange-400" /> Crash &amp; Error Reports
+          </h1>
+          <p className="text-xs text-gray-500 mt-1">
+            Live Sentry issues from the mobile app and web, with triage.
+            {connected && status?.org && <span> | connected to {status.org}</span>}
+          </p>
+        </div>
+        <Toolbar>
+          <Btn icon={Settings} onClick={() => setShowSetup(s => !s)}>Connection</Btn>
+          <Btn variant="primary" icon={RefreshCw} onClick={loadIssues} busy={loading} disabled={!connected}>Refresh</Btn>
+        </Toolbar>
+      </header>
+
+      {notice && <Note icon={CheckCircle2} tone="accent">{notice}</Note>}
+      <ErrorState message={error} onRetry={connected ? loadIssues : loadStatus} />
+
+      {statusLoading && !status && <Panel><LoadingState label="Checking the Sentry connection" rows={2} /></Panel>}
 
       {/* Connection / setup */}
-      {(showSetup || (!statusLoading && !status?.configured)) && (
-        <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4 space-y-3">
-          <h2 className="text-sm font-semibold text-white flex items-center gap-2"><ShieldAlert size={15} className="text-orange-400" /> Sentry connection</h2>
-          <p className="text-xs text-gray-400 flex items-start gap-1.5">
-            <Info size={13} className="mt-0.5 shrink-0" />
-            Paste a Sentry Auth Token with read (and, for triage, <code className="text-orange-300">issue:write</code>) scope.
-            The token is stored on the server only and is never shown again.
-          </p>
-          <div className="grid gap-3 sm:grid-cols-2">
+      {setupOpen && (
+        <Panel tone={connected ? undefined : 'accent'}>
+          <PanelHeader
+            icon={ShieldAlert}
+            title="Sentry connection"
+            subtitle="Stored on the server only. The token is never shown again."
+            actions={connected && <Badge tone="good" icon={CheckCircle2}>Connected to {status.org}</Badge>}
+          />
+          <Note icon={Info}>
+            Paste a Sentry Auth Token with read (and, for triage, <Code>issue:write</Code>) scope.
+          </Note>
+          <div className="grid gap-3 sm:grid-cols-2 mt-3">
             <label className="text-xs text-gray-400 space-y-1">
-              <span>Auth token {status?.configured && <span className="text-green-400">(saved &mdash; leave blank to keep)</span>}</span>
-              <input type="password" value={token} onChange={e => setToken(e.target.value)} placeholder={status?.configured ? '••••••••••••' : 'sntrys_...'} autoComplete="off"
-                className="w-full px-3 py-2 rounded-lg bg-gray-950 border border-gray-700 text-gray-100 text-sm focus:border-orange-500 outline-none" />
+              <span>Auth token {connected && <span className="text-emerald-400">(saved, leave blank to keep)</span>}</span>
+              <input type="password" value={token} onChange={e => setToken(e.target.value)} placeholder={connected ? '••••••••••••' : 'sntrys_...'} autoComplete="off"
+                className={INPUT} />
             </label>
             <label className="text-xs text-gray-400 space-y-1"><span>Organisation slug</span>
-              <input value={org} onChange={e => setOrg(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-gray-950 border border-gray-700 text-gray-100 text-sm focus:border-orange-500 outline-none" /></label>
+              <input value={org} onChange={e => setOrg(e.target.value)} className={INPUT} /></label>
             <label className="text-xs text-gray-400 space-y-1"><span>Region URL</span>
-              <input value={regionUrl} onChange={e => setRegionUrl(e.target.value)} placeholder="https://de.sentry.io" className="w-full px-3 py-2 rounded-lg bg-gray-950 border border-gray-700 text-gray-100 text-sm focus:border-orange-500 outline-none" /></label>
+              <input value={regionUrl} onChange={e => setRegionUrl(e.target.value)} placeholder="https://de.sentry.io" className={INPUT} /></label>
             <label className="text-xs text-gray-400 space-y-1"><span>Project slug (optional)</span>
-              <input value={project} onChange={e => setProject(e.target.value)} placeholder="all projects" className="w-full px-3 py-2 rounded-lg bg-gray-950 border border-gray-700 text-gray-100 text-sm focus:border-orange-500 outline-none" /></label>
+              <input value={project} onChange={e => setProject(e.target.value)} placeholder="all projects" className={INPUT} /></label>
           </div>
           {/* Fatal-crash alerts */}
-          <div className="pt-2 mt-1 border-t border-gray-800 space-y-3">
+          <div className="pt-3 mt-3 border-t border-gray-800 space-y-3">
             <label className="flex items-center gap-2.5 cursor-pointer">
               <button type="button" role="switch" aria-checked={alertsEnabled} onClick={() => setAlertsEnabled(v => !v)}
                 className={`relative w-10 h-5 rounded-full transition-colors ${alertsEnabled ? 'bg-orange-500' : 'bg-gray-700'}`}>
                 <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${alertsEnabled ? 'left-[22px]' : 'left-0.5'}`} />
               </button>
               <span className="text-sm text-gray-200 font-medium">Alert on new fatal crashes</span>
+              <Badge tone={alertsEnabled ? 'good' : 'quiet'}>{alertsEnabled ? 'On' : 'Off'}</Badge>
             </label>
-            <p className="text-[11px] text-gray-500 flex items-start gap-1.5 -mt-1">
+            <p className="text-[11px] text-gray-500 flex items-start gap-1.5">
               <Info size={12} className="mt-0.5 shrink-0" />
-              Every 15 minutes we check for new <code className="text-red-300">level:fatal</code> issues. Each new one is logged to System Health and emailed below (deduped, never twice).
+              <span>Every 15 minutes we check for new <Code>level:fatal</Code> issues. Each new one is logged to System Health and emailed below (deduped, never twice).</span>
             </p>
             <label className="text-xs text-gray-400 space-y-1 block max-w-md">
-              <span>Alert email(s) &mdash; comma separated</span>
+              <span>Alert email(s), comma separated</span>
               <input value={alertEmail} onChange={e => setAlertEmail(e.target.value)} placeholder="ops@tyrepulse.app, you@company.com"
-                className="w-full px-3 py-2 rounded-lg bg-gray-950 border border-gray-700 text-gray-100 text-sm focus:border-orange-500 outline-none" />
+                className={INPUT} />
             </label>
           </div>
-          <div className="flex items-center gap-2">
-            <button onClick={onSave} disabled={saving || (!status?.configured && !token.trim())}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-orange-500/90 hover:bg-orange-500 text-white disabled:opacity-50">
-              {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} Save connection
-            </button>
-            {status?.configured && <span className="text-xs text-green-400 inline-flex items-center gap-1"><CheckCircle2 size={13} /> Connected to {status.org}</span>}
+          <div className="flex items-center gap-2 mt-3">
+            <Btn variant="primary" icon={Save} onClick={onSave} busy={saving} disabled={!connected && !token.trim()}>
+              Save connection
+            </Btn>
           </div>
-        </div>
+        </Panel>
       )}
 
-      {status?.configured && (
+      {connected && (
         <>
           {/* Summary tiles */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-2.5">
-            <Tile label="Issues" value={summary.total} />
-            <Tile label="Fatal" value={summary.fatal} tint="text-red-300" />
-            <Tile label="Errors" value={summary.errors} tint="text-orange-300" />
-            <Tile label="Events" value={summary.events} tint="text-gray-200" />
-            <Tile label="Users affected" value={summary.users} tint="text-amber-300" />
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            <StatTile label="Issues" value={loading ? 'N/A' : summary.total} icon={Bug}
+              sub={summary.total >= ISSUE_PAGE ? `First ${ISSUE_PAGE} shown` : 'In this window'} />
+            <StatTile label="Fatal" value={loading ? 'N/A' : summary.fatal} tone={summary.fatal > 0 ? 'danger' : 'default'} icon={ShieldAlert} />
+            <StatTile label="Errors" value={loading ? 'N/A' : summary.errors} tone={summary.errors > 0 ? 'accent' : 'default'} icon={Bug} />
+            <StatTile label="Events" value={loading ? 'N/A' : nf.format(summary.events)} icon={Activity} sub="Across these issues" />
+            <StatTile label="Users affected" value={loading ? 'N/A' : nf.format(summary.users)} tone={summary.users > 0 ? 'warning' : 'default'} icon={Users}
+              sub="Summed per issue" />
           </div>
+
+          {summary.total >= ISSUE_PAGE && !loading && (
+            <Note icon={Info} tone="warning">
+              Sentry returned its first page of {ISSUE_PAGE} issues, so tiles and charts cover those only.
+              Narrow the search or period, or open Sentry for the full list.
+            </Note>
+          )}
+
+          {/* Charts */}
+          {!loading && issues.length > 0 && (
+            <div className="grid gap-4 lg:grid-cols-5">
+              <Panel className="lg:col-span-2">
+                <PanelHeader icon={BarChart3} title="Issues by level" subtitle="How many distinct issues sit at each Sentry level." />
+                <BarsChart bars={levelBars} summary={levelBars.map(b => `${b.label} ${b.value}`).join(', ')} />
+              </Panel>
+              <Panel className="lg:col-span-3">
+                <PanelHeader icon={Activity} title="Top issues by events" subtitle="The issues producing the most events in this window, coloured by level." />
+                <BarsChart bars={topBars} valueFormat={(v) => `${nf.format(v)} events`}
+                  summary={topBars.map(b => `${b.label} ${b.value}`).join(', ')}
+                  emptyText="No events recorded against these issues." />
+              </Panel>
+            </div>
+          )}
 
           {/* Filters */}
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <form onSubmit={submitSearch} className="flex items-center gap-1.5 flex-1 min-w-[220px]">
-                <div className="relative flex-1">
-                  <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
-                  <input value={queryText} onChange={e => setQueryText(e.target.value)} placeholder="Sentry search e.g. is:unresolved level:fatal release:1.3.0"
-                    className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-gray-200 text-xs focus:border-orange-500 outline-none" />
-                </div>
-                <button type="submit" className="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs">Search</button>
+          <Panel>
+            <PanelHeader icon={Bug} title="Issues" subtitle="Click an issue for its stack trace, device details and activity." />
+            <div className="space-y-2 mb-3">
+              <form onSubmit={submitSearch}>
+                <Toolbar>
+                  <SearchInput value={queryText} onChange={setQueryText}
+                    placeholder="Sentry search e.g. is:unresolved level:fatal release:1.3.0" className="flex-1 min-w-[220px]" />
+                  <Btn type="submit">Search</Btn>
+                  <Select value={projectId} onChange={setProjectId} className="w-44"
+                    options={[{ value: '', label: 'All projects' }, ...projects.map(p => ({ value: String(p.id), label: p.name || p.slug }))]} />
+                  <Select value={period} onChange={setPeriod} className="w-36"
+                    options={PERIODS.map(p => ({ value: p.key, label: p.label }))} />
+                </Toolbar>
               </form>
-              <select value={projectId} onChange={e => setProjectId(e.target.value)}
-                className="px-3 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-gray-200 text-xs outline-none focus:border-orange-500">
-                <option value="">All projects</option>
-                {projects.map(p => <option key={p.id} value={p.id}>{p.name || p.slug}</option>)}
-              </select>
-              <select value={period} onChange={e => setPeriod(e.target.value)}
-                className="px-3 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-gray-200 text-xs outline-none focus:border-orange-500">
-                {PERIODS.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
-              </select>
+              <Segmented value={activeQuery} onChange={applyPreset}
+                options={PRESETS.map(p => ({ key: p.key, label: p.label }))} />
             </div>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {PRESETS.map(p => (
-                <button key={p.label} onClick={() => applyPreset(p.key)}
-                  className={`px-2.5 py-1 rounded-md text-xs font-medium ${activeQuery === p.key ? 'bg-orange-500 text-white' : 'bg-gray-900/60 border border-gray-800 text-gray-300 hover:bg-gray-800'}`}>
-                  {p.label}
-                </button>
-              ))}
-            </div>
-          </div>
 
-          {/* Issue list */}
-          <div className="space-y-2">
+            {/* Issue list */}
             {loading ? (
-              <div className="flex items-center justify-center py-16 text-gray-500 gap-2"><Loader2 size={18} className="animate-spin" /> Loading crash reports...</div>
+              <LoadingState label="Loading crash reports" />
             ) : reason === 'auth' ? (
-              <div className="text-center py-14 text-gray-400"><ShieldAlert size={26} className="mx-auto text-red-400 mb-2" />Sentry rejected the token. Open <span className="text-gray-200">Connection</span> and paste a fresh one.</div>
+              <EmptyState icon={ShieldAlert} title="Sentry rejected the token"
+                reason="Open Connection and paste a fresh token." action={<Btn icon={Settings} onClick={() => setShowSetup(true)}>Connection</Btn>} />
+            ) : reason && reason !== 'not_configured' ? (
+              <EmptyState icon={Bug} title="Issues could not be loaded" reason="Sentry did not answer this request. Try again in a moment."
+                action={<Btn icon={RefreshCw} onClick={loadIssues}>Retry</Btn>} />
             ) : issues.length === 0 ? (
-              <div className="text-center py-14 text-gray-400"><CheckCircle2 size={26} className="mx-auto text-green-400 mb-2" />No matching issues in this window.</div>
-            ) : issues.map(it => {
-              const lvl = LEVEL_STYLE[it.level] || LEVEL_STYLE.error
-              return (
-                <div key={it.id} className="rounded-xl border border-gray-800 bg-gray-900/50 p-3.5 hover:border-gray-700 transition-colors">
-                  <div className="flex items-start justify-between gap-3">
-                    <button onClick={() => openDetail(it)} className="min-w-0 text-left group">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase border ${lvl}`}>{it.level}</span>
-                        {it.shortId && <span className="text-[11px] text-gray-500 font-mono">{it.shortId}</span>}
-                        {it.project && <span className="text-[11px] text-gray-500">{it.project}</span>}
-                        {it.platform && <span className="text-[11px] text-gray-500">{it.platform}</span>}
-                        {it.status && it.status !== 'unresolved' && <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-700/50 text-gray-300">{it.status}</span>}
+              <EmptyState icon={CheckCircle2} title="No matching issues in this window"
+                reason="Nothing in Sentry matches this search, project and period." />
+            ) : (
+              <div className="space-y-2">
+                {issues.map(it => {
+                  const lvl = levelMeta(it.level)
+                  return (
+                    <div key={it.id} className="rounded-xl border border-gray-800 bg-gray-900/40 p-3.5 hover:border-gray-700 transition-colors">
+                      <div className="flex items-start justify-between gap-3">
+                        <button onClick={() => openDetail(it)} className="min-w-0 text-left group">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Badge tone={lvl.tone}>{it.level ? it.level.toUpperCase() : 'ERROR'}</Badge>
+                            {it.shortId && <Code>{it.shortId}</Code>}
+                            {it.project && <span className="text-[11px] text-gray-500">{it.project}</span>}
+                            {it.platform && <span className="text-[11px] text-gray-500">{it.platform}</span>}
+                            {it.status && it.status !== 'unresolved' && <Badge tone={STATUS_TONE[it.status] || 'default'}><span className="capitalize">{it.status}</span></Badge>}
+                          </div>
+                          <p className="text-sm font-semibold text-gray-100 mt-1 truncate group-hover:text-orange-300">{it.title}</p>
+                          {it.value && it.value !== it.title && <p className="text-xs text-gray-400 mt-0.5 truncate">{it.value}</p>}
+                          {it.culprit && <p className="text-[11px] text-gray-500 mt-0.5 font-mono truncate">{it.culprit}</p>}
+                        </button>
+                        <div className="shrink-0 flex flex-col items-end gap-1.5">
+                          {safeHref(it.permalink) && (
+                            <a href={safeHref(it.permalink)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-orange-300 hover:text-orange-200">Sentry <ExternalLink size={12} /></a>
+                          )}
+                          <IssueActions issue={it} acting={acting === it.id} onAct={act} compact />
+                          {members.length > 0 && (
+                            <Select value={it.assignedTo?.type === 'user' ? String(it.assignedTo.id) : ''} disabled={acting === it.id}
+                              onChange={v => assign(it, v)} options={memberOptions} className="w-36" />
+                          )}
+                        </div>
                       </div>
-                      <p className="text-sm font-semibold text-gray-100 mt-1 truncate group-hover:text-orange-300">{it.title}</p>
-                      {it.value && it.value !== it.title && <p className="text-xs text-gray-400 mt-0.5 truncate">{it.value}</p>}
-                      {it.culprit && <p className="text-[11px] text-gray-500 mt-0.5 font-mono truncate">{it.culprit}</p>}
-                    </button>
-                    <div className="shrink-0 flex flex-col items-end gap-1.5">
-                      {safeHref(it.permalink) && (
-                        <a href={safeHref(it.permalink)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-orange-300 hover:text-orange-200">Sentry <ExternalLink size={12} /></a>
-                      )}
-                      <div className="flex items-center gap-1">
-                        {it.status !== 'resolved' && (
-                          <button onClick={() => act(it, 'resolved')} disabled={acting === it.id} title="Resolve"
-                            className="p-1.5 rounded-md bg-green-500/10 border border-green-500/30 text-green-300 hover:bg-green-500/20 disabled:opacity-50">
-                            {acting === it.id ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
-                          </button>
-                        )}
-                        {it.status !== 'ignored' && (
-                          <button onClick={() => act(it, 'ignored')} disabled={acting === it.id} title="Ignore"
-                            className="p-1.5 rounded-md bg-gray-700/40 border border-gray-600/40 text-gray-300 hover:bg-gray-700/70 disabled:opacity-50"><EyeOff size={13} /></button>
-                        )}
-                        {it.status !== 'unresolved' && (
-                          <button onClick={() => act(it, 'unresolved')} disabled={acting === it.id} title="Reopen"
-                            className="p-1.5 rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-300 hover:bg-amber-500/20 disabled:opacity-50"><RotateCcw size={13} /></button>
-                        )}
+                      <div className="flex items-center gap-4 mt-2.5 text-[11px] text-gray-400 flex-wrap">
+                        <span className="inline-flex items-center gap-1 tabular-nums"><Activity size={12} /> {nf.format(it.count || 0)} event{it.count !== 1 ? 's' : ''}</span>
+                        <span className="inline-flex items-center gap-1 tabular-nums"><Users size={12} /> {nf.format(it.userCount || 0)} user{it.userCount !== 1 ? 's' : ''}</span>
+                        <span>first {timeAgo(it.firstSeen)}</span>
+                        <span>last {timeAgo(it.lastSeen)}</span>
+                        {it.assignedTo && <span className="inline-flex items-center gap-1 text-orange-300"><UserPlus size={12} /> {it.assignedTo.name}</span>}
                       </div>
-                      {members.length > 0 && (
-                        <select value={it.assignedTo?.type === 'user' ? it.assignedTo.id : ''} disabled={acting === it.id}
-                          onChange={e => assign(it, e.target.value)} title="Assign to"
-                          className="max-w-[130px] px-2 py-1 rounded-md bg-gray-900 border border-gray-800 text-gray-300 text-[11px] outline-none focus:border-orange-500">
-                          <option value="">Unassigned</option>
-                          {members.map(m => <option key={m.userId} value={m.userId}>{m.name}</option>)}
-                        </select>
-                      )}
                     </div>
-                  </div>
-                  <div className="flex items-center gap-4 mt-2.5 text-[11px] text-gray-400 flex-wrap">
-                    <span className="inline-flex items-center gap-1"><Activity size={12} /> {it.count} event{it.count !== 1 ? 's' : ''}</span>
-                    <span className="inline-flex items-center gap-1"><Users size={12} /> {it.userCount} user{it.userCount !== 1 ? 's' : ''}</span>
-                    <span>first {timeAgo(it.firstSeen)}</span>
-                    <span>last {timeAgo(it.lastSeen)}</span>
-                    {it.assignedTo && <span className="inline-flex items-center gap-1 text-orange-300"><UserPlus size={12} /> {it.assignedTo.name}</span>}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+                  )
+                })}
+              </div>
+            )}
+          </Panel>
         </>
       )}
 
-      {/* Detail drawer */}
-      {detailFor && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/60" onClick={() => { setDetailFor(null); setDetail(null) }}>
-          <div className="w-full max-w-2xl h-full overflow-y-auto bg-gray-950 border-l border-gray-800 p-5 space-y-4" onClick={e => e.stopPropagation()}>
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase border ${LEVEL_STYLE[detailFor.level] || LEVEL_STYLE.error}`}>{detailFor.level}</span>
-                  {detailFor.shortId && <span className="text-[11px] text-gray-500 font-mono">{detailFor.shortId}</span>}
-                </div>
-                <h3 className="text-base font-bold text-white mt-1">{detailFor.title}</h3>
-                {detailFor.culprit && <p className="text-xs text-gray-500 font-mono mt-0.5">{detailFor.culprit}</p>}
-              </div>
-              <button onClick={() => { setDetailFor(null); setDetail(null) }} className="p-1.5 rounded-lg hover:bg-gray-800 text-gray-400"><X size={18} /></button>
+      {/* Detail dialog */}
+      <Modal
+        open={!!detailFor}
+        onClose={closeDetail}
+        width="max-w-3xl"
+        title={detailFor?.title || 'Issue'}
+        subtitle={detailFor?.culprit || undefined}
+      >
+        {detailFor && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Badge tone={levelMeta(detailFor.level).tone}>{detailFor.level ? detailFor.level.toUpperCase() : 'ERROR'}</Badge>
+              {detailFor.shortId && <Code>{detailFor.shortId}</Code>}
+              {detailFor.status && <Badge tone={STATUS_TONE[detailFor.status] || 'default'}><span className="capitalize">{detailFor.status}</span></Badge>}
             </div>
 
-            <div className="flex items-center gap-2">
-              {detailFor.status !== 'resolved' && <button onClick={() => act(detailFor, 'resolved')} disabled={acting === detailFor.id} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-green-500/10 border border-green-500/30 text-green-300 hover:bg-green-500/20"><Check size={13} /> Resolve</button>}
-              {detailFor.status !== 'ignored' && <button onClick={() => act(detailFor, 'ignored')} disabled={acting === detailFor.id} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-gray-700/40 border border-gray-600/40 text-gray-300 hover:bg-gray-700/70"><EyeOff size={13} /> Ignore</button>}
-              {detailFor.status !== 'unresolved' && <button onClick={() => act(detailFor, 'unresolved')} disabled={acting === detailFor.id} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-amber-500/10 border border-amber-500/30 text-amber-300 hover:bg-amber-500/20"><RotateCcw size={13} /> Reopen</button>}
-              {safeHref(detailFor.permalink) && <a href={safeHref(detailFor.permalink)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-orange-500/10 border border-orange-500/30 text-orange-300 hover:bg-orange-500/20 ml-auto">Open in Sentry <ExternalLink size={12} /></a>}
+            <div className="flex items-center gap-2 flex-wrap">
+              <IssueActions issue={detailFor} acting={acting === detailFor.id} onAct={act} />
+              {safeHref(detailFor.permalink) && (
+                <a href={safeHref(detailFor.permalink)} target="_blank" rel="noopener noreferrer"
+                  className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border border-orange-700/50 text-orange-300 hover:bg-orange-500/10">
+                  Open in Sentry <ExternalLink size={12} />
+                </a>
+              )}
             </div>
 
             {/* Assignee */}
             {members.length > 0 && (
               <div className="flex items-center gap-2 text-xs">
                 <span className="text-gray-400 inline-flex items-center gap-1.5"><UserPlus size={14} className="text-orange-400" /> Assigned to</span>
-                <select value={detailFor.assignedTo?.type === 'user' ? detailFor.assignedTo.id : ''} disabled={acting === detailFor.id}
-                  onChange={e => assign(detailFor, e.target.value)}
-                  className="px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-gray-200 text-xs outline-none focus:border-orange-500">
-                  <option value="">Unassigned</option>
-                  {members.map(m => <option key={m.userId} value={m.userId}>{m.name}{m.email ? ` (${m.email})` : ''}</option>)}
-                </select>
+                <Select value={detailFor.assignedTo?.type === 'user' ? String(detailFor.assignedTo.id) : ''} disabled={acting === detailFor.id}
+                  onChange={v => assign(detailFor, v)} className="w-64"
+                  options={[{ value: '', label: 'Unassigned' }, ...members.map(m => ({ value: m.userId, label: `${m.name}${m.email ? ` (${m.email})` : ''}` }))]} />
               </div>
             )}
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
-              <Tile label="Events" value={detailFor.count} />
-              <Tile label="Users" value={detailFor.userCount} tint="text-amber-300" />
-              <div className="rounded-xl border border-gray-800 bg-gray-900/50 px-3 py-2.5"><div className="text-xs font-semibold text-gray-200">{timeAgo(detailFor.firstSeen)}</div><div className="text-[11px] text-gray-400">first seen</div></div>
-              <div className="rounded-xl border border-gray-800 bg-gray-900/50 px-3 py-2.5"><div className="text-xs font-semibold text-gray-200">{timeAgo(detailFor.lastSeen)}</div><div className="text-[11px] text-gray-400">last seen</div></div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <StatTile label="Events" value={nf.format(detailFor.count || 0)} icon={Activity} />
+              <StatTile label="Users" value={nf.format(detailFor.userCount || 0)} tone={detailFor.userCount > 0 ? 'warning' : 'default'} icon={Users} />
+              <StatTile label="First seen" value={timeAgo(detailFor.firstSeen)} icon={Clock} />
+              <StatTile label="Last seen" value={timeAgo(detailFor.lastSeen)} icon={Clock} />
             </div>
 
             {detailLoading ? (
-              <div className="flex items-center justify-center py-14 text-gray-500 gap-2"><Loader2 size={18} className="animate-spin" /> Loading details...</div>
+              <LoadingState label="Loading details" rows={3} />
             ) : detail?.error ? (
-              <div className="text-sm text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2">{detail.error}</div>
+              <Note icon={Info} tone="warning">{detail.error}</Note>
             ) : detail?.event ? (
               <>
                 {/* Key tags */}
@@ -487,7 +526,7 @@ export default function ConsoleCrashReports() {
                   <div className="text-xs text-gray-400">
                     <span className="text-gray-500">User </span>
                     <span className="text-gray-200">{detail.event.user.username || detail.event.user.id || 'unknown'}</span>
-                    {detail.event.user.geo?.country_code && <span className="text-gray-500"> &middot; {detail.event.user.geo.city || ''} {detail.event.user.geo.country_code}</span>}
+                    {detail.event.user.geo?.country_code && <span className="text-gray-500"> | {detail.event.user.geo.city || ''} {detail.event.user.geo.country_code}</span>}
                   </div>
                 )}
                 {/* Stack traces */}
@@ -499,6 +538,7 @@ export default function ConsoleCrashReports() {
                         <div key={fi} className={`px-3 py-1.5 text-[11px] font-mono ${f.inApp ? 'bg-orange-500/5' : ''}`}>
                           <span className={f.inApp ? 'text-orange-300' : 'text-gray-300'}>{f.fn}</span>
                           {f.file && <span className="text-gray-500"> &nbsp;{f.file}{f.line != null ? `:${f.line}` : ''}</span>}
+                          {f.inApp && <span className="ml-2"><Badge tone="accent">app</Badge></span>}
                         </div>
                       ))}
                     </div>
@@ -516,12 +556,9 @@ export default function ConsoleCrashReports() {
               <h4 className="text-xs font-semibold text-gray-300 mb-1.5 flex items-center gap-1.5"><MessageSquare size={13} className="text-orange-400" /> Add a note</h4>
               <div className="flex items-start gap-2">
                 <textarea value={commentText} onChange={e => setCommentText(e.target.value)} rows={2}
-                  placeholder="e.g. Fixed in v1.3.1 - resizing photos before base64. Assigned to me."
-                  className="flex-1 px-3 py-2 rounded-lg bg-gray-950 border border-gray-800 text-gray-100 text-xs focus:border-orange-500 outline-none resize-y" />
-                <button onClick={submitComment} disabled={commenting || !commentText.trim()}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs bg-orange-500/90 hover:bg-orange-500 text-white disabled:opacity-50 shrink-0">
-                  {commenting ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />} Post
-                </button>
+                  placeholder="e.g. Fixed in v1.3.1 by resizing photos before base64. Assigned to me."
+                  className={`${INPUT} flex-1 resize-y`} />
+                <Btn variant="primary" icon={Send} onClick={submitComment} busy={commenting} disabled={!commentText.trim()}>Post</Btn>
               </div>
             </div>
 
@@ -532,10 +569,10 @@ export default function ConsoleCrashReports() {
                 <div className="space-y-1.5">
                   {detail.activity.map((a, ai) => (
                     <div key={ai} className="text-[11px] text-gray-400 flex items-start gap-2">
-                      <span className="text-gray-600 shrink-0">{timeAgo(a.dateCreated)}</span>
+                      <span className="text-gray-600 shrink-0 w-16">{timeAgo(a.dateCreated)}</span>
                       <span className="min-w-0">
                         <span className="text-gray-200 font-medium">{a.user}</span>{' '}
-                        <span className="text-gray-500">{a.type.replace(/_/g, ' ')}</span>
+                        <span className="text-gray-500">{String(a.type || '').replace(/_/g, ' ')}</span>
                         {a.text && <span className="block text-gray-300 mt-0.5">{a.text}</span>}
                       </span>
                     </div>
@@ -544,7 +581,31 @@ export default function ConsoleCrashReports() {
               </div>
             )}
           </div>
-        </div>
+        )}
+      </Modal>
+    </div>
+  )
+}
+
+/** Resolve / Ignore / Reopen, shown only where the transition makes sense. */
+function IssueActions({ issue, acting, onAct, compact = false }) {
+  const size = compact ? 'xs' : 'sm'
+  return (
+    <div className="flex items-center gap-1">
+      {issue.status !== 'resolved' && (
+        <Btn size={size} variant="good" icon={Check} busy={acting} onClick={() => onAct(issue, 'resolved')} title="Resolve">
+          {compact ? null : 'Resolve'}
+        </Btn>
+      )}
+      {issue.status !== 'ignored' && (
+        <Btn size={size} icon={EyeOff} disabled={acting} onClick={() => onAct(issue, 'ignored')} title="Ignore">
+          {compact ? null : 'Ignore'}
+        </Btn>
+      )}
+      {issue.status !== 'unresolved' && (
+        <Btn size={size} icon={RotateCcw} disabled={acting} onClick={() => onAct(issue, 'unresolved')} title="Reopen">
+          {compact ? null : 'Reopen'}
+        </Btn>
       )}
     </div>
   )

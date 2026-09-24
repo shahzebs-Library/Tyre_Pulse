@@ -1,6 +1,6 @@
 /**
  * ConsoleAlertRules - super-admin no-code Alert Rules builder (Admin Control
- * Module 5). A pure console page (navy + orange theme, useConsoleAuth gate).
+ * Module 5). A pure console page.
  *
  * The builder reads plain English:
  *   "if [metric] [operator] [value] then notify via [in-app / email]"
@@ -16,13 +16,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   BellRing, Plus, Pencil, Trash2, RefreshCw, AlertTriangle, Info,
-  Power, Save, X, CheckCircle2, Clock, Mail, MonitorSmartphone,
+  Power, Save, X, Clock, Mail, MonitorSmartphone, BarChart3,
 } from 'lucide-react'
 import { toUserMessage } from '../../lib/safeError'
 import {
   ALERT_METRICS, ALERT_OPERATORS, metricLabel, operatorLabel,
   listAlertRules, createAlertRule, updateAlertRule, toggleAlertRule, deleteAlertRule,
 } from '../../lib/api/alertRules'
+import {
+  Panel, PanelHeader, Note, StatTile, Badge, Btn, Segmented, SearchInput, Select, Toolbar,
+  Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, Modal,
+} from '../components/ui'
+import { BarsChart } from '../components/ui/charts'
 
 const EMPTY_FORM = {
   name: '',
@@ -36,6 +41,8 @@ const EMPTY_FORM = {
   active: true,
 }
 
+const INPUT = 'w-full px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 placeholder-gray-600 focus:border-gray-700 focus:outline-none'
+
 /** Plain-English tooltip marker sitting next to a technical term. */
 function InfoDot({ text }) {
   return (
@@ -43,6 +50,12 @@ function InfoDot({ text }) {
       <Info size={11} />
     </span>
   )
+}
+
+function fmtWhen(v) {
+  if (!v) return 'Never'
+  const d = new Date(v)
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleString()
 }
 
 export default function ConsoleAlertRules() {
@@ -55,6 +68,10 @@ export default function ConsoleAlertRules() {
   const [editId, setEditId]   = useState(null)
   const [saving, setSaving]   = useState(false)
   const [formError, setFormError] = useState(null)
+
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [search, setSearch] = useState('')
+  const [confirmDelete, setConfirmDelete] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -142,7 +159,7 @@ export default function ConsoleAlertRules() {
   }
 
   async function onDelete(r) {
-    if (typeof window !== 'undefined' && !window.confirm(`Delete alert rule "${r.name}"? This cannot be undone.`)) return
+    setConfirmDelete(null)
     setBusyId(r.id)
     try {
       await deleteAlertRule(r.id)
@@ -156,113 +173,139 @@ export default function ConsoleAlertRules() {
   }
 
   const activeCount = rules.filter((r) => r.active !== false).length
+  const totalFired = rules.reduce((a, r) => a + (Number(r.triggered_count) || 0), 0)
+  const neverFired = rules.filter((r) => !r.last_triggered_at).length
+
+  const visibleRules = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return rules.filter((r) => {
+      const isActive = r.active !== false
+      if (statusFilter === 'active' && !isActive) return false
+      if (statusFilter === 'paused' && isActive) return false
+      if (!q) return true
+      return [r.name, metricLabel(r.metric), r.site_filter, r.brand_filter]
+        .some((v) => String(v || '').toLowerCase().includes(q))
+    })
+  }, [rules, statusFilter, search])
+
+  // Rules per metric and firings per metric: two measures, two charts.
+  const byMetric = useMemo(() => {
+    const m = new Map(ALERT_METRICS.map((x) => [x.key, { label: x.label, rules: 0, fired: 0 }]))
+    for (const r of rules) {
+      const key = r.metric || 'unknown'
+      if (!m.has(key)) m.set(key, { label: metricLabel(key) || 'Unknown metric', rules: 0, fired: 0 })
+      const e = m.get(key)
+      e.rules += 1
+      e.fired += Number(r.triggered_count) || 0
+    }
+    return [...m.values()]
+  }, [rules])
+  const ruleBars = useMemo(() => byMetric.filter((x) => x.rules > 0).map((x) => ({ label: x.label, value: x.rules })), [byMetric])
+  const firedBars = useMemo(() => byMetric.filter((x) => x.rules > 0).map((x) => ({ label: x.label, value: x.fired })), [byMetric])
 
   return (
-    <div className="space-y-6 max-w-5xl">
+    <div className="space-y-5 max-w-7xl">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
+      <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-white flex items-center gap-2">
-            <BellRing size={20} className="text-orange-400" /> Alert Rules
+          <h1 className="flex items-center gap-2">
+            <BellRing size={18} className="text-orange-400" /> Alert Rules
           </h1>
-          <p className="text-sm text-gray-500 mt-0.5">
+          <p className="text-xs text-gray-500 mt-1">
             No-code rules that watch your fleet and notify you when a threshold is crossed.
           </p>
         </div>
-        <button onClick={load} disabled={loading}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-800 text-gray-400 hover:text-white text-xs border border-gray-700 transition-colors disabled:opacity-50">
-          <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Refresh
-        </button>
-      </div>
+        <Btn icon={RefreshCw} onClick={load} busy={loading}>Refresh</Btn>
+      </header>
 
       {/* Honest evaluation note */}
-      <div className="flex items-start gap-2 rounded-xl border border-blue-800/40 bg-blue-900/15 p-3 text-xs text-blue-200/90">
-        <Clock size={14} className="mt-0.5 flex-shrink-0 text-blue-400" />
-        <p>
-          Rules are evaluated hourly. Critical alerts notify immediately, warnings batch into a daily
-          digest (severity routing via your notification preferences).
-        </p>
+      <Note icon={Clock} tone="accent">
+        Rules are evaluated hourly. Critical alerts notify immediately, warnings batch into a daily
+        digest (severity routing via your notification preferences).
+      </Note>
+
+      {/* KPI tiles */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <StatTile label="Rules" value={loading ? 'N/A' : rules.length} icon={BellRing} />
+        <StatTile label="Active" value={loading ? 'N/A' : activeCount} tone="good" icon={Power}
+          sub={loading ? undefined : `${rules.length - activeCount} paused`} />
+        <StatTile label="Times fired" value={loading ? 'N/A' : totalFired} tone="accent" icon={AlertTriangle} sub="All rules, all time" />
+        <StatTile label="Never fired" value={loading ? 'N/A' : neverFired} tone="muted" icon={Clock} />
       </div>
 
       {/* Builder */}
-      <form onSubmit={save} className="rounded-xl border border-gray-800 bg-gray-900/50 p-4 space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-white">
-            {editId ? 'Edit alert rule' : 'New alert rule'}
-          </h3>
-          {editId && (
-            <button type="button" onClick={resetForm}
-              className="flex items-center gap-1 text-xs text-gray-500 hover:text-white">
-              <X size={12} /> Cancel edit
-            </button>
-          )}
-        </div>
-
-        {/* Name */}
-        <div>
-          <label className="block text-xs font-medium text-gray-400 mb-1">Rule name</label>
-          <input
-            value={form.name}
-            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-            placeholder="e.g. Too many high-risk tyres"
-            className="w-full px-3 py-2 rounded-lg bg-gray-950 border border-gray-700 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500"
-          />
-        </div>
-
-        {/* Plain-English condition builder */}
-        <div className="rounded-lg border border-gray-800 bg-gray-950/60 p-3">
-          <p className="text-[11px] uppercase tracking-wide text-gray-500 mb-2">Condition</p>
-          <div className="flex flex-wrap items-center gap-2 text-sm text-gray-300">
-            <span className="text-gray-500">If</span>
-            <select
-              value={form.metric}
-              onChange={(e) => setForm((f) => ({ ...f, metric: e.target.value }))}
-              className="px-2 py-1.5 rounded-lg bg-gray-900 border border-gray-700 text-sm text-white focus:outline-none focus:border-orange-500">
-              {ALERT_METRICS.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
-            </select>
-            <span className="text-gray-500">is</span>
-            <select
-              value={form.operator}
-              onChange={(e) => setForm((f) => ({ ...f, operator: e.target.value }))}
-              className="px-2 py-1.5 rounded-lg bg-gray-900 border border-gray-700 text-sm text-white focus:outline-none focus:border-orange-500">
-              {ALERT_OPERATORS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
-            </select>
-            <input
-              type="number"
-              step="any"
-              value={form.threshold}
-              onChange={(e) => setForm((f) => ({ ...f, threshold: e.target.value }))}
-              placeholder="value"
-              className="w-24 px-2 py-1.5 rounded-lg bg-gray-900 border border-gray-700 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500"
-            />
-            <span className="text-gray-500">then notify me.</span>
-          </div>
-        </div>
-
-        {/* Channels + filters */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <Panel tone={editId ? 'accent' : undefined}>
+        <PanelHeader
+          icon={editId ? Pencil : Plus}
+          title={editId ? 'Edit alert rule' : 'New alert rule'}
+          subtitle="Read it as a sentence: if the metric crosses the value, notify me."
+          actions={editId && <Btn size="xs" variant="quiet" icon={X} onClick={resetForm}>Cancel edit</Btn>}
+        />
+        <form onSubmit={save} className="space-y-4">
+          {/* Name */}
           <div>
-            <p className="text-xs font-medium text-gray-400 mb-1.5">
-              Notify via
-              <InfoDot text="How you get told when this rule fires. In-app shows a notification; email sends a message." />
-            </p>
-            <div className="flex flex-col gap-1.5">
-              <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
-                <input type="checkbox" checked={form.notifyInApp}
-                  onChange={(e) => setForm((f) => ({ ...f, notifyInApp: e.target.checked }))}
-                  className="accent-orange-500" />
-                <MonitorSmartphone size={13} className="text-gray-500" /> In-app
-              </label>
-              <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
-                <input type="checkbox" checked={form.notifyEmail}
-                  onChange={(e) => setForm((f) => ({ ...f, notifyEmail: e.target.checked }))}
-                  className="accent-orange-500" />
-                <Mail size={13} className="text-gray-500" /> Email
-              </label>
+            <label className="block text-xs font-medium text-gray-400 mb-1">Rule name</label>
+            <input
+              value={form.name}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              placeholder="e.g. Too many high-risk tyres"
+              className={INPUT}
+            />
+          </div>
+
+          {/* Plain-English condition builder */}
+          <div className="rounded-lg border border-gray-800 bg-gray-950/60 p-3">
+            <p className="text-[11px] uppercase tracking-wide text-gray-500 mb-2">Condition</p>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-gray-300">
+              <span className="text-gray-500">If</span>
+              <Select
+                value={form.metric}
+                onChange={(v) => setForm((f) => ({ ...f, metric: v }))}
+                options={ALERT_METRICS.map((m) => ({ value: m.key, label: m.label }))}
+                className="w-52"
+              />
+              <span className="text-gray-500">is</span>
+              <Select
+                value={form.operator}
+                onChange={(v) => setForm((f) => ({ ...f, operator: v }))}
+                options={ALERT_OPERATORS.map((o) => ({ value: o.key, label: o.label }))}
+                className="w-36"
+              />
+              <input
+                type="number"
+                step="any"
+                value={form.threshold}
+                onChange={(e) => setForm((f) => ({ ...f, threshold: e.target.value }))}
+                placeholder="value"
+                className={`${INPUT} w-24`}
+              />
+              <span className="text-gray-500">then notify me.</span>
             </div>
           </div>
 
-          <div className="space-y-2">
+          {/* Channels + filters */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <p className="text-xs font-medium text-gray-400 mb-1.5">
+                Notify via
+                <InfoDot text="How you get told when this rule fires. In-app shows a notification; email sends a message." />
+              </p>
+              <div className="flex flex-col gap-1.5">
+                <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer">
+                  <input type="checkbox" checked={form.notifyInApp}
+                    onChange={(e) => setForm((f) => ({ ...f, notifyInApp: e.target.checked }))}
+                    className="accent-orange-500" />
+                  <MonitorSmartphone size={13} className="text-gray-500" /> In-app
+                </label>
+                <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer">
+                  <input type="checkbox" checked={form.notifyEmail}
+                    onChange={(e) => setForm((f) => ({ ...f, notifyEmail: e.target.checked }))}
+                    className="accent-orange-500" />
+                  <Mail size={13} className="text-gray-500" /> Email
+                </label>
+              </div>
+            </div>
+
             <div>
               <label className="block text-xs font-medium text-gray-400 mb-1">
                 Site filter <span className="text-gray-600">(optional)</span>
@@ -272,7 +315,7 @@ export default function ConsoleAlertRules() {
                 value={form.siteFilter}
                 onChange={(e) => setForm((f) => ({ ...f, siteFilter: e.target.value }))}
                 placeholder="All sites"
-                className="w-full px-3 py-1.5 rounded-lg bg-gray-950 border border-gray-700 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500"
+                className={INPUT}
               />
             </div>
             <div>
@@ -284,131 +327,162 @@ export default function ConsoleAlertRules() {
                 value={form.brandFilter}
                 onChange={(e) => setForm((f) => ({ ...f, brandFilter: e.target.value }))}
                 placeholder="All brands"
-                className="w-full px-3 py-1.5 rounded-lg bg-gray-950 border border-gray-700 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500"
+                className={INPUT}
               />
             </div>
           </div>
-        </div>
 
-        {/* Active + submit */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-          <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
-            <input type="checkbox" checked={form.active}
-              onChange={(e) => setForm((f) => ({ ...f, active: e.target.checked }))}
-              className="accent-orange-500" />
-            Rule is active
-            <InfoDot text="Inactive rules are kept but never evaluated." />
-          </label>
-          <div className="flex items-center gap-2">
-            {formError && (
-              <span className="flex items-center gap-1 text-xs text-red-300">
-                <AlertTriangle size={12} /> {formError}
-              </span>
-            )}
-            <button type="submit" disabled={saving || !!validation}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-orange-600 hover:bg-orange-500 text-white text-sm font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-              {editId ? <Save size={14} /> : <Plus size={14} />}
-              {saving ? 'Saving...' : editId ? 'Save changes' : 'Add rule'}
-            </button>
+          {/* Active + submit */}
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+            <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer">
+              <input type="checkbox" checked={form.active}
+                onChange={(e) => setForm((f) => ({ ...f, active: e.target.checked }))}
+                className="accent-orange-500" />
+              Rule is active
+              <InfoDot text="Inactive rules are kept but never evaluated." />
+            </label>
+            <div className="flex items-center gap-2">
+              {(formError || (validation && form.name)) && (
+                <span className="flex items-center gap-1 text-xs text-red-300">
+                  <AlertTriangle size={12} /> {formError || validation}
+                </span>
+              )}
+              <Btn type="submit" variant="primary" size="md" icon={editId ? Save : Plus}
+                busy={saving} disabled={!!validation}>
+                {saving ? 'Saving' : editId ? 'Save changes' : 'Add rule'}
+              </Btn>
+            </div>
           </div>
+        </form>
+      </Panel>
+
+      {/* Charts */}
+      {!loading && !error && rules.length > 0 && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Panel>
+            <PanelHeader icon={BarChart3} title="Rules per metric" subtitle="How many rules watch each signal." />
+            <BarsChart bars={ruleBars} summary={ruleBars.map((b) => `${b.label} ${b.value}`).join(', ')} />
+          </Panel>
+          <Panel>
+            <PanelHeader icon={AlertTriangle} title="Times fired per metric" subtitle="All-time firings, summed across the rules on each metric." />
+            <BarsChart bars={firedBars} summary={firedBars.map((b) => `${b.label} ${b.value}`).join(', ')}
+              emptyText="None of these rules has fired yet." />
+          </Panel>
         </div>
-      </form>
+      )}
 
       {/* Existing rules */}
-      <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-white">
-            Your alert rules {rules.length > 0 && (
-              <span className="text-xs font-normal text-gray-500">
-                ({activeCount} active of {rules.length})
-              </span>
-            )}
-          </h3>
-        </div>
+      <Panel>
+        <PanelHeader
+          icon={BellRing}
+          title="Your alert rules"
+          subtitle={rules.length > 0 ? `${activeCount} active of ${rules.length}` : undefined}
+        />
+        <Toolbar className="mb-3">
+          <Segmented
+            value={statusFilter}
+            onChange={setStatusFilter}
+            options={[
+              { key: 'all', label: 'All', count: rules.length },
+              { key: 'active', label: 'Active', count: activeCount },
+              { key: 'paused', label: 'Paused', count: rules.length - activeCount },
+            ]}
+          />
+          <SearchInput value={search} onChange={setSearch} placeholder="Search name, metric, site or brand" className="w-64" />
+        </Toolbar>
 
-        {error && (
-          <div className="flex items-center justify-between gap-3 rounded-lg border border-red-800/50 bg-red-900/20 p-3 text-sm text-red-200">
-            <span className="flex items-center gap-2"><AlertTriangle size={14} /> {error}</span>
-            <button onClick={load} className="text-xs text-red-300 underline hover:text-red-200">Retry</button>
-          </div>
-        )}
-
-        {loading && !error && (
-          <div className="flex items-center gap-2 text-sm text-gray-500 py-8 justify-center">
-            <RefreshCw size={14} className="animate-spin" /> Loading alert rules...
-          </div>
-        )}
-
-        {!loading && !error && rules.length === 0 && (
-          <div className="text-center py-10">
-            <BellRing size={28} className="mx-auto text-gray-700 mb-2" />
-            <p className="text-sm text-gray-500">No alert rules yet - add one to get notified.</p>
-          </div>
-        )}
-
-        {!loading && !error && rules.length > 0 && (
-          <div className="space-y-2">
-            {rules.map((r) => {
-              const isActive = r.active !== false
-              return (
-                <div key={r.id}
-                  className={`flex flex-wrap items-center gap-3 rounded-lg border p-3 transition-colors ${
-                    isActive ? 'border-gray-800 bg-gray-950/50' : 'border-gray-800/60 bg-gray-950/20 opacity-70'
-                  }`}>
-                  <div className="flex-1 min-w-[220px]">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-semibold text-white truncate">{r.name || 'Untitled rule'}</p>
-                      {isActive
-                        ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-900/40 text-green-300 border border-green-700/40">Active</span>
-                        : <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 border border-gray-700">Paused</span>}
-                    </div>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      If <span className="text-gray-200">{metricLabel(r.metric)}</span>{' '}
-                      is <span className="text-gray-200">{operatorLabel(r.operator)}</span>{' '}
-                      <span className="text-gray-200">{r.threshold ?? '-'}</span>
-                      {r.site_filter ? <span className="text-gray-500"> | site {r.site_filter}</span> : null}
-                      {r.brand_filter ? <span className="text-gray-500"> | brand {r.brand_filter}</span> : null}
-                    </p>
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1.5 text-[11px] text-gray-500">
-                      <span className="flex items-center gap-1">
-                        {r.notify_in_app !== false && <MonitorSmartphone size={11} />}
-                        {r.notify_email && <Mail size={11} />}
-                        {r.notify_in_app === false && !r.notify_email ? 'No channel' : 'Notify'}
+        {error ? (
+          <ErrorState message={error} onRetry={load} />
+        ) : loading ? (
+          <LoadingState label="Loading alert rules" />
+        ) : rules.length === 0 ? (
+          <EmptyState icon={BellRing} title="No alert rules yet" reason="Add one above to get notified when a threshold is crossed." />
+        ) : visibleRules.length === 0 ? (
+          <EmptyState icon={BellRing} title="No rules match" reason="Nothing matches this status and search. Clear the filters to see every rule." />
+        ) : (
+          <Table>
+            <THead>
+              <Th>Rule</Th>
+              <Th>Condition</Th>
+              <Th>Channels</Th>
+              <Th align="right">Fired</Th>
+              <Th>Last fired</Th>
+              <Th>Status</Th>
+              <Th align="right">Actions</Th>
+            </THead>
+            <tbody>
+              {visibleRules.map((r) => {
+                const isActive = r.active !== false
+                const noChannel = r.notify_in_app === false && !r.notify_email
+                return (
+                  <Tr key={r.id} className={isActive ? '' : 'opacity-70'}>
+                    <Td className="max-w-[220px]">
+                      <span className="text-gray-200 font-medium line-clamp-2" title={r.name || ''}>{r.name || 'Untitled rule'}</span>
+                    </Td>
+                    <Td>
+                      <span className="text-gray-400">
+                        If <span className="text-gray-200">{metricLabel(r.metric)}</span>{' '}
+                        is <span className="text-gray-200">{operatorLabel(r.operator)}</span>{' '}
+                        <span className="text-gray-200 tabular-nums">{r.threshold ?? 'N/A'}</span>
                       </span>
-                      <span className="flex items-center gap-1">
-                        <CheckCircle2 size={11} /> Fired {r.triggered_count ?? 0} time{(r.triggered_count ?? 0) === 1 ? '' : 's'}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Clock size={11} /> {r.last_triggered_at
-                          ? `Last ${new Date(r.last_triggered_at).toLocaleString()}`
-                          : 'Never triggered'}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <button onClick={() => onToggle(r)} disabled={busyId === r.id} title={isActive ? 'Pause rule' : 'Activate rule'}
-                      className={`p-1.5 rounded-lg border transition-colors disabled:opacity-40 ${
-                        isActive
-                          ? 'border-gray-700 text-green-400 hover:bg-gray-800'
-                          : 'border-gray-700 text-gray-500 hover:bg-gray-800 hover:text-white'
-                      }`}>
-                      <Power size={14} />
-                    </button>
-                    <button onClick={() => startEdit(r)} disabled={busyId === r.id} title="Edit rule"
-                      className="p-1.5 rounded-lg border border-gray-700 text-gray-400 hover:bg-gray-800 hover:text-white transition-colors disabled:opacity-40">
-                      <Pencil size={14} />
-                    </button>
-                    <button onClick={() => onDelete(r)} disabled={busyId === r.id} title="Delete rule"
-                      className="p-1.5 rounded-lg border border-gray-700 text-red-400 hover:bg-red-900/30 transition-colors disabled:opacity-40">
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+                      {(r.site_filter || r.brand_filter) && (
+                        <span className="block text-[10px] text-gray-500 mt-0.5">
+                          {r.site_filter ? `site ${r.site_filter}` : ''}
+                          {r.site_filter && r.brand_filter ? ' | ' : ''}
+                          {r.brand_filter ? `brand ${r.brand_filter}` : ''}
+                        </span>
+                      )}
+                    </Td>
+                    <Td nowrap>
+                      <div className="flex gap-1">
+                        {r.notify_in_app !== false && <Badge tone="default" icon={MonitorSmartphone}>In-app</Badge>}
+                        {r.notify_email && <Badge tone="default" icon={Mail}>Email</Badge>}
+                        {noChannel && <Badge tone="warning">No channel</Badge>}
+                      </div>
+                    </Td>
+                    <Td align="right"><span className="tabular-nums text-gray-300">{r.triggered_count ?? 0}</span></Td>
+                    <Td nowrap><span className="text-gray-500">{fmtWhen(r.last_triggered_at)}</span></Td>
+                    <Td>{isActive ? <Badge tone="good">Active</Badge> : <Badge tone="quiet">Paused</Badge>}</Td>
+                    <Td align="right" nowrap>
+                      <div className="inline-flex items-center gap-1">
+                        <Btn size="xs" variant="ghost" icon={Power} onClick={() => onToggle(r)} busy={busyId === r.id}
+                          title={isActive ? 'Pause rule' : 'Activate rule'}>
+                          {isActive ? 'Pause' : 'Activate'}
+                        </Btn>
+                        <Btn size="xs" variant="ghost" icon={Pencil} onClick={() => startEdit(r)} disabled={busyId === r.id} title="Edit rule">
+                          Edit
+                        </Btn>
+                        <Btn size="xs" variant="quiet" icon={Trash2} onClick={() => setConfirmDelete(r)} disabled={busyId === r.id} title="Delete rule">
+                          Delete
+                        </Btn>
+                      </div>
+                    </Td>
+                  </Tr>
+                )
+              })}
+            </tbody>
+          </Table>
         )}
-      </div>
+      </Panel>
+
+      <Modal
+        open={!!confirmDelete}
+        title="Delete alert rule?"
+        subtitle="This cannot be undone."
+        onClose={() => setConfirmDelete(null)}
+        width="max-w-md"
+        footer={(
+          <>
+            <Btn onClick={() => setConfirmDelete(null)}>Cancel</Btn>
+            <Btn variant="danger" icon={Trash2} onClick={() => onDelete(confirmDelete)}>Delete rule</Btn>
+          </>
+        )}
+      >
+        <p className="text-sm text-gray-300">
+          The rule <span className="text-gray-100 font-medium">{confirmDelete?.name || 'Untitled rule'}</span> will
+          stop being evaluated and its firing history on this rule is removed with it.
+        </p>
+      </Modal>
     </div>
   )
 }

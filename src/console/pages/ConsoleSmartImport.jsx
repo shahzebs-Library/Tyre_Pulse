@@ -22,10 +22,15 @@
  */
 import { useCallback, useMemo, useRef, useState } from 'react'
 import {
-  UploadCloud, Wand2, FileSpreadsheet, CheckCircle2, AlertTriangle, Loader2,
-  Database, ArrowRight, RefreshCw, X, ShieldCheck, Info,
+  UploadCloud, Wand2, FileSpreadsheet, CheckCircle2, AlertTriangle,
+  Database, ArrowRight, RefreshCw, ShieldCheck, Info, PieChart,
 } from 'lucide-react'
 import { useConsoleAuth } from '../ConsoleAuthContext'
+import {
+  Panel, PanelHeader, Note, StatTile, Badge, Code, Btn, Select, Table, THead, Th, Tr, Td,
+  LoadingState, ErrorState,
+} from '../components/ui'
+import { ShareChart, STATUS, useChartTheme } from '../components/ui/charts'
 import {
   parseWorkbook, detectModule, rankModules, suggestMapping, transformRow,
   validateRow, rowFingerprint, MODULE_FIELDS, MODULE_TABLES,
@@ -70,10 +75,10 @@ function sanitizeEnums(transformed, mapped, custom, issues) {
 }
 
 function confBadge(conf) {
-  if (conf >= 90) return { text: 'Auto', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' }
-  if (conf >= 60) return { text: `${conf}%`, cls: 'bg-amber-500/15 text-amber-300 border-amber-500/30' }
-  if (conf > 0) return { text: 'Review', cls: 'bg-orange-500/15 text-orange-300 border-orange-500/30' }
-  return { text: 'Custom', cls: 'bg-gray-500/15 text-gray-300 border-gray-500/40' }
+  if (conf >= 90) return { text: 'Auto', tone: 'good' }
+  if (conf >= 60) return { text: `${conf}%`, tone: 'warning' }
+  if (conf > 0) return { text: 'Review', tone: 'accent' }
+  return { text: 'Custom', tone: 'quiet' }
 }
 
 export default function ConsoleSmartImport() {
@@ -277,253 +282,219 @@ export default function ConsoleSmartImport() {
   function reset() {
     setPhase('idle'); setParsed(null); setMapping([]); setModule(''); setRanked([])
     setResult(null); setProgress(null); setError(''); setFileName('')
+    // A repeat warning belongs to the file it was raised for.
+    setFingerprint(null); setRepeatAck(false)
   }
 
+
+  const moduleOptions = rankedModules.map((r) => ({ value: r.module, label: `${moduleLabel(r.module)} (${r.score}% match)` }))
+  const fieldOptions = fields.map((f) => ({ value: f.key, label: `${f.label}${f.required ? ' *' : ''}` }))
+  const canCommit = phase !== 'committing' && previewInfo && previewInfo.ready + previewInfo.warning > 0 && (!fingerprint || repeatAck)
+  const mappedCount = mapping.filter((m) => m.target).length
+
+  const commitLabel = phase === 'committing'
+    ? (progress?.phase === 'preparing'
+      ? 'Preparing rows'
+      : progress?.phase === 'uploading'
+        ? `Uploading ${fmtNum(progress.inserted)} of ${fmtNum(progress.total)}`
+        : `Importing${progress ? ` ${fmtNum(progress.inserted)} saved` : ''}`)
+    : `Import ${previewInfo?.isEstimate ? `up to ${fmtNum(previewInfo?.total || 0)}` : fmtNum((previewInfo?.ready || 0) + (previewInfo?.warning || 0))} rows`
+
   return (
-    <div className="p-6 max-w-6xl mx-auto text-gray-100">
-      <div className="flex items-center gap-3 mb-1">
-        <div className="w-10 h-10 rounded-xl bg-orange-500/15 border border-orange-500/30 flex items-center justify-center">
-          <Wand2 className="text-orange-400" size={20} />
-        </div>
+    <div className="space-y-5 max-w-7xl">
+      <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold">Smart Import</h1>
-          <p className="text-sm text-gray-400">Upload any Excel or CSV file. The console detects what it is, maps the columns, and loads it.</p>
+          <h1 className="flex items-center gap-2"><Wand2 size={18} className="text-orange-400" /> Smart Import</h1>
+          <p className="text-xs text-gray-500 mt-1">Upload any Excel or CSV file. The console detects what it is, maps the columns, and loads it.</p>
         </div>
         {phase !== 'idle' && (
-          <button onClick={reset} className="ml-auto inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border border-gray-700 hover:bg-gray-800">
-            <RefreshCw size={14} /> Start over
-          </button>
+          <Btn icon={RefreshCw} onClick={reset} disabled={phase === 'committing' || phase === 'parsing'}>Start over</Btn>
         )}
-      </div>
+      </header>
 
-      {error && (
-        <div className="mt-4 flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-          <AlertTriangle size={16} className="mt-0.5 shrink-0" /> <span>{error}</span>
-        </div>
-      )}
+      <ErrorState message={error} />
 
-      {/* Upload */}
       {phase === 'idle' && (
-        <label className="mt-6 block cursor-pointer rounded-2xl border-2 border-dashed border-gray-700 hover:border-orange-500/50 bg-gray-900/40 p-12 text-center transition">
+        <label className="block cursor-pointer rounded-xl border-2 border-dashed border-gray-800 hover:border-orange-600/60 bg-gray-900/50 p-12 text-center transition-colors">
           <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv,.tsv,.txt" className="hidden" onChange={onFile} />
-          <UploadCloud className="mx-auto text-orange-400" size={40} />
-          <div className="mt-3 font-semibold">Choose a file or drag it here</div>
-          <div className="text-sm text-gray-400 mt-1">Excel (.xlsx, .xls) or CSV. Vehicles, tyres, stock, accidents, inspections, work orders, warranty, gate passes, suppliers, drivers.</div>
+          <UploadCloud className="mx-auto text-orange-400" size={36} />
+          <p className="mt-3 text-sm font-semibold text-gray-200">Choose a file or drag it here</p>
+          <p className="text-xs text-gray-500 mt-1">Excel (.xlsx, .xls) or CSV. Vehicles, tyres, stock, accidents, inspections, work orders, warranty, gate passes, suppliers, drivers.</p>
         </label>
       )}
 
-      {phase === 'parsing' && (
-        <div className="mt-10 flex items-center justify-center gap-2 text-gray-300">
-          <Loader2 className="animate-spin" size={18} /> Reading and analysing the file...
-        </div>
-      )}
+      {phase === 'parsing' && <LoadingState label="Reading and analysing the file" />}
 
-      {/* Ready: detection + mapping + preview */}
       {(phase === 'ready' || phase === 'committing' || phase === 'done') && sheet && (
-        <div className="mt-6 space-y-5">
-          {/* File + sheet + detection */}
-          <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
-            <div className="flex flex-wrap items-center gap-3">
-              <FileSpreadsheet className="text-orange-400" size={18} />
-              <span className="font-medium">{fileName}</span>
-              <span className="text-xs text-gray-400">{fmtNum(sheet.rows.length)} rows | {sheet.columns.length} columns</span>
-              {parsed.sheets.length > 1 && (
-                <select value={sheetIdx} onChange={(e) => pickSheet(Number(e.target.value))}
-                  className="ml-auto bg-gray-800 border border-gray-700 rounded-lg text-sm px-2 py-1">
-                  {parsed.sheets.map((s, i) => <option key={i} value={i}>{s.name} ({fmtNum(s.rows.length)})</option>)}
-                </select>
-              )}
-            </div>
+        <div className="space-y-5">
+          <Panel>
+            <PanelHeader icon={FileSpreadsheet} title={fileName || 'Uploaded file'}
+              subtitle={`${fmtNum(sheet.rows.length)} rows | ${sheet.columns.length} columns`}
+              actions={parsed.sheets.length > 1 && (
+                <Select value={String(sheetIdx)} onChange={(v) => pickSheet(Number(v))} className="w-56"
+                  options={parsed.sheets.map((s, i) => ({ value: String(i), label: `${s.name} (${fmtNum(s.rows.length)})` }))} />
+              )} />
 
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="text-xs uppercase tracking-wide text-gray-400">Detected as</label>
+                <p className="text-[11px] uppercase tracking-wide text-gray-500">Detected as</p>
                 <div className="mt-1 flex items-center gap-2">
-                  <select value={module} onChange={(e) => changeModule(e.target.value)}
-                    className="flex-1 bg-gray-800 border border-gray-700 rounded-lg text-sm px-3 py-2">
-                    {rankedModules.map((r) => (
-                      <option key={r.module} value={r.module}>{moduleLabel(r.module)} ({r.score}% match)</option>
-                    ))}
-                  </select>
+                  <Select value={module} onChange={changeModule} options={moduleOptions} className="flex-1" disabled={phase !== 'ready'} />
                   {confident
-                    ? <span className="inline-flex items-center gap-1 text-xs text-emerald-300"><CheckCircle2 size={14} /> confident</span>
-                    : <span className="inline-flex items-center gap-1 text-xs text-amber-300"><Info size={14} /> please confirm</span>}
+                    ? <Badge tone="good" icon={CheckCircle2}>Confident</Badge>
+                    : <Badge tone="warning" icon={Info}>Please confirm</Badge>}
                 </div>
-                <p className="mt-1 text-xs text-gray-500">Loads into <span className="text-gray-300 font-mono">{MODULE_TABLES[module]}</span></p>
+                <p className="mt-1 text-xs text-gray-500">Loads into <Code>{MODULE_TABLES[module] || 'N/A'}</Code></p>
               </div>
               <div>
-                <label className="text-xs uppercase tracking-wide text-gray-400">Country (optional)</label>
+                <p className="text-[11px] uppercase tracking-wide text-gray-500">Country (optional)</p>
                 <input value={country} onChange={(e) => setCountry(e.target.value)} placeholder="Leave blank to use your default scope"
-                  className="mt-1 w-full bg-gray-800 border border-gray-700 rounded-lg text-sm px-3 py-2" />
+                  disabled={phase !== 'ready'} aria-label="Country"
+                  className="mt-1 w-full px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 placeholder-gray-600 focus:border-gray-700 focus:outline-none disabled:opacity-50" />
                 <p className="mt-1 text-xs text-gray-500">Stamps every imported row with this country for data isolation.</p>
               </div>
             </div>
-          </div>
+          </Panel>
 
-          {/* Very large file guidance (non-blocking) */}
           {sheet.rows.length > LARGE_FILE_ROWS && (
-            <div className="flex items-start gap-2 rounded-lg border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-sm text-sky-200">
-              <Info size={16} className="mt-0.5 shrink-0" />
-              <span>
-                This sheet has {fmtNum(sheet.rows.length)} rows. You can import it here, but for very large files the fastest path is the Supabase Table Editor "Import data from CSV" option, which streams the whole file and stamps your organisation automatically. The in-app import below will still work; it just takes longer.
-              </span>
-            </div>
+            <Note icon={Info} tone="accent">
+              This sheet has {fmtNum(sheet.rows.length)} rows. You can import it here, but for very large files the fastest path is the Supabase Table Editor Import data from CSV option, which streams the whole file and stamps your organisation automatically. The in-app import below will still work; it just takes longer.
+            </Note>
           )}
 
-          {/* Mapping table */}
-          <div className="rounded-xl border border-gray-800 bg-gray-900/50 overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-800 flex items-center gap-2">
-              <Wand2 size={16} className="text-orange-400" />
-              <span className="font-medium text-sm">Column mapping</span>
-              <span className="text-xs text-gray-500">auto-filled - adjust any row</span>
+          <Panel flush>
+            <div className="px-4 pt-4">
+              <PanelHeader icon={Wand2} title="Column mapping"
+                subtitle={`Auto-filled. ${fmtNum(mappedCount)} of ${fmtNum(mapping.length)} columns mapped; adjust any row.`} />
             </div>
-            <div className="max-h-72 overflow-auto">
-              <table className="w-full text-sm">
-                <thead className="text-xs uppercase text-gray-500 bg-gray-900/70 sticky top-0">
-                  <tr>
-                    <th className="text-left px-4 py-2">File column</th>
-                    <th className="text-left px-4 py-2">Maps to</th>
-                    <th className="text-left px-4 py-2 w-24">Match</th>
-                  </tr>
-                </thead>
+            <div className="max-h-80 overflow-auto px-4 pb-4">
+              <Table>
+                <THead><Th>File column</Th><Th>Maps to</Th><Th>Match</Th></THead>
                 <tbody>
                   {mapping.map((m) => {
                     const b = confBadge(m.confidence)
                     return (
-                      <tr key={m.sourceHeader} className="border-t border-gray-800/70">
-                        <td className="px-4 py-2 text-gray-300">{m.sourceHeader}</td>
-                        <td className="px-4 py-2">
-                          <select value={m.target || ''} onChange={(e) => setTarget(m.sourceHeader, e.target.value)}
-                            className="w-full bg-gray-800 border border-gray-700 rounded-lg text-sm px-2 py-1.5">
-                            <option value="">Keep as-is (not imported)</option>
-                            {fields.map((f) => (
-                              <option key={f.key} value={f.key}>{f.label}{f.required ? ' *' : ''}</option>
-                            ))}
-                          </select>
-                        </td>
-                        <td className="px-4 py-2">
-                          <span className={`inline-block text-xs px-2 py-0.5 rounded border ${b.cls}`}>{b.text}</span>
-                        </td>
-                      </tr>
+                      <Tr key={m.sourceHeader}>
+                        <Td><span className="text-gray-300">{m.sourceHeader}</span></Td>
+                        <Td>
+                          <Select value={m.target || ''} onChange={(v) => setTarget(m.sourceHeader, v)}
+                            placeholder="Keep as-is (not imported)" options={fieldOptions} disabled={phase !== 'ready'} />
+                        </Td>
+                        <Td><Badge tone={b.tone}>{b.text}</Badge></Td>
+                      </Tr>
                     )
                   })}
                 </tbody>
-              </table>
+              </Table>
             </div>
-          </div>
+          </Panel>
 
-          {/* Preview + counts */}
           {previewInfo && (
-            <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
-              <div className="flex flex-wrap gap-3 text-sm">
-                <span className="inline-flex items-center gap-1.5 text-emerald-300"><CheckCircle2 size={15} /> {fmtNum(previewInfo.ready)} ready</span>
-                <span className="inline-flex items-center gap-1.5 text-amber-300"><Info size={15} /> {fmtNum(previewInfo.warning)} needs review</span>
-                <span className="inline-flex items-center gap-1.5 text-red-300"><AlertTriangle size={15} /> {fmtNum(previewInfo.errorRows)} would fail</span>
+            <Panel>
+              <PanelHeader icon={PieChart} title="Preview"
+                subtitle={previewInfo.isEstimate
+                  ? `Estimate based on the first ${fmtNum(previewInfo.scanned)} of ${fmtNum(previewInfo.total)} rows. Every row is checked when you import.`
+                  : `All ${fmtNum(previewInfo.total)} rows checked.`} />
+              <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)] items-center">
+                <PreviewShare info={previewInfo} />
+                <div className="grid grid-cols-3 gap-2">
+                  <StatTile label="Ready" value={fmtNum(previewInfo.ready)} tone="good" icon={CheckCircle2} />
+                  <StatTile label="Needs review" value={fmtNum(previewInfo.warning)} tone="warning" icon={Info} />
+                  <StatTile label="Would fail" value={fmtNum(previewInfo.errorRows)} tone={previewInfo.errorRows ? 'danger' : 'default'} icon={AlertTriangle} />
+                </div>
               </div>
-              {previewInfo.isEstimate && (
-                <p className="mt-2 text-xs text-gray-500">Estimate based on the first {fmtNum(previewInfo.scanned)} of {fmtNum(previewInfo.total)} rows. Every row is checked when you import.</p>
-              )}
+
               {requiredMissing.length > 0 && (
-                <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-                  <AlertTriangle size={14} className="mt-0.5 shrink-0" />
-                  <span>Required field(s) not yet mapped: <strong>{requiredMissing.join(', ')}</strong>. Rows without them will be skipped.</span>
+                <div className="mt-3">
+                  <Note icon={AlertTriangle} tone="warning">
+                    Required field(s) not yet mapped: <strong>{requiredMissing.join(', ')}</strong>. Rows without them will be skipped.
+                  </Note>
                 </div>
               )}
-              <div className="mt-3 max-h-64 overflow-auto rounded-lg border border-gray-800">
-                <table className="w-full text-xs">
-                  <thead className="text-gray-500 bg-gray-900/70 sticky top-0">
-                    <tr>
-                      <th className="text-left px-3 py-1.5 w-16">Status</th>
-                      {previewInfo.activeTargets.slice(0, 6).map((t) => (
-                        <th key={t} className="text-left px-3 py-1.5">{(fields.find((f) => f.key === t) || {}).label || t}</th>
-                      ))}
-                    </tr>
-                  </thead>
+
+              <div className="mt-3 max-h-72 overflow-auto">
+                <Table>
+                  <THead>
+                    <Th>Status</Th>
+                    {previewInfo.activeTargets.slice(0, 6).map((t) => (
+                      <Th key={t}>{(fields.find((f) => f.key === t) || {}).label || t}</Th>
+                    ))}
+                  </THead>
                   <tbody>
                     {previewInfo.sampleOut.map((row, i) => (
-                      <tr key={i} className="border-t border-gray-800/70">
-                        <td className="px-3 py-1.5">
+                      <Tr key={i}>
+                        <Td>
                           {row.status === 'error'
-                            ? <span className="text-red-300">fail</span>
-                            : row.status === 'warning' ? <span className="text-amber-300">review</span> : <span className="text-emerald-300">ok</span>}
-                        </td>
+                            ? <Badge tone="danger">Fail</Badge>
+                            : row.status === 'warning' ? <Badge tone="warning">Review</Badge> : <Badge tone="good">OK</Badge>}
+                        </Td>
                         {previewInfo.activeTargets.slice(0, 6).map((t) => (
-                          <td key={t} className="px-3 py-1.5 text-gray-300 truncate max-w-[160px]">{row.t[t] == null ? '' : String(row.t[t])}</td>
+                          <Td key={t}><span className="block truncate max-w-[160px] text-gray-300">{row.t[t] == null ? '' : String(row.t[t])}</span></Td>
                         ))}
-                      </tr>
+                      </Tr>
                     ))}
                   </tbody>
-                </table>
+                </Table>
               </div>
-            </div>
+            </Panel>
           )}
 
-          {/* This exact file has been loaded before */}
           {fingerprint && (
-            <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 space-y-2">
-              <p className="text-sm font-semibold text-amber-300">This file has been uploaded before</p>
-              <p className="text-xs text-amber-200">
-                The same file content was loaded
-                {fingerprint.first_seen_at ? ` on ${String(fingerprint.first_seen_at).slice(0, 10)}` : ' previously'}
-                {fingerprint.filename ? ` as "${fingerprint.filename}"` : ''}.
-                Committing it again adds those rows a second time.
-              </p>
+            <Panel tone="warning">
+              <PanelHeader icon={AlertTriangle} tone="warning" title="This file has been uploaded before"
+                subtitle={`The same file content was loaded${fingerprint.first_seen_at ? ` on ${String(fingerprint.first_seen_at).slice(0, 10)}` : ' previously'}${fingerprint.filename ? ` as "${fingerprint.filename}"` : ''}. Committing it again adds those rows a second time.`} />
               <label className="flex items-center gap-2 text-xs text-amber-200 cursor-pointer">
-                <input type="checkbox" checked={repeatAck} onChange={(e) => setRepeatAck(e.target.checked)} />
+                <input type="checkbox" checked={repeatAck} onChange={(e) => setRepeatAck(e.target.checked)} disabled={phase !== 'ready'} />
                 I know this is a repeat and I want to import it anyway
               </label>
-            </div>
+            </Panel>
           )}
 
-          {/* Commit */}
           {phase !== 'done' && (
-            <div className="flex items-center gap-3">
-              <button onClick={commit} disabled={phase === 'committing' || !previewInfo || previewInfo.ready + previewInfo.warning === 0 || (!!fingerprint && !repeatAck)}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-medium disabled:opacity-50">
-                {phase === 'committing'
-                  ? (progress?.phase === 'preparing'
-                    ? <><Loader2 className="animate-spin" size={16} /> Preparing rows...</>
-                    : progress?.phase === 'uploading'
-                      ? <><Loader2 className="animate-spin" size={16} /> Uploading {fmtNum(progress.inserted)} of {fmtNum(progress.total)}...</>
-                      : <><Loader2 className="animate-spin" size={16} /> Importing{progress ? ` ${fmtNum(progress.inserted)} saved...` : '...'}</>)
-                  : <><Database size={16} /> Import {previewInfo?.isEstimate ? `up to ${fmtNum(previewInfo?.total || 0)}` : fmtNum((previewInfo?.ready || 0) + (previewInfo?.warning || 0))} rows <ArrowRight size={15} /></>}
-              </button>
+            <div className="flex flex-wrap items-center gap-3">
+              <Btn variant="primary" size="md" icon={phase === 'committing' ? undefined : Database}
+                busy={phase === 'committing'} onClick={commit} disabled={!canCommit}>
+                {commitLabel}{phase !== 'committing' && <ArrowRight size={14} />}
+              </Btn>
               <span className="text-xs text-gray-500">Rows that would fail are skipped automatically.</span>
             </div>
           )}
         </div>
       )}
 
-      {/* Result */}
       {phase === 'done' && result && (
-        <div className="mt-6 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-5">
-          <div className="flex items-center gap-2 text-emerald-300 font-semibold">
-            <ShieldCheck size={18} /> Import complete
+        <Panel tone={Number(result.failed) > 0 ? 'warning' : 'accent'}>
+          <PanelHeader icon={Number(result.failed) > 0 ? AlertTriangle : ShieldCheck}
+            tone={Number(result.failed) > 0 ? 'warning' : 'default'}
+            title={Number(result.failed) > 0 ? 'Import finished with failures' : 'Import complete'}
+            subtitle={`Loaded into ${result.table || 'N/A'} (${moduleLabel(result.module)}). This run is recorded in the audit trail and can be reversed from the Data Intake history.`} />
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <StatTile label="Inserted" value={fmtNum(result.inserted || 0)} tone="good" />
+            <StatTile label="Merged" value={fmtNum(result.merged || 0)} tone="accent" />
+            <StatTile label="Skipped" value={fmtNum(result.skipped || 0)} tone={result.skipped ? 'warning' : 'default'} />
+            <StatTile label="Failed" value={fmtNum(result.failed || 0)} tone={result.failed ? 'danger' : 'default'} />
           </div>
-          <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-            <Stat label="Inserted" value={result.inserted} tone="emerald" />
-            <Stat label="Merged" value={result.merged} tone="sky" />
-            <Stat label="Skipped" value={result.skipped} tone="amber" />
-            <Stat label="Failed" value={result.failed} tone="red" />
+          <div className="mt-4">
+            <Btn icon={UploadCloud} onClick={reset}>Import another file</Btn>
           </div>
-          <p className="mt-3 text-xs text-gray-400">Loaded into <span className="font-mono text-gray-300">{result.table}</span> ({moduleLabel(result.module)}). It is now live across the app. This run is recorded in the audit trail and can be reversed from the Data Intake history.</p>
-          <button onClick={reset} className="mt-4 inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700">
-            <UploadCloud size={15} /> Import another file
-          </button>
-        </div>
+        </Panel>
       )}
     </div>
   )
 }
 
-function Stat({ label, value, tone }) {
-  const tones = {
-    emerald: 'text-emerald-300', sky: 'text-sky-300', amber: 'text-amber-300', red: 'text-red-300',
-  }
+/** Ready / review / fail as shares of the scanned rows, in the reserved status colours. */
+function PreviewShare({ info }) {
+  const theme = useChartTheme()
+  const parts = [
+    { label: 'Ready', value: info.ready, color: STATUS[theme].good },
+    { label: 'Needs review', value: info.warning, color: STATUS[theme].medium },
+    { label: 'Would fail', value: info.errorRows, color: STATUS[theme].critical },
+  ]
   return (
-    <div className="rounded-lg border border-gray-800 bg-gray-900/60 px-3 py-2">
-      <div className="text-xs text-gray-500">{label}</div>
-      <div className={`text-lg font-bold ${tones[tone] || 'text-gray-200'}`}>{fmtNum(value || 0)}</div>
-    </div>
+    <ShareChart parts={parts} height={150}
+      center={{ value: fmtNum(info.scanned), label: info.isEstimate ? 'sampled' : 'rows' }}
+      summary={`Ready ${info.ready}, needs review ${info.warning}, would fail ${info.errorRows}`}
+      emptyText="No rows to preview." />
   )
 }

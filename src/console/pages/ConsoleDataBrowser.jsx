@@ -19,12 +19,17 @@
  * runs through server-side super-admin RPCs that whitelist the table, column and
  * operator and bind the value as a parameter. No raw SQL is ever shown or run.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Database, Search, Sparkles, Play, Download, RefreshCw,
-  Table2, Filter, AlertTriangle, Info, Loader2, X, Pencil, Trash2, Undo2, Lock,
+  Database, Sparkles, Play, Download, RefreshCw,
+  Table2, Filter, AlertTriangle, Info, X, Pencil, Trash2, Undo2, Lock, CheckCircle2, BarChart3,
 } from 'lucide-react'
 import { useConsoleAuth } from '../ConsoleAuthContext'
+import {
+  Panel, PanelHeader, Note, StatTile, Badge, Code, Btn, Segmented, SearchInput, Select,
+  Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, Modal,
+} from '../components/ui'
+import { BarsChart } from '../components/ui/charts'
 import {
   listTables, listColumns, queryTable,
   updateRow, deleteRow, revertChange, listRowChanges, isEditableColumn,
@@ -86,6 +91,8 @@ export default function ConsoleDataBrowser() {
     setTablesLoading(true)
     try {
       setTables(await listTables())
+    } catch (err) {
+      setError(toUserMessage(err, 'Could not refresh the table list.'))
     } finally {
       setTablesLoading(false)
     }
@@ -133,15 +140,23 @@ export default function ConsoleDataBrowser() {
     setError(null)
     setRan(false)
     setRows([])
-    const cols = await listColumns(name)
-    setColumns(cols)
-    await run(name, EMPTY_FILTER, limit)
+    try {
+      const cols = await listColumns(name)
+      setColumns(cols)
+      await run(name, EMPTY_FILTER, limit)
+    } catch (err) {
+      setError(toUserMessage(err, 'Could not open that table.'))
+    }
     void tableSource
   }
 
   // ── Run a query against the server RPC ──
+  // Each run is numbered: switching tables quickly used to let the slower,
+  // older answer land last and show one table's rows under another's name.
+  const runSeq = useRef(0)
   async function run(table, f, lim) {
     if (!table) return
+    const seq = ++runSeq.current
     setRunning(true)
     setError(null)
     try {
@@ -153,13 +168,15 @@ export default function ConsoleDataBrowser() {
         value: clean ? clean.value : null,
         limit: lim,
       })
+      if (seq !== runSeq.current) return
       setRows(Array.isArray(data) ? data : [])
       setRan(true)
     } catch (e) {
-      setError('Could not load rows. Please try again.')
+      if (seq !== runSeq.current) return
+      setError(toUserMessage(e, 'Could not load rows. Please try again.'))
       setRows([])
     } finally {
-      setRunning(false)
+      if (seq === runSeq.current) setRunning(false)
     }
   }
 
@@ -242,13 +259,16 @@ export default function ConsoleDataBrowser() {
     const patch = {}
     for (const [k, v] of Object.entries(editDraft)) {
       const original = editRow?.[k]
-      const before = original == null ? '' : String(original)
+      // Same text the input shows. String() on a json value gave "[object Object]",
+      // so an untouched-then-restored json field was sent as a change.
+      const before = original == null ? '' : cellText(original)
       if (String(v) !== before) patch[k] = v
     }
     return patch
   }
 
   async function saveEdit() {
+    if (busy) return
     const patch = draftPatch()
     if (!editRow?.id || !Object.keys(patch).length) { setEditRow(null); return }
     setBusy(true); setError(null)
@@ -259,14 +279,14 @@ export default function ConsoleDataBrowser() {
       setEditRow(null); setEditDraft({})
       await Promise.all([run(selected, filter, limit), refreshChanges()])
     } catch (err) {
-      setError(err?.message || 'Could not save that change.')
+      setError(toUserMessage(err, 'Could not save that change.'))
     } finally {
       setBusy(false)
     }
   }
 
   async function doDelete() {
-    if (!confirmDelete?.id) return
+    if (busy || !confirmDelete?.id) return
     setBusy(true); setError(null)
     try {
       await deleteRow(selected, confirmDelete.id)
@@ -274,7 +294,7 @@ export default function ConsoleDataBrowser() {
       setConfirmDelete(null)
       await Promise.all([run(selected, filter, limit), refreshChanges()])
     } catch (err) {
-      setError(err?.message || 'Could not delete that row.')
+      setError(toUserMessage(err, 'Could not delete that row.'))
     } finally {
       setBusy(false)
     }
@@ -287,7 +307,7 @@ export default function ConsoleDataBrowser() {
       setNotice(r?.action === 'delete' ? 'Row restored.' : 'Edit undone.')
       await Promise.all([run(selected, filter, limit), refreshChanges()])
     } catch (err) {
-      setError(err?.message || 'Could not undo that change.')
+      setError(toUserMessage(err, 'Could not undo that change.'))
     } finally {
       setBusy(false)
     }
@@ -297,399 +317,308 @@ export default function ConsoleDataBrowser() {
   const canExport = rows.length > 0 && !running
   // Editing needs a row id to target; a projection without one stays read-only.
   const canEditRows = rows.length > 0 && Object.prototype.hasOwnProperty.call(rows[0] || {}, 'id')
+  const patchCount = editRow ? Object.keys(draftPatch()).length : 0
+
+  const [tableSearch, setTableSearch] = useState('')
+  const visibleTables = useMemo(() => {
+    const q = tableSearch.trim().toLowerCase()
+    return q ? tables.filter((t) => String(t.table_name).toLowerCase().includes(q)) : tables
+  }, [tables, tableSearch])
+
+  // Row count per safelisted table, from the server's own count. Largest first.
+  const tableBars = useMemo(() => tables
+    .map((t) => ({ label: t.table_name, value: Number(t.row_count) || 0 }))
+    .sort((a, b) => b.value - a.value), [tables])
+  const totalRows = tableBars.reduce((a, b) => a + b.value, 0)
+  const openChanges = changes.filter((c) => !c.reverted_at).length
+
+  const columnOptions = columns.map((c) => ({ value: c.column_name, label: c.column_name }))
+  const opOptions = QUERY_OPERATORS.map((o) => ({ value: o.key, label: operatorLabel(o.key) }))
 
   return (
     <div className="space-y-5 max-w-7xl">
-      {/* ── Header ── */}
-      <div className="flex items-center justify-between">
+      <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-white flex items-center gap-2">
-            <Database size={20} className="text-orange-400" /> Data Browser
-          </h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            {admin?.full_name ? `${admin.full_name} | ` : ''}Read only. Browse, filter and export operational data with no SQL.
+          <h1 className="flex items-center gap-2"><Database size={18} className="text-orange-400" /> Data Browser</h1>
+          <p className="text-xs text-gray-500 mt-1">
+            {admin?.full_name ? `${admin.full_name} | ` : ''}Browse, filter and export operational data with no SQL, and correct or remove a single row.
           </p>
         </div>
-        <button onClick={loadTables} disabled={tablesLoading}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-800 text-gray-400 hover:text-white text-xs border border-gray-700 transition-colors disabled:opacity-50">
-          <RefreshCw size={12} className={tablesLoading ? 'animate-spin' : ''} /> Refresh tables
-        </button>
+        <Btn icon={RefreshCw} onClick={loadTables} busy={tablesLoading}>Refresh tables</Btn>
+      </header>
+
+      <Note icon={Info} tone="accent">
+        Browse, filter and export any of these tables, and correct or remove a single row.
+        Every edit and delete keeps the original and can be undone below. The row id, the owning
+        company and any value the database calculates itself cannot be changed here.
+      </Note>
+
+      {notice && <Note icon={CheckCircle2} tone="accent"><span role="status">{notice}</span></Note>}
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <StatTile label="Tables available" value={tablesLoading && !tables.length ? 'N/A' : fmtNum(tables.length)} icon={Table2} />
+        <StatTile label="Rows across tables" value={tablesLoading && !tables.length ? 'N/A' : fmtNum(totalRows)} icon={Database}
+          sub="Server count per table" />
+        <StatTile label="Showing" value={ran ? fmtNum(rows.length) : 'N/A'}
+          sub={ran && rows.length === limit ? `Capped at ${limit} rows` : selected || 'No table selected'} />
+        <StatTile label="Changes undoable" value={fmtNum(openChanges)} icon={Undo2}
+          tone={openChanges ? 'accent' : 'default'} sub={`${fmtNum(changes.length)} recent change(s)`} />
       </div>
 
-      {/* ── Scope banner ── */}
-      <div className="flex items-start gap-2 rounded-lg border border-blue-800/40 bg-blue-900/20 px-3 py-2">
-        <Info size={14} className="text-blue-400 mt-0.5 flex-shrink-0" />
-        <p className="text-xs text-blue-200/90">
-          Browse, filter and export any of these tables, and correct or remove a single row.
-          Every edit and delete keeps the original and can be undone below. The row id, the owning
-          company and any value the database calculates itself cannot be changed here.
-        </p>
-      </div>
-
-      {notice && (
-        <div className="flex items-start gap-2 rounded-lg border border-emerald-800/40 bg-emerald-900/20 px-3 py-2">
-          <Info size={14} className="text-emerald-400 mt-0.5 flex-shrink-0" />
-          <p className="text-xs text-emerald-200/90">{notice}</p>
-        </div>
-      )}
-
-      {/* ── Undo list: only appears once something has been changed ── */}
       {changes.length > 0 && (
-        <div className="rounded-xl border border-gray-800 bg-gray-900/50 overflow-hidden">
-          <div className="px-4 py-2 border-b border-gray-800 text-[11px] font-semibold text-gray-300 flex items-center gap-2">
-            <Undo2 size={12} className="text-gray-500" /> Recent changes
-            <span className="text-[10px] text-gray-600 font-normal">every one can be undone</span>
+        <Panel flush>
+          <div className="px-4 pt-4"><PanelHeader icon={Undo2} title="Recent changes" subtitle="Every one can be undone." /></div>
+          <div className="max-h-56 overflow-y-auto px-4 pb-4">
+            <Table>
+              <THead><Th>When</Th><Th>Change</Th><Th align="right">Action</Th></THead>
+              <tbody>
+                {changes.map((c) => (
+                  <Tr key={c.id}>
+                    <Td nowrap><span className="text-gray-500">{fmtStamp(c.created_at)}</span></Td>
+                    <Td>
+                      <span className="inline-flex items-center gap-2">
+                        <Badge tone={c.action === 'delete' ? 'danger' : 'info'}>{c.action === 'delete' ? 'Deleted' : 'Edited'}</Badge>
+                        <Code>{c.tbl}</Code>
+                      </span>
+                    </Td>
+                    <Td align="right">
+                      {c.reverted_at
+                        ? <Badge tone="good" icon={CheckCircle2}>Undone</Badge>
+                        : <Btn size="xs" icon={Undo2} onClick={() => doRevert(c.id)} disabled={busy}>Undo</Btn>}
+                    </Td>
+                  </Tr>
+                ))}
+              </tbody>
+            </Table>
           </div>
-          <div className="divide-y divide-gray-800/60 max-h-44 overflow-y-auto">
-            {changes.map((c) => (
-              <div key={c.id} className="px-4 py-2 flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-[11px] text-gray-200">
-                    {c.action === 'delete' ? 'Deleted a row from' : 'Edited a row in'} {c.tbl}
-                  </p>
-                  <p className="text-[10px] text-gray-600">
-                    {new Date(c.created_at).toISOString().slice(0, 16).replace('T', ' ')}
-                  </p>
-                </div>
-                {c.reverted_at ? (
-                  <span className="px-2 py-0.5 rounded text-[9px] font-semibold text-emerald-300 border border-emerald-800/50 bg-emerald-900/20 flex-shrink-0">
-                    Undone
-                  </span>
-                ) : (
-                  <button onClick={() => doRevert(c.id)} disabled={busy}
-                    className="h-7 px-2.5 rounded-lg bg-gray-800 border border-gray-700 text-[11px] text-gray-300 hover:text-white flex items-center gap-1.5 flex-shrink-0 disabled:opacity-50">
-                    <Undo2 size={11} /> Undo
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
+        </Panel>
       )}
 
-      {/* ── Ask your data ── */}
-      <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
-        <div className="flex items-center gap-2 mb-2">
-          <Sparkles size={15} className="text-orange-400" />
-          <h3 className="text-sm font-semibold text-white">Ask your data</h3>
-        </div>
-        <p className="text-[11px] text-gray-500 mb-3">
-          The assistant reads your question into a filter. Your data is never sent for computation. It only
-          picks a column, an operator and a value, then the query runs on the server.
-        </p>
+      <Panel>
+        <PanelHeader icon={Sparkles} title="Ask your data"
+          subtitle="The assistant reads your question into a filter. Your data is never sent for computation. It only picks a column, an operator and a value, then the query runs on the server." />
         <form onSubmit={handleAsk} className="flex flex-col sm:flex-row gap-2">
-          <div className="relative flex-1">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600" />
-            <input
-              value={question}
-              onChange={e => setQuestion(e.target.value)}
-              placeholder="e.g. tyres at the NHC site, or accidents where severity equals major"
-              title="Ask in plain English. The assistant turns it into a column, operator and value filter."
-              className="w-full pl-9 pr-3 py-2 rounded-lg bg-gray-950 border border-gray-700 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/60"
-            />
-          </div>
-          <button type="submit" disabled={asking || !question.trim() || !tableNames.length}
-            className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-orange-500/90 hover:bg-orange-500 text-white text-sm font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-            {asking ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-            {asking ? 'Reading' : 'Ask'}
-          </button>
+          <SearchInput value={question} onChange={setQuestion} className="flex-1"
+            placeholder="e.g. tyres at the NHC site, or accidents where severity equals major" />
+          <Btn type="submit" variant="primary" icon={Sparkles} busy={asking}
+            disabled={!question.trim() || !tableNames.length}>{asking ? 'Reading' : 'Ask'}</Btn>
         </form>
         {askNote && (
-          <p className="mt-2 text-[11px] text-emerald-300/90 flex items-center gap-1.5">
-            <Filter size={12} /> {askNote}
-          </p>
+          <p className="mt-2 text-[11px] text-emerald-300 flex items-center gap-1.5"><Filter size={12} /> {askNote}</p>
         )}
         {askError && (
-          <p className="mt-2 text-[11px] text-amber-300/90 flex items-center gap-1.5">
-            <AlertTriangle size={12} /> {askError}
-          </p>
+          <div className="mt-2"><Note icon={AlertTriangle} tone="warning">{askError}</Note></div>
         )}
-      </div>
+      </Panel>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-        {/* ── Left: table picker ── */}
-        <div className="lg:col-span-1 rounded-xl border border-gray-800 bg-gray-900/50 p-3">
-          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-            <Table2 size={13} /> Tables
-          </h3>
-          {tablesLoading
-            ? <p className="text-xs text-gray-600 py-2">Loading tables...</p>
+        <Panel className="lg:col-span-1">
+          <PanelHeader icon={Table2} title="Tables" />
+          <SearchInput value={tableSearch} onChange={setTableSearch} placeholder="Find a table" className="mb-2" />
+          {tablesLoading && !tables.length
+            ? <LoadingState label="Loading tables" rows={3} />
             : tables.length === 0
-              ? <p className="text-xs text-gray-600 py-2">No tables available.</p>
-              : (
-                <div className="space-y-1 max-h-[520px] overflow-y-auto pr-1">
-                  {tables.map(t => (
-                    <button key={t.table_name} onClick={() => selectTable(t.table_name)}
-                      className={`w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-left transition-colors ${
-                        selected === t.table_name
-                          ? 'bg-orange-500/15 border border-orange-500/40'
-                          : 'hover:bg-gray-800 border border-transparent'
-                      }`}>
-                      <span className={`text-xs font-medium truncate ${selected === t.table_name ? 'text-orange-200' : 'text-gray-300'}`}>
-                        {t.table_name}
-                      </span>
-                      <span className="text-[10px] text-gray-500 flex-shrink-0">{fmtNum(t.row_count)}</span>
-                    </button>
-                  ))}
-                </div>
-              )
-          }
-        </div>
+              ? <EmptyState icon={Table2} title="No tables available."
+                  reason="The safelist returned nothing, or it could not be read. Try Refresh tables." />
+              : visibleTables.length === 0
+                ? <EmptyState title="No table matches." reason="Clear the search to see every table." />
+                : (
+                  <div className="space-y-1 max-h-[520px] overflow-y-auto pr-1">
+                    {visibleTables.map((t) => {
+                      const on = selected === t.table_name
+                      return (
+                        <button key={t.table_name} onClick={() => selectTable(t.table_name)}
+                          className={`w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-left transition-colors border ${
+                            on ? 'bg-orange-500/15 border-orange-600/50' : 'border-transparent hover:bg-gray-800/60'}`}>
+                          <span className={`text-xs font-medium truncate ${on ? 'text-orange-200' : 'text-gray-300'}`}>{t.table_name}</span>
+                          <span className="text-[10px] text-gray-500 tabular-nums flex-shrink-0">{fmtNum(t.row_count)}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+        </Panel>
 
-        {/* ── Right: filter builder + results ── */}
         <div className="lg:col-span-3 space-y-4">
-          {/* Filter builder */}
-          <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Filter size={14} className="text-orange-400" />
-              <h3 className="text-sm font-semibold text-white">Filter {selected ? <span className="text-gray-500 font-normal">on {selected}</span> : ''}</h3>
-            </div>
+          <Panel>
+            <PanelHeader icon={Filter} title={selected ? `Filter on ${selected}` : 'Filter'} />
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
-              <select
-                value={filter.column}
-                onChange={e => setFilter(f => ({ ...f, column: e.target.value }))}
-                title="Choose which column to filter on."
-                className="sm:col-span-4 px-3 py-2 rounded-lg bg-gray-950 border border-gray-700 text-sm text-white focus:outline-none focus:border-orange-500/60">
-                <option value="">All columns (no filter)</option>
-                {columns.map(c => (
-                  <option key={c.column_name} value={c.column_name}>{c.column_name}</option>
-                ))}
-              </select>
-              <select
-                value={filter.op}
-                onChange={e => setFilter(f => ({ ...f, op: e.target.value }))}
-                title="Choose how to compare. Contains does a partial text match."
-                className="sm:col-span-3 px-3 py-2 rounded-lg bg-gray-950 border border-gray-700 text-sm text-white focus:outline-none focus:border-orange-500/60">
-                {QUERY_OPERATORS.map(o => (
-                  <option key={o.key} value={o.key}>{operatorLabel(o.key)}</option>
-                ))}
-              </select>
+              <Select className="sm:col-span-4" value={filter.column} placeholder="All columns (no filter)"
+                options={columnOptions} onChange={(v) => setFilter((f) => ({ ...f, column: v }))} />
+              <Select className="sm:col-span-3" value={filter.op} options={opOptions}
+                onChange={(v) => setFilter((f) => ({ ...f, op: v }))} />
               <input
                 value={filter.value}
-                onChange={e => setFilter(f => ({ ...f, value: e.target.value }))}
-                onKeyDown={e => { if (e.key === 'Enter') handleRun() }}
-                placeholder="Value"
+                onChange={(e) => setFilter((f) => ({ ...f, value: e.target.value }))}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleRun() }}
+                placeholder="Value" aria-label="Filter value"
                 title="The value to compare against. Leave blank with All columns to see every row."
-                className="sm:col-span-3 px-3 py-2 rounded-lg bg-gray-950 border border-gray-700 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/60"
+                className="sm:col-span-3 px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 placeholder-gray-600 focus:border-gray-700 focus:outline-none"
               />
-              <button onClick={handleRun} disabled={running || !selected}
-                className="sm:col-span-2 flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-orange-500/90 hover:bg-orange-500 text-white text-sm font-semibold transition-colors disabled:opacity-40">
-                {running ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />} Run
-              </button>
+              <div className="sm:col-span-2">
+                <Btn variant="primary" icon={Play} onClick={handleRun} busy={running} disabled={!selected}>Run</Btn>
+              </div>
             </div>
             <div className="flex items-center justify-between mt-3 flex-wrap gap-2">
               <p className="text-[11px] text-gray-500 flex items-center gap-1.5">
                 <Info size={12} /> {filterSummary}
                 {filter.column && (
-                  <button onClick={() => { const nf = EMPTY_FILTER; setFilter(nf); run(selected, nf, limit) }}
-                    title="Clear the filter and show all rows."
-                    className="ml-1 text-gray-600 hover:text-gray-300 inline-flex items-center gap-0.5">
-                    <X size={11} /> clear
-                  </button>
+                  <Btn size="xs" variant="quiet" icon={X}
+                    onClick={() => { const nf = EMPTY_FILTER; setFilter(nf); run(selected, nf, limit) }}
+                    title="Clear the filter and show all rows.">Clear</Btn>
                 )}
               </p>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-2">
                 <span className="text-[11px] text-gray-500">Rows</span>
-                {LIMIT_OPTIONS.map(n => (
-                  <button key={n} onClick={() => handleLimit(n)}
-                    title={`Show up to ${n} rows.`}
-                    className={`text-[11px] px-2 py-1 rounded-md border transition-colors ${
-                      limit === n
-                        ? 'bg-orange-500/15 border-orange-500/40 text-orange-200'
-                        : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-white'
-                    }`}>{n}</button>
-                ))}
+                <Segmented value={limit} onChange={handleLimit}
+                  options={LIMIT_OPTIONS.map((n) => ({ key: n, label: String(n), hint: `Show up to ${n} rows.` }))} />
               </div>
             </div>
-          </div>
+          </Panel>
 
-          {/* Results */}
-          <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-white">
-                Results {ran && !running && <span className="text-gray-500 font-normal">({rows.length} row{rows.length === 1 ? '' : 's'}{rows.length === limit ? `, showing first ${limit}` : ''})</span>}
-              </h3>
-              <button onClick={handleExport} disabled={!canExport}
-                title={canExport ? 'Download these rows as an Excel workbook.' : 'Run a query with results to export.'}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-800 text-gray-300 hover:text-white text-xs border border-gray-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-                <Download size={13} /> Export Excel
-              </button>
-            </div>
+          <Panel>
+            <PanelHeader title="Results"
+              subtitle={ran && !running
+                ? `${rows.length} row${rows.length === 1 ? '' : 's'}${rows.length === limit ? `, showing first ${limit}` : ''}`
+                : undefined}
+              actions={(
+                <Btn icon={Download} onClick={handleExport} disabled={!canExport}
+                  title={canExport ? 'Download these rows as an Excel workbook.' : 'Run a query with results to export.'}>
+                  Export Excel
+                </Btn>
+              )} />
 
             {running
-              ? <div className="py-12 flex flex-col items-center justify-center gap-2 text-gray-500">
-                  <Loader2 size={22} className="animate-spin text-orange-400" />
-                  <p className="text-xs">Loading rows...</p>
-                </div>
+              ? <LoadingState label="Loading rows" />
               : error
-                ? <div className="py-12 flex flex-col items-center justify-center gap-2">
-                    <AlertTriangle size={22} className="text-red-400" />
-                    <p className="text-xs text-red-300">{error}</p>
-                    <button onClick={handleRun}
-                      className="mt-1 text-xs px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 text-gray-300 hover:text-white">
-                      Retry
-                    </button>
-                  </div>
+                ? <ErrorState message={error} onRetry={selected ? handleRun : undefined} />
                 : rows.length === 0
-                  ? <div className="py-12 flex flex-col items-center justify-center gap-2 text-gray-600">
-                      <Search size={22} />
-                      <p className="text-xs">No rows match</p>
-                    </div>
+                  ? <EmptyState title={ran ? 'No rows match' : 'Nothing run yet'}
+                      reason={ran ? 'The query ran and returned no rows. Loosen or clear the filter.' : 'Pick a table to preview its rows.'} />
                   : (
-                    <div className="overflow-auto max-h-[540px] rounded-lg border border-gray-800">
-                      <table className="w-full text-left border-collapse">
-                        <thead className="sticky top-0 bg-gray-950 z-10">
-                          <tr>
-                            {canEditRows && (
-                              <th className="px-3 py-2 text-[11px] font-semibold text-gray-400 uppercase tracking-wide border-b border-gray-800 whitespace-nowrap w-20">
-                                Actions
-                              </th>
-                            )}
-                            {rowKeys.map(k => (
-                              <th key={k} className="px-3 py-2 text-[11px] font-semibold text-gray-400 uppercase tracking-wide border-b border-gray-800 whitespace-nowrap">
-                                {k}
-                              </th>
-                            ))}
-                          </tr>
-                        </thead>
+                    <div className="max-h-[540px] overflow-auto">
+                      <Table>
+                        <THead>
+                          {canEditRows && <Th className="w-20">Actions</Th>}
+                          {rowKeys.map((k) => <Th key={k} className="whitespace-nowrap">{k}</Th>)}
+                        </THead>
                         <tbody>
                           {rows.map((r, i) => (
-                            <tr key={r.id || i} className="hover:bg-gray-800/40">
+                            <Tr key={r.id || i}>
                               {canEditRows && (
-                                <td className="px-3 py-1.5 border-b border-gray-800/60 whitespace-nowrap">
-                                  <div className="flex items-center gap-1">
-                                    <button onClick={() => openEdit(r)} disabled={busy}
+                                <Td nowrap>
+                                  <span className="flex items-center gap-1">
+                                    <button onClick={() => openEdit(r)} disabled={busy} aria-label="Edit row"
                                       title="Correct a value in this row"
                                       className="p-1 rounded text-gray-400 hover:text-orange-300 hover:bg-gray-800 disabled:opacity-40">
                                       <Pencil size={12} />
                                     </button>
-                                    <button onClick={() => { setConfirmDelete(r); setNotice('') }} disabled={busy}
+                                    <button onClick={() => { setConfirmDelete(r); setNotice('') }} disabled={busy} aria-label="Delete row"
                                       title="Delete this row (can be undone)"
                                       className="p-1 rounded text-gray-400 hover:text-red-300 hover:bg-gray-800 disabled:opacity-40">
                                       <Trash2 size={12} />
                                     </button>
-                                  </div>
-                                </td>
+                                  </span>
+                                </Td>
                               )}
-                              {rowKeys.map(k => (
-                                <td key={k} className="px-3 py-1.5 text-xs text-gray-300 border-b border-gray-800/60 whitespace-nowrap max-w-[280px] truncate" title={cellText(r[k])}>
-                                  {cellText(r[k])}
-                                </td>
+                              {rowKeys.map((k) => (
+                                <Td key={k} nowrap className="max-w-[280px] truncate">
+                                  <span className="text-gray-300" title={cellText(r[k])}>{cellText(r[k])}</span>
+                                </Td>
                               ))}
-                            </tr>
+                            </Tr>
                           ))}
                         </tbody>
-                      </table>
+                      </Table>
                     </div>
-                  )
-            }
-          </div>
+                  )}
+          </Panel>
         </div>
       </div>
 
-      {/* ── Edit one row ── */}
-      {editRow && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-          onClick={() => setEditRow(null)}>
-          <div className="w-full max-w-2xl rounded-xl bg-[#0f0f16] border border-gray-800 flex flex-col max-h-[85vh]"
-            onClick={e => e.stopPropagation()}>
-            <div className="px-5 py-3 border-b border-gray-800 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-                <Pencil size={14} className="text-orange-400" /> Edit row in {selected}
-              </h3>
-              <button onClick={() => setEditRow(null)} className="text-gray-500 hover:text-white">
-                <X size={16} />
-              </button>
-            </div>
-
-            <div className="px-5 py-3 overflow-y-auto space-y-2.5">
-              <p className="text-[11px] text-gray-500">
-                Change only what you need. Blank means the value is cleared. Locked fields are the
-                row id, the owning company and values the database calculates itself.
-              </p>
-              {rowKeys.map((k) => {
-                const locked = !isEditableColumn(k, columns)
-                const current = editRow[k] == null ? '' : cellText(editRow[k])
-                const value = editDraft[k] !== undefined ? editDraft[k] : current
-                const dirty = String(value) !== current
-                return (
-                  <div key={k} className="grid grid-cols-3 gap-2 items-center">
-                    <label className="text-[11px] text-gray-400 truncate flex items-center gap-1" title={k}>
-                      {locked && <Lock size={9} className="text-gray-600 flex-shrink-0" />}
-                      {k}
-                    </label>
-                    <input
-                      value={value}
-                      disabled={locked || busy}
-                      onChange={e => setEditDraft(d => ({ ...d, [k]: e.target.value }))}
-                      className={`col-span-2 h-8 rounded-lg px-2.5 text-xs bg-gray-800/80 border text-white focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed ${
-                        dirty ? 'border-orange-500' : 'border-gray-700 focus:border-orange-500'
-                      }`}
-                    />
-                  </div>
-                )
-              })}
-            </div>
-
-            <div className="px-5 py-3 border-t border-gray-800 flex items-center justify-between gap-2">
-              <p className="text-[11px] text-gray-500">
-                {Object.keys(draftPatch()).length
-                  ? `${Object.keys(draftPatch()).length} field(s) changed`
-                  : 'Nothing changed yet'}
-              </p>
-              <div className="flex gap-2">
-                <button onClick={() => setEditRow(null)}
-                  className="h-9 px-3 rounded-lg bg-gray-800 border border-gray-700 text-xs text-gray-300 hover:text-white">
-                  Cancel
-                </button>
-                <button onClick={saveEdit} disabled={busy || !Object.keys(draftPatch()).length}
-                  className="h-9 px-3 rounded-lg bg-orange-600 hover:bg-orange-500 text-xs font-semibold text-white flex items-center gap-2 disabled:opacity-40">
-                  {busy ? <Loader2 size={13} className="animate-spin" /> : <Pencil size={13} />} Save
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+      {tableBars.length > 0 && (
+        <Panel>
+          <PanelHeader icon={BarChart3} title="Rows per table"
+            subtitle="The server's own count for every safelisted table. Helps you see where the data actually lives before you filter." />
+          <BarsChart bars={tableBars} valueFormat={(v) => `${fmtNum(v)} rows`}
+            summary={tableBars.map((b) => `${b.label}: ${b.value}`).join(', ')} emptyText="Every safelisted table is empty." />
+        </Panel>
       )}
 
-      {/* ── Confirm delete ── */}
-      {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-          onClick={() => setConfirmDelete(null)}>
-          <div className="w-full max-w-md rounded-xl bg-[#0f0f16] border border-gray-800 p-5 space-y-4"
-            onClick={e => e.stopPropagation()}>
-            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-              <AlertTriangle size={15} className="text-red-400" /> Delete this row
-            </h3>
-            <p className="text-xs text-gray-400">
-              This removes one row from {selected}. The complete row is kept, so you can bring it
-              back from Recent changes straight afterwards.
-            </p>
-            <div className="rounded-lg bg-black/40 border border-gray-800 px-3 py-2 max-h-32 overflow-y-auto">
-              {rowKeys.slice(0, 6).map(k => (
-                <p key={k} className="text-[10px] text-gray-500 truncate">
+      <Modal open={!!editRow} onClose={() => { if (!busy) setEditRow(null) }} width="max-w-2xl"
+        title={`Edit row in ${selected}`}
+        subtitle="Change only what you need. Blank means the value is cleared. Locked fields are the row id, the owning company and values the database calculates itself."
+        footer={(
+          <>
+            <span className="mr-auto self-center text-[11px] text-gray-500">
+              {patchCount ? `${patchCount} field(s) changed` : 'Nothing changed yet'}
+            </span>
+            <Btn onClick={() => setEditRow(null)} disabled={busy}>Cancel</Btn>
+            <Btn variant="primary" icon={Pencil} onClick={saveEdit} busy={busy} disabled={!patchCount}>Save</Btn>
+          </>
+        )}>
+        {editRow && (
+          <div className="space-y-2.5">
+            {rowKeys.map((k) => {
+              const locked = !isEditableColumn(k, columns)
+              const current = editRow[k] == null ? '' : cellText(editRow[k])
+              const value = editDraft[k] !== undefined ? editDraft[k] : current
+              const dirty = String(value) !== current
+              return (
+                <div key={k} className="grid grid-cols-3 gap-2 items-center">
+                  <label className="text-[11px] text-gray-400 truncate flex items-center gap-1" title={k}>
+                    {locked && <Lock size={9} className="text-gray-600 flex-shrink-0" />}
+                    {k}
+                  </label>
+                  <input
+                    value={value}
+                    disabled={locked || busy}
+                    aria-label={k}
+                    onChange={(e) => setEditDraft((d) => ({ ...d, [k]: e.target.value }))}
+                    className={`col-span-2 px-2.5 py-1.5 rounded-lg text-xs bg-gray-900 border text-gray-200 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed ${
+                      dirty ? 'border-orange-500' : 'border-gray-800 focus:border-gray-700'
+                    }`}
+                  />
+                </div>
+              )
+            })}
+            <ErrorState message={error} />
+          </div>
+        )}
+      </Modal>
+
+      <Modal open={!!confirmDelete} onClose={() => { if (!busy) setConfirmDelete(null) }} width="max-w-md"
+        title="Delete this row"
+        subtitle={`This removes one row from ${selected}. The complete row is kept, so you can bring it back from Recent changes straight afterwards.`}
+        footer={(
+          <>
+            <Btn onClick={() => setConfirmDelete(null)} disabled={busy}>Cancel</Btn>
+            <Btn variant="danger" icon={Trash2} onClick={doDelete} busy={busy}>Delete</Btn>
+          </>
+        )}>
+        {confirmDelete && (
+          <div className="space-y-3">
+            <div className="rounded-lg bg-gray-900 border border-gray-800 px-3 py-2 max-h-40 overflow-y-auto">
+              {rowKeys.slice(0, 6).map((k) => (
+                <p key={k} className="text-[11px] text-gray-500 truncate">
                   <span className="text-gray-400">{k}:</span> {cellText(confirmDelete[k]) || 'N/A'}
                 </p>
               ))}
             </div>
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setConfirmDelete(null)}
-                className="h-9 px-3 rounded-lg bg-gray-800 border border-gray-700 text-xs text-gray-300 hover:text-white">
-                Cancel
-              </button>
-              <button onClick={doDelete} disabled={busy}
-                className="h-9 px-3 rounded-lg bg-red-600 hover:bg-red-500 text-xs font-semibold text-white flex items-center gap-2 disabled:opacity-50">
-                {busy ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />} Delete
-              </button>
-            </div>
+            <ErrorState message={error} />
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
     </div>
   )
 }
 
-function fmtNum(n) { return n != null ? Number(n).toLocaleString() : '0' }
+function fmtNum(n) { return n != null && Number.isFinite(Number(n)) ? Number(n).toLocaleString() : 'N/A' }
+
+function fmtStamp(v) {
+  const d = new Date(v)
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toISOString().slice(0, 16).replace('T', ' ')
+}
 
 function cellText(v) {
   if (v === null || v === undefined) return ''

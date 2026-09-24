@@ -57,6 +57,7 @@ export const CONSOLE_DESCRIPTIONS = {
   '/console/security': 'Security posture and sign-on configuration.',
   '/console/config': 'The global switches: maintenance mode, registration, exports, session rules.',
   '/console/api-keys': 'Every API key across all companies: age, last use, expiry, rotation flags, revoke with a reason and set expiry.',
+  '/console/compliance': 'SOC 2 and ISO 27001 readiness: 20 controls evaluated from live evidence, manual attestations with expiry, and a downloadable evidence pack.',
   '/console/audit-integrity': 'Tamper-evident audit logs: every day is sealed with a hash chain, verify on demand, and export the full log.',
   '/console/access-reviews': 'Periodic access certification: snapshot every user, decide keep, modify or revoke, apply the revokes and export the evidence.',
   '/console/security-audit': 'Live security checks with a score, weekly scan, alerts on new findings and the break-glass trail.',

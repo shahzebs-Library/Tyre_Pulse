@@ -118,8 +118,8 @@ export default function ConsoleDataBrowser() {
         setColumns(cols)
         setRows(Array.isArray(initialRows) ? initialRows : [])
         setRan(true)
-      } catch {
-        if (active) setError('Could not load the data browser. Please try again.')
+      } catch (err) {
+        if (active) setError(toUserMessage(err, 'Could not load the data browser. Please try again.'))
       } finally {
         if (active) {
           setTablesLoading(false)
@@ -213,7 +213,14 @@ export default function ConsoleDataBrowser() {
       setAskNote(explanation || null)
       if (nextTable !== selected) {
         setSelected(nextTable)
-        const cols = await listColumns(nextTable)
+        let cols
+        try {
+          cols = await listColumns(nextTable)
+        } catch (colErr) {
+          // A failed column read is a data-access error, not an assistant outage.
+          setError(toUserMessage(colErr, 'Could not open that table.'))
+          return
+        }
         setColumns(cols)
       }
       setFilter(nextFilter)

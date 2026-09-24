@@ -4,8 +4,11 @@
  * Thin, read-only wrappers over the V260 super-admin database-browser RPCs.
  * These power the console No-code Data Browser (Module 3). Every RPC is
  * SECURITY DEFINER + super-admin gated + read-only on the server; this layer
- * only unwraps the result and degrades to a safe empty value on any error so a
- * transient failure never crashes the console.
+ * only unwraps the result. A failed read THROWS (a sanitised ServiceError from
+ * unwrap, original on `.cause`): the console used to receive [] on any error,
+ * which rendered a permission denial or a network drop as "this table has no
+ * rows" - an error must never become an empty list. Callers catch and show an
+ * error state.
  *
  *   admin_db_tables()                     -> [{ table_name, row_count }]
  *   admin_db_columns(p_table)             -> [{ column_name, data_type }]
@@ -18,9 +21,8 @@
  *   admin_db_delete_row(p_table, p_id)           -> {ok, deleted, before}
  *   admin_db_revert_change(p_change_id)          -> {ok, action, tbl}
  *
- * Those three DO throw, deliberately: a write that silently fails is worse than an
- * error message, so unlike the read helpers below they surface the reason instead of
- * degrading to an empty value. Every change records the full before/after row in
+ * Those three throw too, with a friendly message: a write that silently fails is
+ * worse than an error message. Every change records the full before/after row in
  * `admin_row_changes` and can be reverted, and the server refuses to touch identity,
  * tenancy or generated columns.
  */
@@ -29,29 +31,21 @@ import { toUserMessage } from '../safeError'
 
 /**
  * List the safelisted operational tables with their row counts.
- * @returns {Promise<Array<{table_name:string,row_count:number}>>} [] on error.
+ * @returns {Promise<Array<{table_name:string,row_count:number}>>} throws on error.
  */
 export async function listTables() {
-  try {
-    const data = await unwrap(await supabase.rpc('admin_db_tables'))
-    return Array.isArray(data) ? data : []
-  } catch {
-    return []
-  }
+  const data = await unwrap(await supabase.rpc('admin_db_tables'))
+  return Array.isArray(data) ? data : []
 }
 
 /**
  * List the columns (name + data type) of a safelisted table.
  * @param {string} table
- * @returns {Promise<Array<{column_name:string,data_type:string}>>} [] on error.
+ * @returns {Promise<Array<{column_name:string,data_type:string}>>} throws on error.
  */
 export async function listColumns(table) {
-  try {
-    const data = await unwrap(await supabase.rpc('admin_db_columns', { p_table: table }))
-    return Array.isArray(data) ? data : []
-  } catch {
-    return []
-  }
+  const data = await unwrap(await supabase.rpc('admin_db_columns', { p_table: table }))
+  return Array.isArray(data) ? data : []
 }
 
 /**
@@ -66,23 +60,19 @@ export async function listColumns(table) {
  * @param {string}  [args.op]      one of eq|neq|gt|gte|lt|lte|ilike
  * @param {*}       [args.value]
  * @param {number}  [args.limit=100]
- * @returns {Promise<Array<object>>} rows, or [] on error.
+ * @returns {Promise<Array<object>>} rows; throws on error.
  */
 export async function queryTable({ table, column, op, value, limit = 100 } = {}) {
-  try {
-    const data = await unwrap(
-      await supabase.rpc('admin_db_query', {
-        p_table: table,
-        p_column: column || null,
-        p_op: op || null,
-        p_value: value ?? null,
-        p_limit: limit,
-      }),
-    )
-    return Array.isArray(data) ? data : []
-  } catch {
-    return []
-  }
+  const data = await unwrap(
+    await supabase.rpc('admin_db_query', {
+      p_table: table,
+      p_column: column || null,
+      p_op: op || null,
+      p_value: value ?? null,
+      p_limit: limit,
+    }),
+  )
+  return Array.isArray(data) ? data : []
 }
 
 /** Columns the server will refuse to change. Mirrors _admin_editable_cols. */

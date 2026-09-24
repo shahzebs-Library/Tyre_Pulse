@@ -170,7 +170,7 @@ const ALLOWED = [
   //     defects, listed rather than hidden, so the guard can go green while the
   //     debt stays visible and can only shrink (test 2 fails on a stale entry).
   //     Each names the measured impact so nobody has to re-derive it. ---
-  { file: 'src/lib/api/materialMaster.js', why: 'KNOWN: listMaterials clamps to Math.min(limit, 2000) over ~22,162 material_master rows - a caller asking for more than 1,000 truncates. Default is 200, so no live surface hits it today' },
+  { file: 'src/lib/api/materialMaster.js', why: 'BOUNDED, but the resolver cannot evaluate a Math.min expression: listMaterials clamps to Math.min(limit, MATERIAL_LIST_MAX = 1000) (was 2000 - a lie against the 1,000 cap, fixed) and listMaterialTransactions to Math.min(limit, 500). Both are ranked "top N" views, not totals' },
   { file: 'mobile/app/(app)/admin/index.tsx', why: 'KNOWN: bare select of accidents (38 rows today) for the admin severity rollup - below the cap now, truncates once the register passes 1,000' },
 ]
 

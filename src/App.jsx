@@ -80,6 +80,7 @@ const ConsoleDataOps = lazy(() => import('./console/pages/ConsoleDataOps'))
 const ConsoleSecurityAudit = lazy(() => import('./console/pages/ConsoleSecurityAudit'))
 const ConsoleAccessReviews = lazy(() => import('./console/pages/ConsoleAccessReviews'))
 const ConsoleAuditIntegrity = lazy(() => import('./console/pages/ConsoleAuditIntegrity'))
+const ConsoleApiKeys = lazy(() => import('./console/pages/ConsoleApiKeys'))
 
 // Console admin pages built in parallel by other agents. Resolved via
 // import.meta.glob so this build succeeds whether or not the files exist yet: a
@@ -931,6 +932,7 @@ export default function App() {
           <Route path="security-audit" element={<ConsoleSecurityAudit />} />
           <Route path="access-reviews" element={<ConsoleAccessReviews />} />
           <Route path="audit-integrity" element={<ConsoleAuditIntegrity />} />
+          <Route path="api-keys" element={<ConsoleApiKeys />} />
           <Route path="audit-trail"   element={<ConsoleAuditTrail />} />
           <Route path="alert-rules"   element={<ConsoleAlertRules />} />
           <Route path="module-control" element={<ConsoleModuleControl />} />

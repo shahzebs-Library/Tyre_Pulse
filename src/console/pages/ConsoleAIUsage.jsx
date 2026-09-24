@@ -113,8 +113,11 @@ export default function ConsoleAIUsage() {
               tone={s.failureRate > 0.05 ? 'danger' : 'default'} />
           </div>
 
-          {rows.length >= 5000 && (
-            <Note tone="warning" icon={AlertTriangle}>Showing the most recent 5,000 requests in this window. Narrow the range for complete totals.</Note>
+          {/* The service pages past the server's 1,000-row cap and reports when its
+              safety ceiling was hit; the old `rows.length >= 5000` test could
+              never fire because the unpaged read stopped at 1,000. */}
+          {state.data?.truncated && (
+            <Note tone="warning" icon={AlertTriangle}>Showing the most recent {rows.length.toLocaleString()} requests in this window. Narrow the range for complete totals.</Note>
           )}
 
           <Panel>

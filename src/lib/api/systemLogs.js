@@ -12,6 +12,7 @@
  * gate, it only relocates the call and normalises error surfacing.
  */
 import { supabase, unwrap } from './_client'
+import { fetchAllPages } from '../fetchAll'
 
 /** Explicit least-privilege column list (no SELECT *). */
 export const SYSTEM_LOG_COLS =
@@ -274,13 +275,20 @@ export async function getHealthMetrics() {
  * Reads the id/created_at of recent rows and buckets client-side. Degrades to []
  * when the table is unavailable.
  */
-async function buildLogsByDay(since) {
+/** Safety ceiling for the 14-day trend read (rows, not days). */
+const LOGS_BY_DAY_MAX = 50000
+
+export async function buildLogsByDay(since) {
   try {
-    const { data, error } = await supabase.from('system_logs')
-      .select('created_at')
+    // Paged: PostgREST caps a response at 1,000 rows whatever `.limit()` asks
+    // for, so the old `.limit(10000)` silently stopped at 1,000 and the trend
+    // under-counted busy days. `id` is the unique tiebreak for stable paging.
+    const { data, error } = await fetchAllPages((a, b) => supabase.from('system_logs')
+      .select('id,created_at')
       .gte('created_at', since)
       .order('created_at', { ascending: true })
-      .limit(10000)
+      .order('id', { ascending: true })
+      .range(a, b), { max: LOGS_BY_DAY_MAX })
     if (error) return []
     const rows = Array.isArray(data) ? data : []
     const buckets = new Map()

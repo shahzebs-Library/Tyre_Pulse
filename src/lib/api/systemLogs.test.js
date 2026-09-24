@@ -18,6 +18,7 @@ const h = vi.hoisted(() => {
       select(...a) { record('select', ...a); return builder },
       order(...a) { record('order', ...a); return builder },
       limit(...a) { record('limit', ...a); return builder },
+      range(...a) { record('range', ...a); return builder },
       eq(col, val) { record('eq', col, val); return builder },
       gte(col, val) { record('gte', col, val); return builder },
       update(p) { record('update', p); return builder },

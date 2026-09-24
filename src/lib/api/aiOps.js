@@ -14,7 +14,7 @@
  * Missing-relation / pre-migration states degrade to empty results (honest empty
  * states, never a raw error).
  */
-import { supabase, applyCountry } from './_client'
+import { supabase, applyCountry, fetchAllPages } from './_client'
 
 /** True when the failure is "table/column does not exist yet" (pre-migration). */
 function isMissingRelation(err) {
@@ -69,40 +69,41 @@ const USAGE_COLS =
   'id,model,feature,prompt_tokens,completion_tokens,cost_usd,status,error,http_status,site,country,created_at'
 
 /**
- * Fetch raw token-log rows for a trailing window. Returns [] pre-migration.
+ * Fetch raw token-log rows for a trailing window, PAGED past the 1,000-row
+ * server cap (newest first, `id` tiebreak). The old `.limit(5000)` was silently
+ * cut to 1,000 by PostgREST, so a busy month under-reported AI spend.
+ * `limit` is a safety ceiling; hitting it sets `truncated`.
  * `status` column is only present post-V236, so we degrade gracefully.
+ * @returns {Promise<{rows: object[], truncated: boolean}>}
  */
-export async function listTokenLogs({ days = 30, country, limit = 5000 } = {}) {
+export async function readTokenLogs({ days = 30, country, limit = 50000 } = {}) {
   const since = new Date(Date.now() - days * 86_400_000).toISOString()
-  try {
-    let q = supabase.from('ai_token_logs').select(USAGE_COLS)
-    q = applyCountry(q, country)
-    const { data, error } = await q
-      .gte('created_at', since)
-      .order('created_at', { ascending: false })
-      .limit(limit)
-    if (error) throw error
-    return data || []
-  } catch (err) {
-    if (isMissingRelation(err)) {
-      // Retry without the V236 columns so a pre-migration DB still shows usage.
-      try {
-        let q = supabase.from('ai_token_logs')
-          .select('id,model,feature,prompt_tokens,completion_tokens,cost_usd,site,country,created_at')
-        q = applyCountry(q, country)
-        const { data, error: e2 } = await q
-          .gte('created_at', since)
-          .order('created_at', { ascending: false })
-          .limit(limit)
-        if (e2) throw e2
-        return (data || []).map((r) => ({ ...r, status: 'success' }))
-      } catch (e3) {
-        if (isMissingRelation(e3)) return []
-        throw e3
-      }
-    }
-    throw err
+  const read = (cols) => fetchAllPages((a, b) => applyCountry(
+    supabase.from('ai_token_logs').select(cols), country,
+  )
+    .gte('created_at', since)
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
+    .range(a, b), { max: limit })
+
+  const first = await read(USAGE_COLS)
+  if (!first.error) return { rows: first.data || [], truncated: !!first.truncated }
+  if (!isMissingRelation(first.error)) throw first.error
+  // Retry without the V236 columns so a pre-migration DB still shows usage.
+  const second = await read('id,model,feature,prompt_tokens,completion_tokens,cost_usd,site,country,created_at')
+  if (second.error) {
+    if (isMissingRelation(second.error)) return { rows: [], truncated: false }
+    throw second.error
   }
+  return {
+    rows: (second.data || []).map((r) => ({ ...r, status: 'success' })),
+    truncated: !!second.truncated,
+  }
+}
+
+/** Array form of readTokenLogs, kept for existing callers. */
+export async function listTokenLogs(opts = {}) {
+  return (await readTokenLogs(opts)).rows
 }
 
 const isSuccess = (r) => !r.status || r.status === 'success'
@@ -179,11 +180,11 @@ export function summarizeUsage(rows = [], pricing = {}) {
 
 /** Convenience: fetch + price + summarize in one call. */
 export async function getUsageOverview({ days = 30, country } = {}) {
-  const [rows, pricing] = await Promise.all([
-    listTokenLogs({ days, country }),
+  const [{ rows, truncated }, pricing] = await Promise.all([
+    readTokenLogs({ days, country }),
     getModelPricing({ country }),
   ])
-  return { summary: summarizeUsage(rows, pricing), pricing, rows }
+  return { summary: summarizeUsage(rows, pricing), pricing, rows, truncated }
 }
 
 /* ── Delivery & background jobs (report_send_log) ───────────────────────────── */

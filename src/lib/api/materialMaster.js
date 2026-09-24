@@ -36,31 +36,50 @@ const COLS = 'id, country, item_code, item_name, category, subcategory, brand, u
  * @param {boolean} [opts.unreviewedOnly]
  * @param {boolean} [opts.conflictingOnly]
  * @param {number} [opts.limit=200]
- * @returns {Promise<Array<object>>} [] when the table is absent (pre-migration)
+ * @returns {Promise<Array<object>>} [] only when the table is absent (pre-migration);
+ *   any other failure THROWS so the caller shows an error state.
  */
 export async function listMaterials(opts = {}) {
   const {
     country, category, search, reviewedOnly, unreviewedOnly, conflictingOnly, limit = 200,
   } = opts
-  try {
-    let q = supabase.from('material_master').select(COLS)
-    if (country) q = q.eq('country', country)
-    if (category) q = q.eq('category', category)
-    if (reviewedOnly) q = q.eq('reviewed', true)
-    if (unreviewedOnly) q = q.eq('reviewed', false)
-    if (conflictingOnly) q = q.eq('conflicting', true)
-    if (search && String(search).trim()) {
-      const s = sanitizeSearch(search)
-      if (s) q = q.or(`item_code.ilike.%${s}%,item_name.ilike.%${s}%`)
-    }
-    const { data, error } = await q
-      .order('txn_value', { ascending: false })
-      .limit(Math.max(1, Math.min(Number(limit) || 200, 2000)))
-    if (error) return []
-    return Array.isArray(data) ? data : []
-  } catch {
-    return []
+  let q = supabase.from('material_master').select(COLS)
+  if (country) q = q.eq('country', country)
+  if (category) q = q.eq('category', category)
+  if (reviewedOnly) q = q.eq('reviewed', true)
+  if (unreviewedOnly) q = q.eq('reviewed', false)
+  if (conflictingOnly) q = q.eq('conflicting', true)
+  if (search && String(search).trim()) {
+    const s = sanitizeSearch(search)
+    if (s) q = q.or(`item_code.ilike.%${s}%,item_name.ilike.%${s}%`)
   }
+  // Capped at the server's own 1,000-row response ceiling: a larger limit would
+  // be silently cut to 1,000 anyway, so asking for more only misleads the caller.
+  const { data, error } = await q
+    .order('txn_value', { ascending: false })
+    .order('id', { ascending: true })
+    .limit(Math.max(1, Math.min(Number(limit) || 200, MATERIAL_LIST_MAX)))
+  if (error) {
+    // Only a table that genuinely is not deployed yet reads as "no items".
+    // Anything else (permission, network, bad filter) must reach the page as an
+    // error, never as an empty master that looks like nothing to review.
+    if (isMaterialMasterMissing(error)) return []
+    throw error
+  }
+  return Array.isArray(data) ? data : []
+}
+
+/** Largest page listMaterials will ask for (the PostgREST response cap). */
+export const MATERIAL_LIST_MAX = 1000
+
+/**
+ * Strict missing-table test, by CODE only. The shared message sniffers match a
+ * bare "relation" anywhere, and a permission denial can mention one; that must
+ * surface as an error, not as an empty master.
+ */
+function isMaterialMasterMissing(err) {
+  const code = String(err?.code || err?.cause?.code || '')
+  return code === '42P01' || code === 'PGRST205'
 }
 
 /**

@@ -2,9 +2,9 @@
  * Audit Trail service - the single Supabase boundary for the super-admin console
  * "Audit Trail" viewer (Module 6). Mirrors the sibling service modules
  * (systemLogs.js / dataReconciliation.js): explicit least-privilege column lists,
- * optional filters applied only when provided, and a guarded read that degrades
- * to an empty array so the page can render an honest empty/error state instead of
- * throwing.
+ * optional filters applied only when provided, and reads that THROW on a real
+ * failure (only an undeployed table degrades to []), so the page renders an
+ * error state rather than an empty audit log that reads as "nothing happened".
  *
  * This is a READ-ONLY, unified viewer across three existing, independently-owned
  * audit tables. It never writes to them:
@@ -174,9 +174,21 @@ export function normalizeRow(source, raw) {
 }
 
 /**
+ * Only an audit table that genuinely is not deployed reads as "no entries".
+ * Checked by CODE: a permission denial or a dropped connection must reach the
+ * page as an error. An audit log that silently renders empty on a failed read
+ * says "nothing happened", which is the one thing an audit trail must never
+ * claim falsely.
+ */
+function isAuditSourceMissing(err) {
+  const code = String(err?.code || err?.cause?.code || '')
+  return code === '42P01' || code === 'PGRST205'
+}
+
+/**
  * List row-level data-change audit entries (audit_log_v2), newest first. All
- * filters are optional. Returns normalised rows, or [] on any read/permission/
- * missing-relation error so the viewer degrades gracefully.
+ * filters are optional. Returns normalised rows; [] only when the table is not
+ * deployed, and THROWS on a permission or network failure.
  *
  * @param {object} [opts]
  * @param {string} [opts.action]  eq filter on action
@@ -187,25 +199,24 @@ export function normalizeRow(source, raw) {
  * @returns {Promise<Array<object>>}
  */
 export async function listDataAudit({ action, table, user, since, limit = 200 } = {}) {
-  try {
-    let q = sb.from('audit_log_v2').select(DATA_AUDIT_COLS)
-      .order('created_at', { ascending: false })
-      .limit(limit)
-    if (action) q = q.eq('action', action)
-    if (table) q = q.ilike('table_name', like(table))
-    if (user) q = q.ilike('user_email', like(user))
-    if (since) q = q.gte('created_at', since)
-    const { data, error } = await q
-    if (error) return []
-    return (Array.isArray(data) ? data : []).map((row) => normalizeRow('audit_log_v2', row))
-  } catch {
-    return []
+  let q = sb.from('audit_log_v2').select(DATA_AUDIT_COLS)
+    .order('created_at', { ascending: false })
+    .limit(limit)
+  if (action) q = q.eq('action', action)
+  if (table) q = q.ilike('table_name', like(table))
+  if (user) q = q.ilike('user_email', like(user))
+  if (since) q = q.gte('created_at', since)
+  const { data, error } = await q
+  if (error) {
+    if (isAuditSourceMissing(error)) return []
+    throw error
   }
+  return (Array.isArray(data) ? data : []).map((row) => normalizeRow('audit_log_v2', row))
 }
 
 /**
  * List access-control audit entries (access_audit), newest first. Ordered by the
- * `at` column. All filters optional; []-degrades.
+ * `at` column. All filters optional; throws on a failed read.
  *
  * @param {object} [opts]
  * @param {string} [opts.action]  eq filter on action
@@ -215,24 +226,23 @@ export async function listDataAudit({ action, table, user, since, limit = 200 } 
  * @returns {Promise<Array<object>>}
  */
 export async function listAccessAudit({ action, target, since, limit = 200 } = {}) {
-  try {
-    let q = sb.from('access_audit').select(ACCESS_AUDIT_COLS)
-      .order('at', { ascending: false })
-      .limit(limit)
-    if (action) q = q.eq('action', action)
-    if (target) q = q.ilike('target_user', like(target))
-    if (since) q = q.gte('at', since)
-    const { data, error } = await q
-    if (error) return []
-    return (Array.isArray(data) ? data : []).map((row) => normalizeRow('access_audit', row))
-  } catch {
-    return []
+  let q = sb.from('access_audit').select(ACCESS_AUDIT_COLS)
+    .order('at', { ascending: false })
+    .limit(limit)
+  if (action) q = q.eq('action', action)
+  if (target) q = q.ilike('target_user', like(target))
+  if (since) q = q.gte('at', since)
+  const { data, error } = await q
+  if (error) {
+    if (isAuditSourceMissing(error)) return []
+    throw error
   }
+  return (Array.isArray(data) ? data : []).map((row) => normalizeRow('access_audit', row))
 }
 
 /**
  * List console admin action entries (console_sessions), newest first. All filters
- * optional; []-degrades.
+ * optional; throws on a failed read.
  *
  * @param {object} [opts]
  * @param {string} [opts.action]  eq filter on action
@@ -241,18 +251,17 @@ export async function listAccessAudit({ action, target, since, limit = 200 } = {
  * @returns {Promise<Array<object>>}
  */
 export async function listConsoleAudit({ action, since, limit = 200 } = {}) {
-  try {
-    let q = sb.from('console_sessions').select(CONSOLE_AUDIT_COLS)
-      .order('created_at', { ascending: false })
-      .limit(limit)
-    if (action) q = q.eq('action', action)
-    if (since) q = q.gte('created_at', since)
-    const { data, error } = await q
-    if (error) return []
-    return (Array.isArray(data) ? data : []).map((row) => normalizeRow('console_sessions', row))
-  } catch {
-    return []
+  let q = sb.from('console_sessions').select(CONSOLE_AUDIT_COLS)
+    .order('created_at', { ascending: false })
+    .limit(limit)
+  if (action) q = q.eq('action', action)
+  if (since) q = q.gte('created_at', since)
+  const { data, error } = await q
+  if (error) {
+    if (isAuditSourceMissing(error)) return []
+    throw error
   }
+  return (Array.isArray(data) ? data : []).map((row) => normalizeRow('console_sessions', row))
 }
 
 /** Dispatch to the right list function by source key. */

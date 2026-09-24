@@ -17,7 +17,7 @@ import {
 } from 'lucide-react'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import {
-  listEmailLog, listPushLog, pushReach, emailStats, pushStats,
+  listEmailLog, listPushLog, pushReach, emailStats, pushStats, DELIVERY_LOG_MAX,
 } from '../../lib/api/deliveryHealth'
 import { exportToExcel, reportFileName } from '../../lib/exportUtils'
 import { toUserMessage } from '../../lib/safeError'
@@ -39,8 +39,6 @@ function fmtDateTime(v) {
 }
 
 const DAY_MS = 86_400_000
-/** The service reads cap at this many rows per channel (its own `limit`). */
-const SERVICE_ROW_CAP = 1000
 /** Longest range drawn day by day; wider ranges would make the axis unreadable. */
 const MAX_TREND_DAYS = 370
 
@@ -72,6 +70,8 @@ export default function ConsoleDelivery() {
 
   const [emailRows, setEmailRows] = useState([])
   const [pushRows, setPushRows] = useState([])
+  const [emailTruncated, setEmailTruncated] = useState(false)
+  const [pushTruncated, setPushTruncated] = useState(false)
   const [reach, setReach] = useState(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -95,12 +95,24 @@ export default function ConsoleDelivery() {
       listPushLog({ from, to: toEnd }),
       pushReach(),
     ])
-    if (eRes.status === 'fulfilled') setEmailRows(eRes.value)
-    else setError(toUserMessage(eRes.reason))
+    if (eRes.status === 'fulfilled') {
+      setEmailRows(eRes.value.rows)
+      setEmailTruncated(!!eRes.value.truncated)
+    } else {
+      setEmailRows([])
+      setEmailTruncated(false)
+      setError(toUserMessage(eRes.reason))
+    }
     // A failed push read used to leave the previous range's rows on screen
     // with no warning. It is now cleared and stated.
-    if (pRes.status === 'fulfilled') setPushRows(pRes.value)
-    else { setPushRows([]); setPushError(toUserMessage(pRes.reason, 'Could not read push notifications.')) }
+    if (pRes.status === 'fulfilled') {
+      setPushRows(pRes.value.rows)
+      setPushTruncated(!!pRes.value.truncated)
+    } else {
+      setPushRows([])
+      setPushTruncated(false)
+      setPushError(toUserMessage(pRes.reason, 'Could not read push notifications.'))
+    }
     setReach(rRes.status === 'fulfilled' ? rRes.value : null)
     setRefreshing(false)
     setLoading(false)
@@ -147,7 +159,7 @@ export default function ConsoleDelivery() {
     })
   }, [failures, channel, search])
 
-  const capped = emailRows.length >= SERVICE_ROW_CAP || pushRows.length >= SERVICE_ROW_CAP
+  const capped = emailTruncated || pushTruncated
   const rangeInvalid = days.length === 0
 
   const handleExport = useCallback(async () => {
@@ -212,8 +224,8 @@ export default function ConsoleDelivery() {
       )}
       {capped && (
         <Note icon={Info} tone="warning">
-          This range holds more than {SERVICE_ROW_CAP.toLocaleString()} deliveries on at least one channel, so the figures
-          cover the newest {SERVICE_ROW_CAP.toLocaleString()} per channel only. Narrow the date range for exact totals.
+          This range holds more than {DELIVERY_LOG_MAX.toLocaleString()} deliveries on at least one channel, so the figures
+          cover the newest {DELIVERY_LOG_MAX.toLocaleString()} per channel only. Narrow the date range for exact totals.
         </Note>
       )}
 

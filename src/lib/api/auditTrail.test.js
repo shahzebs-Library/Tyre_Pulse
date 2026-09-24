@@ -89,9 +89,14 @@ describe('auditTrail.listDataAudit', () => {
     expect(opCalls('gte')).toHaveLength(0)
   })
 
-  it('degrades to [] on a read/permission error', async () => {
+  it('THROWS on a permission error instead of an empty audit log', async () => {
     h.state.tableResult = { data: null, error: { message: 'denied', code: '42501' } }
-    expect(await svc.listDataAudit({ action: 'update' })).toEqual([])
+    await expect(svc.listDataAudit({ action: 'update' })).rejects.toBeTruthy()
+  })
+
+  it('degrades to [] only when the table is not deployed', async () => {
+    h.state.tableResult = { data: null, error: { message: 'relation does not exist', code: '42P01' } }
+    expect(await svc.listDataAudit({})).toEqual([])
   })
 })
 
@@ -118,9 +123,9 @@ describe('auditTrail.listAccessAudit', () => {
     expect(out[0].when).toBe('2026-07-16T09:00:00Z')
   })
 
-  it('degrades to [] on error', async () => {
+  it('THROWS on a read error', async () => {
     h.state.tableResult = { data: null, error: { message: 'boom' } }
-    expect(await svc.listAccessAudit({})).toEqual([])
+    await expect(svc.listAccessAudit({})).rejects.toBeTruthy()
   })
 })
 
@@ -148,9 +153,9 @@ describe('auditTrail.listConsoleAudit', () => {
     expect(opCalls('limit')[0][2]).toBe(200)
   })
 
-  it('degrades to [] on error', async () => {
+  it('THROWS on a read error', async () => {
     h.state.tableResult = { data: null, error: { message: 'boom' } }
-    expect(await svc.listConsoleAudit({})).toEqual([])
+    await expect(svc.listConsoleAudit({})).rejects.toBeTruthy()
   })
 })
 

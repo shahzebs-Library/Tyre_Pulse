@@ -86,10 +86,13 @@ vi.mock('../lib/api/deliveryHealth', async () => {
   const actual = await vi.importActual('../lib/api/deliveryHealth')
   return {
     ...actual,
-    listEmailLog: () => Promise.resolve([
-      { id: 'e1', status: 'sent', sent_at: h.today, report_type: 'fleet' },
-      { id: 'e2', status: 'error', sent_at: h.today, schedule_name: 'Weekly fleet', error: 'Bounced' },
-    ]),
+    listEmailLog: () => Promise.resolve({
+      rows: [
+        { id: 'e1', status: 'sent', sent_at: h.today, report_type: 'fleet' },
+        { id: 'e2', status: 'error', sent_at: h.today, schedule_name: 'Weekly fleet', error: 'Bounced' },
+      ],
+      truncated: false,
+    }),
     listPushLog: h.listPushLog,
     pushReach: () => Promise.resolve(4),
   }

@@ -21,9 +21,9 @@ beforeEach(() => {
 })
 
 describe('service layer - data browser', () => {
-  it('listTables returns [] on error and the array on success', async () => {
-    h.state.rpc = { data: null, error: { message: 'boom', code: '42501' } }
-    expect(await db.listTables()).toEqual([])
+  it('listTables THROWS on error (never an empty list) and returns the array on success', async () => {
+    h.state.rpc = { data: null, error: { message: 'permission denied for function admin_db_tables', code: '42501' } }
+    await expect(db.listTables()).rejects.toBeTruthy()
     expect(h.state.lastRpc.name).toBe('admin_db_tables')
 
     const rows = [{ table_name: 'tyre_records', row_count: 1419 }]
@@ -36,9 +36,9 @@ describe('service layer - data browser', () => {
     expect(await db.listTables()).toEqual([])
   })
 
-  it('listColumns passes p_table and returns [] on error, the array on success', async () => {
+  it('listColumns passes p_table, THROWS on error, returns the array on success', async () => {
     h.state.rpc = { data: null, error: { message: 'boom' } }
-    expect(await db.listColumns('accidents')).toEqual([])
+    await expect(db.listColumns('accidents')).rejects.toBeTruthy()
     expect(h.state.lastRpc.name).toBe('admin_db_columns')
     expect(h.state.lastRpc.args).toEqual({ p_table: 'accidents' })
 
@@ -74,8 +74,11 @@ describe('service layer - data browser', () => {
     })
   })
 
-  it('queryTable returns [] on error', async () => {
+  it('queryTable THROWS on error so the page shows an error, not "no rows"', async () => {
     h.state.rpc = { data: null, error: { message: 'denied', code: '42501' } }
-    expect(await db.queryTable({ table: 'tyre_records' })).toEqual([])
+    const err = await db.queryTable({ table: 'tyre_records' }).catch((e) => e)
+    expect(err).toBeInstanceOf(Error)
+    // The sanitised message never leaks the raw database text.
+    expect(String(err.message)).not.toMatch(/42501/)
   })
 })

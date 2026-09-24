@@ -12,6 +12,15 @@
  * fetchers stay thin and degrade to [] / 0 before a relation exists.
  */
 import { supabase } from './_client'
+import { fetchAllPages } from '../fetchAll'
+
+/**
+ * Ceiling on rows read per channel per window. PostgREST caps every response
+ * at 1,000 rows whatever `.limit()` says, so the logs are PAGED; this ceiling
+ * only stops an absurd range from pulling an unbounded table into the browser.
+ * When it is hit the result carries `truncated: true` and the page says so.
+ */
+export const DELIVERY_LOG_MAX = 50000
 
 /** True when a Supabase error means the table / relation is not deployed yet. */
 function isMissingRelation(err) {
@@ -31,42 +40,54 @@ function isMissingRelation(err) {
 const EMAIL_COLS =
   'id,schedule_id,schedule_name,report_type,recipients,status,error,sent_at,organisation_id'
 
-/** Recent report email delivery rows for a window. Returns [] when unreadable. */
-export async function listEmailLog({ days = 30, from, to, limit = 1000 } = {}) {
+/**
+ * Report email delivery rows for a window, paged past the 1,000-row server cap.
+ * Newest first, `id` as the unique tiebreak so a page boundary never drops or
+ * repeats a row. A missing relation resolves to no rows; any other failure
+ * THROWS, so the page shows an error instead of an empty log.
+ * @returns {Promise<{rows: object[], truncated: boolean}>}
+ */
+export async function listEmailLog({ days = 30, from, to, max = DELIVERY_LOG_MAX } = {}) {
   const start = from
     ? new Date(from).toISOString()
     : new Date(Date.now() - days * 86_400_000).toISOString()
-  try {
+  const end = to ? new Date(to).toISOString() : null
+  const { data, error, truncated } = await fetchAllPages((a, b) => {
     let q = supabase.from('report_send_log').select(EMAIL_COLS).gte('sent_at', start)
-    if (to) q = q.lte('sent_at', new Date(to).toISOString())
-    const { data, error } = await q.order('sent_at', { ascending: false }).limit(limit)
-    if (error) throw error
-    return data || []
-  } catch (err) {
-    if (isMissingRelation(err)) return []
-    throw err
+    if (end) q = q.lte('sent_at', end)
+    return q.order('sent_at', { ascending: false }).order('id', { ascending: false }).range(a, b)
+  }, { max })
+  if (error) {
+    if (isMissingRelation(error)) return { rows: [], truncated: false }
+    throw error
   }
+  return { rows: data || [], truncated: !!truncated }
 }
 
 const PUSH_COLS =
   'id,event_type,recipient_count,status,attempts,next_attempt_at,response_status,' +
   'result,last_error,created_at,delivered_at,organisation_id'
 
-/** Recent workflow / push notification rows for a window. Returns [] when unreadable. */
-export async function listPushLog({ days = 30, from, to, limit = 1000 } = {}) {
+/**
+ * Workflow / push notification rows for a window, paged past the 1,000-row
+ * server cap (newest first, `id` tiebreak). Same error contract as listEmailLog.
+ * @returns {Promise<{rows: object[], truncated: boolean}>}
+ */
+export async function listPushLog({ days = 30, from, to, max = DELIVERY_LOG_MAX } = {}) {
   const start = from
     ? new Date(from).toISOString()
     : new Date(Date.now() - days * 86_400_000).toISOString()
-  try {
+  const end = to ? new Date(to).toISOString() : null
+  const { data, error, truncated } = await fetchAllPages((a, b) => {
     let q = supabase.from('workflow_notifications').select(PUSH_COLS).gte('created_at', start)
-    if (to) q = q.lte('created_at', new Date(to).toISOString())
-    const { data, error } = await q.order('created_at', { ascending: false }).limit(limit)
-    if (error) throw error
-    return data || []
-  } catch (err) {
-    if (isMissingRelation(err)) return []
-    throw err
+    if (end) q = q.lte('created_at', end)
+    return q.order('created_at', { ascending: false }).order('id', { ascending: false }).range(a, b)
+  }, { max })
+  if (error) {
+    if (isMissingRelation(error)) return { rows: [], truncated: false }
+    throw error
   }
+  return { rows: data || [], truncated: !!truncated }
 }
 
 /** Head count of devices reachable by push (profiles.push_token not null). */

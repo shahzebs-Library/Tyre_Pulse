@@ -13,7 +13,7 @@
  * protected count rather than hide it, so nobody assumes "0 deletable" means
  * "nothing found".
  */
-import { supabase } from './_client'
+import { supabase, fetchAllPages } from './_client'
 import { toUserMessage } from '../safeError'
 
 /** Every scannable target: {key, tbl, label, kind, has_source_row}. */
@@ -71,16 +71,36 @@ export async function restoreDuplicateBatch(batchId) {
   return data || { ok: false, restored: 0 }
 }
 
-/** Past delete batches, so every removal stays visible and undoable. */
+/** Ceiling on archive rows read to rebuild the batch list (lean columns only). */
+export const DUP_ARCHIVE_ROW_MAX = 50000
+
+/**
+ * Past delete batches, newest first, so every removal stays visible and undoable.
+ *
+ * `limit` is a number of BATCHES. It used to be applied to archive ROWS, which
+ * made a 4,993-row delete batch read as "50 rows" (and PostgREST caps a
+ * response at 1,000 rows anyway). The archive is now paged in full (lean
+ * columns, `id` tiebreak) so each batch's row count is the real one.
+ *
+ * Only an undeployed archive (pre-V362) reads as "no batches"; any other
+ * failure THROWS so the page shows an error instead of an empty undo list.
+ */
 export async function listDuplicateBatches(limit = 50) {
-  const { data, error } = await supabase
+  // Newest first: if the ceiling were ever hit, only the OLDEST batch's count
+  // could be short, never a recent one.
+  const { data, error } = await fetchAllPages((a, b) => supabase
     .from('dup_resolve_archive')
-    .select('batch_id, target_key, tbl, country, reason, created_at, restored_at')
+    .select('id, batch_id, target_key, tbl, country, reason, created_at, restored_at')
     .order('created_at', { ascending: false })
-    .limit(Math.max(1, Math.min(Number(limit) || 50, 2000)))
-  // The table only exists from V362 onward; degrade quietly rather than break the page.
-  if (error) return []
+    .order('id', { ascending: false })
+    .range(a, b), { max: DUP_ARCHIVE_ROW_MAX })
+  if (error) {
+    const code = String(error.code || error.cause?.code || '')
+    if (code === '42P01' || code === 'PGRST205') return []
+    throw new Error(toUserMessage(error, 'Could not load past delete batches.'))
+  }
   return groupBatches(Array.isArray(data) ? data : [])
+    .slice(0, Math.max(1, Math.min(Number(limit) || 50, 500)))
 }
 
 /**

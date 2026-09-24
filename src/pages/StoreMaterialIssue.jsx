@@ -889,6 +889,7 @@ function RaiseTab({ canWrite, activeCountry, profileName, onSaved }) {
   const [jobs, setJobs] = useState([])
   const [items, setItems] = useState([])
   const [itemsFor, setItemsFor] = useState(null)
+  const [itemsError, setItemsError] = useState('')
 
   const searchTimer = useRef(null)
   const itemTimer = useRef(null)
@@ -933,10 +934,18 @@ function RaiseTab({ canWrite, activeCountry, profileName, onSaved }) {
     setLine(idx, { query: term, item_code: '', item_description: '' })
     setItemsFor(idx)
     if (itemTimer.current) clearTimeout(itemTimer.current)
+    setItemsError('')
     if (!header.country || !term.trim()) { setItems([]); return }
     itemTimer.current = setTimeout(async () => {
-      const rows = await listMaterials({ country: header.country, search: term, limit: 25 })
-      setItems(rows)
+      try {
+        const rows = await listMaterials({ country: header.country, search: term, limit: 25 })
+        setItemsError('')
+        setItems(rows)
+      } catch (err) {
+        // A failed lookup must not read as "No item in the master matches that".
+        setItems([])
+        setItemsError(toUserMessage(err, 'Could not search the item master.'))
+      }
     }, 300)
   }, [header.country])
 
@@ -1186,7 +1195,11 @@ function RaiseTab({ canWrite, activeCountry, profileName, onSaved }) {
                   </div>
                   {itemsFor === i && !l.item_code && l.query && (
                     <div className="max-h-40 overflow-y-auto rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)]">
-                      {items.length === 0 ? (
+                      {itemsError ? (
+                        <p role="alert" className="px-3 py-2 text-[11px] text-red-400">
+                          {itemsError}
+                        </p>
+                      ) : items.length === 0 ? (
                         <p className="px-3 py-2 text-[11px] text-[var(--text-muted)]">
                           No item in the master matches that.
                         </p>

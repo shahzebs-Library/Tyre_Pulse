@@ -37,7 +37,7 @@ final class SupabasePmRepository with SupabaseGateway implements PmRepository {
           await fetchAllPages<Map<String, dynamic>>(
         (int from, int to) => query
             .order('next_due', ascending: true, nullsFirst: false)
-            .order('id')
+            .order('id', ascending: true)
             .range(from, to),
         maxRows: 100000,
       );

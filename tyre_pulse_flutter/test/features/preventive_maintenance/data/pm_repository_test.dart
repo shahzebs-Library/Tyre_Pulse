@@ -30,10 +30,11 @@ void main() {
       request.response.headers.contentType = ContentType.json;
       if (failSecondPage && offset > 0) {
         request.response.statusCode = HttpStatus.forbidden;
-        request.response.write(jsonEncode(<String, String>{
+        final Map<String, String> failure = <String, String>{
           'code': '42501',
           'message': 'Read denied',
-        }));
+        };
+        request.response.write(jsonEncode(failure));
       } else {
         final int end = offset + limit < 1001 ? offset + limit : 1001;
         final List<Map<String, Object?>> rows = <Map<String, Object?>>[];

@@ -31,6 +31,19 @@ test('contact validation rejects malformed and honeypot submissions before deliv
   assert.equal((await post(request({ ...input, website: 'spam' }))).status, 400);
 });
 
+test('malformed JSON is a client error and never attempts delivery', async () => {
+  const post = handler(configured, () => { throw new Error('must not send'); });
+  assert.equal((await post({ json: async () => { throw new SyntaxError('invalid JSON'); } })).status, 400);
+});
+
+test('email whitespace is normalized before validation and delivery', async () => {
+  const post = handler(configured, async (_url, options) => {
+    assert.equal(JSON.parse(options.body).reply_to, input.email);
+    return { ok: true, json: async () => ({ id: 'mock-delivery-id' }) };
+  });
+  assert.equal((await post(request({ ...input, email: ` ${input.email} ` }))).status, 200);
+});
+
 test('success requires provider acceptance and uses configured sender and recipient', async () => {
   let calls = 0;
   const post = handler(configured, async (url, options) => {

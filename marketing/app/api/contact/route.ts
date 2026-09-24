@@ -3,7 +3,7 @@ import { z } from "zod";
 
 const requestSchema = z.object({
   name: z.string().trim().min(2).max(100),
-  email: z.string().email().max(200),
+  email: z.string().trim().email().max(200),
   company: z.string().trim().min(2).max(160),
   country: z.string().trim().min(2).max(100),
   fleetSize: z.string().trim().max(100).optional().default(""),
@@ -13,11 +13,15 @@ const requestSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  let raw: unknown;
   try {
-    const raw = await request.json();
+    raw = await request.json();
+  } catch {
+    return NextResponse.json({ message: "Please send a valid JSON request." }, { status: 400 });
+  }
+  try {
     const parsed = requestSchema.safeParse(raw);
     if (!parsed.success) return NextResponse.json({ message: "Please check the highlighted information and try again." }, { status: 400 });
-    if (parsed.data.website) return NextResponse.json({ message: "Request received." });
 
     const apiKey = process.env.RESEND_API_KEY;
     const recipient = process.env.CONTACT_TO_EMAIL;

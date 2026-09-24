@@ -156,16 +156,16 @@ export default function ConsoleSecurityAudit() {
       reportFileName('Security Audit', new Date().toISOString().slice(0, 10)))
   }
 
-  if (state.loading && !posture) return <div className="p-6"><LoadingState label="Running security checks" rows={6} /></div>
-  if (state.error && !posture) return <div className="p-6"><ErrorState message={state.error} onRetry={load} /></div>
+  if (state.loading && !posture) return <div><LoadingState label="Running security checks" rows={6} /></div>
+  if (state.error && !posture) return <div><ErrorState message={state.error} onRetry={load} /></div>
 
   const act = posture?.activity || {}
 
   return (
-    <div className="p-6 space-y-5 max-w-7xl">
+    <div className="space-y-5 max-w-7xl">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold text-gray-100 flex items-center gap-2">
+          <h1>
             <ShieldCheck size={18} className="text-orange-400" /> Security Audit
           </h1>
           <p className="text-xs text-gray-500 mt-1">

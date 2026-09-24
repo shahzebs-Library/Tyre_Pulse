@@ -1,286 +1,170 @@
-import { useEffect, useState, useCallback } from 'react'
-import { Zap, RefreshCw, DollarSign, TrendingUp, Calendar, Filter } from 'lucide-react'
-import { supabase } from '../../lib/supabase'
+/**
+ * ConsoleAIUsage.jsx - AI usage and spend across the platform.
+ *
+ * Reads ai_token_logs through the single AI usage reader (lib/api/aiOps), the
+ * same one AI Administration uses, so both pages report the same numbers.
+ *
+ * The previous version read ai_usage_log, which holds no rows, and selected
+ * columns that table does not have, so this page could only ever show an error
+ * or an empty state.
+ */
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Zap, RefreshCw, DollarSign, AlertTriangle, Cpu, Download, Layers } from 'lucide-react'
+import {
+  Panel, PanelHeader, StatTile, Badge, Btn, Segmented, Select, Toolbar,
+  Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, Note,
+} from '../components/ui'
+import { TrendChart, BarsChart } from '../components/ui/charts'
+import { getUsageOverview } from '../../lib/api/aiOps'
+import { dailySeries } from '../../lib/consoleCharts'
 import { toUserMessage } from '../../lib/safeError'
-import { ErrorState } from '../components/ui'
-import { useConsoleAuth } from '../ConsoleAuthContext'
+import { exportToExcel, reportFileName } from '../../lib/exportUtils'
+import { COUNTRIES } from '../../contexts/SettingsContext'
 
 const RANGES = [
-  { label: '7 days',  days: 7 },
-  { label: '30 days', days: 30 },
-  { label: '90 days', days: 90 },
+  { key: '7', label: '7 days' },
+  { key: '30', label: '30 days' },
+  { key: '90', label: '90 days' },
 ]
+const COUNTRY_OPTS = [{ value: '', label: 'All countries' }, ...COUNTRIES.map((c) => ({ value: c, label: c }))]
+
+const nf = new Intl.NumberFormat('en-US')
+const usd = (v) => `$${(Number(v) || 0).toFixed((Number(v) || 0) < 1 ? 4 : 2)}`
+const pct = (v) => `${((Number(v) || 0) * 100).toFixed(1)}%`
+const fmtWhen = (v) => (v ? new Date(v).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'N/A')
 
 export default function ConsoleAIUsage() {
-  const { activeOrg } = useConsoleAuth()
-  const [logs, setLogs]     = useState([])
-  const [loading, setLoading] = useState(true)
-  const [loadError, setLoadError] = useState('')
-  const [range, setRange]   = useState(30)
-  const [filterModel, setFilterModel] = useState('')
-  const [filterOrg, setFilterOrg]     = useState(activeOrg?.id ?? '')
-  const [orgs, setOrgs]     = useState([])
-  const [page, setPage]     = useState(0)
-  const [total, setTotal]   = useState(0)
-  const PAGE_SIZE = 50
-
-  useEffect(() => {
-    supabase.from('organisations').select('id, name').order('name')
-      .then(({ data }) => setOrgs(data ?? []))
-  }, [])
+  const [range, setRange] = useState('30')
+  const [country, setCountry] = useState('')
+  const [metric, setMetric] = useState('calls')
+  const [state, setState] = useState({ loading: true, error: null, data: null })
 
   const load = useCallback(async () => {
-    setLoading(true); setLoadError('')
-    const since = new Date(Date.now() - range * 86400000).toISOString()
-    let q = supabase
-      .from('ai_usage_log')
-      .select('id, created_at, user_id, organisation_id, model, prompt_tokens, completion_tokens, total_tokens, cost_usd, feature, latency_ms', { count: 'exact' })
-      .gte('created_at', since)
-      .order('created_at', { ascending: false })
-      .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1)
-
-    if (filterOrg)   q = q.eq('organisation_id', filterOrg)
-    if (filterModel) q = q.eq('model', filterModel)
-
+    setState((s) => ({ ...s, loading: true, error: null }))
     try {
-      const { data, count, error } = await q
-      // An unread error rendered as an empty page, which reads as "no AI usage"
-      // when it actually means "we could not look".
-      if (error) throw error
-      setLogs(data ?? [])
-      setTotal(count ?? 0)
-    } catch (e) {
-      setLoadError(toUserMessage(e, 'Could not load AI usage.'))
-      setLogs([]); setTotal(0)
-    } finally {
-      setLoading(false)
+      const data = await getUsageOverview({ days: Number(range), country: country || undefined })
+      setState({ loading: false, error: null, data })
+    } catch (err) {
+      setState({ loading: false, error: toUserMessage(err, 'Could not load AI usage.'), data: null })
     }
-  }, [range, filterOrg, filterModel, page])
+  }, [range, country])
 
   useEffect(() => { load() }, [load])
 
-  // Compute aggregates from current page data + totals query
-  const [agg, setAgg] = useState({ calls: 0, tokens: 0, cost: 0, models: {} })
+  const s = state.data?.summary
+  const rows = useMemo(() => state.data?.rows || [], [state.data])
 
-  useEffect(() => {
-    async function loadAgg() {
-      const since = new Date(Date.now() - range * 86400000).toISOString()
-      let q = supabase.from('ai_usage_log')
-        .select('model, total_tokens, cost_usd, created_at')
-        .gte('created_at', since)
-      if (filterOrg)   q = q.eq('organisation_id', filterOrg)
-      if (filterModel) q = q.eq('model', filterModel)
-      const { data } = await q
-      const models = {}
-      let tokens = 0, cost = 0
-      ;(data ?? []).forEach(r => {
-        tokens += r.total_tokens ?? 0
-        cost   += parseFloat(r.cost_usd ?? 0)
-        if (!models[r.model]) models[r.model] = { calls: 0, tokens: 0, cost: 0 }
-        models[r.model].calls++
-        models[r.model].tokens += r.total_tokens ?? 0
-        models[r.model].cost   += parseFloat(r.cost_usd ?? 0)
-      })
-      setAgg({ calls: data?.length ?? 0, tokens, cost, models })
+  const series = useMemo(() => {
+    const days = Number(range)
+    if (metric === 'cost') {
+      const byDay = Object.fromEntries((s?.byDay || []).map((d) => [d.date, d.cost]))
+      const base = dailySeries([], () => null, days)
+      return { labels: base.labels, values: base.keys.map((k) => Number((byDay[k] || 0).toFixed(4))), label: 'Cost (USD)' }
     }
-    loadAgg()
-  }, [range, filterOrg, filterModel])
+    if (metric === 'failures') {
+      const d = dailySeries(rows.filter((r) => r.status && r.status !== 'success'), (r) => r.created_at, days)
+      return { labels: d.labels, values: d.values, label: 'Failed calls' }
+    }
+    const d = dailySeries(rows.filter((r) => !r.status || r.status === 'success'), (r) => r.created_at, days)
+    return { labels: d.labels, values: d.values, label: 'Calls' }
+  }, [rows, s, metric, range])
 
-  // Day-by-day trend
-  const [trend, setTrend] = useState([])
-  useEffect(() => {
-    const byDay = {}
-    logs.forEach(r => {
-      const d = r.created_at.slice(0, 10)
-      if (!byDay[d]) byDay[d] = { date: d, calls: 0, tokens: 0, cost: 0 }
-      byDay[d].calls++
-      byDay[d].tokens += r.total_tokens ?? 0
-      byDay[d].cost   += parseFloat(r.cost_usd ?? 0)
-    })
-    setTrend(Object.values(byDay).sort((a, b) => a.date.localeCompare(b.date)))
-  }, [logs])
+  const modelBars = (s?.byModel || []).slice(0, 8).map((m) => ({ label: m.model, value: Number(m.cost.toFixed(4)) }))
+  const featureBars = (s?.byFeature || []).slice(0, 8).map((f) => ({ label: f.feature, value: f.calls }))
 
-  const uniqueModels = [...new Set(logs.map(l => l.model).filter(Boolean))]
+  const exportRows = () => {
+    exportToExcel(rows.map((r) => ({
+      when: r.created_at, model: r.model, feature: r.feature, status: r.status || 'success',
+      prompt: r.prompt_tokens, completion: r.completion_tokens, cost: r.cost_usd, country: r.country,
+    })), ['when', 'model', 'feature', 'status', 'prompt', 'completion', 'cost', 'country'],
+    ['Time', 'Model', 'Feature', 'Status', 'Prompt tokens', 'Completion tokens', 'Cost USD', 'Country'],
+    reportFileName('AI Usage', `${range} days`))
+  }
 
   return (
     <div className="space-y-5 max-w-7xl">
-      <ErrorState message={loadError} onRetry={load} />
-      {/* Header */}
-      <div className="flex items-center justify-between">
+      <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-white">AI Usage & Cost</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Token consumption and cost tracking across all AI features</p>
+          <h1><Zap size={18} className="text-orange-400" /> AI Usage</h1>
+          <p className="text-xs text-gray-500 mt-1">Calls, tokens, spend and failures for every AI feature, from the AI request log.</p>
         </div>
-        <button onClick={load} disabled={loading}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 text-gray-400 hover:text-white text-xs border border-gray-700 disabled:opacity-50 transition-colors">
-          <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Refresh
-        </button>
-      </div>
+        <Toolbar>
+          <Segmented value={range} onChange={setRange} options={RANGES} />
+          <Select value={country} onChange={setCountry} options={COUNTRY_OPTS} className="w-36" />
+          <Btn icon={Download} onClick={exportRows} disabled={!rows.length}>Export</Btn>
+          <Btn icon={RefreshCw} onClick={load} busy={state.loading}>Refresh</Btn>
+        </Toolbar>
+      </header>
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-3">
-        <div className="flex gap-1 p-1 bg-gray-900 border border-gray-800 rounded-xl">
-          {RANGES.map(r => (
-            <button key={r.days} onClick={() => { setRange(r.days); setPage(0) }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                range === r.days ? 'bg-orange-900/60 text-orange-300 border border-orange-700/40' : 'text-gray-400 hover:text-white'
-              }`}>{r.label}</button>
-          ))}
-        </div>
-        {!activeOrg && (
-          <select value={filterOrg} onChange={e => { setFilterOrg(e.target.value); setPage(0) }}
-            className="h-9 bg-gray-800 border border-gray-700 rounded-lg px-3 text-xs text-gray-300 focus:outline-none focus:border-orange-500">
-            <option value="">All Orgs</option>
-            {orgs.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
-          </select>
-        )}
-        <select value={filterModel} onChange={e => { setFilterModel(e.target.value); setPage(0) }}
-          className="h-9 bg-gray-800 border border-gray-700 rounded-lg px-3 text-xs text-gray-300 focus:outline-none focus:border-orange-500">
-          <option value="">All Models</option>
-          {uniqueModels.map(m => <option key={m} value={m}>{m}</option>)}
-        </select>
-      </div>
+      {state.error && <ErrorState message={state.error} onRetry={load} />}
+      {state.loading && !s && <LoadingState label="Loading AI usage" rows={4} />}
 
-      {/* KPI cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <AiKpi icon={Zap}         label="Total Calls"   value={agg.calls.toLocaleString()}                      color="yellow" />
-        <AiKpi icon={TrendingUp}  label="Total Tokens"  value={fmtTokens(agg.tokens)}                           color="blue" />
-        <AiKpi icon={DollarSign}  label="Total Cost"    value={`$${Number(agg.cost).toFixed(4)}`}               color="orange" />
-        <AiKpi icon={Calendar}    label="Avg per Day"   value={`$${(agg.cost / Math.max(range, 1)).toFixed(4)}`} color="purple" />
-      </div>
-
-      {/* Model breakdown */}
-      {Object.keys(agg.models).length > 0 && (
-        <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
-          <h3 className="text-sm font-semibold text-white mb-3">By Model</h3>
-          <div className="space-y-2">
-            {Object.entries(agg.models).sort((a, b) => b[1].cost - a[1].cost).map(([model, s]) => (
-              <div key={model} className="flex items-center gap-3">
-                <span className="text-xs text-gray-300 w-48 truncate font-mono">{model}</span>
-                <div className="flex-1 h-2 bg-gray-800 rounded-full overflow-hidden">
-                  <div className="h-full bg-orange-500/70 rounded-full transition-all"
-                    style={{ width: `${(s.cost / agg.cost) * 100}%` }} />
-                </div>
-                <span className="text-xs text-gray-400 w-20 text-right">{s.calls.toLocaleString()} calls</span>
-                <span className="text-xs text-orange-300 w-24 text-right font-semibold">${s.cost.toFixed(4)}</span>
-              </div>
-            ))}
+      {s && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+            <StatTile icon={Zap} label="Successful calls" value={nf.format(s.totalCalls)} />
+            <StatTile icon={Layers} label="Tokens" value={nf.format(s.totalTokens)}
+              sub={`${nf.format(s.promptTokens)} in, ${nf.format(s.completionTokens)} out`} />
+            <StatTile icon={DollarSign} label="Spend" value={usd(s.totalCost)} tone="accent" />
+            <StatTile icon={DollarSign} label="Cost per call" value={s.totalCalls ? usd(s.avgCostPerCall) : 'N/A'} />
+            <StatTile icon={AlertTriangle} label="Failed calls" value={nf.format(s.failedCalls)}
+              tone={s.failedCalls ? 'warning' : 'default'} />
+            <StatTile icon={Cpu} label="Failure rate" value={rows.length ? pct(s.failureRate) : 'N/A'}
+              tone={s.failureRate > 0.05 ? 'danger' : 'default'} />
           </div>
-        </div>
-      )}
 
-      {/* Trend chart */}
-      {trend.length > 0 && (
-        <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
-          <h3 className="text-sm font-semibold text-white mb-4">Daily Trend - Cost ($)</h3>
-          <div className="flex items-end gap-1 h-24">
-            {trend.map(d => {
-              const maxCost = Math.max(...trend.map(x => x.cost), 0.0001)
-              const pct = (d.cost / maxCost) * 100
-              return (
-                <div key={d.date} className="flex-1 flex flex-col items-center gap-1 group relative" title={`${d.date}: $${d.cost.toFixed(4)} (${d.calls} calls)`}>
-                  <div className="w-full bg-gray-800 rounded-sm relative flex-1">
-                    <div className="absolute bottom-0 w-full rounded-sm bg-orange-500/70 transition-all"
-                      style={{ height: `${pct}%`, minHeight: d.cost > 0 ? 3 : 0 }} />
-                  </div>
-                  <p className="text-[9px] text-gray-600">{d.date.slice(5)}</p>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
+          {rows.length >= 5000 && (
+            <Note tone="warning" icon={AlertTriangle}>Showing the most recent 5,000 requests in this window. Narrow the range for complete totals.</Note>
+          )}
 
-      {/* Logs table */}
-      <div className="rounded-xl border border-gray-800 overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-800 bg-gray-900/60">
-          <h3 className="text-sm font-semibold text-white">Request Log</h3>
-        </div>
-        {loading ? (
-          <div className="flex items-center justify-center h-32">
-            <div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+          <Panel>
+            <PanelHeader icon={Zap} title="Trend" subtitle={`Per day over the last ${range} days.`}
+              actions={<Segmented value={metric} onChange={setMetric} options={[
+                { key: 'calls', label: 'Calls' }, { key: 'cost', label: 'Cost' }, { key: 'failures', label: 'Failures' },
+              ]} />} />
+            <TrendChart labels={series.labels} series={[{ label: series.label, values: series.values }]} height={220}
+              summary={`${series.label} per day`} emptyText="No AI requests in this window." />
+          </Panel>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Panel>
+              <PanelHeader icon={Cpu} title="Spend by model" subtitle="Estimated from recorded cost, or model pricing when cost is missing." />
+              <BarsChart bars={modelBars} valueFormat={usd} summary={modelBars.map((b) => `${b.label} ${usd(b.value)}`).join(', ')}
+                emptyText="No spend recorded." />
+            </Panel>
+            <Panel>
+              <PanelHeader icon={Layers} title="Calls by feature" subtitle="Which part of the app is asking the AI." />
+              <BarsChart bars={featureBars} valueFormat={(v) => nf.format(v)}
+                summary={featureBars.map((b) => `${b.label} ${b.value}`).join(', ')} emptyText="No calls recorded." />
+            </Panel>
           </div>
-        ) : logs.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-32 text-gray-600">
-            <Zap size={24} className="mb-2 opacity-30" />
-            <p className="text-xs">No AI requests found</p>
-          </div>
-        ) : (
-          <>
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-gray-800/60 text-gray-500">
-                  <th className="text-left px-4 py-2.5 font-semibold uppercase tracking-wider">Time</th>
-                  <th className="text-left px-4 py-2.5 font-semibold uppercase tracking-wider">Feature</th>
-                  <th className="text-left px-4 py-2.5 font-semibold uppercase tracking-wider">Model</th>
-                  <th className="text-right px-4 py-2.5 font-semibold uppercase tracking-wider">Prompt</th>
-                  <th className="text-right px-4 py-2.5 font-semibold uppercase tracking-wider">Completion</th>
-                  <th className="text-right px-4 py-2.5 font-semibold uppercase tracking-wider">Total</th>
-                  <th className="text-right px-4 py-2.5 font-semibold uppercase tracking-wider">Cost</th>
-                  <th className="text-right px-4 py-2.5 font-semibold uppercase tracking-wider">Latency</th>
-                </tr>
-              </thead>
-              <tbody>
-                {logs.map(log => (
-                  <tr key={log.id} className="border-b border-gray-800/40 hover:bg-gray-800/20 transition-colors">
-                    <td className="px-4 py-2.5 text-gray-500 whitespace-nowrap">
-                      {new Date(log.created_at).toLocaleString()}
-                    </td>
-                    <td className="px-4 py-2.5 text-gray-300 capitalize">{log.feature ?? '-'}</td>
-                    <td className="px-4 py-2.5 font-mono text-gray-400 text-[10px]">{log.model ?? '-'}</td>
-                    <td className="px-4 py-2.5 text-right text-gray-500">{(log.prompt_tokens ?? 0).toLocaleString()}</td>
-                    <td className="px-4 py-2.5 text-right text-gray-500">{(log.completion_tokens ?? 0).toLocaleString()}</td>
-                    <td className="px-4 py-2.5 text-right text-white font-semibold">{(log.total_tokens ?? 0).toLocaleString()}</td>
-                    <td className="px-4 py-2.5 text-right text-orange-300 font-semibold">
-                      ${Number(log.cost_usd ?? 0).toFixed(5)}
-                    </td>
-                    <td className="px-4 py-2.5 text-right text-gray-500">
-                      {log.latency_ms ? `${log.latency_ms}ms` : '-'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {total > PAGE_SIZE && (
-              <div className="flex items-center justify-between px-4 py-3 border-t border-gray-800 bg-gray-900/30">
-                <p className="text-xs text-gray-500">
-                  {page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, total)} of {total.toLocaleString()}
-                </p>
-                <div className="flex gap-2">
-                  <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
-                    className="px-3 py-1 rounded-lg text-xs bg-gray-800 text-gray-400 hover:text-white disabled:opacity-40 border border-gray-700">← Prev</button>
-                  <button onClick={() => setPage(p => p + 1)} disabled={(page + 1) * PAGE_SIZE >= total}
-                    className="px-3 py-1 rounded-lg text-xs bg-gray-800 text-gray-400 hover:text-white disabled:opacity-40 border border-gray-700">Next →</button>
-                </div>
-              </div>
+
+          <Panel flush>
+            <div className="p-4 pb-2">
+              <PanelHeader icon={AlertTriangle} title="Recent failures"
+                subtitle="Rate limits, missing keys and provider errors. Each one was a user who got no answer." />
+            </div>
+            {!s.recentFailures.length ? (
+              <div className="px-4 pb-4"><EmptyState title="No failed requests" reason="Every AI request in this window succeeded." /></div>
+            ) : (
+              <Table className="border-0 rounded-none">
+                <THead><Th>When</Th><Th>Feature</Th><Th>Model</Th><Th>Status</Th><Th>Error</Th></THead>
+                <tbody>
+                  {s.recentFailures.map((r) => (
+                    <Tr key={r.id}>
+                      <Td nowrap><span className="text-gray-500 tabular-nums">{fmtWhen(r.created_at)}</span></Td>
+                      <Td>{r.feature || 'other'}</Td>
+                      <Td><span className="font-mono text-[11px] text-gray-400">{r.model || 'unknown'}</span></Td>
+                      <Td><Badge tone={r.status === 'rate_limited' ? 'warning' : 'danger'}>{String(r.status || 'error').replace(/_/g, ' ')}</Badge></Td>
+                      <Td><span className="text-gray-400">{r.error || (r.http_status ? `HTTP ${r.http_status}` : 'N/A')}</span></Td>
+                    </Tr>
+                  ))}
+                </tbody>
+              </Table>
             )}
-          </>
-        )}
-      </div>
+          </Panel>
+        </>
+      )}
     </div>
   )
-}
-
-function AiKpi({ icon: Icon, label, value, color }) {
-  const c = {
-    yellow: 'text-yellow-400 bg-yellow-900/10 border-yellow-800/40',
-    blue:   'text-blue-400 bg-blue-900/20 border-blue-800/40',
-    orange: 'text-orange-400 bg-orange-900/20 border-orange-800/40',
-    purple: 'text-purple-400 bg-purple-900/20 border-purple-800/40',
-  }
-  return (
-    <div className={`rounded-xl border p-4 ${c[color]}`}>
-      <Icon size={18} className="mb-2 opacity-80" />
-      <p className="text-xl font-bold text-white">{value}</p>
-      <p className="text-xs text-gray-400 mt-0.5">{label}</p>
-    </div>
-  )
-}
-
-function fmtTokens(n) {
-  if (!n) return '0'
-  const v = Number(n)
-  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(2)}M`
-  if (v >= 1000) return `${(v / 1000).toFixed(1)}k`
-  return v.toString()
 }

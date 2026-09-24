@@ -1825,3 +1825,18 @@ html.light .console-root {
   --border-brand: rgba(234,88,12,0.18);
   --border-bright: rgba(234,88,12,0.32);
 }
+
+/* One page-title style across every console page. Pages grew their own h1
+   (text-lg vs text-xl, bold vs semibold, white vs gray); this makes them one
+   size and weight without editing each page, and new pages get it for free. */
+.console-root main h1 {
+  font-size: 1.125rem !important;
+  line-height: 1.4;
+  font-weight: 600 !important;
+  letter-spacing: -0.01em;
+  color: #f3f4f6;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+html.light .console-root main h1 { color: #0f172a !important; }

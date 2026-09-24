@@ -1,289 +1,249 @@
-import { useCallback, useEffect, useState } from 'react'
+/**
+ * ConsoleDashboard.jsx - the super-admin overview.
+ *
+ * What a console visit is usually for, in order: anything waiting on you, the
+ * security score, the platform at a glance, then trends. Every panel loads on
+ * its own and a failed panel says so instead of showing a silent zero.
+ *
+ * AI usage reads ai_token_logs, the single AI usage source (V236). The previous
+ * version read ai_usage_log, which is empty, so it always reported no usage.
+ */
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  Users, Building2, Database, AlertTriangle, Zap, Shield,
-  TrendingUp, Clock, CheckCircle, XCircle, RefreshCw, DollarSign,
+  Users, Building2, Database, Zap, Shield, RefreshCw, ClipboardCheck,
+  Truck, UserPlus, Activity, ChevronRight, ShieldCheck,
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import { toUserMessage } from '../../lib/safeError'
-import { ErrorState } from '../components/ui'
+import {
+  Panel, PanelHeader, Note, StatTile, Badge, Btn, Table, THead, Th, Tr, Td,
+  EmptyState, ErrorState,
+} from '../components/ui'
+import { TrendChart, BarsChart, ShareChart, ScoreRing } from '../components/ui/charts'
 import { loadAttentionInputs } from '../../lib/api/consoleAttention'
 import { buildAttention } from '../../lib/consoleAttention'
+import { getSecurityPosture } from '../../lib/api/securityAudit'
+import { fetchAllPages } from '../../lib/fetchAll'
+import { dailySeries, topShare } from '../../lib/consoleCharts'
+
+const nf = new Intl.NumberFormat('en-US')
+const fmt = (n) => (n === null || n === undefined ? 'N/A' : nf.format(Number(n)))
+const fmtWhen = (v) => (v ? new Date(v).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'N/A')
+
+function useLoader(fn, deps) {
+  const [s, set] = useState({ loading: true, error: null, data: null })
+  const run = useCallback(async () => {
+    set((p) => ({ ...p, loading: true, error: null }))
+    try {
+      set({ loading: false, error: null, data: await fn() })
+    } catch (err) {
+      set({ loading: false, error: toUserMessage(err, 'Could not load this panel.'), data: null })
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps)
+  return [s, run]
+}
 
 export default function ConsoleDashboard() {
   const { activeOrg } = useConsoleAuth()
   const navigate = useNavigate()
-  const [stats, setStats]         = useState(null)
-  const [loading, setLoading]     = useState(true)
-  const [recentActions, setRecentActions] = useState([])
-  const [recentUsers, setRecentUsers]     = useState([])
-  const [aiTrend, setAiTrend]             = useState([])
-  const [attention, setAttention]         = useState(null)   // null = not loaded yet
-  const [error, setError]                 = useState('')
+  const orgId = activeOrg?.id || null
 
-  const loadStats = useCallback(async () => {
-    const { data, error: err } = await supabase.rpc('get_console_stats')
-    if (err) throw err
-    setStats(data)
+  const [stats, loadStats] = useLoader(async () => {
+    const { data, error } = await supabase.rpc('get_console_stats')
+    if (error) throw error
+    return data
   }, [])
 
-  // "Anything waiting on me?" - the loader yields null (UNKNOWN) for anything
-  // it could not read, and the pure engine renders that as "could not check"
-  // rather than a silent all-clear.
-  const loadAttention = useCallback(async () => {
-    const inputs = await loadAttentionInputs()
-    setAttention(buildAttention(inputs))
+  const [attention, loadAttention] = useLoader(async () => buildAttention(await loadAttentionInputs()), [])
+  const [security, loadSecurity] = useLoader(() => getSecurityPosture(), [])
+
+  const [people, loadPeople] = useLoader(async () => {
+    const { data, error } = await fetchAllPages((from, to) => {
+      let q = supabase.from('profiles').select('id, role, created_at, approved, locked').order('id').range(from, to)
+      if (orgId) q = q.eq('organisation_id', orgId)
+      return q
+    }, { max: 20000 })
+    if (error) throw error
+    return data
+  }, [orgId])
+
+  const [ai, loadAi] = useLoader(async () => {
+    const since = new Date(Date.now() - 30 * 86400000).toISOString()
+    const { data, error } = await supabase
+      .from('ai_token_logs')
+      .select('created_at, status, cost_usd')
+      .gte('created_at', since)
+      .order('created_at', { ascending: true })
+      .limit(1000)
+    if (error) throw error
+    return data || []
   }, [])
 
-  const loadRecentActions = useCallback(async () => {
-    const { data } = await supabase
+  const [actions, loadActions] = useLoader(async () => {
+    const { data, error } = await supabase
       .from('console_sessions')
-      .select('action, target_type, details, created_at, admin_id')
+      .select('id, action, target_type, created_at')
       .order('created_at', { ascending: false })
       .limit(8)
-    setRecentActions(data ?? [])
+    if (error) throw error
+    return data || []
   }, [])
 
-  const loadRecentUsers = useCallback(async () => {
-    let q = supabase
-      .from('profiles')
-      .select('id, full_name, email, role, site, approved, locked, created_at')
-      .order('created_at', { ascending: false })
-      .limit(6)
-    if (activeOrg) q = q.eq('organisation_id', activeOrg.id)
-    const { data } = await q
-    setRecentUsers(data ?? [])
-  }, [activeOrg])
-
-  const loadAiTrend = useCallback(async () => {
-    const { data } = await supabase
-      .from('ai_usage_log')
-      .select('created_at, total_tokens, cost_usd, model')
-      .gte('created_at', new Date(Date.now() - 7 * 86400000).toISOString())
-      .order('created_at', { ascending: true })
-    // Aggregate by day
-    const byDay = {}
-    ;(data ?? []).forEach(r => {
-      const d = r.created_at.slice(0, 10)
-      if (!byDay[d]) byDay[d] = { date: d, calls: 0, tokens: 0, cost: 0 }
-      byDay[d].calls++
-      byDay[d].tokens += r.total_tokens ?? 0
-      byDay[d].cost   += parseFloat(r.cost_usd ?? 0)
-    })
-    setAiTrend(Object.values(byDay))
-  }, [])
-
-  // Every reader settles on its own and the flag is cleared after every panel
-  // settles, so one failed panel cannot leave the overview spinning forever.
-  const loadAll = useCallback(async () => {
-    setLoading(true); setError('')
-    const results = await Promise.allSettled([
-      loadStats(), loadRecentActions(), loadRecentUsers(), loadAiTrend(), loadAttention(),
-    ])
-    const failed = results.filter((result) => result.status === 'rejected')
-    if (failed.length === results.length) {
-      setError(toUserMessage(failed[0].reason, 'Could not load the overview.'))
-    } else if (failed.length) {
-      setError('Some panels could not be loaded. The figures shown are incomplete.')
-    }
-    setLoading(false)
-  }, [loadAiTrend, loadAttention, loadRecentActions, loadRecentUsers, loadStats])
+  const loadAll = useCallback(() => {
+    loadStats(); loadAttention(); loadSecurity(); loadPeople(); loadAi(); loadActions()
+  }, [loadStats, loadAttention, loadSecurity, loadPeople, loadAi, loadActions])
 
   useEffect(() => { loadAll() }, [loadAll])
 
-  const U = stats?.users ?? {}
-  const O = stats?.organisations ?? {}
-  const A = stats?.assets ?? {}
-  const aiStats = {
-    calls_today: aiTrend.at(-1)?.calls ?? 0,
-    tokens_month: aiTrend.reduce((s, d) => s + d.tokens, 0),
-    cost_month:   aiTrend.reduce((s, d) => s + d.cost, 0),
-  }
+  const U = stats.data?.users ?? {}
+  const O = stats.data?.organisations ?? {}
+  const A = stats.data?.assets ?? {}
+
+  const signups = useMemo(() => dailySeries(people.data || [], (r) => r.created_at, 30), [people.data])
+  const roles = useMemo(() => topShare(people.data || [], (r) => r.role, 5), [people.data])
+  const aiDaily = useMemo(() => dailySeries(ai.data || [], (r) => r.created_at, 30), [ai.data])
+  const aiFailed = useMemo(() => (ai.data || []).filter((r) => r.status && r.status !== 'success').length, [ai.data])
+  const aiCost = useMemo(() => (ai.data || []).reduce((a, r) => a + (Number(r.cost_usd) || 0), 0), [ai.data])
+
+  const assetBars = [
+    { label: 'Tyre records', value: Number(A.tyres) || 0 },
+    { label: 'Inspections', value: Number(A.inspections) || 0 },
+    { label: 'Vehicles', value: Number(A.vehicles) || 0 },
+  ]
+
+  const busy = stats.loading || people.loading || ai.loading
 
   return (
-    <div className="space-y-6 max-w-7xl">
-      <div className="flex items-center justify-between">
+    <div className="space-y-5 max-w-7xl">
+      <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-white">System Overview</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            {activeOrg ? `Showing data for: ${activeOrg.name}` : 'All organisations · Live data'}
+          <h1>System Overview</h1>
+          <p className="text-xs text-gray-500 mt-1">
+            {activeOrg ? `Showing ${activeOrg.name}` : 'All organisations, live data'}
           </p>
         </div>
-        <button onClick={loadAll} disabled={loading}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-800 text-gray-400 hover:text-white text-xs border border-gray-700 transition-colors disabled:opacity-50">
-          <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Refresh
-        </button>
-      </div>
+        <Btn icon={RefreshCw} onClick={loadAll} busy={busy}>Refresh</Btn>
+      </header>
 
-      <ErrorState message={error} onRetry={loadAll} />
-
-      {/* ── Anything waiting on you? Plain English, one action per line. ── */}
-      {attention !== null && (
-        <div className={`rounded-xl border p-4 ${attention.length
-          ? 'border-orange-800/50 bg-orange-950/20'
-          : 'border-green-800/40 bg-green-950/10'}`}>
-          <h3 className="text-sm font-semibold text-white mb-2">
-            {attention.length ? 'Waiting on you' : 'Nothing is waiting on you'}
-          </h3>
-          {attention.length === 0 ? (
-            <p className="text-xs text-gray-500">No pending approvals, no unresolved errors, no stale data feeds, no open alerts.</p>
-          ) : (
-            <div className="space-y-1.5">
-              {attention.map((a) => (
+      {/* Waiting on you */}
+      {attention.error ? (
+        <Note tone="warning" icon={Shield}>Could not check what is waiting on you. {attention.error}</Note>
+      ) : attention.data && (
+        <Panel tone={attention.data.length ? 'accent' : undefined}>
+          <PanelHeader icon={ClipboardCheck}
+            title={attention.data.length ? 'Waiting on you' : 'Nothing is waiting on you'}
+            subtitle={attention.data.length ? 'Each line opens the page that clears it.' : 'No pending approvals, unresolved errors, stale feeds or open alerts.'} />
+          {attention.data.length > 0 && (
+            <div className="space-y-1">
+              {attention.data.map((a) => (
                 <button key={a.key} type="button" onClick={() => navigate(a.to)}
                   className="w-full flex items-center gap-2 text-left rounded-lg px-2 py-1.5 hover:bg-gray-800/50 transition-colors">
-                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                    a.tone === 'danger' ? 'bg-red-500' : a.tone === 'warning' ? 'bg-orange-400' : 'bg-blue-400'}`} />
+                  <Badge tone={a.tone === 'danger' ? 'danger' : a.tone === 'warning' ? 'warning' : 'info'}>
+                    {a.tone === 'danger' ? 'Urgent' : a.tone === 'warning' ? 'Review' : 'Info'}
+                  </Badge>
                   <span className="text-xs text-gray-200 flex-1">{a.text}</span>
-                  <span className="text-[10px] text-orange-400">Open →</span>
+                  <ChevronRight size={13} className="text-gray-500" />
                 </button>
               ))}
             </div>
           )}
-        </div>
+        </Panel>
       )}
 
-      {/* ── KPI grid ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiCard icon={Users}      label="Total Users"     value={U.total}       sub={`${U.pending ?? 0} pending approval`}  color="blue"   onClick={() => navigate('/console/users')} />
-        <KpiCard icon={Building2}  label="Organisations"   value={O.total}       sub={`${O.active ?? 0} active`}             color="purple" onClick={() => navigate('/console/organisations')} />
-        <KpiCard icon={Shield}     label="Locked Accounts" value={U.locked ?? 0} sub="require attention"                     color="red"    onClick={() => navigate('/console/users')} />
-        <KpiCard icon={Clock}      label="New This Week"   value={U.new_week}    sub={`${U.new_today ?? 0} new today`}       color="green" />
+      {/* Headline numbers */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+        <StatTile icon={Users} label="Users" value={fmt(U.total)} sub={`${fmt(U.pending ?? 0)} pending approval`}
+          onClick={() => navigate('/console/users')} tone={Number(U.pending) > 0 ? 'accent' : 'default'} />
+        <StatTile icon={UserPlus} label="New this week" value={fmt(U.new_week)} sub={`${fmt(U.new_today ?? 0)} today`} />
+        <StatTile icon={Shield} label="Locked accounts" value={fmt(U.locked ?? 0)}
+          tone={Number(U.locked) > 0 ? 'warning' : 'default'} onClick={() => navigate('/console/users')} />
+        <StatTile icon={Building2} label="Organisations" value={fmt(O.total)} sub={`${fmt(O.active ?? 0)} active`}
+          onClick={() => navigate('/console/organisations')} />
+        <StatTile icon={Truck} label="Vehicles" value={fmt(A.vehicles)} sub="registered" />
+        <StatTile icon={Zap} label="AI calls (30d)" value={ai.error ? 'N/A' : fmt(aiDaily.total)}
+          sub={aiFailed ? `${aiFailed} failed` : 'no failures'} tone={aiFailed ? 'warning' : 'default'}
+          onClick={() => navigate('/console/ai-usage')} />
+      </div>
+      {stats.error && <ErrorState message={stats.error} onRetry={loadStats} />}
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Panel>
+          <PanelHeader icon={ShieldCheck} title="Security"
+            actions={<Btn size="xs" onClick={() => navigate('/console/security-audit')}>Open audit</Btn>} />
+          {security.error ? (
+            <p className="text-xs text-gray-500">Could not read the security score. {security.error}</p>
+          ) : (
+            <>
+              <ScoreRing score={security.data?.score ?? null} size={104} label="Security score" />
+              <p className="text-xs text-gray-500 mt-3">
+                {security.data
+                  ? `${security.data.checks.filter((c) => c.status === 'fail' || c.status === 'warn').length} open findings across ${security.data.checks.length} checks.`
+                  : 'Reading checks...'}
+              </p>
+            </>
+          )}
+        </Panel>
+
+        <Panel className="lg:col-span-2">
+          <PanelHeader icon={UserPlus} title="New users, last 30 days"
+            subtitle={people.error ? people.error : `${fmt(signups.total)} registrations in the window.`} />
+          <TrendChart labels={signups.labels} series={[{ label: 'New users', values: signups.values }]}
+            height={190} summary={`${signups.total} new users in 30 days`}
+            emptyText="No registrations in the last 30 days." />
+        </Panel>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiCard icon={Database}      label="Tyre Records"   value={fmtNum(A.tyres)}        sub="total across all orgs" color="orange" />
-        <KpiCard icon={CheckCircle}   label="Inspections"    value={fmtNum(A.inspections)}  sub="all time"              color="green" />
-        <KpiCard icon={TrendingUp}    label="Vehicles"       value={fmtNum(A.vehicles)}     sub="registered"            color="blue" />
-        <KpiCard icon={Zap}           label="AI Calls"       value={aiStats.calls_today}    sub={`${fmtTokens(aiStats.tokens_month)} tokens (7d)`} color="yellow" onClick={() => navigate('/console/ai-usage')} />
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Panel>
+          <PanelHeader icon={Users} title="Users by role" subtitle="The five largest roles, the rest grouped as Other." />
+          {people.error ? <ErrorState message={people.error} onRetry={loadPeople} /> : (
+            <ShareChart parts={roles} height={170} center={{ value: fmt((people.data || []).length), label: 'users' }}
+              summary={roles.map((r) => `${r.label} ${r.value}`).join(', ')} emptyText="No users yet." />
+          )}
+        </Panel>
+        <Panel>
+          <PanelHeader icon={Database} title="Platform data" subtitle="Records held across every organisation." />
+          <BarsChart bars={assetBars} height={170} valueFormat={(v) => nf.format(v)}
+            summary={assetBars.map((b) => `${b.label} ${b.value}`).join(', ')} emptyText="No records yet." />
+        </Panel>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* ── Recent console actions ── */}
-        <div className="lg:col-span-1 rounded-xl border border-gray-800 bg-gray-900/50 p-4">
-          <h3 className="text-sm font-semibold text-white mb-3">Recent Console Actions</h3>
-          {recentActions.length === 0
-            ? <p className="text-xs text-gray-600">No recent actions</p>
-            : (
-              <div className="space-y-2">
-                {recentActions.map((a, i) => (
-                  <div key={i} className="flex items-start gap-2">
-                    <span className={`w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${
-                      a.action === 'login' ? 'bg-green-500' :
-                      a.action === 'logout' ? 'bg-gray-500' :
-                      a.action.includes('lock') ? 'bg-red-500' : 'bg-orange-500'
-                    }`} />
-                    <div className="min-w-0">
-                      <p className="text-xs text-gray-300 font-medium capitalize">{a.action.replace(/_/g, ' ')}</p>
-                      <p className="text-[10px] text-gray-600">{new Date(a.created_at).toLocaleString()}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )
-          }
-        </div>
-
-        {/* ── Pending users ── */}
-        <div className="lg:col-span-2 rounded-xl border border-gray-800 bg-gray-900/50 p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-white">Recently Registered Users</h3>
-            <button onClick={() => navigate('/console/users')} className="text-xs text-orange-400 hover:text-orange-300">View all →</button>
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Panel className="lg:col-span-2">
+          <PanelHeader icon={Zap} title="AI usage, last 30 days"
+            subtitle={ai.error ? ai.error : `${fmt(aiDaily.total)} calls, estimated cost $${aiCost.toFixed(2)}.`}
+            actions={<Btn size="xs" onClick={() => navigate('/console/ai-usage')}>Details</Btn>} />
+          <TrendChart labels={aiDaily.labels} series={[{ label: 'AI calls', values: aiDaily.values }]}
+            height={180} summary={`${aiDaily.total} AI calls in 30 days`}
+            emptyText="No AI calls in the last 30 days." />
+        </Panel>
+        <Panel flush>
+          <div className="p-4 pb-2">
+            <PanelHeader icon={Activity} title="Recent console actions"
+              actions={<Btn size="xs" onClick={() => navigate('/console/audit-trail')}>Audit trail</Btn>} />
           </div>
-          {recentUsers.length === 0
-            ? <p className="text-xs text-gray-600">No users yet</p>
-            : (
-              <div className="space-y-2">
-                {recentUsers.map(u => (
-                  <div key={u.id} className="flex items-center gap-3 py-1.5">
-                    <div className="w-7 h-7 rounded-full bg-gray-700 flex items-center justify-center text-xs font-bold text-gray-300 flex-shrink-0">
-                      {(u.full_name ?? '?')[0].toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs text-white font-medium truncate">{u.full_name ?? '-'}</p>
-                      <p className="text-[10px] text-gray-500 truncate">{u.email ?? u.site ?? '-'}</p>
-                    </div>
-                    <RoleBadge role={u.role} />
-                    {!u.approved && <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-900/50 text-yellow-300 border border-yellow-700/40">Pending</span>}
-                    {u.locked  && <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-900/50 text-red-300 border border-red-700/40">Locked</span>}
-                  </div>
+          {actions.error ? (
+            <div className="px-4 pb-4"><ErrorState message={actions.error} onRetry={loadActions} /></div>
+          ) : !actions.data?.length ? (
+            <div className="px-4 pb-4"><EmptyState title="No console actions yet" /></div>
+          ) : (
+            <Table className="border-0 rounded-none">
+              <THead><Th>Action</Th><Th align="right">When</Th></THead>
+              <tbody>
+                {actions.data.map((a) => (
+                  <Tr key={a.id}>
+                    <Td><span className="text-gray-300 capitalize">{String(a.action).replace(/_/g, ' ')}</span></Td>
+                    <Td align="right" nowrap><span className="text-gray-500 tabular-nums">{fmtWhen(a.created_at)}</span></Td>
+                  </Tr>
                 ))}
-              </div>
-            )
-          }
-        </div>
-      </div>
-
-      {/* ── AI usage 7-day trend ── */}
-      <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
-        <h3 className="text-sm font-semibold text-white mb-4">AI Usage - Last 7 Days</h3>
-        {aiTrend.length === 0
-          ? <p className="text-xs text-gray-600">No AI usage data yet</p>
-          : (
-            <div className="grid grid-cols-7 gap-2">
-              {aiTrend.map(d => {
-                const maxCalls = Math.max(...aiTrend.map(x => x.calls), 1)
-                const pct = (d.calls / maxCalls) * 100
-                return (
-                  <div key={d.date} className="flex flex-col items-center gap-1">
-                    <div className="w-full bg-gray-800 rounded-sm relative" style={{ height: 60 }}>
-                      <div className="absolute bottom-0 w-full rounded-sm bg-orange-500/70"
-                        style={{ height: `${pct}%`, minHeight: d.calls > 0 ? 4 : 0 }} />
-                    </div>
-                    <p className="text-[10px] text-gray-600">{d.date.slice(5)}</p>
-                    <p className="text-[10px] text-gray-400">{d.calls}</p>
-                  </div>
-                )
-              })}
-            </div>
-          )
-        }
-        {aiTrend.length > 0 && (
-          <div className="flex gap-6 mt-3 pt-3 border-t border-gray-800">
-            <div>
-              <p className="text-xs text-gray-500">7-day tokens</p>
-              <p className="text-sm font-semibold text-white">{fmtTokens(aiStats.tokens_month)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Estimated cost</p>
-              <p className="text-sm font-semibold text-orange-300">${aiStats.cost_month.toFixed(4)}</p>
-            </div>
-          </div>
-        )}
+              </tbody>
+            </Table>
+          )}
+        </Panel>
       </div>
     </div>
   )
 }
-
-function KpiCard({ icon: Icon, label, value, sub, color, onClick }) {
-  const colors = {
-    blue:   'text-blue-400 bg-blue-900/20 border-blue-800/40',
-    purple: 'text-purple-400 bg-purple-900/20 border-purple-800/40',
-    red:    'text-red-400 bg-red-900/20 border-red-800/40',
-    green:  'text-green-400 bg-green-900/20 border-green-800/40',
-    orange: 'text-orange-400 bg-orange-900/20 border-orange-800/40',
-    yellow: 'text-yellow-400 bg-yellow-900/10 border-yellow-800/40',
-  }
-  return (
-    <button onClick={onClick}
-      className={`rounded-xl border p-4 text-left transition-all ${colors[color]} ${onClick ? 'hover:brightness-110 cursor-pointer' : 'cursor-default'}`}>
-      <Icon size={18} className="mb-2 opacity-80" />
-      <p className="text-xl font-bold text-white">{value ?? '-'}</p>
-      <p className="text-xs font-semibold text-gray-300 mt-0.5">{label}</p>
-      {sub && <p className="text-[10px] text-gray-600 mt-0.5">{sub}</p>}
-    </button>
-  )
-}
-
-function RoleBadge({ role }) {
-  const c = { Admin: 'text-red-300 bg-red-900/30', Manager: 'text-orange-300 bg-orange-900/30',
-    Director: 'text-blue-300 bg-blue-900/30', Inspector: 'text-purple-300 bg-purple-900/30',
-    'Tyre Man': 'text-teal-300 bg-teal-900/30' }
-  return (
-    <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${c[role] ?? 'text-gray-400 bg-gray-800'}`}>{role}</span>
-  )
-}
-
-function fmtNum(n)    { return n != null ? Number(n).toLocaleString() : '-' }
-function fmtTokens(n) { if (!n) return '0'; const v = Number(n); return v > 1000 ? `${(v/1000).toFixed(1)}k` : v.toString() }

@@ -55,6 +55,120 @@ batching stops them being started at all.
 
 ---
 
+# ⚑ SESSION 2026-09-24: THE MARKETING SITE WAS SELLING A GREEN PRODUCT IN BLUE, WITH THREE DEAD LINKS.
+# No migration. Four pushes to main: `6c6cf61a`, `7278f8ce`, `679144bc`, `2072d370`. All live.
+
+### **I TOLD THE OWNER THE MARKETING SITE WAS NOT DEPLOYED. IT WAS, AND HAD BEEN ALL ALONG.**
+I listed the Vercel projects, saw `tyre-pulse-eezl`, assumed from the name that it was not the marketing one,
+and reported "there is no Vercel project for it" as fact. **`tyre-pulse-eezl` IS the marketing project**:
+framework `nextjs`, Root Directory `marketing`, tracking `main`, serving **https://tyre-pulse-eezl.vercel.app**
+publicly at HTTP 200. It built every commit of this session to READY production. I then wrote the false claim
+INTO the repo README, where it sat until the owner said "it was already deployed i could see it". Corrected in
+`679144bc`. **RULE: two Vercel projects build this one repo and their names do not say which is which -
+`tyre-pulse` is the Vite app from the root, `tyre-pulse-eezl` is `marketing/`. Check each project, never infer
+from the name.**
+**MCP TRAP THAT HELPED HIDE IT:** `get_project(idOrName=<prj_id>, teamId=...)` returns **404** for that
+project while `get_project(idOrName="tyre-pulse-eezl")` with NO teamId returns it. Same for `get_deployment`.
+If a Vercel project 404s by id, retry by name before concluding it does not exist.
+
+### **THE BRAND SPLIT IS CLOSED: the site was blue, the product is green**
+`marketing/app/globals.css` defined `--brand: #1368e8` while the web app defines `#16a34a` and the Android
+launcher icon is recoloured to match. `layout.tsx` already declared `themeColor: #16a34a`, so the page
+contradicted its own metadata. **TWO GREENS, because one cannot do both jobs on a light page:**
+`--brand #15803d` for anything carrying label text (white on it is **5.01:1**, passes AA, and is
+byte-identical to the mobile light-theme primary) and `--brand-strong #16a34a` for identity and decoration
+only (white on it is **3.30:1** and FAILS AA). Do not put label text on `--brand-strong`.
+**THE LOGO AND FAVICON WERE 100% BLUE BY PIXEL COUNT.** Recoloured onto a ramp *sampled from*
+`mobile/assets/logo.png` rather than invented, so the marketing mark lands on the exact greens already on
+phones, at unchanged dimensions so nothing shifts. Originals are in git history.
+
+### **THREE DEAD LINKS WERE ON EVERY PAGE.** `app.tyrepulse.app` and `admin.tyrepulse.app` resolve NOWHERE
+Verified against live Vercel: the only configured domains are `tyrepulse.app` and `www.tyrepulse.app`, both on
+the app project. The header Login button and two footer links were DNS errors. The host had **four separate
+definitions**; it now has ONE, `marketing/lib/site.ts`, read by the header, the footer, `app/schema.tsx` and
+`next.config.ts`. `.env.example` had to be fixed too (`7278f8ce`): the README says to copy it to `.env.local`,
+so following the README put the dead host straight back and overrode the default.
+
+### **THE HERO WAS AMPUTATING ITS OWN HEADLINE ON EVERY PHONE, AND NO OVERFLOW CHECK COULD SEE IT**
+`.canvas-fallback` was a flat `width: 420px`. **A `1fr` grid track resolves to `minmax(auto, 1fr)` and that
+`auto` floor is the content's min-content width**, so the hero could never be narrower than 420px: at a 320px
+viewport it clipped **110px** of its own heading, eyebrow and lead behind `.hero { overflow: hidden }`.
+**Nothing scrolled sideways, so a `document.scrollWidth` overflow check reports CLEAN** - I ran one, it said
+clean, and I had to correct myself. Measure element rects against `innerWidth` instead. 15 grid tracks gained
+an explicit `minmax(0, ...)` floor.
+
+### **THE 3D HERO: WRONG TYRE, WRONG ANGLE, AND IT FETCHED FROM A CDN**
+- **It was a tractor tread** - 34 chunky blocks proud of the carcass. This is sold to mixer, transport and
+  workshop fleets, so it is now the tyre they run: **five continuous circumferential ribs, four deep
+  longitudinal grooves**, proportioned like a 315/80R22.5, rim just under 60% of overall diameter, on a
+  commercial alloy with a 10-stud bolt circle. **The grooves are not cut**: a darker cylinder sits below the
+  ribs and the gaps read as grooves. Four meshes instead of CSG.
+- **THE ANGLE IS LOAD-BEARING.** Face-on, the tread band is edge-on, the ribs are invisible and it reads as a
+  speaker cone. That was built, screenshotted and rejected. Rest is now `REST_X 0.34, REST_Y -0.72`.
+- **`<Environment preset="city">` pulls an HDRI off a third-party CDN on the hero.** Removed; lighting is
+  authored. A test asserts **zero external hosts** and it passes. Keep it that way.
+- **FOUR animations ran at once** (manual rotation, `<Float>`, `OrbitControls autoRotate`, drag). Now three,
+  each meaning something: the wheel turns, it leans toward the pointer, a pulse ring crosses the tread. All
+  stop under `prefers-reduced-motion`.
+- **TWO GEOMETRY TRAPS ALREADY PAID FOR:** a `BoxGeometry` centred on the origin and rotated N times draws
+  **2N arms** (five spokes drew a ten-arm gear); and a tread block is shallow radially and wide tangentially,
+  and with those axes swapped it draws radial fins, which is what made the tyre look spiked.
+- `FitToView` scales to whichever viewport axis is tighter. A fixed camera cannot work: the stage is portrait
+  on desktop while the FOV is vertical, so the wheel fitted top-to-bottom and was sliced off at the right.
+
+### **THE TYPE WAS A POSTER, NOT A PRODUCT PAGE.** Display ran to **99px** desktop, `15vw` phone
+Now display `clamp(2.1rem, 4.4vw, 3.75rem)`, h2 `clamp(1.55rem, 2.5vw, 2.35rem)`, h3 `1.05rem`, lead
+`clamp(1rem, 1.25vw, 1.1rem)` at line-height 1.65, phone display `clamp(1.95rem, 8.4vw, 2.75rem)`. Hero and
+stage heights came down with it, because they were reserving space for type that no longer exists.
+
+### **MEASURED, NOT ASSERTED.** 7 pages x 3 viewports, 1,196 text nodes, 388 interactive elements
+Contrast failures **1 -> 0** (`.dark-section .lead` sat at **3.44:1**; a `.dark-section .muted` override
+existed but `SectionTitle` renders that line as `.lead`, which reads `var(--muted)` directly and never picked
+it up; now 10.4:1). Touch targets under 44x44 **2 -> 0** (hit area grown by padding taken back out of the flex
+`gap`, so spacing is visually identical). Clipped text, overflow, skipped headings, images without alt: all 0.
+Focus rings on all 23 focusable elements. **Zero em/en dashes or smart punctuation in the marketing source.**
+**MY OWN PROBE PRODUCED FIVE FALSE POSITIVES** by computing accessible names from `aria-label`/`textContent`
+only: every correctly-labelled input on `/contact` read as unnamed. Use `HTMLInputElement.labels` or
+`locator.ariaSnapshot()`. Note `page.accessibility` is **gone** from current Playwright.
+
+### **`marketing/` ADDED TO THE APP PROJECT'S BUILD-SKIP LIST**, and it is proven, not assumed
+`scripts/vercel-ignore-build.mjs` excluded `mobile`, `*.md`, `MIGRATIONS_*.sql`, `store-assets`, `.claude`,
+`.github`, `tyre_pulse_app`, `tyre_pulse_flutter` but NOT `marketing`, so a marketing-only push started a
+production build of the Vite app that could not contain any of the change. A real marketing-only push then
+came back **CANCELED with `errorLink: ...#ignored-build-step`**, 10 seconds instead of a full build. That
+script belongs to the APP project only; `tyre-pulse-eezl` is unaffected and still rebuilds on every change.
+
+### **21ST.DEV: skills installed, both front doors were unauthenticated, CLI now logged in**
+`npx @21st-dev/cli install-skill` installed 7 skills to `~/.claude/skills/` (user level, repo untouched):
+`21st-ui-build`, `21st-ui-explore`, `21st-ui-review`, `21st-cli-use`, `21st-ai`, `21st-registry`,
+`21st-design-sync`. The CLI is logged in as `ws123na-afk`. **Plan is FREE tier: `21st AI generation: not
+enabled`, so `generate`/`iterate` do not work; `search` + `get` only, at 2 component retrievals per day.**
+The owner's API key is stored as the **user env vars `MAGIC_API_KEY` and `TWENTYFIRST_TOKEN`**, NOT in the
+repo: `.mcp.json` is committed to git and already correctly references `"API_KEY": "${MAGIC_API_KEY}"`.
+Verified the key appears in **no tracked file and in no commit** (`git log -S`). **The `magic` MCP needs Claude
+Code restarted** to pick the variable up. `21st review <path>` returns one rule at `info` and a lot of noise
+(99 findings, all `design-hardcoded-color`; a three.js material cannot take a CSS variable). It earned its keep
+once: it pointed at `StoreBadges.tsx`, whose `var()` fallbacks still held the retired blue palette.
+
+### **STILL OPEN, and it is now ONE thing, not "deploy it"**
+The marketing site has **no custom domain**. `tyrepulse.app` and `www.tyrepulse.app` are both on the app
+project, so the branded hosts serve the application. Order matters: add `app.tyrepulse.app` to the APP project
+and let it serve, THEN set `NEXT_PUBLIC_APP_URL` on `tyre-pulse-eezl`, THEN move www. The app is an installed
+PWA bound to the current host and `marketing/next.config.ts` carries the `source=pwa` rescue redirect for
+exactly this. Claude's Vercel connection is read-only for writes (`add_project_domain` returns 403), so every
+domain change is an owner action. GitHub also reported **3 dependabot vulnerabilities (2 high, 1 moderate)**
+on main during these pushes; pre-existing, not from this work.
+
+### PROCESS
+Every commit was made **by explicit pathspec** and pushed by **grafting onto `origin/main` with a throwaway
+`GIT_INDEX_FILE`**, because this branch is 45 commits behind main and a parallel session had ~33 files of
+uncommitted work in the tree (Flutter, washing, damage map, and the reservations/contact fixes from
+`audit/platform-review-2026-09-24/review.md`). **No working tree was written to and none of that work was
+swept in or disturbed.** Safety check before each graft: `git diff --stat origin/main HEAD -- <paths>` must be
+EMPTY, proving main has not moved those files and the graft cannot clobber newer work.
+
+---
+
 # ⚑ SESSION 2026-09-23 — SECURITY/ENGINEERING SWEEP OF MAIN. Migration `20260923090000` APPLIED LIVE.
 - **Anon-executable SECURITY DEFINER sweep**: only 2 functions outside the V500 10-fn allowlist -
   `notify_inspection_plan_assignment/_reassignment()` (trigger fns from 20260921160000, never revoked PUBLIC).

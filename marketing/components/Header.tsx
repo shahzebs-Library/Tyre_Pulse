@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Menu, X, ArrowUpRight } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { APP_URL } from "@/lib/site";
 import { A11yStyles } from "./A11yStyles";
 
 const links = [
@@ -19,7 +20,6 @@ const MOBILE_NAV_ID = "mobile-nav";
 export function Header() {
   const [open, setOpen] = useState(false);
   const toggleRef = useRef<HTMLButtonElement>(null);
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.tyrepulse.app";
 
   const close = useCallback(() => {
     setOpen(false);
@@ -57,7 +57,7 @@ export function Header() {
             <Link href="/ar" lang="ar">العربية</Link>
           </nav>
           <div className="nav-actions">
-            <a className="btn btn-secondary" href={appUrl}>Login</a>
+            <a className="btn btn-secondary" href={APP_URL}>Login</a>
             <Link className="btn btn-primary" href="/contact">
               Book a demo <ArrowUpRight size={17} aria-hidden="true" />
             </Link>
@@ -87,7 +87,7 @@ export function Header() {
               The login button is hidden below 640px by globals.css and was not
               reachable anywhere else, so phone visitors had no way to sign in.
             */}
-            <a href={appUrl} onClick={() => setOpen(false)}>Login</a>
+            <a href={APP_URL} onClick={() => setOpen(false)}>Login</a>
           </nav>
         )}
       </div>

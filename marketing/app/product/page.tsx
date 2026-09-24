@@ -32,8 +32,17 @@ const groups = [
 ];
 
 /**
- * A capability group shows a real screenshot once one exists for it, and shows
- * nothing when it does not. Capture them with
+ * Extra screenshots for a capability group, beyond the one named after its own
+ * slug. `scheduled-reports.png` was captured and then shipped unreferenced: it
+ * sat in public/ and no page rendered it. It belongs to the reporting group.
+ */
+const EXTRA_SHOTS: Record<string, readonly string[]> = {
+  "executive-report": ["scheduled-reports"],
+};
+
+/**
+ * A capability group shows the real screenshots that exist for it, and shows
+ * nothing when there are none. Capture them with
  * `node scripts/capture-marketing-screenshots.mjs`, which writes the slugs
  * used above into public/screenshots/.
  *
@@ -41,9 +50,10 @@ const groups = [
  * otherwise ship a broken image to a page whose whole job is to look credible.
  * Every page here is statically prerendered, so this runs once at build.
  */
-function shotFor(slug: string): string | null {
-  const rel = `/screenshots/${slug}.png`;
-  return existsSync(join(process.cwd(), "public", rel)) ? rel : null;
+function shotsFor(slug: string): string[] {
+  return [slug, ...(EXTRA_SHOTS[slug] ?? [])]
+    .map((name) => `/screenshots/${name}.png`)
+    .filter((rel) => existsSync(join(process.cwd(), "public", rel)));
 }
 
 export default function ProductPage() {
@@ -53,13 +63,13 @@ export default function ProductPage() {
     <section className="page-content"><div className="site-shell feature-list">
       {groups.map(([Icon, title, slug, text]) => {
         const C = Icon as typeof Gauge;
-        const shot = shotFor(String(slug));
+        const shots = shotsFor(String(slug));
         return <article className="card feature-row" key={String(title)}>
           <div className="icon-box"><C /></div>
           <div>
             <h2 className="h3">{String(title)}</h2>
             <p className="muted">{String(text)}</p>
-            {shot && <div className="product-window feature-shot"><Image src={shot} alt={`Tyre Pulse ${String(title).toLowerCase()} screen`} width={1600} height={900} loading="lazy" sizes="(max-width: 900px) 100vw, 640px" /></div>}
+            {shots.map((shot, i) => <div className="product-window feature-shot" key={shot}><Image src={shot} alt={i === 0 ? `Tyre Pulse ${String(title).toLowerCase()} screen` : `A second Tyre Pulse ${String(title).toLowerCase()} screen`} width={1600} height={900} loading="lazy" sizes="(max-width: 900px) 100vw, 640px" /></div>)}
           </div>
         </article>;
       })}

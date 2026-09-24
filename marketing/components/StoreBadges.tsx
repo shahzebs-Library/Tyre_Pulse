@@ -89,8 +89,8 @@ const css = `
 
 /* On the light page surfaces. */
 .store-badges-on-light .store-badge-link {
-  background: var(--navy, #07182d);
-  border-color: var(--navy, #07182d);
+  background: var(--navy, #06170f);
+  border-color: var(--navy, #06170f);
   color: #ffffff;
 }
 .store-badges-on-light .store-badge-link:hover {
@@ -101,10 +101,10 @@ const css = `
   color: #c2d2e4;
 }
 .store-badges-on-light .store-badge-pending {
-  border-color: var(--line, #d9e3ef);
+  border-color: var(--line, #dae7df);
   border-style: dashed;
   background: rgba(255, 255, 255, .6);
-  color: var(--muted, #5f6f85);
+  color: var(--muted, #5c6f63);
 }
 .store-badges-on-light .store-badge-pending .store-badge-kicker {
   color: inherit;

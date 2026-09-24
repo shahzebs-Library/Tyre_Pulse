@@ -13,6 +13,11 @@ const result = spawnSync('git', [
   ':(exclude)mobile', ':(exclude)*.md', ':(exclude)MIGRATIONS_*.sql',
   ':(exclude)store-assets', ':(exclude).claude', ':(exclude).github',
   ':(exclude)tyre_pulse_app', ':(exclude)tyre_pulse_flutter',
+  // marketing/ is a standalone Next.js app with its own root. This project
+  // builds the Vite web app from the repository root and never reads it, so a
+  // marketing-only push was starting a production build that could not contain
+  // any of the change. Same reasoning as the two mobile apps above.
+  ':(exclude)marketing',
 ], { stdio: 'inherit' });
 
 // Missing shallow-clone history or any Git error must also request a build.

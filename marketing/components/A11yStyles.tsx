@@ -38,7 +38,7 @@ select:focus-visible,
 textarea:focus-visible,
 summary:focus-visible,
 [tabindex]:focus-visible {
-  outline: 3px solid var(--brand, #1368e8);
+  outline: 3px solid var(--brand, #15803d);
   outline-offset: 2px;
   box-shadow: 0 0 0 5px rgba(255, 255, 255, .95);
 }
@@ -73,7 +73,7 @@ summary:focus-visible,
   align-items: center;
   justify-content: center;
   border-radius: 12px;
-  color: var(--ink, #081a33);
+  color: var(--ink, #071710);
 }
 .nav-mobile-panel a {
   display: flex;
@@ -84,7 +84,7 @@ summary:focus-visible,
   font-weight: 650;
 }
 .nav-mobile-panel a:hover {
-  background: rgba(19, 104, 232, .08);
+  background: rgba(21, 128, 61, .08);
 }
 
 /*

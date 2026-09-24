@@ -9,8 +9,13 @@
  *  - no SearchAction is emitted, because the site has no search endpoint
  */
 
-export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://www.tyrepulse.app").replace(/\/$/, "");
-export const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || "https://app.tyrepulse.app").replace(/\/$/, "");
+/**
+ * Both host names now live in lib/site.ts, so the header, the footer, the Next
+ * config and this file cannot disagree about them. Re-exported here because
+ * several modules already import SITE_URL from this one.
+ */
+export { SITE_URL, APP_URL } from "@/lib/site";
+import { SITE_URL, APP_URL } from "@/lib/site";
 
 export const ANDROID_PACKAGE = "com.shahzebrahman.tyrepulseinspector";
 export const ANDROID_APP_NAME = "Tyre Pulse Inspector";

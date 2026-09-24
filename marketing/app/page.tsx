@@ -143,7 +143,7 @@ export default function HomePage() {
               [Sparkles, "AI-ready", "Data-backed recommendations"],
             ].map(([Icon, value, label]) => {
               const C = Icon as typeof Smartphone;
-              return <div className="card metric" key={String(value)}><C color="#1368e8" /><div className="value">{String(value)}</div><div className="label">{String(label)}</div></div>;
+              return <div className="card metric" key={String(value)}><C color="var(--brand)" /><div className="value">{String(value)}</div><div className="label">{String(label)}</div></div>;
             })}
           </div>
         </section>

@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 
-const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || "https://app.tyrepulse.app").replace(/\/$/, "");
+import { APP_URL } from "./lib/site";
 
 const nextConfig: NextConfig = {
   // This standalone app must not inherit the operational web app's tooling.

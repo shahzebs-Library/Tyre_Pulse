@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { APP_STORE_URL } from "@/app/schema";
+import { APP_URL } from "@/lib/site";
 import { StoreBadges } from "./StoreBadges";
 
 export function Footer() {
@@ -57,10 +58,25 @@ export function Footer() {
           <nav aria-labelledby="footer-access">
             <h2 className="footer-heading" id="footer-access">Access</h2>
             <div className="footer-links">
-              <a href="https://app.tyrepulse.app">Customer login</a>
-              <a href="https://admin.tyrepulse.app">Company admin</a>
-              {/* Not a link. Styled and described so it does not read as one. */}
-              <span className="footer-note">Owner console</span>
+              <a href={APP_URL}>Customer login</a>
+              {/*
+                Company administration and the owner console are deliberately
+                not links.
+
+                admin.tyrepulse.app was linked here and does not exist: no
+                Vercel project holds that name, so the link resolved to a DNS
+                error. Neither destination is a separate public site in any
+                case. Company administration lives inside the application, and
+                the platform owner console is reached only by typing its path
+                into its own tab, which is a rule the product enforces on
+                purpose so no page ever offers a way in.
+
+                Stated as text rather than shown as a disabled control, because
+                a control that can only fail invites a click and then refuses
+                it.
+              */}
+              <span className="footer-note">Company administration, inside the app</span>
+              <span className="footer-note">Owner console, by direct address</span>
             </div>
           </nav>
         </div>

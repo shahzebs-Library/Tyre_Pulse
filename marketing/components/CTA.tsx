@@ -16,7 +16,7 @@ export function CTA() {
           <div>
             <span
               className="eyebrow"
-              style={{ background: "rgba(255,255,255,.08)", color: "#9ecbff", borderColor: "rgba(255,255,255,.15)" }}
+              style={{ background: "rgba(255,255,255,.08)", color: "#9fe8bd", borderColor: "rgba(255,255,255,.15)" }}
             >
               Ready for controlled growth
             </span>

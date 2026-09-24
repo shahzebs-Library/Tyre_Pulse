@@ -5,46 +5,60 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 
 /**
- * The hero wheel.
+ * The hero wheel: a commercial steer tyre on a green alloy.
  *
- * Two deliberate constraints shape this scene, and both are departures from
- * what was here before:
+ * WHAT IT IS, AND WHY IT IS THAT. The previous version drew thirty-four chunky
+ * blocks standing proud of the carcass, which is the tread of a tractor or an
+ * earthmover. This product is sold to mixer, transport and workshop fleets, so
+ * the tyre on the front page should be the one those fleets actually run: a
+ * commercial steer casing with continuous circumferential ribs and deep
+ * longitudinal grooves. The ribs are the single clearest signal that this is a
+ * truck tyre rather than a generic wheel, so they are the thing the scene is
+ * built around.
  *
- * 1. ONE motion with a meaning. The previous version ran four animations at
- *    once (a manual rotation.z, a <Float> wobble, OrbitControls autoRotate and
- *    drag), which fought each other and read as restlessness rather than as a
- *    turning wheel. A wheel rotates; that is the motion. The pulse ring is the
- *    only other moving thing, and it earns its place by saying what the product
- *    does: a reading being taken, and the "Pulse" in the name.
+ * Proportion follows a real 315/80R22.5: the rim is a little under 60% of the
+ * overall diameter, where the old scene had a small rim lost inside a very fat
+ * carcass.
  *
- * 2. Nothing is fetched. The previous version used drei's Environment with
- *    preset="city", which downloads an HDRI from a third-party CDN on the hero
- *    of the marketing site. Lighting is authored here instead, so the scene
- *    cannot be delayed, blocked or broken by someone else's host.
+ * MOTION. Three things move, and each says something:
+ *   1. the wheel turns, because a wheel turns;
+ *   2. it leans toward the pointer, so the object reads as solid and as
+ *      something you are looking at rather than a picture;
+ *   3. a pulse ring crosses the tread, which is a reading being taken and the
+ *      "Pulse" in the name.
+ * Everything stops under prefers-reduced-motion.
  *
- * Colours come from the product rather than from this file: #16a34a is the
- * brand green used by the web app and the Android launcher icon, and the
- * near-black carries the same green undertone as the app's own surfaces.
+ * NOTHING IS FETCHED. An earlier version used drei's Environment preset, which
+ * pulls an HDRI from a third-party CDN on the hero of the marketing site.
+ * Lighting is authored here, so the scene cannot be delayed or broken by
+ * someone else's host.
+ *
+ * Colours are the product's own: #16a34a is the brand green used by the web app
+ * and the Android launcher icon.
  */
 
 const BRAND = "#16a34a";
 const BRAND_BRIGHT = "#22c55e";
 const BRAND_ELECTRIC = "#4ade80";
-const TREAD_DARK = "#09150e";
-const TREAD_BLOCK = "#0d1f16";
-const RIM_METAL = "#cfe6d8";
+const RUBBER = "#0b1710";
+const RUBBER_LIT = "#16281d";
+const GROOVE = "#050d08";
+const ALLOY = "#dcefe4";
 
-/** Tread blocks around the circumference. */
-const BLOCKS = 34;
-/** Rim spokes. Five reads as a wheel; ten read as a bicycle. */
-const SPOKES = 5;
+/** Tread geometry, in the same proportions as a 315/80R22.5. */
+const TREAD_R = 2.58;   // rib surface
+const GROOVE_R = 2.42;  // groove floor, sitting below the ribs
+const RIM_R = 1.52;     // wheel flange, just under 60% of overall diameter
+const HALF_W = 0.62;    // half the section width
 
-const HUB_RADIUS = 0.46;
-const RIM_RADIUS = 1.44;
-const OUTER_RADIUS = 2.6;
-/** Half the widest thing drawn, lugs included. Used to fit the wheel on screen. */
-const WHEEL_EXTENT = 2.72;
+/** Five ribs and four grooves, the classic steer pattern. */
+const RIB_CENTRES = [-0.53, -0.265, 0, 0.265, 0.53];
+const RIB_W = 0.185;
+
+const STUDS = 10;
 const PULSE_SECONDS = 2.8;
+/** Half the widest thing drawn. Used to fit the wheel on screen. */
+const WHEEL_EXTENT = 2.68;
 
 function usePrefersReducedMotion() {
   const [reduced, setReduced] = useState(false);
@@ -61,67 +75,46 @@ function usePrefersReducedMotion() {
 }
 
 /**
- * The tread blocks, ticks and spokes are each one geometry and one material
- * shared across every instance. Declaring a geometry inside a map would build a
- * separate one per block and upload all of them to the GPU, which is fifty
- * needless buffers for a decoration.
+ * Geometries and materials that are used many times over are built once and
+ * shared. Declaring them inside a map would upload a separate buffer per stud
+ * and per rib, which is dozens of needless allocations for a decoration, and
+ * React will not reclaim GPU memory on its own when the scene unmounts.
  */
 function useSharedParts() {
   const parts = useMemo(() => {
-    const block = new THREE.BoxGeometry(0.18, 0.46, 0.9);
-    const tick = new THREE.BoxGeometry(0.07, 0.055, 0.2);
-    /*
-     * A spoke runs from the hub to the rim, so it is exactly that long and is
-     * pushed out to sit between them. The previous geometry was 1.24 long and
-     * centred on the origin, which meant each box crossed the whole wheel and
-     * stuck out the far side: five of them drew ten arms and read as a gear,
-     * not as a road wheel.
-     */
-    const spoke = new THREE.BoxGeometry(RIM_RADIUS - HUB_RADIUS, 0.26, 0.34);
+    // A cylinder's axis is Y, so every one of these is rotated onto Z by its
+    // mesh. Open-ended: the rib walls are hidden by their neighbours.
+    const rib = new THREE.CylinderGeometry(TREAD_R, TREAD_R, RIB_W, 96, 1, true);
+    const stud = new THREE.CylinderGeometry(0.058, 0.058, 0.1, 16);
 
-    const blockMaterial = new THREE.MeshStandardMaterial({
-      color: TREAD_BLOCK,
-      roughness: 0.95,
-      metalness: 0.02,
+    const ribMaterial = new THREE.MeshStandardMaterial({
+      color: RUBBER_LIT,
+      roughness: 0.82,
+      metalness: 0.04,
     });
-    const tickMaterial = new THREE.MeshStandardMaterial({
-      color: BRAND_ELECTRIC,
-      emissive: new THREE.Color(BRAND_BRIGHT),
-      emissiveIntensity: 0.9,
-      roughness: 0.4,
-    });
-    const spokeMaterial = new THREE.MeshStandardMaterial({
-      color: RIM_METAL,
-      metalness: 0.92,
-      roughness: 0.26,
+    const studMaterial = new THREE.MeshStandardMaterial({
+      color: ALLOY,
+      metalness: 0.95,
+      roughness: 0.22,
     });
 
-    return { block, tick, spoke, blockMaterial, tickMaterial, spokeMaterial };
+    return { rib, stud, ribMaterial, studMaterial };
   }, []);
 
-  // Geometries and materials hold GPU memory that React will not reclaim on
-  // its own, and this component unmounts whenever the visitor turns reduced
-  // motion on or crosses the mobile breakpoint.
-  useEffect(() => {
-    return () => {
-      parts.block.dispose();
-      parts.tick.dispose();
-      parts.spoke.dispose();
-      parts.blockMaterial.dispose();
-      parts.tickMaterial.dispose();
-      parts.spokeMaterial.dispose();
-    };
+  useEffect(() => () => {
+    parts.rib.dispose();
+    parts.stud.dispose();
+    parts.ribMaterial.dispose();
+    parts.studMaterial.dispose();
   }, [parts]);
 
   return parts;
 }
 
 /**
- * A ring that grows out of the hub and fades, once every PULSE_SECONDS.
- *
- * It reads as a reading being taken: it starts at the hub, crosses the tread
- * and stops. Opacity is driven from the same normalised progress as the scale,
- * so the ring can never be left visible at a size it was not drawn at.
+ * A ring that grows out of the hub, crosses the tread and fades, once every
+ * PULSE_SECONDS. Opacity is driven from the same normalised progress as the
+ * scale, so it can never be left visible at a size it was not drawn at.
  */
 function PulseRing({ still }: { still: boolean }) {
   const mesh = useRef<THREE.Mesh>(null);
@@ -131,23 +124,22 @@ function PulseRing({ still }: { still: boolean }) {
     if (!mesh.current || !material.current) return;
 
     if (still) {
-      // One legible frame, rather than a ring frozen mid-fade at random.
+      // One legible frame rather than a ring frozen mid-fade at random.
       mesh.current.scale.setScalar(1);
-      material.current.opacity = 0.22;
+      material.current.opacity = 0.2;
       return;
     }
 
     const progress = (clock.getElapsedTime() % PULSE_SECONDS) / PULSE_SECONDS;
     const eased = 1 - Math.pow(1 - progress, 2.2);
 
-    mesh.current.scale.setScalar(0.34 + eased * 1.12);
-    // In quickly, then out across the rest of the sweep.
-    material.current.opacity = 0.5 * Math.min(progress / 0.12, 1) * (1 - eased);
+    mesh.current.scale.setScalar(0.32 + eased * 1.1);
+    material.current.opacity = 0.46 * Math.min(progress / 0.12, 1) * (1 - eased);
   });
 
   return (
-    <mesh ref={mesh} position={[0, 0, 0.5]}>
-      <ringGeometry args={[1.94, 2.06, 96]} />
+    <mesh ref={mesh} position={[0, 0, 0.62]}>
+      <ringGeometry args={[2.1, 2.2, 96]} />
       <meshBasicMaterial
         ref={material}
         color={BRAND_ELECTRIC}
@@ -160,155 +152,154 @@ function PulseRing({ still }: { still: boolean }) {
   );
 }
 
-function Wheel({ still }: { still: boolean }) {
-  const group = useRef<THREE.Group>(null);
-  const { block, tick, spoke, blockMaterial, tickMaterial, spokeMaterial } = useSharedParts();
+/** The rubber: grooved base, five ribs, rounded shoulders, bulged sidewalls. */
+function Tyre() {
+  const { rib, ribMaterial } = useSharedParts();
 
-  useFrame((_, delta) => {
-    if (still || !group.current) return;
-    // Slow enough to read as a wheel under load, not as a fan.
-    group.current.rotation.z += delta * 0.16;
-  });
+  return (
+    <group>
+      {/* Groove floor. Sitting below the ribs, the gaps between them read as
+          four deep longitudinal grooves without a single cut being made. */}
+      <mesh rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[GROOVE_R, GROOVE_R, HALF_W * 2, 72, 1, true]} />
+        <meshStandardMaterial color={GROOVE} roughness={1} side={THREE.DoubleSide} />
+      </mesh>
 
-  const blocks = useMemo(
-    () =>
-      Array.from({ length: BLOCKS }, (_, i) => {
-        const angle = (Math.PI * 2 * i) / BLOCKS;
-        return {
-          key: i,
-          x: Math.cos(angle) * OUTER_RADIUS,
-          y: Math.sin(angle) * OUTER_RADIUS,
-          angle,
-          // Alternating lateral offset gives the tread a pattern, not a fence.
-          offset: i % 2 === 0 ? 0.19 : -0.19,
-        };
-      }),
-    [],
+      {RIB_CENTRES.map((z) => (
+        <mesh key={z} geometry={rib} material={ribMaterial} position={[0, 0, z]} rotation={[Math.PI / 2, 0, 0]} />
+      ))}
+
+      {/* Shoulders: the rounded edge where the tread turns into the sidewall. */}
+      {[-HALF_W, HALF_W].map((z) => (
+        <mesh key={`sh-${z}`} position={[0, 0, z]}>
+          <torusGeometry args={[TREAD_R - 0.08, 0.1, 14, 96]} />
+          <meshStandardMaterial color={RUBBER} roughness={0.88} />
+        </mesh>
+      ))}
+
+      {/* Sidewalls. One torus spanning rim flange to shoulder, flattened on Z
+          so it bulges like a loaded casing instead of reading as a doughnut. */}
+      <mesh scale={[1, 1, 0.92]}>
+        <torusGeometry args={[(RIM_R + TREAD_R) / 2, (TREAD_R - RIM_R) / 2, 26, 96]} />
+        <meshStandardMaterial color={RUBBER} roughness={0.9} metalness={0.05} />
+      </mesh>
+    </group>
   );
+}
 
-  const ticks = useMemo(
+/** The alloy: flange, dished face, ten studs, centre cap. */
+function Rim() {
+  const { stud, studMaterial } = useSharedParts();
+
+  const studs = useMemo(
     () =>
-      Array.from({ length: 12 }, (_, i) => {
-        const angle = (Math.PI * 2 * i) / 12;
-        return {
-          key: i,
-          x: Math.cos(angle) * 1.62,
-          y: Math.sin(angle) * 1.62,
-          angle,
-        };
+      Array.from({ length: STUDS }, (_, i) => {
+        const a = (Math.PI * 2 * i) / STUDS;
+        return { key: i, x: Math.cos(a) * 0.62, y: Math.sin(a) * 0.62 };
       }),
     [],
   );
 
   return (
-    <group ref={group} rotation={[0.2, -0.42, 0.06]}>
-      {/* Carcass. The bulk of the tyre. */}
-      <mesh>
-        <torusGeometry args={[1.98, 0.66, 28, 112]} />
-        <meshStandardMaterial color={TREAD_DARK} roughness={0.88} metalness={0.06} />
-      </mesh>
-
-      {/* Circumferential groove, sitting slightly proud as a darker band so the
-          tread reads as patterned rather than as a smooth doughnut. */}
-      <mesh>
-        <torusGeometry args={[2.62, 0.075, 14, 96]} />
-        <meshStandardMaterial color="#060f0a" roughness={1} />
-      </mesh>
-
-      {blocks.map((b) => (
-        <mesh
-          key={b.key}
-          geometry={block}
-          material={blockMaterial}
-          position={[b.x, b.y, b.offset]}
-          rotation={[0, 0, b.angle]}
-        />
-      ))}
-
-      {/* Sidewall shoulder, catching the key light. */}
-      <mesh position={[0, 0, 0.36]}>
-        <torusGeometry args={[1.72, 0.2, 16, 88]} />
-        <meshStandardMaterial color="#132a1d" roughness={0.62} metalness={0.15} />
-      </mesh>
-
-      {/* Rim lip: the one genuinely bright ring, in brand green. */}
-      <mesh position={[0, 0, 0.42]}>
-        <torusGeometry args={[1.46, 0.11, 18, 88]} />
+    <group>
+      {/* Flange: the one genuinely bright ring, in brand green. */}
+      <mesh position={[0, 0, 0.3]}>
+        <torusGeometry args={[RIM_R, 0.11, 20, 96]} />
         <meshStandardMaterial
           color={BRAND_BRIGHT}
           emissive={new THREE.Color(BRAND)}
-          emissiveIntensity={0.28}
-          metalness={0.7}
-          roughness={0.24}
+          emissiveIntensity={0.3}
+          metalness={0.78}
+          roughness={0.22}
         />
       </mesh>
 
-      {/* Rim face. */}
-      <mesh position={[0, 0, 0.3]} rotation={[Math.PI / 2, 0, 0]}>
-        <cylinderGeometry args={[1.44, 1.44, 0.2, 64]} />
-        <meshStandardMaterial color="#0d2117" metalness={0.5} roughness={0.42} />
+      {/* Dished face, set back from the flange so the rim reads as having depth. */}
+      <mesh position={[0, 0, 0.22]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[RIM_R - 0.02, RIM_R - 0.02, 0.16, 72]} />
+        <meshStandardMaterial color="#0f2a1b" metalness={0.62} roughness={0.36} />
       </mesh>
 
-      {Array.from({ length: SPOKES }).map((_, i) => {
-        const angle = (Math.PI * 2 * i) / SPOKES;
-        // Seated at the midpoint of the gap it spans, so it reaches the hub at
-        // one end and the rim at the other and no further.
-        const r = HUB_RADIUS + (RIM_RADIUS - HUB_RADIUS) / 2;
-        return (
-          <mesh
-            key={`spoke-${i}`}
-            geometry={spoke}
-            material={spokeMaterial}
-            position={[Math.cos(angle) * r, Math.sin(angle) * r, 0.38]}
-            rotation={[0, 0, angle]}
-          />
-        );
-      })}
+      {/* Bolt circle. Ten studs is the commercial standard. */}
+      {studs.map((s) => (
+        <mesh key={s.key} geometry={stud} material={studMaterial} position={[s.x, s.y, 0.34]} rotation={[Math.PI / 2, 0, 0]} />
+      ))}
 
-      {/* Hub and centre cap. */}
-      <mesh position={[0, 0, 0.46]} rotation={[Math.PI / 2, 0, 0]}>
-        <cylinderGeometry args={[0.46, 0.46, 0.36, 48]} />
-        <meshStandardMaterial color={RIM_METAL} metalness={0.95} roughness={0.2} />
+      {/* Hub and cap. */}
+      <mesh position={[0, 0, 0.33]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[0.36, 0.36, 0.2, 48]} />
+        <meshStandardMaterial color={ALLOY} metalness={0.94} roughness={0.2} />
       </mesh>
-      <mesh position={[0, 0, 0.64]} rotation={[Math.PI / 2, 0, 0]}>
-        <cylinderGeometry args={[0.24, 0.24, 0.12, 40]} />
+      <mesh position={[0, 0, 0.45]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[0.21, 0.21, 0.1, 40]} />
         <meshStandardMaterial
           color={BRAND}
           emissive={new THREE.Color(BRAND)}
-          emissiveIntensity={0.7}
-          metalness={0.4}
+          emissiveIntensity={0.4}
+          metalness={0.45}
           roughness={0.3}
         />
       </mesh>
-
-      {/* Measurement ticks on the rim face. Twelve marks, evenly spaced: the
-          visual language of a gauge, which is what the product is. */}
-      {ticks.map((t) => (
-        <mesh
-          key={`tick-${t.key}`}
-          geometry={tick}
-          material={tickMaterial}
-          position={[t.x, t.y, 0.44]}
-          rotation={[0, 0, t.angle]}
-        />
-      ))}
     </group>
   );
+}
+
+/** Constant rotation. Slow enough to read as a wheel under load, not a fan. */
+function Spin({ still, children }: { still: boolean; children: React.ReactNode }) {
+  const group = useRef<THREE.Group>(null);
+
+  useFrame((_, delta) => {
+    if (still || !group.current) return;
+    group.current.rotation.z += delta * 0.14;
+  });
+
+  return <group ref={group}>{children}</group>;
+}
+
+/**
+ * Lean toward the pointer.
+ *
+ * state.pointer is already normalised to -1..1 across the canvas and only
+ * updates while the pointer is over it, so no DOM listener is needed and the
+ * wheel settles back to its resting angle on its own when the pointer leaves.
+ * The lean is small and eased; a hero that swings hard at the cursor reads as a
+ * toy, and this one sits next to a demo request.
+ */
+function HoverTilt({ still, children }: { still: boolean; children: React.ReactNode }) {
+  const group = useRef<THREE.Group>(null);
+  const REST_X = 0.34;
+  const REST_Y = -0.72;
+
+  useFrame(({ pointer }, delta) => {
+    if (!group.current) return;
+    if (still) {
+      group.current.rotation.set(REST_X, REST_Y, 0);
+      return;
+    }
+    // Frame-rate independent easing, so the feel is the same at 60 and 144Hz.
+    const k = 1 - Math.pow(0.0001, delta);
+    group.current.rotation.x += (REST_X - pointer.y * 0.16 - group.current.rotation.x) * k;
+    group.current.rotation.y += (REST_Y + pointer.x * 0.2 - group.current.rotation.y) * k;
+  });
+
+  return <group ref={group}>{children}</group>;
 }
 
 /**
  * Keeps the whole wheel on screen at every size.
  *
- * A fixed camera distance cannot do this, because the hero stage is portrait on
- * a desktop (roughly 546 by 610) and the field of view is vertical: the wheel
- * fitted top to bottom and was sliced off at the right. Scaling to whichever
- * axis is tighter means the lugs stay inside the frame whatever shape the
- * column takes, with no per-breakpoint numbers to keep in step with the CSS.
+ * A fixed camera distance cannot: the hero stage is portrait on a desktop and
+ * the field of view is vertical, so the wheel fitted top to bottom and was
+ * sliced off at the right. Scaling to whichever axis is tighter means the tread
+ * stays inside the frame whatever shape the column takes, with no
+ * per-breakpoint numbers to keep in step with the CSS.
  */
 function FitToView({ children }: { children: React.ReactNode }) {
   const viewport = useThree((state) => state.viewport);
-  // A little under a perfect fit, so the tread is not flush against the edge.
-  const scale = (Math.min(viewport.width, viewport.height) / (WHEEL_EXTENT * 2)) * 0.88;
+  // 0.8 rather than a tighter fit: the two floating KPI panels sit over the
+  // stage, and at a fuller size the tread ran under them and touched the
+  // right edge of the column.
+  const scale = (Math.min(viewport.width, viewport.height) / (WHEEL_EXTENT * 2)) * 0.8;
 
   return <group scale={scale}>{children}</group>;
 }
@@ -331,15 +322,20 @@ export default function HeroScene() {
         frameloop={reduced ? "demand" : "always"}
       >
         {/* Authored lighting. Nothing here reaches the network. */}
-        <hemisphereLight args={["#eaf6ef", "#04120b", 1.1]} />
-        <directionalLight position={[4.2, 5.4, 6]} intensity={2.6} color="#ffffff" />
-        <directionalLight position={[-5, -1.5, 2]} intensity={0.9} color={BRAND_ELECTRIC} />
-        <pointLight position={[-3.4, -2.6, 4.2]} intensity={14} distance={16} color={BRAND} />
+        <hemisphereLight args={["#eaf6ef", "#04120b", 1.15]} />
+        <directionalLight position={[4.2, 5.4, 6]} intensity={2.7} color="#ffffff" />
+        <directionalLight position={[-5, -1.5, 2]} intensity={0.85} color={BRAND_ELECTRIC} />
+        <pointLight position={[-3.4, -2.6, 4.2]} intensity={13} distance={16} color={BRAND} />
         <pointLight position={[3.2, 3.4, 3.2]} intensity={9} distance={14} color="#d9fbe7" />
 
         <FitToView>
-          <Wheel still={reduced} />
-          <PulseRing still={reduced} />
+          <HoverTilt still={reduced}>
+            <Spin still={reduced}>
+              <Tyre />
+              <Rim />
+            </Spin>
+            <PulseRing still={reduced} />
+          </HoverTilt>
         </FitToView>
       </Canvas>
     </div>

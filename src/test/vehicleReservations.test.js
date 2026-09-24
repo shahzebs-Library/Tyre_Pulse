@@ -69,6 +69,19 @@ describe('vehicleReservations — overlaps', () => {
 })
 
 describe('vehicleReservations — findConflicts', () => {
+  it('matches pairwise overlap semantics for unordered nested, adjacent and invalid windows', () => {
+    const rows = Array.from({ length: 90 }, (_, id) => ({
+      id, asset_no: `POOL-${id % 3}`, status: id % 11 === 0 ? 'cancelled' : 'approved',
+      start_at: new Date(2026, 0, 1, (id * 7) % 24).toISOString(),
+      end_at: new Date(2026, 0, 1, (id * 7) % 24 + id % 5).toISOString(),
+    }))
+    rows.push({ id: 100, asset_no: 'POOL-1', start_at: 'invalid', end_at: null })
+    const expected = []
+    rows.forEach((a, i) => rows.slice(i + 1).forEach((b) => {
+      if (a.status !== 'cancelled' && b.status !== 'cancelled' && overlaps(a, b)) expected.push({ a, b })
+    }))
+    expect(findConflicts(rows)).toEqual(expected)
+  })
   it('reports each conflicting pair once and ignores cancelled bookings', () => {
     const rows = [
       { id: 1, asset_no: 'POOL-1', status: 'approved', start_at: iso('2026-07-01T08:00:00Z'), end_at: iso('2026-07-01T12:00:00Z') },

@@ -52,7 +52,7 @@ export function computeSavings(plan = {}) {
  *   • totalOptimizedKm  — sum of optimized_distance_km
  *   • totalSavingsKm     — sum of per-plan savings (total − optimised, ≥ 0)
  *   • avgSavingsPct     — average per-plan savings % over plans that have a
- *                         positive baseline distance
+ *                         positive baseline and a recorded non-negative optimized distance
  *   • optimizedCount    — plans whose optimised distance beats their total
  *
  * @param {Array<object>} rows
@@ -85,7 +85,7 @@ export function summariseRoutePlans(rows = []) {
     if (savingsKm > 0) totalSavingsKm += savingsKm
     if (savingsKm > 0) optimizedCount += 1
 
-    if (total != null && total > 0) {
+    if (total != null && total > 0 && optimized != null && optimized >= 0) {
       pctSum += savingsPct
       pctCount += 1
     }

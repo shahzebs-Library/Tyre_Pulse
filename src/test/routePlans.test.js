@@ -38,6 +38,12 @@ describe('routePlans — computeSavings', () => {
 })
 
 describe('routePlans — summariseRoutePlans', () => {
+  it('excludes missing optimized distances from the average rather than counting them as measured zero savings', () => {
+    expect(summariseRoutePlans([
+      { total_distance_km: 100, optimized_distance_km: 60 },
+      { total_distance_km: 200, optimized_distance_km: null },
+    ]).avgSavingsPct).toBe(40)
+  })
   it('returns zeroes for empty / non-array input', () => {
     const zero = {
       totalPlans: 0, totalStops: 0, totalDistanceKm: 0, totalOptimizedKm: 0,

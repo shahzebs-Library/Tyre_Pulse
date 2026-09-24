@@ -84,14 +84,30 @@ export function overlaps(a, b) {
  */
 export function findConflicts(rows = []) {
   const list = Array.isArray(rows) ? rows : []
-  const active = list.filter((r) => r && String(r.status || '').toLowerCase() !== 'cancelled')
+  const groups = new Map()
+  list.forEach((row, index) => {
+    if (!row || String(row.status || '').toLowerCase() === 'cancelled') return
+    const asset = assetKey(row)
+    const start = timeMs(row.start_at)
+    const end = timeMs(row.end_at)
+    if (!asset || start == null || end == null || end <= start) return
+    if (!groups.has(asset)) groups.set(asset, [])
+    groups.get(asset).push({ row, index, start, end })
+  })
   const pairs = []
-  for (let i = 0; i < active.length; i++) {
-    for (let j = i + 1; j < active.length; j++) {
-      if (overlaps(active[i], active[j])) pairs.push({ a: active[i], b: active[j] })
+  // Compare only the same asset's overlapping time windows. Loading the full
+  // register must not introduce a quadratic scan of unrelated bookings.
+  for (const bookings of groups.values()) {
+    bookings.sort((a, b) => a.start - b.start || a.index - b.index)
+    for (let i = 0; i < bookings.length; i++) {
+      for (let j = i + 1; j < bookings.length && bookings[j].start < bookings[i].end; j++) {
+        const [a, b] = bookings[i].index < bookings[j].index
+          ? [bookings[i], bookings[j]] : [bookings[j], bookings[i]]
+        pairs.push({ a: a.row, b: b.row, i: a.index, j: b.index })
+      }
     }
   }
-  return pairs
+  return pairs.sort((a, b) => a.i - b.i || a.j - b.j).map(({ a, b }) => ({ a, b }))
 }
 
 /**

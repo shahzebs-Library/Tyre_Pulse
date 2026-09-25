@@ -63,9 +63,12 @@
 -- ENFORCEMENT GAPS (stated, not hidden)
 --   * The IP allowlist gates the CONSOLE UI only. A super admin's JWT can still
 --     reach PostgREST/RPCs directly from any IP; RLS is not IP-aware.
+--     [2026-09-25: the console WRITE RPCs are now gated server-side by
+--     20260924126000_console_ip_server_enforcement.sql; reads are not.]
 --   * SSO enforcement is app-level: a client calling supabase-js
---     signInWithPassword directly still obtains a session. The mobile apps do
---     not call sso_password_login_check yet.
+--     signInWithPassword directly still obtains a session. [2026-09-25: the
+--     Expo mobile app now calls sso_password_login_check after sign-in, code
+--     only, awaiting an EAS build; the Flutter app does not yet.]
 --   * Real SSO sign-in needs an IdP registered in Supabase Auth (Management
 --     API). 0 providers are registered today.
 --

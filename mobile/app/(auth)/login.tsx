@@ -56,8 +56,12 @@ export default function LoginScreen() {
         setError(t('login.errorLocked').replace('{mins}', String(lockMins(gate))))
         return
       }
-      const { error: signInError } = await signIn(identifier, password)
-      if (signInError) {
+      const { error: signInError, code } = await signIn(identifier, password)
+      if (code === 'sso_required') {
+        // The password was correct, so this is not a failed attempt: do not
+        // count it towards the lockout. The session is already signed out.
+        setError(t('login.errorSsoRequired'))
+      } else if (signInError) {
         const locked = await recordFailure(identifier.trim())
         if (locked.locked) {
           setError(t('login.errorLocked').replace('{mins}', String(lockMins(locked))))

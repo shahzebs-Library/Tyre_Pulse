@@ -14,6 +14,7 @@ import {
 } from '../lib/recordQueue'
 import { clearPushToken, cancelDailyInspectionReminder, registerPushToken } from '../lib/notifications'
 import { setSentryUser } from '../lib/sentry'
+import { checkSsoPasswordLogin } from '../lib/ssoPolicy'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { AppState, AppStateStatus } from 'react-native'
 import { storageReadFailureCount } from '../lib/secureStorage'
@@ -137,7 +138,9 @@ interface AuthContextType {
   /** Total pending (unsynced) queued work: offline queue + record queue. Callers
    *  (e.g. the profile screen) use it to warn before logging out. */
   hasUnsyncedWork: () => Promise<number>
-  signIn: (identifier: string, password: string) => Promise<{ error: AuthError | Error | null }>
+  /** `code: 'sso_required'` means the password was right but the user's
+   *  organisation requires SSO; the session has already been signed out. */
+  signIn: (identifier: string, password: string) => Promise<{ error: AuthError | Error | null; code?: 'sso_required' }>
   /** `force` lets a caller express intent to sign out despite unsynced work;
    *  behavior is identical either way (pending work is preserved regardless). */
   signOut: (force?: boolean) => Promise<void>
@@ -677,6 +680,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) {
       if (__DEV__) console.warn('signInWithPassword error', error)
       return { error: genericError }
+    }
+    // Access Policies: an org that requires SSO refuses PASSWORD sign-in for
+    // its non-super-admin users (super admins are exempt server-side). Asked
+    // AFTER the password is proven so it is never an enumeration oracle.
+    // FAILS OPEN on any error - a broken check must never lock people out.
+    const sso = await checkSsoPasswordLogin(() => supabase.rpc('sso_password_login_check'))
+    if (!sso.allowed) {
+      try { await supabase.auth.signOut() } catch { /* best-effort */ }
+      return { error: new Error('sso_required'), code: 'sso_required' as const }
     }
     return { error: null }
   }

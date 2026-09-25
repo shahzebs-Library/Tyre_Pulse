@@ -183,11 +183,12 @@ describe('checkDatabase / checkTable', () => {
     expect(typeof r.latencyMs).toBe('number')
   })
 
-  it('maps a query error to down with the error message', async () => {
-    h.state.result = { data: null, error: { message: 'relation missing' } }
+  it('maps a query error to down with a sanitised message (no raw driver text)', async () => {
+    h.state.result = { data: null, error: { code: '42P01', message: 'relation "public.tyre_records" does not exist' } }
     const r = await checkTable('tyre_records')
     expect(r.status).toBe(STATUS.DOWN)
-    expect(r.detail).toBe('relation missing')
+    expect(r.detail).not.toMatch(/relation|public\.|does not exist/i)
+    expect(r.detail.length).toBeGreaterThan(0)
     expect(r.id).toBe('table:tyre_records')
     expect(r.group).toBe('tables')
   })

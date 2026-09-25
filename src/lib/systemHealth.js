@@ -17,6 +17,7 @@
  *    summary) are exported separately for unit testing without a network.
  */
 import { supabase } from './supabase'
+import { toUserMessage } from './safeError'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -131,9 +132,11 @@ function now() {
   return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()
 }
 
+// Never surface raw driver/PostgREST text (relation names, SQL, endpoints) on
+// the health board - route it through the one sanitiser the rest of the app uses.
 function errMessage(err) {
   if (!err) return 'Unknown error'
-  return err.message || err.error_description || err.hint || String(err)
+  return toUserMessage(err, 'Check failed')
 }
 
 function supabaseBaseUrl() {

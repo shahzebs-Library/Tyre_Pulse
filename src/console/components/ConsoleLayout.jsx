@@ -6,7 +6,7 @@ import {
   Globe, Menu, X, AlertTriangle, Layers, Smartphone, Palette, Activity,
   DatabaseBackup, UserCog, History, BellRing, Boxes, HeartPulse, Search, Truck, Trash2, CopyX, FileClock,
   LayoutList, Bug, Wand2, LifeBuoy, Eye, UserX, Brain, ShieldCheck, Sparkles, Scale, GitBranch, Rocket,
-  Map, Command, UserCheck, Fingerprint, KeyRound, ClipboardCheck, PackageOpen, Siren,
+  Map, Command, UserCheck, Fingerprint, KeyRound, ClipboardCheck, PackageOpen, Siren, Timer,
 } from 'lucide-react'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import Console2FAModal from './Console2FAModal'
@@ -45,6 +45,7 @@ export const NAV_GROUPS = [
       { to: '/console/compliance',     label: 'Compliance',       icon: ClipboardCheck },
       { to: '/console/approvals',      label: 'Approvals',        icon: Scale },
       { to: '/console/incidents',      label: 'Incidents',        icon: Siren },
+      { to: '/console/jit-elevation',  label: 'JIT Elevation',    icon: Timer },
     ],
   },
   {

@@ -8,7 +8,7 @@
  */
 import { useCallback, useEffect, useState } from 'react'
 import { Timer, Trash2, Save, RefreshCw } from 'lucide-react'
-import { Panel, PanelHeader, Note, StatTile, Btn, LoadingState, ErrorState } from '../../components/ui'
+import { Panel, PanelHeader, Note, StatTile, Btn, LoadingState, ErrorState, Modal } from '../../components/ui'
 import { getRetentionStatus, setRetentionDays, purgeExpiredNow } from '../../../lib/api/tenantExport'
 import { validateRetentionDays, RETENTION_MIN, RETENTION_MAX } from '../../../lib/tenantExport'
 import { toUserMessage } from '../../../lib/safeError'
@@ -26,6 +26,7 @@ export default function RetentionPanel({ onPurged }) {
   const [saving, setSaving] = useState(false)
   const [purging, setPurging] = useState(false)
   const [msg, setMsg] = useState('')
+  const [confirmPurge, setConfirmPurge] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true); setErr('')
@@ -57,6 +58,7 @@ export default function RetentionPanel({ onPurged }) {
   }
 
   async function purge() {
+    setConfirmPurge(false)
     setPurging(true); setErr(''); setMsg('')
     try {
       const r = await purgeExpiredNow()
@@ -92,11 +94,11 @@ export default function RetentionPanel({ onPurged }) {
                 type="number" min={RETENTION_MIN} max={RETENTION_MAX} value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 aria-label="Retention in days"
-                className="w-28 bg-gray-900 border border-gray-800 rounded-lg px-2 py-1.5 text-sm text-gray-200"
+                className="w-28 bg-gray-900 border border-gray-800 rounded-lg px-2 py-1.5 text-sm text-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
               />
             </label>
             <Btn variant="primary" icon={Save} busy={saving} disabled={!changed || !!draftError} onClick={save}>Save</Btn>
-            <Btn variant="danger" icon={Trash2} busy={purging} disabled={!status.dueCount} onClick={purge}
+            <Btn variant="danger" icon={Trash2} busy={purging} disabled={!status.dueCount} onClick={() => setConfirmPurge(true)}
               title={status.dueCount ? 'Delete the files of every expired export now' : 'Nothing has expired yet'}>
               Delete expired now
             </Btn>
@@ -106,6 +108,19 @@ export default function RetentionPanel({ onPurged }) {
           <Note>Deletion cannot be undone. An expired export can no longer be downloaded; run a new export if the data is needed again. Every change and every deletion is recorded in the console audit trail.</Note>
         </div>
       )}
+      <Modal open={confirmPurge} title="Delete expired exports now?" width="max-w-md"
+        onClose={() => setConfirmPurge(false)}
+        footer={(
+          <>
+            <Btn onClick={() => setConfirmPurge(false)}>Cancel</Btn>
+            <Btn variant="danger" icon={Trash2} busy={purging} onClick={purge}>Delete {status?.dueCount || ''} expired</Btn>
+          </>
+        )}>
+        <p className="text-sm text-gray-300">
+          The files of {status?.dueCount || 0} expired export(s) are deleted from storage. This cannot be undone; the
+          export records stay, marked Expired.
+        </p>
+      </Modal>
     </Panel>
   )
 }

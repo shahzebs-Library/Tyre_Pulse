@@ -87,6 +87,7 @@ export default function ConsoleSmartImport() {
 
   const [phase, setPhase] = useState('idle') // idle | parsing | ready | committing | done
   const [error, setError] = useState('')
+  const [dragOver, setDragOver] = useState(false)
   const [fileName, setFileName] = useState('')
   // Set when this exact file content has been loaded before. The commit button
   // stays disabled until the operator says they meant to repeat it.
@@ -315,8 +316,19 @@ export default function ConsoleSmartImport() {
       <ErrorState message={error} />
 
       {phase === 'idle' && (
-        <label className="block cursor-pointer rounded-xl border-2 border-dashed border-gray-800 hover:border-orange-600/60 bg-gray-900/50 p-12 text-center transition-colors">
-          <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv,.tsv,.txt" className="hidden" onChange={onFile} />
+        // The input is visually hidden but stays focusable, so the picker opens
+        // from the keyboard; the drop handler makes "drag it here" true.
+        <label
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => {
+            e.preventDefault(); setDragOver(false)
+            const file = e.dataTransfer?.files?.[0]
+            if (file) onFile({ target: { files: [file] } })
+          }}
+          className={`block cursor-pointer rounded-xl border-2 border-dashed ${dragOver ? 'border-orange-500 bg-orange-950/20' : 'border-gray-800 bg-gray-900/50'} hover:border-orange-600/60 p-6 sm:p-12 text-center transition-colors focus-within:ring-2 focus-within:ring-orange-500`}>
+          <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv,.tsv,.txt" className="sr-only" onChange={onFile}
+            aria-label="Choose a file to import" />
           <UploadCloud className="mx-auto text-orange-400" size={36} />
           <p className="mt-3 text-sm font-semibold text-gray-200">Choose a file or drag it here</p>
           <p className="text-xs text-gray-500 mt-1">Excel (.xlsx, .xls) or CSV. Vehicles, tyres, stock, accidents, inspections, work orders, warranty, gate passes, suppliers, drivers.</p>
@@ -331,7 +343,7 @@ export default function ConsoleSmartImport() {
             <PanelHeader icon={FileSpreadsheet} title={fileName || 'Uploaded file'}
               subtitle={`${fmtNum(sheet.rows.length)} rows | ${sheet.columns.length} columns`}
               actions={parsed.sheets.length > 1 && (
-                <Select value={String(sheetIdx)} onChange={(v) => pickSheet(Number(v))} className="w-56"
+                <Select ariaLabel="Sheet" value={String(sheetIdx)} onChange={(v) => pickSheet(Number(v))} className="w-56"
                   options={parsed.sheets.map((s, i) => ({ value: String(i), label: `${s.name} (${fmtNum(s.rows.length)})` }))} />
               )} />
 
@@ -339,7 +351,7 @@ export default function ConsoleSmartImport() {
               <div>
                 <p className="text-[11px] uppercase tracking-wide text-gray-500">Detected as</p>
                 <div className="mt-1 flex items-center gap-2">
-                  <Select value={module} onChange={changeModule} options={moduleOptions} className="flex-1" disabled={phase !== 'ready'} />
+                  <Select ariaLabel="Module" value={module} onChange={changeModule} options={moduleOptions} className="flex-1" disabled={phase !== 'ready'} />
                   {confident
                     ? <Badge tone="good" icon={CheckCircle2}>Confident</Badge>
                     : <Badge tone="warning" icon={Info}>Please confirm</Badge>}
@@ -350,7 +362,7 @@ export default function ConsoleSmartImport() {
                 <p className="text-[11px] uppercase tracking-wide text-gray-500">Country (optional)</p>
                 <input value={country} onChange={(e) => setCountry(e.target.value)} placeholder="Leave blank to use your default scope"
                   disabled={phase !== 'ready'} aria-label="Country"
-                  className="mt-1 w-full px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 placeholder-gray-600 focus:border-gray-700 focus:outline-none disabled:opacity-50" />
+                  className="mt-1 w-full px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 placeholder-gray-600 focus:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 disabled:opacity-50" />
                 <p className="mt-1 text-xs text-gray-500">Stamps every imported row with this country for data isolation.</p>
               </div>
             </div>
@@ -377,7 +389,7 @@ export default function ConsoleSmartImport() {
                       <Tr key={m.sourceHeader}>
                         <Td><span className="text-gray-300">{m.sourceHeader}</span></Td>
                         <Td>
-                          <Select value={m.target || ''} onChange={(v) => setTarget(m.sourceHeader, v)}
+                          <Select ariaLabel={`Field for column ${m.sourceHeader}`} value={m.target || ''} onChange={(v) => setTarget(m.sourceHeader, v)}
                             placeholder="Keep as-is (not imported)" options={fieldOptions} disabled={phase !== 'ready'} />
                         </Td>
                         <Td><Badge tone={b.tone}>{b.text}</Badge></Td>
@@ -397,7 +409,7 @@ export default function ConsoleSmartImport() {
                   : `All ${fmtNum(previewInfo.total)} rows checked.`} />
               <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)] items-center">
                 <PreviewShare info={previewInfo} />
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <StatTile label="Ready" value={fmtNum(previewInfo.ready)} tone="good" icon={CheckCircle2} />
                   <StatTile label="Needs review" value={fmtNum(previewInfo.warning)} tone="warning" icon={Info} />
                   <StatTile label="Would fail" value={fmtNum(previewInfo.errorRows)} tone={previewInfo.errorRows ? 'danger' : 'default'} icon={AlertTriangle} />
@@ -444,7 +456,8 @@ export default function ConsoleSmartImport() {
               <PanelHeader icon={AlertTriangle} tone="warning" title="This file has been uploaded before"
                 subtitle={`The same file content was loaded${fingerprint.first_seen_at ? ` on ${String(fingerprint.first_seen_at).slice(0, 10)}` : ' previously'}${fingerprint.filename ? ` as "${fingerprint.filename}"` : ''}. Committing it again adds those rows a second time.`} />
               <label className="flex items-center gap-2 text-xs text-amber-200 cursor-pointer">
-                <input type="checkbox" checked={repeatAck} onChange={(e) => setRepeatAck(e.target.checked)} disabled={phase !== 'ready'} />
+                <input type="checkbox" checked={repeatAck} onChange={(e) => setRepeatAck(e.target.checked)} disabled={phase !== 'ready'}
+                  className="accent-orange-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />
                 I know this is a repeat and I want to import it anyway
               </label>
             </Panel>

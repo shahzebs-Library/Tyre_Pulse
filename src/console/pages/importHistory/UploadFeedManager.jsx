@@ -78,7 +78,7 @@ function FeedForm({ feed, candidates, onChange }) {
     <div className="space-y-3">
       <div>
         <p className="text-[11px] text-gray-400 mb-1">Which table does this upload land in?</p>
-        <Select
+        <Select ariaLabel="Destination table"
           value={feed.table_name}
           onChange={pickTable}
           disabled={!!feed.id}
@@ -89,7 +89,7 @@ function FeedForm({ feed, candidates, onChange }) {
           }))}
         />
         {feed.id && (
-          <p className="text-[10px] text-gray-600 mt-1">
+          <p className="text-[10px] text-gray-400 mt-1">
             The table cannot be changed after saving. Add a separate feed instead, so the
             alert history for this one stays meaningful.
           </p>
@@ -98,15 +98,15 @@ function FeedForm({ feed, candidates, onChange }) {
 
       {feed.table_name && (
         <>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <p className="text-[11px] text-gray-400 mb-1">Which date says what day the data covers?</p>
-              <Select value={feed.date_column} onChange={pickDate} placeholder="Choose a date"
+              <Select ariaLabel="Date column" value={feed.date_column} onChange={pickDate} placeholder="Choose a date"
                 options={dateCols.map((c) => ({ value: c, label: c }))} />
             </div>
             <div>
               <p className="text-[11px] text-gray-400 mb-1">Which column is the site or area?</p>
-              <Select value={feed.site_column || ''} onChange={(v) => onChange({ ...feed, site_column: v })}
+              <Select ariaLabel="Site or area column" value={feed.site_column || ''} onChange={(v) => onChange({ ...feed, site_column: v })}
                 placeholder="No site on this table"
                 options={siteCols.map((c) => ({ value: c, label: c }))} />
             </div>
@@ -120,17 +120,17 @@ function FeedForm({ feed, candidates, onChange }) {
             </Note>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <p className="text-[11px] text-gray-400 mb-1">Name shown on the panel</p>
-              <input value={feed.label} onChange={(e) => onChange({ ...feed, label: e.target.value })}
-                className="w-full px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 focus:border-gray-700 focus:outline-none" />
+              <input value={feed.label} aria-label="Name shown on the panel" onChange={(e) => onChange({ ...feed, label: e.target.value })}
+                className="w-full px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 focus:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />
             </div>
             <div>
               <p className="text-[11px] text-gray-400 mb-1">Order on the panel</p>
-              <input type="number" value={feed.sort_order}
+              <input type="number" aria-label="Order on the panel" value={feed.sort_order}
                 onChange={(e) => onChange({ ...feed, sort_order: e.target.value })}
-                className="w-full px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 focus:border-gray-700 focus:outline-none" />
+                className="w-full px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 focus:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />
             </div>
           </div>
 
@@ -138,10 +138,10 @@ function FeedForm({ feed, candidates, onChange }) {
             <label className="flex items-start gap-2 text-[11px] text-gray-400">
               <input type="checkbox" checked={feed.site_day_policed}
                 onChange={(e) => onChange({ ...feed, site_day_policed: e.target.checked })}
-                className="mt-0.5" />
+                className="mt-0.5 accent-orange-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />
               <span>
                 Every working site should send this every day.
-                <span className="block text-gray-600">
+                <span className="block text-gray-400">
                   Leave this off for anything event driven, where a site only appears when
                   something actually happened - otherwise every quiet site is reported as a gap.
                 </span>
@@ -157,6 +157,9 @@ function FeedForm({ feed, candidates, onChange }) {
 export default function UploadFeedManager() {
   const [feeds, setFeeds] = useState([])
   const [candidates, setCandidates] = useState([])
+  const [candidatesFailed, setCandidatesFailed] = useState(false)
+  const [togglingId, setTogglingId] = useState(null)
+  const [toggleErr, setToggleErr] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [editing, setEditing] = useState(null)
@@ -170,9 +173,9 @@ export default function UploadFeedManager() {
       // feed list itself, which is the part everyone can read.
       const [f, c] = await Promise.all([
         listUploadFeeds(),
-        listUploadFeedCandidates().catch(() => []),
+        listUploadFeedCandidates().catch(() => null),
       ])
-      setFeeds(f); setCandidates(c)
+      setFeeds(f); setCandidates(c || []); setCandidatesFailed(c === null)
     } catch (e) {
       setError(toUserMessage(e, 'Could not load the watched feed list.'))
     } finally { setLoading(false) }
@@ -196,10 +199,13 @@ export default function UploadFeedManager() {
     } finally { setBusy(false) }
   }
 
+  // A failed pause/resume is reported beside the list rather than replacing
+  // it, so the feeds stay visible while the reason is shown.
   const toggle = async (f) => {
+    setTogglingId(f.id); setToggleErr('')
     try { await setUploadFeedActive(f.id, !f.active); await load() } catch (e) {
-      setError(toUserMessage(e, 'Could not change this feed.'))
-    }
+      setToggleErr(toUserMessage(e, 'Could not change this feed.'))
+    } finally { setTogglingId(null) }
   }
 
   const valid = editing?.table_name && editing?.date_column
@@ -230,6 +236,7 @@ export default function UploadFeedManager() {
           />
         ) : (
           <>
+            {toggleErr && <div className="px-3 pt-3"><ErrorState message={toggleErr} /></div>}
             <Table>
               <THead>
                 <Th>Feed</Th>
@@ -242,7 +249,7 @@ export default function UploadFeedManager() {
                 {feeds.map((f) => (
                   <Tr key={f.id}>
                     <Td>
-                      <span className="text-gray-200">{f.label}</span>
+                      <span className="text-gray-200 break-words">{f.label}</span>
                       {!f.active && <Badge tone="quiet">paused</Badge>}
                     </Td>
                     <Td nowrap><span className="text-gray-500">{f.table_name}</span></Td>
@@ -253,12 +260,12 @@ export default function UploadFeedManager() {
                     <Td nowrap>
                       {f.site_column
                         ? <span className="text-gray-500">{f.site_column}{f.site_day_policed ? ' · daily per site' : ''}</span>
-                        : <span className="text-gray-600">none</span>}
+                        : <span className="text-gray-400">none</span>}
                     </Td>
                     <Td align="right">
                       <Toolbar className="justify-end">
                         <Btn icon={Pencil} onClick={() => { setSaveErr(''); setEditing({ ...f, site_column: f.site_column || '' }) }}>Edit</Btn>
-                        <Btn icon={f.active ? Pause : Play} onClick={() => toggle(f)}>
+                        <Btn icon={f.active ? Pause : Play} onClick={() => toggle(f)} busy={togglingId === f.id} disabled={togglingId != null}>
                           {f.active ? 'Pause' : 'Resume'}
                         </Btn>
                       </Toolbar>
@@ -267,6 +274,15 @@ export default function UploadFeedManager() {
                 ))}
               </tbody>
             </Table>
+
+            {candidatesFailed && (
+              <div className="px-3 pb-3">
+                <Note icon={AlertTriangle} tone="warning">
+                  The list of tables that could be watched could not be read, so adding a new feed is not possible
+                  right now. The watched feeds above are unaffected.
+                </Note>
+              </div>
+            )}
 
             {unwatched.length > 0 && (
               <div className="px-3 pb-3">

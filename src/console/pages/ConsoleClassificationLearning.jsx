@@ -133,7 +133,7 @@ export default function ConsoleClassificationLearning() {
           icon={Brain}
           title="How the classifier is learning"
           subtitle="Every category you correct is measured against what the machine would have said. What it gets wrong becomes the next thing it learns."
-          actions={<Btn icon={RefreshCw} onClick={load}>Refresh</Btn>}
+          actions={<Btn icon={RefreshCw} onClick={load} busy={state.loading}>Refresh</Btn>}
         />
 
         {flash && (
@@ -228,11 +228,13 @@ export default function ConsoleClassificationLearning() {
                     <Td align="right">{imp ? money(imp.value) : 'N/A'}</Td>
                     <Td align="right">
                       <Toolbar className="justify-end">
-                        <Btn icon={Eye} onClick={() => openPreview(p)}>Look</Btn>
+                        <Btn icon={Eye} onClick={() => openPreview(p)} ariaLabel={`Look at the items "${p.token}" would change`}>Look</Btn>
                         <Btn
                           icon={X}
                           onClick={() => decide(p, 'reject')}
                           busy={busy === `${p.token}:${p.category}:reject`}
+                          ariaLabel={`Reject "${p.token}" as ${categoryLabel(p.category)}`}
+                          title="Reject this suggestion. It will not be suggested again."
                         >
                           No
                         </Btn>
@@ -293,7 +295,7 @@ export default function ConsoleClassificationLearning() {
               <Th>Means</Th>
               <Th>Decision</Th>
               <Th>Why</Th>
-              <Th align="right"></Th>
+              <Th align="right"><span className="sr-only">Action</span></Th>
             </THead>
             <tbody>
               {rules.map((r) => (
@@ -341,6 +343,7 @@ export default function ConsoleClassificationLearning() {
               icon={X}
               onClick={() => decide(preview.proposal, 'reject')}
               busy={busy.endsWith(':reject')}
+              disabled={!!busy}
             >
               No, that is wrong
             </Btn>
@@ -349,13 +352,15 @@ export default function ConsoleClassificationLearning() {
               icon={Check}
               onClick={() => decide(preview.proposal, 'accept')}
               busy={busy.endsWith(':accept')}
-              disabled={preview.loading || !preview.rows.length}
+              disabled={!!busy || preview.loading || !preview.rows.length}
             >
               Yes, learn this
             </Btn>
           </Toolbar>
         )}
       >
+        {/* A failed decision keeps this dialog open; its reason lands in the page flash behind it. */}
+        {flash?.tone === 'bad' && <div className="mb-3"><Note icon={AlertTriangle} tone="danger">{flash.text}</Note></div>}
         {preview?.loading && <LoadingState label="Finding the rows" rows={3} />}
         {preview?.error && <ErrorState message={preview.error} />}
         {preview && !preview.loading && !preview.error && (

@@ -55,6 +55,21 @@ batching stops them being started at all.
 
 ---
 
+# ⚑ SESSION 2026-09-25 (part 5) — CONSOLE UI/UX PASS (ui-ux-pro-max, 4 agents). No migration. Branch only.
+- Every console page + kit audited: aria-labels on icon buttons, focus-visible orange rings, labelled inputs,
+  keyboard rows, confirm dialogs on destructive actions, responsive grids, gray-600 body text raised to gray-400.
+- **Kit (`src/console/components/ui/index.jsx`) now carries a11y by default:** Btn passes ...rest/ariaLabel (title
+  fallback), SearchInput/Select default aria-label from placeholder/label, clickable Tr = tabIndex+Enter/Space,
+  sortable Th aria-sort, Modal aria-labelledby, ErrorState role=alert, PanelHeader actions wrap. USE the kit.
+- **Honest states:** many pages rendered a FAILED read as empty/zero/default (SystemConfig switches, 2FA "not
+  enabled", MobileApp gate, FX rates, Delivery, ImportHistory, MaterialMaster, SecurityAudit history). Now
+  ErrorState + Retry. RULE: never render a failed read as "none".
+- RULE: do not put aria-label on a button that has visible text (tests find it by visible name).
+- Layout: skip-to-content link + #console-main, aria-current nav. SmartImport drag-drop now actually works.
+- Verified: eslint 0 errors, build clean, console tests 328/328. NOT verified in a browser.
+
+---
+
 # ⚑ SESSION 2026-09-25 (part 4) — USER DELETED + OPEN-ITEM CLEANUP. Migration 20260925090000 APPLIED LIVE.
 - **Mahmoud Taher (Egypt Director, a4fd5401-7345-4c08-9701-d39349e612af) DELETED** on owner instruction. Only
   his own notifications (58, cascade) + auth identity referenced him. Row kept in

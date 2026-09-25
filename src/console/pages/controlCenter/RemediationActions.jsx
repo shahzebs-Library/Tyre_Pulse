@@ -24,7 +24,7 @@
  *     an unreviewed cost code are per-row human decisions, so those cards route to
  *     the existing surface instead of inventing a value.
  */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Wrench, RefreshCw, ShieldCheck, CheckCircle2, ExternalLink,
@@ -75,6 +75,7 @@ function ActionCard({
   const [running, setRunning] = useState(false)
   const mountedRef = useRef(true)
   const navigate = useNavigate()
+  const typedId = useId()
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -208,16 +209,20 @@ function ActionCard({
         >
           <div className="space-y-3 text-sm text-gray-300">
             <p>{action.confirmBody}</p>
+            {/* A failed run keeps this dialog open, so the reason has to show here too. */}
+            {error && <ErrorState message={error} />}
             {action.typed && (
               <div>
-                <label className="block text-xs text-gray-500 mb-1">
+                <label htmlFor={typedId} className="block text-xs text-gray-400 mb-1">
                   Type CONFIRM to proceed
                 </label>
                 <input
+                  id={typedId}
+                  autoComplete="off"
                   value={typedValue}
                   onChange={(e) => setTypedValue(e.target.value)}
                   placeholder="CONFIRM"
-                  className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-800 text-sm text-gray-200 placeholder-gray-600 focus:border-gray-700 focus:outline-none"
+                  className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-800 text-sm text-gray-200 placeholder-gray-600 focus:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
                 />
               </div>
             )}
@@ -477,7 +482,7 @@ export default function RemediationActions({ country }) {
         />
       </div>
 
-      <p className="text-[11px] text-gray-600">
+      <p className="text-[11px] text-gray-400">
         Advanced Remediation reuses the existing reconciliation, duplicate-control,
         material-master and system-log services. It never writes SQL, never invents a
         value, and every destructive action is archived or reversible.

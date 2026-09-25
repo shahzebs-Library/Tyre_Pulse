@@ -151,7 +151,7 @@ export default function ConsoleMetricCatalogue() {
                   <Th>Source table</Th>
                   <Th>Refresh SLA</Th>
                   <Th align="right">Dashboards</Th>
-                  <Th align="right"></Th>
+                  <Th align="right"><span className="sr-only">Open</span></Th>
                 </THead>
                 <tbody>
                   {filtered.map((r) => {
@@ -159,14 +159,14 @@ export default function ConsoleMetricCatalogue() {
                     const on = id === selected
                     return (
                       <Tr key={id || field(r, 'name')} onClick={() => openDetail(id)} className={on ? 'bg-orange-950/20' : ''}>
-                        <Td><span className="font-medium text-gray-100">{na(field(r, 'name'))}</span></Td>
+                        <Td><button type="button" aria-pressed={on} onClick={(e) => { e.stopPropagation(); openDetail(id) }} className="text-left font-medium text-gray-100 hover:text-orange-300 break-words focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 rounded">{na(field(r, 'name'))}</button></Td>
                         <Td nowrap><span className="font-mono text-[11px] text-gray-400">{na(id)}</span></Td>
                         <Td>{na(field(r, 'business_owner', 'owner'))}</Td>
                         <Td>{na(field(r, 'unit'))}</Td>
                         <Td nowrap><span className="font-mono text-[11px] text-gray-400">{na(field(r, 'source_table'))}</span></Td>
                         <Td>{na(field(r, 'refresh_sla'))}</Td>
                         <Td align="right"><span className="tabular-nums text-gray-300">{dashCount(r)}</span></Td>
-                        <Td align="right"><ChevronRight size={14} className="text-gray-600 inline" /></Td>
+                        <Td align="right"><ChevronRight size={14} className="text-gray-500 inline" aria-hidden="true" /></Td>
                       </Tr>
                     )
                   })}
@@ -263,6 +263,11 @@ export default function ConsoleMetricCatalogue() {
                   )}
                 </div>
               </>
+            )}
+
+            {!detail.loading && !detail.error && !metric && (
+              <EmptyState icon={Ruler} title="No definition found"
+                reason="This metric id returned no governed definition. It may have been removed from the registry." />
             )}
           </div>
         </Panel>

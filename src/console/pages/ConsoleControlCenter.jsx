@@ -235,20 +235,22 @@ export default function ConsoleControlCenter() {
             options={COUNTRIES.map((c) => ({ key: c, label: c }))}
             value={country}
             onChange={setCountry}
+            ariaLabel="Country"
+            role="group"
           />
           <button onClick={() => doExport('excel')} disabled={!canExport}
             title="Download the trust, diagnostics and lineage snapshot as Excel"
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-800 text-gray-400 hover:text-white text-xs border border-gray-700 transition-colors disabled:opacity-50">
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-800 text-gray-400 hover:text-white text-xs border border-gray-700 transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
             <Download size={12} /> Excel
           </button>
           <button onClick={() => doExport('pdf')} disabled={!canExport}
             title="Download the diagnostics snapshot as PDF"
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-800 text-gray-400 hover:text-white text-xs border border-gray-700 transition-colors disabled:opacity-50">
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-800 text-gray-400 hover:text-white text-xs border border-gray-700 transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
             <FileText size={12} /> PDF
           </button>
           <button onClick={refreshAll} disabled={refreshing}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-800 text-gray-400 hover:text-white text-xs border border-gray-700 transition-colors disabled:opacity-50">
-            <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} /> Refresh
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-800 text-gray-400 hover:text-white text-xs border border-gray-700 transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
+            <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} /> {refreshing ? 'Refreshing...' : 'Refresh'}
           </button>
         </div>
       </div>
@@ -284,7 +286,7 @@ export default function ConsoleControlCenter() {
                       <span className={`text-3xl font-black tabular-nums ${BAND_TEXT[tone]}`}>
                         {card.score == null ? 'N/A' : card.score}
                       </span>
-                      {card.score != null && <span className="text-[11px] text-gray-600">out of 100</span>}
+                      {card.score != null && <span className="text-[11px] text-gray-400">out of 100</span>}
                       <Badge tone={BAND_BADGE_TONE[tone] || 'quiet'}>{card.band?.label || 'Not measurable'}</Badge>
                     </div>
                     {card.reasons.length > 0 ? (
@@ -297,7 +299,7 @@ export default function ConsoleControlCenter() {
                         ))}
                       </ul>
                     ) : (
-                      card.note && <p className="text-[11px] text-gray-600 mt-2">{card.note}</p>
+                      card.note && <p className="text-[11px] text-gray-400 mt-2">{card.note}</p>
                     )}
                   </div>
                 )
@@ -320,8 +322,8 @@ export default function ConsoleControlCenter() {
                       <div className="min-w-0 flex-1">
                         <p className="text-xs text-gray-300">
                           <span className="font-semibold">{a.label}</span>
-                          <span className="text-gray-600"> | {a.country}</span>
-                          <span className="text-gray-600"> | affects {a.affects.join(', ')}</span>
+                          <span className="text-gray-400"> | {a.country}</span>
+                          <span className="text-gray-400"> | affects {a.affects.join(', ')}</span>
                         </p>
                         <p className="text-[11px] text-gray-500 mt-0.5">{a.detail}</p>
                       </div>
@@ -340,7 +342,7 @@ export default function ConsoleControlCenter() {
           subtitle={`${openIssues} open ${openIssues === 1 ? 'issue' : 'issues'} across the current selection`}
           actions={(
             <div className="flex items-center gap-2">
-              <span className="hidden sm:inline-flex items-center gap-1 text-[11px] text-gray-600" title="When this feed was last scanned">
+              <span className="hidden sm:inline-flex items-center gap-1 text-[11px] text-gray-400" title="When this feed was last scanned">
                 <Clock size={11} className="text-gray-600" />
                 {loading ? 'Scanning' : lastUpdated ? `Updated ${fmtTime(lastUpdated)}` : 'Not updated yet'}
               </span>
@@ -377,11 +379,11 @@ export default function ConsoleControlCenter() {
                     return (
                       <div key={issue.key}
                         className="flex items-center gap-3 bg-gray-900/50 border border-gray-800 rounded-lg px-3 py-2">
-                        <span className={`w-2 h-2 rounded-full shrink-0 ${
+                        <span aria-hidden="true" className={`w-2 h-2 rounded-full shrink-0 ${
                           issue.severity === 'critical' ? 'bg-red-500'
                             : issue.severity === 'warning' ? 'bg-amber-500' : 'bg-blue-500'}`} />
                         <div className="min-w-0 flex-1">
-                          <p className="text-xs text-gray-300 font-medium truncate">{issue.label}</p>
+                          <p className="text-xs text-gray-300 font-medium truncate" title={issue.label}>{issue.label}</p>
                         </div>
                         <Badge tone={ISSUE_SEVERITY_TONE[issue.severity] || 'info'}>{issue.severity}</Badge>
                         <span className="text-sm font-semibold tabular-nums text-gray-200 min-w-[3rem] text-right">
@@ -410,12 +412,15 @@ export default function ConsoleControlCenter() {
         <PanelHeader icon={GitBranch} title="Figure lineage"
           subtitle="Trace a headline figure back to its source tables, their provenance, and the imports behind it"
           actions={
-            <Select
-              value={domain}
-              onChange={setDomain}
-              options={LINEAGE_DOMAINS.map((d) => ({ value: d, label: DOMAIN_LABELS[d] || d }))}
-              className="w-44"
-            />
+            <label className="block">
+              <span className="sr-only">Figure to trace</span>
+              <Select
+                value={domain}
+                onChange={setDomain}
+                options={LINEAGE_DOMAINS.map((d) => ({ value: d, label: DOMAIN_LABELS[d] || d }))}
+                className="w-44"
+              />
+            </label>
           } />
 
         {lineageLoading ? (
@@ -551,8 +556,8 @@ function BreakdownBars({ title, obj }) {
   if (raw.length === 0) {
     return (
       <div>
-        <p className="text-[10px] uppercase tracking-wide text-gray-600 mb-1 capitalize">{labelizeKey(title)}</p>
-        <p className="text-[11px] text-gray-600">N/A</p>
+        <p className="text-[10px] uppercase tracking-wide text-gray-400 mb-1 capitalize">{labelizeKey(title)}</p>
+        <p className="text-[11px] text-gray-400">N/A</p>
       </div>
     )
   }
@@ -561,7 +566,7 @@ function BreakdownBars({ title, obj }) {
     // Non-numeric provenance (e.g. a coverage flag): show as chips, not bars.
     return (
       <div>
-        <p className="text-[10px] uppercase tracking-wide text-gray-600 mb-1 capitalize">{labelizeKey(title)}</p>
+        <p className="text-[10px] uppercase tracking-wide text-gray-400 mb-1 capitalize">{labelizeKey(title)}</p>
         <div className="flex flex-wrap gap-1">
           {raw.map(([k, v]) => (
             <span key={k} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-gray-800/70 text-[10px]">
@@ -582,7 +587,7 @@ function BreakdownBars({ title, obj }) {
 
   return (
     <div>
-      <p className="text-[10px] uppercase tracking-wide text-gray-600 mb-1.5 capitalize">{labelizeKey(title)}</p>
+      <p className="text-[10px] uppercase tracking-wide text-gray-400 mb-1.5 capitalize">{labelizeKey(title)}</p>
       <div className="space-y-1.5">
         {rows.map(([k, v], i) => {
           const share = (v / total) * 100
@@ -591,7 +596,7 @@ function BreakdownBars({ title, obj }) {
               <div className="flex items-center justify-between gap-2 text-[11px] mb-0.5">
                 <span className="text-gray-400 truncate min-w-0">{k}</span>
                 <span className="text-gray-500 font-medium tabular-nums shrink-0">
-                  {fmtInt(v)} <span className="text-gray-600">| {fmtPct(share)}</span>
+                  {fmtInt(v)} <span className="text-gray-400">| {fmtPct(share)}</span>
                 </span>
               </div>
               <div className="h-1.5 rounded-full bg-gray-800 overflow-hidden">
@@ -631,7 +636,7 @@ function SourceCard({ src }) {
         </div>
         <div className="text-right shrink-0">
           <p className="text-lg font-bold tabular-nums text-gray-100">{fmtInt(src.rows)}</p>
-          <p className="text-[10px] uppercase tracking-wide text-gray-600">rows</p>
+          <p className="text-[10px] uppercase tracking-wide text-gray-400">rows</p>
         </div>
       </div>
 

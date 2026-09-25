@@ -19,6 +19,7 @@ import {
   Panel, PanelHeader, Note, StatTile, Badge, Btn, Select, SearchInput,
   Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, Toolbar,
 } from '../components/ui'
+import { useChartTheme } from '../components/ui/charts'
 import { listDataAssets, getLineageGraph, getDownstreamImpact } from '../../lib/api/lineageOps'
 import {
   shapeGraph, shapeImpact, assetKindLabel, assetShortName, ASSET_KIND_TONE,
@@ -42,7 +43,11 @@ const GRAPH_CAP = 16 // per side, to keep the diagram legible
  * arrows pointing the way a change propagates. Positions are fixed (layout
  * 'none') so the three columns read left-to-right; the user can pan/zoom.
  */
-function buildLineageOption(asset, graph, impact) {
+function buildLineageOption(asset, graph, impact, theme = 'dark') {
+  // Labels and edges follow the console theme; a fixed near-white label is
+  // unreadable on the light surface.
+  const labelInk = theme === 'light' ? '#1f2937' : '#e5e7eb'
+  const edgeInk = theme === 'light' ? '#9ca3af' : '#475569'
   const upstream = (graph?.upstream || []).slice(0, GRAPH_CAP)
   const downSource = impact?.impacted?.length ? impact.impacted : (graph?.downstream || [])
   const downstream = downSource.slice(0, GRAPH_CAP)
@@ -63,7 +68,7 @@ function buildLineageOption(asset, graph, impact) {
       y: (idx - (count - 1) / 2) * rowGap,
       symbolSize: isCenter ? 46 : 28,
       itemStyle: { color: isCenter ? CENTER_COLOR : (NODE_COLOR[kind] || '#94a3b8') },
-      label: { color: '#e5e7eb', fontSize: isCenter ? 12 : 10 },
+      label: { color: labelInk, fontSize: isCenter ? 12 : 10 },
       value: assetKindLabel(kind),
     })
   }
@@ -98,7 +103,7 @@ function buildLineageOption(asset, graph, impact) {
       edgeSymbol: ['none', 'arrow'],
       edgeSymbolSize: 9,
       label: { show: true, position: 'bottom', formatter: '{b}' },
-      lineStyle: { color: '#475569', width: 1.4, curveness: 0.06, opacity: 0.85 },
+      lineStyle: { color: edgeInk, width: 1.4, curveness: 0.06, opacity: 0.85 },
       emphasis: { focus: 'adjacency', lineStyle: { width: 2.6, color: '#fb923c' } },
       data: nodes,
       links,
@@ -185,7 +190,7 @@ export default function ConsoleLineageExplorer() {
           icon={GitBranch}
           title="Data Lineage Explorer"
           subtitle="Trace any table, metric or dashboard upstream to its sources and downstream to everything it affects."
-          actions={<Btn icon={RefreshCw} onClick={loadAssets}>Refresh</Btn>}
+          actions={<Btn icon={RefreshCw} onClick={loadAssets} busy={assets.loading}>Refresh</Btn>}
         />
       </Panel>
 
@@ -194,7 +199,7 @@ export default function ConsoleLineageExplorer() {
         <Panel className="lg:col-span-1">
           <PanelHeader icon={Database} title="Assets" subtitle="Pick one to trace its lineage." />
           <Toolbar className="mb-3">
-            <Select
+            <Select ariaLabel="Asset kind"
               value={kind}
               onChange={setKind}
               options={KIND_FILTERS}
@@ -230,14 +235,15 @@ export default function ConsoleLineageExplorer() {
                   <button
                     key={a.asset_id}
                     onClick={() => selectAsset(a)}
+                    aria-pressed={on}
                     className={`w-full text-left rounded-lg border px-3 py-2 transition-colors ${
                       on
                         ? 'border-orange-600/60 bg-orange-950/20'
                         : 'border-gray-800 bg-gray-900/40 hover:border-gray-700 hover:bg-gray-900'
-                    }`}
+                    } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500`}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-medium text-gray-100 truncate">{a.name || assetShortName(a.asset_id)}</span>
+                      <span className="text-xs font-medium text-gray-100 truncate" title={a.name || a.asset_id}>{a.name || assetShortName(a.asset_id)}</span>
                       <AssetBadge kind={a.kind} />
                     </div>
                     {a.module && <p className="text-[11px] text-gray-500 mt-0.5 truncate">{a.module}</p>}
@@ -288,9 +294,10 @@ function LineageDetail({ asset, graph, impact, showEdges, onToggleEdges }) {
   }, [graph])
 
   const nothing = upstream.length === 0 && downstream.length === 0 && impacted.length === 0
+  const theme = useChartTheme()
   const lineageOption = useMemo(
-    () => (nothing ? null : buildLineageOption(asset, graph, impact)),
-    [nothing, asset, graph, impact],
+    () => (nothing ? null : buildLineageOption(asset, graph, impact, theme)),
+    [nothing, asset, graph, impact, theme],
   )
   const capped = upstream.length > GRAPH_CAP
     || (impacted.length ? impacted.length : downstream.length) > GRAPH_CAP

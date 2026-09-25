@@ -140,7 +140,7 @@ export default function ConsoleDataOps() {
   return (
     <div className="space-y-6 max-w-7xl">
       {/* ── header ── */}
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-white">Data Operations</h1>
           <p className="text-sm text-gray-500 mt-0.5">
@@ -214,7 +214,7 @@ function LinkCard({ card, onOpen }) {
   return (
     <button
       onClick={onOpen}
-      className="text-left bg-gray-900/50 border border-gray-800 rounded-xl p-4 transition-colors hover:border-orange-700/50 hover:bg-gray-900 flex flex-col gap-2"
+      className="text-left bg-gray-900/50 border border-gray-800 rounded-xl p-4 transition-colors hover:border-orange-700/50 hover:bg-gray-900 flex flex-col gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
     >
       <div className="flex items-start gap-2.5">
         <span className="w-8 h-8 rounded-lg bg-orange-500/10 border border-orange-800/40 flex items-center justify-center shrink-0">
@@ -222,7 +222,7 @@ function LinkCard({ card, onOpen }) {
         </span>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-gray-200 truncate">{title}</p>
-          <p className="text-[11px] font-mono text-gray-600 truncate">{route}</p>
+          <p className="text-[11px] font-mono text-gray-400 truncate">{route}</p>
         </div>
       </div>
       <p className="text-xs text-gray-500 flex-1">{desc}</p>

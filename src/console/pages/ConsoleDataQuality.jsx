@@ -140,7 +140,7 @@ export default function ConsoleDataQuality() {
           subtitle="Governed checks over the fleet data - required fields, dates, integrity, freshness and business rules."
           actions={(
             <Toolbar>
-              <Select value={country} onChange={setCountry} options={COUNTRY_OPTS} className="w-32" />
+              <Select ariaLabel="Country" value={country} onChange={setCountry} options={COUNTRY_OPTS} className="w-32" />
               <Btn variant="primary" icon={Play} busy={running} onClick={runNow}>Run checks now</Btn>
               <Btn icon={RefreshCw} onClick={load}>Refresh</Btn>
             </Toolbar>
@@ -210,12 +210,13 @@ export default function ConsoleDataQuality() {
                           href={href}
                           target={href.startsWith('/console') ? undefined : '_blank'}
                           rel={href.startsWith('/console') ? undefined : 'noopener noreferrer'}
-                          className="inline-flex items-center gap-1 text-orange-300 hover:text-orange-200 text-xs"
+                          aria-label={`Open the rows behind ${rule?.name || r.ruleKey}`}
+                          className="inline-flex items-center gap-1 text-orange-300 hover:text-orange-200 text-xs rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
                         >
                           <ExternalLink size={12} /> Open
                         </a>
                       ) : (
-                        <span className="text-gray-600 text-xs">N/A</span>
+                        <span className="text-gray-400 text-xs">N/A</span>
                       )}
                     </Td>
                   </Tr>

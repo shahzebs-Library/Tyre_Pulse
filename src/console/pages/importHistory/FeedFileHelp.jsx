@@ -24,8 +24,10 @@ export default function FeedFileHelp({ src, country }) {
       setTimeout(() => setCopied(''), 1500)
     } catch {
       // Clipboard can be refused; the headers are on screen either way, so this
-      // is a convenience failing, not the feature failing.
-      setCopied('')
+      // is a convenience failing, not the feature failing - but say it failed,
+      // or the button reads as having done nothing.
+      setCopied('failed')
+      setTimeout(() => setCopied(''), 2500)
     }
   }
 
@@ -47,7 +49,7 @@ export default function FeedFileHelp({ src, country }) {
           <p className="text-gray-300">
             Upload the <span className="text-gray-100">{help.sourceFile}</span>
           </p>
-          <p className="text-gray-500 mt-0.5">
+          <p className="text-gray-500 mt-0.5 break-words">
             {help.intoTable ? (
               <>
                 into <Code>{help.intoTable}</Code>
@@ -62,7 +64,7 @@ export default function FeedFileHelp({ src, country }) {
               </>
             )}
           </p>
-          <p className="text-gray-600 mt-0.5">It becomes rows in <Code>{help.feeds}</Code>.</p>
+          <p className="text-gray-400 mt-0.5">It becomes rows in <Code>{help.feeds}</Code>.</p>
         </div>
       </div>
 
@@ -92,7 +94,7 @@ export default function FeedFileHelp({ src, country }) {
               icon={copied === 'cols' ? Check : Copy}
               onClick={() => copy(help.columns.join('\t'), 'cols')}
             >
-              {copied === 'cols' ? 'Copied' : 'Copy header row'}
+              {copied === 'cols' ? 'Copied' : copied === 'failed' ? 'Copy blocked, select the headers below' : 'Copy header row'}
             </Btn>
           </div>
           <div className="flex flex-wrap gap-1">
@@ -108,7 +110,7 @@ export default function FeedFileHelp({ src, country }) {
 
       {help.notes && (
         <details className="text-gray-500">
-          <summary className="cursor-pointer hover:text-gray-300">What else to watch for</summary>
+          <summary className="cursor-pointer hover:text-gray-300 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">What else to watch for</summary>
           <p className="mt-1 leading-relaxed text-gray-400">{help.notes}</p>
         </details>
       )}

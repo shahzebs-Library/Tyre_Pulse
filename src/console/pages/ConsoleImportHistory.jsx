@@ -28,7 +28,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  History, RefreshCw, AlertTriangle, FileUp, Loader2, Info, Activity, Download, CopyX,
+  History, RefreshCw, AlertTriangle, FileUp, Info, Activity, Download, CopyX,
   CalendarDays, Shuffle,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
@@ -40,7 +40,7 @@ import { listDuplicateTargets } from '../../lib/api/duplicateControl'
 import { exportToExcel, reportFileName } from '../../lib/exportUtils'
 import UploadCoveragePanel from './importHistory/UploadCoveragePanel'
 import DecisionsPanel from './importHistory/DecisionsPanel'
-import { Btn, ErrorState, Badge } from '../components/ui'
+import { Btn, ErrorState, Badge, LoadingState } from '../components/ui'
 
 const fmtNum = (n) => (Number.isFinite(Number(n)) ? Number(n).toLocaleString() : 'N/A')
 const fmtTime = (v) => {
@@ -64,6 +64,7 @@ export default function ConsoleImportHistory() {
   const [clusters, setClusters] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [clusterError, setClusterError] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
@@ -78,11 +79,11 @@ export default function ConsoleImportHistory() {
   }, [])
 
   const loadClusters = useCallback(async (key) => {
-    setError('')
+    setClusterError('')
     try {
       setClusters(await listUnloggedImports(key, 80))
     } catch (e) {
-      setError(e?.message || 'Could not load import activity.')
+      setClusterError(e?.message || 'Could not load import activity.')
       setClusters([])
     }
   }, [])
@@ -137,17 +138,17 @@ export default function ConsoleImportHistory() {
         </div>
       </div>
 
-      <div className="flex gap-1.5 border-b border-gray-800">
+      <div className="flex gap-1.5 border-b border-gray-800 overflow-x-auto" role="tablist" aria-label="Import history views">
         {[
           ['uploads', 'Uploads', FileUp, 'Files loaded through the app, and repeats of the same file'],
           ['activity', 'Load activity', Activity, 'Loads done straight through the database, reconstructed'],
           ['coverage', 'Daily coverage', CalendarDays, 'Which days have data and which are empty'],
           ['decisions', 'What we changed', Shuffle, 'Where we filed something differently from your file'],
         ].map(([k, label, Icon, hint]) => (
-          <button key={k} onClick={() => setTab(k)} title={hint}
+          <button key={k} onClick={() => setTab(k)} title={hint} role="tab" aria-selected={tab === k}
             className={`px-3 py-2 text-xs font-semibold flex items-center gap-1.5 border-b-2 -mb-px transition-colors ${
               tab === k ? 'border-orange-500 text-orange-300' : 'border-transparent text-gray-500 hover:text-gray-300'
-            }`}>
+            } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500`}>
             <Icon size={13} /> {label}
           </button>
         ))}
@@ -161,9 +162,7 @@ export default function ConsoleImportHistory() {
       ) : tab === 'decisions' ? (
         <DecisionsPanel />
       ) : loading ? (
-        <div className="flex items-center justify-center h-48">
-          <Loader2 className="w-7 h-7 text-orange-500 animate-spin" />
-        </div>
+        <LoadingState label="Loading import history" />
       ) : tab === 'uploads' ? (
         <>
           {reuploads.length > 0 && (
@@ -174,13 +173,13 @@ export default function ConsoleImportHistory() {
                   ? '1 file has been uploaded more than once.'
                   : `${reuploads.length} files have been uploaded more than once.`}
                 {' '}They are marked below. Check{' '}
-                <Link to="/console/duplicates" className="underline hover:text-amber-100">Duplicate Control</Link>
+                <Link to="/console/duplicates" className="underline hover:text-amber-100 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">Duplicate Control</Link>
                 {' '}if any of them added rows.
               </p>
             </div>
           )}
 
-          {rows.length === 0 ? (
+          {error ? null : rows.length === 0 ? (
             <div className="text-center text-sm text-gray-500 py-16 border border-gray-800 rounded-xl">
               No uploads recorded yet. Files loaded straight through the Supabase Table Editor
               do not appear here; see the Load activity tab.
@@ -206,7 +205,7 @@ export default function ConsoleImportHistory() {
                           <p className="text-xs text-gray-200 truncate max-w-[260px]" title={r.filename}>
                             {r.filename || 'N/A'}
                           </p>
-                          <p className="text-[10px] text-gray-600">{fmtBytes(r.size_bytes)}</p>
+                          <p className="text-[10px] text-gray-400">{fmtBytes(r.size_bytes)}</p>
                         </td>
                         <td className="px-3 py-2.5 text-[11px] text-gray-400">{r.module || 'N/A'}</td>
                         <td className="px-3 py-2.5 text-[11px] text-gray-400">{r.country || 'N/A'}</td>
@@ -238,7 +237,7 @@ export default function ConsoleImportHistory() {
                               Same file as {fmtTime(r.reupload_first_seen)}
                             </span>
                           ) : (
-                            <span className="text-[10px] text-gray-600">First time</span>
+                            <span className="text-[10px] text-gray-400">First time</span>
                           )}
                         </td>
                       </tr>
@@ -251,9 +250,9 @@ export default function ConsoleImportHistory() {
         </>
       ) : (
         <>
-          <div className="flex items-start gap-2 px-4 py-2.5 rounded-xl bg-sky-950/30 border border-sky-800/40">
-            <Info size={14} className="text-sky-400 flex-shrink-0 mt-0.5" />
-            <p className="text-xs text-sky-200">
+          <div className="flex items-start gap-2 px-4 py-2.5 rounded-xl bg-blue-950/30 border border-blue-800/40">
+            <Info size={14} className="text-blue-400 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-blue-200">
               Loads done straight through the Supabase Table Editor leave no upload record, so
               this rebuilds them from when the rows actually landed. Two loads of the SAME row
               count within a few minutes usually means one upload was sent twice.
@@ -262,10 +261,10 @@ export default function ConsoleImportHistory() {
 
           <div className="flex flex-wrap items-center gap-1.5">
             {targets.map((t) => (
-              <button key={t.key} onClick={() => setTargetKey(t.key)}
+              <button key={t.key} onClick={() => setTargetKey(t.key)} aria-pressed={targetKey === t.key}
                 className={`px-2.5 py-1 rounded-lg text-[11px] border ${
                   targetKey === t.key ? 'bg-orange-600 border-orange-500 text-white'
-                    : 'bg-gray-800 border-gray-700 text-gray-300 hover:text-white'}`}>
+                    : 'bg-gray-800 border-gray-700 text-gray-300 hover:text-white'} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500`}>
                 {t.label}
               </button>
             ))}
@@ -276,20 +275,22 @@ export default function ConsoleImportHistory() {
               <AlertTriangle size={14} className="text-amber-400 flex-shrink-0 mt-0.5" />
               <p className="text-xs text-amber-200">
                 {suspiciousCount} load(s) here match another load of the same size.{' '}
-                <Link to="/console/duplicates" className="underline hover:text-amber-100">
+                <Link to="/console/duplicates" className="underline hover:text-amber-100 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
                   Check Duplicate Control
                 </Link>{' '}to see whether they actually added duplicate rows.
               </p>
             </div>
           )}
 
-          {flagged.length === 0 ? (
+          <ErrorState message={clusterError} onRetry={() => loadClusters(targetKey)} />
+
+          {clusterError ? null : flagged.length === 0 ? (
             <div className="text-center text-sm text-gray-500 py-16 border border-gray-800 rounded-xl">
               No load activity recorded for this table.
             </div>
           ) : (
             <div className="rounded-xl border border-gray-800 overflow-hidden">
-              <div className="max-h-[520px] overflow-y-auto">
+              <div className="max-h-[520px] overflow-auto">
                 <table className="w-full text-left">
                   <thead className="bg-black/30 text-[10px] uppercase tracking-wide text-gray-500 sticky top-0">
                     <tr>
@@ -313,7 +314,7 @@ export default function ConsoleImportHistory() {
                               <CopyX size={10} /> same size as {fmtTime(c.pairedWith)}
                             </span>
                           ) : (
-                            <span className="text-[10px] text-gray-600">Looks normal</span>
+                            <span className="text-[10px] text-gray-400">Looks normal</span>
                           )}
                         </td>
                       </tr>

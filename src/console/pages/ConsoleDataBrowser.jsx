@@ -71,6 +71,7 @@ export default function ConsoleDataBrowser() {
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [busy, setBusy]             = useState(false)
   const [changes, setChanges]       = useState([])
+  const [changesError, setChangesError] = useState('')
   const [notice, setNotice]         = useState('')
 
   const tableNames = useMemo(() => tables.map(t => t.table_name), [tables])
@@ -85,7 +86,14 @@ export default function ConsoleDataBrowser() {
 
   // ── Initial load: the safelisted tables with row counts ──
   // Show any prior edits/deletes so the undo list survives a page reload.
-  useEffect(() => { listRowChanges(20).then(setChanges).catch(() => setChanges([])) }, [])
+  const loadChanges = useCallback(() => {
+    setChangesError('')
+    listRowChanges(20).then(setChanges).catch((err) => {
+      setChanges([])
+      setChangesError(toUserMessage(err, 'The recent changes list could not be read, so earlier edits cannot be undone from here right now.'))
+    })
+  }, [])
+  useEffect(() => { loadChanges() }, [loadChanges])
 
   const loadTables = useCallback(async () => {
     setTablesLoading(true)
@@ -368,9 +376,11 @@ export default function ConsoleDataBrowser() {
           sub="Server count per table" />
         <StatTile label="Showing" value={ran ? fmtNum(rows.length) : 'N/A'}
           sub={ran && rows.length === limit ? `Capped at ${limit} rows` : selected || 'No table selected'} />
-        <StatTile label="Changes undoable" value={fmtNum(openChanges)} icon={Undo2}
-          tone={openChanges ? 'accent' : 'default'} sub={`${fmtNum(changes.length)} recent change(s)`} />
+        <StatTile label="Changes undoable" value={changesError ? 'N/A' : fmtNum(openChanges)} icon={Undo2}
+          tone={openChanges ? 'accent' : 'default'} sub={changesError ? 'Could not be read' : `${fmtNum(changes.length)} recent change(s)`} />
       </div>
+
+      <ErrorState message={changesError} onRetry={loadChanges} />
 
       {changes.length > 0 && (
         <Panel flush>
@@ -434,9 +444,9 @@ export default function ConsoleDataBrowser() {
                     {visibleTables.map((t) => {
                       const on = selected === t.table_name
                       return (
-                        <button key={t.table_name} onClick={() => selectTable(t.table_name)}
+                        <button key={t.table_name} onClick={() => selectTable(t.table_name)} aria-pressed={on}
                           className={`w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-left transition-colors border ${
-                            on ? 'bg-orange-500/15 border-orange-600/50' : 'border-transparent hover:bg-gray-800/60'}`}>
+                            on ? 'bg-orange-500/15 border-orange-600/50' : 'border-transparent hover:bg-gray-800/60'} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500`}>
                           <span className={`text-xs font-medium truncate ${on ? 'text-orange-200' : 'text-gray-300'}`}>{t.table_name}</span>
                           <span className="text-[10px] text-gray-500 tabular-nums flex-shrink-0">{fmtNum(t.row_count)}</span>
                         </button>
@@ -452,7 +462,7 @@ export default function ConsoleDataBrowser() {
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
               <Select className="sm:col-span-4" value={filter.column} placeholder="All columns (no filter)"
                 options={columnOptions} onChange={(v) => setFilter((f) => ({ ...f, column: v }))} />
-              <Select className="sm:col-span-3" value={filter.op} options={opOptions}
+              <Select ariaLabel="Filter operator" className="sm:col-span-3" value={filter.op} options={opOptions}
                 onChange={(v) => setFilter((f) => ({ ...f, op: v }))} />
               <input
                 value={filter.value}
@@ -460,7 +470,7 @@ export default function ConsoleDataBrowser() {
                 onKeyDown={(e) => { if (e.key === 'Enter') handleRun() }}
                 placeholder="Value" aria-label="Filter value"
                 title="The value to compare against. Leave blank with All columns to see every row."
-                className="sm:col-span-3 px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 placeholder-gray-600 focus:border-gray-700 focus:outline-none"
+                className="sm:col-span-3 px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 placeholder-gray-600 focus:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
               />
               <div className="sm:col-span-2">
                 <Btn variant="primary" icon={Play} onClick={handleRun} busy={running} disabled={!selected}>Run</Btn>
@@ -477,7 +487,7 @@ export default function ConsoleDataBrowser() {
               </p>
               <div className="flex items-center gap-2">
                 <span className="text-[11px] text-gray-500">Rows</span>
-                <Segmented value={limit} onChange={handleLimit}
+                <Segmented ariaLabel="Rows to show" role="group" value={limit} onChange={handleLimit}
                   options={LIMIT_OPTIONS.map((n) => ({ key: n, label: String(n), hint: `Show up to ${n} rows.` }))} />
               </div>
             </div>
@@ -515,14 +525,14 @@ export default function ConsoleDataBrowser() {
                               {canEditRows && (
                                 <Td nowrap>
                                   <span className="flex items-center gap-1">
-                                    <button onClick={() => openEdit(r)} disabled={busy} aria-label="Edit row"
+                                    <button type="button" onClick={() => openEdit(r)} disabled={busy} aria-label={`Edit row ${r.id ?? i + 1}`}
                                       title="Correct a value in this row"
-                                      className="p-1 rounded text-gray-400 hover:text-orange-300 hover:bg-gray-800 disabled:opacity-40">
+                                      className="p-1 rounded text-gray-400 hover:text-orange-300 hover:bg-gray-800 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
                                       <Pencil size={12} />
                                     </button>
-                                    <button onClick={() => { setConfirmDelete(r); setNotice('') }} disabled={busy} aria-label="Delete row"
+                                    <button type="button" onClick={() => { setConfirmDelete(r); setNotice('') }} disabled={busy} aria-label={`Delete row ${r.id ?? i + 1}`}
                                       title="Delete this row (can be undone)"
-                                      className="p-1 rounded text-gray-400 hover:text-red-300 hover:bg-gray-800 disabled:opacity-40">
+                                      className="p-1 rounded text-gray-400 hover:text-red-300 hover:bg-gray-800 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
                                       <Trash2 size={12} />
                                     </button>
                                   </span>
@@ -572,7 +582,7 @@ export default function ConsoleDataBrowser() {
               const value = editDraft[k] !== undefined ? editDraft[k] : current
               const dirty = String(value) !== current
               return (
-                <div key={k} className="grid grid-cols-3 gap-2 items-center">
+                <div key={k} className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-2 items-center">
                   <label className="text-[11px] text-gray-400 truncate flex items-center gap-1" title={k}>
                     {locked && <Lock size={9} className="text-gray-600 flex-shrink-0" />}
                     {k}
@@ -582,7 +592,7 @@ export default function ConsoleDataBrowser() {
                     disabled={locked || busy}
                     aria-label={k}
                     onChange={(e) => setEditDraft((d) => ({ ...d, [k]: e.target.value }))}
-                    className={`col-span-2 px-2.5 py-1.5 rounded-lg text-xs bg-gray-900 border text-gray-200 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed ${
+                    className={`sm:col-span-2 px-2.5 py-1.5 rounded-lg text-xs bg-gray-900 border text-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 disabled:opacity-50 disabled:cursor-not-allowed ${
                       dirty ? 'border-orange-500' : 'border-gray-800 focus:border-gray-700'
                     }`}
                   />

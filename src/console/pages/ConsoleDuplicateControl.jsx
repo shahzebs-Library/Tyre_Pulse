@@ -190,7 +190,7 @@ export default function ConsoleDuplicateControl() {
         <Btn icon={RefreshCw} onClick={load} busy={loading}>Refresh</Btn>
       </header>
 
-      <Segmented value={tab} onChange={setTab} options={[
+      <Segmented ariaLabel="Duplicate control view" value={tab} onChange={setTab} options={[
         { key: 'duplicates', label: <span className="inline-flex items-center gap-1.5"><CopyX size={13} /> Duplicates</span>, count: openBatches.length || undefined, hint: 'Removals still undoable' },
         { key: 'import', label: <span className="inline-flex items-center gap-1.5"><Upload size={13} /> Where to import</span>, count: IMPORT_TARGETS.length },
       ]} />
@@ -235,7 +235,7 @@ export default function ConsoleDuplicateControl() {
                             const active = selected?.key === t.key
                             return (
                               <Tr key={t.key} onClick={() => selectTarget(t)} className={active ? 'bg-orange-950/20' : ''}>
-                                <Td><span className={active ? 'text-orange-200 font-medium' : 'text-gray-200'}>{t.label}</span></Td>
+                                <Td><button type="button" aria-pressed={active} onClick={(e) => { e.stopPropagation(); selectTarget(t) }} className={`text-left break-words ${active ? 'text-orange-200 font-medium' : 'text-gray-200 hover:text-orange-300'} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 rounded`}>{t.label}</button></Td>
                                 <Td><Code>{t.tbl}</Code></Td>
                                 <Td>
                                   <span className="inline-flex flex-wrap gap-1">
@@ -264,7 +264,7 @@ export default function ConsoleDuplicateControl() {
 
                       <div>
                         <p className="text-[11px] font-semibold text-gray-400 mb-1.5">Country</p>
-                        <Segmented value={country} onChange={selectCountry}
+                        <Segmented ariaLabel="Country" role="group" value={country} onChange={selectCountry}
                           options={['', ...COUNTRIES].map((c) => ({ key: c, label: c || 'All countries' }))} />
                       </div>
 
@@ -274,7 +274,7 @@ export default function ConsoleDuplicateControl() {
 
                       {preview && (
                         <div className="space-y-3">
-                          <div className="grid grid-cols-2 gap-2">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                             <StatTile label="Can be removed" value={fmtNum(deletable)} tone={deletable ? 'warning' : 'default'} />
                             <StatTile label="Protected (genuine)" value={fmtNum(protectedRows)} tone={protectedRows ? 'good' : 'default'} />
                           </div>
@@ -284,7 +284,7 @@ export default function ConsoleDuplicateControl() {
                                 { label: 'Can be removed', value: deletable, tone: 'warning' },
                                 { label: 'Protected', value: protectedRows, tone: 'good' },
                               ]} />
-                              <p className="text-[10px] text-gray-600">Share of repeated rows that are import mistakes versus genuine repeats.</p>
+                              <p className="text-[10px] text-gray-400">Share of repeated rows that are import mistakes versus genuine repeats.</p>
                             </div>
                           )}
                           {/* Each country keeps its own currency (SAR / AED / EGP), so a
@@ -369,8 +369,12 @@ export default function ConsoleDuplicateControl() {
                   <PanelHeader icon={Undo2} title="Removal history" subtitle="Every removal stays undoable." />
                 </div>
                 {batches.length === 0 ? (
-                  <EmptyState icon={Undo2} title="Nothing has been removed yet."
-                    reason="Removals made on this page are listed here with an undo button." />
+                  loadError ? (
+                    <p className="px-4 pb-4 text-xs text-gray-400">The removal history could not be read, so it is not shown. Use Retry above.</p>
+                  ) : (
+                    <EmptyState icon={Undo2} title="Nothing has been removed yet."
+                      reason="Removals made on this page are listed here with an undo button." />
+                  )
                 ) : (
                   <div className="max-h-72 overflow-y-auto px-4 pb-4">
                     <Table>
@@ -385,7 +389,7 @@ export default function ConsoleDuplicateControl() {
                             <Td align="right">
                               {b.restored
                                 ? <Badge tone="good" icon={CheckCircle2}>Put back</Badge>
-                                : <Btn size="xs" icon={Undo2} onClick={() => doRestore(b.batch_id)} disabled={busy}>Undo</Btn>}
+                                : <Btn size="xs" icon={Undo2} onClick={() => doRestore(b.batch_id)} disabled={busy} ariaLabel={`Undo removal of ${fmtNum(b.rows)} rows from ${b.tbl}`}>Undo</Btn>}
                             </Td>
                           </Tr>
                         ))}
@@ -396,7 +400,7 @@ export default function ConsoleDuplicateControl() {
               </Panel>
 
               {openBatches.length > 0 && (
-                <p className="text-[10px] text-gray-600 flex items-center gap-1">
+                <p className="text-[10px] text-gray-400 flex items-center gap-1">
                   <Info size={10} /> {openBatches.length} removal(s) can still be undone.
                 </p>
               )}
@@ -429,7 +433,7 @@ export default function ConsoleDuplicateControl() {
               <input value={confirmText} onChange={(e) => setConfirmText(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') doRemove() }}
                 autoFocus placeholder={CONFIRM_WORD}
-                className="w-full px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 focus:border-red-700 focus:outline-none" />
+                className="w-full px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 focus:border-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />
             </label>
             <ErrorState message={error} />
           </div>

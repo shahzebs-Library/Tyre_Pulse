@@ -75,11 +75,11 @@ function LineEvidence({ country, itemCode }) {
   }, [country, itemCode])
 
   if (err) return <p className="text-[11px] text-red-300">{err}</p>
-  if (!rows) return <p className="text-[11px] text-gray-600">Reading the lines behind this item...</p>
-  if (!rows.length) return <p className="text-[11px] text-gray-600">No individual lines could be read for this item.</p>
+  if (!rows) return <p className="text-[11px] text-gray-400">Reading the lines behind this item...</p>
+  if (!rows.length) return <p className="text-[11px] text-gray-400">No individual lines could be read for this item.</p>
   return (
     <div className="space-y-1">
-      <p className="text-[10px] uppercase tracking-wide text-gray-600">
+      <p className="text-[10px] uppercase tracking-wide text-gray-400">
         Lines behind this item {rows.length >= 8 ? '(highest value first, first 8)' : ''}
       </p>
       {rows.map((r, i) => (
@@ -268,7 +268,7 @@ export default function DecisionsPanel() {
                   <span className="w-2 h-2 rounded-sm bg-amber-500" /> Moved
                 </dt>
                 <dd className="text-gray-300 tabular-nums">
-                  {num(c.moved_rows)} <span className="text-gray-600">({pct(c.moved_share)})</span> · {money(c.moved_value, c.currency)}
+                  {num(c.moved_rows)} <span className="text-gray-400">({pct(c.moved_share)})</span> · {money(c.moved_value, c.currency)}
                 </dd>
               </div>
               <div className="flex justify-between gap-2">
@@ -289,7 +289,7 @@ export default function DecisionsPanel() {
       </div>
 
       <Toolbar>
-        <Segmented
+        <Segmented ariaLabel="Decision view" role="group"
           value={view}
           onChange={(v) => { setView(v); setExpanded(null) }}
           options={VIEWS.map((v) => ({ ...v, count: v.key === 'all' ? viewCounts.all : viewCounts[v.key] }))}
@@ -299,7 +299,7 @@ export default function DecisionsPanel() {
           value={country} onChange={setCountry} placeholder="All countries" className="w-36"
           options={countries.map((c) => ({ value: c.country, label: c.country }))}
         />
-        <Select
+        <Select ariaLabel="Sort by"
           value={sort} onChange={setSort} className="w-40"
           options={SORTS.map((s) => ({ value: s.key, label: s.label }))}
         />
@@ -311,9 +311,10 @@ export default function DecisionsPanel() {
       {flaggedCount > 0 && (
         <button
           onClick={() => setOnlyFlagged((v) => !v)}
+          aria-pressed={onlyFlagged}
           className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg border text-xs transition-colors ${
             onlyFlagged ? 'bg-amber-500/15 border-amber-600/60 text-amber-200'
-                        : 'bg-amber-950/20 border-amber-800/40 text-amber-300 hover:bg-amber-950/40'}`}
+                        : 'bg-amber-950/20 border-amber-800/40 text-amber-300 hover:bg-amber-950/40'} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500`}
         >
           <AlertTriangle size={13} />
           <span className="flex-1 text-left">
@@ -338,7 +339,10 @@ export default function DecisionsPanel() {
               ? `${stagedThatMove} of them move money between buckets. Nothing is written until you save.`
               : 'None of these change a cost bucket, so no total will move. Nothing is written until you save.'}
             actions={<>
-              <Btn icon={Trash2} onClick={() => setStaged({})} disabled={savingAll}>Discard</Btn>
+              <Btn icon={Trash2} disabled={savingAll}
+                onClick={() => {
+                  if (stagedList.length < 2 || window.confirm(`Discard all ${stagedList.length} staged changes? Nothing has been saved yet.`)) setStaged({})
+                }}>Discard</Btn>
               <Btn variant="primary" icon={Check} onClick={saveStaged} busy={savingAll}>Save these</Btn>
             </>}
           />
@@ -348,14 +352,14 @@ export default function DecisionsPanel() {
               return (
                 <li key={decisionKey(row)} className="flex flex-wrap items-center gap-2 text-xs">
                   <Code>{row.item_code}</Code>
-                  <span className="text-gray-600">{row.country}</span>
+                  <span className="text-gray-400">{row.country}</span>
                   <Bucket b={row.we_said} />
                   <ArrowRight size={12} className="text-gray-600" />
                   <Badge tone="accent">{cat?.label || category}</Badge>
                   {!overrideMovesMoney(row, category) && (
-                    <span className="text-[10px] text-gray-600">same bucket, no total changes</span>
+                    <span className="text-[10px] text-gray-400">same bucket, no total changes</span>
                   )}
-                  <button onClick={() => stage(row, '')} className="ml-auto text-gray-600 hover:text-gray-300" title="Remove">
+                  <button onClick={() => stage(row, '')} aria-label="Remove this staged change" className="ml-auto text-gray-600 hover:text-gray-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" title="Remove">
                     <Undo2 size={12} />
                   </button>
                 </li>
@@ -391,6 +395,8 @@ export default function DecisionsPanel() {
           </Btn>
         </>}
       >
+        {/* A failed apply keeps this dialog open, so its reason has to show here. */}
+        {error && <div className="mb-3"><ErrorState message={error} /></div>}
         {(preview?.moves || []).length === 0 ? (
           <EmptyState
             icon={Check}
@@ -458,14 +464,14 @@ export default function DecisionsPanel() {
               return [
                 <Tr key={key} tone={flag ? 'warning' : undefined}>
                   <Td>
-                    <button onClick={() => setExpanded(isOpen ? null : key)}
-                      className="flex items-start gap-1.5 text-left group">
+                    <button onClick={() => setExpanded(isOpen ? null : key)} aria-expanded={isOpen}
+                      className="flex items-start gap-1.5 text-left group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
                       <ChevronRight size={12}
                         className={`mt-1 text-gray-600 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
                       <span className="min-w-0">
                         <span className="block font-mono text-gray-200 group-hover:text-orange-300">{r.item_code}</span>
                         <span className="block text-gray-500 max-w-[300px] truncate" title={r.item_name}>{r.item_name}</span>
-                        <span className="block text-[10px] text-gray-600">{r.country}</span>
+                        <span className="block text-[10px] text-gray-400">{r.country}</span>
                       </span>
                     </button>
                     {flag && (
@@ -489,6 +495,7 @@ export default function DecisionsPanel() {
                   <Td align="right" nowrap className="text-gray-300 tabular-nums">{money(r.value, r.currency)}</Td>
                   <Td>
                     <Select
+                      ariaLabel={`New category for ${r.item_code}`}
                       value={chosen}
                       onChange={(v) => stage(r, v)}
                       placeholder="Leave as it is"

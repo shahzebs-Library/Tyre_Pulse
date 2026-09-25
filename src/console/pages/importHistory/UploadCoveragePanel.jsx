@@ -62,12 +62,12 @@ function DayCell({ day, isToday, watched }) {
     ? 'bg-gray-700 border-gray-500 text-gray-300'
     : empty
       ? (watched ? 'bg-amber-500/25 border-amber-600/60 text-amber-200'
-                 : 'bg-gray-800/60 border-gray-700 text-gray-600')
+                 : 'bg-gray-800/60 border-gray-700 text-gray-400')
       : 'bg-emerald-600/25 border-emerald-600/50 text-emerald-200'
   const title = `${day.d}: ${empty ? 'no data' : `${rows.toLocaleString()} rows from ${sites} area${sites === 1 ? '' : 's'}`}`
     + (isToday ? ' (today, still in progress)' : '')
   return (
-    <div title={title}
+    <div title={title} role="img" aria-label={title}
       className={`w-7 h-7 rounded border text-[10px] flex items-center justify-center ${tone}`}>
       {dayNum(day.d)}
     </div>
@@ -78,7 +78,7 @@ function DayCell({ day, isToday, watched }) {
 function AreaList({ src }) {
   const sites = src.sites || []
   if (!sites.length) {
-    return <p className="text-[11px] text-gray-600">No area reported data for this feed in the window.</p>
+    return <p className="text-[11px] text-gray-400">No area reported data for this feed in the window.</p>
   }
   const problems = problemAreas(src)
   const dormant = sites.filter((s) => s.dormant)
@@ -97,9 +97,9 @@ function AreaList({ src }) {
                 <span className="text-gray-200 font-medium">{s.site}</span>
                 <Badge tone="warning">{num(s.missing_count)} missed</Badge>
                 <span className="text-gray-500">last {fmtDate(s.last_data_date)} · {ago(s.days_since_last)}</span>
-                <span className="text-gray-600">{num(s.rows)} rows</span>
+                <span className="text-gray-400">{num(s.rows)} rows</span>
                 {(s.missing_days || []).length > 0 && (
-                  <span className="text-gray-600 w-full pl-4">
+                  <span className="text-gray-400 w-full pl-4">
                     {(s.missing_days || []).slice(0, 10).map(fmtShort).join(', ')}
                     {(s.missing_days || []).length > 10 ? ' and more' : ''}
                   </span>
@@ -119,7 +119,7 @@ function AreaList({ src }) {
         // Not "missing": a site that has sent nothing all window is either
         // closed or between jobs, and alarming about it forever trains people
         // to ignore the page.
-        <p className="text-[11px] text-gray-600">
+        <p className="text-[11px] text-gray-400">
           <span className="text-gray-500">Nothing all window (not counted as missed):</span>{' '}
           {dormant.map((s) => `${s.site} (last ${fmtDate(s.last_data_date)})`).join(', ')}
         </p>
@@ -155,7 +155,7 @@ function FeedCard({ src, today, country }) {
             {fmtDate(src.last_data_date)}
             <span className="text-gray-500"> · {ago(src.days_since_last)}</span>
           </p>
-          <p className="text-[10px] text-gray-600">{num(src.total_rows)} rows in window</p>
+          <p className="text-[10px] text-gray-400">{num(src.total_rows)} rows in window</p>
         </div>
       </div>
 
@@ -173,15 +173,15 @@ function FeedCard({ src, today, country }) {
       )}
 
       <div className="flex items-center gap-4 flex-wrap">
-        <button onClick={() => setOpen((v) => !v)}
-          className="flex items-center gap-1 text-[11px] text-gray-500 hover:text-gray-300">
+        <button onClick={() => setOpen((v) => !v)} aria-expanded={open}
+          className="flex items-center gap-1 text-[11px] text-gray-500 hover:text-gray-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
           <ChevronRight size={11} className={`transition-transform ${open ? 'rotate-90' : ''}`} />
           {open ? 'Hide areas' : `Areas (${(src.sites || []).length})`}
           {gaps > 0 && !open && <span className="text-amber-400">· {gaps} with gaps</span>}
         </button>
         {/* The gap is only half an answer; this is the other half. */}
-        <button onClick={() => setHelp((v) => !v)}
-          className="flex items-center gap-1 text-[11px] text-gray-500 hover:text-gray-300">
+        <button onClick={() => setHelp((v) => !v)} aria-expanded={help}
+          className="flex items-center gap-1 text-[11px] text-gray-500 hover:text-gray-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
           <ChevronRight size={11} className={`transition-transform ${help ? 'rotate-90' : ''}`} />
           {help ? 'Hide the file' : 'What fills this?'}
         </button>
@@ -250,7 +250,7 @@ export default function UploadCoveragePanel() {
   return (
     <div className="space-y-4">
       <Toolbar>
-        <Segmented value={days} onChange={pickPreset}
+        <Segmented ariaLabel="Coverage window" role="group" value={days} onChange={pickPreset}
           options={[14, 30, 60, 90, 180].map((n) => ({ key: n, label: `${n} days` }))} />
         {/* A custom start date, expressed as the day count the view already
             understands. The window always ends today, because the question this
@@ -262,7 +262,7 @@ export default function UploadCoveragePanel() {
             value={fromDate}
             max={cov?.today || undefined}
             onChange={(e) => pickFrom(e.target.value)}
-            className="bg-gray-900 border border-gray-800 rounded px-2 py-1 text-[11px] text-gray-300"
+            className="bg-gray-900 border border-gray-800 rounded px-2 py-1 text-[11px] text-gray-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
           />
         </label>
         {tooFarBack && (
@@ -272,7 +272,7 @@ export default function UploadCoveragePanel() {
             Showing the last {MAX_WINDOW_DAYS} days, the furthest back this goes.
           </span>
         )}
-        <Segmented value={country} onChange={setCountry}
+        <Segmented ariaLabel="Country" role="group" value={country} onChange={setCountry}
           options={[{ key: '', label: 'All countries' },
             ...countries.map((c) => ({
               key: c.country,
@@ -337,7 +337,7 @@ export default function UploadCoveragePanel() {
           <FileUp size={13} className="text-gray-500" /> Files uploaded through the app in this window
         </p>
         {(cov.files || []).length === 0 ? (
-          <p className="text-[11px] text-gray-600">
+          <p className="text-[11px] text-gray-400">
             None. Loads made straight into the database do not record a file name, so most
             uploads will never appear here - the day squares above are the reliable record of
             what arrived.
@@ -349,7 +349,7 @@ export default function UploadCoveragePanel() {
                 <span className="text-gray-200">{f.filename || 'Unnamed file'}</span>
                 {f.country && <Badge tone="quiet">{f.country}</Badge>}
                 <span className="text-gray-500">{fmtDate(f.uploaded_at)}</span>
-                {f.source_system && <span className="text-gray-600">{f.source_system}</span>}
+                {f.source_system && <span className="text-gray-400">{f.source_system}</span>}
               </li>
             ))}
           </ul>

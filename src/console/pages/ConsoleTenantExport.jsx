@@ -256,9 +256,9 @@ export default function ConsoleTenantExport() {
         <PanelHeader icon={Building2} title="Organisation"
           subtitle="Pick the tenant to export. Counts are read live from the database for that organisation only." />
         <div className="flex flex-wrap items-center gap-2">
-          <Select className="w-80" value={orgId} onChange={setOrgId} placeholder="Choose an organisation" options={orgOptions} />
-          <Select className="w-56" value={ceiling} onChange={setCeiling} options={CEILING_OPTIONS} />
-          <span className="text-[11px] text-gray-600">Ceiling per table. A table above it is exported partially and marked truncated.</span>
+          <Select ariaLabel="Organisation" className="w-full sm:w-80" value={orgId} onChange={setOrgId} placeholder="Choose an organisation" options={orgOptions} />
+          <Select ariaLabel="Rows per table ceiling" className="w-full sm:w-56" value={ceiling} onChange={setCeiling} options={CEILING_OPTIONS} />
+          <span className="text-[11px] text-gray-400">Ceiling per table. A table above it is exported partially and marked truncated.</span>
         </div>
       </Panel>
 
@@ -320,14 +320,18 @@ export default function ConsoleTenantExport() {
                         <Tr key={t.table} onClick={() => !running && toggle(t.table)}>
                           <Td>
                             <span className="inline-flex items-center gap-2">
-                              {on ? <CheckSquare size={14} className="text-orange-400" /> : <Square size={14} className="text-gray-600" />}
+                              <button type="button" role="checkbox" aria-checked={on} aria-label={`Include ${t.label}`} disabled={running}
+                                onClick={(e) => { e.stopPropagation(); if (!running) toggle(t.table) }}
+                                className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 rounded disabled:opacity-50">
+                                {on ? <CheckSquare size={14} className="text-orange-400" /> : <Square size={14} className="text-gray-500" />}
+                              </button>
                               <span className="text-gray-200">{t.label}</span>
-                              <span className="text-[10px] text-gray-600 font-mono">{t.table}</span>
+                              <span className="text-[10px] text-gray-400 font-mono">{t.table}</span>
                             </span>
                           </Td>
                           <Td align="right" nowrap>{t.rows == null ? <Badge tone="danger">N/A</Badge> : fmt(t.rows)}</Td>
                           <Td nowrap>
-                            {!on ? <span className="text-gray-600">Skipped</span>
+                            {!on ? <span className="text-gray-400">Skipped</span>
                               : planned?.willTruncate ? <Badge tone="warning">First {fmt(planned.willFetch)}</Badge>
                                 : t.rows == null ? <Badge tone="warning">Count unknown</Badge>
                                   : <Badge tone="quiet">Full table</Badge>}
@@ -351,7 +355,7 @@ export default function ConsoleTenantExport() {
               <Btn variant="primary" icon={FileSpreadsheet} disabled={!plan.tables} onClick={() => openExport('xlsx')}>Export as Excel</Btn>
               <Btn icon={FileJson} disabled={!plan.tables} onClick={() => openExport('json')}>Export as JSON</Btn>
             </div>
-            <p className="text-[11px] text-gray-600 mt-2">
+            <p className="text-[11px] text-gray-400 mt-2">
               JSON keeps every row and nested field. Excel is capped by the max export rows policy and by Excel&apos;s own sheet limit, and says so inside the file when either applies.
             </p>
           </Panel>
@@ -362,7 +366,7 @@ export default function ConsoleTenantExport() {
             <div className="flex flex-wrap items-center gap-2">
               <Btn variant="primary" icon={Play} disabled={!plan.tables || srvJob?.running}
                 onClick={() => { setSrvErr(''); setSrvOpen(true) }}>Run full server export</Btn>
-              <span className="text-[11px] text-gray-600">
+              <span className="text-[11px] text-gray-400">
                 {plan.tables} table(s), about {fmt(plan.expectedRows)} rows. Nothing is held in this browser tab; you can leave the page while it runs.
               </span>
             </div>
@@ -383,7 +387,7 @@ export default function ConsoleTenantExport() {
                   </span>
                 </div>
                 {srvJob.pct != null && (
-                  <div className="h-1.5 w-full rounded bg-gray-800 overflow-hidden" role="progressbar"
+                  <div className="h-1.5 w-full rounded bg-gray-800 overflow-hidden" role="progressbar" aria-label="Server export progress"
                     aria-valuenow={srvJob.pct} aria-valuemin={0} aria-valuemax={100}>
                     <div className="h-full bg-orange-500" style={{ width: `${srvJob.pct}%` }} />
                   </div>
@@ -464,14 +468,14 @@ export default function ConsoleTenantExport() {
                           <Td><Badge tone={STATUS_TONE[j.status] || 'quiet'}>{STATUS_TEXT[j.status] || j.status}</Badge></Td>
                           <Td nowrap>{j.mode === 'server' ? 'Server' : 'Browser'}</Td>
                           <Td align="right" nowrap>
-                            {j.mode !== 'server' ? <span className="text-gray-600">In browser</span>
+                            {j.mode !== 'server' ? <span className="text-gray-400">In browser</span>
                               : j.status === 'expired'
-                                ? <span className="text-gray-600" title={j.expired_at ? `Files deleted ${fmtWhen(j.expired_at)}` : 'Files deleted'}>Deleted</span>
+                                ? <span className="text-gray-400" title={j.expired_at ? `Files deleted ${fmtWhen(j.expired_at)}` : 'Files deleted'}>Deleted</span>
                               : j.status === 'running'
                                 ? <Btn size="xs" onClick={() => { setSrvJob(null); setSrvJobId(j.id) }}>Track</Btn>
                                 : (Array.isArray(j.files) && j.files.length > 0)
                                   ? <Btn size="xs" icon={Download} busy={linksBusy === j.id} onClick={() => openLinks(j.id)}>Download</Btn>
-                                  : <span className="text-gray-600">None</span>}
+                                  : <span className="text-gray-400">None</span>}
                           </Td>
                         </Tr>
                       )
@@ -507,7 +511,7 @@ export default function ConsoleTenantExport() {
             <span className="text-xs text-gray-400">Reason (required, at least {MIN_REASON} characters)</span>
             <textarea value={reason} onChange={(e) => setReason(e.target.value)} disabled={running} rows={3}
               placeholder="For example: customer offboarding request, ticket 1234"
-              className="mt-1 w-full rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 p-2 placeholder-gray-600 focus:border-gray-700 focus:outline-none" />
+              className="mt-1 w-full rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 p-2 placeholder-gray-600 focus:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />
           </label>
           {reason && reasonError && <p className="text-[11px] text-amber-300">{reasonError}</p>}
           {running && (
@@ -536,7 +540,7 @@ export default function ConsoleTenantExport() {
             <span className="text-xs text-gray-400">Reason (required, at least {MIN_REASON} characters)</span>
             <textarea value={srvReason} onChange={(e) => setSrvReason(e.target.value)} disabled={srvBusy} rows={3}
               placeholder="For example: legal hold request, ticket 1234"
-              className="mt-1 w-full rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 p-2 placeholder-gray-600 focus:border-gray-700 focus:outline-none" />
+              className="mt-1 w-full rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 p-2 placeholder-gray-600 focus:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />
           </label>
           {srvReason && validateReason(srvReason) && <p className="text-[11px] text-amber-300">{validateReason(srvReason)}</p>}
           <ErrorState message={srvErr} />
@@ -568,7 +572,7 @@ export default function ConsoleTenantExport() {
                     <Td align="right" nowrap>{formatBytes(f.bytes)}</Td>
                     <Td align="right" nowrap>
                       {f.url
-                        ? <a href={f.url} download={serverFileName(f)} rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-orange-300 hover:text-orange-200"><Link2 size={12} /> Download</a>
+                        ? <a href={f.url} download={serverFileName(f)} rel="noopener noreferrer" aria-label={`Download ${serverFileName(f)}`} className="inline-flex items-center gap-1 text-xs text-orange-300 hover:text-orange-200 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"><Link2 size={12} /> Download</a>
                         : <Badge tone="danger">No link</Badge>}
                     </Td>
                   </Tr>

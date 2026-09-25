@@ -28,7 +28,10 @@ describe('RetentionPanel', () => {
     fireEvent.click(save)
     await waitFor(() => expect(setDays).toHaveBeenCalledWith(14))
 
+    // Deleting files cannot be undone, so the button asks first.
     fireEvent.click(screen.getByRole('button', { name: /Delete expired now/ }))
+    expect(purge).not.toHaveBeenCalled()
+    fireEvent.click(await screen.findByRole('button', { name: /Delete 1 expired/ }))
     await waitFor(() => expect(purge).toHaveBeenCalled())
     expect(await screen.findByText(/Deleting 1 expired export/)).toBeTruthy()
   })

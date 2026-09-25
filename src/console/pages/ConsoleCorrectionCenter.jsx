@@ -162,10 +162,10 @@ export default function ConsoleCorrectionCenter() {
           subtitle="Do not edit a dashboard total directly. Open a case: freeze the value, investigate, propose, approve, apply, reconcile, close - with full history and rollback."
           actions={(
             <Toolbar>
-              <Select value={country} onChange={setCountry} options={COUNTRY_OPTS} className="w-40" />
-              <Select value={status} onChange={setStatus} options={STATUS_FILTER_OPTS} className="w-44" />
+              <Select ariaLabel="Country" value={country} onChange={setCountry} options={COUNTRY_OPTS} className="w-40" />
+              <Select ariaLabel="Case status" value={status} onChange={setStatus} options={STATUS_FILTER_OPTS} className="w-44" />
               <Btn icon={RefreshCw} onClick={load} busy={state.loading}>Refresh</Btn>
-              <Btn variant="primary" icon={Plus} onClick={() => { setForm(EMPTY_NEW); setCreating(true) }}>New case</Btn>
+              <Btn variant="primary" icon={Plus} onClick={() => { setForm(EMPTY_NEW); setFlash(null); setCreating(true) }}>New case</Btn>
             </Toolbar>
           )}
         />
@@ -212,8 +212,8 @@ export default function ConsoleCorrectionCenter() {
             </THead>
             <tbody>
               {cases.map((r) => (
-                <Tr key={r.id} onClick={() => openDetail(r)}>
-                  <Td nowrap><span className="font-mono text-gray-300">{r.case_no || 'N/A'}</span></Td>
+                <Tr key={r.id} onClick={() => { setFlash(null); openDetail(r) }}>
+                  <Td nowrap><button type="button" onClick={(e) => { e.stopPropagation(); setFlash(null); openDetail(r) }} aria-label={`Open case ${r.case_no || r.title || ''}`} className="font-mono text-gray-300 hover:text-orange-300 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 rounded">{r.case_no || 'N/A'}</button></Td>
                   <Td><span className="text-gray-100">{r.title || 'Untitled'}</span></Td>
                   <Td>{show(r.metric_id)}</Td>
                   <Td><Badge tone={caseStatusTone(r.status)}>{CASE_STATUS_LABEL[r.status] || r.status || 'N/A'}</Badge></Td>
@@ -282,6 +282,7 @@ export default function ConsoleCorrectionCenter() {
             />
           </Field>
           <Note>Country is taken from the filter above ({country}).</Note>
+          {flash?.tone === 'bad' && <Note icon={AlertTriangle} tone="danger">{flash.text}</Note>}
         </div>
       </Modal>
 
@@ -297,6 +298,8 @@ export default function ConsoleCorrectionCenter() {
         {detail?.error && <ErrorState message={detail.error} onRetry={() => openDetail(detail.case)} />}
         {kase && !detail.loading && !detail.error && (
           <div className="space-y-4">
+            {/* Save and transition failures land in the page flash, which sits behind this dialog. */}
+            {flash?.tone === 'bad' && <Note icon={AlertTriangle} tone="danger">{flash.text}</Note>}
             {/* frozen facts */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <KV label="Metric" value={show(kase.metric_id)} />
@@ -380,6 +383,7 @@ export default function ConsoleCorrectionCenter() {
                   <input
                     value={note}
                     onChange={(e) => setNote(e.target.value)}
+                    aria-label="Note for this step (optional)"
                     placeholder="Note for this step (optional)"
                     className={INPUT}
                   />
@@ -391,6 +395,7 @@ export default function ConsoleCorrectionCenter() {
                         icon={ArrowRight}
                         onClick={() => doTransition(s)}
                         busy={busy === `t:${s}`}
+                        disabled={!!busy && busy !== `t:${s}`}
                       >
                         {CASE_STATUS_LABEL[s] || s}
                       </Btn>
@@ -420,7 +425,7 @@ export default function ConsoleCorrectionCenter() {
                         <Td nowrap>
                           {ev.from_status || ev.to_status
                             ? <span className="text-gray-400">{show(ev.from_status)} <ArrowRight size={10} className="inline" /> {show(ev.to_status)}</span>
-                            : <span className="text-gray-600">N/A</span>}
+                            : <span className="text-gray-400">N/A</span>}
                         </Td>
                         <Td>{show(ev.note)}</Td>
                         <Td nowrap>{when(ev.created_at)}</Td>
@@ -437,7 +442,7 @@ export default function ConsoleCorrectionCenter() {
   )
 }
 
-const INPUT = 'w-full px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 placeholder-gray-600 focus:border-gray-700 focus:outline-none'
+const INPUT = 'w-full px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 placeholder-gray-600 focus:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500'
 
 function Field({ label, children }) {
   return (

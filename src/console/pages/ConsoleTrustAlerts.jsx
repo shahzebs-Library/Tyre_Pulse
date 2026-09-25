@@ -98,7 +98,7 @@ export default function ConsoleTrustAlerts() {
           subtitle="Breaches raised from the quality and reconciliation scans - acknowledge or resolve each."
           actions={(
             <Toolbar>
-              <Select value={country} onChange={setCountry} options={COUNTRY_OPTS} className="w-40" />
+              <Select ariaLabel="Country" value={country} onChange={setCountry} options={COUNTRY_OPTS} className="w-40" />
               <Btn icon={Play} variant="primary" onClick={runScan} busy={scanning}>Run scan now</Btn>
               <Btn icon={RefreshCw} onClick={load}>Refresh</Btn>
             </Toolbar>
@@ -126,7 +126,7 @@ export default function ConsoleTrustAlerts() {
           icon={ShieldAlert}
           title="Raised alerts"
           subtitle="An open or acknowledged alert can be acknowledged or resolved. Resolving records that the breach was handled."
-          actions={<Select value={status} onChange={setStatus} options={STATUS_OPTS} className="w-40" />}
+          actions={<Select ariaLabel="Alert status" value={status} onChange={setStatus} options={STATUS_OPTS} className="w-40" />}
         />
 
         {state.loading ? (
@@ -168,7 +168,7 @@ export default function ConsoleTrustAlerts() {
                     <Td nowrap><span className="font-mono text-gray-400">{r.ref_key || 'N/A'}</span></Td>
                     <Td><Badge tone={alertTone(r.severity)}>{r.severity || 'N/A'}</Badge></Td>
                     <Td>{r.country || 'All'}</Td>
-                    <Td className="text-gray-300">{r.message || 'N/A'}</Td>
+                    <Td className="text-gray-300 break-words min-w-[12rem]">{r.message || 'N/A'}</Td>
                     <Td><Badge tone={STATUS_TONE[r.status] || 'default'}>{r.status || 'N/A'}</Badge></Td>
                     <Td nowrap>
                       <span className="inline-flex items-center gap-1 text-gray-500">
@@ -198,7 +198,7 @@ export default function ConsoleTrustAlerts() {
                           </Btn>
                         </Toolbar>
                       ) : (
-                        <span className="text-gray-600">Done</span>
+                        <span className="text-gray-400">Done</span>
                       )}
                     </Td>
                   </Tr>

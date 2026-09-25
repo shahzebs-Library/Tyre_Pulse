@@ -327,15 +327,15 @@ export default function ConsoleMaterialMaster() {
 
       <Panel>
         <div className="flex flex-wrap items-center gap-2">
-          <Segmented value={country} onChange={setCountry}
+          <Segmented ariaLabel="Country" role="group" value={country} onChange={setCountry}
             options={COUNTRIES.map((c) => ({ key: c, label: c }))} />
-          <Segmented value={view} onChange={setView} options={[
+          <Segmented ariaLabel="Review state" role="group" value={view} onChange={setView} options={[
             { key: 'all', label: 'All' },
             { key: 'unreviewed', label: 'Not reviewed' },
             { key: 'reviewed', label: 'Reviewed' },
             { key: 'conflicting', label: <span className="inline-flex items-center gap-1"><ListFilter size={10} /> Needs a decision</span> },
           ]} />
-          <Segmented value={agree} onChange={setAgree} options={[
+          <Segmented ariaLabel="Description agreement" role="group" value={agree} onChange={setAgree} options={[
             { key: 'any', label: 'Description any' },
             { key: 'agree', label: <span className="inline-flex items-center gap-1"><CheckCircle2 size={10} /> Agrees</span> },
             { key: 'differ', label: <span className="inline-flex items-center gap-1"><HelpCircle size={10} /> Differs</span> },
@@ -346,7 +346,7 @@ export default function ConsoleMaterialMaster() {
 
       {loading ? (
         <LoadingState label="Loading the material master" />
-      ) : visible.length === 0 ? (
+      ) : error && rows.length === 0 ? null : visible.length === 0 ? (
         <Panel>
           <EmptyState icon={Boxes}
             title={search ? 'No item matches that search.'
@@ -354,7 +354,7 @@ export default function ConsoleMaterialMaster() {
                 : 'No items to show.'}
             reason={search || agree !== 'any'
               ? 'Clear the search or the description filter to widen the list.'
-              : 'Either the list has not been built yet or it could not be read. Use Refresh from transactions to build it from your expense data.'} />
+              : 'The list has not been built yet. Use Refresh from transactions to build it from your expense data.'} />
         </Panel>
       ) : (
         <>
@@ -403,7 +403,7 @@ export default function ConsoleMaterialMaster() {
                           {r.item_name || 'No description on record'}
                         </p>
                         {(r.brand || r.subcategory) && (
-                          <p className="text-[9px] text-gray-600 mt-0.5">
+                          <p className="text-[9px] text-gray-400 mt-0.5">
                             {[r.brand, r.subcategory].filter(Boolean).join(' | ')}
                           </p>
                         )}
@@ -414,7 +414,7 @@ export default function ConsoleMaterialMaster() {
                         <p className="text-[11px] text-gray-300 tabular-nums">
                           {fmtMoney(r.txn_value)} {CURRENCY[r.country] || ''}
                         </p>
-                        <p className="text-[10px] text-gray-600">{fmtNum(r.txn_rows)} lines</p>
+                        <p className="text-[10px] text-gray-400">{fmtNum(r.txn_rows)} lines</p>
                       </Td>
                       <Td>
                         {r.reviewed ? <Badge tone="good" icon={Check}>Confirmed</Badge>
@@ -426,9 +426,9 @@ export default function ConsoleMaterialMaster() {
                           {!r.reviewed && (
                             <Btn size="xs" variant="good" icon={Check} onClick={() => confirmOne(r)}
                               busy={confirmingId === r.id} disabled={busy}
-                              title="Confirm as its current category">Confirm</Btn>
+                              title="Confirm as its current category" ariaLabel={`Confirm ${r.item_code} as its current category`}>Confirm</Btn>
                           )}
-                          <Btn size="xs" onClick={() => openDetail(r)}>{r.reviewed ? 'Edit' : 'Review'}</Btn>
+                          <Btn size="xs" onClick={() => openDetail(r)} ariaLabel={`${r.reviewed ? 'Edit' : 'Review'} ${r.item_code}`}>{r.reviewed ? 'Edit' : 'Review'}</Btn>
                         </span>
                       </Td>
                     </Tr>
@@ -443,7 +443,7 @@ export default function ConsoleMaterialMaster() {
       {/* Multi-confirm action bar, shown only when something is selected. */}
       {selectedRows.length > 0 && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-[min(92vw,640px)]">
-          <div className="rounded-xl bg-gray-950 border border-orange-800/60 shadow-2xl px-4 py-3 flex items-center justify-between gap-3">
+          <div className="rounded-xl bg-gray-950 border border-orange-800/60 shadow-2xl px-4 py-3 flex flex-wrap items-center justify-between gap-3" role="region" aria-label="Selected items">
             <div className="flex items-center gap-2 min-w-0">
               <CheckCheck size={16} className="text-orange-400 flex-shrink-0" />
               <p className="text-xs text-gray-200">
@@ -485,7 +485,7 @@ export default function ConsoleMaterialMaster() {
                       onClick={() => setDraft((d) => ({ ...d, category: c.key, subcategory: '' }))}
                       className={`px-2 py-1.5 rounded-lg text-[11px] border text-left transition-colors ${
                         on ? 'bg-orange-500/20 border-orange-600/60 text-orange-200'
-                          : 'bg-gray-900 border-gray-800 text-gray-300 hover:bg-gray-800/60'}`}>
+                          : 'bg-gray-900 border-gray-800 text-gray-300 hover:bg-gray-800/60'} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500`}>
                       {c.label}
                       <span className="block text-[9px] opacity-70">counts as {c.costBucket}</span>
                     </button>
@@ -503,7 +503,7 @@ export default function ConsoleMaterialMaster() {
                       onClick={() => setDraft((d) => ({ ...d, subcategory: d.subcategory === s ? '' : s }))}
                       className={`px-2 py-1 rounded-lg text-[10px] border transition-colors ${
                         draft.subcategory === s ? 'bg-orange-500/20 border-orange-600/60 text-orange-200'
-                          : 'bg-gray-900 border-gray-800 text-gray-400 hover:bg-gray-800/60'}`}>
+                          : 'bg-gray-900 border-gray-800 text-gray-400 hover:bg-gray-800/60'} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500`}>
                       {s}
                     </button>
                   ))}
@@ -511,18 +511,18 @@ export default function ConsoleMaterialMaster() {
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <label className="block">
                 <span className="block text-[11px] font-semibold text-gray-400 mb-1.5">Unit</span>
                 <input value={draft.uom} onChange={(e) => setDraft((d) => ({ ...d, uom: e.target.value }))}
                   placeholder="litre, piece, set"
-                  className="w-full px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 placeholder-gray-600 focus:border-gray-700 focus:outline-none" />
+                  className="w-full px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 placeholder-gray-600 focus:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />
               </label>
               <label className="block">
                 <span className="block text-[11px] font-semibold text-gray-400 mb-1.5">Note</span>
                 <input value={draft.notes} onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))}
                   placeholder="Why this classification"
-                  className="w-full px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 placeholder-gray-600 focus:border-gray-700 focus:outline-none" />
+                  className="w-full px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 placeholder-gray-600 focus:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />
               </label>
             </div>
 
@@ -534,7 +534,7 @@ export default function ConsoleMaterialMaster() {
               {detailLoading ? (
                 <LoadingState label="Loading the transactions" rows={2} />
               ) : detailTxns.length === 0 ? (
-                <p className="text-[11px] text-gray-600">No transactions could be found for this code.</p>
+                <p className="text-[11px] text-gray-400">No transactions could be found for this code.</p>
               ) : (
                 <div className="max-h-48 overflow-y-auto">
                   <Table>

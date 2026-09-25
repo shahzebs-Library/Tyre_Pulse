@@ -191,7 +191,7 @@ export default function ConsoleDataCleanup() {
                       const active = selected?.key === t.key
                       return (
                         <Tr key={t.key} onClick={() => selectTarget(t)} className={active ? 'bg-orange-950/20' : ''}>
-                          <Td><span className={active ? 'text-orange-200 font-medium' : 'text-gray-200'}>{t.label}</span></Td>
+                          <Td><button type="button" aria-pressed={active} onClick={(e) => { e.stopPropagation(); selectTarget(t) }} className={`text-left break-words ${active ? 'text-orange-200 font-medium' : 'text-gray-200 hover:text-orange-300'} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 rounded`}>{t.label}</button></Td>
                           <Td><Badge tone={t.kind === 'business' ? 'danger' : 'default'}>{t.kind === 'business' ? 'Business data' : 'Logs'}</Badge></Td>
                           <Td align="right" nowrap><span className="tabular-nums text-gray-300">{fmtNum(t.total)}</span></Td>
                           <Td nowrap><span className="text-gray-500">{fmtDate(t.oldest)} to {fmtDate(t.newest)}</span></Td>
@@ -221,12 +221,12 @@ export default function ConsoleDataCleanup() {
                   <div>
                     <p className="text-[11px] font-semibold text-gray-400 mb-1.5">Delete records older than</p>
                     <div className="mb-2">
-                      <Segmented options={presetOptions} value={before} onChange={changeCutoff} />
+                      <Segmented ariaLabel="Age preset" role="group" options={presetOptions} value={before} onChange={changeCutoff} />
                     </div>
                     <input type="date" value={before} max={new Date().toISOString().slice(0, 10)}
                       onChange={(e) => changeCutoff(e.target.value)} aria-label="Cutoff date"
-                      className="w-full px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 focus:border-gray-700 focus:outline-none" />
-                    <p className="text-[10px] text-gray-600 mt-1 flex items-center gap-1">
+                      className="w-full px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 focus:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />
+                    <p className="text-[10px] text-gray-400 mt-1 flex items-center gap-1">
                       <Info size={10} /> Cutoff {fmtDate(before)}. Records dated before this are removed; newer records are kept.
                     </p>
                   </div>
@@ -279,7 +279,7 @@ export default function ConsoleDataCleanup() {
             <div>
               <p className="text-[11px] text-gray-500 mb-1.5">Type <span className="font-mono text-orange-300">{CONFIRM_WORD}</span> to confirm.</p>
               <input autoFocus value={confirmText} onChange={(e) => setConfirmText(e.target.value)} aria-label="Type CLEAN to confirm"
-                className="w-full px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 focus:border-red-700 focus:outline-none" />
+                className="w-full px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 focus:border-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />
             </div>
             <ErrorState message={error} />
           </div>

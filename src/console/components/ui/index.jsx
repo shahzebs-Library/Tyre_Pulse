@@ -43,13 +43,13 @@ export function PanelHeader({ icon: Icon, title, subtitle, actions, tone = 'defa
   const iconTone = tone === 'warning' ? 'text-amber-400'
     : tone === 'danger' ? 'text-red-400' : 'text-orange-400'
   return (
-    <header className="flex items-start gap-3 mb-3">
+    <header className="flex flex-wrap items-start gap-3 mb-3">
       {Icon && <Icon size={16} className={`${iconTone} mt-0.5 shrink-0`} />}
       <div className="flex-1 min-w-0">
         <h3 className="text-sm font-semibold text-gray-200">{title}</h3>
         {subtitle && <p className="text-xs text-gray-500 mt-0.5">{subtitle}</p>}
       </div>
-      {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}
+      {actions && <div className="flex flex-wrap items-center gap-2 max-w-full">{actions}</div>}
     </header>
   )
 }

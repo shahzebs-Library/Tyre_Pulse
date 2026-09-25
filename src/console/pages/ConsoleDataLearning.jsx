@@ -221,7 +221,7 @@ export default function ConsoleDataLearning() {
           subtitle="Confirm once - fix every matching row now and auto-apply to future imports. Never touches cost."
           actions={(
             <div className="flex items-center gap-2">
-              <Select
+              <Select ariaLabel="Country"
                 value={country}
                 onChange={setCountry}
                 options={COUNTRY_OPTS}
@@ -293,7 +293,7 @@ export default function ConsoleDataLearning() {
             subtitle="Blank serials whose value can be recovered. Confirm one and every row of that serial is filled now, and future imports too."
             actions={(
               <div className="flex items-center gap-2">
-                <Select value={field} onChange={setField} options={FIELD_OPTS} className="w-32" />
+                <Select ariaLabel="Field to learn" value={field} onChange={setField} options={FIELD_OPTS} className="w-32" />
                 {lastBatch && (
                   <Btn icon={Undo2} onClick={undoLast} busy={busy === 'undo'}>Undo last</Btn>
                 )}
@@ -380,7 +380,7 @@ export default function ConsoleDataLearning() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
           <div>
             <label className="text-[11px] uppercase tracking-wide text-gray-500 block mb-1">Match by</label>
-            <Select
+            <Select ariaLabel="Match by"
               value={teach.matchType}
               onChange={(v) => setTeach((t) => ({ ...t, matchType: v }))}
               options={MATCH_OPTS}
@@ -388,7 +388,7 @@ export default function ConsoleDataLearning() {
           </div>
           <div>
             <label className="text-[11px] uppercase tracking-wide text-gray-500 block mb-1">Fix field</label>
-            <Select
+            <Select ariaLabel="Fix field"
               value={teach.targetField}
               onChange={(v) => setTeach((t) => ({ ...t, targetField: v }))}
               options={TARGET_OPTS}
@@ -400,22 +400,24 @@ export default function ConsoleDataLearning() {
             </label>
             <input
               value={teach.matchValue}
+              aria-label={teach.matchType === 'serial' ? 'Serial number' : 'Wrong spelling'}
               onChange={(e) => setTeach((t) => ({ ...t, matchValue: e.target.value }))}
               placeholder={teach.matchType === 'serial' ? 'e.g. EP060420711' : 'e.g. TRAINGLE'}
-              className="w-full px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 placeholder-gray-600 focus:border-gray-700 focus:outline-none"
+              className="w-full px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 placeholder-gray-600 focus:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
             />
           </div>
           <div>
             <label className="text-[11px] uppercase tracking-wide text-gray-500 block mb-1">Correct value</label>
             <input
               value={teach.targetValue}
+              aria-label="Correct value"
               onChange={(e) => setTeach((t) => ({ ...t, targetValue: e.target.value }))}
               placeholder="e.g. TRIANGLE"
-              className="w-full px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 placeholder-gray-600 focus:border-gray-700 focus:outline-none"
+              className="w-full px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 placeholder-gray-600 focus:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
             />
           </div>
         </div>
-        <div className="mt-3 flex items-center justify-between gap-3">
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
           <p className="text-[11px] text-gray-500">
             Applies to {country === 'All' ? 'all countries' : country}. Cost is never changed.
           </p>
@@ -456,7 +458,7 @@ export default function ConsoleDataLearning() {
                   <Td>
                     <span className="text-gray-500">{matchTypeLabel(f.match_type)}</span>{' '}
                     <span className="font-medium text-gray-100">{f.match_value}</span>
-                    <span className="text-gray-600"> {'->'} </span>
+                    <span className="text-gray-400"> {'->'} </span>
                     <span className="text-gray-100">{f.target_value}</span>
                   </Td>
                   <Td>{TARGET_FIELDS[f.target_field] || f.target_field}</Td>

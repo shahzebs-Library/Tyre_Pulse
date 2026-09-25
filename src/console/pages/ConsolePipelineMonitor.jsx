@@ -99,19 +99,19 @@ export default function ConsolePipelineMonitor() {
           subtitle="Every import, report and integration run - status, rows, timing and errors."
           actions={(
             <Toolbar>
-              <Select value={country} onChange={setCountry} options={COUNTRY_OPTS} className="w-40" />
+              <Select ariaLabel="Country" value={country} onChange={setCountry} options={COUNTRY_OPTS} className="w-40" />
               <Btn icon={RefreshCw} onClick={load} busy={state.loading}>Refresh</Btn>
             </Toolbar>
           )}
         />
 
         <div className="px-4 pb-3 flex flex-wrap items-center gap-3 justify-between">
-          <Segmented options={tabs} value={tab} onChange={setTab} />
+          <Segmented options={tabs} value={tab} onChange={setTab} ariaLabel="Monitor view" />
           <SearchInput
             value={search}
             onChange={setSearch}
             placeholder={tab === 'jobs' ? 'Search job or status' : 'Search event or status'}
-            className="w-56"
+            className="w-full sm:w-56"
           />
         </div>
 
@@ -166,7 +166,7 @@ export default function ConsolePipelineMonitor() {
                     <Td align="right">{num(r.skipped)}</Td>
                     <Td align="right">{num(r.duplicates)}</Td>
                     <Td nowrap>{when(r.started_at)}</Td>
-                    <Td>{r.error_reason ? <span className="text-red-300">{r.error_reason}</span> : <span className="text-gray-600">None</span>}</Td>
+                    <Td>{r.error_reason ? <span className="text-red-300 break-words">{r.error_reason}</span> : <span className="text-gray-400">None</span>}</Td>
                   </Tr>
                 ))}
               </tbody>
@@ -201,7 +201,7 @@ export default function ConsolePipelineMonitor() {
                     <Td><Badge tone={statusTone(e.status)}>{e.status || 'N/A'}</Badge></Td>
                     <Td align="right">{num(e.http_status)}</Td>
                     <Td align="right">{num(e.latency_ms)}</Td>
-                    <Td>{e.error_reason ? <span className="text-red-300">{e.error_reason}</span> : <span className="text-gray-600">None</span>}</Td>
+                    <Td>{e.error_reason ? <span className="text-red-300 break-words">{e.error_reason}</span> : <span className="text-gray-400">None</span>}</Td>
                     <Td nowrap>{when(e.occurred_at)}</Td>
                   </Tr>
                 ))}

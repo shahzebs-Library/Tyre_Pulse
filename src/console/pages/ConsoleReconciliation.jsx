@@ -116,7 +116,7 @@ export default function ConsoleReconciliation() {
           subtitle="Expected vs actual across cost, fleet and production - with the difference and where to investigate."
           actions={(
             <Toolbar>
-              <Select value={country} onChange={setCountry} options={COUNTRY_OPTS} className="w-32" />
+              <Select ariaLabel="Country" value={country} onChange={setCountry} options={COUNTRY_OPTS} className="w-32" />
               <Btn variant="primary" icon={Play} busy={running} onClick={runNow}>Run reconciliation now</Btn>
               <Btn icon={RefreshCw} onClick={load}>Refresh</Btn>
             </Toolbar>
@@ -185,12 +185,13 @@ export default function ConsoleReconciliation() {
                           href={href}
                           target={href.startsWith('/console') ? undefined : '_blank'}
                           rel={href.startsWith('/console') ? undefined : 'noopener noreferrer'}
-                          className="inline-flex items-center gap-1 text-orange-300 hover:text-orange-200 text-xs"
+                          aria-label={`Open the rows behind ${r.label}`}
+                          className="inline-flex items-center gap-1 text-orange-300 hover:text-orange-200 text-xs rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
                         >
                           <ExternalLink size={12} /> Open
                         </a>
                       ) : (
-                        <span className="text-gray-600 text-xs">N/A</span>
+                        <span className="text-gray-400 text-xs">N/A</span>
                       )}
                     </Td>
                     <Td nowrap><span className="text-gray-500 text-[11px]">{formatRunAt(r.runAt)}</span></Td>

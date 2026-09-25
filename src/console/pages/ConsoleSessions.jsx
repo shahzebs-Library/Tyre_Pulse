@@ -35,6 +35,7 @@ import {
   listUserDevices, listConsoleSessions, lockUser, clearPushToken,
 } from '../../lib/api/consoleSessions'
 import { toUserMessage } from '../../lib/safeError'
+import KnownConsoleDevices from './sessions/KnownConsoleDevices'
 import { exportToExcel } from '../../lib/exportUtils'
 
 const ACTIVITY_LIMIT = 200
@@ -284,6 +285,8 @@ export default function ConsoleSessions() {
           )}
         </Panel>
       </div>
+
+      <KnownConsoleDevices />
 
       <Panel flush>
         <div className="p-4 pb-3 space-y-3">

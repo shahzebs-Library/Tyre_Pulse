@@ -9,6 +9,7 @@ import { supabase, IS_CONSOLE_SURFACE } from '../lib/supabase'
 import { hasUnmetMfa } from '../lib/authAssurance'
 import { checkConsoleAccess } from '../lib/api/accessPolicies'
 import { blockedReasonText } from '../lib/accessPolicies'
+import { recordConsoleLoginDevice } from '../lib/api/consoleKnownDevices'
 
 // Break-glass admin console: auto sign out after this much inactivity so a
 // console left open on a shared/unattended machine cannot be walked up to.
@@ -158,6 +159,8 @@ export function ConsoleAuthProvider({ children }) {
 
     // No MFA or already at aal2 - log the session (server-stamped) and proceed.
     await logConsoleEvent('login', null, 'system', { email, user_agent: navigator.userAgent })
+    // New-IP / new-device alert (best-effort, never awaited, never blocks sign-in).
+    recordConsoleLoginDevice(navigator.userAgent)
     return { error: null }
   }
 
@@ -169,6 +172,8 @@ export function ConsoleAuthProvider({ children }) {
     if (error) return { error }
     // Log session after successful MFA (server-stamped, self-gated).
     await logConsoleEvent('login', null, 'system', { mfa: true, user_agent: navigator.userAgent })
+    // New-IP / new-device alert (best-effort, never awaited, never blocks sign-in).
+    recordConsoleLoginDevice(navigator.userAgent)
     return { error: null }
   }
 

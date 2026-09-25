@@ -89,8 +89,10 @@ export default function ConsoleAIUsage() {
           <p className="text-xs text-gray-500 mt-1">Calls, tokens, spend and failures for every AI feature, from the AI request log.</p>
         </div>
         <Toolbar>
-          <Segmented value={range} onChange={setRange} options={RANGES} />
-          <Select value={country} onChange={setCountry} options={COUNTRY_OPTS} className="w-36" />
+          <Segmented value={range} onChange={setRange} options={RANGES} ariaLabel="Date range" role="group" />
+          <label className="block"><span className="sr-only">Country</span>
+            <Select value={country} onChange={setCountry} options={COUNTRY_OPTS} className="w-36" />
+          </label>
           <Btn icon={Download} onClick={exportRows} disabled={!rows.length}>Export</Btn>
           <Btn icon={RefreshCw} onClick={load} busy={state.loading}>Refresh</Btn>
         </Toolbar>
@@ -122,7 +124,7 @@ export default function ConsoleAIUsage() {
 
           <Panel>
             <PanelHeader icon={Zap} title="Trend" subtitle={`Per day over the last ${range} days.`}
-              actions={<Segmented value={metric} onChange={setMetric} options={[
+              actions={<Segmented value={metric} onChange={setMetric} ariaLabel="Trend metric" role="group" options={[
                 { key: 'calls', label: 'Calls' }, { key: 'cost', label: 'Cost' }, { key: 'failures', label: 'Failures' },
               ]} />} />
             <TrendChart labels={series.labels} series={[{ label: series.label, values: series.values }]} height={220}
@@ -159,7 +161,7 @@ export default function ConsoleAIUsage() {
                       <Td>{r.feature || 'other'}</Td>
                       <Td><span className="font-mono text-[11px] text-gray-400">{r.model || 'unknown'}</span></Td>
                       <Td><Badge tone={r.status === 'rate_limited' ? 'warning' : 'danger'}>{String(r.status || 'error').replace(/_/g, ' ')}</Badge></Td>
-                      <Td><span className="text-gray-400">{r.error || (r.http_status ? `HTTP ${r.http_status}` : 'N/A')}</span></Td>
+                      <Td><span className="text-gray-400 break-words">{r.error || (r.http_status ? `HTTP ${r.http_status}` : 'N/A')}</span></Td>
                     </Tr>
                   ))}
                 </tbody>

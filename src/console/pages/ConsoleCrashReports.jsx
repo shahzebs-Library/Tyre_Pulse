@@ -138,7 +138,7 @@ export default function ConsoleCrashReports() {
         if (res?.reason === 'auth') setError('Sentry rejected the token. Update it in Connection.')
         else if (res?.reason !== 'not_configured') setError('Could not load crash reports. Try again.')
       }
-    } catch (e) { setError(toUserMessage(e, 'Could not load crash reports.')) }
+    } catch (e) { setIssues([]); setReason('error'); setError(toUserMessage(e, 'Could not load crash reports.')) }
     finally { setLoading(false) }
   }, [activeQuery, period, projectId])
 
@@ -323,7 +323,7 @@ export default function ConsoleCrashReports() {
           <div className="pt-3 mt-3 border-t border-gray-800 space-y-3">
             <label className="flex items-center gap-2.5 cursor-pointer">
               <button type="button" role="switch" aria-checked={alertsEnabled} onClick={() => setAlertsEnabled(v => !v)}
-                className={`relative w-10 h-5 rounded-full transition-colors ${alertsEnabled ? 'bg-orange-500' : 'bg-gray-700'}`}>
+                className={`relative w-10 h-5 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 ${alertsEnabled ? 'bg-orange-500' : 'bg-gray-700'}`}>
                 <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${alertsEnabled ? 'left-[22px]' : 'left-0.5'}`} />
               </button>
               <span className="text-sm text-gray-200 font-medium">Alert on new fatal crashes</span>
@@ -341,7 +341,7 @@ export default function ConsoleCrashReports() {
           </div>
           <div className="flex items-center gap-2 mt-3">
             <Btn variant="primary" icon={Save} onClick={onSave} busy={saving} disabled={!connected && !token.trim()}>
-              Save connection
+              {saving ? 'Saving...' : 'Save connection'}
             </Btn>
           </div>
         </Panel>
@@ -351,12 +351,12 @@ export default function ConsoleCrashReports() {
         <>
           {/* Summary tiles */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-            <StatTile label="Issues" value={loading ? 'N/A' : summary.total} icon={Bug}
+            <StatTile label="Issues" value={(loading || reason) ? 'N/A' : summary.total} icon={Bug}
               sub={summary.total >= ISSUE_PAGE ? `First ${ISSUE_PAGE} shown` : 'In this window'} />
-            <StatTile label="Fatal" value={loading ? 'N/A' : summary.fatal} tone={summary.fatal > 0 ? 'danger' : 'default'} icon={ShieldAlert} />
-            <StatTile label="Errors" value={loading ? 'N/A' : summary.errors} tone={summary.errors > 0 ? 'accent' : 'default'} icon={Bug} />
-            <StatTile label="Events" value={loading ? 'N/A' : nf.format(summary.events)} icon={Activity} sub="Across these issues" />
-            <StatTile label="Users affected" value={loading ? 'N/A' : nf.format(summary.users)} tone={summary.users > 0 ? 'warning' : 'default'} icon={Users}
+            <StatTile label="Fatal" value={(loading || reason) ? 'N/A' : summary.fatal} tone={summary.fatal > 0 ? 'danger' : 'default'} icon={ShieldAlert} />
+            <StatTile label="Errors" value={(loading || reason) ? 'N/A' : summary.errors} tone={summary.errors > 0 ? 'accent' : 'default'} icon={Bug} />
+            <StatTile label="Events" value={(loading || reason) ? 'N/A' : nf.format(summary.events)} icon={Activity} sub="Across these issues" />
+            <StatTile label="Users affected" value={(loading || reason) ? 'N/A' : nf.format(summary.users)} tone={summary.users > 0 ? 'warning' : 'default'} icon={Users}
               sub="Summed per issue" />
           </div>
 
@@ -392,13 +392,17 @@ export default function ConsoleCrashReports() {
                   <SearchInput value={queryText} onChange={setQueryText}
                     placeholder="Sentry search e.g. is:unresolved level:fatal release:1.3.0" className="flex-1 min-w-[220px]" />
                   <Btn type="submit">Search</Btn>
-                  <Select value={projectId} onChange={setProjectId} className="w-44"
-                    options={[{ value: '', label: 'All projects' }, ...projects.map(p => ({ value: String(p.id), label: p.name || p.slug }))]} />
-                  <Select value={period} onChange={setPeriod} className="w-36"
-                    options={PERIODS.map(p => ({ value: p.key, label: p.label }))} />
+                  <label><span className="sr-only">Project</span>
+                    <Select value={projectId} onChange={setProjectId} className="w-44"
+                      options={[{ value: '', label: 'All projects' }, ...projects.map(p => ({ value: String(p.id), label: p.name || p.slug }))]} />
+                  </label>
+                  <label><span className="sr-only">Period</span>
+                    <Select value={period} onChange={setPeriod} className="w-36"
+                      options={PERIODS.map(p => ({ value: p.key, label: p.label }))} />
+                  </label>
                 </Toolbar>
               </form>
-              <Segmented value={activeQuery} onChange={applyPreset}
+              <Segmented value={activeQuery} onChange={applyPreset} ariaLabel="Issue presets" role="group"
                 options={PRESETS.map(p => ({ key: p.key, label: p.label }))} />
             </div>
 
@@ -421,7 +425,8 @@ export default function ConsoleCrashReports() {
                   return (
                     <div key={it.id} className="rounded-xl border border-gray-800 bg-gray-900/40 p-3.5 hover:border-gray-700 transition-colors">
                       <div className="flex items-start justify-between gap-3">
-                        <button onClick={() => openDetail(it)} className="min-w-0 text-left group">
+                        <button type="button" onClick={() => openDetail(it)} aria-label={`Open details for ${it.title || 'issue'}`}
+                          className="min-w-0 text-left group rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
                           <div className="flex items-center gap-2 flex-wrap">
                             <Badge tone={lvl.tone}>{it.level ? it.level.toUpperCase() : 'ERROR'}</Badge>
                             {it.shortId && <Code>{it.shortId}</Code>}
@@ -429,7 +434,7 @@ export default function ConsoleCrashReports() {
                             {it.platform && <span className="text-[11px] text-gray-500">{it.platform}</span>}
                             {it.status && it.status !== 'unresolved' && <Badge tone={STATUS_TONE[it.status] || 'default'}><span className="capitalize">{it.status}</span></Badge>}
                           </div>
-                          <p className="text-sm font-semibold text-gray-100 mt-1 truncate group-hover:text-orange-300">{it.title}</p>
+                          <p className="text-sm font-semibold text-gray-100 mt-1 truncate group-hover:text-orange-300" title={it.title || ''}>{it.title}</p>
                           {it.value && it.value !== it.title && <p className="text-xs text-gray-400 mt-0.5 truncate">{it.value}</p>}
                           {it.culprit && <p className="text-[11px] text-gray-500 mt-0.5 font-mono truncate">{it.culprit}</p>}
                         </button>
@@ -439,8 +444,10 @@ export default function ConsoleCrashReports() {
                           )}
                           <IssueActions issue={it} acting={acting === it.id} onAct={act} compact />
                           {members.length > 0 && (
-                            <Select value={it.assignedTo?.type === 'user' ? String(it.assignedTo.id) : ''} disabled={acting === it.id}
-                              onChange={v => assign(it, v)} options={memberOptions} className="w-36" />
+                            <label><span className="sr-only">Assign issue</span>
+                              <Select value={it.assignedTo?.type === 'user' ? String(it.assignedTo.id) : ''} disabled={acting === it.id}
+                                onChange={v => assign(it, v)} options={memberOptions} className="w-36" />
+                            </label>
                           )}
                         </div>
                       </div>
@@ -488,12 +495,12 @@ export default function ConsoleCrashReports() {
 
             {/* Assignee */}
             {members.length > 0 && (
-              <div className="flex items-center gap-2 text-xs">
+              <label className="flex flex-wrap items-center gap-2 text-xs">
                 <span className="text-gray-400 inline-flex items-center gap-1.5"><UserPlus size={14} className="text-orange-400" /> Assigned to</span>
                 <Select value={detailFor.assignedTo?.type === 'user' ? String(detailFor.assignedTo.id) : ''} disabled={acting === detailFor.id}
-                  onChange={v => assign(detailFor, v)} className="w-64"
+                  onChange={v => assign(detailFor, v)} className="w-full sm:w-64"
                   options={[{ value: '', label: 'Unassigned' }, ...members.map(m => ({ value: m.userId, label: `${m.name}${m.email ? ` (${m.email})` : ''}` }))]} />
-              </div>
+              </label>
             )}
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -516,7 +523,7 @@ export default function ConsoleCrashReports() {
                     <div className="flex flex-wrap gap-1.5">
                       {detail.event.tags.filter(t => KEY_TAGS.includes(t.key)).map(t => (
                         <span key={t.key} className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-gray-900 border border-gray-800 text-[11px]">
-                          <span className="text-gray-500">{t.key}</span><span className="text-gray-200 font-medium">{t.value}</span>
+                          <span className="text-gray-500">{t.key}</span><span className="text-gray-200 font-medium break-all">{t.value}</span>
                         </span>
                       ))}
                     </div>
@@ -535,7 +542,7 @@ export default function ConsoleCrashReports() {
                     <h4 className="text-xs font-semibold text-gray-300 mb-1.5 flex items-center gap-1.5"><Cpu size={13} className="text-orange-400" /> {ex.type}{ex.value ? `: ${ex.value}` : ''}</h4>
                     <div className="rounded-lg border border-gray-800 bg-gray-900/60 divide-y divide-gray-800/70 overflow-hidden">
                       {ex.frames.map((f, fi) => (
-                        <div key={fi} className={`px-3 py-1.5 text-[11px] font-mono ${f.inApp ? 'bg-orange-500/5' : ''}`}>
+                        <div key={fi} className={`px-3 py-1.5 text-[11px] font-mono break-all ${f.inApp ? 'bg-orange-500/5' : ''}`}>
                           <span className={f.inApp ? 'text-orange-300' : 'text-gray-300'}>{f.fn}</span>
                           {f.file && <span className="text-gray-500"> &nbsp;{f.file}{f.line != null ? `:${f.line}` : ''}</span>}
                           {f.inApp && <span className="ml-2"><Badge tone="accent">app</Badge></span>}
@@ -555,10 +562,10 @@ export default function ConsoleCrashReports() {
             <div className="pt-1">
               <h4 className="text-xs font-semibold text-gray-300 mb-1.5 flex items-center gap-1.5"><MessageSquare size={13} className="text-orange-400" /> Add a note</h4>
               <div className="flex items-start gap-2">
-                <textarea value={commentText} onChange={e => setCommentText(e.target.value)} rows={2}
+                <textarea aria-label="Note for this issue" value={commentText} onChange={e => setCommentText(e.target.value)} rows={2}
                   placeholder="e.g. Fixed in v1.3.1 by resizing photos before base64. Assigned to me."
                   className={`${INPUT} flex-1 resize-y`} />
-                <Btn variant="primary" icon={Send} onClick={submitComment} busy={commenting} disabled={!commentText.trim()}>Post</Btn>
+                <Btn variant="primary" icon={Send} onClick={submitComment} busy={commenting} disabled={!commentText.trim()}>{commenting ? 'Posting...' : 'Post'}</Btn>
               </div>
             </div>
 
@@ -569,11 +576,11 @@ export default function ConsoleCrashReports() {
                 <div className="space-y-1.5">
                   {detail.activity.map((a, ai) => (
                     <div key={ai} className="text-[11px] text-gray-400 flex items-start gap-2">
-                      <span className="text-gray-600 shrink-0 w-16">{timeAgo(a.dateCreated)}</span>
+                      <span className="text-gray-500 shrink-0 w-16">{timeAgo(a.dateCreated)}</span>
                       <span className="min-w-0">
                         <span className="text-gray-200 font-medium">{a.user}</span>{' '}
                         <span className="text-gray-500">{String(a.type || '').replace(/_/g, ' ')}</span>
-                        {a.text && <span className="block text-gray-300 mt-0.5">{a.text}</span>}
+                        {a.text && <span className="block text-gray-300 mt-0.5 break-words">{a.text}</span>}
                       </span>
                     </div>
                   ))}

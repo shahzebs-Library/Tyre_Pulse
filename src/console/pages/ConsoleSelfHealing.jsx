@@ -233,7 +233,7 @@ export default function ConsoleSelfHealing() {
           </p>
         </div>
         <Btn variant="primary" icon={RefreshCw} onClick={rescan} busy={scanning}>
-          {scanning ? 'Scanning' : 'Scan now'}
+          {scanning ? 'Scanning...' : 'Scan now'}
         </Btn>
       </header>
 
@@ -269,7 +269,7 @@ export default function ConsoleSelfHealing() {
       {/* Summary strip + chart */}
       {summary && (
         <div className="grid gap-4 lg:grid-cols-3">
-          <div className="grid grid-cols-3 lg:grid-cols-1 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-3">
             <div title="How many data issues the last scan found in total.">
               <StatTile label="Total findings" value={summary.total}
                 tone={summary.total > 0 ? 'warning' : failedChecks.length > 0 ? 'default' : 'good'} icon={Wand2}
@@ -318,7 +318,7 @@ export default function ConsoleSelfHealing() {
                 <div key={r.asset_no} className="flex items-center justify-between gap-3 py-1.5 border-b border-gray-800/60 last:border-0">
                   <div className="min-w-0 flex items-center gap-2">
                     <Code>{r.asset_no}</Code>
-                    <span className="text-[11px] text-gray-500 truncate">{r.vehicle_type || 'unknown type'} | {r.tyre_count} tyre{r.tyre_count === 1 ? '' : 's'}</span>
+                    <span className="text-[11px] text-gray-400 truncate" title={`${r.vehicle_type || 'unknown type'} | ${r.tyre_count} tyres`}>{r.vehicle_type || 'unknown type'} | {r.tyre_count} tyre{r.tyre_count === 1 ? '' : 's'}</span>
                   </div>
                   <Btn size="xs" onClick={() => backfillOne(r.asset_no)} disabled={!!busyKey && busyKey !== `orphan:${r.asset_no}`}
                     busy={busyKey === `orphan:${r.asset_no}`}>
@@ -337,7 +337,7 @@ export default function ConsoleSelfHealing() {
                 <div key={r.keep_id || `${r.serial_no}:${r.asset_no}`} className="flex items-center justify-between gap-3 py-1.5 border-b border-gray-800/60 last:border-0">
                   <div className="min-w-0 flex items-center gap-2">
                     <Code>{r.serial_no || 'No serial'}</Code>
-                    <span className="text-[11px] text-gray-500 truncate">asset {r.asset_no || 'N/A'} | {r.row_count} identical copies</span>
+                    <span className="text-[11px] text-gray-400 truncate" title={`asset ${r.asset_no || 'N/A'} | ${r.row_count} identical copies`}>asset {r.asset_no || 'N/A'} | {r.row_count} identical copies</span>
                   </div>
                   <Btn size="xs" onClick={() => mergeOne(r)} disabled={!!busyKey && busyKey !== `dup:${r.keep_id}`}
                     busy={busyKey === `dup:${r.keep_id}`}>
@@ -371,7 +371,7 @@ export default function ConsoleSelfHealing() {
               rows={scan.stale} empty="Every site has recent activity."
               render={(r) => (
                 <div key={r.group} className="flex items-center justify-between gap-3 py-1.5 border-b border-gray-800/60 last:border-0">
-                  <span className="text-xs text-gray-200 font-medium">{r.group}</span>
+                  <span className="text-xs text-gray-200 font-medium min-w-0 break-words">{r.group}</span>
                   <span className="text-[11px] text-gray-500 whitespace-nowrap">quiet {r.daysStale}d | last {fmtDate(r.lastSeen)}</span>
                 </div>
               )}
@@ -387,7 +387,7 @@ export default function ConsoleSelfHealing() {
                   <Badge tone={ANOMALY_TONE[a.severity] || 'quiet'}>
                     <span className="capitalize">{a.severity || 'low'}</span>
                   </Badge>
-                  <span className="text-[11px] text-gray-300">{a.message}</span>
+                  <span className="text-[11px] text-gray-300 min-w-0 break-words">{a.message}</span>
                 </div>
               )}
             />
@@ -395,7 +395,7 @@ export default function ConsoleSelfHealing() {
         </div>
       ) : null}
 
-      <p className="text-[11px] text-gray-600">
+      <p className="text-[11px] text-gray-500">
         Self-Healing reuses the existing data reconciliation checks. It never deletes non-identical rows,
         never merges tyres that moved between vehicles, and always asks for confirmation before a fix.
       </p>
@@ -413,7 +413,7 @@ export default function ConsoleSelfHealing() {
           </>
         )}
       >
-        <p className="text-sm text-gray-300">{pending?.message}</p>
+        <p className="text-sm text-gray-300 break-words">{pending?.message}</p>
       </Modal>
     </div>
   )
@@ -456,7 +456,7 @@ function FindingCard({ meta, failure, icon: Icon, tip, action, children, readOnl
 function RowList({ rows, render, empty, max = 8 }) {
   const list = Array.isArray(rows) ? rows : []
   if (list.length === 0) {
-    return <p className="text-[11px] text-gray-500 py-2">{empty}</p>
+    return <p className="text-[11px] text-gray-400 py-2">{empty}</p>
   }
   const shown = list.slice(0, max)
   return (

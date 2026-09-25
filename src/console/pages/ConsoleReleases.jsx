@@ -135,7 +135,7 @@ export default function ConsoleReleases() {
           actions={(
             <Toolbar>
               <Btn icon={Plus} variant="primary" onClick={openCreate}>Record release</Btn>
-              <Btn icon={RefreshCw} onClick={load}>Refresh</Btn>
+              <Btn icon={RefreshCw} onClick={load} busy={state.loading}>Refresh</Btn>
             </Toolbar>
           )}
         />
@@ -149,8 +149,8 @@ export default function ConsoleReleases() {
         )}
 
         <div className="grid grid-cols-2 gap-3 p-4 pt-0">
-          <StatTile label="Releases" value={state.error ? 'N/A' : nf.format(state.releases.length)} icon={Tag} />
-          <StatTile label="Recorded impacts" value={state.error ? 'N/A' : nf.format(state.impacts.length)} />
+          <StatTile label="Releases" value={state.loading || state.error ? 'N/A' : nf.format(state.releases.length)} icon={Tag} />
+          <StatTile label="Recorded impacts" value={state.loading || state.error ? 'N/A' : nf.format(state.impacts.length)} />
         </div>
       </Panel>
 
@@ -178,11 +178,11 @@ export default function ConsoleReleases() {
             </THead>
             <tbody>
               {state.releases.map((r) => (
-                <Tr key={r.id} onClick={() => setDetail(r)}>
+                <Tr key={r.id} onClick={() => setDetail(r)} ariaLabel={`Open release ${r.version || ''}`.trim()}>
                   <Td><span className="font-medium text-gray-100">{r.version || 'N/A'}</span></Td>
-                  <Td className="text-gray-400">{r.notes || 'No notes'}</Td>
+                  <Td className="text-gray-400 break-words max-w-md">{r.notes || 'No notes'}</Td>
                   <Td nowrap>
-                    <span className="inline-flex items-center gap-1 text-gray-500">
+                    <span className="inline-flex items-center gap-1 text-gray-400">
                       <Clock size={11} />{fmtWhen(r.released_at)}
                     </span>
                   </Td>
@@ -203,21 +203,23 @@ export default function ConsoleReleases() {
         open={creating}
         title="Record a release"
         subtitle="Name the version you shipped. Add its impacts afterwards from the release detail."
-        onClose={() => setCreating(false)}
+        onClose={() => { if (!savingRelease) setCreating(false) }}
         width="max-w-lg"
         footer={(
           <Toolbar className="justify-end">
-            <Btn onClick={() => setCreating(false)}>Cancel</Btn>
+            <Btn onClick={() => setCreating(false)} disabled={savingRelease}>Cancel</Btn>
             <Btn variant="primary" icon={CheckCircle2} onClick={saveRelease} busy={savingRelease} disabled={!form.version.trim()}>
-              Record release
+              {savingRelease ? 'Saving...' : 'Record release'}
             </Btn>
           </Toolbar>
         )}
       >
         <div className="space-y-3">
+          {flash?.tone === 'bad' && <ErrorState message={flash.text} />}
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Version <span className="text-red-400">*</span></label>
+            <label htmlFor="release-version" className="block text-xs text-gray-400 mb-1">Version <span className="text-red-400">*</span></label>
             <input
+              id="release-version"
               value={form.version}
               onChange={(e) => setForm((f) => ({ ...f, version: e.target.value }))}
               placeholder="e.g. V474"
@@ -225,8 +227,9 @@ export default function ConsoleReleases() {
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Notes</label>
+            <label htmlFor="release-notes" className="block text-xs text-gray-400 mb-1">Notes</label>
             <textarea
+              id="release-notes"
               value={form.notes}
               onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
               placeholder="What changed in this release"
@@ -247,10 +250,11 @@ export default function ConsoleReleases() {
       >
         {detail && (
           <div className="space-y-4">
+            {flash?.tone === 'bad' && <ErrorState message={flash.text} />}
             {detail.notes && <Note>{detail.notes}</Note>}
 
             <div>
-              <h4 className="text-xs uppercase tracking-wide text-gray-500 mb-2">Recorded impacts</h4>
+              <h4 className="text-xs uppercase tracking-wide text-gray-400 mb-2">Recorded impacts</h4>
               {detailImpacts.length === 0 ? (
                 <EmptyState
                   icon={Tag}
@@ -273,9 +277,9 @@ export default function ConsoleReleases() {
                         <Td>
                           {it.impact_type
                             ? <Badge tone={IMPACT_TONE[String(it.impact_type).toLowerCase()] || 'default'}>{it.impact_type}</Badge>
-                            : <span className="text-gray-600">N/A</span>}
+                            : <span className="text-gray-500">N/A</span>}
                         </Td>
-                        <Td className="text-gray-300">{it.note || 'No note'}</Td>
+                        <Td className="text-gray-300 break-words">{it.note || 'No note'}</Td>
                       </Tr>
                     ))}
                   </tbody>
@@ -284,11 +288,12 @@ export default function ConsoleReleases() {
             </div>
 
             <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-3">
-              <h4 className="text-xs uppercase tracking-wide text-gray-500 mb-2">Add an impact</h4>
+              <h4 className="text-xs uppercase tracking-wide text-gray-400 mb-2">Add an impact</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-[11px] text-gray-500 mb-1">Metric id</label>
+                  <label htmlFor="impact-metric" className="block text-[11px] text-gray-400 mb-1">Metric id</label>
                   <input
+                    id="impact-metric"
                     value={impactForm.metric}
                     onChange={(e) => setImpactForm((f) => ({ ...f, metric: e.target.value }))}
                     placeholder="e.g. fleet_cpk"
@@ -296,8 +301,9 @@ export default function ConsoleReleases() {
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] text-gray-500 mb-1">Asset id</label>
+                  <label htmlFor="impact-asset" className="block text-[11px] text-gray-400 mb-1">Asset id</label>
                   <input
+                    id="impact-asset"
                     value={impactForm.asset}
                     onChange={(e) => setImpactForm((f) => ({ ...f, asset: e.target.value }))}
                     placeholder="optional asset id"
@@ -305,8 +311,9 @@ export default function ConsoleReleases() {
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] text-gray-500 mb-1">Impact type</label>
+                  <label htmlFor="impact-impact" className="block text-[11px] text-gray-400 mb-1">Impact type</label>
                   <input
+                    id="impact-impact"
                     value={impactForm.impact}
                     onChange={(e) => setImpactForm((f) => ({ ...f, impact: e.target.value }))}
                     placeholder="e.g. increase, decrease, fix, change"
@@ -314,8 +321,9 @@ export default function ConsoleReleases() {
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] text-gray-500 mb-1">Note</label>
+                  <label htmlFor="impact-note" className="block text-[11px] text-gray-400 mb-1">Note</label>
                   <input
+                    id="impact-note"
                     value={impactForm.note}
                     onChange={(e) => setImpactForm((f) => ({ ...f, note: e.target.value }))}
                     placeholder="what this release did to it"
@@ -331,7 +339,7 @@ export default function ConsoleReleases() {
                   busy={savingImpact}
                   disabled={!impactForm.metric.trim() && !impactForm.asset.trim()}
                 >
-                  Add impact
+                  {savingImpact ? 'Saving...' : 'Add impact'}
                 </Btn>
               </div>
             </div>

@@ -212,7 +212,9 @@ export default function ConsoleAutomation() {
         <Panel>
           <PanelHeader icon={Mail} title="Schedule health"
             subtitle="Each schedule counted once, by its worst state: failing, then overdue, then paused." />
-          {loading ? <LoadingState label="Loading schedules" rows={2} /> : (
+          {loading ? <LoadingState label="Loading schedules" rows={2} /> : error ? (
+            <EmptyState icon={XCircle} title="Schedules could not be read" reason={error} />
+          ) : (
             <ShareChart
               parts={scheduleShare}
               center={{ value: schedSummary.total, label: 'schedules' }}
@@ -247,6 +249,8 @@ export default function ConsoleAutomation() {
           <Segmented
             value={stateFilter}
             onChange={setStateFilter}
+            ariaLabel="Filter schedules by state"
+            role="group"
             options={[
               { key: 'all', label: 'All', count: scheduleRows.length },
               { key: 'failing', label: 'Failing', count: stateCounts.failing },
@@ -255,7 +259,7 @@ export default function ConsoleAutomation() {
               { key: 'healthy', label: 'Healthy', count: stateCounts.healthy },
             ]}
           />
-          <SearchInput value={search} onChange={setSearch} placeholder="Search name, type or frequency" className="w-64" />
+          <SearchInput value={search} onChange={setSearch} placeholder="Search name, type or frequency" className="w-full sm:w-64" />
         </Toolbar>
         {loading ? (
           <LoadingState label="Loading schedules" />
@@ -282,7 +286,7 @@ export default function ConsoleAutomation() {
                   <Td className="max-w-[260px]">
                     <span className="line-clamp-2 text-gray-200 font-medium" title={r.name || ''}>{r.name || 'Unnamed schedule'}</span>
                     {f.failing && r.last_error && (
-                      <span className="block text-[10px] text-red-400/80 mt-0.5 line-clamp-2" title={r.last_error}>
+                      <span className="block text-[10px] text-red-400 mt-0.5 line-clamp-2 break-words" title={r.last_error}>
                         {r.last_error}
                       </span>
                     )}
@@ -377,7 +381,7 @@ export default function ConsoleAutomation() {
         </ul>
       </Panel>
 
-      <p className="text-[11px] text-gray-600 flex items-center gap-1.5">
+      <p className="text-[11px] text-gray-500 flex items-center gap-1.5">
         <Bell size={12} /> This board reads live from the database each time you refresh. It never triggers a report or a job.
       </p>
     </div>

@@ -77,6 +77,7 @@ export default function ConsoleDelivery() {
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState(null)
   const [pushError, setPushError] = useState(null)
+  const [emailError, setEmailError] = useState(null)
   const [channel, setChannel] = useState('all')
   const [search, setSearch] = useState('')
 
@@ -87,6 +88,7 @@ export default function ConsoleDelivery() {
   const load = useCallback(async () => {
     setRefreshing(true)
     setError(null)
+    setEmailError(null)
     setPushError(null)
     // End date is inclusive: extend "to" to end-of-day.
     const toEnd = to ? `${to}T23:59:59.999Z` : undefined
@@ -101,7 +103,7 @@ export default function ConsoleDelivery() {
     } else {
       setEmailRows([])
       setEmailTruncated(false)
-      setError(toUserMessage(eRes.reason))
+      setEmailError(toUserMessage(eRes.reason, 'Could not read report emails.'))
     }
     // A failed push read used to leave the previous range's rows on screen
     // with no warning. It is now cleared and stated.
@@ -218,7 +220,7 @@ export default function ConsoleDelivery() {
         </Toolbar>
       </header>
 
-      <ErrorState message={error} onRetry={load} />
+      <ErrorState message={emailError || error} onRetry={load} />
       {rangeInvalid && (
         <Note icon={Info} tone="warning">The From date is after the To date, so there is nothing to show. Pick a valid range.</Note>
       )}
@@ -231,13 +233,13 @@ export default function ConsoleDelivery() {
 
       {/* KPI tiles */}
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-        <StatTile label="Emails sent" value={loading ? 'N/A' : email.sent} tone="good" icon={Mail} />
+        <StatTile label="Emails sent" value={loading || emailError ? 'N/A' : email.sent} tone="good" icon={Mail} />
         <div title="Report emails whose delivery status was not 'sent'.">
-          <StatTile label="Emails failed" value={loading ? 'N/A' : email.failed} tone={email.failed > 0 ? 'danger' : 'default'} icon={Mail} />
+          <StatTile label="Emails failed" value={loading || emailError ? 'N/A' : email.failed} tone={email.failed > 0 ? 'danger' : 'default'} icon={Mail} />
         </div>
-        <StatTile label="Email failure rate" value={loading ? 'N/A' : emailRate}
+        <StatTile label="Email failure rate" value={loading || emailError ? 'N/A' : emailRate}
           tone={email.failureRate > 0.1 ? 'danger' : email.failureRate > 0 ? 'warning' : 'default'} icon={Mail}
-          sub={email.total ? `of ${email.total} attempts` : 'No attempts'} />
+          sub={emailError ? undefined : email.total ? `of ${email.total} attempts` : 'No attempts'} />
         <StatTile label="Push delivered" value={loading || pushError ? 'N/A' : push.delivered} tone="good" icon={Bell}
           sub={pushError ? undefined : `${push.queued} still queued`} />
         <div title="Notifications whose status was failed or error.">
@@ -255,7 +257,9 @@ export default function ConsoleDelivery() {
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel>
           <PanelHeader icon={Mail} title="Report emails per day" subtitle="Sent and failed, across the selected range." />
-          {loading ? <LoadingState label="Loading email deliveries" rows={3} /> : (
+          {loading ? <LoadingState label="Loading email deliveries" rows={3} /> : emailError ? (
+            <EmptyState icon={XCircle} title="Report emails could not be read" reason={emailError} />
+          ) : (
             <TrendChart
               labels={labels}
               series={email.total ? emailTrend : []}
@@ -295,19 +299,25 @@ export default function ConsoleDelivery() {
           <Segmented
             value={channel}
             onChange={setChannel}
+            ariaLabel="Filter by channel"
+            role="group"
             options={[
               { key: 'all', label: 'All', count: failures.length },
               { key: 'email', label: 'Email', count: email.recentFailures?.length || 0 },
               { key: 'push', label: 'Push', count: push.recentFailures?.length || 0 },
             ]}
           />
-          <SearchInput value={search} onChange={setSearch} placeholder="Search name, status or error" className="w-64" />
+          <SearchInput value={search} onChange={setSearch} placeholder="Search name, status or error" className="w-full sm:w-64" />
         </Toolbar>
         {loading ? (
           <LoadingState label="Loading failures" />
+        ) : emailError && pushError ? (
+          <ErrorState message="Neither email nor push deliveries could be read, so failures are unknown." onRetry={load} />
         ) : failures.length === 0 ? (
           <EmptyState icon={Send} title="No delivery failures in this range"
-            reason={pushError ? 'Email deliveries all succeeded. Push could not be read, so push failures are unknown.' : 'Everything is getting through.'} />
+            reason={pushError ? 'Email deliveries all succeeded. Push could not be read, so push failures are unknown.'
+              : emailError ? 'Push deliveries all succeeded. Email could not be read, so email failures are unknown.'
+              : 'Everything is getting through.'} />
         ) : visibleFailures.length === 0 ? (
           <EmptyState icon={Send} title="No failures match" reason="Nothing matches this channel and search. Clear the filters to see every failure." />
         ) : (
@@ -329,7 +339,7 @@ export default function ConsoleDelivery() {
                   </Td>
                   <Td className="max-w-[240px]"><span className="line-clamp-2 text-gray-300" title={r.name}>{r.name}</span></Td>
                   <Td nowrap><Badge tone="danger"><span className="capitalize">{r.status}</span></Badge></Td>
-                  <Td className="max-w-md"><span className="line-clamp-2 text-gray-500" title={r.error || ''}>{r.error || 'No detail'}</span></Td>
+                  <Td className="max-w-md"><span className="line-clamp-2 break-words text-gray-400" title={r.error || ''}>{r.error || 'No detail'}</span></Td>
                   <Td nowrap><span className="text-gray-500">{fmtDateTime(r.at)}</span></Td>
                 </Tr>
               ))}
@@ -345,13 +355,13 @@ export default function ConsoleDelivery() {
 
 function DateInput({ label, value, onChange }) {
   return (
-    <label className="flex items-center gap-1.5 text-[11px] text-gray-500">
+    <label className="flex items-center gap-1.5 text-[11px] text-gray-400">
       {label}
       <input
         type="date"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 focus:border-gray-700 focus:outline-none"
+        className="px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 focus:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
       />
     </label>
   )

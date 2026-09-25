@@ -42,7 +42,7 @@ const CONFIRM_WORD = 'RESTORE'
 /** Plain-English tooltip marker sitting next to a technical term. */
 function InfoDot({ text }) {
   return (
-    <span className="inline-flex align-middle ml-1 text-gray-600 hover:text-gray-300 cursor-help" title={text}>
+    <span role="img" aria-label={text} className="inline-flex align-middle ml-1 text-gray-500 hover:text-gray-300 cursor-help" title={text}>
       <Info size={11} />
     </span>
   )
@@ -298,7 +298,7 @@ export default function ConsoleBackups() {
             title="Download the list of backups as an Excel spreadsheet">Export</Btn>
           <Btn variant="primary" icon={Plus} onClick={handleBackupNow} busy={backingUp}
             title="Take a snapshot of your core data right now, in addition to the automatic nightly one">
-            {backingUp ? 'Backing up' : 'Back up now'}
+            {backingUp ? 'Backing up...' : 'Back up now'}
           </Btn>
         </div>
       </header>
@@ -368,7 +368,7 @@ export default function ConsoleBackups() {
               return (
                 <div key={snap.id}>
                   <button onClick={() => toggleExpand(snap.id)} aria-expanded={isOpen}
-                    className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-900/60 transition-colors">
+                    className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-900/60 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-orange-500">
                     <span className="text-gray-500">
                       {isOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
                     </span>
@@ -376,7 +376,7 @@ export default function ConsoleBackups() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-medium text-gray-200">{fmtDateTime(snap.taken_at)}</span>
                         <Badge tone={nightly ? 'info' : 'accent'}>{nightly ? 'Nightly' : 'Manual'}</Badge>
-                        <span className="text-[10px] text-gray-600">{fmtRelative(snap.taken_at)}</span>
+                        <span className="text-[10px] text-gray-500">{fmtRelative(snap.taken_at)}</span>
                       </div>
                       <p className="text-[11px] text-gray-500 mt-0.5 truncate">
                         {fmtNum(snap.table_count)} tables, {fmtNum(snap.total_rows)} rows saved
@@ -430,7 +430,7 @@ export default function ConsoleBackups() {
                           </tbody>
                         </Table>
                       ) : (
-                        <p className="text-[11px] text-gray-600 py-2">
+                        <p className="text-[11px] text-gray-500 py-2">
                           No per-table detail was recorded for this snapshot.
                         </p>
                       )}
@@ -455,7 +455,7 @@ export default function ConsoleBackups() {
             <Btn onClick={closeConfirm} disabled={restoring}>Cancel</Btn>
             <Btn variant="good" icon={RotateCcw} onClick={handleRestore} busy={restoring}
               disabled={confirmText.trim().toUpperCase() !== CONFIRM_WORD}>
-              {restoring ? 'Recovering' : 'Recover missing rows'}
+              {restoring ? 'Recovering...' : 'Recover missing rows'}
             </Btn>
           </>
         )}>
@@ -497,7 +497,7 @@ export default function ConsoleBackups() {
  */
 function SafetyPanel({ loading, error, preview, onRecover, onRetry }) {
   if (loading) {
-    return <p className="text-xs text-gray-500 flex items-center gap-2"><RefreshCw size={12} className="animate-spin" /> Checking what can be safely recovered...</p>
+    return <p role="status" className="text-xs text-gray-400 flex items-center gap-2"><RefreshCw size={12} className="animate-spin" /> Checking what can be safely recovered...</p>
   }
   if (error) return <ErrorState message={error} onRetry={onRetry} />
   if (!preview) return null

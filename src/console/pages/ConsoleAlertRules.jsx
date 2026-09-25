@@ -46,7 +46,7 @@ const INPUT = 'w-full px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-80
 /** Plain-English tooltip marker sitting next to a technical term. */
 function InfoDot({ text }) {
   return (
-    <span className="inline-flex align-middle ml-1 text-gray-600 hover:text-gray-300 cursor-help" title={text}>
+    <span role="img" aria-label={text} className="inline-flex align-middle ml-1 text-gray-500 hover:text-gray-300 cursor-help" title={text}>
       <Info size={11} />
     </span>
   )
@@ -226,11 +226,11 @@ export default function ConsoleAlertRules() {
 
       {/* KPI tiles */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatTile label="Rules" value={loading ? 'N/A' : rules.length} icon={BellRing} />
-        <StatTile label="Active" value={loading ? 'N/A' : activeCount} tone="good" icon={Power}
-          sub={loading ? undefined : `${rules.length - activeCount} paused`} />
-        <StatTile label="Times fired" value={loading ? 'N/A' : totalFired} tone="accent" icon={AlertTriangle} sub="All rules, all time" />
-        <StatTile label="Never fired" value={loading ? 'N/A' : neverFired} tone="muted" icon={Clock} />
+        <StatTile label="Rules" value={(loading || error) ? 'N/A' : rules.length} icon={BellRing} />
+        <StatTile label="Active" value={(loading || error) ? 'N/A' : activeCount} tone="good" icon={Power}
+          sub={(loading || error) ? undefined : `${rules.length - activeCount} paused`} />
+        <StatTile label="Times fired" value={(loading || error) ? 'N/A' : totalFired} tone="accent" icon={AlertTriangle} sub="All rules, all time" />
+        <StatTile label="Never fired" value={(loading || error) ? 'N/A' : neverFired} tone="muted" icon={Clock} />
       </div>
 
       {/* Builder */}
@@ -244,8 +244,9 @@ export default function ConsoleAlertRules() {
         <form onSubmit={save} className="space-y-4">
           {/* Name */}
           <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1">Rule name</label>
+            <label htmlFor="alert-rule-name" className="block text-xs font-medium text-gray-400 mb-1">Rule name</label>
             <input
+              id="alert-rule-name"
               value={form.name}
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
               placeholder="e.g. Too many high-risk tyres"
@@ -257,21 +258,22 @@ export default function ConsoleAlertRules() {
           <div className="rounded-lg border border-gray-800 bg-gray-950/60 p-3">
             <p className="text-[11px] uppercase tracking-wide text-gray-500 mb-2">Condition</p>
             <div className="flex flex-wrap items-center gap-2 text-xs text-gray-300">
-              <span className="text-gray-500">If</span>
-              <Select
+              <span className="text-gray-400">If</span>
+              <label><span className="sr-only">Metric</span><Select
                 value={form.metric}
                 onChange={(v) => setForm((f) => ({ ...f, metric: v }))}
                 options={ALERT_METRICS.map((m) => ({ value: m.key, label: m.label }))}
-                className="w-52"
-              />
-              <span className="text-gray-500">is</span>
-              <Select
+                className="w-full sm:w-52"
+              /></label>
+              <span className="text-gray-400">is</span>
+              <label><span className="sr-only">Operator</span><Select
                 value={form.operator}
                 onChange={(v) => setForm((f) => ({ ...f, operator: v }))}
                 options={ALERT_OPERATORS.map((o) => ({ value: o.key, label: o.label }))}
                 className="w-36"
-              />
+              /></label>
               <input
+                aria-label="Threshold value"
                 type="number"
                 step="any"
                 value={form.threshold}
@@ -279,7 +281,7 @@ export default function ConsoleAlertRules() {
                 placeholder="value"
                 className={`${INPUT} w-24`}
               />
-              <span className="text-gray-500">then notify me.</span>
+              <span className="text-gray-400">then notify me.</span>
             </div>
           </div>
 
@@ -307,11 +309,12 @@ export default function ConsoleAlertRules() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1">
-                Site filter <span className="text-gray-600">(optional)</span>
+              <label htmlFor="alert-rule-site" className="block text-xs font-medium text-gray-400 mb-1">
+                Site filter <span className="text-gray-500">(optional)</span>
                 <InfoDot text="Limit this rule to one site. Leave blank to watch all sites." />
               </label>
               <input
+                id="alert-rule-site"
                 value={form.siteFilter}
                 onChange={(e) => setForm((f) => ({ ...f, siteFilter: e.target.value }))}
                 placeholder="All sites"
@@ -319,11 +322,12 @@ export default function ConsoleAlertRules() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1">
-                Brand filter <span className="text-gray-600">(optional)</span>
+              <label htmlFor="alert-rule-brand" className="block text-xs font-medium text-gray-400 mb-1">
+                Brand filter <span className="text-gray-500">(optional)</span>
                 <InfoDot text="Limit this rule to one tyre brand. Leave blank to watch all brands." />
               </label>
               <input
+                id="alert-rule-brand"
                 value={form.brandFilter}
                 onChange={(e) => setForm((f) => ({ ...f, brandFilter: e.target.value }))}
                 placeholder="All brands"
@@ -343,13 +347,13 @@ export default function ConsoleAlertRules() {
             </label>
             <div className="flex items-center gap-2">
               {(formError || (validation && form.name)) && (
-                <span className="flex items-center gap-1 text-xs text-red-300">
+                <span role="alert" className="flex items-center gap-1 text-xs text-red-300 break-words">
                   <AlertTriangle size={12} /> {formError || validation}
                 </span>
               )}
               <Btn type="submit" variant="primary" size="md" icon={editId ? Save : Plus}
                 busy={saving} disabled={!!validation}>
-                {saving ? 'Saving' : editId ? 'Save changes' : 'Add rule'}
+                {saving ? 'Saving...' : editId ? 'Save changes' : 'Add rule'}
               </Btn>
             </div>
           </div>
@@ -382,13 +386,15 @@ export default function ConsoleAlertRules() {
           <Segmented
             value={statusFilter}
             onChange={setStatusFilter}
+            ariaLabel="Filter by status"
+            role="group"
             options={[
               { key: 'all', label: 'All', count: rules.length },
               { key: 'active', label: 'Active', count: activeCount },
               { key: 'paused', label: 'Paused', count: rules.length - activeCount },
             ]}
           />
-          <SearchInput value={search} onChange={setSearch} placeholder="Search name, metric, site or brand" className="w-64" />
+          <SearchInput value={search} onChange={setSearch} placeholder="Search name, metric, site or brand" className="w-full sm:w-64" />
         </Toolbar>
 
         {error ? (
@@ -474,7 +480,7 @@ export default function ConsoleAlertRules() {
         footer={(
           <>
             <Btn onClick={() => setConfirmDelete(null)}>Cancel</Btn>
-            <Btn variant="danger" icon={Trash2} onClick={() => onDelete(confirmDelete)}>Delete rule</Btn>
+            <Btn variant="danger" icon={Trash2} onClick={() => onDelete(confirmDelete)} busy={!!confirmDelete && busyId === confirmDelete.id}>Delete rule</Btn>
           </>
         )}
       >

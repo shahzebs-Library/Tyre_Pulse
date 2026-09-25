@@ -28,6 +28,31 @@ export const SEVERITY_HELP = {
   sev4: 'Cosmetic or low impact.',
 }
 
+/**
+ * Where an incident came from. MIRRORS the platform_incidents_source_type_check
+ * CHECK (supabase/migrations/20260924119000_sentry_incident_signal.sql) - change
+ * both. 'sentry' incidents are opened automatically by a trigger when a new
+ * fatal Sentry issue is logged (system_config.sentry_auto_incidents).
+ */
+export const SOURCE_TYPES = ['system_log', 'trust_alert', 'security_scan', 'crash', 'manual', 'sentry']
+
+export const SOURCE_LABEL = {
+  system_log: 'System log',
+  trust_alert: 'Trust alert',
+  security_scan: 'Security scan',
+  crash: 'Crash',
+  manual: 'Manual',
+  sentry: 'Sentry (automatic)',
+}
+
+export function sourceLabel(sourceType) {
+  if (!sourceType) return 'Manual'
+  return SOURCE_LABEL[sourceType] || String(sourceType).replace(/_/g, ' ')
+}
+
+/** True when the incident was opened by the system rather than a person. */
+export const isAutomatic = (i) => !!i && i.source_type === 'sentry' && !i.created_by
+
 export const STATUS_LABEL = {
   investigating: 'Investigating',
   identified: 'Identified',

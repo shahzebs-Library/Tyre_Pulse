@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   PackageOpen, Building2, FileSpreadsheet, FileJson, History, RefreshCw, CheckCircle2,
-  AlertTriangle, XCircle, CheckSquare, Square, ShieldAlert, Database,
+  AlertTriangle, XCircle, CheckSquare, Square, ShieldAlert, Database, Server, Download, Play, Link2,
 } from 'lucide-react'
 import {
   Panel, PanelHeader, Note, StatTile, Badge, Btn, Select, Table, THead, Th, Tr, Td,
@@ -22,10 +22,12 @@ import {
 import { BarsChart } from '../components/ui/charts'
 import {
   listExportOrganisations, getExportManifest, exportTableRows, logTenantExport, listExportJobs,
+  startServerExport, resumeServerExport, getServerExportLinks, getExportJob,
 } from '../../lib/api/tenantExport'
 import {
   CEILING_OPTIONS, DEFAULT_CEILING, defaultSelection, planExport, validateReason, parseCeiling,
   buildWorkbookSheets, buildJsonBundle, summarizeResults, manifestBars, safeFileStem, MIN_REASON,
+  shapeServerJob, formatBytes, serverFileName,
 } from '../../lib/tenantExport'
 import { configNum } from '../../lib/api/systemConfig'
 import { exportSheetsToExcel } from '../../lib/exportUtils'
@@ -36,8 +38,9 @@ function fmtWhen(v) {
   if (!v) return 'N/A'
   return new Date(v).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
-const STATUS_TONE = { completed: 'good', partial: 'warning', failed: 'danger' }
-const STATUS_TEXT = { completed: 'Complete', partial: 'Partial', failed: 'Failed' }
+const STATUS_TONE = { completed: 'good', partial: 'warning', failed: 'danger', running: 'info' }
+const STATUS_TEXT = { completed: 'Complete', partial: 'Partial', failed: 'Failed', running: 'Running' }
+const POLL_MS = 4000
 const OUTCOME = {
   complete: { tone: 'good', text: 'Complete', icon: CheckCircle2 },
   truncated: { tone: 'warning', text: 'Truncated', icon: AlertTriangle },
@@ -79,6 +82,17 @@ export default function ConsoleTenantExport() {
   const [runErr, setRunErr] = useState('')
   const cancelRef = useRef(false)
 
+  // Server export (edge function): no ceiling, files land in a private bucket.
+  const [srvOpen, setSrvOpen] = useState(false)
+  const [srvReason, setSrvReason] = useState('')
+  const [srvBusy, setSrvBusy] = useState(false)
+  const [srvErr, setSrvErr] = useState('')
+  const [srvJobId, setSrvJobId] = useState(null)
+  const [srvJob, setSrvJob] = useState(null)
+  const [links, setLinks] = useState(null)
+  const [linksBusy, setLinksBusy] = useState(null)
+  const [linksErr, setLinksErr] = useState('')
+
   const orgName = useMemo(() => orgs.find((o) => o.id === orgId)?.name || '', [orgs, orgId])
 
   const loadOrgs = useCallback(async () => {
@@ -104,6 +118,60 @@ export default function ConsoleTenantExport() {
 
   useEffect(() => { loadOrgs(); loadJobs() }, [loadOrgs, loadJobs])
   useEffect(() => { loadManifest(orgId) }, [orgId, loadManifest])
+
+  // Poll the tracked server job until it leaves 'running'.
+  useEffect(() => {
+    if (!srvJobId) return undefined
+    let stop = false
+    let timer = null
+    const tick = async () => {
+      try {
+        const row = await getExportJob(srvJobId)
+        if (stop) return
+        setSrvJob(row ? shapeServerJob(row) : null)
+        if (row && row.status === 'running') timer = setTimeout(tick, POLL_MS)
+        else loadJobs()
+      } catch (e) {
+        if (!stop) setSrvErr(toUserMessage(e, 'Could not read the export progress.'))
+      }
+    }
+    tick()
+    return () => { stop = true; if (timer) clearTimeout(timer) }
+  }, [srvJobId, loadJobs])
+
+  const runServerExport = async () => {
+    if (validateReason(srvReason) || !plan.items.length) return
+    setSrvBusy(true); setSrvErr('')
+    try {
+      const id = await startServerExport(orgId, srvReason.trim(), plan.items.map((i) => i.table))
+      setSrvJob(null)
+      setSrvJobId(id)
+      setSrvOpen(false)
+      setSrvReason('')
+      loadJobs()
+    } catch (e) {
+      setSrvErr(toUserMessage(e, 'The server export could not be started.'))
+    } finally { setSrvBusy(false) }
+  }
+
+  const resumeServer = async (id) => {
+    setSrvErr('')
+    try {
+      await resumeServerExport(id)
+      setSrvJobId(null)
+      setTimeout(() => setSrvJobId(id), 0)
+    } catch (e) { setSrvErr(toUserMessage(e, 'The export could not be resumed.')) }
+  }
+
+  const openLinks = async (id) => {
+    setLinksBusy(id); setLinksErr(''); setLinks(null)
+    try {
+      const res = await getServerExportLinks(id)
+      setLinks({ jobId: id, ...res, at: Date.now() })
+    } catch (e) {
+      setLinksErr(toUserMessage(e, 'The download could not be prepared.'))
+    } finally { setLinksBusy(null) }
+  }
 
   const plan = useMemo(() => planExport(manifest, selected, ceiling), [manifest, selected, ceiling])
   const bars = useMemo(() => manifestBars(manifest, 12), [manifest])
@@ -287,6 +355,57 @@ export default function ConsoleTenantExport() {
             </p>
           </Panel>
 
+          <Panel>
+            <PanelHeader icon={Server} title="Full server export"
+              subtitle="Runs on the server with no row ceiling. The selected tables are written as compressed NDJSON files to private storage, then offered as short-lived download links." />
+            <div className="flex flex-wrap items-center gap-2">
+              <Btn variant="primary" icon={Play} disabled={!plan.tables || srvJob?.running}
+                onClick={() => { setSrvErr(''); setSrvOpen(true) }}>Run full server export</Btn>
+              <span className="text-[11px] text-gray-600">
+                {plan.tables} table(s), about {fmt(plan.expectedRows)} rows. Nothing is held in this browser tab; you can leave the page while it runs.
+              </span>
+            </div>
+            <div className="mt-3"><ErrorState message={srvErr} /></div>
+            {srvJobId && !srvJob && <LoadingState label="Starting the server export" rows={2} />}
+            {srvJob && (
+              <div className="mt-3 space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge tone={srvJob.stalled ? 'warning' : STATUS_TONE[srvJob.status] || 'quiet'}>
+                    {srvJob.stalled ? 'Stalled' : STATUS_TEXT[srvJob.status] || srvJob.status}
+                  </Badge>
+                  <span className="text-xs text-gray-400">
+                    {fmt(srvJob.exportedRows)} rows exported
+                    {srvJob.expectedRows != null ? ` of about ${fmt(srvJob.expectedRows)} counted so far` : ''}
+                    {' | '}{srvJob.tablesDone} of {srvJob.tablesTotal} tables
+                    {srvJob.currentLabel ? ` | now reading ${srvJob.currentLabel}` : ''}
+                    {' | '}{srvJob.files.length} file(s), {formatBytes(srvJob.bytes)}
+                  </span>
+                </div>
+                {srvJob.pct != null && (
+                  <div className="h-1.5 w-full rounded bg-gray-800 overflow-hidden" role="progressbar"
+                    aria-valuenow={srvJob.pct} aria-valuemin={0} aria-valuemax={100}>
+                    <div className="h-full bg-orange-500" style={{ width: `${srvJob.pct}%` }} />
+                  </div>
+                )}
+                {srvJob.stalled && (
+                  <Note tone="warning" icon={AlertTriangle}>
+                    No progress for over two minutes. The files written so far are kept; resume to carry on from the last saved position.
+                    <span className="ml-2"><Btn size="xs" icon={Play} onClick={() => resumeServer(srvJob.id)}>Resume</Btn></span>
+                  </Note>
+                )}
+                {srvJob.errors.length > 0 && (
+                  <ul className="space-y-1">
+                    {srvJob.errors.map((e) => <li key={e.table} className="text-xs text-amber-200">{e.label}: {e.message}. This table is NOT complete.</li>)}
+                  </ul>
+                )}
+                {!srvJob.running && srvJob.error && <p className="text-xs text-amber-200">{srvJob.error}</p>}
+                {!srvJob.running && srvJob.files.length > 0 && (
+                  <Btn icon={Download} busy={linksBusy === srvJob.id} onClick={() => openLinks(srvJob.id)}>Get download links</Btn>
+                )}
+              </div>
+            )}
+          </Panel>
+
           {result && (
             <Panel tone={result.complete ? undefined : 'warning'}>
               <PanelHeader icon={result.complete ? CheckCircle2 : AlertTriangle}
@@ -326,6 +445,8 @@ export default function ConsoleTenantExport() {
                     <Th align="right">Tables</Th>
                     <Th align="right">Rows</Th>
                     <Th>Status</Th>
+                    <Th>Path</Th>
+                    <Th align="right">Files</Th>
                   </THead>
                   <tbody>
                     {jobs.map((j) => {
@@ -338,6 +459,15 @@ export default function ConsoleTenantExport() {
                           <Td align="right">{Array.isArray(j.tables) ? j.tables.length : 0}</Td>
                           <Td align="right">{fmt(rows)}</Td>
                           <Td><Badge tone={STATUS_TONE[j.status] || 'quiet'}>{STATUS_TEXT[j.status] || j.status}</Badge></Td>
+                          <Td nowrap>{j.mode === 'server' ? 'Server' : 'Browser'}</Td>
+                          <Td align="right" nowrap>
+                            {j.mode !== 'server' ? <span className="text-gray-600">In browser</span>
+                              : j.status === 'running'
+                                ? <Btn size="xs" onClick={() => { setSrvJob(null); setSrvJobId(j.id) }}>Track</Btn>
+                                : (Array.isArray(j.files) && j.files.length > 0)
+                                  ? <Btn size="xs" icon={Download} busy={linksBusy === j.id} onClick={() => openLinks(j.id)}>Download</Btn>
+                                  : <span className="text-gray-600">None</span>}
+                          </Td>
                         </Tr>
                       )
                     })}
@@ -382,6 +512,66 @@ export default function ConsoleTenantExport() {
           )}
           <ErrorState message={runErr} />
         </div>
+      </Modal>
+
+      <Modal open={srvOpen} onClose={() => { if (!srvBusy) setSrvOpen(false) }}
+        title={`Full server export of ${manifest?.orgName || orgName}`}
+        subtitle={`${plan.tables} tables, about ${fmt(plan.expectedRows)} rows, no ceiling`}
+        footer={<>
+          <Btn onClick={() => setSrvOpen(false)} disabled={srvBusy}>Cancel</Btn>
+          <Btn variant="primary" icon={Server} busy={srvBusy} disabled={!!validateReason(srvReason)} onClick={runServerExport}>
+            Start server export
+          </Btn>
+        </>}>
+        <div className="space-y-3">
+          <Note tone="warning" icon={ShieldAlert}>
+            This writes a complete copy of a customer&apos;s data to private storage. It is recorded in the audit trail with your name and the reason below, and every download is recorded again.
+          </Note>
+          <label className="block">
+            <span className="text-xs text-gray-400">Reason (required, at least {MIN_REASON} characters)</span>
+            <textarea value={srvReason} onChange={(e) => setSrvReason(e.target.value)} disabled={srvBusy} rows={3}
+              placeholder="For example: legal hold request, ticket 1234"
+              className="mt-1 w-full rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 p-2 placeholder-gray-600 focus:border-gray-700 focus:outline-none" />
+          </label>
+          {srvReason && validateReason(srvReason) && <p className="text-[11px] text-amber-300">{validateReason(srvReason)}</p>}
+          <ErrorState message={srvErr} />
+        </div>
+      </Modal>
+
+      <Modal open={!!links || !!linksErr} onClose={() => { setLinks(null); setLinksErr('') }}
+        title="Download export files"
+        subtitle={links ? `Links expire ${links.expiresIn ? `in ${Math.round(links.expiresIn / 60)} minutes` : 'soon'}. This download was recorded in the audit trail.` : ''}
+        footer={<Btn onClick={() => { setLinks(null); setLinksErr('') }}>Close</Btn>}>
+        <ErrorState message={linksErr} />
+        {links && (
+          <div className="space-y-2">
+            <p className="text-[11px] text-gray-500">
+              Each .ndjson.gz file holds one JSON row per line, ordered by id. manifest.json lists, per table, the rows counted when the table started, the rows exported, and any failure.
+            </p>
+            <Table>
+              <THead>
+                <Th>File</Th>
+                <Th align="right">Rows</Th>
+                <Th align="right">Size</Th>
+                <Th align="right">Link</Th>
+              </THead>
+              <tbody>
+                {links.files.map((f) => (
+                  <Tr key={f.path}>
+                    <Td><span className="font-mono text-[11px] text-gray-300">{serverFileName(f)}</span></Td>
+                    <Td align="right">{f.table === '_manifest' ? 'Manifest' : fmt(f.rows)}</Td>
+                    <Td align="right" nowrap>{formatBytes(f.bytes)}</Td>
+                    <Td align="right" nowrap>
+                      {f.url
+                        ? <a href={f.url} download={serverFileName(f)} rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-orange-300 hover:text-orange-200"><Link2 size={12} /> Download</a>
+                        : <Badge tone="danger">No link</Badge>}
+                    </Td>
+                  </Tr>
+                ))}
+              </tbody>
+            </Table>
+          </div>
+        )}
       </Modal>
     </div>
   )

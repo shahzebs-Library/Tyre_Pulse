@@ -26,7 +26,7 @@ import { listIncidents, openIncident, postIncidentUpdate, loadIncidentSignals } 
 import {
   SEVERITIES, SEVERITY_LABEL, SEVERITY_HELP, STATUS_LABEL, allowedNext, isOpen,
   mttr, mtta, openBySeverity, countSince, platformStatus, weeklyCounts, shapeTimeline,
-  formatDuration, durationMinutes, sortIncidents, draftFromSignal, exportRows, EXPORT_COLUMNS, EXPORT_HEADERS,
+  formatDuration, durationMinutes, sortIncidents, draftFromSignal, exportRows, EXPORT_COLUMNS, EXPORT_HEADERS, sourceLabel,
 } from '../../lib/platformIncidents'
 import { toUserMessage } from '../../lib/safeError'
 import { exportToExcel, reportFileName } from '../../lib/exportUtils'
@@ -299,7 +299,7 @@ export default function ConsoleIncidents() {
               <StatTile label={isOpen(selected) ? 'Open for' : 'Time to resolve'}
                 value={formatDuration(durationMinutes(selected.started_at, isOpen(selected) ? now : selected.resolved_at))} />
               <StatTile label="Commander" value={selected.commander_name || 'N/A'} />
-              <StatTile label="Source" value={selected.source_type ? selected.source_type.replace('_', ' ') : 'Manual'} />
+              <StatTile label="Source" value={sourceLabel(selected.source_type)} sub={selected.source_type === 'sentry' && selected.source_ref ? `Sentry issue ${selected.source_ref}` : undefined} />
             </div>
             {selected.impact && <Note icon={AlertTriangle}>{selected.impact}</Note>}
             {(selected.affected_modules || []).length > 0 && (

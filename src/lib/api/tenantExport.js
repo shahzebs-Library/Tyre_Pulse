@@ -72,7 +72,54 @@ export async function logTenantExport(orgId, reason, tables, counts, status) {
 export async function listExportJobs(limit = 25) {
   return unwrap(await supabase
     .from('tenant_export_jobs')
-    .select('id, org_id, requested_by, reason, tables, status, row_counts, created_at, completed_at')
+    .select('id, org_id, requested_by, reason, tables, status, row_counts, created_at, completed_at, mode, progress, files, error, started_at, updated_at')
     .order('created_at', { ascending: false })
     .limit(limit)) || []
+}
+
+// ---------------------------------------------------------------------------
+// Server export (edge function `tenant-export`). The function validates the
+// caller is a super admin and every action is audited server-side.
+// ---------------------------------------------------------------------------
+
+/** Read the function's own JSON { error } so the user sees the real, sanitized reason. */
+async function invokeTenantExport(body, fallback) {
+  const { data, error } = await supabase.functions.invoke('tenant-export', { body })
+  if (error) {
+    let msg = null
+    try {
+      const res = error.context
+      if (res && typeof res.json === 'function') msg = (await res.json())?.error || null
+    } catch { /* keep the fallback */ }
+    throw new Error(msg || toUserMessage(error, fallback))
+  }
+  if (data && data.ok === false) throw new Error(data.error || fallback)
+  return data
+}
+
+export async function startServerExport(orgId, reason, tables = null) {
+  const data = await invokeTenantExport(
+    { action: 'start', org_id: orgId, reason, tables: tables && tables.length ? tables : null },
+    'The server export could not be started.',
+  )
+  return data?.job_id || null
+}
+
+export async function resumeServerExport(jobId) {
+  await invokeTenantExport({ action: 'resume', job_id: jobId }, 'The export could not be resumed.')
+  return true
+}
+
+/** Short-lived signed links (the function audits the download first). */
+export async function getServerExportLinks(jobId) {
+  const data = await invokeTenantExport({ action: 'download', job_id: jobId }, 'The download could not be prepared.')
+  return { expiresIn: data?.expires_in ?? null, files: Array.isArray(data?.files) ? data.files : [] }
+}
+
+export async function getExportJob(jobId) {
+  return unwrap(await supabase
+    .from('tenant_export_jobs')
+    .select('id, org_id, reason, tables, status, mode, progress, files, row_counts, error, started_at, updated_at, created_at, completed_at')
+    .eq('id', jobId)
+    .maybeSingle())
 }

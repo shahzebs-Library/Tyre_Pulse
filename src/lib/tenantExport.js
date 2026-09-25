@@ -261,3 +261,85 @@ export function safeFileStem(name) {
   const s = String(name || 'Tenant').replace(/[^A-Za-z0-9 ()]+/g, ' ').replace(/\s+/g, ' ').trim()
   return s || 'Tenant'
 }
+
+// ---------------------------------------------------------------------------
+// Server export (edge function `tenant-export`): job shaping. The server writes
+// gzip NDJSON part files into a private bucket; the job row carries progress.
+// ---------------------------------------------------------------------------
+
+/** A running server job that has not checkpointed for this long is stalled. */
+export const SERVER_STALL_MS = 120000
+
+function toMs(v) {
+  if (!v) return null
+  const t = Date.parse(v)
+  return Number.isFinite(t) ? t : null
+}
+
+/**
+ * Shape a tenant_export_jobs row written by the server path. Honest by design:
+ * `pct` is null when no table could be counted (never a made-up 0 or 100), a
+ * running job silent for SERVER_STALL_MS is `stalled`, and every table error is
+ * surfaced. `now` is explicit so the maths is deterministic.
+ */
+export function shapeServerJob(row, now = Date.now()) {
+  const r = row && typeof row === 'object' ? row : {}
+  const tables = Array.isArray(r.tables) ? r.tables.filter((t) => typeof t === 'string') : []
+  const prog = r.progress && typeof r.progress === 'object' ? r.progress : {}
+  const expected = prog.expected && typeof prog.expected === 'object' ? prog.expected : {}
+  const counts = r.row_counts && typeof r.row_counts === 'object' ? r.row_counts : {}
+  const errors = prog.errors && typeof prog.errors === 'object' ? prog.errors : {}
+  const files = (Array.isArray(r.files) ? r.files : []).filter((f) => f && typeof f.path === 'string')
+  const exported = tables.reduce((s, t) => s + (toCount(counts[t]) || 0), 0)
+  const counted = tables.filter((t) => toCount(expected[t]) != null)
+  const expectedRows = counted.reduce((s, t) => s + toCount(expected[t]), 0)
+  const idx = Math.min(Math.max(Number(prog.idx) || 0, 0), tables.length)
+  const status = String(r.status || 'failed')
+  const running = status === 'running'
+  const updated = toMs(r.updated_at)
+  const stalled = running && updated != null && now - updated > SERVER_STALL_MS
+  let pct = null
+  if (!running) pct = status === 'completed' ? 100 : null
+  else if (tables.length) pct = Math.min(99, Math.floor((idx / tables.length) * 100))
+  return {
+    id: r.id || null,
+    orgId: r.org_id || null,
+    status,
+    running,
+    stalled,
+    mode: r.mode || 'browser',
+    reason: r.reason || '',
+    tablesTotal: tables.length,
+    tablesDone: idx,
+    currentTable: running && idx < tables.length ? tables[idx] : null,
+    currentLabel: running && idx < tables.length ? tableLabel(tables[idx]) : null,
+    exportedRows: exported,
+    expectedRows: counted.length ? expectedRows : null,
+    pct,
+    files: files.filter((f) => f.table !== '_manifest'),
+    manifest: files.find((f) => f.table === '_manifest') || null,
+    bytes: files.reduce((s, f) => s + (toCount(f.bytes) || 0), 0),
+    errors: Object.entries(errors).map(([table, message]) => ({ table, label: tableLabel(table), message: String(message) })),
+    error: r.error || null,
+    startedAt: r.started_at || r.created_at || null,
+    completedAt: r.completed_at || null,
+    updatedAt: r.updated_at || null,
+  }
+}
+
+/** "812 KB", "3.4 MB". */
+export function formatBytes(n) {
+  const v = toCount(n)
+  if (v == null) return 'N/A'
+  if (v < 1024) return `${v} B`
+  if (v < 1024 * 1024) return `${Math.round(v / 1024)} KB`
+  if (v < 1024 * 1024 * 1024) return `${(v / (1024 * 1024)).toFixed(1)} MB`
+  return `${(v / (1024 * 1024 * 1024)).toFixed(2)} GB`
+}
+
+/** The file name a signed download should save as (last path segment, prefixed by table). */
+export function serverFileName(file) {
+  const path = String(file?.path || '')
+  const last = path.split('/').pop() || 'export'
+  return file?.table && file.table !== '_manifest' ? `${file.table}-${last}` : last
+}

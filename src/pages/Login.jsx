@@ -317,6 +317,13 @@ export default function Login() {
       setLoading(false)
       return
     }
+    // Access Policies: this organisation requires single sign-on, so the
+    // password session was signed straight back out. Not a failed password.
+    if (result?.code === 'sso_required') {
+      setError(t('auth.login.errSsoRequired'))
+      setLoading(false)
+      return
+    }
     if (result?.code === 'account_locked') {
       setError(t('auth.login.accessRevokedBanner'))
       setLoading(false)

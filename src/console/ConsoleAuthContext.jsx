@@ -7,6 +7,8 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { supabase, IS_CONSOLE_SURFACE } from '../lib/supabase'
 import { hasUnmetMfa } from '../lib/authAssurance'
+import { checkConsoleAccess } from '../lib/api/accessPolicies'
+import { blockedReasonText } from '../lib/accessPolicies'
 
 // Break-glass admin console: auto sign out after this much inactivity so a
 // console left open on a shared/unattended machine cannot be walked up to.
@@ -21,6 +23,10 @@ export function ConsoleAuthProvider({ children }) {
   const [loading, setLoading]     = useState(true)
   const [activeOrg, setActiveOrg] = useState(null)
   const [orgs, setOrgs]           = useState([])
+  // Console IP allowlist (Access Policies). Set when console_check_access()
+  // explicitly refuses this connection; the provider then renders a blocked
+  // screen instead of the console or its login.
+  const [ipBlocked, setIpBlocked] = useState(null)
 
   // Idle + absolute-lifetime auto sign-out for the ISOLATED console session (a
   // separately-opened console tab on its own tab-local sessionStorage session).
@@ -77,6 +83,12 @@ export function ConsoleAuthProvider({ children }) {
       // and would be aborted; just withhold `admin` so the guard shows the login
       // (and its MFA prompt). The verified AAL2 session admits on the next event.
       if (await hasUnmetMfa()) { setAdmin(null); setLoading(false); return }
+      // Console IP allowlist. FAILS OPEN: checkConsoleAccess() returns
+      // allowed:true on any RPC error, so a bug or outage in the check can never
+      // lock the owner out. Only an explicit server refusal blocks.
+      const gate = await checkConsoleAccess()
+      if (!gate.allowed) { setIpBlocked(gate); setAdmin(null); setLoading(false); return }
+      setIpBlocked(null)
       setAdmin(data)
       await loadOrgs()
     } else {
@@ -99,7 +111,7 @@ export function ConsoleAuthProvider({ children }) {
     })
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_e, session) => {
       if (session?.user) await resolveAdmin(session.user.id)
-      else { setAdmin(null); setLoading(false) }
+      else { setAdmin(null); setIpBlocked(null); setLoading(false) }
     })
     return () => subscription.unsubscribe()
   }, [resolveAdmin])
@@ -210,7 +222,7 @@ export function ConsoleAuthProvider({ children }) {
       await logConsoleEvent('logout', null, 'system', {})
     }
     await supabase.auth.signOut()
-    setAdmin(null); setActiveOrg(null)
+    setAdmin(null); setActiveOrg(null); setIpBlocked(null)
   }
 
   async function logAction(action, targetId, targetType, details = {}) {
@@ -240,10 +252,30 @@ export function ConsoleAuthProvider({ children }) {
     <ConsoleAuthContext.Provider value={{
       admin, loading, activeOrg, setActiveOrg, orgs, loadOrgs,
       signIn, verifyMfa, enrollMfa, confirmMfaEnrollment, unenrollMfa, listMfaFactors,
-      signOut, logAction,
+      signOut, logAction, ipBlocked,
     }}>
-      {children}
+      {ipBlocked ? <IpBlockedScreen gate={ipBlocked} onSignOut={signOut} /> : children}
     </ConsoleAuthContext.Provider>
+  )
+}
+
+/** Shown instead of the console when the IP allowlist refuses this connection. */
+function IpBlockedScreen({ gate, onSignOut }) {
+  return (
+    <div className="console-root min-h-screen bg-[var(--bg-base)] flex items-center justify-center px-4">
+      <div className="max-w-md w-full text-center bg-gray-900/50 border border-amber-800/40 rounded-xl p-6">
+        <h2 className="text-lg font-semibold text-gray-100 mb-2">Blocked by IP policy</h2>
+        <p className="text-sm text-gray-400 leading-relaxed">{blockedReasonText(gate.reason, gate.ip)}</p>
+        <p className="text-xs text-gray-500 mt-3 leading-relaxed">
+          Connect from an allowed network (office or VPN), or ask another super admin to add your range in
+          Console, Access Policies.
+        </p>
+        <button onClick={onSignOut}
+          className="mt-5 px-4 py-2 rounded-lg border border-gray-800 text-sm text-gray-300 hover:bg-gray-800/60">
+          Sign out
+        </button>
+      </div>
+    </div>
   )
 }
 

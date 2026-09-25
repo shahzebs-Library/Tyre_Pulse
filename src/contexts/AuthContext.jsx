@@ -9,6 +9,7 @@ import { resolveAccess, overrideToFlags } from '../lib/accessResolver'
 import { hasUnmetMfa } from '../lib/authAssurance'
 import { listModuleStatuses } from '../lib/api/modulesRegistry'
 import { configNum } from '../lib/api/systemConfig'
+import { checkSsoPasswordLogin } from '../lib/api/accessPolicies'
 
 // Exported so the isolated System Console can supply its own Provider value via
 // ConsoleAuthBridge, letting main-app admin pages render verbatim inside /console.
@@ -571,6 +572,16 @@ export function AuthProvider({ children }) {
         if (prof && prof.approved === false) {
           await supabase.auth.signOut()
           return { code: 'pending_approval' }
+        }
+        // Access Policies: an org that requires SSO refuses PASSWORD sign-in
+        // for its non-super-admin users (super admins are exempt server-side).
+        // Asked AFTER the password is proven so the answer is never an account
+        // enumeration oracle. FAILS OPEN on any error - a broken check must
+        // never lock people out.
+        const sso = await checkSsoPasswordLogin()
+        if (sso.allowed === false) {
+          await supabase.auth.signOut()
+          return { code: 'sso_required' }
         }
       }
 

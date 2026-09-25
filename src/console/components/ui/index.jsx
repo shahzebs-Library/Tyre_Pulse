@@ -18,7 +18,9 @@
  *    takes a reason, because "no rows" and "we could not look" read identically
  *    on screen and mean opposite things.
  */
-import { useRef } from 'react'
+import { useId, useRef } from 'react'
+
+const FOCUS_RING = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500'
 import { createPortal } from 'react-dom'
 import { Loader2, Inbox, AlertTriangle, Search, X, ChevronDown } from 'lucide-react'
 import useDialogBehavior from '../../../components/ui/useDialogBehavior'
@@ -90,12 +92,13 @@ export function StatTile({ label, value, sub, tone = 'default', icon: Icon, onCl
   return (
     <Tag
       onClick={onClick}
-      className={`text-left bg-gray-900/50 border rounded-xl p-3 transition-colors w-full ${
+      {...(onClick ? { type: 'button', 'aria-pressed': active ? true : undefined } : {})}
+      className={`text-left bg-gray-900/50 border rounded-xl p-3 transition-colors w-full ${onClick ? FOCUS_RING : ''} ${
         active ? 'border-orange-600/60 bg-orange-950/20' : 'border-gray-800'
       } ${onClick ? 'hover:border-gray-700 hover:bg-gray-900' : ''}`}
     >
       <div className="flex items-center gap-1.5 mb-1">
-        {Icon && <Icon size={12} className="text-gray-600" />}
+        {Icon && <Icon size={12} className="text-gray-500" aria-hidden="true" />}
         <p className="text-[11px] uppercase tracking-wide text-gray-500 truncate">{label}</p>
       </div>
       <p className={`text-xl font-semibold tabular-nums ${TILE_TONE[tone] || TILE_TONE.default}`}>{value}</p>
@@ -165,7 +168,7 @@ export function Code({ children, title }) {
 
 /* ── controls ─────────────────────────────────────────────────────────────── */
 
-export function Btn({ children, onClick, variant = 'ghost', size = 'sm', icon: Icon, busy, disabled, title, type = 'button' }) {
+export function Btn({ children, onClick, variant = 'ghost', size = 'sm', icon: Icon, busy, disabled, title, type = 'button', ariaLabel, 'aria-label': ariaLabelAttr, className = '', ...rest }) {
   const variants = {
     primary: 'bg-orange-500 hover:bg-orange-400 text-black font-medium border-orange-500',
     good: 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-600',
@@ -175,9 +178,10 @@ export function Btn({ children, onClick, variant = 'ghost', size = 'sm', icon: I
   }
   const sizes = { xs: 'px-2 py-1 text-[11px]', sm: 'px-3 py-1.5 text-xs', md: 'px-4 py-2 text-sm' }
   return (
-    <button type={type} onClick={onClick} disabled={disabled || busy} title={title}
-      className={`rounded-lg border inline-flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${variants[variant] || variants.ghost} ${sizes[size] || sizes.sm}`}>
-      {busy ? <Loader2 size={13} className="animate-spin" /> : (Icon && <Icon size={13} />)}
+    <button {...rest} type={type} onClick={onClick} disabled={disabled || busy} title={title}
+      aria-label={ariaLabel || ariaLabelAttr || (!children && title ? title : undefined)} aria-busy={busy ? true : undefined}
+      className={`rounded-lg border inline-flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${FOCUS_RING} ${variants[variant] || variants.ghost} ${sizes[size] || sizes.sm} ${className}`}>
+      {busy ? <Loader2 size={13} className="animate-spin" aria-hidden="true" /> : (Icon && <Icon size={13} aria-hidden="true" />)}
       {children}
     </button>
   )
@@ -203,7 +207,7 @@ export function Segmented({ options = [], value, onChange, size = 'sm', ariaLabe
           <button key={o.key} type="button" onClick={() => { if (!off) onChange?.(o.key) }} title={o.hint}
             role={itemRole} aria-selected={itemRole ? on : undefined} aria-pressed={itemRole ? undefined : on}
             disabled={off}
-            className={`rounded-md inline-flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${pad} ${
+            className={`rounded-md inline-flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${FOCUS_RING} ${pad} ${
               on ? 'bg-orange-500/20 text-orange-200 border border-orange-600/50'
                  : 'border border-transparent text-gray-500 hover:text-gray-300 hover:bg-gray-800/60'}`}>
             {o.label}
@@ -219,15 +223,16 @@ export function Segmented({ options = [], value, onChange, size = 'sm', ariaLabe
   )
 }
 
-export function SearchInput({ value, onChange, placeholder = 'Search', className = '' }) {
+export function SearchInput({ value, onChange, placeholder = 'Search', className = '', ariaLabel, 'aria-label': ariaLabelAttr, id, ...rest }) {
   return (
     <div className={`relative ${className}`}>
       <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-600 pointer-events-none" />
-      <input value={value} onChange={(e) => onChange?.(e.target.value)} placeholder={placeholder}
-        className="w-full pl-8 pr-7 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 placeholder-gray-600 focus:border-gray-700 focus:outline-none" />
+      <input {...rest} id={id} value={value} onChange={(e) => onChange?.(e.target.value)} placeholder={placeholder}
+        aria-label={ariaLabel || ariaLabelAttr || placeholder}
+        className="w-full pl-8 pr-7 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 placeholder-gray-500 focus:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />
       {value ? (
-        <button onClick={() => onChange?.('')} title="Clear"
-          className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-300">
+        <button type="button" onClick={() => onChange?.('')} title="Clear" aria-label="Clear search"
+          className={`absolute right-2 top-1/2 -translate-y-1/2 rounded text-gray-500 hover:text-gray-300 ${FOCUS_RING}`}>
           <X size={12} />
         </button>
       ) : null}
@@ -235,11 +240,12 @@ export function SearchInput({ value, onChange, placeholder = 'Search', className
   )
 }
 
-export function Select({ value, onChange, options = [], placeholder, disabled, className = '' }) {
+export function Select({ value, onChange, options = [], placeholder, disabled, className = '', ariaLabel, 'aria-label': ariaLabelAttr, label, id, ...rest }) {
   return (
     <div className={`relative ${className}`}>
-      <select value={value} onChange={(e) => onChange?.(e.target.value)} disabled={disabled}
-        className="w-full appearance-none pl-2.5 pr-7 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 disabled:opacity-50 focus:border-gray-700 focus:outline-none">
+      <select {...rest} id={id} value={value} onChange={(e) => onChange?.(e.target.value)} disabled={disabled}
+        aria-label={ariaLabel || ariaLabelAttr || (typeof label === 'string' && label ? label : undefined) || (typeof placeholder === 'string' && placeholder ? placeholder : undefined)}
+        className="w-full appearance-none pl-2.5 pr-7 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 disabled:opacity-50 focus:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
         {placeholder != null && <option value="">{placeholder}</option>}
         {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
@@ -275,22 +281,33 @@ export function Th({ children, align = 'left', sortKey, sort, onSort, className 
   const clickable = !!(sortKey && onSort)
   return (
     <th
+      scope="col"
       onClick={clickable ? () => onSort(sortKey) : undefined}
-      className={`px-3 py-2 font-medium text-${align} ${clickable ? 'cursor-pointer select-none hover:text-gray-300' : ''} ${active ? 'text-orange-300' : ''} ${className}`}
+      onKeyDown={clickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSort(sortKey) } } : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}
+      className={`px-3 py-2 font-medium text-${align} ${clickable ? `cursor-pointer select-none hover:text-gray-300 ${FOCUS_RING}` : ''} ${active ? 'text-orange-300' : ''} ${className}`}
     >
       <span className="inline-flex items-center gap-1">
         {children}
-        {active && <span className="text-[9px]">{sort.dir === 'asc' ? '▲' : '▼'}</span>}
+        {active && <span className="text-[9px]" aria-hidden="true">{sort.dir === 'asc' ? '▲' : '▼'}</span>}
       </span>
     </th>
   )
 }
 
-export function Tr({ children, onClick, className = '', tone }) {
+export function Tr({ children, onClick, className = '', tone, ariaLabel }) {
   const toneCls = tone === 'warning' ? 'bg-amber-950/10' : ''
+  // A clickable row must also be reachable and operable from the keyboard.
+  // Keys pressed inside a nested control (a button in a cell) are ignored so
+  // that control keeps its own behaviour.
+  const onKeyDown = onClick ? (e) => {
+    if (e.target !== e.currentTarget) return
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(e) }
+  } : undefined
   return (
-    <tr onClick={onClick}
-      className={`border-t border-gray-800/70 align-top ${toneCls} ${onClick ? 'cursor-pointer hover:bg-gray-900/60' : 'hover:bg-gray-900/40'} ${className}`}>
+    <tr onClick={onClick} onKeyDown={onKeyDown} tabIndex={onClick ? 0 : undefined} aria-label={ariaLabel}
+      className={`border-t border-gray-800/70 align-top ${toneCls} ${onClick ? `cursor-pointer hover:bg-gray-900/60 ${FOCUS_RING}` : 'hover:bg-gray-900/40'} ${className}`}>
       {children}
     </tr>
   )
@@ -315,7 +332,7 @@ export function LoadingState({ label = 'Loading', rows = 4 }) {
           <div key={i} className="h-8 rounded-lg bg-gray-900/60 animate-pulse" style={{ opacity: 1 - i * 0.15 }} />
         ))}
       </div>
-      <p className="text-xs text-gray-600 text-center mt-3">{label}...</p>
+      <p className="text-xs text-gray-500 text-center mt-3">{label}...</p>
     </div>
   )
 }
@@ -328,9 +345,9 @@ export function LoadingState({ label = 'Loading', rows = 4 }) {
 export function EmptyState({ icon: Icon = Inbox, title, reason, action }) {
   return (
     <div className="py-10 text-center">
-      <Icon size={22} className="mx-auto text-gray-700 mb-2" />
+      <Icon size={22} className="mx-auto text-gray-600 mb-2" aria-hidden="true" />
       <p className="text-sm text-gray-400">{title}</p>
-      {reason && <p className="text-xs text-gray-600 mt-1 max-w-md mx-auto">{reason}</p>}
+      {reason && <p className="text-xs text-gray-500 mt-1 max-w-md mx-auto break-words">{reason}</p>}
       {action && <div className="mt-3 flex justify-center">{action}</div>}
     </div>
   )
@@ -339,9 +356,9 @@ export function EmptyState({ icon: Icon = Inbox, title, reason, action }) {
 export function ErrorState({ message, onRetry }) {
   if (!message) return null
   return (
-    <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-red-950/30 border border-red-800/50">
-      <AlertTriangle size={14} className="text-red-400 shrink-0 mt-0.5" />
-      <p className="text-xs text-red-300 flex-1">{message}</p>
+    <div role="alert" className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-red-950/30 border border-red-800/50">
+      <AlertTriangle size={14} className="text-red-400 shrink-0 mt-0.5" aria-hidden="true" />
+      <p className="text-xs text-red-300 flex-1 min-w-0 break-words">{message}</p>
       {onRetry && <Btn size="xs" onClick={onRetry}>Retry</Btn>}
     </div>
   )
@@ -355,6 +372,7 @@ export function ErrorState({ message, onRetry }) {
  */
 export function Modal({ open, title, subtitle, onClose, children, footer, width = 'max-w-2xl' }) {
   const panelRef = useRef(null)
+  const titleId = useId()
   useDialogBehavior(open, panelRef, onClose)
   if (!open) return null
   // Portalled so the console's own scroll container cannot clip or offset it,
@@ -368,16 +386,16 @@ export function Modal({ open, title, subtitle, onClose, children, footer, width 
         ref={panelRef}
         role="dialog"
         aria-modal="true"
-        aria-label={typeof title === 'string' ? title : undefined}
+        aria-labelledby={title ? titleId : undefined}
         tabIndex={-1}
         className={`w-full ${width} max-h-[92dvh] flex flex-col rounded-xl bg-gray-950 border border-gray-800 shadow-2xl overflow-hidden`}
       >
         <header className="flex items-start gap-3 px-5 py-3.5 border-b border-gray-800 shrink-0">
           <div className="flex-1 min-w-0">
-            <h3 className="text-sm font-semibold text-gray-200">{title}</h3>
+            <h3 id={titleId} className="text-sm font-semibold text-gray-200 break-words">{title}</h3>
             {subtitle && <p className="text-xs text-gray-500 mt-0.5">{subtitle}</p>}
           </div>
-          <button onClick={onClose} aria-label="Close" className="p-1 rounded text-gray-600 hover:text-gray-300 hover:bg-gray-800 shrink-0">
+          <button type="button" onClick={onClose} aria-label="Close" title="Close" className={`p-1 rounded text-gray-500 hover:text-gray-300 hover:bg-gray-800 shrink-0 ${FOCUS_RING}`}>
             <X size={16} />
           </button>
         </header>

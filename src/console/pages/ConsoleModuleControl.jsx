@@ -74,10 +74,10 @@ function StatusToggle({ current, disabled, onPick, name }) {
             aria-pressed={active}
             disabled={disabled || active}
             onClick={() => onPick(t.status)}
-            className={`flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold transition-colors disabled:opacity-100
+            className={`flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold transition-colors disabled:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500
               ${active ? t.on : `bg-gray-900/40 ${t.off}`} ${disabled && !active ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
-            <Icon size={11} /> {t.label}
+            <Icon size={11} aria-hidden="true" /> {t.label}
           </button>
         )
       })}
@@ -201,7 +201,9 @@ export default function ConsoleModuleControl() {
         if (!warnings.includes(w)) warnings.push(w)
       }
     }
-    if (warnings.length > 0) {
+    // Switching a module Off hides it from every user, so it always asks first,
+    // even when nothing depends on it.
+    if (warnings.length > 0 || status === 'disabled') {
       setConfirm({ scope, ids, status, warnings })
     } else {
       applyStatus(scope, ids, status)
@@ -353,6 +355,7 @@ export default function ConsoleModuleControl() {
           value={category}
           onChange={setCategory}
           options={[{ value: 'all', label: 'All categories' }, ...categories.map((c) => ({ value: c, label: c }))]}
+          ariaLabel="Filter by category"
           className="w-48"
         />
       </Toolbar>
@@ -363,7 +366,7 @@ export default function ConsoleModuleControl() {
           selectedIds.length > 0 ? 'border-orange-800/40 bg-orange-950/20' : 'border-gray-800 bg-gray-900/50'}`}>
           <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer">
             <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAllVisible}
-              className="h-3.5 w-3.5 rounded border-gray-600 bg-gray-800 accent-orange-500" />
+              className="h-3.5 w-3.5 rounded border-gray-600 bg-gray-800 accent-orange-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />
             {selectedIds.length > 0
               ? <span className="text-orange-200 font-semibold">{selectedIds.length} selected</span>
               : `Select all ${filtered.length} shown`}
@@ -455,12 +458,12 @@ function ModuleCard({ module: m, busy, checked, onToggleSelect, onPick }) {
           type="checkbox"
           checked={checked}
           onChange={onToggleSelect}
-          className="mt-1 h-3.5 w-3.5 rounded border-gray-600 bg-gray-800 accent-orange-500 flex-shrink-0"
+          className="mt-1 h-3.5 w-3.5 rounded border-gray-600 bg-gray-800 accent-orange-500 flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
           aria-label={`Select ${name}`}
         />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-sm font-semibold text-gray-100 truncate">{name}</p>
+            <p className="text-sm font-semibold text-gray-100 truncate min-w-0" title={name}>{name}</p>
             <StatusBadge status={m.status} />
           </div>
           <div className="flex items-center gap-2 mt-1 flex-wrap">
@@ -488,7 +491,7 @@ function ModuleCard({ module: m, busy, checked, onToggleSelect, onPick }) {
         <span className="text-[10px] text-gray-500 flex items-center gap-1"
           title="Who this module is intended for. Recorded only; not enforced.">
           Visible to: {VISIBLE_LABEL[m.visible_to] || m.visible_to || 'Everyone'}
-          <Info size={11} className="text-gray-600" />
+          <Info size={11} className="text-gray-500" aria-hidden="true" />
         </span>
       </div>
     </div>
@@ -496,7 +499,7 @@ function ModuleCard({ module: m, busy, checked, onToggleSelect, onPick }) {
 }
 
 const FIELD_LABEL = 'block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1'
-const FIELD_INPUT = 'w-full h-9 bg-gray-900 border border-gray-800 rounded-lg px-3 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-gray-700'
+const FIELD_INPUT = 'w-full h-9 bg-gray-900 border border-gray-800 rounded-lg px-3 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-gray-700 focus-visible:ring-2 focus-visible:ring-orange-500'
 
 function MaintenanceModal({ open, count, until, note, warnings, busy, onUntil, onNote, onCancel, onConfirm }) {
   return (
@@ -544,20 +547,30 @@ function MaintenanceModal({ open, count, until, note, warnings, busy, onUntil, o
 
 function ConfirmModal({ confirm, onCancel, onConfirm }) {
   const meta = confirm ? (MODULE_STATUS_META[confirm.status] || { label: confirm.status }) : null
+  const hasWarnings = !!confirm?.warnings?.length
   return (
     <Modal
       open={!!confirm}
-      title="Dependency check"
+      title={hasWarnings || !confirm ? 'Dependency check' : 'Turn this off?'}
       onClose={onCancel}
       width="max-w-md"
       footer={(
         <>
           <Btn onClick={onCancel}>Cancel</Btn>
-          <Btn variant="primary" icon={CheckCircle2} onClick={onConfirm}>Apply anyway</Btn>
+          <Btn variant={confirm?.status === 'disabled' ? 'danger' : 'primary'} icon={CheckCircle2} onClick={onConfirm}>
+            {hasWarnings ? 'Apply anyway' : 'Turn off'}
+          </Btn>
         </>
       )}
     >
-      {confirm && (
+      {confirm && !hasWarnings && (
+        <p className="text-xs text-gray-300 leading-relaxed">
+          You are about to switch {confirm.ids.length > 1 ? `${confirm.ids.length} modules` : 'this module'}{' '}
+          <span className="font-semibold text-gray-100">{meta.label}</span>. Users will no longer be able to open it
+          until it is set back to Live. Nothing else depends on it.
+        </p>
+      )}
+      {confirm && hasWarnings && (
         <div className="space-y-3">
           <p className="text-xs text-gray-300 leading-relaxed">
             You are about to set {confirm.ids.length > 1 ? `${confirm.ids.length} modules` : 'this module'} to{' '}

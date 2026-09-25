@@ -11,7 +11,7 @@
 import { useEffect, useState } from 'react'
 import { Smartphone, ShieldAlert, Rocket, RefreshCw, Save, Bell } from 'lucide-react'
 import {
-  Panel, PanelHeader, Note, StatTile, Btn, LoadingState, ErrorState,
+  Panel, PanelHeader, Note, StatTile, Btn, LoadingState, ErrorState, Modal,
 } from '../components/ui'
 import { getMobileOps, setMobileMinVersion, setMobileLatestVersion } from '../../lib/api/mobileOps'
 import { gateRisk, gateSummary } from '../../lib/mobileOps'
@@ -27,6 +27,8 @@ export default function ConsoleMobileApp() {
   const [latestDraft, setLatestDraft] = useState('')
   const [saving, setSaving] = useState('')
   const [msg, setMsg] = useState('')
+  const [msgIsError, setMsgIsError] = useState(false)
+  const [confirmMin, setConfirmMin] = useState(false)
 
   async function load() {
     setLoading(true); setError('')
@@ -47,28 +49,29 @@ export default function ConsoleMobileApp() {
 
   async function saveMin() {
     if (!risk || risk.level === 'blocked') return
-    setSaving('min'); setMsg('')
+    setConfirmMin(false)
+    setSaving('min'); setMsg(''); setMsgIsError(false)
     try {
       await setMobileMinVersion(minDraft.trim())
       await logAction('set_mobile_min_version', null, 'system', { value: minDraft.trim() })
       setMsg(minDraft.trim() ? `Saved. Phones below ${minDraft.trim()} must now update.` : 'Saved. The update gate is now off.')
       await load()
-    } catch (e) { setMsg(toUserMessage(e, 'Could not save.')) }
+    } catch (e) { setMsg(toUserMessage(e, 'Could not save.')); setMsgIsError(true) }
     setSaving('')
   }
 
   async function saveLatest() {
-    setSaving('latest'); setMsg('')
+    setSaving('latest'); setMsg(''); setMsgIsError(false)
     try {
       await setMobileLatestVersion(latestDraft.trim())
       await logAction('set_mobile_latest_version', null, 'system', { value: latestDraft.trim() })
       setMsg(`Recorded ${latestDraft.trim()} as the newest released build.`)
       await load()
-    } catch (e) { setMsg(toUserMessage(e, 'Could not save.')) }
+    } catch (e) { setMsg(toUserMessage(e, 'Could not save.')); setMsgIsError(true) }
     setSaving('')
   }
 
-  if (loading) return <LoadingState label="Loading mobile overview" />
+  if (loading && !ops) return <LoadingState label="Loading mobile overview" />
 
   return (
     <div className="space-y-5 max-w-4xl">
@@ -77,10 +80,11 @@ export default function ConsoleMobileApp() {
           <h1 className="text-xl font-bold text-white">Mobile App Control</h1>
           <p className="text-sm text-gray-500 mt-0.5">The field phones: what version is out, who is on it, and the forced-update rule.</p>
         </div>
-        <Btn icon={RefreshCw} onClick={load}>Refresh</Btn>
+        <Btn icon={RefreshCw} onClick={load} busy={loading}>Refresh</Btn>
       </div>
 
       <ErrorState message={error} onRetry={load} />
+      {!ops ? null : (<>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <StatTile icon={Rocket} label="Newest released build" value={ops?.latestVersion || 'Not recorded'}
@@ -110,9 +114,9 @@ export default function ConsoleMobileApp() {
             <label className="flex flex-col gap-1">
               <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Required minimum version</span>
               <input value={minDraft} onChange={(e) => setMinDraft(e.target.value)} placeholder="e.g. 1.3.2 (blank = gate off)"
-                className="w-56 rounded-lg bg-gray-900 border border-gray-700 px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:border-orange-600 focus:outline-none" />
+                className="w-56 max-w-full rounded-lg bg-gray-900 border border-gray-700 px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:border-orange-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />
             </label>
-            <Btn icon={Save} variant="primary" onClick={saveMin} busy={saving === 'min'}
+            <Btn icon={Save} variant="primary" onClick={() => (minDraft.trim() ? setConfirmMin(true) : saveMin())} busy={saving === 'min'}
               disabled={!minChanged || (risk && risk.level === 'blocked')}>
               Save rule
             </Btn>
@@ -137,13 +141,32 @@ export default function ConsoleMobileApp() {
           <label className="flex flex-col gap-1">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Newest released version</span>
             <input value={latestDraft} onChange={(e) => setLatestDraft(e.target.value)} placeholder="e.g. 1.3.3"
-              className="w-56 rounded-lg bg-gray-900 border border-gray-700 px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:border-orange-600 focus:outline-none" />
+              className="w-56 max-w-full rounded-lg bg-gray-900 border border-gray-700 px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:border-orange-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />
           </label>
           <Btn icon={Save} onClick={saveLatest} busy={saving === 'latest'} disabled={!latestChanged}>Record release</Btn>
         </div>
       </Panel>
 
-      {msg && <p className="text-xs text-gray-400">{msg}</p>}
+      </>)}
+
+      {msg && (msgIsError
+        ? <ErrorState message={msg} />
+        : <p className="text-xs text-gray-400" role="status">{msg}</p>)}
+
+      <Modal open={confirmMin} onClose={() => setConfirmMin(false)} width="max-w-md"
+        title="Force phones to update?"
+        subtitle="Phones below this version cannot continue until they install the update."
+        footer={(
+          <>
+            <Btn onClick={() => setConfirmMin(false)}>Cancel</Btn>
+            <Btn variant="primary" icon={Save} onClick={saveMin} busy={saving === 'min'}>Save rule</Btn>
+          </>
+        )}>
+        <p className="text-sm text-gray-300">
+          Every phone running a version older than <span className="font-semibold text-white">{minDraft.trim()}</span> will
+          see an update screen on its next launch.
+        </p>
+      </Modal>
     </div>
   )
 }

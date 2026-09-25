@@ -106,7 +106,7 @@ function ChartFrame({ height, summary, empty, children }) {
   if (empty) {
     return (
       <div style={{ height }} className="flex items-center justify-center rounded-lg border border-dashed border-gray-800">
-        <p className="text-xs text-gray-500">{empty}</p>
+        <p className="text-xs text-gray-500 px-3 text-center">{empty}</p>
       </div>
     )
   }
@@ -209,7 +209,7 @@ export function ShareChart({ parts = [], height = 180, summary, emptyText = 'Not
   }, [theme])
   if (!total) return <ChartFrame height={height} empty={emptyText} />
   return (
-    <div className="flex items-center gap-4">
+    <div className="flex flex-wrap items-center gap-4">
       <div className="relative shrink-0" style={{ width: height, height }}>
         <ChartFrame height={height} summary={summary}>
           <Doughnut data={data} options={options} />
@@ -234,8 +234,8 @@ export function Legend({ items = [], vertical = false }) {
     <ul className={`${vertical ? 'space-y-1.5' : 'flex flex-wrap gap-x-4 gap-y-1 mt-2'} text-[11px] text-gray-400`}>
       {items.map((it) => (
         <li key={it.label} className="flex items-center gap-1.5">
-          <span className="inline-block w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: it.color }} />
-          <span className="text-gray-300">{it.label}</span>
+          <span aria-hidden="true" className="inline-block w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: it.color }} />
+          <span className="text-gray-300 break-words min-w-0">{it.label}</span>
           {it.value !== undefined && <span className="tabular-nums text-gray-500">{it.value}{it.pct !== undefined ? ` (${it.pct}%)` : ''}</span>}
         </li>
       ))}
@@ -256,7 +256,7 @@ export function ScoreRing({ score, size = 120, label = 'Score' }) {
   const circ = 2 * Math.PI * r
   return (
     <div className="flex items-center gap-3">
-      <svg width={size} height={size} viewBox="0 0 100 100" role="img" aria-label={`${label} ${s} of 100`}>
+      <svg width={size} height={size} viewBox="0 0 100 100" role="img" aria-label={score === null || score === undefined ? `${label} not measured` : `${label} ${s} of 100`}>
         <circle cx="50" cy="50" r={r} fill="none" stroke={INK[theme].grid} strokeWidth="8" />
         <circle cx="50" cy="50" r={r} fill="none" stroke={color} strokeWidth="8" strokeLinecap="round"
           strokeDasharray={`${(s / 100) * circ} ${circ}`} transform="rotate(-90 50 50)" />

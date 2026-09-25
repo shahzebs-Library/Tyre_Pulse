@@ -199,8 +199,13 @@ export default function ConsoleLayout() {
 
   return (
     <div className="console-root flex h-screen bg-[#0a0a0f] text-white overflow-hidden">
+      <a href="#console-main"
+        onClick={(e) => { e.preventDefault(); document.getElementById('console-main')?.focus() }}
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[60] focus:px-3 focus:py-2 focus:rounded-lg focus:bg-orange-500 focus:text-black focus:text-xs focus:font-semibold">
+        Skip to content
+      </a>
       {/* ── Sidebar ─────────────────────────────────────────────────────────── */}
-      <aside className={`${sidebarOpen ? 'w-56' : 'w-14'} flex-shrink-0 flex flex-col border-r border-gray-800/80 transition-all duration-200 bg-gray-950`}>
+      <aside aria-label="Console navigation" className={`${sidebarOpen ? 'w-56' : 'w-14'} flex-shrink-0 flex flex-col border-r border-gray-800/80 transition-all duration-200 bg-gray-950`}>
         {/* Logo */}
         <div className="h-14 flex items-center px-3 border-b border-gray-800/80 gap-3">
           <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
@@ -213,30 +218,34 @@ export default function ConsoleLayout() {
               <p className="text-[10px] text-orange-400 font-semibold">RESTRICTED</p>
             </div>
           )}
-          <button onClick={() => setSidebarOpen(s => !s)} className="ml-auto text-gray-600 hover:text-gray-300 flex-shrink-0">
-            {sidebarOpen ? <X size={14} /> : <Menu size={14} />}
+          <button type="button" onClick={() => setSidebarOpen(s => !s)}
+            aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'} aria-expanded={sidebarOpen}
+            title={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+            className={`ml-auto rounded text-gray-500 hover:text-gray-300 flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500`}>
+            {sidebarOpen ? <X size={14} aria-hidden="true" /> : <Menu size={14} aria-hidden="true" />}
           </button>
         </div>
 
         {/* Org picker */}
         {sidebarOpen && (
           <div className="px-3 py-2 border-b border-gray-800/80">
-            <p className="text-[10px] text-gray-600 uppercase tracking-wider mb-1">Viewing</p>
-            <button onClick={() => setOrgOpen(o => !o)}
-              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg bg-gray-800/60 hover:bg-gray-800 transition-colors text-left">
+            <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Viewing</p>
+            <button type="button" onClick={() => setOrgOpen(o => !o)} aria-expanded={orgOpen} aria-haspopup="listbox"
+              aria-label={`Viewing organisation: ${activeOrg?.name ?? 'All Organisations'}`}
+              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg bg-gray-800/60 hover:bg-gray-800 transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
               <Globe size={12} className="text-orange-400 flex-shrink-0" />
               <span className="text-xs text-gray-200 flex-1 truncate">{activeOrg?.name ?? 'All Organisations'}</span>
               <ChevronDown size={11} className={`text-gray-500 transition-transform ${orgOpen ? 'rotate-180' : ''}`} />
             </button>
             {orgOpen && (
               <div className="mt-1 rounded-lg bg-gray-800 border border-gray-700 overflow-hidden shadow-xl">
-                <button onClick={() => { setActiveOrg(null); setOrgOpen(false) }}
-                  className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-700 transition-colors ${!activeOrg ? 'text-orange-300 font-semibold' : 'text-gray-300'}`}>
+                <button type="button" onClick={() => { setActiveOrg(null); setOrgOpen(false) }} aria-pressed={!activeOrg}
+                  className={`focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 w-full text-left px-3 py-2 text-xs hover:bg-gray-700 transition-colors ${!activeOrg ? 'text-orange-300 font-semibold' : 'text-gray-300'}`}>
                   All Organisations
                 </button>
                 {orgs.map(o => (
-                  <button key={o.id} onClick={() => { setActiveOrg(o); setOrgOpen(false) }}
-                    className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-700 transition-colors truncate ${activeOrg?.id === o.id ? 'text-orange-300 font-semibold' : 'text-gray-300'}`}>
+                  <button type="button" key={o.id} onClick={() => { setActiveOrg(o); setOrgOpen(false) }} aria-pressed={activeOrg?.id === o.id} title={o.name}
+                    className={`focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 w-full text-left px-3 py-2 text-xs hover:bg-gray-700 transition-colors truncate ${activeOrg?.id === o.id ? 'text-orange-300 font-semibold' : 'text-gray-300'}`}>
                     {o.name}
                   </button>
                 ))}
@@ -255,25 +264,26 @@ export default function ConsoleLayout() {
                 value={navFilter}
                 onChange={(e) => setNavFilter(e.target.value)}
                 placeholder="Find a page"
-                className="w-full pl-7 pr-6 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-[11px] text-gray-200 placeholder-gray-600 focus:border-gray-700 focus:outline-none"
+                aria-label="Find a console page"
+                className="w-full pl-7 pr-6 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-[11px] text-gray-200 placeholder-gray-500 focus:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
               />
               {navFilter && (
-                <button onClick={() => setNavFilter('')} title="Clear"
-                  className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-300">
+                <button type="button" onClick={() => setNavFilter('')} title="Clear" aria-label="Clear page filter"
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded text-gray-500 hover:text-gray-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
                   <X size={11} />
                 </button>
               )}
             </div>
           </div>
         )}
-        <nav className="flex-1 overflow-y-auto py-2 px-2">
+        <nav aria-label="Console pages" className="flex-1 overflow-y-auto py-2 px-2">
           {visibleGroups.length === 0 && sidebarOpen && (
-            <p className="text-[11px] text-gray-600 px-2 py-4 text-center">No page matches that.</p>
+            <p className="text-[11px] text-gray-500 px-2 py-4 text-center" role="status">No page matches that.</p>
           )}
           {visibleGroups.map(group => (
             <div key={group.label} className="mb-3 last:mb-0">
               {sidebarOpen && (
-                <p className="px-2.5 pb-1 text-[10px] uppercase tracking-wider text-gray-600 font-semibold">
+                <p className="px-2.5 pb-1 text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
                   {group.label}
                 </p>
               )}
@@ -282,14 +292,15 @@ export default function ConsoleLayout() {
                   const Icon = item.icon
                   return (
                     <NavLink key={item.to} to={item.to} end={item.end} title={item.label}
+                      aria-label={sidebarOpen ? undefined : item.label}
                       className={({ isActive }) =>
-                        `flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all text-xs font-medium group ${
+                        `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all text-xs font-medium group ${
                           isActive
                             ? 'bg-orange-950/60 text-orange-300 border border-orange-800/40'
                             : 'text-gray-500 hover:text-gray-200 hover:bg-gray-800/60'
                         }`
                       }>
-                      <Icon size={15} className="flex-shrink-0" />
+                      <Icon size={15} className="flex-shrink-0" aria-hidden="true" />
                       {sidebarOpen && <span className="truncate">{item.label}</span>}
                     </NavLink>
                   )
@@ -305,7 +316,7 @@ export default function ConsoleLayout() {
             <div className="mb-2 px-2 flex items-center gap-2">
               <div className="min-w-0 flex-1">
                 <p className="text-xs text-gray-300 font-medium truncate">{admin?.full_name ?? 'Super Admin'}</p>
-                <p className="text-[10px] text-gray-600 truncate">{admin?.email ?? ''}</p>
+                <p className="text-[10px] text-gray-500 truncate" title={admin?.email ?? ''}>{admin?.email ?? ''}</p>
               </div>
               <ThemeToggle size={15} className="inline-flex items-center justify-center w-7 h-7 rounded-lg text-gray-500 hover:text-orange-400 hover:bg-orange-400/10 transition-colors flex-shrink-0" />
             </div>
@@ -314,14 +325,14 @@ export default function ConsoleLayout() {
               <ThemeToggle size={15} className="inline-flex items-center justify-center w-7 h-7 rounded-lg text-gray-500 hover:text-orange-400 hover:bg-orange-400/10 transition-colors" />
             </div>
           )}
-          <button onClick={() => setShow2FA(true)}
-            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-gray-500 hover:text-blue-400 hover:bg-blue-950/20 transition-colors mb-0.5"
+          <button type="button" onClick={() => setShow2FA(true)} aria-label={sidebarOpen ? undefined : "Two-Factor Authentication"}
+            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-gray-500 hover:text-blue-400 hover:bg-blue-950/20 transition-colors mb-0.5"
             title="Two-Factor Authentication">
             <Smartphone size={14} className="flex-shrink-0" />
             {sidebarOpen && '2FA Security'}
           </button>
-          <button onClick={handleSignOut}
-            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-gray-500 hover:text-red-400 hover:bg-red-950/20 transition-colors">
+          <button type="button" onClick={handleSignOut} aria-label={sidebarOpen ? undefined : "Sign Out"} title="Sign Out"
+            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-gray-500 hover:text-red-400 hover:bg-red-950/20 transition-colors">
             <LogOut size={14} className="flex-shrink-0" />
             {sidebarOpen && 'Sign Out'}
           </button>
@@ -333,7 +344,7 @@ export default function ConsoleLayout() {
       {/* ── Main content ────────────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top bar */}
-        <header className="h-14 flex-shrink-0 border-b border-gray-800/80 flex items-center px-6 gap-4 bg-gray-950/50">
+        <header className="h-14 flex-shrink-0 border-b border-gray-800/80 flex items-center px-3 sm:px-6 gap-2 sm:gap-4 bg-gray-950/50">
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-orange-500/20 text-orange-300 border border-orange-500/30 tracking-wider">CONSOLE</span>
             {activeOrg && (
@@ -345,15 +356,15 @@ export default function ConsoleLayout() {
             )}
           </div>
           <button type="button" onClick={() => setCommandOpen(true)}
-            className="ml-auto flex min-w-52 items-center gap-2 rounded-lg border border-gray-800 bg-gray-900/70 px-3 py-1.5 text-xs text-gray-500 hover:border-orange-700/50 hover:text-gray-200"
+            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 ml-auto flex min-w-0 sm:min-w-52 items-center gap-2 rounded-lg border border-gray-800 bg-gray-900/70 px-3 py-1.5 text-xs text-gray-500 hover:border-orange-700/50 hover:text-gray-200"
             aria-label="Open Super Admin command palette">
             <Command size={13} className="text-orange-400" />
-            <span className="flex-1 text-left">Search all capabilities</span>
+            <span className="flex-1 text-left truncate hidden sm:inline">Search all capabilities</span>
             <kbd className="rounded border border-gray-700 px-1.5 py-0.5 text-[9px] text-gray-500">Ctrl K</kbd>
           </button>
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5 text-xs text-gray-600">
-              <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+            <div className="flex items-center gap-1.5 text-xs text-gray-500">
+              <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse motion-reduce:animate-none" aria-hidden="true" />
               Live
             </div>
           </div>
@@ -372,16 +383,16 @@ export default function ConsoleLayout() {
             {supportMinsLeft != null && (
               <span className="text-orange-300/70">{supportMinsLeft === 0 ? 'expired' : `ends in ${supportMinsLeft}m`}</span>
             )}
-            <button onClick={handleEndSupport} disabled={endingSupport}
-              className="ml-auto px-2 py-0.5 rounded-md text-[11px] font-semibold text-white bg-red-600/80 hover:bg-red-600 disabled:opacity-40">
+            <button type="button" onClick={handleEndSupport} disabled={endingSupport} aria-label="End support session"
+              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 ml-auto px-2 py-0.5 rounded-md text-[11px] font-semibold text-white bg-red-600/80 hover:bg-red-600 disabled:opacity-40">
               {endingSupport ? 'Ending...' : 'End'}
             </button>
           </div>
         )}
 
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto p-6">
-          <Suspense fallback={<div className="p-8 text-sm text-gray-400">Loading</div>}>
+        <main id="console-main" tabIndex={-1} className="flex-1 overflow-y-auto p-3 sm:p-6 focus:outline-none">
+          <Suspense fallback={<div className="p-8 text-sm text-gray-400" role="status">Loading</div>}>
             <Outlet />
           </Suspense>
         </main>

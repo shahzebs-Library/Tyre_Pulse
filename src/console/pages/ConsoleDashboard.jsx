@@ -19,7 +19,7 @@ import { useConsoleAuth } from '../ConsoleAuthContext'
 import { toUserMessage } from '../../lib/safeError'
 import {
   Panel, PanelHeader, Note, StatTile, Badge, Btn, Table, THead, Th, Tr, Td,
-  EmptyState, ErrorState,
+  EmptyState, ErrorState, LoadingState,
 } from '../components/ui'
 import { TrendChart, BarsChart, ShareChart, ScoreRing } from '../components/ui/charts'
 import { loadAttentionInputs } from '../../lib/api/consoleAttention'
@@ -140,12 +140,12 @@ export default function ConsoleDashboard() {
             <div className="space-y-1">
               {attention.data.map((a) => (
                 <button key={a.key} type="button" onClick={() => navigate(a.to)}
-                  className="w-full flex items-center gap-2 text-left rounded-lg px-2 py-1.5 hover:bg-gray-800/50 transition-colors">
+                  className="w-full flex items-center gap-2 text-left rounded-lg px-2 py-1.5 hover:bg-gray-800/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
                   <Badge tone={a.tone === 'danger' ? 'danger' : a.tone === 'warning' ? 'warning' : 'info'}>
                     {a.tone === 'danger' ? 'Urgent' : a.tone === 'warning' ? 'Review' : 'Info'}
                   </Badge>
-                  <span className="text-xs text-gray-200 flex-1">{a.text}</span>
-                  <ChevronRight size={13} className="text-gray-500" />
+                  <span className="text-xs text-gray-200 flex-1 min-w-0 break-words">{a.text}</span>
+                  <ChevronRight size={13} className="text-gray-500 shrink-0" aria-hidden="true" />
                 </button>
               ))}
             </div>
@@ -174,7 +174,7 @@ export default function ConsoleDashboard() {
           <PanelHeader icon={ShieldCheck} title="Security"
             actions={<Btn size="xs" onClick={() => navigate('/console/security-audit')}>Open audit</Btn>} />
           {security.error ? (
-            <p className="text-xs text-gray-500">Could not read the security score. {security.error}</p>
+            <ErrorState message={`Could not read the security score. ${security.error}`} onRetry={loadSecurity} />
           ) : (
             <>
               <ScoreRing score={security.data?.score ?? null} size={104} label="Security score" />
@@ -189,36 +189,44 @@ export default function ConsoleDashboard() {
 
         <Panel className="lg:col-span-2">
           <PanelHeader icon={UserPlus} title="New users, last 30 days"
-            subtitle={people.error ? people.error : `${fmt(signups.total)} registrations in the window.`} />
-          <TrendChart labels={signups.labels} series={[{ label: 'New users', values: signups.values }]}
-            height={190} summary={`${signups.total} new users in 30 days`}
-            emptyText="No registrations in the last 30 days." />
+            subtitle={people.error ? 'Could not read registrations.' : `${fmt(signups.total)} registrations in the window.`} />
+          {people.error ? <ErrorState message={people.error} onRetry={loadPeople} /> : people.loading && !people.data ? <LoadingState label="Loading registrations" rows={3} /> : (
+            <TrendChart labels={signups.labels} series={[{ label: 'New users', values: signups.values }]}
+              height={190} summary={`${signups.total} new users in 30 days`}
+              emptyText="No registrations in the last 30 days." />
+          )}
         </Panel>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel>
           <PanelHeader icon={Users} title="Users by role" subtitle="The five largest roles, the rest grouped as Other." />
-          {people.error ? <ErrorState message={people.error} onRetry={loadPeople} /> : (
+          {people.error ? <ErrorState message={people.error} onRetry={loadPeople} /> : people.loading && !people.data ? <LoadingState label="Loading users" rows={3} /> : (
             <ShareChart parts={roles} height={170} center={{ value: fmt((people.data || []).length), label: 'users' }}
               summary={roles.map((r) => `${r.label} ${r.value}`).join(', ')} emptyText="No users yet." />
           )}
         </Panel>
         <Panel>
           <PanelHeader icon={Database} title="Platform data" subtitle="Records held across every organisation." />
-          <BarsChart bars={assetBars} height={170} valueFormat={(v) => nf.format(v)}
-            summary={assetBars.map((b) => `${b.label} ${b.value}`).join(', ')} emptyText="No records yet." />
+          {stats.error ? (
+            <EmptyState title="Platform data unavailable" reason="The platform counts could not be read, so nothing is shown rather than zeros." />
+          ) : stats.loading && !stats.data ? <LoadingState label="Loading platform data" rows={3} /> : (
+            <BarsChart bars={assetBars} height={170} valueFormat={(v) => nf.format(v)}
+              summary={assetBars.map((b) => `${b.label} ${b.value}`).join(', ')} emptyText="No records yet." />
+          )}
         </Panel>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Panel className="lg:col-span-2">
           <PanelHeader icon={Zap} title="AI usage, last 30 days"
-            subtitle={ai.error ? ai.error : `${fmt(aiDaily.total)} calls, estimated cost $${aiCost.toFixed(2)}.`}
+            subtitle={ai.error ? 'Could not read AI usage.' : `${fmt(aiDaily.total)} calls, estimated cost $${aiCost.toFixed(2)}.`}
             actions={<Btn size="xs" onClick={() => navigate('/console/ai-usage')}>Details</Btn>} />
-          <TrendChart labels={aiDaily.labels} series={[{ label: 'AI calls', values: aiDaily.values }]}
-            height={180} summary={`${aiDaily.total} AI calls in 30 days`}
-            emptyText="No AI calls in the last 30 days." />
+          {ai.error ? <ErrorState message={ai.error} onRetry={loadAi} /> : ai.loading && !ai.data ? <LoadingState label="Loading AI usage" rows={3} /> : (
+            <TrendChart labels={aiDaily.labels} series={[{ label: 'AI calls', values: aiDaily.values }]}
+              height={180} summary={`${aiDaily.total} AI calls in 30 days`}
+              emptyText="No AI calls in the last 30 days." />
+          )}
         </Panel>
         <Panel flush>
           <div className="p-4 pb-2">
@@ -227,8 +235,10 @@ export default function ConsoleDashboard() {
           </div>
           {actions.error ? (
             <div className="px-4 pb-4"><ErrorState message={actions.error} onRetry={loadActions} /></div>
+          ) : actions.loading && !actions.data ? (
+            <div className="px-4 pb-4"><LoadingState label="Loading console actions" rows={3} /></div>
           ) : !actions.data?.length ? (
-            <div className="px-4 pb-4"><EmptyState title="No console actions yet" /></div>
+            <div className="px-4 pb-4"><EmptyState title="No console actions yet" reason="Actions taken in this console are recorded here once someone takes one." /></div>
           ) : (
             <Table className="border-0 rounded-none">
               <THead><Th>Action</Th><Th align="right">When</Th></THead>

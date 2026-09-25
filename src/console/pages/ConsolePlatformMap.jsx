@@ -69,10 +69,10 @@ export default function ConsolePlatformMap() {
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 px-4 pb-4">
           {fBackend.map((item) => (
             <button key={item.label} type="button" onClick={() => navigate(item.to)}
-              className="rounded-xl border border-gray-800 bg-gray-900/50 p-4 text-left hover:border-orange-700/60 hover:bg-orange-950/10 transition-colors">
+              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 rounded-xl border border-gray-800 bg-gray-900/50 p-4 text-left hover:border-orange-700/60 hover:bg-orange-950/10 transition-colors">
               <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-[10px] uppercase tracking-wider text-gray-600">{item.group}</p>
+                <div className="min-w-0">
+                  <p className="text-[10px] uppercase tracking-wider text-gray-500">{item.group}</p>
                   <p className="mt-1 text-sm font-semibold text-white">{item.label}</p>
                 </div>
                 <Badge tone={item.status === 'Live' || item.status === 'Protected' ? 'good' : 'accent'}>{item.status}</Badge>
@@ -84,7 +84,7 @@ export default function ConsolePlatformMap() {
               </div>
             </button>
           ))}
-          {fBackend.length === 0 && <p className="text-xs text-gray-600">No backend capability matches that.</p>}
+          {fBackend.length === 0 && <p className="text-xs text-gray-500">No backend capability matches that.</p>}
         </div>
       </Panel>
 
@@ -117,11 +117,11 @@ export default function ConsolePlatformMap() {
         <div className="px-4 pb-4 space-y-4">
           {fConsole.map((g) => (
             <div key={g.label}>
-              <p className="text-[11px] uppercase tracking-wider text-gray-600 font-semibold mb-2">{g.label}</p>
+              <p className="text-[11px] uppercase tracking-wider text-gray-500 font-semibold mb-2">{g.label}</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 {g.items.map((it) => (
                   <button key={it.to} type="button" onClick={() => navigate(it.to)}
-                    className="text-left rounded-lg border border-gray-800 bg-gray-900/40 p-2.5 hover:border-orange-800/60 hover:bg-gray-900 transition-colors">
+                    className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 text-left rounded-lg border border-gray-800 bg-gray-900/40 p-2.5 hover:border-orange-800/60 hover:bg-gray-900 transition-colors">
                     <p className="text-xs font-semibold text-gray-200">{it.label}</p>
                     <p className="text-[11px] text-gray-500 leading-snug mt-0.5">{it.what}</p>
                   </button>
@@ -129,7 +129,7 @@ export default function ConsolePlatformMap() {
               </div>
             </div>
           ))}
-          {fConsole.length === 0 && <p className="text-xs text-gray-600">No console tool matches that.</p>}
+          {fConsole.length === 0 && <p className="text-xs text-gray-500">No console tool matches that.</p>}
         </div>
       </Panel>
 
@@ -139,22 +139,22 @@ export default function ConsolePlatformMap() {
         <div className="px-4 pb-4 space-y-3">
           {fWeb.map((g) => (
             <div key={g.label}>
-              <p className="text-[11px] uppercase tracking-wider text-gray-600 font-semibold mb-1.5">{g.label}</p>
+              <p className="text-[11px] uppercase tracking-wider text-gray-500 font-semibold mb-1.5">{g.label}</p>
               <div className="flex flex-wrap gap-1.5">
                 {g.items.map((it) => (
                   <div key={it.to} className="flex items-center rounded-md border border-gray-800 bg-gray-900/40 overflow-hidden">
                     <button type="button" onClick={() => window.open(it.to, '_blank', 'noopener,noreferrer')}
-                      className="px-2 py-1.5 text-[11px] text-gray-200 hover:bg-orange-950/30">{it.label}</button>
+                      className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 px-2 py-1.5 text-[11px] text-gray-200 hover:bg-orange-950/30">{it.label}</button>
                     <button type="button" onClick={() => navigate(`/console/access?surface=web&module=${encodeURIComponent(it.to)}`)}
-                      className="border-l border-gray-800 px-1.5 py-1.5 text-gray-600 hover:text-orange-400" aria-label={`Manage ${it.label} access`}>
-                      <SlidersHorizontal size={11} />
+                      className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 border-l border-gray-800 px-1.5 py-1.5 text-gray-500 hover:text-orange-400" aria-label={`Manage ${it.label} access`} title={`Manage ${it.label} access`}>
+                      <SlidersHorizontal size={11} aria-hidden="true" />
                     </button>
                   </div>
                 ))}
               </div>
             </div>
           ))}
-          {fWeb.length === 0 && <p className="text-xs text-gray-600">No web area matches that.</p>}
+          {fWeb.length === 0 && <p className="text-xs text-gray-500">No web area matches that.</p>}
         </div>
       </Panel>
 
@@ -164,13 +164,13 @@ export default function ConsolePlatformMap() {
         <div className="px-4 pb-4 space-y-3">
           {fMobile.map((g) => (
             <div key={g.label}>
-              <p className="text-[11px] uppercase tracking-wider text-gray-600 font-semibold mb-1.5">{g.label}</p>
+              <p className="text-[11px] uppercase tracking-wider text-gray-500 font-semibold mb-1.5">{g.label}</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
                 {g.items.map((it) => (
                   <div key={it.label} className="flex items-center justify-between gap-2 rounded-md border border-gray-800 bg-gray-900/40 px-2.5 py-2">
-                    <div><span className="text-xs text-gray-200 font-medium">{it.label}</span><span className="block text-[10px] text-gray-500">{it.openTo}</span></div>
+                    <div className="min-w-0"><span className="text-xs text-gray-200 font-medium break-words">{it.label}</span><span className="block text-[10px] text-gray-500">{it.openTo}</span></div>
                     <button type="button" onClick={() => navigate(`/console/access?surface=mobile&module=${encodeURIComponent(it.key)}`)}
-                      className="flex items-center gap-1 rounded border border-gray-700 px-2 py-1 text-[10px] text-gray-400 hover:border-orange-700 hover:text-orange-400">
+                      className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 flex items-center gap-1 rounded border border-gray-700 px-2 py-1 text-[10px] text-gray-400 hover:border-orange-700 hover:text-orange-400">
                       <SlidersHorizontal size={10} /> Access
                     </button>
                   </div>
@@ -178,7 +178,7 @@ export default function ConsolePlatformMap() {
               </div>
             </div>
           ))}
-          {fMobile.length === 0 && <p className="text-xs text-gray-600">No mobile module matches that.</p>}
+          {fMobile.length === 0 && <p className="text-xs text-gray-500">No mobile module matches that.</p>}
         </div>
       </Panel>
 

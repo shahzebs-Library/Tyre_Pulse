@@ -46,8 +46,8 @@ function chip(on, extra = '') {
     ? 'border-orange-600/60 bg-orange-950/20 text-orange-300 font-semibold'
     : 'border-gray-800 text-gray-400 hover:bg-gray-800/60 hover:text-gray-200'} ${extra}`
 }
-const FIELD = 'rounded-lg bg-gray-900 border border-gray-800 text-gray-200 text-sm px-2.5 py-2 placeholder-gray-600 focus:border-gray-700 focus:outline-none disabled:opacity-60'
-const MINI_SELECT = 'rounded bg-gray-900 border border-gray-800 text-gray-300 text-[11px] px-1.5 py-1 focus:border-gray-700 focus:outline-none disabled:opacity-40'
+const FIELD = 'rounded-lg bg-gray-900 border border-gray-800 text-gray-200 text-sm px-2.5 py-2 placeholder-gray-500 focus:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 disabled:opacity-60'
+const MINI_SELECT = 'rounded bg-gray-900 border border-gray-800 text-gray-300 text-[11px] px-1.5 py-1 focus:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 disabled:opacity-40'
 const LABEL = 'text-xs font-semibold text-gray-300'
 
 function freshDraft() {
@@ -406,8 +406,8 @@ export default function ConsoleVehicleDesigner() {
           ) : (
             <div className="flex flex-wrap gap-1.5">
               {missingTypes.map((t) => (
-                <button key={t} onClick={() => startNew(t)}
-                  className="text-[11px] px-2.5 py-1 rounded-full border border-gray-800 text-gray-300 hover:border-orange-800/60 hover:text-orange-300 hover:bg-orange-950/20 transition-colors">
+                <button type="button" key={t} onClick={() => startNew(t)}
+                  className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 text-[11px] px-2.5 py-1 rounded-full border border-gray-800 text-gray-300 hover:border-orange-800/60 hover:text-orange-300 hover:bg-orange-950/20 transition-colors">
                   {t}
                 </button>
               ))}
@@ -557,33 +557,33 @@ export default function ConsoleVehicleDesigner() {
                 <div className="space-y-1.5">
                   {draft.config.axles.map((axle, i) => (
                     <div key={i} className="rounded-lg border border-gray-800 bg-gray-900/50 px-2.5 py-1.5 space-y-1.5">
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span className="text-[11px] text-gray-500 w-12 flex-shrink-0">Axle {i + 1}</span>
                         <select value={axle.kind} onChange={(e) => patchAxle(i, { kind: e.target.value })}
                           aria-label={`Axle ${i + 1} kind`} className={MINI_SELECT}>
                           {AXLE_KINDS.map((k) => <option key={k} value={k}>{AXLE_KIND_LABELS[k]}</option>)}
                         </select>
                         <div className="flex rounded-lg overflow-hidden border border-gray-800" role="group" aria-label={`Axle ${i + 1} wheels`}>
-                          <button onClick={() => patchAxle(i, { dual: false })} aria-pressed={!axle.dual}
-                            className={`text-xs px-2 py-1 ${!axle.dual ? 'bg-orange-500/20 text-orange-300' : 'text-gray-400 hover:bg-gray-800/60'}`}>
+                          <button type="button" onClick={() => patchAxle(i, { dual: false })} aria-pressed={!axle.dual}
+                            className={`focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 text-xs px-2 py-1 ${!axle.dual ? 'bg-orange-500/20 text-orange-300' : 'text-gray-400 hover:bg-gray-800/60'}`}>
                             Single
                           </button>
-                          <button onClick={() => patchAxle(i, { dual: true })} aria-pressed={axle.dual}
-                            className={`text-xs px-2 py-1 ${axle.dual ? 'bg-orange-500/20 text-orange-300' : 'text-gray-400 hover:bg-gray-800/60'}`}>
+                          <button type="button" onClick={() => patchAxle(i, { dual: true })} aria-pressed={axle.dual}
+                            className={`focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 text-xs px-2 py-1 ${axle.dual ? 'bg-orange-500/20 text-orange-300' : 'text-gray-400 hover:bg-gray-800/60'}`}>
                             Dual
                           </button>
                         </div>
                         <span className="text-[10px] text-gray-500">{axle.dual ? '4 tyres' : '2 tyres'}</span>
-                        <button onClick={() => removeAxle(i)} disabled={draft.config.axles.length <= MIN_AXLES}
+                        <button type="button" onClick={() => removeAxle(i)} disabled={draft.config.axles.length <= MIN_AXLES}
                           title="Remove axle" aria-label={`Remove axle ${i + 1}`}
-                          className="ml-auto text-gray-600 hover:text-red-400 disabled:opacity-30 p-0.5">
-                          <Trash2 size={12} />
+                          className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 ml-auto text-gray-500 hover:text-red-400 disabled:opacity-30 p-0.5">
+                          <Trash2 size={12} aria-hidden="true" />
                         </button>
                       </div>
-                      <div className="flex items-center flex-wrap gap-2 pl-12">
-                        <button onClick={() => patchAxle(i, { lift: !axle.lift })} aria-pressed={!!axle.lift}
+                      <div className="flex items-center flex-wrap gap-2 sm:pl-12">
+                        <button type="button" onClick={() => patchAxle(i, { lift: !axle.lift })} aria-pressed={!!axle.lift}
                           title="Lifted axle: wheels render slightly smaller with a LIFT marker"
-                          className={`text-[10px] px-2 py-0.5 rounded-full border ${axle.lift
+                          className={`focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 text-[10px] px-2 py-0.5 rounded-full border ${axle.lift
                             ? 'border-orange-600/60 bg-orange-950/20 text-orange-300 font-semibold'
                             : 'border-gray-800 text-gray-500 hover:bg-gray-800/60'}`}>
                           Lifted
@@ -615,7 +615,7 @@ export default function ConsoleVehicleDesigner() {
                 <span className={LABEL}>Spare tyres</span>
                 <div className="flex gap-1.5" role="group" aria-label="Spare tyres">
                   {Array.from({ length: MAX_SPARES + 1 }, (_, n) => (
-                    <button key={n} onClick={() => patchConfig({ spare: n })} aria-pressed={draft.config.spare === n}
+                    <button type="button" key={n} onClick={() => patchConfig({ spare: n })} aria-pressed={draft.config.spare === n}
                       className={chip(draft.config.spare === n, 'text-xs px-3 py-1.5')}>
                       {n === 0 ? 'None' : n}
                     </button>
@@ -624,15 +624,15 @@ export default function ConsoleVehicleDesigner() {
               </div>
 
               {/* Body style */}
-              <div className="space-y-1.5">
+              <div className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 space-y-1.5">
                 <span className={LABEL}>Body style</span>
                 <div className="grid grid-cols-4 gap-1.5">
                   {BODY_STYLES.map((b) => {
                     const on = draft.config.body === b
                     return (
-                      <button key={b} onClick={() => patchConfig({ body: b })} aria-pressed={on}
+                      <button type="button" key={b} onClick={() => patchConfig({ body: b })} aria-pressed={on}
                         title={BODY_LABELS[b]}
-                        className={`rounded-lg border px-1 py-2 text-center transition-colors ${on
+                        className={`focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 rounded-lg border px-1 py-2 text-center transition-colors ${on
                           ? 'border-orange-600/60 bg-orange-950/20'
                           : 'border-gray-800 hover:border-gray-700 bg-gray-900/50'}`}>
                         <span className="text-lg block leading-none" aria-hidden="true">{BODY_EMOJI[b]}</span>
@@ -650,9 +650,9 @@ export default function ConsoleVehicleDesigner() {
                 <span className={LABEL}>Accents</span>
                 <div className="flex flex-wrap gap-1.5">
                   {ACCENTS.map((a) => (
-                    <button key={a.key} onClick={() => toggleAccent(a.key)} aria-pressed={!!draft.config.accents[a.key]}
+                    <button type="button" key={a.key} onClick={() => toggleAccent(a.key)} aria-pressed={!!draft.config.accents[a.key]}
                       className={chip(!!draft.config.accents[a.key], 'text-xs px-3 py-1.5 inline-flex items-center gap-1.5')}>
-                      <span className="w-2 h-2 rounded-full inline-block" style={{ background: a.dot }} /> {a.label}
+                      <span className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 w-2 h-2 rounded-full inline-block" style={{ background: a.dot }} /> {a.label}
                     </button>
                   ))}
                 </div>
@@ -663,9 +663,9 @@ export default function ConsoleVehicleDesigner() {
                       {HAZARD_SPEEDS.map((s) => {
                         const on = draft.config.accents.hazardSpeed === s
                         return (
-                          <button key={s} aria-pressed={on}
+                          <button type="button" key={s} aria-pressed={on}
                             onClick={() => patchConfig({ accents: { ...draft.config.accents, hazardSpeed: s } })}
-                            className={`text-[11px] px-2.5 py-1 ${on
+                            className={`focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 text-[11px] px-2.5 py-1 ${on
                               ? 'bg-orange-500/20 text-orange-300 font-semibold'
                               : 'text-gray-400 hover:bg-gray-800/60'}`}>
                             {HAZARD_SPEED_LABELS[s]}
@@ -706,7 +706,7 @@ export default function ConsoleVehicleDesigner() {
               <div className="flex items-center justify-between gap-2">
                 <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Live preview</p>
                 <div className="flex items-center gap-2">
-                  <button onClick={() => setSimulate((v) => !v)} aria-pressed={simulate}
+                  <button type="button" onClick={() => setSimulate((v) => !v)} aria-pressed={simulate}
                     title="Preview only: colours the wheels with a sample of live tyre statuses (good / warning / critical). Never saved."
                     className={chip(simulate, 'text-[11px] px-2.5 py-1 inline-flex items-center gap-1')}>
                     <Activity size={11} /> Simulate tyre status
@@ -716,7 +716,7 @@ export default function ConsoleVehicleDesigner() {
               </div>
               {/* The canvas is deliberately dark in both themes: the diagram art and
                   its light wheel labels are drawn for a dark ground, exactly as before. */}
-              <div className="rounded-xl border border-gray-800 p-4 flex items-center justify-center overflow-auto"
+              <div className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 rounded-xl border border-gray-800 p-4 flex items-center justify-center overflow-auto"
                 style={{ minHeight: 320, maxHeight: 560, background: '#020617' }}>
                 <CustomDiagramPreview layout={layout} width={250} statuses={simStatuses} />
               </div>
@@ -725,7 +725,7 @@ export default function ConsoleVehicleDesigner() {
                   <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full inline-block" style={{ background: '#22c55e' }} /> Good</span>
                   <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full inline-block" style={{ background: '#f59e0b' }} /> Warning</span>
                   <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full inline-block" style={{ background: '#ef4444' }} /> Critical</span>
-                  <span className="text-gray-600">Sample data, preview only</span>
+                  <span className="text-gray-500">Sample data, preview only</span>
                 </div>
               )}
               <p className="text-[11px] text-gray-500">
@@ -785,7 +785,7 @@ export default function ConsoleVehicleDesigner() {
                 <span>{bulkSelected.length} of {bulkOptions.length} selected</span>
                 <button type="button" disabled={bulkSaving}
                   onClick={() => setBulkSelected(bulkSelected.length === bulkOptions.length ? [] : [...bulkOptions])}
-                  className="text-orange-300 hover:underline disabled:opacity-50">
+                  className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 text-orange-300 hover:underline disabled:opacity-50">
                   {bulkSelected.length === bulkOptions.length ? 'Clear all' : 'Select all'}
                 </button>
               </div>

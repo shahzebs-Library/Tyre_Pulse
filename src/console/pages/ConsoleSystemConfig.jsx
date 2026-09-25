@@ -5,7 +5,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { toUserMessage } from '../../lib/safeError'
-import { ErrorState } from '../components/ui'
+import { ErrorState, Modal, Btn } from '../components/ui'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import { ENFORCEMENT_STATUS } from '../../lib/api/systemConfig'
 import FxRatesPanel from './config/FxRatesPanel'
@@ -87,9 +87,12 @@ export default function ConsoleSystemConfig() {
   const [dirty, setDirty]     = useState(false)
   const [saving, setSaving]   = useState(false)
   const [saved, setSaved]     = useState(false)
+  const [saveError, setSaveError] = useState('')
+  const [loadedMaintenance, setLoadedMaintenance] = useState(null)
+  const [confirmSave, setConfirmSave] = useState(false)
 
   const load = useCallback(async () => {
-    setLoading(true); setDirty(false); setSaved(false); setLoadError('')
+    setLoading(true); setDirty(false); setSaved(false); setLoadError(''); setSaveError('')
     try {
       const { data, error } = await supabase.from('system_config').select('key, value')
       // Critical here: an unread error would render every switch at its default,
@@ -99,6 +102,7 @@ export default function ConsoleSystemConfig() {
       const map = {}
       ;(data ?? []).forEach(row => { map[row.key] = row.value })
       setConfigs(map)
+      setLoadedMaintenance(map.maintenance_mode === 'true')
     } catch (e) {
       setLoadError(toUserMessage(e, 'Could not load the configuration.'))
     } finally {
@@ -127,30 +131,46 @@ export default function ConsoleSystemConfig() {
     setDirty(true); setSaved(false)
   }
 
+  // Turning maintenance mode ON locks every regular user out, so it asks first.
+  const turningMaintenanceOn = configs.maintenance_mode === 'true' && loadedMaintenance === false
+
+  function requestSave() {
+    if (turningMaintenanceOn) { setConfirmSave(true); return }
+    handleSave()
+  }
+
   async function handleSave() {
-    setSaving(true)
-    const rows = Object.entries(configs).map(([key, value]) => ({
-      key, value: String(value ?? ''), updated_at: new Date().toISOString(),
-    }))
-    const { error } = await supabase
-      .from('system_config')
-      .upsert(rows, { onConflict: 'key', ignoreDuplicates: false })
-    if (!error) {
+    setConfirmSave(false)
+    setSaving(true); setSaveError('')
+    try {
+      const rows = Object.entries(configs).map(([key, value]) => ({
+        key, value: String(value ?? ''), updated_at: new Date().toISOString(),
+      }))
+      const { error } = await supabase
+        .from('system_config')
+        .upsert(rows, { onConflict: 'key', ignoreDuplicates: false })
+      // A failed save used to be silent: the button simply stopped spinning.
+      if (error) throw error
       await logAction('update_config', null, 'system', { keys: Object.keys(configs).length })
       setSaved(true); setDirty(false)
+      setLoadedMaintenance(configs.maintenance_mode === 'true')
+    } catch (e) {
+      setSaveError(toUserMessage(e, 'Could not save the configuration. Nothing was changed.'))
+    } finally {
+      setSaving(false)
     }
-    setSaving(false)
   }
 
   return (
     <div className="space-y-5 max-w-4xl">
       <ErrorState message={loadError} onRetry={load} />
+      <ErrorState message={saveError} onRetry={requestSave} />
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-white">System Configuration</h1>
           <p className="text-sm text-gray-500 mt-0.5">Global platform settings and feature flags</p>
-          <p className="text-[10px] text-gray-600 mt-1 flex items-center gap-3 flex-wrap">
+          <p className="text-[10px] text-gray-500 mt-1 flex items-center gap-3 flex-wrap">
             <span className="inline-flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-green-400" /> Active and enforced
             </span>
@@ -160,12 +180,12 @@ export default function ConsoleSystemConfig() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={load} disabled={loading}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 text-gray-400 hover:text-white text-xs border border-gray-700 disabled:opacity-50 transition-colors">
+          <button type="button" onClick={load} disabled={loading}
+            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 text-gray-400 hover:text-white text-xs border border-gray-700 disabled:opacity-50 transition-colors">
             <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Refresh
           </button>
-          <button onClick={handleSave} disabled={!dirty || saving}
-            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold text-white disabled:opacity-40 transition-all ${
+          <button type="button" onClick={requestSave} disabled={!dirty || saving || !!loadError}
+            className={`focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold text-white disabled:opacity-40 transition-all ${
               saved ? 'bg-green-700' : ''
             }`}
             style={!saved ? { background: 'linear-gradient(135deg,#ea580c,#f97316)' } : {}}>
@@ -188,16 +208,20 @@ export default function ConsoleSystemConfig() {
       {(configs.maintenance_mode === 'true') && (
         <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-red-950/50 border border-red-700/50">
           <AlertTriangle size={18} className="text-red-400 flex-shrink-0" />
-          <p className="text-sm text-red-300 font-semibold">Maintenance Mode is ACTIVE - regular users cannot access the app</p>
-          <button onClick={() => setVal('maintenance_mode', 'bool', false)}
-            className="ml-auto text-xs text-red-300 underline hover:text-red-200">Disable</button>
+          <p className="text-sm text-red-300 font-semibold min-w-0 flex-1">Maintenance Mode is ACTIVE - regular users cannot access the app</p>
+          <button type="button" onClick={() => setVal('maintenance_mode', 'bool', false)}
+            className="ml-auto rounded text-xs text-red-300 underline hover:text-red-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">Disable</button>
         </div>
       )}
 
       {loading ? (
-        <div className="flex items-center justify-center h-48">
-          <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+        <div className="flex items-center justify-center h-48" role="status" aria-label="Loading configuration">
+          <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" aria-hidden="true" />
         </div>
+      ) : loadError ? (
+        <p className="text-xs text-gray-400 px-1">
+          The settings are hidden until they can be read, so no switch is shown at a default it may not have.
+        </p>
       ) : (
         <div className="space-y-4">
           {CONFIG_GROUPS.map(group => {
@@ -214,10 +238,10 @@ export default function ConsoleSystemConfig() {
                     const enf = ENFORCEMENT_STATUS[cfg.key]
                     const active = enf?.status === 'active'
                     return (
-                    <div key={cfg.key} className="flex items-center gap-4 px-5 py-3.5 hover:bg-black/10 transition-colors">
+                    <div key={cfg.key} className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 px-4 sm:px-5 py-3.5 hover:bg-black/10 transition-colors">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-xs font-semibold text-gray-200">{cfg.label}</p>
+                          <p id={`cfg-${cfg.key}`} className="text-xs font-semibold text-gray-200">{cfg.label}</p>
                           <span
                             title={enf?.where || (active ? 'Enforced' : 'Saved but not yet enforced')}
                             className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold border ${
@@ -225,20 +249,21 @@ export default function ConsoleSystemConfig() {
                                 ? 'text-green-300 border-green-700/40 bg-green-900/20'
                                 : 'text-gray-400 border-gray-700/50 bg-gray-800/40'
                             }`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${active ? 'bg-green-400' : 'bg-gray-500'}`} />
+                            <span aria-hidden="true" className={`w-1.5 h-1.5 rounded-full ${active ? 'bg-green-400' : 'bg-gray-500'}`} />
                             {active ? 'Active and enforced' : 'Saved only'}
                           </span>
                         </div>
-                        <p className="text-[10px] text-gray-600 mt-0.5">{cfg.desc}</p>
+                        <p className="text-[10px] text-gray-500 mt-0.5">{cfg.desc}</p>
                         {enf?.where && (
-                          <p className="text-[9px] text-gray-700 mt-0.5">Checked at: {enf.where}</p>
+                          <p className="text-[9px] text-gray-500 mt-0.5 break-words">Checked at: {enf.where}</p>
                         )}
                       </div>
-                      <div className="flex-shrink-0 w-48">
+                      <div className="flex-shrink-0 w-full sm:w-48">
                         {cfg.type === 'bool' ? (
                           <button
+                            type="button" role="switch" aria-checked={getVal(cfg.key, 'bool')} aria-labelledby={`cfg-${cfg.key}`}
                             onClick={() => setVal(cfg.key, 'bool', !getVal(cfg.key, 'bool'))}
-                            className={`w-12 h-6 rounded-full relative transition-all ${
+                            className={`focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 w-12 h-6 rounded-full relative transition-all ${
                               getVal(cfg.key, 'bool') ? 'bg-orange-500' : 'bg-gray-700'
                             }`}>
                             <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${
@@ -248,16 +273,18 @@ export default function ConsoleSystemConfig() {
                         ) : cfg.type === 'number' ? (
                           <input
                             type="number"
+                            aria-labelledby={`cfg-${cfg.key}`}
                             value={getVal(cfg.key, 'number')}
                             onChange={e => setVal(cfg.key, 'number', e.target.value)}
-                            className="w-full h-8 bg-gray-800/80 border border-gray-700 rounded-lg px-3 text-xs text-white focus:outline-none focus:border-orange-500"
+                            className="w-full h-8 bg-gray-800/80 border border-gray-700 rounded-lg px-3 text-xs text-white focus:outline-none focus:border-orange-500 focus-visible:ring-2 focus-visible:ring-orange-500"
                           />
                         ) : (
                           <input
                             type="text"
+                            aria-labelledby={`cfg-${cfg.key}`}
                             value={getVal(cfg.key, 'string')}
                             onChange={e => setVal(cfg.key, 'string', e.target.value)}
-                            className="w-full h-8 bg-gray-800/80 border border-gray-700 rounded-lg px-3 text-xs text-white focus:outline-none focus:border-orange-500"
+                            className="w-full h-8 bg-gray-800/80 border border-gray-700 rounded-lg px-3 text-xs text-white focus:outline-none focus:border-orange-500 focus-visible:ring-2 focus-visible:ring-orange-500"
                           />
                         )}
                       </div>
@@ -273,6 +300,21 @@ export default function ConsoleSystemConfig() {
 
       {/* Exchange rates: the gate on any combined-country figure. */}
       <FxRatesPanel />
+
+      <Modal open={confirmSave} onClose={() => setConfirmSave(false)} width="max-w-md"
+        title="Turn on maintenance mode?"
+        subtitle="Regular users are locked out until it is turned off again."
+        footer={(
+          <>
+            <Btn onClick={() => setConfirmSave(false)}>Cancel</Btn>
+            <Btn variant="danger" icon={Save} onClick={handleSave} busy={saving}>Save and lock users out</Btn>
+          </>
+        )}>
+        <p className="text-sm text-gray-300">
+          Every signed-in user who is not a super admin or Admin will see the maintenance screen as soon as
+          this is saved. The console stays available to you.
+        </p>
+      </Modal>
     </div>
   )
 }

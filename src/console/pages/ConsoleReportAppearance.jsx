@@ -14,6 +14,7 @@ import { safeImageSrc } from '../../lib/safeUrl'
 import { toUserMessage } from '../../lib/safeError'
 import {
   Panel, PanelHeader, Note, Badge, Code, Btn, LoadingState, ErrorState,
+  Modal,
 } from '../components/ui'
 
 ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, Tooltip)
@@ -70,6 +71,7 @@ export default function ConsoleReportAppearance() {
   const [logoLoading, setLogoLoading] = useState(true)
   const [logoSaving, setLogoSaving] = useState(false)
   const [logoSaved, setLogoSaved] = useState(false)
+  const [confirmClearLogo, setConfirmClearLogo] = useState(false)
   const [logoError, setLogoError] = useState('')
   const [diagBg, setDiagBg] = useState(DEFAULT_DIAGRAM_BG)     // diagram background (editable)
   const [diagBgSaving, setDiagBgSaving] = useState(false)
@@ -151,6 +153,7 @@ export default function ConsoleReportAppearance() {
   }
 
   async function clearLogo() {
+    setConfirmClearLogo(false)
     setLogoSaving(true); setLogoError(''); setLogoSaved(false)
     try {
       await setCompanyLogo('')
@@ -263,8 +266,8 @@ export default function ConsoleReportAppearance() {
                   {PRESET_KEYS.map((key) => {
                     const active = !isCustom && sel === key
                     return (
-                      <button key={key} onClick={() => { setSel(key); setSaved(false) }} aria-pressed={active}
-                        className={`rounded-xl border p-3 text-left transition-colors ${active ? 'border-orange-600/60 bg-orange-950/20' : 'border-gray-800 hover:border-gray-700 bg-gray-900/50'}`}>
+                      <button type="button" key={key} onClick={() => { setSel(key); setSaved(false) }} aria-pressed={active}
+                        className={`focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 rounded-xl border p-3 text-left transition-colors ${active ? 'border-orange-600/60 bg-orange-950/20' : 'border-gray-800 hover:border-gray-700 bg-gray-900/50'}`}>
                         <div className="flex items-center justify-between mb-2">
                           <span className="text-sm font-semibold text-gray-100">{PRESET_LABELS[key] || key}</span>
                           {active && <Badge tone="accent" icon={CheckCircle2}>Selected</Badge>}
@@ -274,8 +277,8 @@ export default function ConsoleReportAppearance() {
                     )
                   })}
                   {/* Custom */}
-                  <button onClick={chooseCustom} aria-pressed={isCustom}
-                    className={`rounded-xl border p-3 text-left transition-colors ${isCustom ? 'border-orange-600/60 bg-orange-950/20' : 'border-gray-800 hover:border-gray-700 bg-gray-900/50'}`}>
+                  <button type="button" onClick={chooseCustom} aria-pressed={isCustom}
+                    className={`focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 rounded-xl border p-3 text-left transition-colors ${isCustom ? 'border-orange-600/60 bg-orange-950/20' : 'border-gray-800 hover:border-gray-700 bg-gray-900/50'}`}>
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-semibold text-gray-100 inline-flex items-center gap-1.5"><Sparkles size={14} className="text-orange-400" /> Custom</span>
                       {isCustom && <Badge tone="accent" icon={CheckCircle2}>Selected</Badge>}
@@ -287,10 +290,10 @@ export default function ConsoleReportAppearance() {
                 {isCustom && (
                   <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-3">
                     <p className={FIELD_LABEL}>Custom colours</p>
-                    <div className="grid grid-cols-6 gap-2">
+                    <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
                       {custom.map((c, i) => (
                         <input key={i} type="color" value={c} onChange={(e) => editCustom(i, e.target.value)}
-                          className="h-9 w-full rounded cursor-pointer bg-transparent border border-gray-800" aria-label={`Colour ${i + 1}`} />
+                          className="h-9 w-full rounded cursor-pointer bg-transparent border border-gray-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" aria-label={`Colour ${i + 1}`} />
                       ))}
                     </div>
                   </div>
@@ -320,7 +323,7 @@ export default function ConsoleReportAppearance() {
           actions={(
             <>
               {logoDirty && !logoLoading && <Badge tone="warning">Unsaved</Badge>}
-              <Btn icon={Trash2} onClick={clearLogo}
+              <Btn icon={Trash2} onClick={() => setConfirmClearLogo(true)}
                 disabled={logoSaving || logoLoading || (logoInput.trim() === '' && logoUrl === '')}>
                 Clear
               </Btn>
@@ -345,7 +348,7 @@ export default function ConsoleReportAppearance() {
                 <input id="company-logo-url" type="url" inputMode="url" spellCheck={false}
                   value={logoInput} onChange={(e) => { setLogoInput(e.target.value); setLogoSaved(false); setLogoError('') }}
                   placeholder="https://your-company.com/logo.png"
-                  className="w-full rounded-lg bg-gray-900 border border-gray-800 text-gray-200 text-sm px-3 py-2 placeholder-gray-600 focus:border-gray-700 focus:outline-none" />
+                  className="w-full rounded-lg bg-gray-900 border border-gray-800 text-gray-200 text-sm px-3 py-2 placeholder-gray-500 focus:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />
                 <p className="text-[11px] text-gray-500 mt-1.5">
                   Paste a public image URL (http or https) or a data:image URI. Use a wide, high-contrast mark so it reads on a wall board.
                 </p>
@@ -391,7 +394,7 @@ export default function ConsoleReportAppearance() {
               Colour
               <input type="color" value={diagBg}
                 onChange={(e) => { setDiagBg(e.target.value); setDiagBgSaved(false); setDiagBgError('') }}
-                className="h-9 w-14 rounded border border-gray-800 bg-gray-900 cursor-pointer" />
+                className="h-9 w-14 rounded border border-gray-800 bg-gray-900 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />
               <Code>{diagBg}</Code>
             </label>
             <div className="rounded-xl border border-gray-800 px-6 py-3 text-xs font-semibold"
@@ -401,6 +404,18 @@ export default function ConsoleReportAppearance() {
           </div>
         </div>
       </Panel>
+
+      <Modal open={confirmClearLogo} onClose={() => setConfirmClearLogo(false)} width="max-w-md"
+        title="Remove the company logo?"
+        subtitle="Shared TV reports and public report links will show no logo until a new one is saved."
+        footer={(
+          <>
+            <Btn onClick={() => setConfirmClearLogo(false)}>Cancel</Btn>
+            <Btn variant="danger" icon={Trash2} onClick={clearLogo} busy={logoSaving}>Remove logo</Btn>
+          </>
+        )}>
+        <p className="text-sm text-gray-300">This takes effect on every board and link immediately.</p>
+      </Modal>
     </div>
   )
 }

@@ -113,9 +113,9 @@ export default function ConsoleLogin() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center p-6">
+    <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center p-4 sm:p-6">
       {/* Background grid */}
-      <div className="fixed inset-0 opacity-[0.03]"
+      <div aria-hidden="true" className="fixed inset-0 opacity-[0.03]"
         style={{ backgroundImage: 'linear-gradient(#f97316 1px, transparent 1px), linear-gradient(90deg, #f97316 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
 
       <div className="w-full max-w-md relative z-10">
@@ -146,7 +146,7 @@ export default function ConsoleLogin() {
         </div>
 
         {/* Card */}
-        <div className="rounded-2xl border border-gray-800 bg-gray-900/80 backdrop-blur p-8 shadow-2xl">
+        <div className="rounded-2xl border border-gray-800 bg-gray-900/80 backdrop-blur p-5 sm:p-8 shadow-2xl">
 
           {/* Step indicator */}
           <div className="flex items-center justify-center gap-2 mb-6">
@@ -166,29 +166,30 @@ export default function ConsoleLogin() {
 
               <form onSubmit={handleCredentials} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Email</label>
-                  <input type="email" value={email}
+                  <label htmlFor="console-login-email" className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Email</label>
+                  <input id="console-login-email" type="email" value={email}
                     onChange={e => { setEmail(e.target.value); setError(null) }}
                     placeholder="admin@tyrepulse.com"
-                    className="w-full h-11 bg-gray-800/80 border border-gray-700 rounded-xl px-4 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500 transition-colors"
+                    className="w-full h-11 bg-gray-800/80 border border-gray-700 rounded-xl px-4 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-orange-500 focus-visible:ring-2 focus-visible:ring-orange-500/60 transition-colors"
                     autoComplete="username" autoFocus />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Password</label>
+                  <label htmlFor="console-login-password" className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Password</label>
                   <div className="relative">
-                    <input type={showPass ? 'text' : 'password'} value={password}
+                    <input id="console-login-password" type={showPass ? 'text' : 'password'} value={password}
                       onChange={e => { setPassword(e.target.value); setError(null) }}
                       placeholder="••••••••••"
-                      className="w-full h-11 bg-gray-800/80 border border-gray-700 rounded-xl px-4 pr-11 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500 transition-colors"
+                      className="w-full h-11 bg-gray-800/80 border border-gray-700 rounded-xl px-4 pr-11 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-orange-500 focus-visible:ring-2 focus-visible:ring-orange-500/60 transition-colors"
                       autoComplete="current-password" />
                     <button type="button" onClick={() => setShowPass(s => !s)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300">
+                      aria-label={showPass ? 'Hide password' : 'Show password'} title={showPass ? 'Hide password' : 'Show password'}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 rounded text-gray-500 hover:text-gray-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
                       {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
                   </div>
                 </div>
                 <button type="submit" disabled={loading}
-                  className="w-full h-11 rounded-xl font-semibold text-sm transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="w-full h-11 rounded-xl font-semibold text-sm transition-all disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 flex items-center justify-center gap-2"
                   style={{ background: loading ? 'rgba(249,115,22,0.4)' : 'linear-gradient(135deg, #ea580c, #f97316)', boxShadow: loading ? 'none' : '0 4px 20px rgba(249,115,22,0.35)' }}>
                   {loading
                     ? <><Spinner /> Verifying...</>
@@ -211,8 +212,8 @@ export default function ConsoleLogin() {
               <form onSubmit={handleTotp} className="space-y-6">
                 {/* 6-digit input boxes */}
                 <div>
-                  <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 text-center">Authentication Code</label>
-                  <div className="flex justify-center gap-2">
+                  <p id="console-login-code" className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 text-center">Authentication Code</p>
+                  <div className="flex justify-center gap-1.5 sm:gap-2" role="group" aria-labelledby="console-login-code">
                     {totpCode.map((digit, i) => (
                       <input
                         key={i}
@@ -220,6 +221,8 @@ export default function ConsoleLogin() {
                         type="text"
                         inputMode="numeric"
                         maxLength={6}
+                        autoComplete={i === 0 ? 'one-time-code' : 'off'}
+                        aria-label={`Digit ${i + 1} of 6`}
                         value={digit}
                         onChange={e => handleTotpInput(i, e.target.value)}
                         onKeyDown={e => handleTotpKeyDown(i, e)}
@@ -227,7 +230,7 @@ export default function ConsoleLogin() {
                           e.preventDefault()
                           handleTotpInput(i, e.clipboardData.getData('text'))
                         }}
-                        className={`w-11 h-14 text-center text-xl font-bold rounded-xl border transition-all focus:outline-none ${
+                        className={`w-10 sm:w-11 h-14 text-center text-xl font-bold rounded-xl border transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 ${
                           digit
                             ? 'bg-gray-700 border-orange-500 text-white'
                             : 'bg-gray-800/80 border-gray-700 text-white focus:border-orange-500'
@@ -236,26 +239,26 @@ export default function ConsoleLogin() {
                       />
                     ))}
                   </div>
-                  <p className="text-center text-[10px] text-gray-600 mt-2">Code refreshes every 30 seconds</p>
+                  <p className="text-center text-[10px] text-gray-500 mt-2">Code refreshes every 30 seconds</p>
                 </div>
 
                 <button type="submit" disabled={loading || totpCode.join('').length !== 6}
-                  className="w-full h-11 rounded-xl font-semibold text-sm transition-all disabled:opacity-40 flex items-center justify-center gap-2"
+                  className="w-full h-11 rounded-xl font-semibold text-sm transition-all disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 flex items-center justify-center gap-2"
                   style={{ background: 'linear-gradient(135deg, #1d4ed8, #3b82f6)', boxShadow: '0 4px 20px rgba(59,130,246,0.3)' }}>
                   {loading ? <><Spinner /> Verifying...</> : <><Smartphone size={15} /> Verify Code</>}
                 </button>
               </form>
 
-              <button onClick={() => { setStep('credentials'); setError(null); setTotpCode(['','','','','','']) }}
-                className="w-full flex items-center justify-center gap-1.5 mt-4 text-xs text-gray-500 hover:text-gray-300 transition-colors">
+              <button type="button" onClick={() => { setStep('credentials'); setError(null); setTotpCode(['','','','','','']) }}
+                className="w-full flex items-center justify-center gap-1.5 mt-4 rounded text-xs text-gray-500 hover:text-gray-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
                 <ChevronLeft size={12} /> Back to login
               </button>
             </>
           )}
         </div>
 
-        <p className="text-center text-xs text-gray-700 mt-6">
-          TyrePulse System Console · All sessions are recorded
+        <p className="text-center text-xs text-gray-500 mt-6">
+          TyrePulse System Console | All sessions are recorded
         </p>
       </div>
     </div>
@@ -264,19 +267,19 @@ export default function ConsoleLogin() {
 
 function StepDot({ active, done, label }) {
   return (
-    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-all ${
+    <div aria-label={`Step ${label}${done ? ' done' : active ? ' current' : ''}`} aria-current={active ? 'step' : undefined} className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-all ${
       done ? 'bg-orange-500 text-white' :
       active ? 'bg-orange-500/30 text-orange-300 border border-orange-500/50' :
-      'bg-gray-800 text-gray-600 border border-gray-700'
+      'bg-gray-800 text-gray-400 border border-gray-700'
     }`}>{label}</div>
   )
 }
 
 function ErrBox({ msg }) {
   return (
-    <div className="mb-4 p-3 rounded-lg bg-red-950/50 border border-red-800/50 flex items-center gap-2">
-      <AlertTriangle size={14} className="text-red-400 flex-shrink-0" />
-      <p className="text-sm text-red-300">{msg}</p>
+    <div role="alert" className="mb-4 p-3 rounded-lg bg-red-950/50 border border-red-800/50 flex items-center gap-2">
+      <AlertTriangle size={14} className="text-red-400 flex-shrink-0" aria-hidden="true" />
+      <p className="text-sm text-red-300 min-w-0 break-words">{msg}</p>
     </div>
   )
 }

@@ -27,7 +27,7 @@ import {
 
 // Small square icon button in the console gray family (slate stays dark in
 // light mode, so it is not used here).
-const ICON_BTN = 'w-7 h-7 flex items-center justify-center rounded-md border border-gray-800 text-gray-400 hover:bg-gray-800 hover:text-gray-200 transition-colors disabled:opacity-30 disabled:cursor-not-allowed'
+const ICON_BTN = 'w-7 h-7 flex items-center justify-center rounded-md border border-gray-800 text-gray-400 hover:bg-gray-800 hover:text-gray-200 transition-colors disabled:opacity-30 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500'
 
 export default function ConsoleNavigation() {
   const { logAction } = useConsoleAuth()
@@ -236,8 +236,8 @@ export default function ConsoleNavigation() {
                 if (q && shown.length === 0) return null
                 return (
                   <Panel key={g.key} flush className={g.hidden ? 'opacity-70' : ''}>
-                    <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-800">
-                      <Menu size={14} className="text-gray-600 flex-shrink-0" />
+                    <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-b border-gray-800">
+                      <Menu size={14} className="text-gray-500 flex-shrink-0" />
                       {renaming === g.key ? (
                         <input
                           autoFocus
@@ -245,14 +245,14 @@ export default function ConsoleNavigation() {
                           aria-label={`Rename ${g.defaultLabel}`}
                           onBlur={(e) => { renameGroup(gIdx, e.target.value); setRenaming(null) }}
                           onKeyDown={(e) => { if (e.key === 'Enter') { renameGroup(gIdx, e.target.value); setRenaming(null) } if (e.key === 'Escape') setRenaming(null) }}
-                          className="flex-1 min-w-0 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm text-gray-100 focus:border-orange-600 focus:outline-none"
+                          className="flex-1 min-w-0 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm text-gray-100 focus:border-orange-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
                         />
                       ) : (
-                        <button onClick={() => setRenaming(g.key)} title="Rename group"
-                          className="flex-1 min-w-0 text-left inline-flex items-center gap-1.5 group">
+                        <button type="button" onClick={() => setRenaming(g.key)} title="Rename group" aria-label={`Rename group ${g.label}`}
+                          className={`flex-1 min-w-0 text-left inline-flex items-center gap-1.5 group rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500`}>
                           <span className="text-sm font-semibold text-gray-100 truncate">{g.label}</span>
                           {g.label !== g.defaultLabel && <Badge tone="accent">was {g.defaultLabel}</Badge>}
-                          <Pencil size={11} className="text-gray-600 group-hover:text-gray-300 flex-shrink-0" />
+                          <Pencil size={11} className="text-gray-500 group-hover:text-gray-300 flex-shrink-0" />
                         </button>
                       )}
                       {g.hidden && <Badge tone="quiet" icon={EyeOff}>Hidden</Badge>}
@@ -261,38 +261,38 @@ export default function ConsoleNavigation() {
                         {g.items.filter((i) => !i.hidden).length}/{g.items.length}
                       </span>
                       <div className="flex items-center gap-1 flex-shrink-0">
-                        <button className={ICON_BTN} title="Move group up" aria-label="Move group up" disabled={gIdx === 0} onClick={() => moveGroup(gIdx, -1)}><ArrowUp size={13} /></button>
-                        <button className={ICON_BTN} title="Move group down" aria-label="Move group down" disabled={gIdx === model.length - 1} onClick={() => moveGroup(gIdx, 1)}><ArrowDown size={13} /></button>
-                        <button className={ICON_BTN} title={g.hidden ? 'Show group' : 'Hide group'} aria-label={g.hidden ? 'Show group' : 'Hide group'} onClick={() => toggleGroupHidden(gIdx)}>
-                          {g.hidden ? <EyeOff size={13} className="text-gray-600" /> : <Eye size={13} className="text-emerald-400" />}
+                        <button className={ICON_BTN} title="Move group up" aria-label={`Move group ${g.label} up`} disabled={gIdx === 0} onClick={() => moveGroup(gIdx, -1)}><ArrowUp size={13} aria-hidden="true" /></button>
+                        <button className={ICON_BTN} title="Move group down" aria-label={`Move group ${g.label} down`} disabled={gIdx === model.length - 1} onClick={() => moveGroup(gIdx, 1)}><ArrowDown size={13} aria-hidden="true" /></button>
+                        <button className={ICON_BTN} title={g.hidden ? 'Show group' : 'Hide group'} aria-label={`${g.hidden ? 'Show' : 'Hide'} group ${g.label}`} aria-pressed={!g.hidden} onClick={() => toggleGroupHidden(gIdx)}>
+                          {g.hidden ? <EyeOff size={13} className="text-gray-500" /> : <Eye size={13} className="text-emerald-400" />}
                         </button>
                       </div>
                     </div>
 
                     <div className="p-2 space-y-1">
-                      {g.items.length === 0 && <p className="text-[11px] text-gray-600 px-2 py-1">No items.</p>}
+                      {g.items.length === 0 && <p className="text-[11px] text-gray-500 px-2 py-1">No items.</p>}
                       {shown.map(({ it, iIdx }) => (
-                        <div key={it.key} className={`flex items-center gap-2 px-2 py-1 rounded-lg ${it.hidden ? 'opacity-50' : 'hover:bg-gray-800/60'}`}>
+                        <div key={it.key} className={`flex flex-wrap items-center gap-2 px-2 py-1 rounded-lg ${it.hidden ? 'opacity-50' : 'hover:bg-gray-800/60'}`}>
                           <span className="text-[13px] text-gray-200 truncate flex-1 min-w-0">{it.label}</span>
                           {it.hidden && <Badge tone="quiet">Hidden</Badge>}
                           <span className="hidden sm:inline max-w-[140px] truncate"><Code>{it.key}</Code></span>
                           <div className="flex items-center gap-1 flex-shrink-0">
-                            <button className={ICON_BTN} title="Move up" aria-label="Move item up" disabled={iIdx === 0} onClick={() => moveItem(gIdx, iIdx, -1)}><ArrowUp size={12} /></button>
-                            <button className={ICON_BTN} title="Move down" aria-label="Move item down" disabled={iIdx === g.items.length - 1} onClick={() => moveItem(gIdx, iIdx, 1)}><ArrowDown size={12} /></button>
+                            <button className={ICON_BTN} title="Move up" aria-label={`Move ${it.label} up`} disabled={iIdx === 0} onClick={() => moveItem(gIdx, iIdx, -1)}><ArrowUp size={12} aria-hidden="true" /></button>
+                            <button className={ICON_BTN} title="Move down" aria-label={`Move ${it.label} down`} disabled={iIdx === g.items.length - 1} onClick={() => moveItem(gIdx, iIdx, 1)}><ArrowDown size={12} aria-hidden="true" /></button>
                             <div className="relative inline-flex items-center">
-                              <FolderInput size={12} className="absolute left-1.5 text-gray-600 pointer-events-none" />
+                              <FolderInput size={12} className="absolute left-1.5 text-gray-500 pointer-events-none" />
                               <select
                                 value={g.key}
                                 onChange={(e) => moveItemToGroup(gIdx, iIdx, e.target.value)}
                                 title="Move to group"
-                                aria-label="Move to group"
-                                className="appearance-none h-7 pl-6 pr-2 rounded-md border border-gray-800 bg-gray-900 text-[11px] text-gray-300 hover:text-gray-100 focus:border-gray-700 focus:outline-none max-w-[130px]"
+                                aria-label={`Move ${it.label} to group`}
+                                className="appearance-none h-7 pl-6 pr-2 rounded-md border border-gray-800 bg-gray-900 text-[11px] text-gray-300 hover:text-gray-100 focus:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 max-w-[130px]"
                               >
                                 {groupOptions.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
                               </select>
                             </div>
-                            <button className={ICON_BTN} title={it.hidden ? 'Show item' : 'Hide item'} aria-label={it.hidden ? 'Show item' : 'Hide item'} onClick={() => toggleItemHidden(gIdx, iIdx)}>
-                              {it.hidden ? <EyeOff size={12} className="text-gray-600" /> : <Eye size={12} className="text-emerald-400" />}
+                            <button className={ICON_BTN} title={it.hidden ? 'Show item' : 'Hide item'} aria-label={`${it.hidden ? 'Show' : 'Hide'} ${it.label}`} aria-pressed={!it.hidden} onClick={() => toggleItemHidden(gIdx, iIdx)}>
+                              {it.hidden ? <EyeOff size={12} className="text-gray-500" /> : <Eye size={12} className="text-emerald-400" />}
                             </button>
                           </div>
                         </div>
@@ -340,8 +340,8 @@ export default function ConsoleNavigation() {
         width="max-w-md"
         footer={(
           <>
-            <Btn onClick={() => setConfirmReset(false)}>Cancel</Btn>
-            <Btn variant="danger" icon={RotateCcw} onClick={handleReset}>Reset for everyone</Btn>
+            <Btn onClick={() => setConfirmReset(false)} disabled={saving}>Cancel</Btn>
+            <Btn variant="danger" icon={RotateCcw} onClick={handleReset} busy={saving}>Reset for everyone</Btn>
           </>
         )}
       >

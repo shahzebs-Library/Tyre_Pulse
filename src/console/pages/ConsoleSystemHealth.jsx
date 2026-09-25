@@ -46,8 +46,9 @@ const TREND_MAX_ROWS = 20000
 /** Plain-English tooltip marker sitting next to a technical term. */
 function InfoDot({ text }) {
   return (
-    <span className="inline-flex align-middle ml-1 text-gray-600 hover:text-gray-300 cursor-help" title={text}>
-      <Info size={11} />
+    <span tabIndex={0} role="img" aria-label={text} title={text}
+      className="inline-flex align-middle ml-1 rounded text-gray-500 hover:text-gray-300 cursor-help focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
+      <Info size={11} aria-hidden="true" />
     </span>
   )
 }
@@ -627,13 +628,13 @@ export default function ConsoleSystemHealth() {
           )}
         />
         <Toolbar className="mb-3">
-          <Select value={fSeverity} onChange={setFSeverity} className="w-40"
+          <Select value={fSeverity} onChange={setFSeverity} className="w-40" ariaLabel="Filter by severity"
             options={[{ value: 'all', label: 'All severities' }, ...SEVERITIES.map(s => ({ value: s.key, label: s.label }))]} />
-          <Select value={fModule} onChange={setFModule} className="w-44"
+          <Select value={fModule} onChange={setFModule} className="w-44" ariaLabel="Filter by module"
             options={[{ value: 'all', label: 'All modules' }, ...moduleOptions.map(m => ({ value: m, label: m }))]} />
-          <Select value={fResolved} onChange={setFResolved} className="w-36"
+          <Select value={fResolved} onChange={setFResolved} className="w-36" ariaLabel="Filter by status"
             options={[{ value: 'open', label: 'Open only' }, { value: 'resolved', label: 'Resolved only' }, { value: 'all', label: 'All' }]} />
-          <Select value={fSince} onChange={setFSince} className="w-36"
+          <Select value={fSince} onChange={setFSince} className="w-36" ariaLabel="Filter by time window"
             options={[
               { value: '1', label: 'Last 24 hours' }, { value: '7', label: 'Last 7 days' },
               { value: '14', label: 'Last 14 days' }, { value: '30', label: 'Last 30 days' }, { value: 'all', label: 'All time' },
@@ -668,8 +669,8 @@ export default function ConsoleSystemHealth() {
                     <Td><Badge tone={sev.tone}>{sev.label}</Badge></Td>
                     <Td nowrap><span className="text-gray-400">{row.module_id || row.source || 'app'}</span></Td>
                     <Td className="max-w-md">
-                      <span className="line-clamp-2 text-gray-300" title={row.message || ''}>{row.message || 'No message'}</span>
-                      {row.reference_id && <span className="block text-[10px] text-gray-600 font-mono mt-0.5">{row.reference_id}</span>}
+                      <span className="line-clamp-2 break-words text-gray-300" title={row.message || ''}>{row.message || 'No message'}</span>
+                      {row.reference_id && <span className="block text-[10px] text-gray-500 font-mono mt-0.5 break-all">{row.reference_id}</span>}
                     </Td>
                     <Td align="center">
                       {isResolved ? <Badge tone="good">Resolved</Badge> : <Badge tone="default">Open</Badge>}
@@ -689,7 +690,7 @@ export default function ConsoleSystemHealth() {
         )}
       </Panel>
 
-      <p className="text-[11px] text-gray-600">
+      <p className="text-[11px] text-gray-500">
         This board refreshes automatically when a new error is recorded, and every 60 seconds as a fallback.
         Subsystem checks are reachability pings only and never trigger AI calls or emails.
       </p>
@@ -702,8 +703,8 @@ export default function ConsoleSystemHealth() {
         width="max-w-md"
         footer={(
           <>
-            <Btn onClick={() => setConfirmAll(false)}>Cancel</Btn>
-            <Btn variant="primary" icon={CheckCircle2} onClick={handleResolveAll}>Resolve all</Btn>
+            <Btn onClick={() => setConfirmAll(false)} disabled={resolvingAll}>Cancel</Btn>
+            <Btn variant="primary" icon={CheckCircle2} onClick={handleResolveAll} busy={resolvingAll}>Resolve all</Btn>
           </>
         )}
       >

@@ -19,6 +19,7 @@ import {
 } from '../../../lib/api/currencyRates'
 import { supabase } from '../../../lib/api/_client'
 import { toUserMessage } from '../../../lib/safeError'
+import { Modal, Btn } from '../../components/ui'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
@@ -29,10 +30,12 @@ export default function FxRatesPanel() {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [loadFailed, setLoadFailed] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(null)
   const [form, setForm] = useState({ base: 'AED', quote: 'SAR', rate: '', rateDate: today() })
 
   const load = useCallback(async () => {
-    setError('')
+    setError(''); setLoadFailed(false)
     try {
       const [rows, cov] = await Promise.all([
         listCurrencyRates(),
@@ -43,12 +46,14 @@ export default function FxRatesPanel() {
       if (cov?.policy) setPolicy(cov.policy)
     } catch (e) {
       setError(toUserMessage(e, 'Could not load exchange rates.'))
+      setLoadFailed(true)
     } finally { setLoading(false) }
   }, [])
 
   useEffect(() => { load() }, [load])
 
   async function savePolicy(next) {
+    const prev = policy
     setPolicy(next)
     try {
       // Same path the rest of this page uses to persist a setting.
@@ -56,6 +61,7 @@ export default function FxRatesPanel() {
         .upsert([{ key: 'fx_policy', value: next }], { onConflict: 'key' })
       if (e2) throw e2
     } catch (e) {
+      setPolicy(prev)
       setError(toUserMessage(e, 'Could not save the policy.'))
     }
   }
@@ -87,14 +93,19 @@ export default function FxRatesPanel() {
             Needed before any figure can combine KSA, UAE and Egypt into one number.
           </p>
         </div>
-        <button onClick={load} disabled={busy}
-          className="h-8 px-3 rounded-lg bg-gray-800 border border-gray-700 text-xs text-gray-300 hover:text-white inline-flex items-center gap-1.5 disabled:opacity-50">
-          <RefreshCw size={12} /> Refresh
+        <button type="button" onClick={load} disabled={busy}
+          className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 h-8 px-3 rounded-lg bg-gray-800 border border-gray-700 text-xs text-gray-300 hover:text-white inline-flex items-center gap-1.5 disabled:opacity-50">
+          <RefreshCw size={12} aria-hidden="true" /> Refresh
         </button>
       </div>
 
       {error ? (
-        <div className="px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-xs text-red-300">{error}</div>
+        <div role="alert" className="flex flex-wrap items-center gap-2 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-xs text-red-300">
+          <span className="flex-1 min-w-0 break-words">{error}</span>
+          {loadFailed && (
+            <button type="button" onClick={load} className={`px-2 py-0.5 rounded border border-red-500/40 hover:bg-red-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500`}>Retry</button>
+          )}
+        </div>
       ) : null}
 
       {/* Where things stand right now */}
@@ -125,8 +136,8 @@ export default function FxRatesPanel() {
         <p className="text-xs font-medium text-gray-300">How costs are converted</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
           {FX_POLICIES.map((p) => (
-            <button key={p.key} onClick={() => savePolicy(p.key)}
-              className={`text-left p-3 rounded-lg border transition-colors ${
+            <button type="button" key={p.key} onClick={() => savePolicy(p.key)} aria-pressed={policy === p.key}
+              className={`focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 text-left p-3 rounded-lg border transition-colors ${
                 policy === p.key
                   ? 'border-orange-500/60 bg-orange-500/10'
                   : 'border-gray-800 bg-gray-900/60 hover:border-gray-700'}`}>
@@ -145,30 +156,30 @@ export default function FxRatesPanel() {
           <label key={k} className="text-[11px] text-gray-400">
             {label}
             <input value={form[k]} onChange={(e) => setForm((f) => ({ ...f, [k]: e.target.value.toUpperCase() }))}
-              className="block w-20 mt-1 h-8 px-2 rounded-lg bg-gray-950 border border-gray-800 text-xs text-gray-200" />
+              className="block w-20 mt-1 h-8 px-2 rounded-lg bg-gray-950 border border-gray-800 text-xs text-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />
           </label>
         ))}
         <label className="text-[11px] text-gray-400">
           Rate
           <input value={form.rate} onChange={(e) => setForm((f) => ({ ...f, rate: e.target.value }))}
             placeholder="1.0211" inputMode="decimal"
-            className="block w-28 mt-1 h-8 px-2 rounded-lg bg-gray-950 border border-gray-800 text-xs text-gray-200" />
+            className="block w-28 mt-1 h-8 px-2 rounded-lg bg-gray-950 border border-gray-800 text-xs text-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />
         </label>
         <label className="text-[11px] text-gray-400">
           Effective from
           <input type="date" value={form.rateDate}
             onChange={(e) => setForm((f) => ({ ...f, rateDate: e.target.value }))}
-            className="block mt-1 h-8 px-2 rounded-lg bg-gray-950 border border-gray-800 text-xs text-gray-200" />
+            className="block mt-1 h-8 px-2 rounded-lg bg-gray-950 border border-gray-800 text-xs text-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />
         </label>
-        <button onClick={add} disabled={busy || !form.rate}
-          className="h-8 px-3 rounded-lg bg-orange-600 hover:bg-orange-500 text-xs text-white font-medium inline-flex items-center gap-1.5 disabled:opacity-50">
-          <Plus size={12} /> Add rate
+        <button type="button" onClick={add} disabled={busy || !form.rate}
+          className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 h-8 px-3 rounded-lg bg-orange-600 hover:bg-orange-500 text-xs text-white font-medium inline-flex items-center gap-1.5 disabled:opacity-50">
+          {busy ? 'Saving...' : <><Plus size={12} aria-hidden="true" /> Add rate</>}
         </button>
       </div>
 
-      <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-sky-500/10 border border-sky-500/25">
-        <Info size={13} className="text-sky-400 flex-shrink-0 mt-0.5" />
-        <p className="text-[11px] text-sky-300">
+      <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-blue-500/10 border border-blue-500/25">
+        <Info size={13} className="text-blue-400 flex-shrink-0 mt-0.5" aria-hidden="true" />
+        <p className="text-[11px] text-blue-300">
           A new rate is recorded but not used until an administrator approves it. Nothing here is
           filled in automatically: a wrong rate reads as authoritative, which is worse than showing
           three honest per-country figures.
@@ -177,8 +188,8 @@ export default function FxRatesPanel() {
 
       {/* Table */}
       {loading ? (
-        <p className="text-xs text-gray-500">Loading.</p>
-      ) : rates.length === 0 ? (
+        <p className="text-xs text-gray-500" role="status">Loading exchange rates...</p>
+      ) : loadFailed ? null : rates.length === 0 ? (
         <p className="text-xs text-gray-500">
           No rates recorded. Combined-country totals stay unavailable until there are.
         </p>
@@ -187,11 +198,11 @@ export default function FxRatesPanel() {
           <table className="w-full text-xs">
             <thead>
               <tr className="text-left text-gray-500 border-b border-gray-800">
-                <th className="py-2 pr-3">Pair</th>
-                <th className="py-2 px-3 text-right">Rate</th>
-                <th className="py-2 px-3">Effective from</th>
-                <th className="py-2 px-3">Status</th>
-                <th className="py-2 pl-3 text-right">Actions</th>
+                <th scope="col" className="py-2 pr-3">Pair</th>
+                <th scope="col" className="py-2 px-3 text-right">Rate</th>
+                <th scope="col" className="py-2 px-3">Effective from</th>
+                <th scope="col" className="py-2 px-3">Status</th>
+                <th scope="col" className="py-2 pl-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -206,13 +217,15 @@ export default function FxRatesPanel() {
                       : <span className="px-1.5 py-0.5 rounded bg-gray-700/40 text-gray-400">Not approved</span>}
                   </td>
                   <td className="py-2 pl-3 text-right whitespace-nowrap">
-                    <button onClick={() => act(setRateApproval, r.id, !r.approved)} disabled={busy}
-                      className="h-7 px-2 rounded bg-gray-800 border border-gray-700 text-gray-300 hover:text-white inline-flex items-center gap-1 disabled:opacity-50">
+                    <button type="button" onClick={() => act(setRateApproval, r.id, !r.approved)} disabled={busy}
+                      className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 h-7 px-2 rounded bg-gray-800 border border-gray-700 text-gray-300 hover:text-white inline-flex items-center gap-1 disabled:opacity-50">
                       {r.approved ? <><X size={11} /> Withdraw</> : <><Check size={11} /> Approve</>}
                     </button>
-                    <button onClick={() => act(deleteCurrencyRate, r.id)} disabled={busy}
-                      className="h-7 px-2 ml-1.5 rounded bg-gray-800 border border-gray-700 text-red-300 hover:text-red-200 inline-flex items-center gap-1 disabled:opacity-50">
-                      <Trash2 size={11} />
+                    <button type="button" onClick={() => setConfirmDelete(r)} disabled={busy}
+                      aria-label={`Delete rate ${r.base_currency} to ${r.quote_currency} from ${String(r.rate_date).slice(0, 10)}`}
+                      title="Delete rate"
+                      className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 h-7 px-2 ml-1.5 rounded bg-gray-800 border border-gray-700 text-red-300 hover:text-red-200 inline-flex items-center gap-1 disabled:opacity-50">
+                      <Trash2 size={11} aria-hidden="true" />
                     </button>
                   </td>
                 </tr>
@@ -221,6 +234,28 @@ export default function FxRatesPanel() {
           </table>
         </div>
       )}
+
+      <Modal open={!!confirmDelete} onClose={() => setConfirmDelete(null)} width="max-w-md"
+        title="Delete this exchange rate?"
+        subtitle="This cannot be undone. Figures that relied on it fall back to their own currency."
+        footer={(
+          <>
+            <Btn onClick={() => setConfirmDelete(null)} disabled={busy}>Cancel</Btn>
+            <Btn variant="danger" icon={Trash2} busy={busy}
+              onClick={async () => { const row = confirmDelete; await act(deleteCurrencyRate, row.id); setConfirmDelete(null) }}>
+              Delete rate
+            </Btn>
+          </>
+        )}>
+        {confirmDelete && (
+          <p className="text-sm text-gray-300">
+            {confirmDelete.base_currency} to {confirmDelete.quote_currency} at{' '}
+            {Number(confirmDelete.rate).toLocaleString('en-US', { maximumFractionDigits: 6 })}, effective{' '}
+            {String(confirmDelete.rate_date).slice(0, 10)}
+            {confirmDelete.approved ? ', currently in use.' : '.'}
+          </p>
+        )}
+      </Modal>
     </div>
   )
 }

@@ -578,24 +578,37 @@ function claimIsDelayed(r: ClaimRow, today: string): boolean {
 
 // deno-lint-ignore no-explicit-any
 async function buildClaimsDigest(svc: any, orgId: string | null, win: { from: string | null; to: string | null } = { from: null, to: null }): Promise<ClaimsDigest> {
-  let q = svc
-    .from('accidents')
-    .select(
-      'incident_date,asset_no,site,driver_name,status,claim_status,insurer,policy_no,gcc_liability_ratio,fault_status,claim_amount,claim_approved_amount,deductible,recovered_amount,repair_cost,estimated_damage_cost,parts_cost,expected_release_date,release_date,closure_status',
-    )
-    .or('claim_amount.gt.0,claim_approved_amount.gt.0,claim_status.not.is.null,insurer.not.is.null')
-    .order('incident_date', { ascending: false })
-    .limit(5000)
-  // Service role bypasses RLS, so scope to the schedule's org explicitly.
-  if (orgId) q = q.eq('organisation_id', orgId)
-  // The schedule's own coverage window on the incident date (same rule as the
-  // dataset digests: a missing bound leaves that side open, never narrows to
-  // nothing).
-  if (win.from) q = q.gte('incident_date', win.from)
-  if (win.to)   q = q.lte('incident_date', win.to)
-  const { data, error } = await q
-  if (error) throw new Error(`claims query failed: ${error.message}`)
-  const rows = (data ?? []) as ClaimRow[]
+  // PostgREST caps every response at 1000 rows whatever .limit() says, so the
+  // digest pages with .range() (id tiebreak keeps page boundaries stable) up to
+  // a hard ceiling rather than silently summarising the newest 1000 claims.
+  const PAGE = 1000
+  const CEILING = 20000
+  const buildQuery = () => {
+    let q = svc
+      .from('accidents')
+      .select(
+        'id,incident_date,asset_no,site,driver_name,status,claim_status,insurer,policy_no,gcc_liability_ratio,fault_status,claim_amount,claim_approved_amount,deductible,recovered_amount,repair_cost,estimated_damage_cost,parts_cost,expected_release_date,release_date,closure_status',
+      )
+      .or('claim_amount.gt.0,claim_approved_amount.gt.0,claim_status.not.is.null,insurer.not.is.null')
+      .order('incident_date', { ascending: false })
+      .order('id', { ascending: true })
+    // Service role bypasses RLS, so scope to the schedule's org explicitly.
+    if (orgId) q = q.eq('organisation_id', orgId)
+    // The schedule's own coverage window on the incident date (same rule as the
+    // dataset digests: a missing bound leaves that side open, never narrows to
+    // nothing).
+    if (win.from) q = q.gte('incident_date', win.from)
+    if (win.to)   q = q.lte('incident_date', win.to)
+    return q
+  }
+  const rows: ClaimRow[] = []
+  for (let offset = 0; offset < CEILING; offset += PAGE) {
+    const { data, error } = await buildQuery().range(offset, offset + PAGE - 1)
+    if (error) throw new Error(`claims query failed: ${error.message}`)
+    const page = (data ?? []) as ClaimRow[]
+    rows.push(...page)
+    if (page.length < PAGE) break
+  }
 
   const today = new Date().toISOString().slice(0, 10)
   const insurerMap = new Map<string, number>()

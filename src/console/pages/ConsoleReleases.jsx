@@ -149,8 +149,8 @@ export default function ConsoleReleases() {
         )}
 
         <div className="grid grid-cols-2 gap-3 p-4 pt-0">
-          <StatTile label="Releases" value={nf.format(state.releases.length)} icon={Tag} />
-          <StatTile label="Recorded impacts" value={nf.format(state.impacts.length)} />
+          <StatTile label="Releases" value={state.error ? 'N/A' : nf.format(state.releases.length)} icon={Tag} />
+          <StatTile label="Recorded impacts" value={state.error ? 'N/A' : nf.format(state.impacts.length)} />
         </div>
       </Panel>
 

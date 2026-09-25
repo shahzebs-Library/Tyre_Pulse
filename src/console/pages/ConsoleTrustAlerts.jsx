@@ -114,10 +114,10 @@ export default function ConsoleTrustAlerts() {
         )}
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 p-4 pt-0">
-          <StatTile label="Open" value={nf.format(summary.open)} tone={summary.open ? 'danger' : 'good'} icon={ShieldAlert} />
-          <StatTile label="Quality" value={nf.format(summary.quality)} tone={summary.quality ? 'warning' : 'default'} />
-          <StatTile label="Reconciliation" value={nf.format(summary.reconciliation)} tone={summary.reconciliation ? 'warning' : 'default'} />
-          <StatTile label="Total" value={nf.format(summary.total)} />
+          <StatTile label="Open" value={state.error ? 'N/A' : nf.format(summary.open)} tone={state.error ? 'default' : summary.open ? 'danger' : 'good'} icon={ShieldAlert} />
+          <StatTile label="Quality" value={state.error ? 'N/A' : nf.format(summary.quality)} tone={summary.quality ? 'warning' : 'default'} />
+          <StatTile label="Reconciliation" value={state.error ? 'N/A' : nf.format(summary.reconciliation)} tone={summary.reconciliation ? 'warning' : 'default'} />
+          <StatTile label="Total" value={state.error ? 'N/A' : nf.format(summary.total)} />
         </div>
       </Panel>
 

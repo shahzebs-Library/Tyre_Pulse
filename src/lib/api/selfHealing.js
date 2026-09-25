@@ -4,8 +4,11 @@
  *
  *   - SCAN paths are READ-ONLY. They REUSE the existing, server-gated
  *     reconciliation RPCs (dataReconciliation.js) plus a lightweight staleness
- *     query and the local anomaly engine. Each source is isolated in its own
- *     try/catch and degrades to [] so one unavailable table never sinks a scan.
+ *     query and the local anomaly engine. Each source is isolated so one
+ *     failing check never sinks the others - but a failed check is RECORDED in
+ *     `failed` and shown as "could not be checked". It is never reported as
+ *     "no findings": a clean result from a check that did not run is the
+ *     worst lie a data-quality tool can tell.
  *
  *   - FIX paths are thin pass-throughs to the EXISTING reconciliation RPCs only.
  *     This module creates NO new mutating RPC. The only fixes offered are the
@@ -18,7 +21,8 @@
  *
  * Nothing here decides to delete or overwrite data on its own.
  */
-import { supabase, applyCountry, fetchAllPages } from './_client'
+import { supabase, applyCountry, fetchAllPages, isNotProvisioned, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 import {
   listOrphanAssets, listDuplicateTyres, listSerialConflicts,
   backfillAsset, backfillAllOrphanAssets, mergeDuplicate,
@@ -43,99 +47,149 @@ const STALE_TABLES = ['tyre_records', 'accidents', 'inspections']
  */
 const STALE_ROW_CAP = 40000
 
+/** Human labels for each scan, used when a check fails. */
+export const SCAN_LABELS = {
+  orphans: 'Orphaned assets',
+  duplicates: 'Exact-duplicate tyres',
+  serialConflicts: 'Serial conflicts',
+  stale: 'Quiet sites',
+  anomalies: 'Unusual tyre patterns',
+}
+
+const failure = (key, err, detail) => ({
+  key,
+  label: SCAN_LABELS[key] || key,
+  message: toUserMessage(err, 'This check could not run.'),
+  ...(detail ? { detail } : {}),
+})
+
 /**
  * Latest activity per site across the operational tables, as
- * [{ site, created_at }] (one row per site = the most recent created_at seen in
- * any scanned table). Feeds the pure `detectStaleGroups`. Never throws: a table
- * that errors is skipped; total failure returns [].
+ * { rows: [{ site, created_at }], failedTables: [{ table, message }] } (one row
+ * per site = the most recent created_at seen in any scanned table). Feeds the
+ * pure `detectStaleGroups`. A table that is genuinely not provisioned is
+ * skipped; a table whose read FAILS is recorded in `failedTables` so the page
+ * can say the staleness check is incomplete instead of calling every site
+ * active.
  *
  * @param {object} [opts]
  * @param {string} [opts.country]  optional country scope
- * @returns {Promise<Array<{ site: string, created_at: string }>>}
+ * @returns {Promise<{ rows: Array<{ site: string, created_at: string }>, failedTables: Array<{table:string, message:string}> }>}
  */
 async function queryStaleRows({ country } = {}) {
   const latest = new Map() // site -> { t, created_at }
+  const failedTables = []
   for (const table of STALE_TABLES) {
+    let res
     try {
       // `id` is the paging tiebreak - created_at is not unique, and a page
       // boundary inside a run of equal timestamps drops or repeats rows.
-      const { data, error } = await fetchAllPages(
+      res = await fetchAllPages(
         (from, to) => applyCountry(
           supabase.from(table).select('site,created_at'),
           country,
         ).order('created_at', { ascending: false }).order('id').range(from, to),
         { max: STALE_ROW_CAP },
       )
-      if (error) continue
-      for (const r of Array.isArray(data) ? data : []) {
-        const site = r?.site
-        const created = r?.created_at
-        if (!site || !created) continue
-        const t = new Date(created).getTime()
-        if (Number.isNaN(t)) continue
-        const prev = latest.get(site)
-        if (!prev || t > prev.t) latest.set(site, { t, created_at: created })
+    } catch (err) {
+      res = { data: null, error: err }
+    }
+    if (res?.error) {
+      if (!isNotProvisioned(res.error)) {
+        failedTables.push({ table, message: toUserMessage(res.error, 'Could not be read.') })
       }
-    } catch {
-      // skip this table, keep scanning the rest
+      continue
+    }
+    for (const r of Array.isArray(res?.data) ? res.data : []) {
+      const site = r?.site
+      const created = r?.created_at
+      if (!site || !created) continue
+      const t = new Date(created).getTime()
+      if (Number.isNaN(t)) continue
+      const prev = latest.get(site)
+      if (!prev || t > prev.t) latest.set(site, { t, created_at: created })
     }
   }
-  return Array.from(latest.entries()).map(([site, v]) => ({ site, created_at: v.created_at }))
+  return {
+    rows: Array.from(latest.entries()).map(([site, v]) => ({ site, created_at: v.created_at })),
+    failedTables,
+  }
 }
 
 /**
- * Run every READ-ONLY scan. Each source is independently guarded so partial
- * data still returns; nothing here mutates anything.
+ * Run every READ-ONLY scan. Each source is independently isolated so one
+ * failing check never sinks the others; nothing here mutates anything.
+ *
+ * A check that FAILS contributes an empty bucket AND an entry in `failed`
+ * ({ key, label, message }). Callers must present those as "could not be
+ * checked", never as "no findings".
  *
  * @param {object} [opts]
  * @param {string} [opts.country]
  * @returns {Promise<{
- *   orphans: Array, duplicates: Array, serialConflicts: Array, staleRows: Array
+ *   orphans: Array, duplicates: Array, serialConflicts: Array, staleRows: Array,
+ *   failed: Array<{ key: string, label: string, message: string, detail?: Array }>
  * }>}
  */
 export async function runScans({ country } = {}) {
-  const [orphans, duplicates, serialConflicts, staleRows] = await Promise.all([
-    Promise.resolve().then(listOrphanAssets).catch(() => []),
-    Promise.resolve().then(listDuplicateTyres).catch(() => []),
-    Promise.resolve().then(listSerialConflicts).catch(() => []),
-    queryStaleRows({ country }).catch(() => []),
+  const failed = []
+  const guard = (key, fn) => Promise.resolve().then(fn).then(
+    (rows) => (Array.isArray(rows) ? rows : []),
+    (err) => { failed.push(failure(key, err)); return [] },
+  )
+  const [orphans, duplicates, serialConflicts, stale] = await Promise.all([
+    guard('orphans', listOrphanAssets),
+    guard('duplicates', listDuplicateTyres),
+    guard('serialConflicts', listSerialConflicts),
+    queryStaleRows({ country }).catch((err) => {
+      failed.push(failure('stale', err))
+      return { rows: [], failedTables: [] }
+    }),
   ])
-  return {
-    orphans: Array.isArray(orphans) ? orphans : [],
-    duplicates: Array.isArray(duplicates) ? duplicates : [],
-    serialConflicts: Array.isArray(serialConflicts) ? serialConflicts : [],
-    staleRows: Array.isArray(staleRows) ? staleRows : [],
+  if (stale.failedTables.length > 0) {
+    const names = stale.failedTables.map((f) => f.table).join(', ')
+    failed.push({
+      key: 'stale',
+      label: SCAN_LABELS.stale,
+      message: `Activity could not be read from: ${names}. Sites that only appear there are not assessed.`,
+      detail: stale.failedTables,
+    })
   }
+  // Stable order so the page reads the same way every run.
+  const order = Object.keys(SCAN_LABELS)
+  failed.sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key))
+  return { orphans, duplicates, serialConflicts, staleRows: stale.rows, failed }
 }
 
 /**
  * Predictive anomaly scan over tyre_records using the local rule-based engine
- * (no AI). READ-ONLY and honest: returns [] on any error or empty data.
+ * (no AI). READ-ONLY. Returns [] when there are genuinely no rows (or the table
+ * is not provisioned); a failed read THROWS so the caller records the check as
+ * "could not run" rather than "no unusual patterns".
  *
  * @param {object} [opts]
  * @param {string} [opts.country]
  * @returns {Promise<Array>} anomaly objects from detectAnomalies
  */
 export async function scanAnomalies({ country } = {}) {
-  try {
-    // Paged AND ordered: the previous read had neither a real bound nor an
-    // ORDER BY, so the server returned an arbitrary 1000 of 11,132 rows and a
-    // different arbitrary 1000 on the next run.
-    const { data, error } = await fetchAllPages(
-      (from, to) => applyCountry(
-        supabase.from('tyre_records')
-          .select('id,asset_no,serial_no,site,issue_date,cost_per_tyre,risk_level,brand,qty,created_at'),
-        country,
-      ).order('id').range(from, to),
-      { max: STALE_ROW_CAP },
-    )
-    if (error) return []
-    const rows = Array.isArray(data) ? data : []
-    if (rows.length === 0) return []
-    return detectAnomalies(rows)
-  } catch {
-    return []
+  // Paged AND ordered: the previous read had neither a real bound nor an
+  // ORDER BY, so the server returned an arbitrary 1000 of 11,132 rows and a
+  // different arbitrary 1000 on the next run.
+  const { data, error } = await fetchAllPages(
+    (from, to) => applyCountry(
+      supabase.from('tyre_records')
+        .select('id,asset_no,serial_no,site,issue_date,cost_per_tyre,risk_level,brand,qty,created_at'),
+      country,
+    ).order('id').range(from, to),
+    { max: STALE_ROW_CAP },
+  )
+  if (error) {
+    if (isNotProvisioned(error)) return []
+    throw new ServiceError(toUserMessage(error), error.code, error)
   }
+  const rows = Array.isArray(data) ? data : []
+  if (rows.length === 0) return []
+  return detectAnomalies(rows)
 }
 
 /* ── SAFE fix pass-throughs (existing guarded reconciliation RPCs only) ─────── */

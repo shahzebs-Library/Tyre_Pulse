@@ -40,6 +40,11 @@ const h = vi.hoisted(() => {
     applyBackfillOrphan: vi.fn(() => Promise.resolve(1)),
     deleteAlertRule: vi.fn(() => Promise.resolve()),
     listPushLog: vi.fn(() => Promise.reject(new Error('network down'))),
+    runScans: vi.fn(() => Promise.resolve({
+      orphans: [{ asset_no: 'TM999', vehicle_type: 'TR-MIXER', tyre_count: 2 }],
+      duplicates: [], serialConflicts: [], staleRows: [], failed: [],
+    })),
+    scanAnomalies: vi.fn(() => Promise.resolve([])),
   }
 })
 
@@ -99,11 +104,12 @@ vi.mock('../lib/api/deliveryHealth', async () => {
 })
 vi.mock('../lib/exportUtils', () => ({ exportToExcel: vi.fn(), reportFileName: () => 'x' }))
 vi.mock('../lib/api/selfHealing', () => ({
-  runScans: () => Promise.resolve({
-    orphans: [{ asset_no: 'TM999', vehicle_type: 'TR-MIXER', tyre_count: 2 }],
-    duplicates: [], serialConflicts: [], staleRows: [],
-  }),
-  scanAnomalies: () => Promise.resolve([]),
+  runScans: h.runScans,
+  scanAnomalies: h.scanAnomalies,
+  SCAN_LABELS: {
+    orphans: 'Orphaned assets', duplicates: 'Exact-duplicate tyres', serialConflicts: 'Serial conflicts',
+    stale: 'Quiet sites', anomalies: 'Unusual tyre patterns',
+  },
   applyBackfillOrphan: h.applyBackfillOrphan,
   applyBackfillAllOrphans: vi.fn(() => Promise.resolve(1)),
   applyMergeDuplicate: vi.fn(() => Promise.resolve(1)),
@@ -189,6 +195,32 @@ describe('console operations pages on the kit', () => {
     fireEvent.click(screen.getByRole('button', { name: /Apply fix/ }))
     await waitFor(() => expect(h.applyBackfillOrphan).toHaveBeenCalledWith('TM999'))
     expect(await screen.findByText(/was added to the fleet list/)).toBeTruthy()
+  })
+
+  it('Self-Healing lists checks that could not run and never calls the scan "all clear"', async () => {
+    h.runScans.mockImplementationOnce(() => Promise.resolve({
+      orphans: [], duplicates: [], serialConflicts: [], staleRows: [],
+      failed: [{ key: 'orphans', label: 'Orphaned assets', message: 'You do not have permission to do that.' }],
+    }))
+    h.scanAnomalies.mockImplementationOnce(() => Promise.reject(new Error('network down')))
+    render(<ConsoleSelfHealing />)
+    expect(await screen.findByText(/2 checks could not run/)).toBeTruthy()
+    expect(screen.queryByText('Nothing needs healing, all clear')).toBeNull()
+    expect(screen.getAllByText('Could not check').length).toBe(2)
+    // A check that did not run shows its failure, not its "nothing found" line.
+    expect(screen.queryByText('No orphaned assets.')).toBeNull()
+    expect(screen.queryByText('No unusual tyre patterns detected.')).toBeNull()
+    expect(screen.getByRole('button', { name: /Retry scan/ })).toBeTruthy()
+  })
+
+  it('Automation shows an error, not "No scheduled reports", when schedules cannot be read', async () => {
+    const svc = await import('../lib/api/automationHealth')
+    const spy = vi.spyOn(svc, 'listSchedules').mockRejectedValueOnce(new Error('permission denied'))
+    render(<ConsoleAutomation />)
+    await waitFor(() => expect(spy).toHaveBeenCalled())
+    expect(await screen.findAllByText(/permission/i)).toBeTruthy()
+    expect(screen.queryByText('No scheduled reports')).toBeNull()
+    spy.mockRestore()
   })
 
   it('Alert Rules charts rules per metric and deletes only after confirmation', async () => {

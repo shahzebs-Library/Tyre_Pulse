@@ -22,6 +22,9 @@ export default function TyreLearningSection({ activeCountry } = {}) {
   const [facts, setFacts] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  // A failed LOAD is kept apart from a failed action: the lists below must not
+  // render "no gaps" / "no rules" when they were never read.
+  const [loadError, setLoadError] = useState(null)
   const [busyKey, setBusyKey] = useState(null)
   const [notice, setNotice] = useState(null)
   const [lastBatch, setLastBatch] = useState(null)
@@ -32,7 +35,7 @@ export default function TyreLearningSection({ activeCountry } = {}) {
   const [mBrand, setMBrand] = useState('')
 
   const load = useCallback(async () => {
-    setLoading(true); setError(null)
+    setLoading(true); setError(null); setLoadError(null)
     try {
       const [sug, fac] = await Promise.all([
         listTyreSuggestions({ country }),
@@ -41,7 +44,8 @@ export default function TyreLearningSection({ activeCountry } = {}) {
       setSuggestions(shapeSuggestions(sug))
       setFacts(Array.isArray(fac) ? fac : [])
     } catch (e) {
-      setError(toUserMessage(e))
+      setSuggestions([]); setFacts([])
+      setLoadError(toUserMessage(e, 'The learning data could not be read.'))
     } finally {
       setLoading(false)
     }
@@ -125,6 +129,14 @@ export default function TyreLearningSection({ activeCountry } = {}) {
       </div>
 
       <div className="p-5 space-y-5">
+        {loadError && (
+          <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+            <span>{loadError}</span>
+            <button type="button" onClick={load} className="inline-flex items-center gap-1 rounded-md border border-red-400/30 px-2 py-1 text-xs hover:bg-red-500/10">
+              <RefreshCw size={13} /> Retry
+            </button>
+          </div>
+        )}
         {error && <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">{error}</div>}
         {notice && (
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-500/25 bg-emerald-500/5 px-3 py-2 text-sm text-emerald-300">
@@ -150,6 +162,8 @@ export default function TyreLearningSection({ activeCountry } = {}) {
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">Suggested brand fills</p>
           {loading ? (
             <p className="text-sm text-[var(--text-muted)]">Loading suggestions...</p>
+          ) : loadError ? (
+            <p className="text-sm text-[var(--text-muted)]">Suggestions could not be read. Use Retry above.</p>
           ) : suggestions.length === 0 ? (
             <p className="text-sm text-[var(--text-muted)]">No recoverable brand gaps. Every blank-brand serial either has no source or is already learned.</p>
           ) : (
@@ -213,8 +227,12 @@ export default function TyreLearningSection({ activeCountry } = {}) {
 
         {/* learned rules */}
         <div>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">Learned rules ({facts.length})</p>
-          {facts.length === 0 ? (
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">Learned rules ({loadError ? 'N/A' : facts.length})</p>
+          {loading ? (
+            <p className="text-sm text-[var(--text-muted)]">Loading rules...</p>
+          ) : loadError ? (
+            <p className="text-sm text-[var(--text-muted)]">Learned rules could not be read. Use Retry above.</p>
+          ) : facts.length === 0 ? (
             <p className="text-sm text-[var(--text-muted)]">No rules yet. Confirm a suggestion above to create one.</p>
           ) : (
             <div className="space-y-1.5">

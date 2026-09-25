@@ -52,10 +52,12 @@ describe('service layer - reconBrand', () => {
     expect(h.state.last._calls.or).toBe('brand.is.null,brand.eq.')
   })
 
-  it('listBrandGapSummary returns [] when the count query errors', async () => {
-    h.state.result = { data: null, error: { message: 'boom' }, count: null }
-    const rows = await listBrandGapSummary()
-    expect(rows).toEqual([])
+  // CONTRACT CHANGE (honest console reads): this used to assert [] on error.
+  // A country silently dropped from the summary reads as "no brand gap", so a
+  // failed count now THROWS and the section shows an error with Retry.
+  it('listBrandGapSummary THROWS when a count query errors (never [])', async () => {
+    h.state.result = { data: null, error: { code: '42501', message: 'permission denied' }, count: null }
+    await expect(listBrandGapSummary()).rejects.toBeTruthy()
   })
 
   it('listBrandGapTyres selects the tyre column set, filters blank brand, orders and limits', async () => {
@@ -82,10 +84,11 @@ describe('service layer - reconBrand', () => {
     expect(h.state.last._calls.eqs).toEqual([])
   })
 
-  it('listBrandGapTyres returns [] on error', async () => {
-    h.state.result = { data: null, error: { message: 'nope' }, count: 0 }
-    const rows = await listBrandGapTyres()
-    expect(rows).toEqual([])
+  // CONTRACT CHANGE: was "returns [] on error". An empty list for a failed
+  // read claims every tyre carries a brand; it now throws instead.
+  it('listBrandGapTyres THROWS on error (never [])', async () => {
+    h.state.result = { data: null, error: { message: 'Failed to fetch' }, count: 0 }
+    await expect(listBrandGapTyres()).rejects.toBeTruthy()
   })
 
   it('setTyreBrand updates tyre_records.brand for the id', async () => {

@@ -247,6 +247,10 @@ export default function ConsoleDataLearning() {
         )}
       </Panel>
 
+      {/* A failed read hides the read-derived panels: an empty gap list or
+          suggestion list would claim "nothing to fix". The error + Retry above
+          says what happened; the manual teach form stays usable. */}
+      {!state.error && (<>
       {/* ── gap overview ─────────────────────────────────────────────────── */}
       <Panel flush>
         <div className="p-4 pb-0">
@@ -260,7 +264,7 @@ export default function ConsoleDataLearning() {
           <EmptyState
             icon={ListChecks}
             title="No gap data"
-            reason="The gap overview could not be read, or there are no learnable fields for this country."
+            reason="There are no learnable fields for this country, or the gap overview function is not deployed in this workspace yet."
           />
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 p-4">
@@ -364,6 +368,7 @@ export default function ConsoleDataLearning() {
           </Table>
         )}
       </Panel>
+      </>)}
 
       {/* ── manual teach ─────────────────────────────────────────────────── */}
       <Panel>
@@ -420,6 +425,7 @@ export default function ConsoleDataLearning() {
         </div>
       </Panel>
 
+      {!state.error && (<>
       {/* ── learned rules ────────────────────────────────────────────────── */}
       <Panel flush>
         <div className="p-4 pb-0">
@@ -492,7 +498,7 @@ export default function ConsoleDataLearning() {
           <EmptyState
             icon={FileSpreadsheet}
             title="No completeness data"
-            reason="The master upload staging table could not be read, or it holds no rows."
+            reason="The master upload staging table holds no rows, or its completeness function is not deployed in this workspace yet."
           />
         ) : (
           <div className="max-h-96 overflow-y-auto">
@@ -519,6 +525,7 @@ export default function ConsoleDataLearning() {
           </div>
         )}
       </Panel>
+      </>)}
     </div>
   )
 }

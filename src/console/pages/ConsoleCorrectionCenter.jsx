@@ -192,6 +192,8 @@ export default function ConsoleCorrectionCenter() {
         <PanelHeader icon={ClipboardList} title="Correction cases" subtitle="Newest first. Click a case to investigate and move it forward." />
         {state.loading ? (
           <LoadingState label="Reading correction cases" rows={5} />
+        ) : state.error ? (
+          <p className="text-xs text-gray-500 px-1">The case list could not be read, so it is not shown. Use Retry above.</p>
         ) : cases.length === 0 ? (
           <EmptyState
             icon={ClipboardList}
@@ -292,7 +294,7 @@ export default function ConsoleCorrectionCenter() {
         width="max-w-3xl"
       >
         {detail?.loading && <LoadingState label="Reading case" rows={4} />}
-        {detail?.error && <ErrorState message={detail.error} />}
+        {detail?.error && <ErrorState message={detail.error} onRetry={() => openDetail(detail.case)} />}
         {kase && !detail.loading && !detail.error && (
           <div className="space-y-4">
             {/* frozen facts */}

@@ -117,10 +117,10 @@ export default function ConsolePipelineMonitor() {
 
         {tab === 'jobs' && (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 px-4 pb-4">
-            <StatTile label="Runs" value={nf.format(summary.total)} icon={Activity} />
-            <StatTile label="OK" value={nf.format(summary.ok)} tone="good" icon={CheckCircle2} />
-            <StatTile label="Failed" value={nf.format(summary.failed)} tone={summary.failed ? 'danger' : 'default'} icon={AlertTriangle} />
-            <StatTile label="Other" value={nf.format(summary.other)} tone="muted" icon={Clock} />
+            <StatTile label="Runs" value={state.error ? 'N/A' : nf.format(summary.total)} icon={Activity} />
+            <StatTile label="OK" value={state.error ? 'N/A' : nf.format(summary.ok)} tone="good" icon={CheckCircle2} />
+            <StatTile label="Failed" value={state.error ? 'N/A' : nf.format(summary.failed)} tone={summary.failed ? 'danger' : 'default'} icon={AlertTriangle} />
+            <StatTile label="Other" value={state.error ? 'N/A' : nf.format(summary.other)} tone="muted" icon={Clock} />
           </div>
         )}
       </Panel>
@@ -131,7 +131,7 @@ export default function ConsolePipelineMonitor() {
 
       {state.loading ? (
         <Panel><LoadingState label="Reading run history" rows={6} /></Panel>
-      ) : tab === 'jobs' ? (
+      ) : state.error ? null : tab === 'jobs' ? (
         <Panel>
           <PanelHeader icon={Activity} title="Pipeline runs" subtitle="Imports and report generation, newest first." />
           {runs.length === 0 ? (

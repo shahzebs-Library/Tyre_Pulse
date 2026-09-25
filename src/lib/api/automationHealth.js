@@ -11,29 +11,26 @@
  *                           via the V274 SECURITY DEFINER RPC console_cron_jobs().
  *
  * Pure summarizers (summarizeSchedules / summarizeCron) are exported for unit
- * testing; the fetchers stay thin. Everything degrades to [] / an empty summary
- * before the migration is applied or when a relation is unreadable (honest empty
- * states, never a raw error to the UI).
+ * testing; the fetchers stay thin. They degrade to [] ONLY before the migration
+ * is applied (a not-deployed table / RPC, by error code). A permission or
+ * network failure THROWS a sanitised ServiceError, so the page shows an error
+ * with Retry instead of "nothing scheduled" / "no background jobs".
  */
-import { supabase } from './_client'
+import { supabase, isNotProvisioned, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 import { listJobRuns, summarizeJobs } from './aiOps'
 
 // Re-export the report_send_log readers so the page has one import surface and
 // does not re-query report_send_log directly (reuse over duplication).
 export { listJobRuns, summarizeJobs }
 
-/** True when a Supabase error means the table / relation is not deployed yet. */
-function isMissingRelation(err) {
-  const code = err?.code || err?.cause?.code
-  const msg = String(err?.message || err?.cause?.message || '').toLowerCase()
-  return (
-    code === '42P01' || code === '42703' || code === 'PGRST205' || code === 'PGRST204' ||
-    msg.includes('does not exist') ||
-    msg.includes('could not find') ||
-    msg.includes('schema cache') ||
-    msg.includes('relation')
-  )
-}
+/**
+ * True only when a table / RPC is genuinely not deployed yet, by error CODE.
+ * The old message sniffer matched a bare "relation", which a permission denial
+ * ("permission denied for relation ...") also contains - so an unreadable
+ * schedule list rendered as "no scheduled reports".
+ */
+const isMissingRelation = isNotProvisioned
 
 /* ── Scheduled reports (report_schedules) ────────────────────────────────────── */
 
@@ -42,22 +39,22 @@ const SCHEDULE_COLS =
   'active,last_sent_at,next_run_at,org_id,created_at,run_at,output_formats,last_status,last_error'
 
 /**
- * List every scheduled report (newest first). Returns [] pre-migration / when
- * unreadable so the page prompts instead of throwing.
+ * List every scheduled report (newest first). Returns [] only pre-migration;
+ * any other failure throws. The schedule register is small (tens of rows) and
+ * `limit` is clamped to the 1,000-row response cap.
  */
 export async function listSchedules({ limit = 500 } = {}) {
-  try {
-    const { data, error } = await supabase
-      .from('report_schedules')
-      .select(SCHEDULE_COLS)
-      .order('created_at', { ascending: false })
-      .limit(limit)
-    if (error) throw error
-    return data || []
-  } catch (err) {
-    if (isMissingRelation(err)) return []
-    throw err
+  const { data, error } = await supabase
+    .from('report_schedules')
+    .select(SCHEDULE_COLS)
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(Math.min(Math.max(1, Number(limit) || 500), 1000))
+  if (error) {
+    if (isMissingRelation(error)) return []
+    throw new ServiceError(toUserMessage(error), error.code, error)
   }
+  return data || []
 }
 
 /**
@@ -124,21 +121,17 @@ export function scheduleFlags(row, now = Date.now()) {
 
 /**
  * List pg_cron jobs with their most recent run status/time via the V274 RPC.
- * Returns [] when pg_cron is absent, the RPC is not deployed, or the caller is
- * not authorized (the page shows an honest empty state either way).
+ * Returns [] only when the RPC is not deployed (or pg_cron returns no jobs).
+ * A permission denial is NOT swallowed any more: this page is super-admin only,
+ * so "not authorized" is a real fault to show, not "no background jobs".
  */
 export async function listCronJobs() {
-  try {
-    const { data, error } = await supabase.rpc('console_cron_jobs')
-    if (error) throw error
-    return Array.isArray(data) ? data : []
-  } catch (err) {
-    if (isMissingRelation(err)) return []
-    // Permission / not-authorized -> treat as "nothing to show" rather than error.
-    const msg = String(err?.message || '').toLowerCase()
-    if (msg.includes('not authorized') || err?.code === '42501') return []
-    throw err
+  const { data, error } = await supabase.rpc('console_cron_jobs')
+  if (error) {
+    if (isMissingRelation(error)) return []
+    throw new ServiceError(toUserMessage(error), error.code, error)
   }
+  return Array.isArray(data) ? data : []
 }
 
 /** Map a pg_cron run status string to a traffic-light tone. */

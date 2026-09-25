@@ -14,27 +14,19 @@
  * exposes on-demand snapshotting, listing, restore preview and the NON
  * DESTRUCTIVE "restore missing rows" recovery path.
  */
-import { supabase, unwrap } from './_client'
+import { supabase, unwrap, isNotProvisioned } from './_client'
 import { isApprovalRequiredError, APPROVAL_REQUIRED_MESSAGE } from '../dualControl'
 
 /**
- * True when the failure is "the RPC / table is not provisioned yet"
- * (pre-migration) or a plain read/permission error we want the list view to
- * degrade over rather than surface raw.
+ * True ONLY when the failure is "the RPC / table is not provisioned yet"
+ * (pre-migration), by error CODE. It used to also treat 42501 (not a
+ * super-admin) and any "does not exist" text as missing, which made a
+ * permission denial render as "no backups have been taken" - the one claim a
+ * backups page must never make falsely. A permission or network failure now
+ * surfaces as an error.
  */
 export function isMissingRelation(err) {
-  const code = err?.code || err?.cause?.code
-  const msg = String(err?.message || err?.cause?.message || '').toLowerCase()
-  return (
-    code === '42P01' ||
-    code === '42883' ||        // undefined_function (RPC not deployed yet)
-    code === 'PGRST202' ||     // PostgREST: could not find the function
-    code === 'PGRST205' ||     // PostgREST: could not find the table
-    code === '42501' ||        // insufficient_privilege (not a super-admin)
-    msg.includes('does not exist') ||
-    msg.includes('could not find') ||
-    msg.includes('schema cache')
-  )
+  return isNotProvisioned(err)
 }
 
 /**
@@ -55,9 +47,9 @@ export async function createBackupSnapshot(reason = 'manual') {
 
 /**
  * List recent backup snapshots (newest first) via `list_backup_snapshots`.
- * Returns an array; degrades to [] when the RPC is missing, the caller is not a
- * super-admin, or any other read error occurs, so the console can render its
- * honest empty state instead of surfacing a raw error.
+ * Returns [] only when the RPC is genuinely not deployed yet; a permission
+ * denial, network failure or any other error THROWS a sanitised ServiceError so
+ * the console shows an error with Retry instead of "no snapshots".
  *
  * @param {number} [limit=60]  max snapshots to return
  * @returns {Promise<Array<{
@@ -67,14 +59,10 @@ export async function createBackupSnapshot(reason = 'manual') {
  * }>>}
  */
 export async function listBackupSnapshots(limit = 60) {
-  try {
-    const data = unwrap(
-      await supabase.rpc('list_backup_snapshots', { p_limit: limit }),
-    )
-    return Array.isArray(data) ? data : []
-  } catch {
-    return []
-  }
+  const res = await supabase.rpc('list_backup_snapshots', { p_limit: limit })
+  if (res?.error && isNotProvisioned(res.error)) return []
+  const data = unwrap(res)
+  return Array.isArray(data) ? data : []
 }
 
 /**

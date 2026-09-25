@@ -104,12 +104,12 @@ export default function ConsoleAutomation() {
     setCronError(null)
     const [sRes, cRes] = await Promise.allSettled([listSchedules(), listCronJobs()])
     if (sRes.status === 'fulfilled') setSchedules(sRes.value)
-    else setError(toUserMessage(sRes.reason))
+    else { setSchedules([]); setError(toUserMessage(sRes.reason, 'Could not read the scheduled reports.')) }
     if (cRes.status === 'fulfilled') setCron(cRes.value)
-    // listCronJobs already maps "pg_cron absent / not deployed / not authorised"
-    // to []. Anything it still throws is a real failure and is now stated rather
-    // than shown as an empty job list.
-    else setCronError(toUserMessage(cRes.reason, 'Could not read the background jobs.'))
+    // listCronJobs maps only "pg_cron / RPC not deployed" to []. A permission
+    // denial or network failure throws and is stated here rather than shown as
+    // an empty job list.
+    else { setCron([]); setCronError(toUserMessage(cRes.reason, 'Could not read the background jobs.')) }
     setNow(Date.now())
     setRefreshing(false)
     setLoading(false)
@@ -188,19 +188,17 @@ export default function ConsoleAutomation() {
         <Btn icon={RefreshCw} onClick={load} busy={refreshing}>Refresh</Btn>
       </header>
 
-      <ErrorState message={error} onRetry={load} />
-
       {/* KPI tiles */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <StatTile label="Active schedules" value={loading ? 'N/A' : schedSummary.active} tone="good" icon={CalendarClock}
-          sub={loading ? undefined : `of ${schedSummary.total}`} />
-        <StatTile label="Paused" value={loading ? 'N/A' : schedSummary.paused} tone="muted" icon={PauseCircle} />
+        <StatTile label="Active schedules" value={loading || error ? 'N/A' : schedSummary.active} tone="good" icon={CalendarClock}
+          sub={loading || error ? undefined : `of ${schedSummary.total}`} />
+        <StatTile label="Paused" value={loading || error ? 'N/A' : schedSummary.paused} tone="muted" icon={PauseCircle} />
         <div title="Active, but the next run time is already in the past. The cron loop may not have fired yet.">
-          <StatTile label="Overdue" value={loading ? 'N/A' : schedSummary.overdue}
+          <StatTile label="Overdue" value={loading || error ? 'N/A' : schedSummary.overdue}
             tone={schedSummary.overdue > 0 ? 'warning' : 'default'} icon={Clock} />
         </div>
         <div title="The last run ended in error or recorded an error message.">
-          <StatTile label="Failing" value={loading ? 'N/A' : schedSummary.failing}
+          <StatTile label="Failing" value={loading || error ? 'N/A' : schedSummary.failing}
             tone={schedSummary.failing > 0 ? 'danger' : 'default'} icon={XCircle} />
         </div>
         <StatTile label="Background jobs" value={loading || cronError ? 'N/A' : cronSummary.total} icon={Zap}
@@ -261,9 +259,11 @@ export default function ConsoleAutomation() {
         </Toolbar>
         {loading ? (
           <LoadingState label="Loading schedules" />
+        ) : error ? (
+          <ErrorState message={error} onRetry={load} />
         ) : schedules.length === 0 ? (
           <EmptyState icon={CalendarClock} title="No scheduled reports"
-            reason="Create one from Scheduled Reports. If you expected some, the report_schedules table may not be readable yet." />
+            reason="Create one from Scheduled Reports. If the report_schedules table is not deployed yet, none will appear until it is." />
         ) : visibleSchedules.length === 0 ? (
           <EmptyState icon={CalendarClock} title="No schedules match" reason="Nothing matches this state and search. Clear the filters to see every schedule." />
         ) : (

@@ -22,7 +22,7 @@ import {
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import {
   runScans, scanAnomalies, applyBackfillOrphan, applyBackfillAllOrphans,
-  applyMergeDuplicate, logHealFinding,
+  applyMergeDuplicate, logHealFinding, SCAN_LABELS,
 } from '../../lib/api/selfHealing'
 import { detectStaleGroups, summarizeFindings } from '../../lib/selfHealing'
 import { toUserMessage } from '../../lib/safeError'
@@ -84,6 +84,9 @@ export default function ConsoleSelfHealing() {
   const [scannedAt, setScannedAt] = useState(null)
   const [scanning, setScanning]   = useState(false)
   const [error, setError]         = useState(null)
+  // Checks that could not run on the last scan ({ key, label, message }). Their
+  // buckets are empty because they were NOT read, not because they are clean.
+  const [failedChecks, setFailedChecks] = useState([])
   const [busyKey, setBusyKey]     = useState(null) // which fix is running
   const [notice, setNotice]       = useState(null)
   const [pending, setPending]     = useState(null) // fix awaiting confirmation
@@ -94,7 +97,23 @@ export default function ConsoleSelfHealing() {
     setScanning(true)
     setError(null)
     try {
-      const [base, anomalies] = await Promise.all([runScans(), scanAnomalies()])
+      // Each check is isolated: a failing one is recorded, never read as "clean".
+      const [base, anomalyRes] = await Promise.all([
+        runScans(),
+        scanAnomalies().then(
+          (rows) => ({ ok: true, rows }),
+          (err) => ({ ok: false, err }),
+        ),
+      ])
+      const failed = [...(base.failed || [])]
+      if (!anomalyRes.ok) {
+        failed.push({
+          key: 'anomalies',
+          label: SCAN_LABELS.anomalies,
+          message: toUserMessage(anomalyRes.err, 'This check could not run.'),
+        })
+      }
+      const anomalies = anomalyRes.ok ? anomalyRes.rows : []
       const stale = detectStaleGroups(base.staleRows, { now: Date.now() })
       const buckets = {
         orphans: base.orphans,
@@ -107,6 +126,7 @@ export default function ConsoleSelfHealing() {
       if (!mountedRef.current) return
       setScan(buckets)
       setSummary(sum)
+      setFailedChecks(failed)
       setScannedAt(new Date().toISOString())
       logHealFinding(sum) // fire-and-forget: surface findings on System Health
     } catch (err) {
@@ -195,7 +215,9 @@ export default function ConsoleSelfHealing() {
     )
   }
 
-  const nothingToHeal = summary && summary.total === 0
+  const failedByKey = Object.fromEntries(failedChecks.map((f) => [f.key, f]))
+  // "All clear" only when every check actually ran and found nothing.
+  const nothingToHeal = summary && summary.total === 0 && failedChecks.length === 0
 
   return (
     <div className="space-y-5 max-w-7xl">
@@ -224,6 +246,22 @@ export default function ConsoleSelfHealing() {
       </Note>
 
       <ErrorState message={error} onRetry={rescan} />
+      {failedChecks.length > 0 && (
+        <Note icon={AlertTriangle} tone="danger">
+          <span role="alert" className="block">
+            {failedChecks.length === 1 ? 'One check' : `${failedChecks.length} checks`} could not run, so the
+            counts below are incomplete. A check that did not run is not reported as clean.
+          </span>
+          <ul className="mt-1.5 space-y-0.5">
+            {failedChecks.map((f) => (
+              <li key={`${f.key}:${f.message}`} className="text-[11px]">
+                <span className="font-medium">{f.label}:</span> {f.message}
+              </li>
+            ))}
+          </ul>
+          <span className="mt-2 inline-block"><Btn size="xs" icon={RefreshCw} onClick={rescan} busy={scanning}>Retry scan</Btn></span>
+        </Note>
+      )}
       {notice && (
         <Note icon={CheckCircle2} tone="accent">{notice}</Note>
       )}
@@ -233,7 +271,9 @@ export default function ConsoleSelfHealing() {
         <div className="grid gap-4 lg:grid-cols-3">
           <div className="grid grid-cols-3 lg:grid-cols-1 gap-3">
             <div title="How many data issues the last scan found in total.">
-              <StatTile label="Total findings" value={summary.total} tone={summary.total > 0 ? 'warning' : 'good'} icon={Wand2} />
+              <StatTile label="Total findings" value={summary.total}
+                tone={summary.total > 0 ? 'warning' : failedChecks.length > 0 ? 'default' : 'good'} icon={Wand2}
+                sub={failedChecks.length > 0 ? `Incomplete: ${failedChecks.length} check${failedChecks.length === 1 ? '' : 's'} did not run` : undefined} />
             </div>
             <div title="Issues worth acting on, some with a safe one-click fix.">
               <StatTile label="Warnings" value={summary.bySeverity.warning} tone={summary.bySeverity.warning > 0 ? 'warning' : 'good'} icon={AlertTriangle} />
@@ -265,7 +305,7 @@ export default function ConsoleSelfHealing() {
       ) : scan ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Orphan assets - fixable */}
-          <FindingCard meta={itemsByKey.orphans} icon={CARD_META.orphans.Icon} tip={CARD_META.orphans.tip}
+          <FindingCard meta={itemsByKey.orphans} failure={failedByKey.orphans} icon={CARD_META.orphans.Icon} tip={CARD_META.orphans.tip}
             action={itemsByKey.orphans?.fixable && (
               <Btn size="xs" variant="primary" onClick={backfillAll} disabled={!!busyKey && busyKey !== 'orphan:all'}
                 busy={busyKey === 'orphan:all'}>
@@ -290,7 +330,7 @@ export default function ConsoleSelfHealing() {
           </FindingCard>
 
           {/* Duplicate tyres - fixable (identical only) */}
-          <FindingCard meta={itemsByKey.duplicates} icon={CARD_META.duplicates.Icon} tip={CARD_META.duplicates.tip}>
+          <FindingCard meta={itemsByKey.duplicates} failure={failedByKey.duplicates} icon={CARD_META.duplicates.Icon} tip={CARD_META.duplicates.tip}>
             <RowList
               rows={scan.duplicates} empty="No exact-duplicate tyre rows."
               render={(r) => (
@@ -309,7 +349,7 @@ export default function ConsoleSelfHealing() {
           </FindingCard>
 
           {/* Serial conflicts - read only */}
-          <FindingCard meta={itemsByKey.serialConflicts} icon={CARD_META.serialConflicts.Icon} tip={CARD_META.serialConflicts.tip} readOnly>
+          <FindingCard meta={itemsByKey.serialConflicts} failure={failedByKey.serialConflicts} icon={CARD_META.serialConflicts.Icon} tip={CARD_META.serialConflicts.tip} readOnly>
             <p className="text-[11px] text-gray-400 mb-2 flex items-start gap-1.5">
               <Info size={11} className="mt-0.5 shrink-0 text-gray-500" />
               These are legitimate tyre movements between vehicles, not errors. Review only, no fix applied.
@@ -326,7 +366,7 @@ export default function ConsoleSelfHealing() {
           </FindingCard>
 
           {/* Stale sites - read only */}
-          <FindingCard meta={itemsByKey.stale} icon={CARD_META.stale.Icon} tip={CARD_META.stale.tip} readOnly>
+          <FindingCard meta={itemsByKey.stale} failure={failedByKey.stale} icon={CARD_META.stale.Icon} tip={CARD_META.stale.tip} readOnly>
             <RowList
               rows={scan.stale} empty="Every site has recent activity."
               render={(r) => (
@@ -339,7 +379,7 @@ export default function ConsoleSelfHealing() {
           </FindingCard>
 
           {/* Predictive anomalies - read only */}
-          <FindingCard meta={itemsByKey.anomalies} icon={CARD_META.anomalies.Icon} tip={CARD_META.anomalies.tip} readOnly wide>
+          <FindingCard meta={itemsByKey.anomalies} failure={failedByKey.anomalies} icon={CARD_META.anomalies.Icon} tip={CARD_META.anomalies.tip} readOnly wide>
             <RowList
               rows={scan.anomalies} empty="No unusual tyre patterns detected." max={12}
               render={(a) => (
@@ -381,7 +421,7 @@ export default function ConsoleSelfHealing() {
 
 // ── Sub components ─────────────────────────────────────────────────────────────
 
-function FindingCard({ meta, icon: Icon, tip, action, children, readOnly, wide }) {
+function FindingCard({ meta, failure, icon: Icon, tip, action, children, readOnly, wide }) {
   const sev = meta?.severity || 'info'
   const count = meta?.count ?? 0
   return (
@@ -392,7 +432,8 @@ function FindingCard({ meta, icon: Icon, tip, action, children, readOnly, wide }
         title={(
           <span className="inline-flex items-center gap-2 flex-wrap" title={tip}>
             {meta?.label || 'Findings'}
-            <span className="tabular-nums text-gray-100">{count}</span>
+            <span className="tabular-nums text-gray-100">{failure && count === 0 ? 'N/A' : count}</span>
+            {failure && <Badge tone="danger">Could not check</Badge>}
             <Badge tone={SEV_TONE[sev] || 'info'}><span className="capitalize">{sev}</span></Badge>
             {readOnly && <Badge tone="quiet">Review only</Badge>}
           </span>
@@ -400,7 +441,14 @@ function FindingCard({ meta, icon: Icon, tip, action, children, readOnly, wide }
         subtitle={tip}
         actions={action || null}
       />
-      {children}
+      {failure && (
+        <p className="text-[11px] text-red-300 mb-2 flex items-start gap-1.5">
+          <AlertTriangle size={11} className="mt-0.5 shrink-0 text-red-400" />
+          {failure.message}
+        </p>
+      )}
+      {/* A check that did not run shows no rows, never its "nothing found" line. */}
+      {failure && count === 0 ? null : children}
     </Panel>
   )
 }

@@ -71,6 +71,22 @@ export function isMissingRelation(err) {
 }
 
 /**
+ * STRICT "not provisioned yet" test, by CODE only - for the honest console
+ * reads. `isMissingRelation` above falls back to sniffing the text for a bare
+ * "relation", and a permission denial ("permission denied for relation x") can
+ * contain that word; a read that must surface permission and network failures
+ * uses this instead, so only a genuinely undeployed table or function degrades
+ * to an empty/"not provisioned" state.
+ */
+const NOT_PROVISIONED_CODES = new Set(['42P01', 'PGRST205', '42883', 'PGRST202'])
+
+export function isNotProvisioned(err) {
+  if (!err) return false
+  const code = String(err.code || err.cause?.code || '')
+  return NOT_PROVISIONED_CODES.has(code)
+}
+
+/**
  * probeRelation - does this table actually exist?
  *
  * WHY THIS IS NEEDED AT ALL. Most `listX()` services deliberately DEGRADE a

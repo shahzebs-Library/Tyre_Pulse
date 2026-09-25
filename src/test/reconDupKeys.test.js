@@ -37,8 +37,16 @@ describe('service layer - possible duplicate tyres', () => {
     expect(await recon.listDuplicateKeyTyres()).toEqual(rows)
   })
 
-  it('listDuplicateKeyTyres returns [] on an RPC error', async () => {
+  // CONTRACT CHANGE (honest console reads): a permission or network failure
+  // used to read as "no duplicate fitment keys". It now throws; only an RPC
+  // that is genuinely not deployed degrades to [].
+  it('listDuplicateKeyTyres THROWS on a permission error (never [])', async () => {
     h.state.rpc = { data: null, error: { message: 'boom', code: '42501' } }
+    await expect(recon.listDuplicateKeyTyres()).rejects.toBeTruthy()
+  })
+
+  it('listDuplicateKeyTyres degrades to [] only when the RPC is not deployed', async () => {
+    h.state.rpc = { data: null, error: { message: 'could not find the function', code: 'PGRST202' } }
     expect(await recon.listDuplicateKeyTyres()).toEqual([])
   })
 

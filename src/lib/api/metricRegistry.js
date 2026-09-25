@@ -8,60 +8,62 @@
  * explain_metric / get_record_provenance self-gate and are org-scoped in the DB.
  * This layer never re-implements the gate.
  *
- * Read paths never throw: they return [] / { metric:null } / { ok:false } on any
- * error so the console degrades to an honest empty state. The Admin-only write
- * paths (upsertMetric / saveMetricVersion) surface the error via `unwrap`.
+ * Read paths are HONEST: they degrade only when a relation or function is
+ * genuinely not provisioned (by error code); a permission or network failure
+ * THROWS a sanitised ServiceError so the page shows an error with Retry. The
+ * Admin-only write paths (upsertMetric / saveMetricVersion) surface errors too.
  */
-import { supabase, unwrap } from './_client'
+import { supabase, unwrap, isNotProvisioned } from './_client'
 
 /**
- * All active metric registry rows, ordered by metric_id. Never throws (returns
- * [] on error).
+ * All active metric registry rows, ordered by metric_id. The registry is a
+ * small governed catalogue (tens of rows), well under the 1,000-row cap.
+ * [] only when the table is genuinely not provisioned; any other failure
+ * THROWS so the catalogue shows an error with Retry instead of "no metrics".
  *
  * @returns {Promise<Array<object>>}
  */
 export async function listMetrics() {
-  try {
-    const { data, error } = await supabase
-      .from('metric_registry')
-      .select('*')
-      .eq('active', true)
-      .order('metric_id')
-    if (error) return []
-    return Array.isArray(data) ? data : []
-  } catch {
-    return []
-  }
+  const res = await supabase
+    .from('metric_registry')
+    .select('*')
+    .eq('active', true)
+    .order('metric_id')
+  if (res.error && isNotProvisioned(res.error)) return []
+  const data = unwrap(res)
+  return Array.isArray(data) ? data : []
 }
 
 /**
- * A single registry row plus its versions (newest version first). Never throws:
- * returns { metric:null, versions:[] } on any error.
+ * A single registry row plus its versions (newest version first). `metric` is
+ * null only when the metric genuinely does not exist; a failed read of either
+ * table THROWS (a definition shown with no versions would claim it was never
+ * versioned).
  *
  * @param {string} metricId
  * @returns {Promise<{ metric: object|null, versions: object[] }>}
  */
 export async function getMetric(metricId) {
-  try {
-    const [regRes, verRes] = await Promise.all([
-      supabase.from('metric_registry').select('*').eq('metric_id', metricId).maybeSingle(),
-      supabase
-        .from('metric_versions')
-        .select('*')
-        .eq('metric_id', metricId)
-        .order('version', { ascending: false }),
-    ])
-    const metric = regRes && !regRes.error ? regRes.data ?? null : null
-    const versions = verRes && !verRes.error && Array.isArray(verRes.data) ? verRes.data : []
-    return { metric, versions }
-  } catch {
-    return { metric: null, versions: [] }
-  }
+  const [regRes, verRes] = await Promise.all([
+    supabase.from('metric_registry').select('*').eq('metric_id', metricId).maybeSingle(),
+    supabase
+      .from('metric_versions')
+      .select('*')
+      .eq('metric_id', metricId)
+      .order('version', { ascending: false }),
+  ])
+  const metric = unwrap(regRes) ?? null
+  const versions = verRes?.error && isNotProvisioned(verRes.error) ? [] : unwrap(verRes)
+  return { metric, versions: Array.isArray(versions) ? versions : [] }
 }
 
 /**
  * Explain a metric for a country/date window via the `explain_metric` RPC.
- * Returns the json payload, or { ok:false } on any error. Never throws.
+ * Returns the json payload. A payload the server marks `ok:false` (unknown
+ * metric) is returned as-is and the caller says "no governed definition"; an
+ * RPC that is not deployed yet returns `{ ok:false, reason:'not_provisioned' }`.
+ * A permission or network failure THROWS, so a broken read is never shown as
+ * "this metric has no definition".
  * 'All' (or a falsy country) is sent as null so the DB applies no country filter.
  *
  * @param {string} metricId
@@ -69,39 +71,30 @@ export async function getMetric(metricId) {
  * @returns {Promise<object>}
  */
 export async function explainMetric(metricId, { country = null, from = null, to = null } = {}) {
-  try {
-    const { data, error } = await supabase.rpc('explain_metric', {
-      p_metric_id: metricId,
-      p_country: country && country !== 'All' ? country : null,
-      p_from: from,
-      p_to: to,
-    })
-    if (error || !data) return { ok: false }
-    return data
-  } catch {
-    return { ok: false }
-  }
+  const res = await supabase.rpc('explain_metric', {
+    p_metric_id: metricId,
+    p_country: country && country !== 'All' ? country : null,
+    p_from: from,
+    p_to: to,
+  })
+  if (res.error && isNotProvisioned(res.error)) return { ok: false, reason: 'not_provisioned' }
+  return unwrap(res) || { ok: false }
 }
 
 /**
  * Full provenance for one source record via the `get_record_provenance` RPC.
- * Returns the json payload, or { ok:false } on any error. Never throws.
+ * Same contract as explainMetric: the server's own `ok:false` is returned,
+ * a not-deployed RPC returns `{ ok:false, reason:'not_provisioned' }`, and a
+ * real failure THROWS.
  *
  * @param {string} table  the source table name
  * @param {string} id     the row uuid
  * @returns {Promise<object>}
  */
 export async function getRecordProvenance(table, id) {
-  try {
-    const { data, error } = await supabase.rpc('get_record_provenance', {
-      p_table: table,
-      p_id: id,
-    })
-    if (error || !data) return { ok: false }
-    return data
-  } catch {
-    return { ok: false }
-  }
+  const res = await supabase.rpc('get_record_provenance', { p_table: table, p_id: id })
+  if (res.error && isNotProvisioned(res.error)) return { ok: false, reason: 'not_provisioned' }
+  return unwrap(res) || { ok: false }
 }
 
 /**

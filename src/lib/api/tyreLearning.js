@@ -5,74 +5,90 @@
  * tyre_learn_undo) and the tyre_learned_facts table (RLS-scoped).
  *
  * AUTH-SENSITIVE: every RPC self-gates server-side on app_is_elevated() and is
- * org-scoped. This layer never re-implements the gate. Read paths never throw
- * (return [] / honest empty). Write paths surface the error so the UI can report.
+ * org-scoped. This layer never re-implements the gate. Read paths are HONEST:
+ * they degrade only for a not-deployed RPC/table (by error code) and THROW on a
+ * permission or network failure. Write paths surface the error too.
  */
-import { supabase, unwrap } from './_client'
+import { supabase, unwrap, isNotProvisioned, ServiceError } from './_client'
+
+const scope = (country) => (country && country !== 'All' ? country : null)
+
+/**
+ * A json RPC read. A not-deployed RPC returns `fallback`; any other failure
+ * THROWS, and so does a payload the server itself marks `ok:false` (e.g. the
+ * caller is not permitted) - shaping that would render "no gaps".
+ */
+function readJson(res, what, fallback) {
+  if (res?.error && isNotProvisioned(res.error)) return fallback
+  const data = unwrap(res)
+  if (!data) throw new ServiceError(`${what} returned nothing.`, 'EMPTY', null)
+  if (data.ok === false) {
+    throw new ServiceError(`${what} could not be produced${data.reason ? ` (${data.reason})` : ''}.`, data.reason || 'NOT_OK', data)
+  }
+  return data
+}
 
 /**
  * Blank serials with a recoverable value (self/master) for a field. Only 'brand'
- * and 'size' are serial-recoverable. Never throws (returns [] on error).
+ * and 'size' are serial-recoverable. [] only for a not-deployed RPC or genuinely
+ * no suggestions; a failed read THROWS (an empty list would read "nothing to
+ * confirm"). `limit` is clamped to the 1,000-row response cap.
  */
 export async function listTyreSuggestions({ country = null, field = 'brand', limit = 200 } = {}) {
-  try {
-    const { data, error } = await supabase.rpc('tyre_learn_suggestions', {
-      p_country: country && country !== 'All' ? country : null,
-      p_limit: limit,
-      p_field: field,
-    })
-    if (error) return []
-    return Array.isArray(data?.suggestions) ? data.suggestions : []
-  } catch {
-    return []
-  }
+  const res = await supabase.rpc('tyre_learn_suggestions', {
+    p_country: scope(country),
+    p_limit: Math.min(Math.max(1, Number(limit) || 200), 1000),
+    p_field: field,
+  })
+  const data = readJson(res, 'Tyre suggestions', { suggestions: [] })
+  return Array.isArray(data?.suggestions) ? data.suggestions : []
 }
 
 /**
  * Field-level gap overview (blank + recoverable counts per target field).
- * Never throws; returns the json object or { ok:false }.
+ * Returns the json object; `{ ok:false, reason:'not_provisioned' }` only when
+ * the RPC is not deployed. A real failure THROWS.
  */
 export async function getTyreGapOverview({ country = null } = {}) {
-  try {
-    const { data, error } = await supabase.rpc('get_tyre_gap_overview', {
-      p_country: country && country !== 'All' ? country : null,
-    })
-    if (error || !data) return { ok: false }
-    return data
-  } catch {
-    return { ok: false }
-  }
+  return readJson(
+    await supabase.rpc('get_tyre_gap_overview', { p_country: scope(country) }),
+    'The gap overview',
+    { ok: false, reason: 'not_provisioned' },
+  )
 }
 
 /**
- * Per-column completeness of the KSA master upload staging table.
- * Never throws; returns the json object or { ok:false }.
+ * Per-column completeness of the KSA master upload staging table. Same
+ * contract as getTyreGapOverview.
  */
 export async function getMasterCompleteness() {
-  try {
-    const { data, error } = await supabase.rpc('get_master_file_completeness')
-    if (error || !data) return { ok: false }
-    return data
-  } catch {
-    return { ok: false }
-  }
+  return readJson(
+    await supabase.rpc('get_master_file_completeness'),
+    'The master-file completeness report',
+    { ok: false, reason: 'not_provisioned' },
+  )
 }
 
-/** The learned facts (confirmed rules) for this org. Never throws. */
+/** Ceiling on learned facts read in one request (the response cap). */
+export const LEARNED_FACTS_WINDOW = 1000
+
+/**
+ * The learned facts (confirmed rules) for this org, most recently updated
+ * first. [] only when the table is not deployed; a failed read THROWS.
+ * Read in one request up to the 1,000-row response cap (hundreds today).
+ */
 export async function listLearnedFacts({ country = null } = {}) {
-  try {
-    let q = supabase
-      .from('tyre_learned_facts')
-      .select('id,country,match_type,match_value,target_field,target_value,source,active,confirmed_by,created_at,updated_at')
-      .order('updated_at', { ascending: false })
-      .limit(500)
-    if (country && country !== 'All') q = q.or(`country.eq.${country},country.is.null`)
-    const { data, error } = await q
-    if (error) return []
-    return Array.isArray(data) ? data : []
-  } catch {
-    return []
-  }
+  let q = supabase
+    .from('tyre_learned_facts')
+    .select('id,country,match_type,match_value,target_field,target_value,source,active,confirmed_by,created_at,updated_at')
+    .order('updated_at', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(LEARNED_FACTS_WINDOW)
+  if (scope(country)) q = q.or(`country.eq.${country},country.is.null`)
+  const res = await q
+  if (res?.error && isNotProvisioned(res.error)) return []
+  const data = unwrap(res)
+  return Array.isArray(data) ? data : []
 }
 
 /**

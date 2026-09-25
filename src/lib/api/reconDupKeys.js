@@ -18,8 +18,9 @@
  * normalises the empty result. Do NOT rename the RPC here - the enforcement
  * lives in Postgres.
  *
- * The read path NEVER throws: it returns [] on a null payload or any RPC error
- * so the section can degrade to an honest empty state.
+ * The read path is HONEST: [] only for a not-deployed RPC or an empty result;
+ * any other failure throws so the section shows an error rather than a clean
+ * bill of health.
  *
  * The WRITE path (resolveDuplicateKey) is the opposite: it DOES throw on any
  * RPC error so the UI can surface a real failure, and it only ever removes rows
@@ -27,13 +28,15 @@
  * recon_resolve_duplicate_key RPC keeps the newest row and deletes exact copies
  * only; a group whose rows differ is left untouched and reported as such).
  */
-import { supabase } from './_client'
+import { supabase, unwrap, isNotProvisioned } from './_client'
 
 /**
  * List groups of tyre_records that share the same (serial_no, asset_no,
  * issue_date, country) key with more than one copy, via the
- * `recon_duplicate_key_tyres` RPC. Never throws - returns [] on a null payload
- * or any RPC error.
+ * `recon_duplicate_key_tyres` RPC. [] only when the RPC is genuinely not
+ * deployed (by error code) or returns no groups; a permission or network
+ * failure THROWS a sanitised ServiceError, so the section shows an error with
+ * Retry instead of "no duplicate fitment keys".
  *
  * @returns {Promise<Array<{
  *   serial_no: string,
@@ -41,16 +44,13 @@ import { supabase } from './_client'
  *   issue_date: string,
  *   country: string,
  *   copies: number
- * }>>} duplicate-key group rows (empty array when none or on error)
+ * }>>} duplicate-key group rows
  */
 export async function listDuplicateKeyTyres() {
-  try {
-    const { data, error } = await supabase.rpc('recon_duplicate_key_tyres')
-    if (error) return []
-    return Array.isArray(data) ? data : []
-  } catch {
-    return []
-  }
+  const res = await supabase.rpc('recon_duplicate_key_tyres')
+  if (res?.error && isNotProvisioned(res.error)) return []
+  const data = unwrap(res)
+  return Array.isArray(data) ? data : []
 }
 
 /**

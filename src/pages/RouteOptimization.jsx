@@ -26,6 +26,7 @@ import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 import { isMissingRelation } from '../lib/api/_client'
+import useLatestRequest from '../lib/useLatestRequest'
 
 const EMPTY_FORM = {
   plan_name: '', asset_no: '', driver_name: '', plan_date: '', stops_count: '',
@@ -61,6 +62,7 @@ export default function RouteOptimization() {
   const [notProvisioned, setNotProvisioned] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [updatedAt, setUpdatedAt] = useState(null)
+  const latest = useLatestRequest()
 
   const [statusFilter, setStatusFilter] = useState('')
   const [assetFilter, setAssetFilter] = useState('')
@@ -75,21 +77,25 @@ export default function RouteOptimization() {
   const [deleting, setDeleting] = useState(false)
 
   const load = useCallback(async () => {
+    const stale = latest.begin()
+    setRows(null); setUpdatedAt(null)
     setRefreshing(true); setError(''); setNotProvisioned(false)
     try {
       const data = await listRoutePlans({ country: activeCountry })
+      if (stale()) return
       setRows(Array.isArray(data) ? data : [])
       setUpdatedAt(new Date())
     } catch (err) {
+      if (stale()) return
       if (isMissingRelation(err)) setNotProvisioned(true)
       else setError(toUserMessage(err, 'Could not load route plans.'))
       setRows([])
     } finally {
-      setRefreshing(false)
+      if (!stale()) setRefreshing(false)
     }
-  }, [activeCountry])
+  }, [activeCountry, latest])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { load(); return latest.cancel }, [load, latest])
 
   const summary = useMemo(() => summariseRoutePlans(rows || []), [rows])
 
@@ -140,7 +146,7 @@ export default function RouteOptimization() {
       driver_name: r.driver_name || '', plan_date: r.plan_date || '',
       stops_count: r.stops_count ?? '', total_distance_km: r.total_distance_km ?? '',
       optimized_distance_km: r.optimized_distance_km ?? '',
-      savings_km: r.savings_km ?? Math.round(savingsKm * 10) / 10,
+      savings_km: Math.round(Math.max(0, savingsKm) * 10) / 10,
       savings_pct: Math.round(savingsPct * 10) / 10,
       estimated_duration_min: r.estimated_duration_min ?? '', status: r.status || '',
     }
@@ -212,7 +218,7 @@ export default function RouteOptimization() {
     <div className="space-y-6">
       <PageHeader
         title="Route Optimization"
-        subtitle="Plan and optimise fleet routes: compare naive vs optimised distance to bank the kilometres, fuel, and tyre wear you save."
+        subtitle="Record route plans and compare entered baseline and planned distances. Savings are estimates, not verified journey results."
         icon={Navigation}
         onRefresh={load}
         refreshing={refreshing}
@@ -238,7 +244,7 @@ export default function RouteOptimization() {
           <div>
             <p className="text-amber-300 font-medium">Route optimization isn’t enabled on this database yet.</p>
             <p className="text-[var(--text-muted)] text-sm mt-1">
-              Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V165_ROUTE_PLANS.sql</span>, then reload.
+              Ask your administrator to enable route planning, then refresh.
             </p>
           </div>
         </div>
@@ -261,7 +267,7 @@ export default function RouteOptimization() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null || error || notProvisioned ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -302,12 +308,12 @@ export default function RouteOptimization() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={9} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {rows.length === 0 && !notProvisioned ? 'No route plans yet. Create your first plan.' : 'No route plans match these filters.'}
+                  {error || notProvisioned ? 'Route plans are unavailable.' : rows.length === 0 ? 'No route plans yet. Create your first plan.' : 'No route plans match these filters.'}
                 </td></tr>
               ) : (
                 pager.pageRows.map((r) => {
                   const { savingsKm, savingsPct } = computeSavings(r)
-                  const savedKm = r.savings_km != null ? Number(r.savings_km) : savingsKm
+                  const savedKm = Math.max(0, savingsKm)
                   return (
                     <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
                       <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">

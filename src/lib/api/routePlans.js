@@ -5,11 +5,10 @@
  * and input validation. RLS enforces org isolation; this layer never trusts
  * client input blindly.
  *
- * Mirrors odometerLogs.js. A missing `route_plans` relation (org has not run
- * the migration) degrades listing to an empty array so the page can render its
- * "apply the migration" empty state instead of erroring.
+ * Listing preserves backend errors so the page can distinguish an empty
+ * register from an unavailable module.
  */
-import { supabase, unwrap, applyCountry } from './_client'
+import { supabase, unwrap, applyCountry, fetchAllPages } from './_client'
 import { toFiniteNumber } from '../routePlans'
 
 export const COLS =
@@ -18,19 +17,6 @@ export const COLS =
   'savings_km,status,waypoints,notes,created_by,created_at,updated_at'
 
 const STATUSES = ['draft', 'optimized', 'dispatched', 'completed']
-
-/** True when the failure is "table does not exist yet" (pre-migration). */
-function isMissingRelation(err) {
-  const code = err?.code || err?.cause?.code
-  const msg = String(err?.message || err?.cause?.message || '').toLowerCase()
-  return (
-    code === '42P01' || code === 'PGRST205' ||
-    msg.includes('does not exist') ||
-    msg.includes('could not find the table') ||
-    msg.includes('schema cache') ||
-    (msg.includes('relation') && msg.includes('route_plans'))
-  )
-}
 
 const asText = (v, max) => (v == null || v === '' ? null : String(v).trim().slice(0, max))
 const asDate = (v) => {
@@ -59,23 +45,23 @@ const asNonNegative = (v, label) => {
 
 /**
  * List route plans (newest first by plan_date, then created_at). Optional
- * `country` filter. Returns [] when the table has not been provisioned yet.
- * @param {{ country?:string, limit?:number }} [opts]
+ * `country` filter. Fetches the complete register for totals and exports.
+ * @param {{ country?:string }} [opts]
  */
-export async function listRoutePlans({ country, limit = 500 } = {}) {
-  try {
-    let q = supabase.from('route_plans').select(COLS)
-    q = applyCountry(q, country)
-    return unwrap(
-      await q
-        .order('plan_date', { ascending: false, nullsFirst: false })
-        .order('created_at', { ascending: false })
-        .limit(limit),
-    ) || []
-  } catch (err) {
-    if (isMissingRelation(err)) return []
-    throw err
+export async function listRoutePlans({ country } = {}) {
+  const result = await fetchAllPages((from, to) => {
+    const q = applyCountry(supabase.from('route_plans').select(COLS), country)
+    return q
+      .order('plan_date', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(from, to)
+  }, { max: 100000 })
+  const rows = unwrap(result) || []
+  if (result.truncated) {
+    throw new Error('The route register is too large to load completely. Totals and exports are unavailable.')
   }
+  return rows
 }
 
 export async function getRoutePlan(id) {

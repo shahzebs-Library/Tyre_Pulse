@@ -1,5 +1,13 @@
 [
   {
+    "id": "2026.09.24.1",
+    "date": "2026-09-24",
+    "changes": [{
+      "modules": ["route_optimization", "reservations"],
+      "text": {"en": "Route plans and vehicle reservations now include older records in totals, conflict checks and exports. Unavailable data is clearly identified, country changes discard outdated responses, and route savings use consistent distance calculations."}
+    }]
+  },
+  {
     "id": "2026.09.22.2",
     "date": "2026-09-22",
     "changes": [{

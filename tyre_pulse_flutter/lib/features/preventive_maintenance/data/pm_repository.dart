@@ -3,6 +3,8 @@ library;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:tyre_pulse/core/network/supabase_gateway.dart';
 import 'package:tyre_pulse/core/network/supabase_tables.dart';
+import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart'
+    show PagedRows, fetchAllPages;
 import 'package:tyre_pulse/features/preventive_maintenance/domain/pm_plan.dart';
 
 abstract interface class PmRepository {
@@ -31,10 +33,18 @@ final class SupabasePmRepository with SupabaseGateway implements PmRepository {
       if (scope.isNotEmpty && scope != 'All') {
         query = query.or('country.eq.$scope,country.is.null');
       }
-      final List<Map<String, dynamic>> rows = await query
-          .order('next_due', ascending: true, nullsFirst: false)
-          .limit(300);
-      return rows.map(_planFromRow).toList(growable: false);
+      final PagedRows<Map<String, dynamic>> result =
+          await fetchAllPages<Map<String, dynamic>>(
+        (int from, int to) => query
+            .order('next_due', ascending: true, nullsFirst: false)
+            .order('id', ascending: true)
+            .range(from, to),
+        maxRows: 100000,
+      );
+      if (result.truncated) {
+        throw StateError('The active maintenance plan register is incomplete.');
+      }
+      return result.rows.map(_planFromRow).toList(growable: false);
     });
   }
 

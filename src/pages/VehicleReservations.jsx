@@ -29,6 +29,7 @@ import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 import { isMissingRelation } from '../lib/api/_client'
+import useLatestRequest from '../lib/useLatestRequest'
 
 const EMPTY_FORM = {
   reference: '', asset_no: '', requester_name: '', department: '', purpose: '',
@@ -89,6 +90,7 @@ export default function VehicleReservations() {
   const [notProvisioned, setNotProvisioned] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [updatedAt, setUpdatedAt] = useState(null)
+  const latest = useLatestRequest()
 
   const [statusFilter, setStatusFilter] = useState('')
   const [assetFilter, setAssetFilter] = useState('')
@@ -103,21 +105,25 @@ export default function VehicleReservations() {
   const [deleting, setDeleting] = useState(false)
 
   const load = useCallback(async () => {
+    const stale = latest.begin()
+    setRows(null); setUpdatedAt(null)
     setRefreshing(true); setError(''); setNotProvisioned(false)
     try {
       const data = await listVehicleReservations({ country: activeCountry })
+      if (stale()) return
       setRows(Array.isArray(data) ? data : [])
       setUpdatedAt(new Date())
     } catch (err) {
+      if (stale()) return
       if (isMissingRelation(err)) setNotProvisioned(true)
       else setError(toUserMessage(err, 'Could not load vehicle reservations.'))
       setRows([])
     } finally {
-      setRefreshing(false)
+      if (!stale()) setRefreshing(false)
     }
-  }, [activeCountry])
+  }, [activeCountry, latest])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { load(); return latest.cancel }, [load, latest])
 
   // Compute "now" once per render so the pure helpers stay deterministic.
   const nowMs = Date.now()
@@ -265,7 +271,7 @@ export default function VehicleReservations() {
           <div>
             <p className="text-amber-300 font-medium">Vehicle reservations aren’t enabled on this database yet.</p>
             <p className="text-[var(--text-muted)] text-sm mt-1">
-              Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V175_VEHICLE_RESERVATIONS.sql</span>, then reload.
+              Ask your administrator to enable vehicle reservations, then refresh.
             </p>
           </div>
         </div>
@@ -288,7 +294,7 @@ export default function VehicleReservations() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null || error || notProvisioned ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -358,7 +364,7 @@ export default function VehicleReservations() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={7} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {rows.length === 0 && !notProvisioned ? 'No reservations yet. Create your first booking.' : 'No reservations match these filters.'}
+                  {error || notProvisioned ? 'Vehicle reservations are unavailable.' : rows.length === 0 ? 'No reservations yet. Create your first booking.' : 'No reservations match these filters.'}
                 </td></tr>
               ) : (
                 pager.pageRows.map((r) => {

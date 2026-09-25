@@ -5,11 +5,10 @@
  * selects), null-safe country scoping, and input validation. RLS enforces org
  * isolation; this layer never trusts client input blindly.
  *
- * Mirrors odometerLogs.js. A missing `vehicle_reservations` relation (org has
- * not run the migration) degrades listing to an empty array so the page can
- * render its "apply the migration" empty state instead of erroring.
+ * Listing preserves errors and retrieves the complete scoped register so
+ * conflict checks and exports do not silently omit older bookings.
  */
-import { supabase, unwrap, applyCountry } from './_client'
+import { supabase, unwrap, applyCountry, fetchAllPages } from './_client'
 import { toFiniteNumber } from '../vehicleReservations'
 
 export const COLS =
@@ -18,19 +17,6 @@ export const COLS =
   'approved_by,notes,created_by,created_at,updated_at'
 
 const STATUSES = ['requested', 'approved', 'out', 'returned', 'cancelled']
-
-/** True when the failure is "table does not exist yet" (pre-migration). */
-function isMissingRelation(err) {
-  const code = err?.code || err?.cause?.code
-  const msg = String(err?.message || err?.cause?.message || '').toLowerCase()
-  return (
-    code === '42P01' || code === 'PGRST205' ||
-    msg.includes('does not exist') ||
-    msg.includes('could not find the table') ||
-    msg.includes('schema cache') ||
-    (msg.includes('relation') && msg.includes('vehicle_reservations'))
-  )
-}
 
 const asText = (v, max) => (v == null || v === '' ? null : String(v).trim().slice(0, max))
 const asDate = (v) => {
@@ -45,23 +31,21 @@ const asStatus = (v) => {
 
 /**
  * List reservations (newest first by start_at, then created_at). Optional
- * `country` filter. Returns [] when the table has not been provisioned yet.
- * @param {{ country?:string, limit?:number }} [opts]
+ * `country` filter. Failed or incomplete reads never become an empty register.
+ * @param {{ country?:string }} [opts]
  */
-export async function listVehicleReservations({ country, limit = 500 } = {}) {
-  try {
-    let q = supabase.from('vehicle_reservations').select(COLS)
-    q = applyCountry(q, country)
-    return unwrap(
-      await q
-        .order('start_at', { ascending: false, nullsFirst: false })
-        .order('created_at', { ascending: false })
-        .limit(limit),
-    ) || []
-  } catch (err) {
-    if (isMissingRelation(err)) return []
-    throw err
+export async function listVehicleReservations({ country } = {}) {
+  const result = await fetchAllPages((from, to) =>
+    applyCountry(supabase.from('vehicle_reservations').select(COLS), country)
+      .order('start_at', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(from, to), { max: 100000 })
+  const rows = unwrap(result) || []
+  if (result.truncated) {
+    throw new Error('The reservation register is too large to load completely. Conflict checks and exports are unavailable.')
   }
+  return rows
 }
 
 export async function getVehicleReservation(id) {

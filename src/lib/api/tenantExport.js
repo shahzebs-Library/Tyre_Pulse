@@ -4,7 +4,7 @@
  */
 import { supabase, unwrap } from './_client'
 import { toUserMessage } from '../safeError'
-import { shapeManifest, PAGE_SIZE, parseCeiling } from '../tenantExport'
+import { shapeManifest, PAGE_SIZE, parseCeiling, shapeRetentionStatus } from '../tenantExport'
 
 export async function listExportOrganisations() {
   return unwrap(await supabase
@@ -72,7 +72,7 @@ export async function logTenantExport(orgId, reason, tables, counts, status) {
 export async function listExportJobs(limit = 25) {
   return unwrap(await supabase
     .from('tenant_export_jobs')
-    .select('id, org_id, requested_by, reason, tables, status, row_counts, created_at, completed_at, mode, progress, files, error, started_at, updated_at')
+    .select('id, org_id, requested_by, reason, tables, status, row_counts, created_at, completed_at, mode, progress, files, error, started_at, updated_at, expired_at')
     .order('created_at', { ascending: false })
     .limit(limit)) || []
 }
@@ -122,4 +122,24 @@ export async function getExportJob(jobId) {
     .select('id, org_id, reason, tables, status, mode, progress, files, row_counts, error, started_at, updated_at, created_at, completed_at')
     .eq('id', jobId)
     .maybeSingle())
+}
+
+// ---------------------------------------------------------------------------
+// Retention: server export files are deleted after N days by a daily cron (and
+// on demand). The deletion itself runs in the edge function via the Storage
+// API; these RPCs are super-admin only and audited.
+// ---------------------------------------------------------------------------
+
+export async function getRetentionStatus() {
+  return shapeRetentionStatus(unwrap(await supabase.rpc('admin_tenant_export_retention_status')))
+}
+
+export async function setRetentionDays(days) {
+  return unwrap(await supabase.rpc('admin_tenant_export_set_retention', { p_days: Number(days) }))
+}
+
+/** Queue the same cleanup the daily cron runs. Returns { queued, due }. */
+export async function purgeExpiredNow() {
+  const r = unwrap(await supabase.rpc('admin_tenant_export_purge_now')) || {}
+  return { queued: r.queued === true, due: Number(r.due) || 0 }
 }

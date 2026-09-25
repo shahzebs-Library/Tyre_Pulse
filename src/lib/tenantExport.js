@@ -343,3 +343,53 @@ export function serverFileName(file) {
   const last = path.split('/').pop() || 'export'
   return file?.table && file.table !== '_manifest' ? `${file.table}-${last}` : last
 }
+
+// ---------------------------------------------------------------------------
+// Retention (20260924122000): server export files are deleted after N days.
+// The server clamps its reader to 1..90 and refuses a setter outside it; these
+// mirror that so the console can explain a value before it is sent.
+// ---------------------------------------------------------------------------
+export const RETENTION_MIN = 1
+export const RETENTION_MAX = 90
+export const RETENTION_DEFAULT = 7
+
+/** Mirror of public._tenant_export_retention_days(): junk -> 7, else clamp 1..90. */
+export function clampRetentionDays(v) {
+  const s = String(v ?? '').trim().replace(/^"|"$/g, '')
+  if (!/^\d{1,6}$/.test(s)) return RETENTION_DEFAULT
+  return Math.min(Math.max(Number(s), RETENTION_MIN), RETENTION_MAX)
+}
+
+/** Validate a value typed into the console. Returns an error message or ''. */
+export function validateRetentionDays(v) {
+  const s = String(v ?? '').trim()
+  if (!/^\d+$/.test(s)) return 'Enter a whole number of days.'
+  const n = Number(s)
+  if (n < RETENTION_MIN || n > RETENTION_MAX) return `Retention must be between ${RETENTION_MIN} and ${RETENTION_MAX} days.`
+  return ''
+}
+
+/**
+ * Shape admin_tenant_export_retention_status(). Honest: an unreadable payload
+ * yields days null (never a made-up 7) and an empty due list.
+ */
+export function shapeRetentionStatus(raw) {
+  const r = raw && typeof raw === 'object' ? raw : {}
+  const days = toCount(r.days)
+  const due = (Array.isArray(r.due) ? r.due : []).filter((d) => d && d.job_id).map((d) => ({
+    jobId: d.job_id,
+    orgId: d.org_id || null,
+    status: d.status || null,
+    finishedAt: d.finished_at || null,
+    files: toCount(d.files) ?? 0,
+  }))
+  return {
+    days,
+    dueCount: toCount(r.due_count) ?? due.length,
+    due,
+    storedJobs: toCount(r.stored_jobs),
+    expiredJobs: toCount(r.expired_jobs),
+    lastPurgeAt: r.last_purge_at || null,
+    nextRun: r.next_run || null,
+  }
+}

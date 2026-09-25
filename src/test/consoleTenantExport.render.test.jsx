@@ -18,7 +18,11 @@ vi.mock('../lib/api/tenantExport', () => ({
   logTenantExport: (...a) => log(...a),
   listExportJobs: vi.fn(async () => [
     { id: 'j0', org_id: 'o1', reason: 'legal hold ticket 9', tables: ['sites'], status: 'partial', row_counts: { sites: 3 }, created_at: '2026-09-20T00:00:00Z' },
+    { id: 'j1', org_id: 'o1', reason: 'old server dump', tables: ['sites'], status: 'expired', mode: 'server', files: [{ table: 'sites', path: 'o1/j1/sites/part-0001.ndjson.gz' }], row_counts: { sites: 3 }, created_at: '2026-09-01T00:00:00Z', expired_at: '2026-09-10T00:00:00Z' },
   ]),
+  getRetentionStatus: vi.fn(async () => ({ days: 7, dueCount: 0, due: [], storedJobs: 1, expiredJobs: 1, lastPurgeAt: null, nextRun: 'daily 02:40 UTC' })),
+  setRetentionDays: vi.fn(async () => ({ days: 7 })),
+  purgeExpiredNow: vi.fn(async () => ({ queued: false, due: 0 })),
 }))
 
 import ConsoleTenantExport from '../console/pages/ConsoleTenantExport'
@@ -28,6 +32,9 @@ describe('ConsoleTenantExport', () => {
     render(<ConsoleTenantExport />)
     expect(await screen.findByText('legal hold ticket 9')).toBeTruthy()
     expect(screen.getByText('Partial')).toBeTruthy()
+    expect(screen.getByText('Expired')).toBeTruthy()
+    expect(screen.getByText('Deleted')).toBeTruthy()
+    expect(await screen.findByText('Export retention')).toBeTruthy()
     expect(screen.getByText('No organisation chosen')).toBeTruthy()
 
     fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: 'o1' } })

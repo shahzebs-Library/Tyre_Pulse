@@ -142,3 +142,32 @@ export function healthyWebhookRate(rows = []) {
   )
   return Math.round((active / list.length) * 100)
 }
+
+/**
+ * Map a row of the CANONICAL `api_keys` table (the one the public-api edge
+ * function authenticates against; minted by create_api_key) onto the row shape
+ * the Developer Portal renders. There is one key system: the retired
+ * `developer_api_keys` table is no longer read or written.
+ *
+ * Honest mapping: every canonical key authenticates the live public API, so its
+ * environment is 'production'; an inactive key is 'revoked'. Fields the
+ * canonical table does not carry (created_label, country) stay null.
+ */
+export function shapeCanonicalKey(row) {
+  const r = row && typeof row === 'object' ? row : {}
+  const scopes = Array.isArray(r.scopes) ? r.scopes.filter((s) => typeof s === 'string').join(', ') : (r.scopes || null)
+  return {
+    id: r.id || null,
+    key_name: r.name || null,
+    key_prefix: r.key_prefix || null,
+    scopes: scopes || null,
+    environment: 'production',
+    status: r.active === false || r.revoked_at ? 'revoked' : 'active',
+    rate_limit: r.rate_per_minute ?? null,
+    last_used_at: r.last_used_at || null,
+    expires_at: r.expires_at || null,
+    created_label: null,
+    notes: r.revoke_reason || null,
+    created_at: r.created_at || null,
+  }
+}

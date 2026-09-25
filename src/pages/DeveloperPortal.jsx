@@ -2,14 +2,15 @@
  * DeveloperPortal (route /developer-portal) — the integrator-facing control
  * surface. Two tabs on one page:
  *
- *   • API Keys  — issue, edit, and revoke API credential metadata (never raw
- *     secrets; only a display prefix + label are stored). KPI tiles, masked
- *     key display, status/environment badges, expiry awareness.
+ *   • API Keys  — issue and revoke REAL keys in the canonical `api_keys` table
+ *     (the one the public API authenticates against; create_api_key /
+ *     revoke_api_key). The plaintext key is shown ONCE on creation; only its
+ *     sha256 is stored. The retired `developer_api_keys` table is not used.
  *   • Webhooks  — register outbound event-delivery endpoints, track delivery
  *     health and failure counts, edit/remove. KPI tiles, health meter,
  *     status badges.
  *
- * Runs on the `api_keys` and `webhook_endpoints` tables (V194). Real data, KPI
+ * Runs on the canonical `api_keys` table (V99) and `webhook_endpoints` (V194). Real data, KPI
  * tiles, create/edit modals, filters, search, delete/revoke confirm, Excel/PDF
  * export for the active tab, and loading/empty/error/not-provisioned states
  * throughout. All roll-up + display logic lives in the pure
@@ -20,13 +21,13 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
   KeyRound, Webhook, ShieldCheck, Activity, Ban, Clock, Server,
   Radio, AlertTriangle, AlertOctagon, Search, X, Filter, FileSpreadsheet,
-  FileText, Plus, Pencil, Trash2,
+  FileText, Plus, Pencil, Trash2, Copy,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 import { useSettings } from '../contexts/SettingsContext'
 import {
-  listApiKeys, createApiKey, updateApiKey, deleteApiKey,
+  listApiKeys, createApiKey, revokeApiKey,
   listWebhookEndpoints, createWebhookEndpoint, updateWebhookEndpoint, deleteWebhookEndpoint,
 } from '../lib/api/developerPortal'
 import {
@@ -36,10 +37,7 @@ import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { isMissingRelation } from '../lib/api/_client'
 
-const EMPTY_KEY_FORM = {
-  key_name: '', key_prefix: '', scopes: '', environment: 'sandbox',
-  status: 'active', rate_limit: '', expires_at: '', created_label: '', notes: '',
-}
+const EMPTY_KEY_FORM = { key_name: '', expires_at: '' }
 const EMPTY_HOOK_FORM = {
   endpoint_name: '', url: '', event_types: '', status: 'active',
   failure_count: '', secret_set: false, notes: '',
@@ -105,12 +103,15 @@ export default function DeveloperPortal() {
   const [formError, setFormError] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  // The plaintext of a just-minted key. Shown once, never stored in the page.
+  const [newKey, setNewKey] = useState(null)
+  const [copied, setCopied] = useState(false)
 
   const load = useCallback(async () => {
     setRefreshing(true); setError(''); setNotProvisioned(false)
     try {
       const [k, h] = await Promise.all([
-        listApiKeys({ country: activeCountry }),
+        listApiKeys(),
         listWebhookEndpoints({ country: activeCountry }),
       ])
       setKeys(Array.isArray(k) ? k : [])
@@ -232,16 +233,6 @@ export default function DeveloperPortal() {
     setHookForm(EMPTY_HOOK_FORM)
     setFormError(''); setShowModal(true)
   }
-  const openEditKey = (r) => {
-    setEditing(r)
-    setKeyForm({
-      key_name: r.key_name || '', key_prefix: r.key_prefix || '', scopes: r.scopes || '',
-      environment: r.environment || 'sandbox', status: r.status || 'active',
-      rate_limit: r.rate_limit ?? '', expires_at: r.expires_at ? r.expires_at.slice(0, 10) : '',
-      created_label: r.created_label || '', notes: r.notes || '',
-    })
-    setFormError(''); setShowModal(true)
-  }
   const openEditHook = (r) => {
     setEditing(r)
     setHookForm({
@@ -263,9 +254,9 @@ export default function DeveloperPortal() {
     try {
       if (tab === 'keys') {
         if (!keyForm.key_name.trim()) { setFormError('A key name is required.'); setSaving(false); return }
-        const payload = { ...keyForm, country }
-        if (editing) await updateApiKey(editing.id, payload)
-        else await createApiKey(payload)
+        const minted = await createApiKey(keyForm)
+        setCopied(false)
+        setNewKey(minted && minted.key ? { name: keyForm.key_name.trim(), key: minted.key, prefix: minted.prefix } : null)
       } else {
         if (!hookForm.endpoint_name.trim()) { setFormError('An endpoint name is required.'); setSaving(false); return }
         const payload = { ...hookForm, country }
@@ -285,7 +276,7 @@ export default function DeveloperPortal() {
     if (!confirmDelete) return
     setDeleting(true)
     try {
-      if (confirmDelete._kind === 'key') await deleteApiKey(confirmDelete.id)
+      if (confirmDelete._kind === 'key') await revokeApiKey(confirmDelete.id)
       else await deleteWebhookEndpoint(confirmDelete.id)
       setConfirmDelete(null)
       await load()
@@ -308,7 +299,7 @@ export default function DeveloperPortal() {
     <div className="space-y-6">
       <PageHeader
         title="Developer Portal"
-        subtitle="Register API key references and webhook details. These records do not issue credentials, enforce access or rate limits, or start webhook delivery."
+        subtitle="Issue and revoke API keys for the Tyre Pulse public API. Webhook entries are records only: they do not start delivery."
         icon={KeyRound}
         onRefresh={load}
         refreshing={refreshing}
@@ -322,7 +313,7 @@ export default function DeveloperPortal() {
               <FileText size={14} /> PDF
             </button>
             <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5" disabled={notProvisioned}>
-              <Plus size={14} /> {tab === 'keys' ? 'Register key reference' : 'Register webhook'}
+              <Plus size={14} /> {tab === 'keys' ? 'Issue API key' : 'Register webhook'}
             </button>
           </div>
         }
@@ -458,8 +449,9 @@ export default function DeveloperPortal() {
                         <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDate(r.last_used_at)}</td>
                         <td className="px-4 py-2.5">
                           <div className="flex items-center justify-end gap-1">
-                            <button onClick={() => openEditKey(r)} className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Edit"><Pencil size={14} /></button>
-                            <button onClick={() => setConfirmDelete({ ...r, _kind: 'key' })} className="p-1.5 rounded hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400" aria-label="Delete key reference"><Ban size={14} /></button>
+                            {effStatus !== 'revoked' && (
+                              <button onClick={() => setConfirmDelete({ ...r, _kind: 'key' })} className="p-1.5 rounded hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400" aria-label="Revoke key"><Ban size={14} /></button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -527,7 +519,7 @@ export default function DeveloperPortal() {
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-[var(--text-primary)] inline-flex items-center gap-2">
                 {tab === 'keys' ? <KeyRound size={18} /> : <Webhook size={18} />}
-                {editing ? (tab === 'keys' ? 'Edit API key reference' : 'Edit webhook record') : (tab === 'keys' ? 'New API key reference' : 'New webhook record')}
+                {editing ? 'Edit webhook record' : (tab === 'keys' ? 'Issue API key' : 'New webhook record')}
               </h3>
               <button onClick={closeModal} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
             </div>
@@ -535,56 +527,17 @@ export default function DeveloperPortal() {
             <form onSubmit={submit} className="space-y-4">
               {tab === 'keys' ? (
                 <>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="label">Key name</label>
-                      <input className="input w-full" placeholder="e.g. ERP sync (read-only)" value={keyForm.key_name} maxLength={200} onChange={(e) => setKey('key_name', e.target.value)} />
-                    </div>
-                    <div>
-                      <label className="label">Key prefix (display hint)</label>
-                      <input className="input w-full font-mono" placeholder="tp_live_9f3c" value={keyForm.key_prefix} maxLength={60} onChange={(e) => setKey('key_prefix', e.target.value)} />
-                      <p className="text-[11px] text-[var(--text-muted)] mt-1">Never store the full secret, only a recognisable prefix.</p>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div>
-                      <label className="label">Environment</label>
-                      <select className="input w-full" value={keyForm.environment} onChange={(e) => setKey('environment', e.target.value)}>
-                        <option value="sandbox">Sandbox</option>
-                        <option value="production">Production</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="label">Status</label>
-                      <select className="input w-full" value={keyForm.status} onChange={(e) => setKey('status', e.target.value)}>
-                        <option value="active">Active</option>
-                        <option value="revoked">Revoked</option>
-                        <option value="expired">Expired</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="label">Rate limit (/min)</label>
-                      <input className="input w-full" type="number" min="0" step="1" placeholder="600" value={keyForm.rate_limit} onChange={(e) => setKey('rate_limit', e.target.value)} />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="label">Expires at (optional)</label>
-                      <input className="input w-full" type="date" value={keyForm.expires_at} onChange={(e) => setKey('expires_at', e.target.value)} />
-                    </div>
-                    <div>
-                      <label className="label">Owner / label (optional)</label>
-                      <input className="input w-full" placeholder="e.g. Integrations team" value={keyForm.created_label} maxLength={200} onChange={(e) => setKey('created_label', e.target.value)} />
-                    </div>
+                  <div>
+                    <label className="label">Key name</label>
+                    <input className="input w-full" placeholder="e.g. ERP sync (read-only)" value={keyForm.key_name} maxLength={200} onChange={(e) => setKey('key_name', e.target.value)} />
                   </div>
                   <div>
-                    <label className="label">Scopes (optional)</label>
-                    <input className="input w-full" placeholder="tyres:read, vehicles:read, inspections:write" value={keyForm.scopes} maxLength={2000} onChange={(e) => setKey('scopes', e.target.value)} />
+                    <label className="label">Expires on (optional)</label>
+                    <input className="input w-full" type="date" value={keyForm.expires_at} onChange={(e) => setKey('expires_at', e.target.value)} />
                   </div>
-                  <div>
-                    <label className="label">Notes (optional)</label>
-                    <textarea className="input w-full min-h-[70px] resize-y" placeholder="Purpose, owning team, rotation policy…" value={keyForm.notes} maxLength={8000} onChange={(e) => setKey('notes', e.target.value)} />
-                  </div>
+                  <p className="text-xs text-[var(--text-muted)]">
+                    The key grants read-only access to this organisation&apos;s data through the public API. It is shown once after it is issued and cannot be recovered later, so copy it straight away.
+                  </p>
                 </>
               ) : (
                 <>
@@ -644,6 +597,26 @@ export default function DeveloperPortal() {
         </div>
       )}
 
+      {/* One-time plaintext of a just-issued key */}
+      {newKey && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4">
+          <div className="card w-full max-w-lg" role="dialog" aria-label="New API key">
+            <h3 className="text-lg font-bold text-[var(--text-primary)] inline-flex items-center gap-2"><KeyRound size={18} /> API key issued: {newKey.name}</h3>
+            <p className="text-sm text-amber-300 mt-2">Copy this key now. It is shown only once and cannot be recovered.</p>
+            <div className="mt-3 flex items-center gap-2">
+              <code className="flex-1 font-mono text-xs break-all bg-[var(--input-bg)] rounded px-2 py-2 text-[var(--text-primary)]" data-testid="new-api-key">{newKey.key}</code>
+              <button
+                className="btn-secondary text-sm inline-flex items-center gap-1.5"
+                onClick={async () => { try { await navigator.clipboard.writeText(newKey.key); setCopied(true) } catch { setCopied(false) } }}
+              ><Copy size={14} /> {copied ? 'Copied' : 'Copy'}</button>
+            </div>
+            <div className="flex justify-end mt-4">
+              <button className="btn-primary text-sm" onClick={() => { setNewKey(null); setCopied(false) }}>I have copied it</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Delete / Revoke confirm */}
       {confirmDelete && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" onClick={() => !deleting && setConfirmDelete(null)}>
@@ -654,11 +627,11 @@ export default function DeveloperPortal() {
               </div>
               <div>
                 <h3 className="text-[var(--text-primary)] font-semibold">
-                  {confirmDelete._kind === 'key' ? 'Delete this key reference?' : 'Delete this webhook record?'}
+                  {confirmDelete._kind === 'key' ? 'Revoke this API key?' : 'Delete this webhook record?'}
                 </h3>
                 <p className="text-sm text-[var(--text-muted)] mt-1">
                   {confirmDelete._kind === 'key'
-                    ? <>{confirmDelete.key_name || 'Key'} · {maskKey(confirmDelete.key_prefix)}. This removes the saved reference. Revoke the actual credential in the service that issued it.</>
+                    ? <>{confirmDelete.key_name || 'Key'} · {maskKey(confirmDelete.key_prefix)}. Any system using this key stops working immediately. The key stays listed as revoked.</>
                     : <>{confirmDelete.endpoint_name || 'Endpoint'} · {confirmDelete.url || 'N/A'}. This can’t be undone.</>}
                 </p>
               </div>
@@ -667,7 +640,7 @@ export default function DeveloperPortal() {
               <button onClick={() => setConfirmDelete(null)} className="btn-secondary text-sm" disabled={deleting}>Cancel</button>
               <button onClick={doDelete} className="btn-danger text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={deleting}>
                 {confirmDelete._kind === 'key' ? <Ban size={14} /> : <Trash2 size={14} />}
-                {deleting ? 'Working…' : (confirmDelete._kind === 'key' ? 'Delete reference' : 'Delete record')}
+                {deleting ? 'Working…' : (confirmDelete._kind === 'key' ? 'Revoke key' : 'Delete record')}
               </button>
             </div>
           </div>

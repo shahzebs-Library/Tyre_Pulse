@@ -32,14 +32,15 @@ import {
 import { configNum } from '../../lib/api/systemConfig'
 import { exportSheetsToExcel } from '../../lib/exportUtils'
 import { toUserMessage } from '../../lib/safeError'
+import RetentionPanel from './tenantExport/RetentionPanel'
 
 const fmt = (n) => (n == null ? 'N/A' : Number(n).toLocaleString('en-US'))
 function fmtWhen(v) {
   if (!v) return 'N/A'
   return new Date(v).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
-const STATUS_TONE = { completed: 'good', partial: 'warning', failed: 'danger', running: 'info' }
-const STATUS_TEXT = { completed: 'Complete', partial: 'Partial', failed: 'Failed', running: 'Running' }
+const STATUS_TONE = { completed: 'good', partial: 'warning', failed: 'danger', running: 'info', expired: 'quiet' }
+const STATUS_TEXT = { completed: 'Complete', partial: 'Partial', failed: 'Failed', running: 'Running', expired: 'Expired' }
 const POLL_MS = 4000
 const OUTCOME = {
   complete: { tone: 'good', text: 'Complete', icon: CheckCircle2 },
@@ -399,7 +400,7 @@ export default function ConsoleTenantExport() {
                   </ul>
                 )}
                 {!srvJob.running && srvJob.error && <p className="text-xs text-amber-200">{srvJob.error}</p>}
-                {!srvJob.running && srvJob.files.length > 0 && (
+                {!srvJob.running && srvJob.status !== 'expired' && srvJob.files.length > 0 && (
                   <Btn icon={Download} busy={linksBusy === srvJob.id} onClick={() => openLinks(srvJob.id)}>Get download links</Btn>
                 )}
               </div>
@@ -427,6 +428,8 @@ export default function ConsoleTenantExport() {
           )}
         </>
       )}
+
+      <RetentionPanel onPurged={loadJobs} />
 
       <Panel flush>
         <div className="p-4 pb-2">
@@ -462,6 +465,8 @@ export default function ConsoleTenantExport() {
                           <Td nowrap>{j.mode === 'server' ? 'Server' : 'Browser'}</Td>
                           <Td align="right" nowrap>
                             {j.mode !== 'server' ? <span className="text-gray-600">In browser</span>
+                              : j.status === 'expired'
+                                ? <span className="text-gray-600" title={j.expired_at ? `Files deleted ${fmtWhen(j.expired_at)}` : 'Files deleted'}>Deleted</span>
                               : j.status === 'running'
                                 ? <Btn size="xs" onClick={() => { setSrvJob(null); setSrvJobId(j.id) }}>Track</Btn>
                                 : (Array.isArray(j.files) && j.files.length > 0)

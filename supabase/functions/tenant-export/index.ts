@@ -35,6 +35,15 @@
 //   { action:'resume', job_id }                  -> { ok }   (stalled job only)
 //   { action:'download', job_id }                -> { ok, expires_in, files:[{table,path,rows,bytes,url}] }
 //   { action:'continue', job_id, token }         -> internal chaining
+//   { action:'cleanup', trigger?, actor? }       -> retention purge (x-cron-secret only;
+//        called by pg_cron and by admin_tenant_export_purge_now via pg_net)
+//
+// RETENTION (20260924122000): Supabase refuses a direct SQL DELETE on
+// storage.objects (storage.protect_delete), so SQL only decides which jobs are
+// due (_tenant_export_due_for_purge) and records the outcome
+// (_tenant_export_mark_expired). This function lists each due job's prefix,
+// removes the objects through the Storage API, confirms the prefix is empty,
+// and only then marks the job expired. A failure is logged and retried next run.
 // ============================================================================
 
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
@@ -52,6 +61,7 @@ const STALL_MS = 120_000     // resume is only allowed after this much silence
 const SIGN_SECONDS = 300     // signed download URL lifetime
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const TABLE_RE = /^[a-z_][a-z0-9_]{0,62}$/
+const PURGE_JOBS = 50        // jobs handled per cleanup call
 
 const ALLOWED_ORIGINS = ['https://tyrepulse.app', 'https://www.tyrepulse.app', 'https://app.tyrepulse.app', 'https://admin.tyrepulse.app']
 const VERCEL_ORIGIN = /^https:\/\/[a-z0-9-]+\.vercel\.app$/
@@ -289,6 +299,65 @@ async function runSlice(jobId: string, token: string) {
 }
 
 // ---------------------------------------------------------------------------
+// Retention cleanup
+// ---------------------------------------------------------------------------
+type StoredObject = { path: string; bytes: number }
+
+/** Every object under a job prefix (org/job/...), recursing into table folders. */
+async function listPrefix(admin: SupabaseClient, prefix: string, depth = 0): Promise<StoredObject[]> {
+  if (depth > 3) return []
+  const out: StoredObject[] = []
+  for (let offset = 0; offset < 100_000; offset += 1000) {
+    const { data, error } = await admin.storage.from(BUCKET).list(prefix, { limit: 1000, offset })
+    if (error) throw new Error(`List failed: ${pgMessage(error)}`)
+    const rows = data || []
+    for (const e of rows as Array<{ name: string; id: string | null; metadata?: { size?: number } | null }>) {
+      const p = `${prefix}/${e.name}`
+      if (e.id === null) out.push(...(await listPrefix(admin, p, depth + 1)))
+      else out.push({ path: p, bytes: Number(e.metadata?.size) || 0 })
+    }
+    if (rows.length < 1000) break
+  }
+  return out
+}
+
+async function purgeExpired(trigger: string, actor: string | null) {
+  const admin = adminClient()
+  const { data: due, error } = await admin.rpc('_tenant_export_due_for_purge', { p_limit: PURGE_JOBS })
+  if (error) throw new Error(pgMessage(error))
+  const list = (Array.isArray(due) ? due : []) as Array<{ job_id: string; org_id: string; prefix: string }>
+  const results: Array<{ job_id: string; objects: number; bytes: number; ok: boolean }> = []
+  for (const job of list) {
+    const prefix = `${job.org_id}/${job.job_id}`
+    if (!UUID_RE.test(job.org_id) || !UUID_RE.test(job.job_id)) continue
+    let removed = 0
+    let bytes = 0
+    try {
+      const objects = await listPrefix(admin, prefix)
+      bytes = objects.reduce((s, o) => s + o.bytes, 0)
+      for (let i = 0; i < objects.length; i += 100) {
+        const batch = objects.slice(i, i + 100).map((o) => o.path)
+        const { data: gone, error: rmErr } = await admin.storage.from(BUCKET).remove(batch)
+        if (rmErr) throw new Error(`Remove failed: ${pgMessage(rmErr)}`)
+        removed += (gone || []).length
+      }
+      const left = await listPrefix(admin, prefix)
+      if (left.length) throw new Error(`${left.length} file(s) still present after removal`)
+      await admin.rpc('_tenant_export_mark_expired', {
+        p_job: job.job_id, p_objects: removed, p_bytes: bytes, p_trigger: trigger, p_actor: actor, p_error: null,
+      })
+      results.push({ job_id: job.job_id, objects: removed, bytes, ok: true })
+    } catch (err) {
+      await admin.rpc('_tenant_export_mark_expired', {
+        p_job: job.job_id, p_objects: removed, p_bytes: bytes, p_trigger: trigger, p_actor: actor, p_error: pgMessage(err),
+      })
+      results.push({ job_id: job.job_id, objects: removed, bytes, ok: false })
+    }
+  }
+  return results
+}
+
+// ---------------------------------------------------------------------------
 // HTTP
 // ---------------------------------------------------------------------------
 Deno.serve(async (req) => {
@@ -313,6 +382,20 @@ Deno.serve(async (req) => {
       }
       background(runSlice(jobId, token))
       return json(req, { ok: true }, 202)
+    }
+
+    if (action === 'cleanup') {
+      const secret = req.headers.get('x-cron-secret') || ''
+      if (secret.length < 16) return fail(req, 401, 'Not allowed.')
+      const { data: row } = await adminClient().from('cron_config').select('value').eq('name', 'cron_secret').maybeSingle()
+      const expected = String(row?.value || '')
+      if (!expected || !timingSafeEqual(await sha256Hex(expected), await sha256Hex(secret))) {
+        return fail(req, 401, 'Not allowed.')
+      }
+      const trigger = body.trigger === 'manual' ? 'manual' : 'cron'
+      const actor = typeof body.actor === 'string' && UUID_RE.test(body.actor) ? body.actor : null
+      const results = await purgeExpired(trigger, actor)
+      return json(req, { ok: true, jobs: results.length, results })
     }
 
     const auth = await requireSuperAdmin(req)
@@ -363,7 +446,9 @@ Deno.serve(async (req) => {
       if (error) {
         const msg = error.code === '55P03' ? 'That export is still running.'
           : error.code === 'P0002' ? 'Export job not found.'
-            : error.code === '22023' ? 'That export produced no files.' : 'The download could not be prepared.'
+            : error.code === '22023'
+              ? (/expired/i.test(String(error.message || '')) ? 'That export has expired and its files were deleted.' : 'That export produced no files.')
+              : 'The download could not be prepared.'
         return fail(req, error.code === '42501' ? 403 : 400, msg)
       }
       const list: FileEntry[] = Array.isArray((data as { files?: FileEntry[] })?.files) ? (data as { files: FileEntry[] }).files : []

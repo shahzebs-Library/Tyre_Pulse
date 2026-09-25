@@ -1,36 +1,38 @@
 /**
- * Developer Portal service — the single seam between the Developer Portal page
+ * Developer Portal service: the single seam between the Developer Portal page
  * (/developer-portal) and Supabase for two related entity sets:
  *
- *   • api_keys           (table `developer_api_keys`, V194)
- *   • webhook_endpoints  (table `webhook_endpoints`, V194)
+ *   - API keys           -> the CANONICAL `api_keys` table (V99), the one the
+ *                           public-api edge function authenticates against.
+ *                           Minted by create_api_key (plaintext returned ONCE,
+ *                           only its sha256 is stored) and revoked by
+ *                           revoke_api_key. Super admins manage every org's
+ *                           keys at /console/api-keys over the same table.
+ *   - webhook_endpoints  (table `webhook_endpoints`, V194)
  *
- * Mirrors odometerLogs.js: explicit column lists (least-privilege selects),
- * null-safe country scoping, input validation, and a missing-relation guard so
- * a pre-migration org degrades listing to an empty array (the page then renders
- * its "apply the migration" empty state instead of erroring). RLS enforces org
- * isolation; this layer never trusts client input blindly.
+ * RETIRED (20260924123000): the separate `developer_api_keys` table (V194)
+ * held metadata that never issued a credential, so the portal showed "keys"
+ * that could not authenticate anything. It is no longer read or written; there
+ * is ONE key system.
  *
- * SECURITY: this service only ever persists non-secret metadata. `key_prefix` is
- * a display hint, never the raw secret, and `secret_set` is a boolean flag — the
- * webhook signing secret itself is never written here.
+ * SECURITY: key_hash is never selected. The plaintext key exists only in the
+ * create_api_key response and is shown to the user once.
  */
 import { supabase, unwrap, applyCountry } from './_client'
-import { toFiniteNumber } from '../developerPortal'
+import { toFiniteNumber, shapeCanonicalKey } from '../developerPortal'
 
+/** Canonical api_keys columns. Deliberately excludes key_hash. */
 export const API_KEY_COLS =
-  'id,organisation_id,country,key_name,key_prefix,scopes,environment,status,' +
-  'rate_limit,last_used_at,expires_at,created_label,notes,created_by,' +
-  'created_at,updated_at'
+  'id,name,key_prefix,scopes,active,rate_per_minute,created_at,last_used_at,expires_at,revoked_at,revoke_reason'
 
 export const WEBHOOK_COLS =
   'id,organisation_id,country,endpoint_name,url,event_types,status,' +
   'last_delivery_at,failure_count,secret_set,notes,created_by,' +
   'created_at,updated_at'
 
-const KEY_ENVIRONMENTS = ['sandbox', 'production']
-const KEY_STATUSES = ['active', 'revoked', 'expired']
 const WEBHOOK_STATUSES = ['active', 'paused', 'failing', 'disabled']
+/** Scopes create_api_key accepts today. */
+export const API_KEY_SCOPES = ['read']
 
 /** True when the failure is "table does not exist yet" (pre-migration). */
 function isMissingRelation(err, relation) {
@@ -56,97 +58,63 @@ const asTimestamp = (v) => {
   return Number.isNaN(d.getTime()) ? null : d.toISOString()
 }
 
-// ── API Keys ────────────────────────────────────────────────────────────────
+// ── API Keys (canonical api_keys) ───────────────────────────────────────────
 
 /**
- * List API keys (newest first by created_at). Optional `country` filter.
- * Returns [] when the table has not been provisioned yet.
- * @param {{ country?:string, limit?:number }} [opts]
+ * List the organisation's API keys, newest first, in the portal row shape.
+ * api_keys is organisation-level (no country column), so `country` is ignored.
+ * RLS limits the read to elevated users in the caller's organisation.
  */
-export async function listApiKeys({ country, limit = 500 } = {}) {
+export async function listApiKeys({ limit = 500 } = {}) {
   try {
-    let q = supabase.from('developer_api_keys').select(API_KEY_COLS)
-    q = applyCountry(q, country)
-    return unwrap(await q.order('created_at', { ascending: false }).limit(limit)) || []
+    const rows = unwrap(await supabase.from('api_keys').select(API_KEY_COLS)
+      .order('created_at', { ascending: false }).limit(limit)) || []
+    return rows.map(shapeCanonicalKey)
   } catch (err) {
-    if (isMissingRelation(err, 'developer_api_keys')) return []
+    if (isMissingRelation(err, 'api_keys')) return []
     throw err
   }
 }
 
 export async function getApiKey(id) {
-  return unwrap(await supabase.from('developer_api_keys').select(API_KEY_COLS).eq('id', id).maybeSingle())
+  const row = unwrap(await supabase.from('api_keys').select(API_KEY_COLS).eq('id', id).maybeSingle())
+  return row ? shapeCanonicalKey(row) : null
 }
 
 /**
- * Issue an API key record (metadata only — never a raw secret). Requires a
- * human key name. Environment/status are whitelisted; rate_limit, when present,
- * must be a non-negative integer.
+ * Mint a real API key through create_api_key. Returns { id, key, prefix };
+ * `key` is the plaintext and can never be retrieved again, so the caller must
+ * show it immediately. Only the 'read' scope exists today.
  */
 export async function createApiKey(values = {}) {
-  const key_name = asText(values.key_name, 200)
-  if (!key_name) throw new Error('A key name is required.')
-
-  let rate_limit = null
-  if (values.rate_limit !== undefined && values.rate_limit !== null && values.rate_limit !== '') {
-    rate_limit = toFiniteNumber(values.rate_limit)
-    if (rate_limit == null) throw new Error('Rate limit must be a number.')
-    if (rate_limit < 0) throw new Error('Rate limit cannot be negative.')
-    rate_limit = Math.round(rate_limit)
-  }
-
-  const payload = {
-    key_name,
-    key_prefix: asText(values.key_prefix, 60),
-    scopes: asText(values.scopes, 2000),
-    environment: asWhitelist(values.environment, KEY_ENVIRONMENTS) || 'sandbox',
-    status: asWhitelist(values.status, KEY_STATUSES) || 'active',
-    rate_limit,
-    expires_at: asTimestamp(values.expires_at),
-    created_label: asText(values.created_label, 200),
-    notes: values.notes ? String(values.notes).slice(0, 8000) : null,
-    country: values.country ?? null,
-  }
-  return unwrap(await supabase.from('developer_api_keys').insert(payload).select(API_KEY_COLS).single())
+  const name = asText(values.key_name ?? values.name, 200)
+  if (!name) throw new Error('A key name is required.')
+  const expiresAt = asTimestamp(values.expires_at)
+  if (expiresAt && Date.parse(expiresAt) <= Date.now()) throw new Error('The expiry date must be in the future.')
+  return unwrap(await supabase.rpc('create_api_key', {
+    p_name: name, p_scopes: API_KEY_SCOPES, p_expires_at: expiresAt,
+  }))
 }
 
 /**
- * Patch an API key. Strips immutable/ownership fields (id, organisation_id,
- * key_prefix, created_by, timestamps); coerces each field present so the stored
- * value never drifts from the validated shape.
+ * A canonical key cannot be edited: its name, scope and expiry are fixed when
+ * it is minted (super admins can change the expiry at /console/api-keys). The
+ * only change allowed here is revocation.
  */
 export async function updateApiKey(id, patch = {}) {
-  const clean = {}
-  if (patch.key_name !== undefined) {
-    const key_name = asText(patch.key_name, 200)
-    if (!key_name) throw new Error('A key name is required.')
-    clean.key_name = key_name
-  }
-  if (patch.scopes !== undefined) clean.scopes = asText(patch.scopes, 2000)
-  if (patch.environment !== undefined) clean.environment = asWhitelist(patch.environment, KEY_ENVIRONMENTS)
-  if (patch.status !== undefined) clean.status = asWhitelist(patch.status, KEY_STATUSES)
-  if (patch.rate_limit !== undefined) {
-    if (patch.rate_limit === null || patch.rate_limit === '') {
-      clean.rate_limit = null
-    } else {
-      const rl = toFiniteNumber(patch.rate_limit)
-      if (rl == null) throw new Error('Rate limit must be a number.')
-      if (rl < 0) throw new Error('Rate limit cannot be negative.')
-      clean.rate_limit = Math.round(rl)
-    }
-  }
-  if (patch.expires_at !== undefined) clean.expires_at = asTimestamp(patch.expires_at)
-  if (patch.last_used_at !== undefined) clean.last_used_at = asTimestamp(patch.last_used_at)
-  if (patch.created_label !== undefined) clean.created_label = asText(patch.created_label, 200)
-  if (patch.notes !== undefined) clean.notes = patch.notes ? String(patch.notes).slice(0, 8000) : null
-  if (patch.country !== undefined) clean.country = patch.country ?? null
-
-  return unwrap(await supabase.from('developer_api_keys').update(clean).eq('id', id).select(API_KEY_COLS).single())
+  if (patch && patch.status === 'revoked') return revokeApiKey(id)
+  throw new Error('An API key cannot be edited. Revoke it and issue a new one.')
 }
 
-/** Revoke (hard-delete) an API key record. */
+/** Revoke (deactivate) a key. It stays listed as revoked; nothing is deleted. */
+export async function revokeApiKey(id) {
+  if (!id) throw new Error('Missing key id')
+  return unwrap(await supabase.rpc('revoke_api_key', { p_id: id }))
+}
+
+/** Kept for existing callers: "deleting" a key revokes it. */
 export async function deleteApiKey(id) {
-  return unwrap(await supabase.from('developer_api_keys').delete().eq('id', id))
+  return revokeApiKey(id)
 }
 
 // ── Webhook Endpoints ─────────────────────────────────────────────────────────

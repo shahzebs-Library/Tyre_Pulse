@@ -55,6 +55,23 @@ batching stops them being started at all.
 
 ---
 
+# ⚑ SESSION 2026-09-25 (part 3) — CONSOLE ROUND 5. Migration 20260924126000 APPLIED LIVE + verified.
+- **Server-side console IP allowlist**: `_console_ip_allowed()` (fails open; gates only super admins via PostgREST
+  when flag on + >=1 entry) guard inserted into 55 volatile console writer RPCs, raises 42501. Flag still OFF.
+  NOT gated: console READ RPCs, edge-fn-called actions (tenant-export start, revoke sessions), direct RLS reads.
+  Allowlist writers are gated too -> recovery from outside = break-glass SQL in 117000 header.
+- **Mobile SSO** (code only, no build): `mobile/lib/ssoPolicy.ts`; signIn calls `sso_password_login_check`, signs
+  out on sso_required, no lockout count. Still app-level, Flutter not wired.
+- `/request-access` added to CHECKLIST_PATH_PREFIXES; `scheduleOrgId(profile)` (org_id -> organisation_id);
+  send-scheduled-reports v19 (claims digest window-scoped, exec digest states its all-time+30d window);
+  permissionMatrix header corrected.
+- `src/test/consolePagesSmoke.render.test.jsx` = every CONSOLE_NAV page x empty/error; asserts no crash, heading,
+  no raw DB text. RULE: a new console page must be added to its PAGES table or the coverage test fails.
+- OPEN: `src/lib/systemHealth.js errMessage()` still returns raw driver text (console page sanitises; main-app
+  /system-health does not; its tests assert raw text). Claims digest still `.limit(5000)` (cap 1000).
+
+---
+
 # ⚑ SESSION 2026-09-25 (part 2) — CONSOLE ROUND 4. Migrations 20260924121000-125000 APPLIED LIVE + verified.
 - **Request Access** `/request-access` (main app, all approved non-admin users): JIT requester UI over existing
   `request_elevation` + `my_elevation_requests`. Checklist-only roles still redirected (gap).

@@ -122,7 +122,14 @@ export default function ConsoleDataQuality() {
   }, [state.results, search, ruleByKey])
 
   if (state.loading) return <LoadingState label="Reading data-quality results" rows={5} />
-  if (state.error) return <ErrorState message={state.error} onRetry={load} />
+  if (state.error) {
+    return (
+      <Panel>
+        <PanelHeader icon={ShieldCheck} title="Data Quality Center" />
+        <ErrorState message={state.error} onRetry={load} />
+      </Panel>
+    )
+  }
 
   return (
     <div className="space-y-4">

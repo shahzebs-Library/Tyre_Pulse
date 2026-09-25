@@ -98,7 +98,14 @@ export default function ConsoleReconciliation() {
   const summary = useMemo(() => reconSummary(state.runs), [state.runs])
 
   if (state.loading) return <LoadingState label="Reading reconciliation runs" rows={5} />
-  if (state.error) return <ErrorState message={state.error} onRetry={load} />
+  if (state.error) {
+    return (
+      <Panel>
+        <PanelHeader icon={Scale} title="Reconciliation Center" />
+        <ErrorState message={state.error} onRetry={load} />
+      </Panel>
+    )
+  }
 
   return (
     <div className="space-y-4">

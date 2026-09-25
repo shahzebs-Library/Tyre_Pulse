@@ -153,6 +153,16 @@ async function loadTrendRows(sinceIso) {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
+/**
+ * A failed subsystem check carries the raw driver/Postgres message as its
+ * detail. Route it through the shared sanitiser so a table name, error code or
+ * permission text never reaches the screen; our own plain wording passes.
+ */
+function checkDetail(c) {
+  if (!c?.detail) return statusWord(c?.status)
+  return c.status === 'ok' ? c.detail : toUserMessage(c.detail, statusWord(c.status))
+}
+
 export default function ConsoleSystemHealth() {
   const { admin } = useConsoleAuth()
   const theme = useChartTheme()
@@ -537,7 +547,7 @@ export default function ConsoleSystemHealth() {
                           <Badge tone={checkTone(c.status)}>{statusWord(c.status)}</Badge>
                         </div>
                         <div className="flex items-center justify-between gap-2 mt-1.5">
-                          <span className="text-[10px] text-gray-500 truncate" title={c.detail}>{c.detail || statusWord(c.status)}</span>
+                          <span className="text-[10px] text-gray-500 truncate" title={checkDetail(c)}>{checkDetail(c)}</span>
                           <span className="text-[10px] text-gray-400 tabular-nums shrink-0">
                             {c.latencyMs != null ? `${c.latencyMs} ms` : ''}
                           </span>

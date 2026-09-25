@@ -182,7 +182,12 @@ export default function ConsoleIncidents() {
     return <div className="space-y-5 max-w-7xl"><LoadingState label="Loading incidents" rows={6} /></div>
   }
   if (error && !incidents) {
-    return <div className="space-y-5 max-w-7xl"><ErrorState message={error} onRetry={load} /></div>
+    return (
+      <div className="space-y-5 max-w-7xl">
+        <h1><Siren size={18} className="text-orange-400" /> Incidents &amp; Status</h1>
+        <ErrorState message={error} onRetry={load} />
+      </div>
+    )
   }
 
   const level = LEVEL_META[status.level]

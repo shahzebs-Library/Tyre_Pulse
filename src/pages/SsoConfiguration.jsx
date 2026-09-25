@@ -54,14 +54,14 @@ const PROTOCOL_BADGE = {
   saml: 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30',
   oidc: 'bg-sky-500/15 text-sky-300 border-sky-500/30',
   oauth2: 'bg-violet-500/15 text-violet-300 border-violet-500/30',
-  unknown: 'bg-slate-500/15 text-slate-300 border-slate-500/30',
+  unknown: 'bg-gray-500/15 text-gray-300 border-gray-500/30',
 }
 const STATUS_BADGE = {
   active: 'bg-green-500/15 text-green-300 border-green-500/30',
-  draft: 'bg-slate-500/15 text-slate-300 border-slate-500/30',
+  draft: 'bg-gray-500/15 text-gray-300 border-gray-500/30',
   disabled: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
   error: 'bg-red-500/15 text-red-300 border-red-500/30',
-  unknown: 'bg-slate-500/15 text-slate-300 border-slate-500/30',
+  unknown: 'bg-gray-500/15 text-gray-300 border-gray-500/30',
 }
 const CERT_META = {
   valid: { label: 'Valid', cls: 'text-green-400', Icon: CheckCircle2 },

@@ -157,7 +157,14 @@ export default function ConsoleSecurityAudit() {
   }
 
   if (state.loading && !posture) return <div><LoadingState label="Running security checks" rows={6} /></div>
-  if (state.error && !posture) return <div><ErrorState message={state.error} onRetry={load} /></div>
+  if (state.error && !posture) {
+    return (
+      <div className="space-y-5 max-w-7xl">
+        <h1><ShieldCheck size={18} className="text-orange-400" /> Security Audit</h1>
+        <ErrorState message={state.error} onRetry={load} />
+      </div>
+    )
+  }
 
   const act = posture?.activity || {}
 

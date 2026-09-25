@@ -55,6 +55,22 @@ batching stops them being started at all.
 
 ---
 
+# ⚑ SESSION 2026-09-25 (part 4) — USER DELETED + OPEN-ITEM CLEANUP. Migration 20260925090000 APPLIED LIVE.
+- **Mahmoud Taher (Egypt Director, a4fd5401-7345-4c08-9701-d39349e612af) DELETED** on owner instruction. Only
+  his own notifications (58, cascade) + auth identity referenced him. Row kept in
+  `_bak.deleted_user_mahmoud_20260925`. Org `e340fa7a` ("Egypt") now has 0 members (org row left in place).
+- **IP allowlist now also gates 26 console READ RPCs** (same anchored insert as 126000; 81 fns guarded total).
+  NOT gated on purpose: admin_tenant_export_server_start/_download_log (edge fn calls them with the user JWT, so
+  the IP seen is the edge runtime's), admin_revoke_user_sessions (service role), admin_check_import_fingerprint
+  (main-app imports), console_check_access. Flag still OFF.
+- `systemHealth.js errMessage()` now uses `toUserMessage` (item CLOSED).
+- Claims digest paged via .range() (repo only, **send-scheduled-reports NOT redeployed** - deployed v19 still
+  .limit(5000); harmless today, accidents ~38 rows). Ride it with the next deploy of that fn (CLI or deploy+diff).
+- Checked + NOT changed: canonical API keys read "production" by design (one live key system, no sandbox);
+  pushStats.recipients counts devices but is not rendered anywhere.
+
+---
+
 # ⚑ SESSION 2026-09-25 (part 3) — CONSOLE ROUND 5. Migration 20260924126000 APPLIED LIVE + verified.
 - **Server-side console IP allowlist**: `_console_ip_allowed()` (fails open; gates only super admins via PostgREST
   when flag on + >=1 entry) guard inserted into 55 volatile console writer RPCs, raises 42501. Flag still OFF.

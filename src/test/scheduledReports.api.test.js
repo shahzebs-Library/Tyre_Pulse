@@ -76,3 +76,28 @@ describe('scheduledReports - claims report type', () => {
     expect(b._calls.or).toHaveLength(0)
   })
 })
+
+describe('scheduleOrgId', () => {
+  it('prefers org_id', () => {
+    expect(sched.scheduleOrgId({ org_id: 'a', organisation_id: 'b' })).toBe('a')
+  })
+  it('falls back to organisation_id when org_id is missing or blank', () => {
+    expect(sched.scheduleOrgId({ org_id: null, organisation_id: 'b' })).toBe('b')
+    expect(sched.scheduleOrgId({ org_id: '  ', organisation_id: 'b' })).toBe('b')
+    expect(sched.scheduleOrgId({ organisation_id: 'b' })).toBe('b')
+  })
+  it('returns null only when neither is known', () => {
+    expect(sched.scheduleOrgId({})).toBeNull()
+    expect(sched.scheduleOrgId(null)).toBeNull()
+    expect(sched.scheduleOrgId(undefined)).toBeNull()
+  })
+})
+
+describe('ScheduledReports page payload', () => {
+  it('uses scheduleOrgId and never writes a null org_id', async () => {
+    const fs = await import('node:fs')
+    const src = fs.readFileSync('src/pages/ScheduledReports.jsx', 'utf8')
+    expect(src).toContain('scheduleOrgId(profile)')
+    expect(src).not.toMatch(/org_id:\s*profile\?\.org_id\s*\?\?\s*null/)
+  })
+})

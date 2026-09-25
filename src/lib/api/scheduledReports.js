@@ -201,6 +201,18 @@ export function datasetFor(reportType) {
   return DATASETS[reportType] || DATASETS.executive
 }
 
+/**
+ * The organisation a schedule belongs to. `profiles` carries the tenant in two
+ * columns (org_id and organisation_id, kept in step by V311), and a schedule
+ * saved with org_id NULL is read across every organisation by the digest
+ * (its org filter is a no-op on null). Prefer org_id, fall back to
+ * organisation_id, and return null only when neither is known.
+ */
+export function scheduleOrgId(profile) {
+  const pick = (v) => (typeof v === 'string' && v.trim() ? v.trim() : null)
+  return pick(profile?.org_id) ?? pick(profile?.organisation_id) ?? null
+}
+
 /* ── CRUD ─────────────────────────────────────────────────────────────────── */
 
 export async function listSchedules() {

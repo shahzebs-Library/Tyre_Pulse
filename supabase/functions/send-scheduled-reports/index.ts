@@ -371,7 +371,7 @@ function buildRecommendations(d: Digest): string[] {
   return recs.slice(0, 8)
 }
 
-function renderHtml(s: Schedule, d: Digest, appUrl: string, currency: string): string {
+function renderHtml(s: Schedule, d: Digest, appUrl: string, currency: string, windowLabel = ''): string {
   const genAt = new Date().toISOString().slice(0, 16).replace('T', ' ')
   const coverage = `${dateShort(d.all.first_date)} → ${dateShort(d.all.last_date)}`
   const riskColor = d.all.high_risk > 0 ? '#b91c1c' : '#047857'
@@ -393,6 +393,10 @@ function renderHtml(s: Schedule, d: Digest, appUrl: string, currency: string): s
       <div style="font-size:12px;color:#94a3b8;margin-top:3px">
         Schedule “${s.name}” · generated ${genAt} UTC · data coverage ${coverage}
       </div>
+      ${windowLabel ? `<div style="font-size:12px;color:#cbd5e1;margin-top:4px">
+        Report window: all-time totals plus the last ${d.period_days} days compared to the prior ${d.period_days} days.
+        The schedule's selected period (${windowLabel}) does not narrow this executive digest.
+      </div>` : ''}
     </div>
 
     <div style="border:1px solid #e2e8f0;border-top:0;border-radius:0 0 12px 12px;padding:22px 26px">
@@ -573,7 +577,7 @@ function claimIsDelayed(r: ClaimRow, today: string): boolean {
 }
 
 // deno-lint-ignore no-explicit-any
-async function buildClaimsDigest(svc: any, orgId: string | null): Promise<ClaimsDigest> {
+async function buildClaimsDigest(svc: any, orgId: string | null, win: { from: string | null; to: string | null } = { from: null, to: null }): Promise<ClaimsDigest> {
   let q = svc
     .from('accidents')
     .select(
@@ -584,6 +588,11 @@ async function buildClaimsDigest(svc: any, orgId: string | null): Promise<Claims
     .limit(5000)
   // Service role bypasses RLS, so scope to the schedule's org explicitly.
   if (orgId) q = q.eq('organisation_id', orgId)
+  // The schedule's own coverage window on the incident date (same rule as the
+  // dataset digests: a missing bound leaves that side open, never narrows to
+  // nothing).
+  if (win.from) q = q.gte('incident_date', win.from)
+  if (win.to)   q = q.lte('incident_date', win.to)
   const { data, error } = await q
   if (error) throw new Error(`claims query failed: ${error.message}`)
   const rows = (data ?? []) as ClaimRow[]
@@ -638,13 +647,13 @@ async function buildClaimsDigest(svc: any, orgId: string | null): Promise<Claims
   }
 }
 
-function renderClaimsHtml(s: Schedule, d: ClaimsDigest, appUrl: string, currency: string): string {
+function renderClaimsHtml(s: Schedule, d: ClaimsDigest, appUrl: string, currency: string, windowLabel = ''): string {
   const genAt = new Date().toISOString().slice(0, 16).replace('T', ' ')
   const coverage = `${dateShort(d.first_date)} → ${dateShort(d.last_date)}`
   const recoveryRate = d.claim_total > 0 ? Math.round((d.recovered_total / d.claim_total) * 100) : null
 
   const summary = d.total === 0
-    ? `No incidents carrying an insurance claim were found for this organisation. When a claim is opened on an accident record it will appear here automatically.`
+    ? `No incidents carrying an insurance claim were found for ${windowLabel ? `the requested period (${windowLabel})` : 'this organisation'}. When a claim is opened on an accident record it will appear here automatically.`
     : `<b>${num(d.total)}</b> insurance claim(s) on record — <b>${num(d.open)}</b> open, <b>${num(d.closed)}</b> closed` +
       `${d.delayed ? `, with <b style="color:#b91c1c">${num(d.delayed)}</b> past the expected release date` : ''}. ` +
       `Total claimed <b>${money(d.claim_total, currency)}</b>, approved <b>${money(d.approved_total, currency)}</b>, ` +
@@ -678,7 +687,7 @@ function renderClaimsHtml(s: Schedule, d: ClaimsDigest, appUrl: string, currency
     <div style="background:#312e81;border-radius:12px 12px 0 0;padding:22px 26px;color:#fff">
       <div style="font-size:19px;font-weight:800">TyrePulse — Insurance Claims Summary</div>
       <div style="font-size:12px;color:#c7d2fe;margin-top:3px">
-        Schedule “${s.name}” · generated ${genAt} UTC · incident coverage ${coverage}
+        Schedule “${s.name}” · generated ${genAt} UTC · ${windowLabel ? `requested period ${windowLabel} · ` : ''}incident coverage ${coverage}
       </div>
     </div>
 
@@ -992,21 +1001,21 @@ function renderDatasetHtml(s: Schedule, cfg: DatasetDigestCfg, d: DatasetDigest,
  *  scoped to the schedule's own coverage period; builder:<id> custom layouts ->
  *  the accident dataset digest, same scoping.
  *
- *  NOTE: the executive and claims digests (buildDigest/buildClaimsDigest) are
- *  NOT scoped by this fix - they already compute their own all-time + trailing
- *  windows via a separate server-side aggregate and were left untouched to keep
- *  this change to the reported symptom (an 'inspection' schedule showing
- *  unfiltered data). If a schedule's period ever needs to bound those two as
- *  well, that is a separate, deliberate follow-up. */
+ *  The claims digest is scoped to the schedule's window on accidents.incident_date
+ *  and names the requested period in its header. The executive digest reads the
+ *  report_exec_digest RPC (all-time + trailing 30 days) and is NOT narrowed by
+ *  the period; its header says so, so a reader never mistakes it for a
+ *  period-scoped figure. The fallback branch (unknown report type) keeps the
+ *  old header with no window claim. */
 // deno-lint-ignore no-explicit-any
 async function renderForSchedule(svc: any, s: Schedule, appUrl: string, currency: string): Promise<{ subject: string; html: string }> {
   const type = s.report_type ?? ''
   const win = resolvePeriodBounds(s, new Date())
   let html: string
   if (type === 'claims') {
-    html = renderClaimsHtml(s, await buildClaimsDigest(svc, s.org_id), appUrl, currency)
+    html = renderClaimsHtml(s, await buildClaimsDigest(svc, s.org_id, win), appUrl, currency, win.label)
   } else if (type === 'executive') {
-    html = renderHtml(s, await buildDigest(svc, s.org_id), appUrl, currency)
+    html = renderHtml(s, await buildDigest(svc, s.org_id), appUrl, currency, win.label)
   } else if (type.startsWith('builder:')) {
     const cfg = DATASET_DIGEST.accidents
     html = renderDatasetHtml(s, cfg, await buildDatasetDigest(svc, cfg, s.org_id, win), appUrl, currency, win.label)

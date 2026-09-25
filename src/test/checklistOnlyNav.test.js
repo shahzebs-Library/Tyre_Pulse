@@ -47,6 +47,15 @@ describe('Workshop Supervisor', () => {
     expect(isChecklistPathAllowed('/approvals')).toBe(true)
   })
 
+  it('can reach the access-request page (single path list shared by App.jsx and both layouts)', () => {
+    for (const role of CHECKLIST_ONLY_ROLES) expect(isChecklistOnlyRole(role)).toBe(true)
+    expect(isChecklistPathAllowed('/request-access')).toBe(true)
+    expect(isChecklistPathAllowed('/request-access-other')).toBe(false)
+    for (const file of ['src/App.jsx', 'src/components/Layout.jsx', 'src/components/LegacyLayout.jsx']) {
+      expect(read(file), `${file} must gate on the shared list`).toContain('isChecklistPathAllowed(')
+    }
+  })
+
   it('still cannot reach the rest of the app', () => {
     for (const p of ['/dashboard', '/accidents', '/work-orders', '/expense-report', '/console']) {
       expect(isChecklistPathAllowed(p), `${p} must stay hidden`).toBe(false)

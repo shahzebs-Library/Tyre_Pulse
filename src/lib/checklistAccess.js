@@ -30,6 +30,10 @@ export const CHECKLIST_PATH_PREFIXES = [
   // decide_checklist_approval, which re-resolves the rung server-side and
   // refuses anything this person cannot give.
   '/approvals',
+  // Just-in-time access requests (V116 request_elevation). A checklist-only
+  // person who needs one module for an hour must be able to ask for it; the
+  // request is decided by a super admin, so reaching the page grants nothing.
+  '/request-access',
   '/help',
   '/profile',
 ]

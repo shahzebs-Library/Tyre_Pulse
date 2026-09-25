@@ -12,10 +12,22 @@
  *     they flow through the already-live enforcement path.
  *
  *   - The extended capabilities (`create`, `edit`, `delete`, `export`,
- *     `approve`) have no enforcement hooks in the app yet. They are STORED
- *     (not yet enforced) as a sparse diff-from-defaults in `app_settings`
- *     under the `permission_overrides` key — the exact persistence pattern of
- *     src/lib/api/erp.js (authenticated read, admin-only write via RLS).
+ *     `approve`) are STORED as a sparse diff-from-defaults in `app_settings`
+ *     under the `permission_overrides` key (the persistence pattern of
+ *     src/lib/api/erp.js: authenticated read, admin-only write via RLS), and
+ *     the SERVER now reads them. `app_user_can(module_key, capability)`
+ *     resolves Admin/super > per-user revoke > role override > per-user grant
+ *     > deny from that blob plus `user_access_grants`, and PERMISSIVE
+ *     create/edit/delete RLS policies consume it on the capability tables
+ *     (V238 pilot: tyre_records, inspections, work_orders; V241: accidents,
+ *     vehicle_fleet, stock_records, gate_passes, budgets, corrective_actions,
+ *     alerts, rca_records). Two limits are deliberate: `app_user_can` returns
+ *     false for `delete` for every non-admin unconditionally, so delete can
+ *     never be granted to a non-admin by any override or grant; and `export`
+ *     is a client download, so it is a UI gate only. `approve` is enforced
+ *     only as a revoke (V242 blocks a status change on accidents and
+ *     work_orders for a user explicitly revoked `approve`). Tables outside the
+ *     list above still rely on their role-literal policies.
  *
  * `resolvePermissions(role, overrides, viewMap)` is the single function
  * AuthContext (or any enforcement point) can later consume to answer

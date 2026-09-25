@@ -22,7 +22,7 @@ import {
   REPORT_TYPES, FREQUENCIES, PERIODS, OUTPUT_FORMATS,
   listSchedules, createSchedule, updateSchedule, deleteSchedule,
   computeNextRun, resolvePeriod, fetchReportRows,
-  listSchedulableLayouts, isBuilderType, builderTemplateId,
+  listSchedulableLayouts, isBuilderType, builderTemplateId, scheduleOrgId,
 } from '../lib/api/scheduledReports'
 import { getTemplate } from '../lib/api/accidentReportTemplates'
 import { tyreManVehicleTypeSummary, tyreManVehicleTypeTable } from '../lib/inspectionCoverage'
@@ -895,7 +895,9 @@ export default function ScheduledReports() {
       recipients: emails,
       active: f.active,
       next_run_at: computeNextRun(f),
-      org_id: profile?.org_id ?? null,
+      // Never write a null org: an edit must not wipe the stored tenant, and a
+      // null-org schedule's digest reads across every organisation.
+      ...(scheduleOrgId(profile) ? { org_id: scheduleOrgId(profile) } : {}),
     }
   }
 

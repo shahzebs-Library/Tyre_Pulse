@@ -232,7 +232,7 @@ export default function MobileAccessPanel({ mode, role, user, canWriteRole, canW
               <button onClick={resetToRoleDefault} disabled={saving} className="btn-secondary text-[11px] px-2 py-1 inline-flex items-center gap-1 disabled:opacity-40" title="Reset to the role default"><RotateCcw size={11} /> Default</button>
             </>
           )}
-          <button onClick={load} disabled={saving} className="btn-secondary text-[11px] px-2 py-1 inline-flex items-center gap-1 disabled:opacity-40" title="Reload"><RefreshCw size={11} /></button>
+          <button onClick={load} disabled={saving} className="btn-secondary text-[11px] px-2 py-1 inline-flex items-center gap-1 disabled:opacity-40" title="Reload" aria-label="Reload"><RefreshCw size={11} /></button>
         </div>
       </div>
 

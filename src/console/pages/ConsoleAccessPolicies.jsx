@@ -47,7 +47,7 @@ function Field({ label, children, hint }) {
     <label className="block space-y-1">
       <span className="text-[11px] uppercase tracking-wide text-gray-500">{label}</span>
       {children}
-      {hint && <span className="block text-[11px] text-gray-600">{hint}</span>}
+      {hint && <span className="block text-[11px] text-gray-400">{hint}</span>}
     </label>
   )
 }
@@ -190,9 +190,12 @@ function IpAllowlistPanel({ ip, onChanged }) {
                           onClick={() => rowAction(e.id, () => setAllowlistEntryActive(e.id, !e.active))}>
                           {e.active ? 'Pause' : 'Activate'}
                         </Btn>
-                        <Btn size="xs" variant="quiet" icon={Trash2} disabled={strandDel}
-                          title={strandDel ? 'This would lock you out while the allowlist is on' : 'Delete'}
-                          onClick={() => rowAction(e.id, () => deleteAllowlistEntry(e.id))} />
+                        <Btn size="xs" variant="quiet" icon={Trash2} disabled={strandDel} busy={busyId === e.id}
+                          title={strandDel ? 'This would lock you out while the allowlist is on' : `Delete ${e.cidr}`}
+                          onClick={() => {
+                            if (typeof window !== 'undefined' && window.confirm && !window.confirm(`Delete the allowlist entry ${e.label ? `${e.label} (${e.cidr})` : e.cidr}? This cannot be undone.`)) return
+                            rowAction(e.id, () => deleteAllowlistEntry(e.id))
+                          }}>Delete</Btn>
                       </div>
                     </Td>
                   </Tr>
@@ -254,7 +257,7 @@ function SsoPanel({ sso, onChanged }) {
                   <Td><span className="text-gray-200">{o.name}</span></Td>
                   <Td nowrap>{o.active_connections} active of {o.connections}</Td>
                   <Td>
-                    {(o.active_domains || []).length === 0 ? <span className="text-gray-600">None</span> : (
+                    {(o.active_domains || []).length === 0 ? <span className="text-gray-400">None</span> : (
                       <div className="flex flex-wrap gap-1">
                         {o.active_domains.map((d) => <Code key={d}>{d}</Code>)}
                       </div>

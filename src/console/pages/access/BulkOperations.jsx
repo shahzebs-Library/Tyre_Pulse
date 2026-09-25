@@ -212,7 +212,7 @@ export default function BulkOperations() {
             </div>
             <div className="relative">
               <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-              <input
+              <input aria-label="Search users"
                 className="input pl-8 py-1.5 text-sm w-full"
                 placeholder="Search name or email..."
                 value={search}
@@ -220,7 +220,7 @@ export default function BulkOperations() {
               />
             </div>
             <div className="flex items-center gap-2">
-              <select
+              <select aria-label="Filter users by role"
                 className="input py-1.5 text-sm flex-1"
                 value={roleFilter}
                 onChange={(e) => setRoleFilter(e.target.value)}
@@ -341,7 +341,7 @@ export default function BulkOperations() {
               <div className="space-y-3">
                 <div>
                   <label className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold block mb-1.5">New role</label>
-                  <select className="input py-2 text-sm w-full" value={roleValue} onChange={(e) => setRoleValue(e.target.value)}>
+                  <select aria-label="New role" className="input py-2 text-sm w-full" value={roleValue} onChange={(e) => setRoleValue(e.target.value)}>
                     <option value="">Select a role...</option>
                     {assignableRoles.map((r) => <option key={r} value={r}>{r}</option>)}
                   </select>
@@ -355,7 +355,7 @@ export default function BulkOperations() {
               <div className="space-y-3">
                 <div>
                   <label className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold block mb-1.5">Module</label>
-                  <select className="input py-2 text-sm w-full" value={moduleKey} onChange={(e) => setModuleKey(e.target.value)}>
+                  <select aria-label="Module" className="input py-2 text-sm w-full" value={moduleKey} onChange={(e) => setModuleKey(e.target.value)}>
                     <option value="">Select a module...</option>
                     {MODULE_GROUPS.map((g) => (
                       <optgroup key={g.group} label={g.group}>
@@ -367,7 +367,7 @@ export default function BulkOperations() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold block mb-1.5">Capability</label>
-                    <select className="input py-2 text-sm w-full" value={capability} onChange={(e) => setCapability(e.target.value)}>
+                    <select aria-label="Capability" className="input py-2 text-sm w-full" value={capability} onChange={(e) => setCapability(e.target.value)}>
                       {CAPABILITIES.filter((c) => c.key !== 'delete').map((c) => (
                         <option key={c.key} value={c.key}>{c.label}{c.enforced ? '' : ' (stored only)'}</option>
                       ))}
@@ -385,6 +385,8 @@ export default function BulkOperations() {
                         return (
                           <button
                             key={o.key}
+                            type="button"
+                            aria-pressed={on}
                             onClick={() => setEffect(o.key)}
                             className={`flex-1 inline-flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-lg text-sm border transition-colors ${
                               on ? o.tint : 'text-[var(--text-secondary)] border-[var(--input-border)] bg-[var(--input-bg)] hover:text-[var(--text-primary)]'
@@ -401,7 +403,7 @@ export default function BulkOperations() {
                   <label className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold block mb-1.5 inline-flex items-center gap-1.5">
                     <Calendar size={12} /> Expiry (optional)
                   </label>
-                  <input type="date" className="input py-2 text-sm w-full" value={expiry} onChange={(e) => setExpiry(e.target.value)} />
+                  <input aria-label="Expiry date" type="date" className="input py-2 text-sm w-full" value={expiry} onChange={(e) => setExpiry(e.target.value)} />
                   <p className="text-[11px] text-[var(--text-muted)] mt-1">Leave blank for a permanent override.</p>
                 </div>
                 {capMeta && !capMeta.enforced && (

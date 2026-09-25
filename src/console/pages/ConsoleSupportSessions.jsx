@@ -156,6 +156,7 @@ export default function ConsoleSupportSessions() {
 
   async function handleEnd() {
     if (!current?.id) return
+    if (typeof window !== 'undefined' && window.confirm && !window.confirm('End this support session now? Inspection of the organisation stops immediately.')) return
     setEnding(true); setError('')
     try {
       await endSupportSession(current.id)
@@ -260,8 +261,8 @@ export default function ConsoleSupportSessions() {
             </div>
 
             <div>
-              <label className="block text-[11px] font-semibold text-gray-400 mb-1.5">Reason (required)</label>
-              <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2}
+              <label htmlFor="support-session-reason" className="block text-[11px] font-semibold text-gray-400 mb-1.5">Reason (required)</label>
+              <textarea id="support-session-reason" value={reason} onChange={(e) => setReason(e.target.value)} rows={2}
                 placeholder="Why you need to inspect this organisation"
                 className="w-full bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-gray-700 resize-none" />
             </div>

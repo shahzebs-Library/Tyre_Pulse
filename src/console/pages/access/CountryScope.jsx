@@ -219,14 +219,14 @@ export default function CountryScope() {
             </div>
             <div className="relative">
               <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-              <input
+              <input aria-label="Search users"
                 className="input pl-8 py-1.5 text-sm w-full"
                 placeholder="Search name or email..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
-            <select
+            <select aria-label="Filter users by role"
               className="input py-1.5 text-sm w-full"
               value={roleFilter}
               onChange={(e) => setRoleFilter(e.target.value)}

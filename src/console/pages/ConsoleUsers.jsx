@@ -333,6 +333,7 @@ export default function ConsoleUsers() {
 
   async function toggleLock(user) {
     const locked = !user.locked
+    if (locked && typeof window !== 'undefined' && window.confirm && !window.confirm(`Lock ${user.full_name || user.email || 'this user'}? They cannot use the app until unlocked.`)) return
     const { error: err } = await supabase.from('profiles').update({ locked }).eq('id', user.id)
     if (err) { setLoadError(toUserMessage(err, 'Could not change the lock.')); return }
     await logAction(locked ? 'lock_user' : 'unlock_user', user.id, 'user', { email: user.email })
@@ -838,7 +839,7 @@ export default function ConsoleUsers() {
               <input value={editForm.site} onChange={e => setEditForm(f => ({ ...f, site: e.target.value }))}
                 className={INPUT} placeholder="e.g. Depot A" />
             </Field>
-            <Field label={<span className="flex items-center gap-1.5"><Globe size={11} /> Country scope</span>}>
+            <Field group label={<span className="flex items-center gap-1.5"><Globe size={11} /> Country scope</span>}>
               <div className="flex flex-wrap gap-1.5">
                 {[...new Set([...COUNTRIES, ...editForm.countries])].map(c => {
                   const on = editForm.countries.includes(c)
@@ -855,7 +856,7 @@ export default function ConsoleUsers() {
               </div>
               <p className="text-[11px] text-gray-500 mt-1.5">Admins and super-admins see all countries. Other roles see only the countries listed here.</p>
             </Field>
-            <Field label={<span className="flex items-center gap-1.5"><MapPin size={11} /> Site access</span>}>
+            <Field group label={<span className="flex items-center gap-1.5"><MapPin size={11} /> Site access</span>}>
               <div className="flex items-center justify-between gap-2 mb-1.5">
                 {isOrgWideSites(editForm.sites)
                   ? <Badge tone="accent" icon={MapPin}>All sites (org-wide)</Badge>
@@ -1099,6 +1100,11 @@ function MenuItem({ icon: Icon, label, onClick, danger }) {
   )
 }
 
-function Field({ label, children }) {
-  return <div><label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">{label}</label>{children}</div>
+// A <label> wrapping its control associates the two for screen readers. A
+// field holding several buttons (chips) is a named group instead, since a
+// label around buttons would forward clicks on its text to the first button.
+function Field({ label, children, group = false }) {
+  const head = <span className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">{label}</span>
+  if (group) return <div role="group">{head}{children}</div>
+  return <label className="block">{head}{children}</label>
 }

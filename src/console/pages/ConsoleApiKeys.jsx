@@ -307,7 +307,7 @@ export default function ConsoleApiKeys() {
                         <div className="text-gray-200">{k.name}</div>
                         <div className="mt-0.5"><Code>{k.key_prefix}...</Code></div>
                       </Td>
-                      <Td><span className="inline-flex items-center gap-1 text-gray-300"><Building2 size={11} className="text-gray-600" />{k.organisation_name || 'Unknown'}</span></Td>
+                      <Td><span className="inline-flex items-center gap-1 text-gray-300"><Building2 size={11} className="text-gray-500" />{k.organisation_name || 'Unknown'}</span></Td>
                       <Td>{(k.scopes || []).map((s) => <Badge key={s} tone="quiet">{s}</Badge>)}</Td>
                       <Td nowrap>
                         <div className="text-gray-300">{fmtDate(k.created_at)}</div>
@@ -333,11 +333,11 @@ export default function ConsoleApiKeys() {
                         <div className="flex flex-wrap gap-1">
                           {k.flags.length ? k.flags.map((f) => (
                             <Badge key={f} tone={FLAG_META[f].tone} title={FLAG_META[f].hint}>{FLAG_META[f].label}</Badge>
-                          )) : <span className="text-gray-600">None</span>}
+                          )) : <span className="text-gray-400">None</span>}
                         </div>
                       </Td>
                       <Td align="right" nowrap>
-                        {k.status === 'revoked' ? <span className="text-gray-600">No actions</span> : (
+                        {k.status === 'revoked' ? <span className="text-gray-400">No actions</span> : (
                           <span className="inline-flex gap-1.5">
                             <Btn size="xs" icon={CalendarClock} onClick={() => { setFlash(null); setExpiryTarget(k) }}>Expiry</Btn>
                             <Btn size="xs" variant="danger" icon={Ban} onClick={() => { setFlash(null); setRevokeTarget(k) }}>Revoke</Btn>

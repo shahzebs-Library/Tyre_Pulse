@@ -175,7 +175,7 @@ export default function AccessAudit() {
             <label className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold block mb-1.5">Search</label>
             <div className="relative">
               <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-              <input
+              <input aria-label="Search the access audit"
                 className="input pl-8 py-1.5 text-sm w-full"
                 placeholder="Actor, action, entity or target..."
                 value={search}
@@ -187,7 +187,7 @@ export default function AccessAudit() {
             <label className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold block mb-1.5 inline-flex items-center gap-1.5">
               <Layers size={12} /> Entity
             </label>
-            <select className="input py-1.5 text-sm" value={entityFilter} onChange={(e) => setEntityFilter(e.target.value)}>
+            <select aria-label="Filter by entity" className="input py-1.5 text-sm" value={entityFilter} onChange={(e) => setEntityFilter(e.target.value)}>
               <option value="all">All entities</option>
               {entityOptions.map((e) => <option key={e} value={e}>{e}</option>)}
             </select>
@@ -196,14 +196,14 @@ export default function AccessAudit() {
             <label className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold block mb-1.5 inline-flex items-center gap-1.5">
               <User size={12} /> Target user
             </label>
-            <select className="input py-1.5 text-sm max-w-[200px]" value={targetFilter} onChange={(e) => setTargetFilter(e.target.value)}>
+            <select aria-label="Filter by target" className="input py-1.5 text-sm max-w-[200px]" value={targetFilter} onChange={(e) => setTargetFilter(e.target.value)}>
               <option value="all">All users</option>
               {targetOptions.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
           </div>
           <div>
             <label className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold block mb-1.5">Rows</label>
-            <select className="input py-1.5 text-sm" value={limit} onChange={(e) => setLimit(Number(e.target.value))}>
+            <select aria-label="Rows to show" className="input py-1.5 text-sm" value={limit} onChange={(e) => setLimit(Number(e.target.value))}>
               {LIMIT_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
             </select>
           </div>

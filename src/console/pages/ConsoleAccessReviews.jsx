@@ -312,7 +312,7 @@ function CampaignView({ campaignId, onBack, onChanged }) {
           <PanelHeader icon={UserX} title="Reviewer attention" subtitle="Accounts that deserve a closer look" />
           <div className="px-4 pb-4 space-y-3">
             <ScoreRing score={progress.pct ?? 0} label="Completion" size={96} />
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <StatTile label="Dormant" value={dormantCount} sub={`${DORMANT_DAYS}+ days`} tone={dormantCount ? 'warning' : 'default'}
                 onClick={() => setFlag(flag === 'dormant' ? 'all' : 'dormant')} active={flag === 'dormant'} />
               <StatTile label="Super admins" value={superCount}
@@ -393,7 +393,7 @@ function CampaignView({ campaignId, onBack, onChanged }) {
                       </Td>
                       <Td align="right" nowrap>
                         {closed ? (
-                          <span className="text-[11px] text-gray-600">{it.decided_by_email || ''}</span>
+                          <span className="text-[11px] text-gray-400">{it.decided_by_email || ''}</span>
                         ) : (
                           <div className="inline-flex gap-1">
                             <Btn size="xs" variant={it.decision === 'keep' ? 'good' : 'ghost'} busy={busy}
@@ -437,6 +437,7 @@ function CampaignView({ campaignId, onBack, onChanged }) {
               : 'Describe what should change (for example a role or site). Make the change in Users or Access Control; this records the decision as evidence.'}
           </p>
           <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={4} autoFocus
+            aria-label={noteFor?.decision === 'revoke' ? 'Reason for revoking' : 'What should change'}
             placeholder={noteFor?.decision === 'revoke' ? 'Reason, for example: left the company' : 'What should change'}
             className="w-full rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 p-2.5 placeholder-gray-600 focus:border-gray-700 focus:outline-none" />
         </div>

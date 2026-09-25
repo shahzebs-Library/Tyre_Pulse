@@ -336,9 +336,9 @@ export default function ConsoleIncidents() {
                         {u.opened && <span className="text-[11px] text-gray-500">Opened</span>}
                         {u.statusChanged && <span className="text-[11px] text-gray-500">Status changed</span>}
                         <span className="text-[11px] text-gray-500">{fmtWhen(u.created_at)}</span>
-                        <span className="text-[11px] text-gray-600">{u.author_name || 'Unknown'}</span>
+                        <span className="text-[11px] text-gray-400">{u.author_name || 'Unknown'}</span>
                         {u.sincePrevMin !== null && (
-                          <span className="text-[11px] text-gray-600">+{formatDuration(u.sincePrevMin)}</span>
+                          <span className="text-[11px] text-gray-400">+{formatDuration(u.sincePrevMin)}</span>
                         )}
                       </div>
                       <p className="text-xs text-gray-300 mt-1 whitespace-pre-wrap">{u.message}</p>
@@ -472,7 +472,7 @@ function CommanderPanel({ incident, supers, supersError, onSaved }) {
       )}
       {err && <Note icon={XCircle} tone="danger">{err}</Note>}
       {done && <Note icon={CheckCircle2}>{done}</Note>}
-      <p className="text-[11px] text-gray-600">Only a super admin can command an incident. The handover is written to the timeline and the audit log, and the new commander is notified.</p>
+      <p className="text-[11px] text-gray-400">Only a super admin can command an incident. The handover is written to the timeline and the audit log, and the new commander is notified.</p>
     </div>
   )
 }
@@ -647,7 +647,7 @@ function SignalsPanel({ signals, onOpen }) {
               <div className="flex items-center gap-2">
                 <Badge tone={r.severity === 'critical' ? 'danger' : 'warning'}>{r.severity}</Badge>
                 {r.module_id && <span className="text-[11px] text-gray-500">{r.module_id}</span>}
-                <span className="text-[11px] text-gray-600">{fmtWhen(r.created_at)}</span>
+                <span className="text-[11px] text-gray-400">{fmtWhen(r.created_at)}</span>
               </div>
               <p className="text-xs text-gray-300 mt-1 break-words">{r.message}</p>
             </>
@@ -660,7 +660,7 @@ function SignalsPanel({ signals, onOpen }) {
               <div className="flex items-center gap-2">
                 <Badge tone={['critical', 'high'].includes(String(r.severity || '').toLowerCase()) ? 'danger' : 'warning'}>{r.severity || 'N/A'}</Badge>
                 <span className="text-[11px] text-gray-500">{r.source}{r.country ? ` | ${r.country}` : ''}</span>
-                <span className="text-[11px] text-gray-600">{fmtWhen(r.created_at)}</span>
+                <span className="text-[11px] text-gray-400">{fmtWhen(r.created_at)}</span>
               </div>
               <p className="text-xs text-gray-300 mt-1 break-words">{r.message || r.ref_key}</p>
             </>
@@ -675,7 +675,7 @@ function SignalList({ title, icon: Icon, ok, rows, emptyReason, render, onOpen }
   return (
     <div>
       <h4 className="text-xs uppercase tracking-wide text-gray-500 mb-2 flex items-center gap-1.5">
-        <Icon size={12} /> {title} <span className="text-gray-600">({rows.length})</span>
+        <Icon size={12} /> {title} <span className="text-gray-400">({rows.length})</span>
       </h4>
       {!ok ? (
         <Note icon={AlertTriangle} tone="warning">This source could not be read, so it is not known whether there are signals.</Note>

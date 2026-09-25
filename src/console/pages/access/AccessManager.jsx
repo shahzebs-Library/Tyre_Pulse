@@ -964,9 +964,9 @@ export default function AccessManager() {
                 </h3>
                 <div className="relative">
                   <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-                  <input className="input pl-8 py-1.5 text-sm w-full" placeholder="Search name or email..." value={uSearch} onChange={(e) => setUSearch(e.target.value)} />
+                  <input aria-label="Search users" className="input pl-8 py-1.5 text-sm w-full" placeholder="Search name or email..." value={uSearch} onChange={(e) => setUSearch(e.target.value)} />
                 </div>
-                <select className="input py-1.5 text-sm w-full" value={uRoleFilter} onChange={(e) => setURoleFilter(e.target.value)}>
+                <select aria-label="Filter users by role" className="input py-1.5 text-sm w-full" value={uRoleFilter} onChange={(e) => setURoleFilter(e.target.value)}>
                   <option value="all">All roles</option>
                   {roleOptions.map((r) => <option key={r} value={r}>{r}</option>)}
                 </select>
@@ -1067,8 +1067,8 @@ export default function AccessManager() {
                   <div className="flex flex-wrap items-center gap-2">
                     <div className="relative flex-1 min-w-[180px]">
                       <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-                      <input className="input pl-8 py-1.5 text-sm w-full" placeholder="Find a module or tab..." value={search} onChange={(e) => setSearch(e.target.value)} />
-                      {search && <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={13} /></button>}
+                      <input aria-label="Find a module or tab" className="input pl-8 py-1.5 text-sm w-full" placeholder="Find a module or tab..." value={search} onChange={(e) => setSearch(e.target.value)} />
+                      {search && <button type="button" onClick={() => setSearch('')} aria-label="Clear search" title="Clear search" className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={13} /></button>}
                     </div>
                     <button onClick={expandAll} className="btn-secondary text-xs inline-flex items-center gap-1.5" title="Expand all groups"><ChevronsUpDown size={13} /> Expand</button>
                     <button onClick={collapseAll} className="btn-secondary text-xs inline-flex items-center gap-1.5" title="Collapse all groups"><ChevronsDownUp size={13} /> Collapse</button>
@@ -1354,7 +1354,7 @@ function NodeRow({ node, draft, dirty, readOnly, mode, capEditable, advancedOpen
 
         {/* Reset to role (user mode) */}
         {mode === 'user' && onResetRow && (
-          <button type="button" onClick={onResetRow} disabled={readOnly} className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-30" title="Reset this row to the role default">
+          <button type="button" onClick={onResetRow} disabled={readOnly} aria-label="Reset this row to the role default" className="p-1.5 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-30" title="Reset this row to the role default">
             <RotateCcw size={13} />
           </button>
         )}

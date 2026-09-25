@@ -52,7 +52,7 @@ function Field({ label, children, hint }) {
     <label className="block space-y-1">
       <span className="text-[11px] uppercase tracking-wide text-gray-500">{label}</span>
       {children}
-      {hint && <span className="block text-[11px] text-gray-600">{hint}</span>}
+      {hint && <span className="block text-[11px] text-gray-400">{hint}</span>}
     </label>
   )
 }

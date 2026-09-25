@@ -85,7 +85,7 @@ function CheckRow({ check, open, onToggle }) {
 
 export default function ConsoleSecurityAudit() {
   const theme = useChartTheme()
-  const [state, setState] = useState({ loading: true, error: null, posture: null, runs: [], events: [] })
+  const [state, setState] = useState({ loading: true, error: null, posture: null, runs: [], events: [], runsError: null, eventsError: null })
   const [scanning, setScanning] = useState(false)
   const [notice, setNotice] = useState(null)
   const [filter, setFilter] = useState('attention')
@@ -95,12 +95,16 @@ export default function ConsoleSecurityAudit() {
   const load = useCallback(async () => {
     setState((s) => ({ ...s, loading: true, error: null }))
     try {
+      // The two side panels degrade on their own, but a failed read is said
+      // out loud: rendering it as "no scans yet" would read as a fact.
+      let runsError = null
+      let eventsError = null
       const [posture, runs, events] = await Promise.all([
         getSecurityPosture(),
-        listSecurityScans(26).catch(() => []),
-        listBreakGlassEvents(40).catch(() => []),
+        listSecurityScans(26).catch((e) => { runsError = toUserMessage(e, 'Could not load the scan history.'); return [] }),
+        listBreakGlassEvents(40).catch((e) => { eventsError = toUserMessage(e, 'Could not load the break-glass trail.'); return [] }),
       ])
-      setState({ loading: false, error: null, posture, runs, events })
+      setState({ loading: false, error: null, posture, runs, events, runsError, eventsError })
     } catch (err) {
       setState((s) => ({ ...s, loading: false, error: toUserMessage(err, 'Could not load the security audit.') }))
     }
@@ -245,17 +249,21 @@ export default function ConsoleSecurityAudit() {
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel>
           <PanelHeader icon={History} title="Score over time" subtitle="One point per recorded scan, weekly and on demand." />
+          {state.runsError ? <ErrorState message={state.runsError} onRetry={load} /> : (
           <TrendChart labels={trend.labels} series={[{ label: 'Security score', values: trend.scores }]}
             yMax={100} height={200}
             summary={trend.scores.length ? `Latest score ${trend.scores[trend.scores.length - 1]}` : 'No scans yet'}
             emptyText="No scans recorded yet. Press Run scan now." />
+          )}
         </Panel>
         <Panel flush>
           <div className="p-4 pb-2">
             <PanelHeader icon={LogIn} title="Break-glass trail"
               subtitle="Super-admin sign-ins and high-risk actions. Each one notifies every super admin." />
           </div>
-          {events.length === 0 ? (
+          {state.eventsError ? (
+            <div className="px-4 pb-4"><ErrorState message={state.eventsError} onRetry={load} /></div>
+          ) : events.length === 0 ? (
             <div className="px-4 pb-4"><EmptyState title="No events yet" reason="Sign-ins and risky actions appear here as they happen." /></div>
           ) : (
             <div className="max-h-64 overflow-auto">

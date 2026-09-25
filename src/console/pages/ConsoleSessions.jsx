@@ -165,6 +165,7 @@ export default function ConsoleSessions() {
   // ── Actions ───────────────────────────────────────────────────────────────────
 
   async function handleLock(row, locked) {
+    if (locked && typeof window !== 'undefined' && window.confirm && !window.confirm(`Lock ${row.full_name || row.username || 'this user'}? They are signed out of the app until unlocked.`)) return
     setBusyId(row.id)
     setError(null)
     try {

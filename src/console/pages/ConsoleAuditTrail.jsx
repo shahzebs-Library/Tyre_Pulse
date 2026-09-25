@@ -66,9 +66,9 @@ function JsonBlock({ label, value }) {
   const empty = value == null || (typeof value === 'object' && Object.keys(value).length === 0)
   return (
     <div className="min-w-0 flex-1">
-      <p className="text-[10px] text-gray-600 uppercase tracking-wider mb-1">{label}</p>
+      <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">{label}</p>
       {empty ? (
-        <p className="text-xs text-gray-600 italic">No values</p>
+        <p className="text-xs text-gray-400 italic">No values</p>
       ) : (
         <pre className="text-[11px] text-gray-300 bg-gray-900 border border-gray-800 rounded-lg p-2.5 overflow-x-auto max-h-56">
           {typeof value === 'string' ? value : JSON.stringify(value, null, 2)}
@@ -261,7 +261,7 @@ export default function ConsoleAuditTrail() {
         <Panel flush>
           <div className="px-4 py-2.5 flex items-center justify-between">
             <p className="text-[11px] text-gray-500">{filtered.length.toLocaleString()} entries{capped ? ` (latest ${PAGE_LIMIT} loaded)` : ''}</p>
-            {canDiff && <p className="text-[11px] text-gray-600">Click a row to see before and after values</p>}
+            {canDiff && <p className="text-[11px] text-gray-400">Click a row to see before and after values</p>}
           </div>
           <Table className="border-0 rounded-none">
             <THead>
@@ -300,14 +300,14 @@ function FragmentRow({ row, rowKey, isOpen, canDiff, onToggle }) {
     <>
       <Tr onClick={canDiff ? onToggle : undefined}>
         {canDiff && (
-          <Td className="text-gray-600">
+          <Td className="text-gray-400">
             {isOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
           </Td>
         )}
         <Td nowrap className="text-gray-500 tabular-nums">{fmtWhen(row.when)}</Td>
         <Td className="text-gray-300 max-w-[220px] truncate">
           <span title={row.actor || ''}>{row.actor || 'N/A'}</span>
-          {row.role && <span className="ml-1.5 text-[10px] text-gray-600">({row.role})</span>}
+          {row.role && <span className="ml-1.5 text-[10px] text-gray-400">({row.role})</span>}
         </Td>
         <Td><Badge>{(row.action || 'N/A').replace(/_/g, ' ')}</Badge></Td>
         <Td className="text-gray-400 max-w-[220px] truncate"><span title={row.target || ''}>{row.target || 'N/A'}</span></Td>
@@ -320,7 +320,7 @@ function FragmentRow({ row, rowKey, isOpen, canDiff, onToggle }) {
               <JsonBlock label="Before" value={row.old} />
               <JsonBlock label="After" value={row.new} />
             </div>
-            {row.id != null && <p className="text-[10px] text-gray-600 mt-2">Entry ID: <Code>{String(row.id)}</Code></p>}
+            {row.id != null && <p className="text-[10px] text-gray-400 mt-2">Entry ID: <Code>{String(row.id)}</Code></p>}
           </td>
         </tr>
       )}

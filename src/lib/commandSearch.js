@@ -119,6 +119,7 @@ export const NAV_COMMANDS = [
   { id: 'audit',          label: 'Audit Trail',          path: '/audit',        icon: 'History',    adminOnly: true, moduleKey: 'audit_trail' },
   { id: 'users',          label: 'User Management',      path: '/console/users', icon: 'UserCog',    adminOnly: true, moduleKey: 'user_management' },
   { id: 'settings',       label: 'Settings',             path: '/settings',     icon: 'Settings' },
+  { id: 'request-access', label: 'Request Access',       path: '/request-access', icon: 'KeyRound', keywords: ['temporary access', 'elevation', 'jit', 'permission request'] },
   { id: 'scan',           label: 'Tyre Scan (QR)',       path: '/scan',         icon: 'QrCode' },
   // Platform (roadmap tranche)
   { id: 'report-builder',    label: 'Report Builder',      path: '/report-builder',    icon: 'FileText',   keywords: ['custom report', 'export', 'build'] },
@@ -301,7 +302,7 @@ export function isCommandVisible(cmd, profile, hasPermission, grantedModules, is
   if (path === '/odometer-logs') return perm ? perm('odometer_logs') === true : false
 
   // Restricted single-purpose roles (same as the sidebar).
-  if (role === 'Inspector') return path === '/inspections' || path === '/settings'
+  if (role === 'Inspector') return path === '/inspections' || path === '/settings' || path === '/request-access'
   if (isChecklistOnlyRole(role)) return isChecklistPathAllowed(path)
 
   // Report builders are Admin-only, and deliberately checked BEFORE the per-user

@@ -279,3 +279,77 @@ export function exportRows(incidents = []) {
     updates: (i.updates || []).length,
   }))
 }
+
+// ── Commander reassignment + postmortem ──────────────────────────────────────
+// MIRRORS incident_reassign_commander / incident_save_postmortem in
+// supabase/migrations/20260924121000_incident_commander_postmortem.sql
+// (change both). The server is the boundary; these explain a refusal first.
+
+export const REASSIGN_REASON_MIN = 5
+export const PM_SUMMARY_MIN = 10
+export const PM_ROOT_MIN = 5
+export const PM_MAX_ACTIONS = 50
+
+/** Commander candidates: unlocked super admins other than the current commander. */
+export function commanderCandidates(profiles = [], currentCommander = null) {
+  return (profiles || [])
+    .filter((p) => p && p.is_super_admin === true && p.locked !== true && p.id !== currentCommander)
+    .map((p) => ({ id: p.id, name: p.full_name || p.email || 'Super admin' }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
+
+/** Returns a plain message, or null when the reassignment may be sent. */
+export function reassignError({ userId, reason, currentCommander = null } = {}) {
+  if (!userId) return 'Choose the new commander.'
+  if (userId === currentCommander) return 'That person is already the commander.'
+  const r = String(reason ?? '').trim()
+  if (r.length < REASSIGN_REASON_MIN) return `Give a reason of at least ${REASSIGN_REASON_MIN} characters.`
+  if (r.length > 500) return 'Keep the reason under 500 characters.'
+  return null
+}
+
+/** A postmortem can only be written once the incident is resolved. */
+export const canWritePostmortem = (i) => !!i && i.status === 'resolved'
+
+export const hasPostmortem = (i) => !!i && !!i.postmortem_at
+
+/**
+ * Normalise follow-up actions exactly as the server does: blank actions dropped,
+ * owner trimmed (blank -> null), due kept only as YYYY-MM-DD, done boolean.
+ */
+export function normalizeActions(actions = []) {
+  return (Array.isArray(actions) ? actions : [])
+    .map((a) => ({
+      action: String(a?.action ?? '').trim(),
+      owner: String(a?.owner ?? '').trim().slice(0, 200) || null,
+      due: String(a?.due ?? '').trim() || null,
+      done: a?.done === true,
+    }))
+    .filter((a) => a.action.length > 0)
+}
+
+/** Validates a postmortem draft. Returns { field: message } (empty = valid). */
+export function validatePostmortem({ summary, rootCause, actions = [] } = {}, incident = null) {
+  const errors = {}
+  if (incident && !canWritePostmortem(incident)) errors.status = 'Resolve the incident before writing a postmortem.'
+  const s = String(summary ?? '').trim()
+  if (s.length < PM_SUMMARY_MIN) errors.summary = `A summary of at least ${PM_SUMMARY_MIN} characters is required.`
+  else if (s.length > 8000) errors.summary = 'Keep the summary under 8000 characters.'
+  const r = String(rootCause ?? '').trim()
+  if (r.length < PM_ROOT_MIN) errors.rootCause = `A root cause of at least ${PM_ROOT_MIN} characters is required.`
+  else if (r.length > 4000) errors.rootCause = 'Keep the root cause under 4000 characters.'
+  const list = Array.isArray(actions) ? actions : []
+  if (list.length > PM_MAX_ACTIONS) errors.actions = `At most ${PM_MAX_ACTIONS} actions.`
+  else {
+    const bad = normalizeActions(list).find((a) => a.action.length > 500 || (a.due && !/^\d{4}-\d{2}-\d{2}$/.test(a.due)))
+    if (bad) errors.actions = bad.action.length > 500 ? 'Each action must be 500 characters or fewer.' : 'Due dates must be YYYY-MM-DD.'
+  }
+  return errors
+}
+
+/** Open / done counts for the postmortem action list. */
+export function actionProgress(actions = []) {
+  const list = normalizeActions(actions)
+  const done = list.filter((a) => a.done).length
+  return { total: list.length, done, open: list.length - done }
+}

@@ -123,6 +123,7 @@
     "/tenant-health": "Usage & Adoption",
     "/billing": "Billing & Subscription",
     "/settings": "Settings",
+    "/request-access": "Request Access",
     "/users": "User Management"
   },
   "parents": {

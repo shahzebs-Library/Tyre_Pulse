@@ -112,7 +112,7 @@ describe('visibleCommands', () => {
   it('Inspector without Meter Logs access sees only the inspection surface', () => {
     const visible = visibleCommands([...NAV_COMMANDS, ...ACTION_COMMANDS], inspector, key => key !== 'odometer_logs')
     expect(visible.length).toBeGreaterThan(0)
-    expect(visible.every((c) => c.path === '/inspections' || c.path === '/settings')).toBe(true)
+    expect(visible.every((c) => c.path === '/inspections' || c.path === '/settings' || c.path === '/request-access')).toBe(true)
   })
 })
 

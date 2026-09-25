@@ -13,7 +13,7 @@
 import { supabase, unwrap } from './_client'
 import { listSystemLogs } from './systemLogs'
 import { listTrustAlerts } from './lineageOps'
-import { SEVERITIES, STATUSES } from '../platformIncidents'
+import { SEVERITIES, STATUSES, normalizeActions } from '../platformIncidents'
 
 export async function listIncidents({ since = null, limit = 300 } = {}) {
   const data = unwrap(await supabase.rpc('admin_list_incidents', {
@@ -77,4 +77,37 @@ export async function loadIncidentSignals({ days = 7, now = new Date() } = {}) {
     logs: { ok: logsOk, rows: logs },
     trust: { ok: trust.status === 'fulfilled', rows: trust.status === 'fulfilled' ? (trust.value || []).slice(0, 25) : [] },
   }
+}
+
+/** Hand the incident to another super admin (reason required; audited server-side). */
+export async function reassignCommander(incidentId, userId, reason) {
+  if (!incidentId) throw new Error('Missing incident.')
+  if (!userId) throw new Error('Choose the new commander.')
+  const r = String(reason || '').trim()
+  if (r.length < 5) throw new Error('Give a reason of at least 5 characters.')
+  return unwrap(await supabase.rpc('incident_reassign_commander', {
+    p_id: incidentId, p_user: userId, p_reason: r,
+  }))
+}
+
+/** Save (or revise) the postmortem of a resolved incident. */
+export async function savePostmortem(incidentId, { summary, rootCause, actions = [] } = {}) {
+  if (!incidentId) throw new Error('Missing incident.')
+  return unwrap(await supabase.rpc('incident_save_postmortem', {
+    p_id: incidentId,
+    p_summary: String(summary || '').trim(),
+    p_root_cause: String(rootCause || '').trim(),
+    p_actions: normalizeActions(actions),
+  }))
+}
+
+/** Super admins who could take command. Throws on failure (never an empty guess). */
+export async function listCommanderProfiles() {
+  const { data, error } = await supabase.from('profiles')
+    .select('id, full_name, email, is_super_admin, locked')
+    .eq('is_super_admin', true)
+    .order('full_name', { ascending: true })
+    .limit(200)
+  if (error) unwrap({ error })
+  return data || []
 }

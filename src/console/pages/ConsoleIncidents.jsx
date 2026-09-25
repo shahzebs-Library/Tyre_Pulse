@@ -15,18 +15,22 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Siren, RefreshCw, FileSpreadsheet, Plus, CheckCircle2, AlertTriangle, XCircle,
-  Activity, Timer, Clock, Radio, Send, Database, ListChecks, Flame,
+  Activity, Timer, Clock, Radio, Send, Database, ListChecks, Flame, UserCog, FileText, Trash2,
 } from 'lucide-react'
 import {
   Panel, PanelHeader, Note, StatTile, Badge, Btn, Segmented, SearchInput, Select, Toolbar,
   Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, Modal,
 } from '../components/ui'
 import { TrendChart, BarsChart, STATUS as CHART_STATUS, useChartTheme } from '../components/ui/charts'
-import { listIncidents, openIncident, postIncidentUpdate, loadIncidentSignals } from '../../lib/api/platformIncidents'
+import {
+  listIncidents, openIncident, postIncidentUpdate, loadIncidentSignals,
+  reassignCommander, savePostmortem, listCommanderProfiles,
+} from '../../lib/api/platformIncidents'
 import {
   SEVERITIES, SEVERITY_LABEL, SEVERITY_HELP, STATUS_LABEL, allowedNext, isOpen,
   mttr, mtta, openBySeverity, countSince, platformStatus, weeklyCounts, shapeTimeline,
   formatDuration, durationMinutes, sortIncidents, draftFromSignal, exportRows, EXPORT_COLUMNS, EXPORT_HEADERS, sourceLabel,
+  commanderCandidates, reassignError, canWritePostmortem, hasPostmortem, validatePostmortem, actionProgress,
 } from '../../lib/platformIncidents'
 import { toUserMessage } from '../../lib/safeError'
 import { exportToExcel, reportFileName } from '../../lib/exportUtils'
@@ -66,16 +70,21 @@ export default function ConsoleIncidents() {
   const [posting, setPosting] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [now, setNow] = useState(() => new Date())
+  const [supers, setSupers] = useState(null)
+  const [supersError, setSupersError] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
       const since = new Date(Date.now() - WINDOW_DAYS * 86400000)
-      const [list, sig] = await Promise.allSettled([
+      const [list, sig, sup] = await Promise.allSettled([
         listIncidents({ since }),
         loadIncidentSignals({ days: 7 }),
+        listCommanderProfiles(),
       ])
+      if (sup.status === 'fulfilled') { setSupers(sup.value); setSupersError('') }
+      else setSupersError(toUserMessage(sup.reason, 'Could not load the list of super admins.'))
       if (list.status === 'fulfilled') setIncidents(list.value)
       else setError(toUserMessage(list.reason, 'Could not load incidents.'))
       setSignals(sig.status === 'fulfilled' ? sig.value : { logs: { ok: false, rows: [] }, trust: { ok: false, rows: [] } })
@@ -334,6 +343,10 @@ export default function ConsoleIncidents() {
               )}
             </div>
 
+            <CommanderPanel incident={selected} supers={supers} supersError={supersError} onSaved={load} />
+
+            <PostmortemPanel incident={selected} onSaved={load} />
+
             <div className="border-t border-gray-800 pt-3 space-y-2">
               <h4 className="text-xs uppercase tracking-wide text-gray-500">Post an update</h4>
               <Select value={update.status} onChange={(v) => setUpdate((u) => ({ ...u, status: v }))}
@@ -400,6 +413,207 @@ export default function ConsoleIncidents() {
           </div>
         )}
       </Modal>
+    </div>
+  )
+}
+
+const inputCls = 'w-full rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 px-2.5 py-1.5 focus:border-gray-700 focus:outline-none'
+
+/** Hand the incident to another super admin, with a mandatory reason. */
+function CommanderPanel({ incident, supers, supersError, onSaved }) {
+  const [userId, setUserId] = useState('')
+  const [reason, setReason] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const [done, setDone] = useState('')
+  const options = useMemo(() => commanderCandidates(supers || [], incident.commander), [supers, incident.commander])
+  useEffect(() => { setUserId(''); setReason(''); setErr(''); setDone('') }, [incident.id])
+  const problem = reassignError({ userId, reason, currentCommander: incident.commander })
+
+  async function submit() {
+    if (problem) { setErr(problem); return }
+    setBusy(true); setErr(''); setDone('')
+    try {
+      await reassignCommander(incident.id, userId, reason)
+      const name = options.find((o) => o.id === userId)?.name || 'the new commander'
+      setDone(`Command handed to ${name}.`)
+      setUserId(''); setReason('')
+      await onSaved()
+    } catch (e) {
+      setErr(toUserMessage(e, 'Could not reassign the commander.'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="border-t border-gray-800 pt-3 space-y-2">
+      <h4 className="text-xs uppercase tracking-wide text-gray-500 flex items-center gap-1.5"><UserCog size={12} /> Commander</h4>
+      <p className="text-xs text-gray-400">Current: <span className="text-gray-200">{incident.commander_name || 'Nobody assigned'}</span></p>
+      {supersError ? (
+        <Note icon={AlertTriangle} tone="warning">{supersError}</Note>
+      ) : supers === null ? (
+        <p className="text-xs text-gray-500">Loading super admins</p>
+      ) : options.length === 0 ? (
+        <p className="text-xs text-gray-500">No other unlocked super admin can take command.</p>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-[14rem_1fr_auto] gap-2 items-start">
+          <Select value={userId} onChange={setUserId} placeholder="Hand over to"
+            options={options.map((o) => ({ value: o.id, label: o.name }))} />
+          <input value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)}
+            placeholder="Reason for the handover (required)" aria-label="Handover reason" className={inputCls} />
+          <Btn icon={UserCog} onClick={submit} busy={busy} disabled={!userId || reason.trim().length < 5}>Reassign</Btn>
+        </div>
+      )}
+      {err && <Note icon={XCircle} tone="danger">{err}</Note>}
+      {done && <Note icon={CheckCircle2}>{done}</Note>}
+      <p className="text-[11px] text-gray-600">Only a super admin can command an incident. The handover is written to the timeline and the audit log, and the new commander is notified.</p>
+    </div>
+  )
+}
+
+const EMPTY_ACTION = { action: '', owner: '', due: '', done: false }
+
+/** Postmortem: view when recorded, form once the incident is resolved. */
+function PostmortemPanel({ incident, onSaved }) {
+  const [editing, setEditing] = useState(false)
+  const [form, setForm] = useState({ summary: '', rootCause: '', actions: [] })
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const [touched, setTouched] = useState(false)
+
+  useEffect(() => { setEditing(false); setErr(''); setTouched(false) }, [incident.id])
+
+  function startEdit() {
+    setForm({
+      summary: incident.postmortem_summary || '',
+      rootCause: incident.postmortem_root_cause || '',
+      actions: (incident.postmortem_actions || []).map((a) => ({
+        action: a.action || '', owner: a.owner || '', due: a.due || '', done: a.done === true,
+      })),
+    })
+    setErr(''); setTouched(false); setEditing(true)
+  }
+
+  const errors = validatePostmortem(form, incident)
+  const firstError = Object.values(errors)[0] || null
+
+  async function submit() {
+    setTouched(true)
+    if (firstError) { setErr(firstError); return }
+    setBusy(true); setErr('')
+    try {
+      await savePostmortem(incident.id, form)
+      setEditing(false)
+      await onSaved()
+    } catch (e) {
+      setErr(toUserMessage(e, 'Could not save the postmortem.'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const setAction = (idx, patch) => setForm((f) => ({
+    ...f, actions: f.actions.map((a, i) => (i === idx ? { ...a, ...patch } : a)),
+  }))
+
+  const progress = actionProgress(incident.postmortem_actions || [])
+
+  return (
+    <div className="border-t border-gray-800 pt-3 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <h4 className="text-xs uppercase tracking-wide text-gray-500 flex items-center gap-1.5"><FileText size={12} /> Postmortem</h4>
+        {canWritePostmortem(incident) && !editing && (
+          <Btn size="xs" icon={FileText} onClick={startEdit}>{hasPostmortem(incident) ? 'Edit postmortem' : 'Write postmortem'}</Btn>
+        )}
+      </div>
+
+      {!editing && !hasPostmortem(incident) && (
+        <p className="text-xs text-gray-500">
+          {canWritePostmortem(incident)
+            ? 'No postmortem recorded yet.'
+            : 'A postmortem can be written once the incident is resolved.'}
+        </p>
+      )}
+
+      {!editing && hasPostmortem(incident) && (
+        <div className="space-y-2">
+          <p className="text-[11px] text-gray-500">
+            Recorded {fmtWhen(incident.postmortem_at)} by {incident.postmortem_by_name || 'Unknown'}
+            {progress.total > 0 ? ` | ${progress.done} of ${progress.total} actions done` : ''}
+          </p>
+          <div>
+            <p className="text-[11px] uppercase tracking-wide text-gray-500">Summary</p>
+            <p className="text-xs text-gray-300 whitespace-pre-wrap">{incident.postmortem_summary}</p>
+          </div>
+          <div>
+            <p className="text-[11px] uppercase tracking-wide text-gray-500">Root cause</p>
+            <p className="text-xs text-gray-300 whitespace-pre-wrap">{incident.postmortem_root_cause}</p>
+          </div>
+          {(incident.postmortem_actions || []).length > 0 ? (
+            <Table>
+              <THead><Th>Action</Th><Th>Owner</Th><Th>Due</Th><Th>State</Th></THead>
+              <tbody>
+                {incident.postmortem_actions.map((a, idx) => (
+                  <Tr key={idx}>
+                    <Td>{a.action}</Td>
+                    <Td>{a.owner || 'N/A'}</Td>
+                    <Td nowrap>{a.due || 'N/A'}</Td>
+                    <Td><Badge tone={a.done ? 'good' : 'warning'}>{a.done ? 'Done' : 'Open'}</Badge></Td>
+                  </Tr>
+                ))}
+              </tbody>
+            </Table>
+          ) : (
+            <p className="text-xs text-gray-500">No follow-up actions recorded.</p>
+          )}
+        </div>
+      )}
+
+      {editing && (
+        <div className="space-y-2">
+          <Field label="Summary">
+            <textarea rows={3} maxLength={8000} value={form.summary}
+              onChange={(e) => setForm({ ...form, summary: e.target.value })}
+              placeholder="What happened and who was affected" className={`${inputCls} p-2.5`} />
+          </Field>
+          <Field label="Root cause">
+            <textarea rows={2} maxLength={4000} value={form.rootCause}
+              onChange={(e) => setForm({ ...form, rootCause: e.target.value })}
+              placeholder="Why it happened" className={`${inputCls} p-2.5`} />
+          </Field>
+          <div>
+            <span className="block text-[11px] uppercase tracking-wide text-gray-500 mb-1">Follow-up actions</span>
+            {form.actions.length === 0 && <p className="text-xs text-gray-500 mb-1">No actions yet.</p>}
+            <div className="space-y-1.5">
+              {form.actions.map((a, idx) => (
+                <div key={idx} className="grid grid-cols-1 md:grid-cols-[1fr_9rem_9rem_auto_auto] gap-1.5 items-center">
+                  <input value={a.action} maxLength={500} placeholder="Action" aria-label={`Action ${idx + 1}`}
+                    onChange={(e) => setAction(idx, { action: e.target.value })} className={inputCls} />
+                  <input value={a.owner} maxLength={200} placeholder="Owner" aria-label={`Owner ${idx + 1}`}
+                    onChange={(e) => setAction(idx, { owner: e.target.value })} className={inputCls} />
+                  <input type="date" value={a.due} aria-label={`Due ${idx + 1}`}
+                    onChange={(e) => setAction(idx, { due: e.target.value })} className={inputCls} />
+                  <label className="flex items-center gap-1 text-[11px] text-gray-400">
+                    <input type="checkbox" checked={a.done} onChange={(e) => setAction(idx, { done: e.target.checked })} /> Done
+                  </label>
+                  <Btn size="xs" icon={Trash2} title="Remove action"
+                    onClick={() => setForm((f) => ({ ...f, actions: f.actions.filter((_, i) => i !== idx) }))}>Remove</Btn>
+                </div>
+              ))}
+            </div>
+            <div className="mt-1.5">
+              <Btn size="xs" icon={Plus} disabled={form.actions.length >= 50}
+                onClick={() => setForm((f) => ({ ...f, actions: [...f.actions, { ...EMPTY_ACTION }] }))}>Add action</Btn>
+            </div>
+          </div>
+          {(err || (touched && firstError)) && <Note icon={XCircle} tone="danger">{err || firstError}</Note>}
+          <div className="flex justify-end gap-2">
+            <Btn onClick={() => setEditing(false)}>Cancel</Btn>
+            <Btn icon={FileText} variant="primary" onClick={submit} busy={busy}>Save postmortem</Btn>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

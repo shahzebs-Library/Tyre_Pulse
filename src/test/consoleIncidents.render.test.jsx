@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, cleanup, screen, fireEvent } from '@testing-library/react'
+import { render, cleanup, screen, fireEvent, waitFor } from '@testing-library/react'
 
 vi.mock('react-chartjs-2', () => ({ Bar: () => null, Doughnut: () => null, Line: () => null }))
 vi.mock('../console/components/ui/charts', () => {
@@ -22,9 +22,16 @@ vi.mock('../lib/api/platformIncidents', () => ({
   loadIncidentSignals: vi.fn(() => Promise.resolve(h.signals)),
   openIncident: vi.fn(() => Promise.resolve('new-id')),
   postIncidentUpdate: vi.fn(() => Promise.resolve({})),
+  reassignCommander: vi.fn(() => Promise.resolve({ ok: true })),
+  savePostmortem: vi.fn(() => Promise.resolve({ ok: true })),
+  listCommanderProfiles: vi.fn(() => Promise.resolve([
+    { id: 's1', full_name: 'Anum', is_super_admin: true, locked: false },
+    { id: 's2', full_name: 'Waqas', is_super_admin: true, locked: false },
+  ])),
 }))
 
 import ConsoleIncidents from '../console/pages/ConsoleIncidents'
+import { reassignCommander, savePostmortem } from '../lib/api/platformIncidents'
 
 afterEach(() => { cleanup(); h.incidents = [] })
 
@@ -55,5 +62,42 @@ describe('ConsoleIncidents', () => {
     await screen.findByText('All systems operational')
     fireEvent.click(screen.getAllByText('Open incident')[0])
     expect(await screen.findByText(/notify every super admin/)).toBeTruthy()
+  })
+
+  it('reassigns the commander with a reason', async () => {
+    h.incidents = [{
+      id: 'i2', title: 'Reports slow', severity: 'sev3', status: 'identified', commander: 's1', commander_name: 'Anum',
+      affected_modules: [], started_at: new Date(Date.now() - 3600000).toISOString(), updates: [],
+    }]
+    render(<ConsoleIncidents />)
+    fireEvent.click(await screen.findByText('Reports slow'))
+    expect(await screen.findByText(/Nobody assigned|Current:/)).toBeTruthy()
+    expect(screen.getByText(/can be written once the incident is resolved/)).toBeTruthy()
+    const sel = await screen.findByDisplayValue('Hand over to')
+    fireEvent.change(sel, { target: { value: 's2' } })
+    fireEvent.change(screen.getByLabelText('Handover reason'), { target: { value: 'end of my shift' } })
+    fireEvent.click(screen.getByText('Reassign'))
+    await waitFor(() => expect(reassignCommander).toHaveBeenCalledWith('i2', 's2', 'end of my shift'))
+  })
+
+  it('shows a recorded postmortem and saves an edit on a resolved incident', async () => {
+    h.incidents = [{
+      id: 'i3', title: 'Export broke', severity: 'sev2', status: 'resolved', commander: 's1', commander_name: 'Anum',
+      affected_modules: [], started_at: new Date(Date.now() - 7200000).toISOString(),
+      resolved_at: new Date(Date.now() - 3600000).toISOString(), updates: [],
+      postmortem_summary: 'The exporter ran out of memory', postmortem_root_cause: 'Unbounded read',
+      postmortem_actions: [{ action: 'Page the read', owner: 'Ops', due: '2026-10-01', done: false }],
+      postmortem_at: new Date().toISOString(), postmortem_by_name: 'Anum',
+    }]
+    render(<ConsoleIncidents />)
+    await screen.findByText('All systems operational')
+    fireEvent.click(screen.getByRole('tab', { name: /Resolved/ }))
+    fireEvent.click(await screen.findByText('Export broke'))
+    expect(await screen.findByText('The exporter ran out of memory')).toBeTruthy()
+    expect(screen.getByText('Page the read')).toBeTruthy()
+    fireEvent.click(screen.getByText('Edit postmortem'))
+    fireEvent.click(screen.getByText('Save postmortem'))
+    await waitFor(() => expect(savePostmortem).toHaveBeenCalled())
+    expect(savePostmortem.mock.calls[0][0]).toBe('i3')
   })
 })

@@ -383,6 +383,7 @@ const NAV_GROUPS = [
       { to: '/tenant-health',    label: 'Usage & Adoption', parent: 'System',   icon: BarChart, adminOnly: true },
       { to: '/developer-portal', label: 'Developer Portal', parent: 'System',   icon: Code, adminOnly: true },
       { to: '/settings',         label: 'Settings', parent: 'System',           icon: Settings },
+      { to: '/request-access',   label: 'Request Access', parent: 'System',     icon: KeyRound },
       { to: '/help',             label: 'Help & Support', parent: 'System',     icon: LifeBuoy },
     ],
   },
@@ -441,7 +442,7 @@ function shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedM
   const routeGrantKey = governingModuleKey(item.to)
   if (profile?.role !== 'Data Monitor Officer' && routeGrantKey && grantedModules && grantedModules.has(routeGrantKey)) return true
   if (profile?.role === 'Inspector') {
-    return item.to === '/inspections' || item.to === '/settings'
+    return item.to === '/inspections' || item.to === '/settings' || item.to === '/request-access'
   }
   // Admin-defined custom roles: sidebar derived from granted module access.
   if (profile?.role === 'Data Monitor Officer' || isCustomNavRole(profile?.role)) {

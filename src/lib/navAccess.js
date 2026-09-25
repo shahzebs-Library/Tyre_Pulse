@@ -17,7 +17,7 @@
 import { canonicalRoute } from './routeOwnership'
 
 /** Paths every signed-in user may open regardless of role (ungated routes). */
-export const ALWAYS_ALLOWED_PATHS = new Set(['/settings'])
+export const ALWAYS_ALLOWED_PATHS = new Set(['/settings', '/request-access'])
 
 /** path → permission module key. Extends the App.jsx ModuleRoute pairings. */
 export const NAV_MODULE_KEY = {

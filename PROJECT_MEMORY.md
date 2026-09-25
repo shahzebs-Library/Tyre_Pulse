@@ -55,6 +55,27 @@ batching stops them being started at all.
 
 ---
 
+# ⚑ SESSION 2026-09-25 — CONSOLE ROUND 3. Migrations 20260924116000-119000 APPLIED LIVE + verified.
+- **JIT Elevation** `/console/jit-elevation`: one module capability for 5-480 min, reason required, super-admin
+  approve/deny/grant/revoke; writes ONE expiring `user_access_grants` row (no second permission system; every
+  reader already ignores expired rows). Cron `jit-elevation-expiry` 5 min. No self-decide (CHECK). No
+  temporary ROLE change, no 'delete'. Requesters have no main-app screen yet (RPC `request_elevation` only).
+- **Access Policies** `/console/access-policies`: console IP allowlist (`console_ip_allowlist`, flag
+  `console_ip_allowlist_enabled` OFF, guarded) + per-org SSO required (reuses `sso_connections.enforce_sso`).
+  Both FAIL OPEN on RPC error; super admins exempt from SSO; cannot enable allowlist from an uncovered IP.
+  IP order cf-connecting-ip > first x-forwarded-for > x-real-ip. GAPS: allowlist gates console screens only
+  (API still reachable), SSO check is app-level after password sign-in, mobile not wired, 0 IdPs registered.
+- **Server tenant export**: edge fn `tenant-export` v2 (verify_jwt=false, self-validates), gzip NDJSON parts
+  into PRIVATE bucket `tenant-exports`, background slices chained by a per-job token, resume on stall,
+  300 s signed links, all audited. Proven: work_orders 93,727/93,727. 12 verification files left in the bucket.
+- **Sentry -> incidents**: trigger on `sentry_alert_log` opens/appends a sev2 platform incident (6 h burst
+  window), switch `sentry_auto_incidents` default true. `platform_incidents.source_type` now allows 'sentry'.
+- **Honest reads round 2**: dataTrustOps/lineageOps/metricRegistry/reconBrand/reconDupKeys/backups/selfHealing/
+  automationHealth/tyreLearning now throw; only `isNotProvisioned(err)` (CODE only, in `_client.js`) degrades.
+  Use `isNotProvisioned`, not `isMissingRelation`, for any read that must surface permission errors.
+
+---
+
 # ⚑ SESSION 2026-09-24 (part 2) — CONSOLE ROUND 2: GOVERNANCE MODULES. All migrations APPLIED LIVE + verified.
 All super-admin, under /console, built on the console kit + shared charts. Each RPC: DEFINER, search_path=public,
 is_super_admin() -> 42501, revoke PUBLIC then anon, grant authenticated; each write audits to console_sessions.

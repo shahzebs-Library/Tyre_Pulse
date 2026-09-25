@@ -55,6 +55,24 @@ batching stops them being started at all.
 
 ---
 
+# ⚑ SESSION 2026-09-25 (part 2) — CONSOLE ROUND 4. Migrations 20260924121000-125000 APPLIED LIVE + verified.
+- **Request Access** `/request-access` (main app, all approved non-admin users): JIT requester UI over existing
+  `request_elevation` + `my_elevation_requests`. Checklist-only roles still redirected (gap).
+- **Incidents**: `incident_reassign_commander` (target must be unlocked super admin) + `incident_save_postmortem`
+  (resolved only, editable, actions normalised). Mirror in `src/lib/platformIncidents.js` (change BOTH).
+- **Tenant-export retention**: `system_config.tenant_export_retention_days` (default 7, clamp 1-90), cron
+  `tenant-export-retention` 02:40 UTC; SQL cannot delete storage.objects (protect_delete trigger) so edge fn
+  `tenant-export` v3 `cleanup` action (x-cron-secret) removes files; job status `expired`. Console Retention panel.
+- **developer_api_keys RETIRED** (0 rows, COMMENT only, not dropped); DeveloperPortal now uses canonical
+  `api_keys` via create_api_key/revoke_api_key. Migration file renamed to 20260924125000 (timestamp clash).
+- **New-device console alerts**: `console_known_devices` + `console_record_login_device` (first login seeds
+  silently; new IP/UA notifies all super admins). Known-devices panel on Sessions & Devices.
+- **Push fan-out**: `_user_push_tokens(uuid)` = active user_devices + profiles.push_token, used by 7 consumers;
+  `admin_clear_push_token` also revokes user_devices. Backups in `_bak.push_fanout_20260924`.
+  recipient_count now counts devices. NOT verified in a browser.
+
+---
+
 # ⚑ SESSION 2026-09-25 — CONSOLE ROUND 3. Migrations 20260924116000-119000 APPLIED LIVE + verified.
 - **JIT Elevation** `/console/jit-elevation`: one module capability for 5-480 min, reason required, super-admin
   approve/deny/grant/revoke; writes ONE expiring `user_access_grants` row (no second permission system; every

@@ -180,20 +180,11 @@ export default function ConsoleSystemConfig() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button type="button" onClick={load} disabled={loading}
-            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 text-gray-400 hover:text-white text-xs border border-gray-700 disabled:opacity-50 transition-colors">
-            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Refresh
-          </button>
-          <button type="button" onClick={requestSave} disabled={!dirty || saving || !!loadError}
-            className={`focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold text-white disabled:opacity-40 transition-all ${
-              saved ? 'bg-green-700' : ''
-            }`}
-            style={!saved ? { background: 'linear-gradient(135deg,#ea580c,#f97316)' } : {}}>
-            {saving ? <><div className="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin" /> Saving...</>
-              : saved ? <><CheckCircle size={13} /> Saved</>
-              : <><Save size={13} /> Save Changes</>
-            }
-          </button>
+          <Btn icon={RefreshCw} onClick={load} busy={loading}>Refresh</Btn>
+          <Btn variant={saved ? 'good' : 'primary'} icon={saved ? CheckCircle : Save} onClick={requestSave}
+            busy={saving} disabled={!dirty || saving || !!loadError}>
+            {saving ? 'Saving...' : saved ? 'Saved' : 'Save Changes'}
+          </Btn>
         </div>
       </div>
 

@@ -35,6 +35,7 @@ import {
 } from '../../lib/api/controlCenter'
 import { exportControlCenter } from '../../lib/controlCenterExport'
 import { toUserMessage } from '../../lib/safeError'
+import { sortRows } from '../../lib/consoleTable'
 
 const COUNTRIES = ['All', 'KSA', 'UAE', 'Egypt']
 
@@ -193,29 +194,25 @@ export default function ConsoleControlCenter() {
 
   // Recent imports, sorted by the chosen column (date sortable by default).
   const sortedImports = useMemo(() => {
-    const rows = Array.isArray(lineage?.recent_imports) ? [...lineage.recent_imports] : []
-    const { key, dir } = importSort
-    const mul = dir === 'asc' ? 1 : -1
-    const numeric = key === 'rows' || key === 'imported' || key === 'duplicates'
-    return rows.sort((a, b) => {
-      if (key === 'at') {
-        const ta = new Date(a?.at || 0).getTime() || 0
-        const tb = new Date(b?.at || 0).getTime() || 0
-        return (ta - tb) * mul
-      }
-      if (numeric) return ((Number(a?.[key]) || 0) - (Number(b?.[key]) || 0)) * mul
-      return String(a?.[key] ?? '').localeCompare(String(b?.[key] ?? '')) * mul
-    })
+    const rows = Array.isArray(lineage?.recent_imports) ? lineage.recent_imports : []
+    return sortRows(rows, importSort)
   }, [lineage, importSort])
   const onImportSort = useCallback((key) => {
     setImportSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'desc' }))
   }, [])
 
   const canExport = Boolean(report || summary || lineage)
-  const doExport = useCallback((format) => {
+  const [exporting, setExporting] = useState(null)
+  const [exportError, setExportError] = useState(null)
+  const doExport = useCallback(async (format) => {
+    setExporting(format); setExportError(null)
     try {
-      exportControlCenter({ format, country, trustReport: report, summary, lineage })
-    } catch { /* export helper never throws on missing data; ignore */ }
+      await exportControlCenter({ format, country, trustReport: report, summary, lineage })
+    } catch (err) {
+      setExportError(toUserMessage(err, 'The export could not be created. Please try again.'))
+    } finally {
+      setExporting(null)
+    }
   }, [country, report, summary, lineage])
 
   return (
@@ -238,22 +235,21 @@ export default function ConsoleControlCenter() {
             ariaLabel="Country"
             role="group"
           />
-          <button onClick={() => doExport('excel')} disabled={!canExport}
-            title="Download the trust, diagnostics and lineage snapshot as Excel"
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-800 text-gray-400 hover:text-white text-xs border border-gray-700 transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
-            <Download size={12} /> Excel
-          </button>
-          <button onClick={() => doExport('pdf')} disabled={!canExport}
-            title="Download the diagnostics snapshot as PDF"
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-800 text-gray-400 hover:text-white text-xs border border-gray-700 transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
-            <FileText size={12} /> PDF
-          </button>
-          <button onClick={refreshAll} disabled={refreshing}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-800 text-gray-400 hover:text-white text-xs border border-gray-700 transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
-            <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} /> {refreshing ? 'Refreshing...' : 'Refresh'}
-          </button>
+          <Btn icon={Download} onClick={() => doExport('excel')} disabled={!canExport} busy={exporting === 'excel'}
+            title="Download the trust, diagnostics and lineage snapshot as Excel">
+            Excel
+          </Btn>
+          <Btn icon={FileText} onClick={() => doExport('pdf')} disabled={!canExport} busy={exporting === 'pdf'}
+            title="Download the diagnostics snapshot as PDF">
+            PDF
+          </Btn>
+          <Btn icon={RefreshCw} onClick={refreshAll} busy={refreshing}>
+            {refreshing ? 'Refreshing...' : 'Refresh'}
+          </Btn>
         </div>
       </div>
+
+      {exportError && <ErrorState message={exportError} onRetry={() => setExportError(null)} />}
 
       {/* ── 1. Trust scores ── */}
       <Panel>
@@ -457,12 +453,12 @@ export default function ConsoleControlCenter() {
               {sortedImports.length > 0 ? (
                 <Table>
                   <THead>
-                    <Th>Module</Th>
-                    <Th>File</Th>
+                    <Th sortKey="module" sort={importSort} onSort={onImportSort}>Module</Th>
+                    <Th sortKey="file" sort={importSort} onSort={onImportSort}>File</Th>
                     <Th align="right" sortKey="rows" sort={importSort} onSort={onImportSort}>Rows</Th>
                     <Th align="right" sortKey="imported" sort={importSort} onSort={onImportSort}>Imported</Th>
                     <Th align="right" sortKey="duplicates" sort={importSort} onSort={onImportSort}>Duplicates</Th>
-                    <Th>Status</Th>
+                    <Th sortKey="status" sort={importSort} onSort={onImportSort}>Status</Th>
                     <Th sortKey="at" sort={importSort} onSort={onImportSort}>When</Th>
                   </THead>
                   <tbody>

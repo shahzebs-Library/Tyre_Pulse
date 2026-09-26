@@ -19,6 +19,8 @@ import {
   Table, THead, Th, Tr, Td, Toolbar, Segmented,
   LoadingState, EmptyState, ErrorState,
 } from '../components/ui'
+import { sortRows, useTableSort } from '../../lib/consoleTable'
+import ExportButtons from './shared/ExportButtons'
 import { getPipelineRuns, getIntegrationEvents } from '../../lib/api/dataTrustOps'
 import { pipelineSummary } from '../../lib/dataTrustOps'
 import { COUNTRIES } from '../../contexts/SettingsContext'
@@ -41,6 +43,19 @@ function statusTone(s) {
   if (isOk(s)) return 'good'
   return 'quiet'
 }
+
+const RUN_EXPORT_COLUMNS = [
+  { key: 'source', header: 'Source' }, { key: 'job_key', header: 'Job' }, { key: 'trigger', header: 'Trigger' },
+  { key: 'status', header: 'Status' }, { key: 'rows_in', header: 'Rows in' }, { key: 'rows_out', header: 'Rows out' },
+  { key: 'skipped', header: 'Skipped' }, { key: 'duplicates', header: 'Duplicates' },
+  { key: 'started_at', header: 'Started' }, { key: 'error_reason', header: 'Error' },
+]
+const EVENT_EXPORT_COLUMNS = [
+  { key: 'integration', header: 'Integration' }, { key: 'event_type', header: 'Event type' },
+  { key: 'status', header: 'Status' }, { key: 'http_status', header: 'HTTP' },
+  { key: 'latency_ms', header: 'Latency ms' }, { key: 'error_reason', header: 'Error' },
+  { key: 'occurred_at', header: 'When' },
+]
 
 const COUNTRY_OPTS = [{ value: 'All', label: 'All countries' }, ...COUNTRIES.map((x) => ({ value: x, label: x }))]
 
@@ -67,23 +82,25 @@ export default function ConsolePipelineMonitor() {
 
   const summary = useMemo(() => pipelineSummary(state.runs), [state.runs])
 
+  const { sort: runSort, onSort: onRunSort } = useTableSort(null)
+  const { sort: evtSort, onSort: onEvtSort } = useTableSort(null)
   const runs = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return state.runs
-    return state.runs.filter((r) =>
+    const found = !q ? state.runs : state.runs.filter((r) =>
       String(r.job_key || '').toLowerCase().includes(q)
       || String(r.status || '').toLowerCase().includes(q)
       || String(r.trigger || '').toLowerCase().includes(q))
-  }, [state.runs, search])
+    return sortRows(found, runSort)
+  }, [state.runs, search, runSort])
 
   const events = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return state.events
-    return state.events.filter((e) =>
+    const found = !q ? state.events : state.events.filter((e) =>
       String(e.event_type || '').toLowerCase().includes(q)
       || String(e.integration || '').toLowerCase().includes(q)
       || String(e.status || '').toLowerCase().includes(q))
-  }, [state.events, search])
+    return sortRows(found, evtSort)
+  }, [state.events, search, evtSort])
 
   const tabs = [
     { key: 'jobs', label: 'Jobs', count: state.runs.length },
@@ -96,7 +113,7 @@ export default function ConsolePipelineMonitor() {
         <PanelHeader
           icon={Activity}
           title="Pipeline & Integration Monitor"
-          subtitle="Every import, report and integration run - status, rows, timing and errors."
+          subtitle="Every import, report and integration run: status, rows, timing and errors."
           actions={(
             <Toolbar>
               <Select ariaLabel="Country" value={country} onChange={setCountry} options={COUNTRY_OPTS} className="w-40" />
@@ -133,7 +150,8 @@ export default function ConsolePipelineMonitor() {
         <Panel><LoadingState label="Reading run history" rows={6} /></Panel>
       ) : state.error ? null : tab === 'jobs' ? (
         <Panel>
-          <PanelHeader icon={Activity} title="Pipeline runs" subtitle="Imports and report generation, newest first." />
+          <PanelHeader icon={Activity} title="Pipeline runs" subtitle="Imports and report generation, newest first."
+            actions={<ExportButtons rows={runs} columns={RUN_EXPORT_COLUMNS} title="Pipeline Runs" />} />
           {runs.length === 0 ? (
             <EmptyState
               icon={Activity}
@@ -143,15 +161,15 @@ export default function ConsolePipelineMonitor() {
           ) : (
             <Table>
               <THead>
-                <Th>Source</Th>
-                <Th>Job</Th>
-                <Th>Trigger</Th>
-                <Th>Status</Th>
-                <Th align="right">Rows in</Th>
-                <Th align="right">Rows out</Th>
-                <Th align="right">Skipped</Th>
-                <Th align="right">Duplicates</Th>
-                <Th>Started</Th>
+                <Th sortKey="source" sort={runSort} onSort={onRunSort}>Source</Th>
+                <Th sortKey="job_key" sort={runSort} onSort={onRunSort}>Job</Th>
+                <Th sortKey="trigger" sort={runSort} onSort={onRunSort}>Trigger</Th>
+                <Th sortKey="status" sort={runSort} onSort={onRunSort}>Status</Th>
+                <Th align="right" sortKey="rows_in" sort={runSort} onSort={onRunSort}>Rows in</Th>
+                <Th align="right" sortKey="rows_out" sort={runSort} onSort={onRunSort}>Rows out</Th>
+                <Th align="right" sortKey="skipped" sort={runSort} onSort={onRunSort}>Skipped</Th>
+                <Th align="right" sortKey="duplicates" sort={runSort} onSort={onRunSort}>Duplicates</Th>
+                <Th sortKey="started_at" sort={runSort} onSort={onRunSort}>Started</Th>
                 <Th>Error</Th>
               </THead>
               <tbody>
@@ -175,7 +193,8 @@ export default function ConsolePipelineMonitor() {
         </Panel>
       ) : (
         <Panel>
-          <PanelHeader icon={Plug} title="Integration events" subtitle="AI and email calls behind the numbers, newest first." />
+          <PanelHeader icon={Plug} title="Integration events" subtitle="AI and email calls behind the numbers, newest first."
+            actions={<ExportButtons rows={events} columns={EVENT_EXPORT_COLUMNS} title="Integration Events" />} />
           {events.length === 0 ? (
             <EmptyState
               icon={Plug}
@@ -185,13 +204,13 @@ export default function ConsolePipelineMonitor() {
           ) : (
             <Table>
               <THead>
-                <Th>Integration</Th>
-                <Th>Event type</Th>
-                <Th>Status</Th>
-                <Th align="right">HTTP</Th>
-                <Th align="right">Latency ms</Th>
+                <Th sortKey="integration" sort={evtSort} onSort={onEvtSort}>Integration</Th>
+                <Th sortKey="event_type" sort={evtSort} onSort={onEvtSort}>Event type</Th>
+                <Th sortKey="status" sort={evtSort} onSort={onEvtSort}>Status</Th>
+                <Th align="right" sortKey="http_status" sort={evtSort} onSort={onEvtSort}>HTTP</Th>
+                <Th align="right" sortKey="latency_ms" sort={evtSort} onSort={onEvtSort}>Latency ms</Th>
                 <Th>Error</Th>
-                <Th>When</Th>
+                <Th sortKey="occurred_at" sort={evtSort} onSort={onEvtSort}>When</Th>
               </THead>
               <tbody>
                 {events.map((e, i) => (

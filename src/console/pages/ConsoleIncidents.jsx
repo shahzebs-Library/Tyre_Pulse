@@ -34,6 +34,7 @@ import {
 } from '../../lib/platformIncidents'
 import { toUserMessage } from '../../lib/safeError'
 import { exportToExcel, reportFileName } from '../../lib/exportUtils'
+import { sortRows, useTableSort } from '../../lib/consoleTable'
 
 const WINDOW_DAYS = 90
 const SEV_TONE = { sev1: 'danger', sev2: 'warning', sev3: 'info', sev4: 'quiet' }
@@ -110,16 +111,24 @@ export default function ConsoleIncidents() {
     return SEVERITIES.map((s) => ({ label: SEVERITY_LABEL[s], value: openSev[s], color: color[s] }))
   }, [openSev, theme])
 
+  // null sort = the operational order from sortIncidents (open and severe first).
+  const { sort, onSort } = useTableSort(null)
   const listed = useMemo(() => {
     const q = search.trim().toLowerCase()
-    return sortIncidents(all).filter((i) => {
+    const base = sortIncidents(all).filter((i) => {
       if (view === 'open' && !isOpen(i)) return false
       if (view === 'resolved' && isOpen(i)) return false
       if (!q) return true
       return [i.title, i.impact, i.commander_name, ...(i.affected_modules || [])]
         .some((v) => String(v || '').toLowerCase().includes(q))
     })
-  }, [all, view, search])
+    return sortRows(base, sort, {
+      severity: (i) => SEVERITIES.indexOf(i.severity),
+      duration: (i) => durationMinutes(i.started_at, isOpen(i) ? now : i.resolved_at),
+      updates: (i) => (i.updates || []).length,
+      commander: (i) => i.commander_name,
+    })
+  }, [all, view, search, sort, now])
 
   const selected = useMemo(() => all.find((i) => i.id === selectedId) || null, [all, selectedId])
   const timeline = useMemo(() => shapeTimeline(selected), [selected])
@@ -259,7 +268,9 @@ export default function ConsoleIncidents() {
               { key: 'resolved', label: 'Resolved', count: all.length - openCount },
               { key: 'all', label: 'All', count: all.length },
             ]} />
-            <SearchInput value={search} onChange={setSearch} placeholder="Search title, module, commander" className="w-64" />
+            <SearchInput value={search} onChange={setSearch} placeholder="Search title, module, commander" className="w-full sm:w-64"
+              ariaLabel="Search incidents" />
+            <span className="text-[11px] text-gray-500 ml-auto tabular-nums">{listed.length} shown</span>
           </Toolbar>
         </div>
         {listed.length === 0 ? (
@@ -272,8 +283,13 @@ export default function ConsoleIncidents() {
         ) : (
           <Table>
             <THead>
-              <Th>Incident</Th><Th>Severity</Th><Th>Status</Th><Th>Started</Th>
-              <Th>Duration</Th><Th>Commander</Th><Th align="right">Updates</Th>
+              <Th sortKey="title" sort={sort} onSort={onSort}>Incident</Th>
+              <Th sortKey="severity" sort={sort} onSort={onSort}>Severity</Th>
+              <Th sortKey="status" sort={sort} onSort={onSort}>Status</Th>
+              <Th sortKey="started_at" sort={sort} onSort={onSort}>Started</Th>
+              <Th sortKey="duration" sort={sort} onSort={onSort}>Duration</Th>
+              <Th sortKey="commander" sort={sort} onSort={onSort}>Commander</Th>
+              <Th align="right" sortKey="updates" sort={sort} onSort={onSort}>Updates</Th>
             </THead>
             <tbody>
               {listed.map((i) => (

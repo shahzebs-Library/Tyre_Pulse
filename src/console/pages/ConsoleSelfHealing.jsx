@@ -30,6 +30,7 @@ import {
   Panel, PanelHeader, Note, StatTile, Badge, Btn, Code,
   LoadingState, EmptyState, ErrorState, Modal,
 } from '../components/ui'
+import ExportButtons from './shared/ExportButtons'
 import { BarsChart, STATUS, useChartTheme } from '../components/ui/charts'
 
 // ── Presentation helpers ──────────────────────────────────────────────────────
@@ -284,7 +285,12 @@ export default function ConsoleSelfHealing() {
           </div>
           <Panel className="lg:col-span-2">
             <PanelHeader icon={BarChart3} title="Findings by check"
-              subtitle="Bars are coloured by severity: amber is a warning, grey is review only." />
+              subtitle="Bars are coloured by severity: amber is a warning, grey is review only."
+              actions={<ExportButtons rows={summary.items || []} title="Self Healing Findings" columns={[
+                { key: 'label', header: 'Check' },
+                { key: 'severity', header: 'Severity' },
+                { key: 'count', header: 'Findings' },
+              ]} />} />
             <BarsChart
               bars={findingBars}
               summary={findingBars.map(b => `${b.label} ${b.value}`).join(', ')}

@@ -13,9 +13,11 @@ import {
   BellRing, ShieldAlert, CheckCircle2, RefreshCw, Play, AlertTriangle, Clock,
 } from 'lucide-react'
 import {
-  Panel, PanelHeader, Note, StatTile, Badge, Btn, Select, Toolbar,
+  Panel, PanelHeader, Note, StatTile, Badge, Btn, Select, Toolbar, SearchInput,
   Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState,
 } from '../components/ui'
+import { sortRows, searchRows, useTableSort } from '../../lib/consoleTable'
+import ExportButtons from './shared/ExportButtons'
 import { scanDataTrust, listTrustAlerts, ackTrustAlert } from '../../lib/api/lineageOps'
 import { alertSummary, alertTone, ALERT_STATUSES } from '../../lib/lineageOps'
 import { COUNTRIES } from '../../contexts/SettingsContext'
@@ -31,6 +33,17 @@ function fmtWhen(v) {
     year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
   })
 }
+
+const SEVERITY_RANK = { critical: 0, high: 1, medium: 2, low: 3, info: 4 }
+const EXPORT_COLUMNS = [
+  { key: 'source', header: 'Source' },
+  { key: 'ref_key', header: 'Ref' },
+  { key: 'severity', header: 'Severity' },
+  { key: 'country', header: 'Country', value: (r) => r.country || 'All' },
+  { key: 'message', header: 'Message' },
+  { key: 'status', header: 'Status' },
+  { key: 'created_at', header: 'Raised' },
+]
 
 const SOURCE_TONE = { quality: 'warning', reconciliation: 'info' }
 const STATUS_TONE = { open: 'danger', ack: 'warning', resolved: 'good' }
@@ -59,6 +72,13 @@ export default function ConsoleTrustAlerts() {
   useEffect(() => { load() }, [load])
 
   const summary = useMemo(() => alertSummary(state.rows), [state.rows])
+  const [query, setQuery] = useState('')
+  const { sort, onSort } = useTableSort(null)
+  const visible = useMemo(() => sortRows(
+    searchRows(state.rows, query, ['message', 'ref_key', 'country', 'source', 'severity']),
+    sort,
+    { severity: (r) => SEVERITY_RANK[String(r.severity || '').toLowerCase()] ?? 9 },
+  ), [state.rows, query, sort])
 
   const runScan = async () => {
     setScanning(true)
@@ -95,7 +115,7 @@ export default function ConsoleTrustAlerts() {
         <PanelHeader
           icon={BellRing}
           title="Data Trust Alerts"
-          subtitle="Breaches raised from the quality and reconciliation scans - acknowledge or resolve each."
+          subtitle="Breaches raised from the quality and reconciliation scans. Acknowledge or resolve each one."
           actions={(
             <Toolbar>
               <Select ariaLabel="Country" value={country} onChange={setCountry} options={COUNTRY_OPTS} className="w-40" />
@@ -115,8 +135,8 @@ export default function ConsoleTrustAlerts() {
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 p-4 pt-0">
           <StatTile label="Open" value={state.error ? 'N/A' : nf.format(summary.open)} tone={state.error ? 'default' : summary.open ? 'danger' : 'good'} icon={ShieldAlert} />
-          <StatTile label="Quality" value={state.error ? 'N/A' : nf.format(summary.quality)} tone={summary.quality ? 'warning' : 'default'} />
-          <StatTile label="Reconciliation" value={state.error ? 'N/A' : nf.format(summary.reconciliation)} tone={summary.reconciliation ? 'warning' : 'default'} />
+          <StatTile label="Quality" value={state.error ? 'N/A' : nf.format(summary.quality)} tone={!state.error && summary.quality ? 'warning' : 'default'} />
+          <StatTile label="Reconciliation" value={state.error ? 'N/A' : nf.format(summary.reconciliation)} tone={!state.error && summary.reconciliation ? 'warning' : 'default'} />
           <StatTile label="Total" value={state.error ? 'N/A' : nf.format(summary.total)} />
         </div>
       </Panel>
@@ -126,7 +146,13 @@ export default function ConsoleTrustAlerts() {
           icon={ShieldAlert}
           title="Raised alerts"
           subtitle="An open or acknowledged alert can be acknowledged or resolved. Resolving records that the breach was handled."
-          actions={<Select ariaLabel="Alert status" value={status} onChange={setStatus} options={STATUS_OPTS} className="w-40" />}
+          actions={(
+            <Toolbar>
+              <SearchInput value={query} onChange={setQuery} placeholder="Search message, ref or country" className="w-full sm:w-56" ariaLabel="Search alerts" />
+              <Select ariaLabel="Alert status" value={status} onChange={setStatus} options={STATUS_OPTS} className="w-40" />
+              <ExportButtons rows={visible} columns={EXPORT_COLUMNS} title="Data Trust Alerts" disabled={!!state.error} />
+            </Toolbar>
+          )}
         />
 
         {state.loading ? (
@@ -142,20 +168,24 @@ export default function ConsoleTrustAlerts() {
               : `No alerts with status "${status}". Change the filter or run a scan.`}
             action={<Btn icon={Play} variant="primary" onClick={runScan} busy={scanning}>Run scan now</Btn>}
           />
+        ) : visible.length === 0 ? (
+          <EmptyState icon={ShieldAlert} title="No alerts match this search"
+            reason="Clear or change the search to see every loaded alert."
+            action={<Btn onClick={() => setQuery('')}>Clear search</Btn>} />
         ) : (
           <Table>
             <THead>
-              <Th>Source</Th>
-              <Th>Ref</Th>
-              <Th>Severity</Th>
-              <Th>Country</Th>
-              <Th>Message</Th>
-              <Th>Status</Th>
-              <Th>Raised</Th>
+              <Th sortKey="source" sort={sort} onSort={onSort}>Source</Th>
+              <Th sortKey="ref_key" sort={sort} onSort={onSort}>Ref</Th>
+              <Th sortKey="severity" sort={sort} onSort={onSort}>Severity</Th>
+              <Th sortKey="country" sort={sort} onSort={onSort}>Country</Th>
+              <Th sortKey="message" sort={sort} onSort={onSort}>Message</Th>
+              <Th sortKey="status" sort={sort} onSort={onSort}>Status</Th>
+              <Th sortKey="created_at" sort={sort} onSort={onSort}>Raised</Th>
               <Th align="right">Actions</Th>
             </THead>
             <tbody>
-              {state.rows.map((r) => {
+              {visible.map((r) => {
                 const acting = busy.startsWith(`${r.id}:`)
                 const canAct = r.status === 'open' || r.status === 'ack'
                 return (

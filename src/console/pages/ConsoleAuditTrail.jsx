@@ -6,6 +6,7 @@ import {
   Panel, PanelHeader, Note, StatTile, Badge, Btn, Segmented, SearchInput, Select, Toolbar,
   Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, Code,
 } from '../components/ui'
+import { sortRows, useTableSort } from '../../lib/consoleTable'
 import { TrendChart, ShareChart } from '../components/ui/charts'
 import { dailySeries, topShare } from '../../lib/consoleCharts'
 import { useConsoleAuth } from '../ConsoleAuthContext'
@@ -138,16 +139,17 @@ export default function ConsoleAuditTrail() {
   }, [rows, seenActions, sourceKey, actionFilter])
 
   // Free-text search across actor / action / target / detail.
+  const { sort, onSort } = useTableSort(null)
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return rows
-    return rows.filter((r) =>
+    if (!q) return sortRows(rows, sort)
+    return sortRows(rows.filter((r) =>
       (r.actor || '').toLowerCase().includes(q) ||
       (r.action || '').toLowerCase().includes(q) ||
       (r.target || '').toLowerCase().includes(q) ||
       (r.detail || '').toLowerCase().includes(q),
-    )
-  }, [rows, search])
+    ), sort)
+  }, [rows, search, sort])
 
   const canDiff = sourceKey === 'audit_log_v2'
   const hasFilters = !!(search || actionFilter || since !== '7d')
@@ -266,11 +268,11 @@ export default function ConsoleAuditTrail() {
           <Table className="border-0 rounded-none">
             <THead>
               {canDiff && <Th className="w-8" />}
-              <Th>Time</Th>
-              <Th>Actor</Th>
-              <Th>Action</Th>
-              <Th>Target</Th>
-              <Th>Detail</Th>
+              <Th sortKey="when" sort={sort} onSort={onSort}>Time</Th>
+              <Th sortKey="actor" sort={sort} onSort={onSort}>Actor</Th>
+              <Th sortKey="action" sort={sort} onSort={onSort}>Action</Th>
+              <Th sortKey="target" sort={sort} onSort={onSort}>Target</Th>
+              <Th sortKey="detail" sort={sort} onSort={onSort}>Detail</Th>
             </THead>
             <tbody>
               {filtered.map((r, i) => {

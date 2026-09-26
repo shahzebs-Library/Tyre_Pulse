@@ -27,6 +27,8 @@ import {
   Panel, PanelHeader, Note, StatTile, Badge, Btn, Code, Segmented, SearchInput, Toolbar,
   Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState,
 } from '../components/ui'
+import { sortRows, useTableSort } from '../../lib/consoleTable'
+import ExportButtons from './shared/ExportButtons'
 import { ShareChart, BarsChart, STATUS, useChartTheme } from '../components/ui/charts'
 
 // ── Small helpers ───────────────────────────────────────────────────────────
@@ -55,6 +57,17 @@ function fmtRelative(v, now = Date.now()) {
 }
 
 // cron run tone (automationHealth.cronRunTone) -> kit badge tone + label.
+const STATE_RANK = { failing: 0, overdue: 1, paused: 2, healthy: 3 }
+const SCHEDULE_EXPORT_COLUMNS = [
+  { key: 'name', header: 'Name', value: (s) => s.row.name },
+  { key: 'type', header: 'Type', value: (s) => s.row.report_type },
+  { key: 'frequency', header: 'Frequency', value: (s) => s.row.frequency },
+  { key: 'next', header: 'Next run', value: (s) => (s.row.active ? s.row.next_run_at : 'Paused') },
+  { key: 'last', header: 'Last sent', value: (s) => s.row.last_sent_at },
+  { key: 'state', header: 'State', value: (s) => s.state },
+  { key: 'error', header: 'Last error', value: (s) => s.row.last_error },
+]
+
 const RUN_TONE = { green: 'good', amber: 'warning', red: 'danger', gray: 'quiet' }
 const RUN_BUCKET = { green: 'Succeeded', amber: 'Running', red: 'Failed', gray: 'No runs yet' }
 
@@ -134,14 +147,21 @@ export default function ConsoleAutomation() {
     return c
   }, [scheduleRows])
 
+  const { sort, onSort } = useTableSort(null)
+  const { sort: jobSort, onSort: onJobSort } = useTableSort(null)
   const visibleSchedules = useMemo(() => {
     const q = search.trim().toLowerCase()
-    return scheduleRows.filter((s) => {
+    const found = scheduleRows.filter((s) => {
       if (stateFilter !== 'all' && s.state !== stateFilter) return false
       if (!q) return true
       return [s.row.name, s.row.report_type, s.row.frequency].some((v) => String(v || '').toLowerCase().includes(q))
     })
-  }, [scheduleRows, stateFilter, search])
+    return sortRows(found, sort, {
+      name: (s) => s.row.name, type: (s) => s.row.report_type, frequency: (s) => s.row.frequency,
+      next: (s) => (s.row.active ? s.row.next_run_at : null), last: (s) => s.row.last_sent_at,
+      state: (s) => STATE_RANK[s.state],
+    })
+  }, [scheduleRows, stateFilter, search, sort])
 
   const colors = STATUS[theme]
   const scheduleShare = useMemo(() => ([
@@ -260,6 +280,9 @@ export default function ConsoleAutomation() {
             ]}
           />
           <SearchInput value={search} onChange={setSearch} placeholder="Search name, type or frequency" className="w-full sm:w-64" />
+          <div className="ml-auto flex gap-2">
+            <ExportButtons rows={visibleSchedules} columns={SCHEDULE_EXPORT_COLUMNS} title="Scheduled Reports Health" />
+          </div>
         </Toolbar>
         {loading ? (
           <LoadingState label="Loading schedules" />
@@ -273,12 +296,12 @@ export default function ConsoleAutomation() {
         ) : (
           <Table>
             <THead>
-              <Th>Name</Th>
-              <Th>Type</Th>
-              <Th>Frequency</Th>
-              <Th>Next run</Th>
-              <Th>Last sent</Th>
-              <Th>State</Th>
+              <Th sortKey="name" sort={sort} onSort={onSort}>Name</Th>
+              <Th sortKey="type" sort={sort} onSort={onSort}>Type</Th>
+              <Th sortKey="frequency" sort={sort} onSort={onSort}>Frequency</Th>
+              <Th sortKey="next" sort={sort} onSort={onSort}>Next run</Th>
+              <Th sortKey="last" sort={sort} onSort={onSort}>Last sent</Th>
+              <Th sortKey="state" sort={sort} onSort={onSort}>State</Th>
             </THead>
             <tbody>
               {visibleSchedules.map(({ row: r, flags: f }) => (
@@ -339,7 +362,7 @@ export default function ConsoleAutomation() {
               <Th>When</Th>
             </THead>
             <tbody>
-              {cronSummary.jobs.map((j) => (
+              {sortRows(cronSummary.jobs, jobSort).map((j) => (
                 <Tr key={j.jobid ?? j.jobname} tone={j.tone === 'red' ? 'warning' : undefined}>
                   <Td><span className="text-gray-200 font-medium truncate max-w-[260px] inline-block align-bottom" title={j.jobname}>{j.jobname}</span></Td>
                   <Td nowrap>{j.schedule ? <Code>{j.schedule}</Code> : <span className="text-gray-500">N/A</span>}</Td>

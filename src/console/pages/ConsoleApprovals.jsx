@@ -20,6 +20,8 @@ import {
   Panel, PanelHeader, Note, StatTile, Badge, Btn, Segmented, Toolbar, Select,
   Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, Modal,
 } from '../components/ui'
+import { sortRows, useTableSort } from '../../lib/consoleTable'
+import ExportButtons from './shared/ExportButtons'
 import { TrendChart, BarsChart, ShareChart } from '../components/ui/charts'
 import {
   listApprovals, requestApproval, decideApproval, cancelApproval, setDualControl,
@@ -207,6 +209,17 @@ function DecideModal({ row, approve, onClose, onDone }) {
 }
 
 /* ── page ─────────────────────────────────────────────────────────────────── */
+const APPROVAL_EXPORT_COLUMNS = [
+  { key: 'action', header: 'Action', value: (r) => APPROVAL_ACTIONS[r.action]?.label || r.action },
+  { key: 'details', header: 'Details', value: (r) => describePayload(r.action, r.payload) },
+  { key: 'reason', header: 'Reason' },
+  { key: 'requested_by_name', header: 'Asked by' },
+  { key: 'requested_at', header: 'Asked' },
+  { key: 'status', header: 'Status', value: (r) => STATUS_META[r.status]?.label || r.status },
+  { key: 'decided_by_name', header: 'Decided by' },
+  { key: 'decision_note', header: 'Decision note' },
+]
+
 export default function ConsoleApprovals() {
   const [tab, setTab] = useState('open')
   const [data, setData] = useState({ enabled: false, activeSuperAdmins: 0, rows: [] })
@@ -238,9 +251,16 @@ export default function ConsoleApprovals() {
 
   const rows = data.rows
   const summary = useMemo(() => summarizeApprovals(rows), [rows])
-  const shown = useMemo(() => rows.filter((r) => (tab === 'open'
+  const { sort, onSort } = useTableSort(null)
+  const shown = useMemo(() => sortRows(rows.filter((r) => (tab === 'open'
     ? (r.status === 'pending' || r.status === 'approved')
-    : tab === 'decided' ? !(r.status === 'pending' || r.status === 'approved') : true)), [rows, tab])
+    : tab === 'decided' ? !(r.status === 'pending' || r.status === 'approved') : true)), sort, {
+    action: (r) => APPROVAL_ACTIONS[r.action]?.label || r.action,
+    status: (r) => STATUS_META[r.status]?.label || r.status,
+  }), [rows, tab, sort])
+  // A failed read must not show as zero requests: tiles read N/A instead.
+  const failed = !!error && !loading
+  const tileValue = (n) => (loading ? '...' : failed ? 'N/A' : n)
 
   const trend = useMemo(() => dailySeries(rows, (r) => r.requested_at, 30), [rows])
   const statusParts = useMemo(() => Object.entries(summary.byStatus)
@@ -303,8 +323,11 @@ export default function ConsoleApprovals() {
       </header>
 
       {flash && <Note tone={flash.tone === 'danger' ? 'danger' : 'accent'} icon={flash.tone === 'danger' ? AlertTriangle : CheckCircle2}>{flash.text}</Note>}
-      <ErrorState message={error} onRetry={load} />
-
+      {failed ? (
+        <Note tone="danger" icon={AlertTriangle}>
+          The dual control setting and the request list could not be read, so their state is unknown. Retry below.
+        </Note>
+      ) : (
       <Panel tone={data.enabled ? 'accent' : 'warning'}>
         <PanelHeader icon={data.enabled ? Lock : Unlock}
           title={data.enabled ? 'Dual control is ON' : 'Dual control is OFF'}
@@ -328,22 +351,23 @@ export default function ConsoleApprovals() {
               Turning it off also needs an approved request from a second super admin, so one person cannot quietly remove the control.
               If you are the only active super admin left, the server lets you turn it off so you are never locked out.
               {!hasOpenDisable && (
-                <span className="ml-1"><button className="underline text-orange-300 hover:text-orange-200"
+                <span className="ml-1"><button type="button" className="underline text-orange-300 hover:text-orange-200 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
                   onClick={() => { setRequestAction('dual_control_disable'); setRequestOpen(true) }}>Ask to turn it off</button>.</span>
               )}
             </Note>
           )}
         </div>
       </Panel>
+      )}
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <StatTile icon={Hourglass} label="Waiting for you" value={loading ? '...' : summary.awaitingMe}
+        <StatTile icon={Hourglass} label="Waiting for you" value={tileValue(summary.awaitingMe)}
           tone={summary.awaitingMe ? 'warning' : 'default'} sub="Other people's requests" onClick={() => setTab('open')} />
-        <StatTile icon={UserCheck} label="Ready to run" value={loading ? '...' : summary.readyToRun}
+        <StatTile icon={UserCheck} label="Ready to run" value={tileValue(summary.readyToRun)}
           tone={summary.readyToRun ? 'good' : 'default'} sub="Your approved requests" onClick={() => setTab('open')} />
-        <StatTile icon={Clock} label="Pending" value={loading ? '...' : summary.pending} sub="All waiting requests" />
-        <StatTile icon={CheckCircle2} label="Used" value={loading ? '...' : summary.executed} sub="Approved and run" onClick={() => setTab('decided')} />
-        <StatTile icon={XCircle} label="Rejected" value={loading ? '...' : summary.rejected}
+        <StatTile icon={Clock} label="Pending" value={tileValue(summary.pending)} sub="All waiting requests" />
+        <StatTile icon={CheckCircle2} label="Used" value={tileValue(summary.executed)} sub="Approved and run" onClick={() => setTab('decided')} />
+        <StatTile icon={XCircle} label="Rejected" value={tileValue(summary.rejected)}
           tone={summary.rejected ? 'danger' : 'default'} sub="Refused by a second admin" onClick={() => setTab('decided')} />
       </div>
 
@@ -368,14 +392,21 @@ export default function ConsoleApprovals() {
 
       <Panel flush>
         <div className="p-4 pb-3">
-          <Segmented value={tab} onChange={setTab} ariaLabel="Approval view" options={[
-            { key: 'open', label: 'Open', count: summary.pending + summary.approved },
-            { key: 'decided', label: 'Decided', count: summary.total - summary.pending - summary.approved },
-            { key: 'all', label: 'All', count: summary.total },
-          ]} />
+          <Toolbar>
+            <Segmented value={tab} onChange={setTab} ariaLabel="Approval view" options={[
+              { key: 'open', label: 'Open', count: summary.pending + summary.approved },
+              { key: 'decided', label: 'Decided', count: summary.total - summary.pending - summary.approved },
+              { key: 'all', label: 'All', count: summary.total },
+            ]} />
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              <ExportButtons rows={shown} columns={APPROVAL_EXPORT_COLUMNS} title="Approval Requests" disabled={failed} />
+            </div>
+          </Toolbar>
         </div>
         {loading ? <div className="px-4 pb-4"><LoadingState label="Loading approvals" /></div>
-          : shown.length === 0 ? (
+          : failed ? (
+            <div className="px-4 pb-4"><ErrorState message={error} onRetry={load} /></div>
+          ) : shown.length === 0 ? (
             <EmptyState icon={ShieldCheck}
               title={tab === 'open' ? 'Nothing waiting' : 'No decided requests'}
               reason={error ? 'The list could not be loaded, so this may not be complete.'
@@ -384,7 +415,11 @@ export default function ConsoleApprovals() {
           ) : (
             <Table className="border-0 rounded-none border-t">
               <THead>
-                <Th>Action</Th><Th>Details</Th><Th>Asked by</Th><Th>Asked</Th><Th>Status</Th><Th>Decided by</Th><Th align="right">Actions</Th>
+                <Th sortKey="action" sort={sort} onSort={onSort}>Action</Th><Th>Details</Th>
+                <Th sortKey="requested_by_name" sort={sort} onSort={onSort}>Asked by</Th>
+                <Th sortKey="requested_at" sort={sort} onSort={onSort}>Asked</Th>
+                <Th sortKey="status" sort={sort} onSort={onSort}>Status</Th>
+                <Th sortKey="decided_by_name" sort={sort} onSort={onSort}>Decided by</Th><Th align="right">Actions</Th>
               </THead>
               <tbody>
                 {shown.map((r) => {

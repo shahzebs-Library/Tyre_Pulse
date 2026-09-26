@@ -17,6 +17,7 @@ import {
   Panel, PanelHeader, Note, StatTile, Badge, Btn, Segmented, SearchInput, Select, Toolbar,
   Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, Modal, Code,
 } from '../components/ui'
+import { sortRows, useTableSort } from '../../lib/consoleTable'
 import { BarsChart, ShareChart, ScoreRing, STATUS, useChartTheme } from '../components/ui/charts'
 import {
   loadComplianceEvidence, attestControl, withdrawAttestation,
@@ -268,13 +269,19 @@ export default function ConsoleCompliance() {
   const failed = useMemo(() => (evidence ? failedSources(evidence) : []), [evidence])
   const attestations = useMemo(() => (evidence?.attestations?.ok ? evidence.attestations.data : []), [evidence])
 
+  const { sort, onSort } = useTableSort(null)
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase()
-    return sortResults(fwResults.filter((r) =>
+    const base = sortResults(fwResults.filter((r) =>
       (!statusFilter || r.status === statusFilter)
       && (!domainFilter || r.domain === domainFilter)
       && (!q || [r.id, r.title, r.domain, r.detail, ...r.soc2, ...r.iso].join(' ').toLowerCase().includes(q))))
-  }, [fwResults, statusFilter, domainFilter, search])
+    // No column chosen = the engine's own order (failing controls first).
+    return sortRows(base, sort, {
+      soc2: (r) => r.soc2.join(', '), iso: (r) => r.iso.join(', '),
+      status: (r) => STATUS_ORDER.indexOf(r.status),
+    })
+  }, [fwResults, statusFilter, domainFilter, search, sort])
 
   const shareParts = useMemo(() => {
     const color = { pass: STATUS[theme].good, warn: STATUS[theme].medium, fail: STATUS[theme].critical, manual: STATUS[theme].low, unknown: theme === 'light' ? '#9ca3af' : '#4b5563' }
@@ -382,7 +389,7 @@ export default function ConsoleCompliance() {
           <PanelHeader icon={ClipboardCheck} title="Controls"
             subtitle={`${visible.length} of ${fwResults.length} shown. Click a control for its evidence.`} />
           <Toolbar>
-            <SearchInput value={search} onChange={setSearch} placeholder="Search control, clause or evidence" className="w-72" />
+            <SearchInput value={search} onChange={setSearch} placeholder="Search control, clause or evidence" className="w-full sm:w-72" />
             <Select value={statusFilter} onChange={setStatusFilter} placeholder="All statuses" className="w-44"
               options={STATUS_ORDER.map((s) => ({ value: s, label: STATUS_LABEL[s] }))} />
             <Select value={domainFilter} onChange={setDomainFilter} placeholder="All domains" className="w-44" options={domainOptions} />
@@ -391,7 +398,11 @@ export default function ConsoleCompliance() {
         {visible.length ? (
           <Table className="border-0 rounded-none border-t">
             <THead>
-              <Th>Control</Th><Th>Domain</Th><Th>SOC 2</Th><Th>ISO 27001</Th><Th>Status</Th><Th>Evidence</Th>
+              <Th sortKey="title" sort={sort} onSort={onSort}>Control</Th>
+              <Th sortKey="domain" sort={sort} onSort={onSort}>Domain</Th>
+              <Th sortKey="soc2" sort={sort} onSort={onSort}>SOC 2</Th>
+              <Th sortKey="iso" sort={sort} onSort={onSort}>ISO 27001</Th>
+              <Th sortKey="status" sort={sort} onSort={onSort}>Status</Th><Th>Evidence</Th>
             </THead>
             <tbody>
               {visible.map((r) => (

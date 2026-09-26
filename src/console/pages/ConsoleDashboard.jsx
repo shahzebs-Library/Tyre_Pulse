@@ -29,6 +29,7 @@ import { fetchAllPages } from '../../lib/fetchAll'
 import { dailySeries, topShare } from '../../lib/consoleCharts'
 
 const nf = new Intl.NumberFormat('en-US')
+const AI_ROW_CEILING = 50000
 const fmt = (n) => (n === null || n === undefined ? 'N/A' : nf.format(Number(n)))
 const fmtWhen = (v) => (v ? new Date(v).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'N/A')
 
@@ -71,15 +72,18 @@ export default function ConsoleDashboard() {
   }, [orgId])
 
   const [ai, loadAi] = useLoader(async () => {
+    // Paged past the 1,000-row response cap with an id tiebreak, so a busy
+    // month is counted in full rather than silently stopping at 1,000 calls.
     const since = new Date(Date.now() - 30 * 86400000).toISOString()
-    const { data, error } = await supabase
+    const { data, error, truncated } = await fetchAllPages((from, to) => supabase
       .from('ai_token_logs')
-      .select('created_at, status, cost_usd')
+      .select('id, created_at, status, cost_usd')
       .gte('created_at', since)
       .order('created_at', { ascending: true })
-      .limit(1000)
+      .order('id', { ascending: true })
+      .range(from, to), { max: AI_ROW_CEILING })
     if (error) throw error
-    return data || []
+    return Object.assign(data || [], { truncated: !!truncated })
   }, [])
 
   const [actions, loadActions] = useLoader(async () => {
@@ -98,6 +102,9 @@ export default function ConsoleDashboard() {
 
   useEffect(() => { loadAll() }, [loadAll])
 
+  // A failed or pending stats read must never render as "0 pending": every
+  // sub line falls back to N/A unless the number was actually read.
+  const statsOk = !!stats.data && !stats.error
   const U = stats.data?.users ?? {}
   const O = stats.data?.organisations ?? {}
   const A = stats.data?.assets ?? {}
@@ -155,16 +162,16 @@ export default function ConsoleDashboard() {
 
       {/* Headline numbers */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        <StatTile icon={Users} label="Users" value={fmt(U.total)} sub={`${fmt(U.pending ?? 0)} pending approval`}
+        <StatTile icon={Users} label="Users" value={fmt(U.total)} sub={statsOk ? `${fmt(U.pending ?? 0)} pending approval` : 'Pending approvals: N/A'}
           onClick={() => navigate('/console/users')} tone={Number(U.pending) > 0 ? 'accent' : 'default'} />
-        <StatTile icon={UserPlus} label="New this week" value={fmt(U.new_week)} sub={`${fmt(U.new_today ?? 0)} today`} />
-        <StatTile icon={Shield} label="Locked accounts" value={fmt(U.locked ?? 0)}
+        <StatTile icon={UserPlus} label="New this week" value={fmt(U.new_week)} sub={statsOk ? `${fmt(U.new_today ?? 0)} today` : 'Today: N/A'} />
+        <StatTile icon={Shield} label="Locked accounts" value={statsOk ? fmt(U.locked ?? 0) : 'N/A'}
           tone={Number(U.locked) > 0 ? 'warning' : 'default'} onClick={() => navigate('/console/users')} />
-        <StatTile icon={Building2} label="Organisations" value={fmt(O.total)} sub={`${fmt(O.active ?? 0)} active`}
+        <StatTile icon={Building2} label="Organisations" value={fmt(O.total)} sub={statsOk ? `${fmt(O.active ?? 0)} active` : 'Active: N/A'}
           onClick={() => navigate('/console/organisations')} />
         <StatTile icon={Truck} label="Vehicles" value={fmt(A.vehicles)} sub="registered" />
         <StatTile icon={Zap} label="AI calls (30d)" value={ai.error ? 'N/A' : fmt(aiDaily.total)}
-          sub={aiFailed ? `${aiFailed} failed` : 'no failures'} tone={aiFailed ? 'warning' : 'default'}
+          sub={ai.error || !ai.data ? 'Failures: N/A' : aiFailed ? `${aiFailed} failed` : 'no failures'} tone={aiFailed ? 'warning' : 'default'}
           onClick={() => navigate('/console/ai-usage')} />
       </div>
       {stats.error && <ErrorState message={stats.error} onRetry={loadStats} />}
@@ -220,7 +227,7 @@ export default function ConsoleDashboard() {
       <div className="grid gap-4 lg:grid-cols-3">
         <Panel className="lg:col-span-2">
           <PanelHeader icon={Zap} title="AI usage, last 30 days"
-            subtitle={ai.error ? 'Could not read AI usage.' : `${fmt(aiDaily.total)} calls, estimated cost $${aiCost.toFixed(2)}.`}
+            subtitle={ai.error ? 'Could not read AI usage.' : `${fmt(aiDaily.total)} calls, estimated cost $${aiCost.toFixed(2)}.${ai.data?.truncated ? ` Capped at the first ${nf.format(AI_ROW_CEILING)} calls.` : ''}`}
             actions={<Btn size="xs" onClick={() => navigate('/console/ai-usage')}>Details</Btn>} />
           {ai.error ? <ErrorState message={ai.error} onRetry={loadAi} /> : ai.loading && !ai.data ? <LoadingState label="Loading AI usage" rows={3} /> : (
             <TrendChart labels={aiDaily.labels} series={[{ label: 'AI calls', values: aiDaily.values }]}

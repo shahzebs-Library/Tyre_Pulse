@@ -31,14 +31,25 @@ import { toUserMessage } from '../../lib/safeError'
 import { fetchAllPages } from '../../lib/fetchAll'
 import { dailySeries } from '../../lib/consoleCharts'
 import {
-  Panel, PanelHeader, Note, StatTile, Badge, Btn, Select, Toolbar,
+  Panel, PanelHeader, Note, StatTile, Badge, Btn, Select, Toolbar, SearchInput,
   Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, Modal,
 } from '../components/ui'
 import { TrendChart, BarsChart, ScoreRing, STATUS, useChartTheme } from '../components/ui/charts'
+import { sortRows, searchRows, useTableSort } from '../../lib/consoleTable'
+import ExportButtons from './shared/ExportButtons'
 
 const REFRESH_MS = 60_000
 const LOG_LIMIT = 200
 const TREND_DAYS = 14
+
+const LOG_EXPORT_COLUMNS = [
+  { key: 'created_at', header: 'Time' },
+  { key: 'severity', header: 'Severity' },
+  { key: 'module', header: 'Module', value: r => r.module_id || r.source || 'app' },
+  { key: 'message', header: 'Message' },
+  { key: 'reference_id', header: 'Reference' },
+  { key: 'status', header: 'Status', value: r => (r.resolved === true || r.resolved_at != null ? 'Resolved' : 'Open') },
+]
 const TREND_MAX_ROWS = 20000
 
 // ── Small building blocks ─────────────────────────────────────────────────────
@@ -190,6 +201,8 @@ export default function ConsoleSystemHealth() {
   const [fModule, setFModule]     = useState('all')
   const [fResolved, setFResolved] = useState('open')
   const [fSince, setFSince]       = useState('7')   // days, or 'all'
+  const [logQuery, setLogQuery]   = useState('')
+  const { sort: logSort, onSort: onLogSort } = useTableSort({ key: 'created_at', dir: 'desc' })
 
   const mountedRef = useRef(true)
 
@@ -405,6 +418,17 @@ export default function ConsoleSystemHealth() {
     }
   }, [trendRows, metrics, theme])
 
+  // The log table shows the server page narrowed by free-text search and sorted
+  // client-side; exports use exactly this view.
+  const visibleLogs = useMemo(() => {
+    const found = searchRows(logs, logQuery, ['message', 'module_id', 'source', 'reference_id', 'severity'])
+    return sortRows(found, logSort, {
+      severity: r => SEVERITIES.findIndex(x => x.key === canonSeverity(r.severity)),
+      module: r => r.module_id || r.source || 'app',
+      status: r => (r.resolved === true || r.resolved_at != null ? 1 : 0),
+    })
+  }, [logs, logQuery, logSort])
+
   const severityBars = useMemo(
     () => trend.totals.map(s => ({ label: s.label, value: s.total, color: s.color })),
     [trend],
@@ -619,15 +643,19 @@ export default function ConsoleSystemHealth() {
             <InfoDot text="A running list of problems the app has recorded, newest first. Resolve marks a problem as handled so it drops off the open list." />
           </span>}
           subtitle={`Newest first, up to ${LOG_LIMIT} rows for the chosen filters.`}
-          actions={(
+          actions={(<>
+            <ExportButtons rows={visibleLogs} title="System Error Log"
+              columns={LOG_EXPORT_COLUMNS} />
             <Btn variant="primary" icon={CheckCircle2} busy={resolvingAll} disabled={logs.length === 0}
               onClick={() => setConfirmAll(true)}
               title="Mark every problem matching the current module and severity filters as handled">
               Resolve all
             </Btn>
-          )}
+          </>)}
         />
         <Toolbar className="mb-3">
+          <SearchInput value={logQuery} onChange={setLogQuery} className="w-full sm:w-64"
+            placeholder="Search message, module or reference" ariaLabel="Search the error log" />
           <Select value={fSeverity} onChange={setFSeverity} className="w-40" ariaLabel="Filter by severity"
             options={[{ value: 'all', label: 'All severities' }, ...SEVERITIES.map(s => ({ value: s.key, label: s.label }))]} />
           <Select value={fModule} onChange={setFModule} className="w-44" ariaLabel="Filter by module"
@@ -639,7 +667,9 @@ export default function ConsoleSystemHealth() {
               { value: '1', label: 'Last 24 hours' }, { value: '7', label: 'Last 7 days' },
               { value: '14', label: 'Last 14 days' }, { value: '30', label: 'Last 30 days' }, { value: 'all', label: 'All time' },
             ]} />
-          <span className="text-[11px] text-gray-500 ml-auto tabular-nums">{logs.length} shown</span>
+          <span className="text-[11px] text-gray-500 ml-auto tabular-nums">
+            {visibleLogs.length === logs.length ? `${logs.length} shown` : `${visibleLogs.length} of ${logs.length} shown`}
+          </span>
         </Toolbar>
 
         {logsError ? (
@@ -649,18 +679,22 @@ export default function ConsoleSystemHealth() {
         ) : logs.length === 0 ? (
           <EmptyState icon={CheckCircle2} title="No problems match these filters"
             reason="Nothing was logged for this severity, module and time window. The system is quiet here." />
+        ) : visibleLogs.length === 0 ? (
+          <EmptyState icon={ListChecks} title="No problems match this search"
+            reason="Clear or change the search text to see the loaded rows again."
+            action={<Btn onClick={() => setLogQuery('')}>Clear search</Btn>} />
         ) : (
           <Table>
             <THead>
-              <Th>Time</Th>
-              <Th>Severity</Th>
-              <Th>Module</Th>
-              <Th>Message</Th>
-              <Th align="center">Status</Th>
+              <Th sortKey="created_at" sort={logSort} onSort={onLogSort}>Time</Th>
+              <Th sortKey="severity" sort={logSort} onSort={onLogSort}>Severity</Th>
+              <Th sortKey="module" sort={logSort} onSort={onLogSort}>Module</Th>
+              <Th sortKey="message" sort={logSort} onSort={onLogSort}>Message</Th>
+              <Th align="center" sortKey="status" sort={logSort} onSort={onLogSort}>Status</Th>
               <Th align="right">Action</Th>
             </THead>
             <tbody>
-              {logs.map(row => {
+              {visibleLogs.map(row => {
                 const sev = SEV_BY_KEY[canonSeverity(row.severity)]
                 const isResolved = row.resolved === true || row.resolved_at != null
                 return (

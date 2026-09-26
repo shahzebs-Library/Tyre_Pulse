@@ -25,6 +25,7 @@ import {
   Panel, PanelHeader, Note, StatTile, Badge, Btn, Segmented, SearchInput, Toolbar,
   Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState,
 } from '../components/ui'
+import { sortRows, useTableSort } from '../../lib/consoleTable'
 import { TrendChart, STATUS, SERIES, useChartTheme } from '../components/ui/charts'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -152,14 +153,16 @@ export default function ConsoleDelivery() {
     return rows.sort((a, b) => String(b.at || '').localeCompare(String(a.at || '')))
   }, [email, push])
 
+  const { sort, onSort } = useTableSort(null)
   const visibleFailures = useMemo(() => {
     const q = search.trim().toLowerCase()
-    return failures.filter((r) => {
+    const found = failures.filter((r) => {
       if (channel !== 'all' && r.channel !== channel) return false
       if (!q) return true
       return [r.name, r.status, r.error].some((v) => String(v || '').toLowerCase().includes(q))
     })
-  }, [failures, channel, search])
+    return sortRows(found, sort)
+  }, [failures, channel, search, sort])
 
   const capped = emailTruncated || pushTruncated
   const rangeInvalid = days.length === 0
@@ -323,11 +326,11 @@ export default function ConsoleDelivery() {
         ) : (
           <Table>
             <THead>
-              <Th>Channel</Th>
-              <Th>Name</Th>
-              <Th>Status</Th>
-              <Th>Error</Th>
-              <Th>When</Th>
+              <Th sortKey="channel" sort={sort} onSort={onSort}>Channel</Th>
+              <Th sortKey="name" sort={sort} onSort={onSort}>Name</Th>
+              <Th sortKey="status" sort={sort} onSort={onSort}>Status</Th>
+              <Th sortKey="error" sort={sort} onSort={onSort}>Error</Th>
+              <Th sortKey="at" sort={sort} onSort={onSort}>When</Th>
             </THead>
             <tbody>
               {visibleFailures.map((r) => (

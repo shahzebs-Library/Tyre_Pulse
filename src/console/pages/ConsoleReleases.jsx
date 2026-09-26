@@ -13,9 +13,11 @@ import {
   Rocket, Tag, Plus, RefreshCw, AlertTriangle, CheckCircle2, Clock,
 } from 'lucide-react'
 import {
-  Panel, PanelHeader, Note, StatTile, Badge, Btn, Toolbar, Modal,
+  Panel, PanelHeader, Note, StatTile, Badge, Btn, Toolbar, Modal, SearchInput,
   Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState,
 } from '../components/ui'
+import { sortRows, searchRows, useTableSort } from '../../lib/consoleTable'
+import ExportButtons from './shared/ExportButtons'
 import { listReleases, recordRelease, addReleaseImpact } from '../../lib/api/lineageOps'
 import { toUserMessage } from '../../lib/safeError'
 
@@ -69,6 +71,20 @@ export default function ConsoleReleases() {
     }
     return m
   }, [state.impacts])
+
+  const [query, setQuery] = useState('')
+  const { sort, onSort } = useTableSort(null)
+  const visibleReleases = useMemo(() => sortRows(
+    searchRows(state.releases, query, ['version', 'notes']),
+    sort,
+    { impacts: (r) => impactsByRelease.get(r.id)?.length || 0 },
+  ), [state.releases, query, sort, impactsByRelease])
+  const exportColumns = useMemo(() => ([
+    { key: 'version', header: 'Version' },
+    { key: 'notes', header: 'Notes' },
+    { key: 'released_at', header: 'Released at' },
+    { key: 'impacts', header: 'Impacts', value: (r) => impactsByRelease.get(r.id)?.length || 0 },
+  ]), [impactsByRelease])
 
   const detailImpacts = useMemo(
     () => (detail ? (impactsByRelease.get(detail.id) || []) : []),
@@ -155,7 +171,13 @@ export default function ConsoleReleases() {
       </Panel>
 
       <Panel>
-        <PanelHeader icon={Tag} title="Releases" subtitle="Select a release to see and add its impacts." />
+        <PanelHeader icon={Tag} title="Releases" subtitle="Select a release to see and add its impacts."
+          actions={(
+            <Toolbar>
+              <SearchInput value={query} onChange={setQuery} placeholder="Search version or notes" className="w-full sm:w-56" ariaLabel="Search releases" />
+              <ExportButtons rows={visibleReleases} columns={exportColumns} title="Releases" disabled={!!state.error} />
+            </Toolbar>
+          )} />
 
         {state.loading ? (
           <LoadingState label="Reading releases" rows={5} />
@@ -168,16 +190,20 @@ export default function ConsoleReleases() {
             reason="Record a release above to start tracing number changes to deployments."
             action={<Btn icon={Plus} variant="primary" onClick={openCreate}>Record release</Btn>}
           />
+        ) : visibleReleases.length === 0 ? (
+          <EmptyState icon={Tag} title="No releases match this search"
+            reason="Clear or change the search to see every release."
+            action={<Btn onClick={() => setQuery('')}>Clear search</Btn>} />
         ) : (
           <Table>
             <THead>
-              <Th>Version</Th>
-              <Th>Notes</Th>
-              <Th>Released at</Th>
-              <Th align="right">Impacts</Th>
+              <Th sortKey="version" sort={sort} onSort={onSort}>Version</Th>
+              <Th sortKey="notes" sort={sort} onSort={onSort}>Notes</Th>
+              <Th sortKey="released_at" sort={sort} onSort={onSort}>Released at</Th>
+              <Th align="right" sortKey="impacts" sort={sort} onSort={onSort}>Impacts</Th>
             </THead>
             <tbody>
-              {state.releases.map((r) => (
+              {visibleReleases.map((r) => (
                 <Tr key={r.id} onClick={() => setDetail(r)} ariaLabel={`Open release ${r.version || ''}`.trim()}>
                   <Td><span className="font-medium text-gray-100">{r.version || 'N/A'}</span></Td>
                   <Td className="text-gray-400 break-words max-w-md">{r.notes || 'No notes'}</Td>

@@ -14,6 +14,7 @@ import {
   Panel, PanelHeader, StatTile, Badge, Btn, Segmented, Select, Toolbar,
   Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, Note,
 } from '../components/ui'
+import { sortRows, useTableSort } from '../../lib/consoleTable'
 import { TrendChart, BarsChart } from '../components/ui/charts'
 import { getUsageOverview } from '../../lib/api/aiOps'
 import { dailySeries } from '../../lib/consoleCharts'
@@ -72,13 +73,21 @@ export default function ConsoleAIUsage() {
   const modelBars = (s?.byModel || []).slice(0, 8).map((m) => ({ label: m.model, value: Number(m.cost.toFixed(4)) }))
   const featureBars = (s?.byFeature || []).slice(0, 8).map((f) => ({ label: f.feature, value: f.calls }))
 
-  const exportRows = () => {
-    exportToExcel(rows.map((r) => ({
+  const { sort, onSort } = useTableSort(null)
+  const failures = useMemo(() => sortRows(s?.recentFailures || [], sort, { feature: (r) => r.feature || 'other' }), [s, sort])
+  const [exportError, setExportError] = useState(null)
+  const exportRows = async () => {
+    setExportError(null)
+    try {
+      await exportToExcel(rows.map((r) => ({
       when: r.created_at, model: r.model, feature: r.feature, status: r.status || 'success',
       prompt: r.prompt_tokens, completion: r.completion_tokens, cost: r.cost_usd, country: r.country,
     })), ['when', 'model', 'feature', 'status', 'prompt', 'completion', 'cost', 'country'],
     ['Time', 'Model', 'Feature', 'Status', 'Prompt tokens', 'Completion tokens', 'Cost USD', 'Country'],
     reportFileName('AI Usage', `${range} days`))
+    } catch (err) {
+      setExportError(toUserMessage(err, 'The export could not be created. Please try again.'))
+    }
   }
 
   return (
@@ -90,15 +99,14 @@ export default function ConsoleAIUsage() {
         </div>
         <Toolbar>
           <Segmented value={range} onChange={setRange} options={RANGES} ariaLabel="Date range" role="group" />
-          <label className="block"><span className="sr-only">Country</span>
-            <Select value={country} onChange={setCountry} options={COUNTRY_OPTS} className="w-36" />
-          </label>
+          <Select value={country} onChange={setCountry} options={COUNTRY_OPTS} className="w-36" ariaLabel="Country" />
           <Btn icon={Download} onClick={exportRows} disabled={!rows.length}>Export</Btn>
           <Btn icon={RefreshCw} onClick={load} busy={state.loading}>Refresh</Btn>
         </Toolbar>
       </header>
 
       {state.error && <ErrorState message={state.error} onRetry={load} />}
+      {exportError && <Note tone="danger" icon={AlertTriangle}><span role="alert">{exportError}</span></Note>}
       {state.loading && !s && <LoadingState label="Loading AI usage" rows={4} />}
 
       {s && (
@@ -153,9 +161,14 @@ export default function ConsoleAIUsage() {
               <div className="px-4 pb-4"><EmptyState title="No failed requests" reason="Every AI request in this window succeeded." /></div>
             ) : (
               <Table className="border-0 rounded-none">
-                <THead><Th>When</Th><Th>Feature</Th><Th>Model</Th><Th>Status</Th><Th>Error</Th></THead>
+                <THead>
+                  <Th sortKey="created_at" sort={sort} onSort={onSort}>When</Th>
+                  <Th sortKey="feature" sort={sort} onSort={onSort}>Feature</Th>
+                  <Th sortKey="model" sort={sort} onSort={onSort}>Model</Th>
+                  <Th sortKey="status" sort={sort} onSort={onSort}>Status</Th><Th>Error</Th>
+                </THead>
                 <tbody>
-                  {s.recentFailures.map((r) => (
+                  {failures.map((r) => (
                     <Tr key={r.id}>
                       <Td nowrap><span className="text-gray-500 tabular-nums">{fmtWhen(r.created_at)}</span></Td>
                       <Td>{r.feature || 'other'}</Td>

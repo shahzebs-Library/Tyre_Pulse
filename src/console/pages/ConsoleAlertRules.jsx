@@ -27,6 +27,8 @@ import {
   Panel, PanelHeader, Note, StatTile, Badge, Btn, Segmented, SearchInput, Select, Toolbar,
   Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, Modal,
 } from '../components/ui'
+import { sortRows, useTableSort } from '../../lib/consoleTable'
+import ExportButtons from './shared/ExportButtons'
 import { BarsChart } from '../components/ui/charts'
 
 const EMPTY_FORM = {
@@ -176,9 +178,10 @@ export default function ConsoleAlertRules() {
   const totalFired = rules.reduce((a, r) => a + (Number(r.triggered_count) || 0), 0)
   const neverFired = rules.filter((r) => !r.last_triggered_at).length
 
+  const { sort, onSort } = useTableSort(null)
   const visibleRules = useMemo(() => {
     const q = search.trim().toLowerCase()
-    return rules.filter((r) => {
+    const found = rules.filter((r) => {
       const isActive = r.active !== false
       if (statusFilter === 'active' && !isActive) return false
       if (statusFilter === 'paused' && isActive) return false
@@ -186,7 +189,25 @@ export default function ConsoleAlertRules() {
       return [r.name, metricLabel(r.metric), r.site_filter, r.brand_filter]
         .some((v) => String(v || '').toLowerCase().includes(q))
     })
-  }, [rules, statusFilter, search])
+    return sortRows(found, sort, {
+      condition: (r) => metricLabel(r.metric),
+      fired: (r) => Number(r.triggered_count) || 0,
+      status: (r) => (r.active !== false ? 0 : 1),
+    })
+  }, [rules, statusFilter, search, sort])
+
+  const exportColumns = useMemo(() => ([
+    { key: 'name', header: 'Rule' },
+    { key: 'metric', header: 'Metric', value: (r) => metricLabel(r.metric) },
+    { key: 'operator', header: 'Operator', value: (r) => operatorLabel(r.operator) },
+    { key: 'threshold', header: 'Threshold' },
+    { key: 'site_filter', header: 'Site' },
+    { key: 'brand_filter', header: 'Brand' },
+    { key: 'channels', header: 'Channels', value: (r) => [r.notify_in_app !== false ? 'In-app' : '', r.notify_email ? 'Email' : ''].filter(Boolean).join(', ') || 'None' },
+    { key: 'triggered_count', header: 'Fired' },
+    { key: 'last_triggered_at', header: 'Last fired' },
+    { key: 'status', header: 'Status', value: (r) => (r.active !== false ? 'Active' : 'Paused') },
+  ]), [])
 
   // Rules per metric and firings per metric: two measures, two charts.
   const byMetric = useMemo(() => {
@@ -395,6 +416,9 @@ export default function ConsoleAlertRules() {
             ]}
           />
           <SearchInput value={search} onChange={setSearch} placeholder="Search name, metric, site or brand" className="w-full sm:w-64" />
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <ExportButtons rows={visibleRules} columns={exportColumns} title="Alert Rules" />
+          </div>
         </Toolbar>
 
         {error ? (
@@ -408,12 +432,12 @@ export default function ConsoleAlertRules() {
         ) : (
           <Table>
             <THead>
-              <Th>Rule</Th>
-              <Th>Condition</Th>
+              <Th sortKey="name" sort={sort} onSort={onSort}>Rule</Th>
+              <Th sortKey="condition" sort={sort} onSort={onSort}>Condition</Th>
               <Th>Channels</Th>
-              <Th align="right">Fired</Th>
-              <Th>Last fired</Th>
-              <Th>Status</Th>
+              <Th align="right" sortKey="fired" sort={sort} onSort={onSort}>Fired</Th>
+              <Th sortKey="last_triggered_at" sort={sort} onSort={onSort}>Last fired</Th>
+              <Th sortKey="status" sort={sort} onSort={onSort}>Status</Th>
               <Th align="right">Actions</Th>
             </THead>
             <tbody>

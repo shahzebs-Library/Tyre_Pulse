@@ -248,8 +248,9 @@ export default function ConsoleNavigation() {
                           className="flex-1 min-w-0 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm text-gray-100 focus:border-orange-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
                         />
                       ) : (
-                        <button type="button" onClick={() => setRenaming(g.key)} title="Rename group" aria-label={`Rename group ${g.label}`}
+                        <button type="button" onClick={() => setRenaming(g.key)} title="Rename group"
                           className={`flex-1 min-w-0 text-left inline-flex items-center gap-1.5 group rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500`}>
+                          <span className="sr-only">Rename group </span>
                           <span className="text-sm font-semibold text-gray-100 truncate">{g.label}</span>
                           {g.label !== g.defaultLabel && <Badge tone="accent">was {g.defaultLabel}</Badge>}
                           <Pencil size={11} className="text-gray-500 group-hover:text-gray-300 flex-shrink-0" />

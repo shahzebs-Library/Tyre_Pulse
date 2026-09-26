@@ -34,7 +34,27 @@ import {
   Panel, PanelHeader, Note, StatTile, Badge, Code, Btn, Segmented, SearchInput,
   Select, Toolbar, LoadingState, EmptyState, ErrorState, Modal,
 } from '../components/ui'
+import { sortRows } from '../../lib/consoleTable'
+import ExportButtons from './shared/ExportButtons'
 import { ShareChart, STATUS, useChartTheme } from '../components/ui/charts'
+
+// Sort choices for the module cards. Status sorts out-of-service first.
+const STATUS_RANK = { disabled: 0, maintenance: 1, beta: 2, live: 3 }
+const MODULE_ORDERS = [
+  { key: 'name', label: 'Name', field: 'name', dir: 'asc' },
+  { key: 'status', label: 'Status', field: 'status', dir: 'asc' },
+  { key: 'category', label: 'Category', field: 'category', dir: 'asc' },
+  { key: 'updated', label: 'Recently changed', field: 'last_updated', dir: 'desc' },
+]
+const MODULE_EXPORT_COLUMNS = [
+  { key: 'module_id', header: 'Module id' },
+  { key: 'name', header: 'Name' },
+  { key: 'category', header: 'Category' },
+  { key: 'status', header: 'Status' },
+  { key: 'visible_to', header: 'Visible to', value: (m) => (Array.isArray(m.visible_to) ? m.visible_to.join(', ') : m.visible_to) },
+  { key: 'note', header: 'Note' },
+  { key: 'last_updated', header: 'Last changed' },
+]
 
 // Kit badge tone for each stored module status.
 const STATUS_TONE = { live: 'good', maintenance: 'warning', disabled: 'danger', beta: 'info' }
@@ -142,9 +162,10 @@ export default function ConsoleModuleControl() {
     return Array.from(set).sort()
   }, [modules])
 
+  const [order, setOrder] = useState('name')
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    return modules.filter((m) => {
+    const found = modules.filter((m) => {
       if (category !== 'all' && m.category !== category) return false
       if (statusFilter !== 'all' && m.status !== statusFilter) return false
       if (!q) return true
@@ -153,7 +174,12 @@ export default function ConsoleModuleControl() {
         String(m.name || '').toLowerCase().includes(q)
       )
     })
-  }, [modules, search, category, statusFilter])
+    const spec = MODULE_ORDERS.find((o) => o.key === order) || MODULE_ORDERS[0]
+    return sortRows(found, { key: spec.field, dir: spec.dir }, {
+      name: (m) => m.name || m.module_id,
+      status: (m) => STATUS_RANK[m.status] ?? 9,
+    })
+  }, [modules, search, category, statusFilter, order])
 
   const counts = useMemo(() => {
     const c = { live: 0, maintenance: 0, disabled: 0, beta: 0 }
@@ -342,6 +368,8 @@ export default function ConsoleModuleControl() {
         <Segmented
           value={statusFilter}
           onChange={setStatusFilter}
+          ariaLabel="Filter by status"
+          role="group"
           options={[
             { key: 'all', label: 'All', count: modules.length },
             { key: 'live', label: 'Live', count: counts.live },
@@ -358,6 +386,9 @@ export default function ConsoleModuleControl() {
           ariaLabel="Filter by category"
           className="w-48"
         />
+        <Select value={order} onChange={setOrder} ariaLabel="Sort modules by" className="w-40"
+          options={MODULE_ORDERS.map((o) => ({ value: o.key, label: `Sort: ${o.label}` }))} />
+        <ExportButtons rows={filtered} columns={MODULE_EXPORT_COLUMNS} title="Module Control" />
       </Toolbar>
 
       {/* Bulk action bar */}

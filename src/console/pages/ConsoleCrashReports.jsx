@@ -30,6 +30,8 @@ import {
   Panel, PanelHeader, Note, StatTile, Badge, Btn, Code, Segmented, SearchInput, Select, Toolbar,
   LoadingState, EmptyState, ErrorState, Modal,
 } from '../components/ui'
+import { sortRows } from '../../lib/consoleTable'
+import ExportButtons from './shared/ExportButtons'
 import { BarsChart, STATUS, useChartTheme } from '../components/ui/charts'
 
 const PERIODS = [
@@ -55,6 +57,27 @@ const LEVEL_BY_KEY = Object.fromEntries(LEVELS.map((l) => [l.key, l]))
 const levelMeta = (lvl) => LEVEL_BY_KEY[lvl] || LEVEL_BY_KEY.error
 const STATUS_TONE = { resolved: 'good', ignored: 'quiet', unresolved: 'default' }
 /** The edge proxy asks Sentry for one page of this many issues. */
+const ISSUE_ORDERS = [
+  { key: 'lastSeen', label: 'Last seen', field: 'lastSeen', dir: 'desc' },
+  { key: 'firstSeen', label: 'First seen', field: 'firstSeen', dir: 'desc' },
+  { key: 'events', label: 'Most events', field: 'count', dir: 'desc' },
+  { key: 'users', label: 'Most users', field: 'userCount', dir: 'desc' },
+]
+
+const ISSUE_EXPORT_COLUMNS = [
+  { key: 'shortId', header: 'Issue' },
+  { key: 'level', header: 'Level' },
+  { key: 'status', header: 'Status' },
+  { key: 'title', header: 'Title' },
+  { key: 'culprit', header: 'Culprit' },
+  { key: 'project', header: 'Project' },
+  { key: 'count', header: 'Events' },
+  { key: 'userCount', header: 'Users' },
+  { key: 'firstSeen', header: 'First seen' },
+  { key: 'lastSeen', header: 'Last seen' },
+  { key: 'assignee', header: 'Assignee', value: r => r.assignedTo?.name || '' },
+]
+
 const ISSUE_PAGE = 50
 // Tags worth surfacing prominently in the detail dialog.
 const KEY_TAGS = ['release', 'environment', 'os', 'os.name', 'device', 'device.family', 'device.class', 'level', 'handled', 'mechanism', 'transaction']
@@ -158,6 +181,13 @@ export default function ConsoleCrashReports() {
 
   useEffect(() => { loadStatus() }, [loadStatus])
   useEffect(() => { if (status?.configured) { loadIssues(); loadProjects(); loadMembers() } }, [status?.configured, loadIssues, loadProjects, loadMembers])
+
+  const [issueOrder, setIssueOrder] = useState('lastSeen')
+  // Sentry returns its own order; the reader can re-rank the loaded page locally.
+  const sortedIssues = useMemo(() => {
+    const spec = ISSUE_ORDERS.find(o => o.key === issueOrder) || ISSUE_ORDERS[0]
+    return sortRows(issues, { key: spec.field, dir: spec.dir })
+  }, [issues, issueOrder])
 
   const summary = useMemo(() => {
     const fatal = issues.filter(i => i.level === 'fatal').length
@@ -385,7 +415,8 @@ export default function ConsoleCrashReports() {
 
           {/* Filters */}
           <Panel>
-            <PanelHeader icon={Bug} title="Issues" subtitle="Click an issue for its stack trace, device details and activity." />
+            <PanelHeader icon={Bug} title="Issues" subtitle="Click an issue for its stack trace, device details and activity."
+              actions={<ExportButtons rows={sortedIssues} columns={ISSUE_EXPORT_COLUMNS} title="Crash Reports" />} />
             <div className="space-y-2 mb-3">
               <form onSubmit={submitSearch}>
                 <Toolbar>
@@ -402,8 +433,15 @@ export default function ConsoleCrashReports() {
                   </label>
                 </Toolbar>
               </form>
-              <Segmented value={activeQuery} onChange={applyPreset} ariaLabel="Issue presets" role="group"
-                options={PRESETS.map(p => ({ key: p.key, label: p.label }))} />
+              <div className="flex flex-wrap items-center gap-2">
+                <Segmented value={activeQuery} onChange={applyPreset} ariaLabel="Issue presets" role="group"
+                  options={PRESETS.map(p => ({ key: p.key, label: p.label }))} />
+                <label className="ml-auto inline-flex items-center gap-2 text-[11px] text-gray-500">
+                  <span>Sort by</span>
+                  <Select value={issueOrder} onChange={setIssueOrder} className="w-36" ariaLabel="Sort issues by"
+                    options={ISSUE_ORDERS.map(o => ({ value: o.key, label: o.label }))} />
+                </label>
+              </div>
             </div>
 
             {/* Issue list */}
@@ -413,14 +451,14 @@ export default function ConsoleCrashReports() {
               <EmptyState icon={ShieldAlert} title="Sentry rejected the token"
                 reason="Open Connection and paste a fresh token." action={<Btn icon={Settings} onClick={() => setShowSetup(true)}>Connection</Btn>} />
             ) : reason && reason !== 'not_configured' ? (
-              <EmptyState icon={Bug} title="Issues could not be loaded" reason="Sentry did not answer this request. Try again in a moment."
+              <EmptyState icon={Bug} title="Issues could not be loaded" reason="Sentry did not answer this request. Use Retry above or try again in a moment."
                 action={<Btn icon={RefreshCw} onClick={loadIssues}>Retry</Btn>} />
             ) : issues.length === 0 ? (
               <EmptyState icon={CheckCircle2} title="No matching issues in this window"
                 reason="Nothing in Sentry matches this search, project and period." />
             ) : (
               <div className="space-y-2">
-                {issues.map(it => {
+                {sortedIssues.map(it => {
                   const lvl = levelMeta(it.level)
                   return (
                     <div key={it.id} className="rounded-xl border border-gray-800 bg-gray-900/40 p-3.5 hover:border-gray-700 transition-colors">

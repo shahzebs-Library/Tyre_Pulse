@@ -2,7 +2,8 @@ import { useEffect, useState, useCallback } from 'react'
 import { Megaphone, Plus, Edit2, Trash2, RefreshCw, Save, Eye, EyeOff, AlertTriangle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { toUserMessage } from '../../lib/safeError'
-import { Btn, ErrorState, LoadingState, EmptyState, Modal } from '../components/ui'
+import { Btn, ErrorState, LoadingState, EmptyState, Modal, StatTile, SearchInput, Toolbar } from '../components/ui'
+import { searchRows } from '../../lib/consoleTable'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 
 const ROLES = ['Admin', 'Manager', 'Director', 'Inspector', 'Tyre Man', 'Reporter', 'Driver']
@@ -131,8 +132,13 @@ export default function ConsoleAnnouncements() {
   const toggleRole = (r) =>
     setForm(f => ({ ...f, target_roles: f.target_roles.includes(r) ? f.target_roles.filter(x => x !== r) : [...f.target_roles, r] }))
 
-  const active = list.filter(a => a.active)
-  const inactive = list.filter(a => !a.active)
+  const [query, setQuery] = useState('')
+  const shown = searchRows(list, query, ['title', 'body', 'type'])
+  const active = shown.filter(a => a.active)
+  const inactive = shown.filter(a => !a.active)
+  const now = Date.now()
+  const expired = list.filter(a => a.show_until && new Date(a.show_until).getTime() < now).length
+  const targeted = list.filter(a => (a.target_roles && a.target_roles.length) || a.target_org_id).length
 
   return (
     <div className="space-y-5 max-w-5xl">
@@ -150,6 +156,21 @@ export default function ConsoleAnnouncements() {
         </div>
       </div>
 
+      {!loadError && !loading && list.length > 0 && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <StatTile icon={Megaphone} label="Active" value={list.filter(a => a.active).length} tone="accent" sub="Showing to users now" />
+            <StatTile label="Inactive" value={list.filter(a => !a.active).length} sub="Hidden from users" />
+            <StatTile label="Expired" value={expired} tone={expired ? 'warning' : 'default'} sub="Past their show-until date" />
+            <StatTile label="Targeted" value={targeted} sub="Limited by role or company" />
+          </div>
+          <Toolbar>
+            <SearchInput value={query} onChange={setQuery} placeholder="Search title, message or type" className="w-full sm:w-72" ariaLabel="Search announcements" />
+            {query && <span className="text-[11px] text-gray-500 tabular-nums">{shown.length} of {list.length} shown</span>}
+          </Toolbar>
+        </>
+      )}
+
       {loadError ? (
         <ErrorState message={loadError} onRetry={load} />
       ) : loading ? (
@@ -158,6 +179,10 @@ export default function ConsoleAnnouncements() {
         <EmptyState icon={Megaphone} title="No announcements yet"
           reason="Nothing has been published to users. Create one to show a banner in the app."
           action={<Btn variant="primary" icon={Plus} onClick={openCreate}>Create the first one</Btn>} />
+      ) : shown.length === 0 ? (
+        <EmptyState icon={Megaphone} title="No announcements match this search"
+          reason="Clear or change the search to see every announcement."
+          action={<Btn onClick={() => setQuery('')}>Clear search</Btn>} />
       ) : (
         <>
           {active.length > 0 && (

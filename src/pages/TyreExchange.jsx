@@ -1,3 +1,15 @@
+/**
+ * TyreExchange (route /tyre-exchange) - tyre transfers, retreads, chain of
+ * custody and pending returns, all derived from tyre_records grouped by serial.
+ *
+ * Every derivation lives in the pure `tyreExchangeAnalytics` engine; this page
+ * is presentation and orchestration only. Registers render through the shared
+ * EnterpriseTable. Honest states: a failed read says so with a Retry, a value
+ * that was never recorded reads "N/A", never 0.
+ *
+ * The return / write-off marks are persisted in tyre_status_marks (V62) through
+ * the exchange service; that write path and its approval lock are unchanged.
+ */
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -8,23 +20,33 @@ import {
 import { Bar, Doughnut } from 'react-chartjs-2'
 import {
   ArrowLeftRight, MapPin, RefreshCw, Clock, Search, Filter, X,
-  Download, FileText, FileSpreadsheet, ChevronLeft, ChevronRight,
-  CheckCircle, AlertTriangle, AlertCircle, History, Package,
-  TrendingUp, RotateCcw, Truck, Eye, CheckSquare, XCircle,
-  Calendar, ChevronDown, Lock,
+  FileText, FileSpreadsheet, CheckCircle, AlertTriangle, AlertCircle, History,
+  TrendingUp, Truck, CheckSquare, XCircle, ChevronDown, Lock,
 } from 'lucide-react'
 import * as exchangeApi from '../lib/api/tyreExchange'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
-import { useAuth } from '../contexts/AuthContext'
-import { exportToPdf, exportToExcel, resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme } from '../lib/exportUtils'
+import {
+  exportToPdf, exportToExcel, reportFileName, reportDateLabel,
+  resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme,
+} from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 import EmptyState from '../components/EmptyState'
 import { formatDate } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
 import { loadAutoTable } from '../lib/pdfEngine'
+import {
+  deriveTransfers, deriveCustody, deriveRetreads, derivePendingReturns, excludeMarked,
+  exchangeKpis, transferFilterOptions, filterTransfers, hasTransferFilters, EMPTY_TRANSFER_FILTERS,
+  siteFlowMatrix, siteNetFlow, flowIntensity, monthlyTransferCounts, transferTypeCounts,
+  topTransferredSerials, transfersByBrand, custodySummary, custodyRows, retreadSummary,
+  pendingSummary, pendingBand, transferExportView, exportRows, TRANSFER_TYPES,
+  RETREAD_EXPORT_COLUMNS, PENDING_EXPORT_COLUMNS, NET_FLOW_EXPORT_COLUMNS,
+  RETREAD_OVERDUE_DAYS, PENDING_CRITICAL_DAYS,
+} from '../lib/tyreExchangeAnalytics'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
 
@@ -71,162 +93,90 @@ const TABS = [
   { id: 'flow',       label: 'Site Flow Matrix',     icon: Truck },
 ]
 
+const btnCls = 'flex items-center gap-1.5 px-3 py-2 bg-[var(--input-bg)] hover:bg-gray-700 border border-[var(--input-border)] '
+  + 'text-[var(--text-secondary)] rounded-lg text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
+const selectCls = 'w-full bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] rounded-lg px-3 py-2 text-sm'
+
 function fmtDate(d) {
-  if (!d) return '-'
+  if (!d) return 'N/A'
   return formatDate(d, 'All', { day: '2-digit', month: 'short', year: 'numeric' })
 }
+const na = (v) => (v == null || v === '' ? 'N/A' : v)
+const fmtNum = (v) => (v == null ? 'N/A' : Number(v).toLocaleString())
+const fmtMm = (v) => (v == null ? 'N/A' : `${v}mm`)
 
-function daysDiff(dateStr) {
-  if (!dateStr) return null
-  const d = new Date(dateStr)
-  const now = new Date()
-  return Math.floor((now - d) / (1000 * 60 * 60 * 24))
+const FLOW_CELL = ['', 'bg-blue-700/10 text-blue-300', 'bg-blue-700/25 text-blue-200', 'bg-blue-700/45 text-blue-100', 'bg-blue-700/70 text-white']
+
+function transferTypeBadge(type) {
+  const map = {
+    'Inter-Vehicle': 'bg-blue-900/50 text-blue-300 border-blue-700/50',
+    'Inter-Site': 'bg-purple-900/50 text-purple-300 border-purple-700/50',
+    Retread: 'bg-green-900/50 text-green-300 border-green-700/50',
+    Repair: 'bg-yellow-900/50 text-yellow-300 border-yellow-700/50',
+  }
+  return (
+    <span className={`px-2 py-0.5 rounded-full text-xs border ${map[type] || 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)]'}`}>
+      {type}
+    </span>
+  )
 }
 
-// Derive transfer events from tyre_records grouped by serial_number
-function deriveTransfers(records) {
-  const bySerial = {}
-  for (const r of records) {
-    const sn = r.serial_number || r.serial_no
-    if (!sn) continue
-    if (!bySerial[sn]) bySerial[sn] = []
-    bySerial[sn].push(r)
-  }
-
-  const transfers = []
-  for (const [serial, recs] of Object.entries(bySerial)) {
-    const sorted = [...recs].sort((a, b) => {
-      const da = a.issue_date ? new Date(a.issue_date) : new Date(0)
-      const db = b.issue_date ? new Date(b.issue_date) : new Date(0)
-      return da - db
-    })
-
-    for (let i = 1; i < sorted.length; i++) {
-      const prev = sorted[i - 1]
-      const curr = sorted[i]
-      const fromAsset = prev.asset_no
-      const toAsset = curr.asset_no
-      const fromSite = prev.site
-      const toSite = curr.site
-
-      const isVehicleTransfer = fromAsset && toAsset && fromAsset !== toAsset
-      const isSiteTransfer = fromSite && toSite && fromSite !== toSite
-
-      if (isVehicleTransfer || isSiteTransfer) {
-        let transferType = 'Inter-Vehicle'
-        if (isSiteTransfer && isVehicleTransfer) transferType = 'Inter-Site'
-        else if (isSiteTransfer) transferType = 'Inter-Site'
-        else if ((curr.category || '').toLowerCase().includes('retread')) transferType = 'Retread'
-        else if ((curr.category || '').toLowerCase().includes('repair')) transferType = 'Repair'
-
-        const kmAtRemoval = prev.km_at_removal || null
-        const kmAtFitment = prev.km_at_fitment || null
-        const kmRun = kmAtRemoval && kmAtFitment ? kmAtRemoval - kmAtFitment : null
-
-        transfers.push({
-          id: `${serial}-${i}`,
-          serial,
-          brand: prev.brand || curr.brand || '-',
-          size: prev.size || curr.size || '-',
-          fromAsset: fromAsset || '-',
-          toAsset: toAsset || '-',
-          fromSite: fromSite || '-',
-          toSite: toSite || '-',
-          transferDate: curr.issue_date,
-          kmAtTransfer: kmAtRemoval,
-          kmRun,
-          category: curr.category || prev.category || '-',
-          treadAtTransfer: prev.tread_depth,
-          transferType,
-          prevRecord: prev,
-          currRecord: curr,
-        })
-      }
-    }
-  }
-  return transfers
+function riskBadge(level) {
+  const map = { critical: 'text-red-400', high: 'text-orange-400', medium: 'text-yellow-400', low: 'text-green-400' }
+  return <span className={map[(level || '').toLowerCase()] || 'text-[var(--text-muted)]'}>{na(level)}</span>
 }
 
-// Derive custody chain for a single serial
-function deriveCustody(records, serial) {
-  const sn = serial.trim().toLowerCase()
-  const matched = records.filter(r => {
-    const s = (r.serial_number || r.serial_no || '').toLowerCase()
-    return s === sn
-  })
-  return [...matched].sort((a, b) => {
-    const da = a.issue_date ? new Date(a.issue_date) : new Date(0)
-    const db = b.issue_date ? new Date(b.issue_date) : new Date(0)
-    return da - db
-  })
+const PENDING_CLASS = {
+  critical: 'text-red-400 font-semibold',
+  warn: 'text-yellow-400 font-semibold',
+  ok: 'text-[var(--text-secondary)]',
+  unknown: 'text-[var(--text-muted)]',
 }
 
-// Derive pending returns: removed (retread/repair) with no subsequent fitment
-function derivePendingReturns(records) {
-  const bySerial = {}
-  for (const r of records) {
-    const sn = r.serial_number || r.serial_no
-    if (!sn) continue
-    if (!bySerial[sn]) bySerial[sn] = []
-    bySerial[sn].push(r)
-  }
+/** EnterpriseTable over the shared page contract (usePagedRows) - the pager owns paging. */
+function PagedTable({ columns, rows, emptyMessage }) {
+  return (
+    <EnterpriseTable
+      columns={columns}
+      data={rows}
+      getRowId={(r) => r._key}
+      enableGlobalFilter={false}
+      enableColumnFilters={false}
+      enableSorting={false}
+      enableExport={false}
+      virtual
+      maxHeight={560}
+      emptyMessage={emptyMessage}
+    />
+  )
+}
 
-  const pending = []
-  for (const [serial, recs] of Object.entries(bySerial)) {
-    const sorted = [...recs].sort((a, b) => {
-      const da = a.issue_date ? new Date(a.issue_date) : new Date(0)
-      const db = b.issue_date ? new Date(b.issue_date) : new Date(0)
-      return da - db
-    })
-
-    const last = sorted[sorted.length - 1]
-    const cat = (last.category || '').toLowerCase()
-    const isRemoved = cat.includes('retread') || cat.includes('repair') || cat.includes('scrap')
-    const hasRemovalDate = !!last.km_at_removal || !!(last.issue_date && sorted.length > 1 && sorted[sorted.length - 2].km_at_removal)
-
-    if (isRemoved && sorted.length >= 1) {
-      const removalDate = last.issue_date
-      const days = removalDate ? daysDiff(removalDate) : null
-
-      pending.push({
-        serial,
-        brand: last.brand || '-',
-        size: last.size || '-',
-        removedFrom: last.asset_no || '-',
-        site: last.site || '-',
-        removalDate,
-        daysPending: days,
-        category: last.category || '-',
-        treadAtRemoval: last.tread_depth,
-        lastRecord: last,
-      })
-    }
-  }
-
-  return pending
+function Stat({ label, value, tone }) {
+  return (
+    <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
+      <p className="text-xs text-[var(--text-muted)] mb-1">{label}</p>
+      <p className={`text-2xl font-bold ${tone}`}>{value}</p>
+    </div>
+  )
 }
 
 export default function TyreExchange() {
-  const { appSettings, activeCountry, activeCurrency } = useSettings()
+  const { appSettings, activeCountry } = useSettings()
   const { branding } = useTenant()
-  const { profile } = useAuth()
   const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
 
   const [records, setRecords] = useState([])
-  const [stockMovements, setStockMovements] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [loadedAt, setLoadedAt] = useState(null)
+  const [reloadKey, setReloadKey] = useState(0)
   const [activeTab, setActiveTab] = useState('transfers')
 
   // Transfer history filters
-  const [filterFromSite, setFilterFromSite] = useState('')
-  const [filterToSite, setFilterToSite] = useState('')
-  const [filterBrand, setFilterBrand] = useState('')
-  const [filterDateFrom, setFilterDateFrom] = useState('')
-  const [filterDateTo, setFilterDateTo] = useState('')
-  const [filterCategory, setFilterCategory] = useState('')
-  const [filterTransferType, setFilterTransferType] = useState('')
+  const [filters, setFilters] = useState({ ...EMPTY_TRANSFER_FILTERS })
   const [txPage, setTxPage] = useState(1)
   const [showFilters, setShowFilters] = useState(false)
+  const setFilter = (k, v) => { setFilters((f) => ({ ...f, [k]: v })); setTxPage(1) }
 
   // Custody search
   const [custodySerial, setCustodySerial] = useState('')
@@ -255,104 +205,60 @@ export default function TyreExchange() {
       setWrittenOffSerials(data.filter((m) => m.mark_type === 'written_off').map((m) => m.serial))
     })
     return () => { cancelled = true }
-  }, [])
-
-  // Selected transfer for certificate
-  const [certTransfer, setCertTransfer] = useState(null)
+  }, [reloadKey])
 
   // ── Data Loading ──────────────────────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false
     async function load() {
       setLoading(true)
+      setLoadError('')
       try {
-        const { data: recData } = await exchangeApi.listExchangeTyreRecords({ country: activeCountry })
-        // Try loading stock_movements table (may not exist)
-        const { data: movData } = await exchangeApi.listStockMovements()
+        const { data: recData, error } = await exchangeApi.listExchangeTyreRecords({ country: activeCountry })
         if (cancelled) return   // a newer country selection superseded this load
+        if (error) {
+          setLoadError(toUserMessage(error, 'Could not load the tyre records.'))
+          setRecords([])
+          return
+        }
         setRecords(recData || [])
-        setStockMovements(movData || [])
+        setLoadedAt(new Date())
+      } catch (err) {
+        if (!cancelled) {
+          setLoadError(toUserMessage(err, 'Could not load the tyre records.'))
+          setRecords([])
+        }
       } finally {
         if (!cancelled) setLoading(false)   // never leave the spinner stuck
       }
     }
     load()
     return () => { cancelled = true }
-  }, [activeCountry])
+  }, [activeCountry, reloadKey])
 
-  // ── Derived data ──────────────────────────────────────────────────────────────
+  const reload = useCallback(() => setReloadKey((k) => k + 1), [])
+
+  // ── Derived data (all in the engine) ──────────────────────────────────────────
+  const now = loadedAt || new Date()
   const transfers = useMemo(() => deriveTransfers(records), [records])
-
-  const retreads = useMemo(() => {
-    const bySerial = {}
-    for (const r of records) {
-      const sn = r.serial_number || r.serial_no
-      if (!sn) continue
-      if (!bySerial[sn]) bySerial[sn] = []
-      bySerial[sn].push(r)
-    }
-    const result = []
-    for (const [serial, recs] of Object.entries(bySerial)) {
-      const sorted = [...recs].sort((a, b) => {
-        const da = a.issue_date ? new Date(a.issue_date) : new Date(0)
-        const db = b.issue_date ? new Date(b.issue_date) : new Date(0)
-        return da - db
-      })
-      for (let i = 0; i < sorted.length; i++) {
-        const r = sorted[i]
-        if ((r.category || '').toLowerCase().includes('retread')) {
-          const later = sorted.slice(i + 1)
-          const returned = later.length > 0 && later[0].asset_no
-          const returnRec = returned ? later[0] : null
-          const daysSent = r.issue_date ? daysDiff(r.issue_date) : null
-          result.push({
-            serial,
-            brand: r.brand || '-',
-            size: r.size || '-',
-            sentFromAsset: r.asset_no || '-',
-            sentFromSite: r.site || '-',
-            sendDate: r.issue_date,
-            kmAtRemoval: r.km_at_removal,
-            treadAtSend: r.tread_depth,
-            returnStatus: returned ? 'Returned' : 'Pending Return',
-            returnDate: returned ? returnRec.issue_date : null,
-            returnAsset: returned ? returnRec.asset_no : null,
-            daysSent,
-            overdue: !returned && daysSent && daysSent > 60,
-          })
-        }
-      }
-    }
-    return result
-  }, [records])
-
-  const pendingReturns = useMemo(() => {
-    const all = derivePendingReturns(records)
-    return all.filter(p =>
-      !returnedSerials.includes(p.serial) &&
-      !writtenOffSerials.includes(p.serial)
-    )
-  }, [records, returnedSerials, writtenOffSerials])
-
-  const custodyChain = useMemo(() => {
-    if (!custodySerial) return []
-    return deriveCustody(records, custodySerial)
-  }, [records, custodySerial])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const retreads = useMemo(() => deriveRetreads(records, { now }), [records, loadedAt])
+  const pendingReturns = useMemo(
+    () => excludeMarked(derivePendingReturns(records, { now }), returnedSerials, writtenOffSerials),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [records, returnedSerials, writtenOffSerials, loadedAt],
+  )
+  const custodyChain = useMemo(() => (custodySerial ? deriveCustody(records, custodySerial) : []), [records, custodySerial])
+  const custody = useMemo(() => custodySummary(custodyChain), [custodyChain])
+  const custodyTable = useMemo(() => custodyRows(custodyChain), [custodyChain])
 
   /**
    * THE TWO DERIVED REGISTERS ARE READ A PAGE AT A TIME.
    *
    * Both are derived from every tyre record the country holds - 11,200 rows -
    * with no ceiling of their own, so either can become a single unbroken table
-   * the moment retreading starts being recorded. Measured on the live data today
-   * both are EMPTY (no record carries a retread/repair/scrap category), so this
-   * changes nothing a reader can see right now; it is the bound that stops the
-   * page growing without limit later.
-   *
-   * The transfer history already pages itself (25 a page, `txPagedData`) and is
-   * left alone; the custody chain is one serial's own history and is short by
-   * construction. Neither list has an export, and the KPI tiles above still
-   * count `retreads`/`transfers` in full.
+   * the moment retreading starts being recorded. The KPI tiles and the exports
+   * still cover `retreads`/`pendingReturns` in full.
    */
   const retreadPager = usePagedRows(retreads)
   const pendingPager = usePagedRows(pendingReturns)
@@ -370,56 +276,17 @@ export default function TyreExchange() {
     }
   }, [custodyChain, custodySerial])
 
-  // ── KPIs ──────────────────────────────────────────────────────────────────────
-  const kpis = useMemo(() => {
-    const bySerial = {}
-    for (const r of records) {
-      const sn = r.serial_number || r.serial_no
-      if (!sn) continue
-      if (!bySerial[sn]) bySerial[sn] = { assets: new Set(), sites: new Set() }
-      if (r.asset_no) bySerial[sn].assets.add(r.asset_no)
-      if (r.site) bySerial[sn].sites.add(r.site)
-    }
-    const interVehicle = Object.values(bySerial).filter(v => v.assets.size >= 2).length
-    const interSite = Object.values(bySerial).filter(v => v.sites.size >= 2).length
-    const retreadCount = retreads.length
-    const transfersWithKm = transfers.filter(t => t.kmAtTransfer != null)
-    const avgKm = transfersWithKm.length > 0
-      ? Math.round(transfersWithKm.reduce((s, t) => s + t.kmAtTransfer, 0) / transfersWithKm.length)
-      : 0
-
-    return { interVehicle, interSite, retreadCount, avgKm }
-  }, [records, retreads, transfers])
-
-  // ── Unique filter values ──────────────────────────────────────────────────────
-  const uniqueSites = useMemo(() => {
-    const s = new Set(records.map(r => r.site).filter(Boolean))
-    return [...s].sort()
-  }, [records])
-
-  const uniqueBrands = useMemo(() => {
-    const b = new Set(records.map(r => r.brand).filter(Boolean))
-    return [...b].sort()
-  }, [records])
-
-  const uniqueCategories = useMemo(() => {
-    const c = new Set(transfers.map(t => t.category).filter(v => v && v !== '-'))
-    return [...c].sort()
-  }, [transfers])
+  const kpis = useMemo(() => exchangeKpis(records, transfers, retreads, pendingReturns), [records, transfers, retreads, pendingReturns])
+  const retreadStats = useMemo(() => retreadSummary(retreads), [retreads])
+  const pendingStats = useMemo(() => pendingSummary(pendingReturns), [pendingReturns])
+  const options = useMemo(() => transferFilterOptions(records, transfers), [records, transfers])
 
   // ── Filtered transfers ────────────────────────────────────────────────────────
-  const filteredTransfers = useMemo(() => {
-    return transfers.filter(t => {
-      if (filterFromSite && t.fromSite !== filterFromSite) return false
-      if (filterToSite && t.toSite !== filterToSite) return false
-      if (filterBrand && t.brand !== filterBrand) return false
-      if (filterDateFrom && t.transferDate && t.transferDate < filterDateFrom) return false
-      if (filterDateTo && t.transferDate && t.transferDate > filterDateTo) return false
-      if (filterCategory && t.category !== filterCategory) return false
-      if (filterTransferType && t.transferType !== filterTransferType) return false
-      return true
-    })
-  }, [transfers, filterFromSite, filterToSite, filterBrand, filterDateFrom, filterDateTo, filterCategory, filterTransferType])
+  const filteredTransfers = useMemo(
+    () => filterTransfers(transfers, filters).map(transferExportView),
+    [transfers, filters],
+  )
+  const hasActiveFilter = hasTransferFilters(filters)
 
   const txTotalPages = Math.max(1, Math.ceil(filteredTransfers.length / PAGE_SIZE))
   const txPagedData = useMemo(() => {
@@ -427,88 +294,40 @@ export default function TyreExchange() {
     return filteredTransfers.slice(start, start + PAGE_SIZE)
   }, [filteredTransfers, txPage])
 
-  // ── Site Flow Matrix ──────────────────────────────────────────────────────────
-  const siteFlowMatrix = useMemo(() => {
-    const sites = [...new Set([
-      ...transfers.map(t => t.fromSite).filter(s => s && s !== '-'),
-      ...transfers.map(t => t.toSite).filter(s => s && s !== '-'),
-    ])].sort()
-
-    const matrix = {}
-    for (const from of sites) {
-      matrix[from] = {}
-      for (const to of sites) matrix[from][to] = 0
-    }
-    for (const t of transfers) {
-      if (t.fromSite !== '-' && t.toSite !== '-' && t.fromSite !== t.toSite) {
-        if (!matrix[t.fromSite]) matrix[t.fromSite] = {}
-        matrix[t.fromSite][t.toSite] = (matrix[t.fromSite][t.toSite] || 0) + 1
-      }
-    }
-    return { sites, matrix }
-  }, [transfers])
-
-  const maxFlowValue = useMemo(() => {
-    let max = 0
-    for (const row of Object.values(siteFlowMatrix.matrix)) {
-      for (const v of Object.values(row)) {
-        if (v > max) max = v
-      }
-    }
-    return max
-  }, [siteFlowMatrix])
+  const flow = useMemo(() => siteFlowMatrix(transfers), [transfers])
+  const netFlow = useMemo(() => siteNetFlow(flow), [flow])
 
   // ── Analytics Charts ──────────────────────────────────────────────────────────
-  const monthlyBarData = useMemo(() => {
-    const now = new Date()
-    const months = []
-    for (let i = 11; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-      months.push({
-        label: d.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }),
-        key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
-        count: 0,
-      })
-    }
-    for (const t of transfers) {
-      if (!t.transferDate) continue
-      const key = t.transferDate.slice(0, 7)
-      const m = months.find(m => m.key === key)
-      if (m) m.count++
-    }
-    return {
-      labels: months.map(m => m.label),
-      datasets: [{
-        label: 'Transfers',
-        data: months.map(m => m.count),
-        backgroundColor: '#2563eb',
-        borderRadius: 4,
-      }],
-    }
-  }, [transfers])
+  const monthly = useMemo(
+    () => monthlyTransferCounts(transfers, { now }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [transfers, loadedAt],
+  )
+  const monthlyBarData = useMemo(() => ({
+    labels: monthly.map(m => m.label),
+    datasets: [{ label: 'Transfers', data: monthly.map(m => m.count), backgroundColor: '#2563eb', borderRadius: 4 }],
+  }), [monthly])
 
   const transferTypeDonut = useMemo(() => {
-    const counts = { 'Inter-Vehicle': 0, 'Inter-Site': 0, Retread: 0, Repair: 0 }
-    for (const t of transfers) {
-      if (counts[t.transferType] !== undefined) counts[t.transferType]++
-      else counts['Inter-Vehicle']++
-    }
+    const counts = transferTypeCounts(transfers)
     return {
-      labels: Object.keys(counts),
+      labels: TRANSFER_TYPES,
       datasets: [{
-        data: Object.values(counts),
+        data: TRANSFER_TYPES.map((t) => counts[t]),
         backgroundColor: ['#2563eb', '#7c3aed', '#16a34a', '#d97706'],
         borderWidth: 0,
       }],
     }
   }, [transfers])
+  const topSerials = useMemo(() => topTransferredSerials(transfers, records, 10), [transfers, records])
+  const byBrand = useMemo(() => transfersByBrand(transfers, 8), [transfers])
 
   // ── Actions ───────────────────────────────────────────────────────────────────
   // Optimistic update + DB persist; rolled back with a visible error on failure
   // so a rejected write can never silently pretend to be saved.
   async function persistMark(serial, markType, list, setList) {
     setMarkError('')
-    // Locked — this record is mid-approval; edits are blocked (server also enforces).
+    // Locked - this record is mid-approval; edits are blocked (server also enforces).
     if (wfLocked && serial === replacementRecord?.serial) {
       setMarkError(`${serial} is locked: an approval is in progress for this record.`)
       return
@@ -527,38 +346,33 @@ export default function TyreExchange() {
   function markWrittenOff(serial) { persistMark(serial, 'written_off', writtenOffSerials, setWrittenOffSerials) }
 
   function clearFilters() {
-    setFilterFromSite('')
-    setFilterToSite('')
-    setFilterBrand('')
-    setFilterDateFrom('')
-    setFilterDateTo('')
-    setFilterCategory('')
-    setFilterTransferType('')
+    setFilters({ ...EMPTY_TRANSFER_FILTERS })
     setTxPage(1)
   }
 
-  const hasActiveFilter = filterFromSite || filterToSite || filterBrand || filterDateFrom || filterDateTo || filterCategory || filterTransferType
-
   // ── Export functions ──────────────────────────────────────────────────────────
+  // Every export carries the FULL filtered set, never the page on screen.
   function exportTransfersPdf() {
     exportToPdf(
       filteredTransfers,
       [
         { key: 'serial', header: 'Serial' },
-        { key: 'brand', header: 'Brand' },
-        { key: 'size', header: 'Size' },
-        { key: 'fromAsset', header: 'From Asset' },
-        { key: 'toAsset', header: 'To Asset' },
-        { key: 'fromSite', header: 'From Site' },
-        { key: 'toSite', header: 'To Site' },
-        { key: 'transferDate', header: 'Transfer Date' },
-        { key: 'kmAtTransfer', header: 'KM at Transfer' },
+        { key: 'x_brand', header: 'Brand' },
+        { key: 'x_size', header: 'Size' },
+        { key: 'x_fromAsset', header: 'From Asset' },
+        { key: 'x_toAsset', header: 'To Asset' },
+        { key: 'x_fromSite', header: 'From Site' },
+        { key: 'x_toSite', header: 'To Site' },
+        { key: 'x_date', header: 'Transfer Date' },
+        { key: 'x_km', header: 'KM at Transfer' },
         { key: 'transferType', header: 'Type' },
-        { key: 'treadAtTransfer', header: 'Tread (mm)' },
+        { key: 'x_tread', header: 'Tread' },
       ],
       'Tyre Transfer History',
-      'TyrePulse_Transfers',
-      'landscape'
+      reportFileName('Tyre Transfer History', reportDateLabel()),
+      'landscape',
+      company,
+      { branding },
     )
   }
 
@@ -567,38 +381,53 @@ export default function TyreExchange() {
     const wb = XLSX.utils.book_new()
     const transferSheet = XLSX.utils.json_to_sheet(filteredTransfers.map(t => ({
       Serial: t.serial,
-      Brand: t.brand,
-      Size: t.size,
-      'From Asset': t.fromAsset,
-      'To Asset': t.toAsset,
-      'From Site': t.fromSite,
-      'To Site': t.toSite,
-      'Transfer Date': t.transferDate,
-      'KM at Transfer': t.kmAtTransfer,
+      Brand: na(t.brand),
+      Size: na(t.size),
+      'From Asset': na(t.fromAsset),
+      'To Asset': na(t.toAsset),
+      'From Site': na(t.fromSite),
+      'To Site': na(t.toSite),
+      'Transfer Date': na(t.transferDate),
+      'KM at Transfer': na(t.kmAtTransfer),
       'Transfer Type': t.transferType,
-      Category: t.category,
-      'Tread at Transfer': t.treadAtTransfer,
+      Category: na(t.category),
+      'Tread at Transfer': na(t.treadAtTransfer),
     })))
     XLSX.utils.book_append_sheet(wb, transferSheet, 'Transfers')
 
-    if (custodyChain.length > 0) {
-      const custodySheet = XLSX.utils.json_to_sheet(custodyChain.map(r => ({
-        Serial: r.serial_number || r.serial_no,
-        'Fitment Date': r.issue_date,
-        Asset: r.asset_no,
-        Site: r.site,
-        Position: r.position,
-        Brand: r.brand,
-        'KM Start': r.km_at_fitment,
-        'KM End': r.km_at_removal,
-        'Tread (mm)': r.tread_depth,
-        Category: r.category,
-        'Risk Level': r.risk_level,
+    if (custodyTable.length > 0) {
+      const custodySheet = XLSX.utils.json_to_sheet(custodyTable.map(r => ({
+        Serial: custodySerial,
+        'Fitment Date': na(r.date),
+        Asset: na(r.asset),
+        Site: na(r.site),
+        Position: na(r.position),
+        'KM Start': na(r.kmStart),
+        'KM End': na(r.kmEnd),
+        'KM Run': na(r.kmRun),
+        'Tread (mm)': na(r.tread),
+        Category: na(r.category),
+        'Risk Level': na(r.risk),
       })))
       XLSX.utils.book_append_sheet(wb, custodySheet, 'Custody Chain')
     }
 
-    XLSX.writeFile(wb, 'TyrePulse_TransferHistory.xlsx')
+    XLSX.writeFile(wb, `${reportFileName('Tyre Transfer History', reportDateLabel())}.xlsx`)
+  }
+
+  function exportRegister(kind, format) {
+    const spec = {
+      retreads: { rows: retreads, cols: RETREAD_EXPORT_COLUMNS, title: 'Retread Send Out History' },
+      pending: { rows: pendingReturns, cols: PENDING_EXPORT_COLUMNS, title: 'Tyre Pending Returns' },
+      netflow: { rows: netFlow, cols: NET_FLOW_EXPORT_COLUMNS, title: 'Tyre Site Net Flow' },
+    }[kind]
+    const data = exportRows(spec.rows, spec.cols)
+    const name = reportFileName(spec.title, reportDateLabel())
+    if (format === 'excel') {
+      exportToExcel(data, spec.cols.map(c => c.key), spec.cols.map(c => c.header), name)
+    } else {
+      exportToPdf(data, spec.cols.map(c => ({ key: c.key, header: c.header })), spec.title, name, 'landscape', company, { branding })
+    }
   }
 
   async function exportTransferCertificate(tx) {
@@ -618,16 +447,16 @@ export default function TyreExchange() {
       startY: 40,
       body: [
         ['Serial Number', tx.serial],
-        ['Brand / Size', `${tx.brand} / ${tx.size}`],
+        ['Brand / Size', `${na(tx.brand)} / ${na(tx.size)}`],
         ['Transfer Type', tx.transferType],
         ['Transfer Date', fmtDate(tx.transferDate)],
-        ['From Asset', tx.fromAsset],
-        ['To Asset', tx.toAsset],
-        ['From Site', tx.fromSite],
-        ['To Site', tx.toSite],
-        ['KM at Transfer', tx.kmAtTransfer != null ? tx.kmAtTransfer.toLocaleString() : '-'],
-        ['Tread at Transfer', tx.treadAtTransfer != null ? `${tx.treadAtTransfer} mm` : '-'],
-        ['Category', tx.category],
+        ['From Asset', na(tx.fromAsset)],
+        ['To Asset', na(tx.toAsset)],
+        ['From Site', na(tx.fromSite)],
+        ['To Site', na(tx.toSite)],
+        ['KM at Transfer', fmtNum(tx.kmAtTransfer)],
+        ['Tread at Transfer', tx.treadAtTransfer != null ? `${tx.treadAtTransfer} mm` : 'N/A'],
+        ['Category', na(tx.category)],
       ],
       columnStyles: {
         0: { fontStyle: 'bold', fillColor: [243, 244, 246], cellWidth: 60 },
@@ -647,49 +476,199 @@ export default function TyreExchange() {
     const totalPages = doc.internal.getNumberOfPages()
     for (let p = 1; p <= totalPages; p++) { doc.setPage(p); pdfFooter(doc, p, totalPages, company, brand) }
 
-    doc.save(`TyrePulse_Transfer_Certificate_${tx.serial}.pdf`)
+    doc.save(`${reportFileName('Tyre Transfer Certificate', tx.serial)}.pdf`)
   }
 
-  // ── Render helpers ────────────────────────────────────────────────────────────
-  function transferTypeBadge(type) {
-    const map = {
-      'Inter-Vehicle': 'bg-blue-900/50 text-blue-300 border-blue-700/50',
-      'Inter-Site': 'bg-purple-900/50 text-purple-300 border-purple-700/50',
-      Retread: 'bg-green-900/50 text-green-300 border-green-700/50',
-      Repair: 'bg-yellow-900/50 text-yellow-300 border-yellow-700/50',
-    }
-    return (
-      <span className={`px-2 py-0.5 rounded-full text-xs border ${map[type] || 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)]'}`}>
-        {type}
-      </span>
-    )
-  }
+  // ── Table columns ─────────────────────────────────────────────────────────────
+  const transferColumns = useMemo(() => [
+    { id: 'serial', header: 'Serial', accessorFn: (t) => t.serial, cell: ({ row }) => <span className="font-mono text-blue-400 text-xs">{row.original.serial}</span> },
+    { id: 'brand', header: 'Brand', accessorFn: (t) => na(t.brand) },
+    { id: 'size', header: 'Size', accessorFn: (t) => na(t.size) },
+    { id: 'fromAsset', header: 'From Asset', accessorFn: (t) => na(t.fromAsset) },
+    { id: 'toAsset', header: 'To Asset', accessorFn: (t) => na(t.toAsset) },
+    { id: 'fromSite', header: 'From Site', accessorFn: (t) => na(t.fromSite) },
+    { id: 'toSite', header: 'To Site', accessorFn: (t) => na(t.toSite) },
+    { id: 'date', header: 'Transfer Date', accessorFn: (t) => t.transferDate || '', cell: ({ row }) => <span className="whitespace-nowrap">{fmtDate(row.original.transferDate)}</span> },
+    { id: 'km', header: 'KM', accessorFn: (t) => t.kmAtTransfer ?? -1, meta: { align: 'right' }, cell: ({ row }) => fmtNum(row.original.kmAtTransfer) },
+    { id: 'type', header: 'Type', accessorFn: (t) => t.transferType, cell: ({ row }) => transferTypeBadge(row.original.transferType) },
+    { id: 'tread', header: 'Tread', accessorFn: (t) => t.treadAtTransfer ?? -1, meta: { align: 'right' }, cell: ({ row }) => fmtMm(row.original.treadAtTransfer) },
+    {
+      id: 'cert', header: 'Cert', enableSorting: false, meta: { export: false, align: 'center' },
+      cell: ({ row }) => (
+        <button
+          type="button"
+          onClick={() => exportTransferCertificate(row.original)}
+          className="text-[var(--text-muted)] hover:text-blue-400 transition-colors"
+          title="Download Transfer Certificate"
+          aria-label={`Download transfer certificate for ${row.original.serial}`}
+        >
+          <FileText size={14} />
+        </button>
+      ),
+    },
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [branding, company])
 
-  function riskBadge(level) {
-    const map = {
-      critical: 'text-red-400',
-      high: 'text-orange-400',
-      medium: 'text-yellow-400',
-      low: 'text-green-400',
-    }
-    return <span className={map[(level || '').toLowerCase()] || 'text-[var(--text-muted)]'}>{level || '-'}</span>
-  }
+  const retreadColumns = useMemo(() => [
+    { id: 'serial', header: 'Serial', cell: ({ row }) => <span className="font-mono text-blue-400 text-xs">{row.original.serial}</span> },
+    { id: 'brand', header: 'Brand', cell: ({ row }) => na(row.original.brand) },
+    { id: 'size', header: 'Size', cell: ({ row }) => na(row.original.size) },
+    { id: 'from', header: 'Sent From Asset', cell: ({ row }) => na(row.original.sentFromAsset) },
+    { id: 'site', header: 'Site', cell: ({ row }) => na(row.original.sentFromSite) },
+    { id: 'send', header: 'Send Date', cell: ({ row }) => <span className="whitespace-nowrap">{fmtDate(row.original.sendDate)}</span> },
+    { id: 'km', header: 'KM at Removal', meta: { align: 'right' }, cell: ({ row }) => fmtNum(row.original.kmAtRemoval) },
+    { id: 'tread', header: 'Tread Sent', meta: { align: 'right' }, cell: ({ row }) => fmtMm(row.original.treadAtSend) },
+    {
+      id: 'status', header: 'Status',
+      cell: ({ row }) => {
+        const r = row.original
+        return (
+          <span className={`px-2 py-0.5 rounded-full text-xs border flex items-center gap-1 w-fit ${
+            r.returnStatus === 'Returned'
+              ? 'bg-green-900/50 text-green-300 border-green-700/50'
+              : r.overdue
+                ? 'bg-red-900/50 text-red-300 border-red-700/50'
+                : 'bg-yellow-900/50 text-yellow-300 border-yellow-700/50'
+          }`}>
+            {r.overdue && <AlertTriangle size={10} />}
+            {r.returnStatus}
+            {r.overdue && ` (${r.daysSent}d)`}
+          </span>
+        )
+      },
+    },
+    { id: 'rdate', header: 'Return Date', cell: ({ row }) => <span className="whitespace-nowrap">{fmtDate(row.original.returnDate)}</span> },
+    { id: 'rasset', header: 'Return Asset', cell: ({ row }) => na(row.original.returnAsset) },
+  ], [])
 
-  function pendingDaysClass(days) {
-    if (!days) return 'text-[var(--text-muted)]'
-    if (days > 60) return 'text-red-400 font-semibold'
-    if (days > 30) return 'text-yellow-400 font-semibold'
-    return 'text-[var(--text-secondary)]'
-  }
+  const custodyColumns = useMemo(() => [
+    { id: 'seq', header: '#', accessorKey: 'seq' },
+    { id: 'date', header: 'Fitment Date', accessorFn: (r) => r.date || '', cell: ({ row }) => <span className="whitespace-nowrap">{fmtDate(row.original.date)}</span> },
+    { id: 'asset', header: 'Asset', accessorFn: (r) => na(r.asset), cell: ({ row }) => <span className="text-blue-400">{na(row.original.asset)}</span> },
+    { id: 'site', header: 'Site', accessorFn: (r) => na(r.site) },
+    { id: 'position', header: 'Position', accessorFn: (r) => na(r.position) },
+    { id: 'kmStart', header: 'KM Start', accessorFn: (r) => r.kmStart ?? -1, meta: { align: 'right' }, cell: ({ row }) => fmtNum(row.original.kmStart) },
+    { id: 'kmEnd', header: 'KM End', accessorFn: (r) => r.kmEnd ?? -1, meta: { align: 'right' }, cell: ({ row }) => fmtNum(row.original.kmEnd) },
+    { id: 'kmRun', header: 'KM Run', accessorFn: (r) => r.kmRun ?? -1, meta: { align: 'right' }, cell: ({ row }) => fmtNum(row.original.kmRun) },
+    { id: 'tread', header: 'Tread', accessorFn: (r) => r.tread ?? -1, meta: { align: 'right' }, cell: ({ row }) => fmtMm(row.original.tread) },
+    { id: 'category', header: 'Category', accessorFn: (r) => na(r.category) },
+    { id: 'risk', header: 'Risk', accessorFn: (r) => na(r.risk), cell: ({ row }) => riskBadge(row.original.risk) },
+  ], [])
 
-  function flowCellColor(value) {
-    if (!value || maxFlowValue === 0) return ''
-    const intensity = value / maxFlowValue
-    if (intensity > 0.75) return 'bg-blue-700/70 text-white'
-    if (intensity > 0.5) return 'bg-blue-700/45 text-blue-100'
-    if (intensity > 0.25) return 'bg-blue-700/25 text-blue-200'
-    return 'bg-blue-700/10 text-blue-300'
-  }
+  const pendingColumns = useMemo(() => [
+    { id: 'serial', header: 'Serial', cell: ({ row }) => <span className="font-mono text-blue-400 text-xs">{row.original.serial}</span> },
+    { id: 'brand', header: 'Brand', cell: ({ row }) => na(row.original.brand) },
+    { id: 'size', header: 'Size', cell: ({ row }) => na(row.original.size) },
+    { id: 'from', header: 'Removed From', cell: ({ row }) => na(row.original.removedFrom) },
+    { id: 'site', header: 'Site', cell: ({ row }) => na(row.original.site) },
+    { id: 'date', header: 'Removal Date', cell: ({ row }) => <span className="whitespace-nowrap">{fmtDate(row.original.removalDate)}</span> },
+    {
+      id: 'category', header: 'Category',
+      cell: ({ row }) => (
+        <span className="px-2 py-0.5 bg-[var(--input-bg)] text-[var(--text-secondary)] border border-[var(--input-border)] rounded-full text-xs">
+          {na(row.original.category)}
+        </span>
+      ),
+    },
+    {
+      id: 'days', header: 'Days Pending', meta: { align: 'right' },
+      cell: ({ row }) => {
+        const d = row.original.daysPending
+        const band = pendingBand(d)
+        return (
+          <span className={`flex items-center justify-end gap-1 ${PENDING_CLASS[band]}`}>
+            {band === 'critical' && <AlertTriangle size={12} />}
+            {band === 'warn' && <AlertCircle size={12} />}
+            {d == null ? 'N/A' : `${d}d`}
+          </span>
+        )
+      },
+    },
+    {
+      id: 'actions', header: 'Actions', meta: { export: false, align: 'center' },
+      cell: ({ row }) => {
+        const p = row.original
+        const rowLocked = wfLocked && p.serial === replacementRecord?.serial
+        return (
+          <div className="flex items-center justify-center gap-2">
+            {rowLocked && (
+              <span className="flex items-center gap-1 text-[var(--accent)]" title="Locked, in approval">
+                <Lock size={12} />
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => markReturned(p.serial)}
+              disabled={rowLocked}
+              className="flex items-center gap-1 px-2.5 py-1.5 bg-green-900/50 hover:bg-green-800/60 border border-green-700/50 text-green-300 rounded-lg text-xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-green-900/50"
+              title={rowLocked ? 'Locked, in approval' : 'Mark as Returned'}
+            >
+              <CheckSquare size={12} /> Returned
+            </button>
+            <button
+              type="button"
+              onClick={() => markWrittenOff(p.serial)}
+              disabled={rowLocked}
+              className="flex items-center gap-1 px-2.5 py-1.5 bg-red-900/50 hover:bg-red-800/60 border border-red-700/50 text-red-300 rounded-lg text-xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-red-900/50"
+              title={rowLocked ? 'Locked, in approval' : 'Write Off'}
+            >
+              <XCircle size={12} /> Write Off
+            </button>
+          </div>
+        )
+      },
+    },
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [wfLocked, replacementRecord, returnedSerials, writtenOffSerials])
+
+  const flowColumns = useMemo(() => [
+    {
+      id: 'from', header: 'From (row) / To (column)',
+      cell: ({ row }) => <span className={`font-medium ${row.original.isTotal ? 'text-[var(--text-muted)]' : 'text-[var(--text-secondary)]'}`}>{row.original.site}</span>,
+    },
+    ...flow.sites.map((to) => ({
+      id: `to_${to}`, header: to, meta: { align: 'center' },
+      cell: ({ row }) => {
+        const r = row.original
+        if (r.isTotal) return <span className="text-purple-400 font-semibold">{flow.totalIn[to] || 'N/A'}</span>
+        if (r.site === to) return <span className="text-[var(--text-dim)]">N/A</span>
+        const v = flow.matrix[r.site]?.[to] || 0
+        const band = flowIntensity(v, flow.max)
+        return v > 0
+          ? <span className={`inline-block px-2 py-0.5 rounded font-medium ${FLOW_CELL[band]}`}>{v}</span>
+          : <span className="text-[var(--text-dim)]">0</span>
+      },
+    })),
+    {
+      id: 'totalOut', header: 'Total Out', meta: { align: 'center' },
+      cell: ({ row }) => (row.original.isTotal ? '' : <span className="text-blue-400 font-semibold">{flow.totalOut[row.original.site] || 0}</span>),
+    },
+  ], [flow])
+
+  const flowRows = useMemo(() => [
+    ...flow.sites.map((s) => ({ site: s, key: s })),
+    ...(flow.sites.length ? [{ site: 'Total In', key: '__total', isTotal: true }] : []),
+  ], [flow])
+
+  const netColumns = useMemo(() => [
+    { id: 'site', header: 'Site', accessorKey: 'site', cell: ({ row }) => <span className="font-medium text-[var(--text-secondary)]">{row.original.site}</span> },
+    { id: 'out', header: 'Transfers Out', accessorKey: 'out', meta: { align: 'right' }, cell: ({ row }) => <span className="text-orange-400">{row.original.out}</span> },
+    { id: 'in', header: 'Transfers In', accessorKey: 'in', meta: { align: 'right' }, cell: ({ row }) => <span className="text-green-400">{row.original.in}</span> },
+    {
+      id: 'net', header: 'Net Flow', accessorKey: 'net', meta: { align: 'right' },
+      cell: ({ row }) => {
+        const net = row.original.net
+        return <span className={`font-semibold ${net > 0 ? 'text-green-400' : net < 0 ? 'text-red-400' : 'text-[var(--text-muted)]'}`}>{net > 0 ? `+${net}` : net}</span>
+      },
+    },
+    {
+      id: 'role', header: 'Role', accessorKey: 'role',
+      cell: ({ row }) => {
+        const role = row.original.role
+        return <span className={role === 'Net Receiver' ? 'text-green-400' : role === 'Net Sender' ? 'text-orange-400' : 'text-[var(--text-muted)]'}>{role}</span>
+      },
+    },
+  ], [])
 
   if (loading) {
     return (
@@ -706,71 +685,48 @@ export default function TyreExchange() {
     )
   }
 
+  const exportButtons = (onExcel, onPdf, disabled) => (
+    <div className="flex gap-2">
+      <button type="button" onClick={onExcel} disabled={disabled} className={btnCls}><FileSpreadsheet size={15} /> Excel</button>
+      <button type="button" onClick={onPdf} disabled={disabled} className={btnCls}><FileText size={15} /> PDF</button>
+    </div>
+  )
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Tyre Exchange & Transfer Management"
         subtitle="Track tyre movements across fleet and locations"
         icon={ArrowLeftRight}
-        actions={
-          <div className="flex gap-2">
-            <button
-              onClick={exportTransfersPdf}
-              className="flex items-center gap-1.5 px-3 py-2 bg-[var(--input-bg)] hover:bg-gray-700 border border-[var(--input-border)] text-[var(--text-secondary)] rounded-lg text-sm transition-colors"
-            >
-              <FileText size={15} /> PDF
-            </button>
-            <button
-              onClick={exportTransfersExcel}
-              className="flex items-center gap-1.5 px-3 py-2 bg-[var(--input-bg)] hover:bg-gray-700 border border-[var(--input-border)] text-[var(--text-secondary)] rounded-lg text-sm transition-colors"
-            >
-              <FileSpreadsheet size={15} /> Excel
-            </button>
-          </div>
-        }
+        onRefresh={reload}
+        refreshing={loading}
+        updatedAt={loadedAt}
+        actions={exportButtons(exportTransfersExcel, exportTransfersPdf, filteredTransfers.length === 0)}
       />
 
+      {loadError && (
+        <div role="alert" className="flex items-start gap-3 bg-red-900/20 border border-red-800/50 rounded-xl p-4 text-sm text-red-300">
+          <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />
+          <span className="flex-1">{loadError}</span>
+          <button type="button" onClick={reload} className={btnCls}><RefreshCw size={14} /> Retry</button>
+        </div>
+      )}
+
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         {[
-          {
-            label: 'Inter-Vehicle Transfers',
-            value: kpis.interVehicle.toLocaleString(),
-            icon: ArrowLeftRight,
-            color: 'text-blue-400',
-            bg: 'bg-blue-900/20 border-blue-800/50',
-            sub: 'Serials on 2+ vehicles',
-          },
-          {
-            label: 'Inter-Site Transfers',
-            value: kpis.interSite.toLocaleString(),
-            icon: MapPin,
-            color: 'text-purple-400',
-            bg: 'bg-purple-900/20 border-purple-800/50',
-            sub: 'Serials on 2+ sites',
-          },
-          {
-            label: 'Retread Send-Outs',
-            value: kpis.retreadCount.toLocaleString(),
-            icon: RefreshCw,
-            color: 'text-green-400',
-            bg: 'bg-green-900/20 border-green-800/50',
-            sub: 'Category: Retread',
-          },
-          {
-            label: 'Avg KM at Transfer',
-            value: kpis.avgKm > 0 ? kpis.avgKm.toLocaleString() : '-',
-            icon: TrendingUp,
-            color: 'text-yellow-400',
-            bg: 'bg-yellow-900/20 border-yellow-800/50',
-            sub: 'Mean km at removal',
-          },
+          { label: 'Transfers Detected', value: fmtNum(kpis.transfers), icon: ArrowLeftRight, color: 'text-sky-400', bg: 'bg-sky-900/20 border-sky-800/50', sub: `Across ${fmtNum(kpis.serials)} serials` },
+          { label: 'Inter-Vehicle Transfers', value: fmtNum(kpis.interVehicle), icon: ArrowLeftRight, color: 'text-blue-400', bg: 'bg-blue-900/20 border-blue-800/50', sub: 'Serials on 2+ vehicles' },
+          { label: 'Inter-Site Transfers', value: fmtNum(kpis.interSite), icon: MapPin, color: 'text-purple-400', bg: 'bg-purple-900/20 border-purple-800/50', sub: 'Serials on 2+ sites' },
+          { label: 'Retread Send-Outs', value: fmtNum(kpis.retreadCount), icon: RefreshCw, color: 'text-green-400', bg: 'bg-green-900/20 border-green-800/50', sub: `${fmtNum(retreadStats.overdue)} overdue` },
+          { label: 'Pending Returns', value: fmtNum(kpis.pendingReturns), icon: Clock, color: 'text-orange-400', bg: 'bg-orange-900/20 border-orange-800/50', sub: `${fmtNum(kpis.pendingOverdue)} over 30 days` },
+          { label: 'Avg KM at Transfer', value: fmtNum(kpis.avgKm), icon: TrendingUp, color: 'text-yellow-400', bg: 'bg-yellow-900/20 border-yellow-800/50', sub: kpis.avgKm == null ? 'No removal km recorded' : `From ${fmtNum(kpis.kmSample)} transfers` },
         ].map((kpi, i) => (
           <motion.div
             key={kpi.label}
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.07 }}
+            transition={{ delay: i * 0.05 }}
             className={`rounded-xl border p-4 ${kpi.bg}`}
           >
             <div className="flex items-start justify-between">
@@ -792,6 +748,7 @@ export default function TyreExchange() {
           return (
             <button
               key={tab.id}
+              type="button"
               onClick={() => setActiveTab(tab.id)}
               className={`flex items-center gap-1.5 px-4 py-2.5 rounded-t-lg text-sm font-medium whitespace-nowrap transition-colors ${
                 activeTab === tab.id
@@ -801,9 +758,9 @@ export default function TyreExchange() {
             >
               <Icon size={14} />
               {tab.label}
-              {tab.id === 'pending' && pendingReturns.length > 0 && (
-                <span className="ml-1 bg-red-600 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
-                  {pendingReturns.filter(p => p.daysPending > 30).length}
+              {tab.id === 'pending' && pendingStats.over30 > 0 && (
+                <span className="ml-1 bg-red-600 text-white text-xs rounded-full min-w-4 h-4 px-1 flex items-center justify-center">
+                  {pendingStats.over30}
                 </span>
               )}
             </button>
@@ -825,23 +782,36 @@ export default function TyreExchange() {
             <div className="space-y-4">
               {/* Filter bar */}
               <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <button
-                    onClick={() => setShowFilters(!showFilters)}
-                    className="flex items-center gap-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                  >
-                    <Filter size={15} />
-                    Filters
-                    <ChevronDown size={14} className={`transition-transform ${showFilters ? 'rotate-180' : ''}`} />
-                    {hasActiveFilter && (
-                      <span className="bg-blue-600 text-white text-xs rounded-full px-2 py-0.5 ml-1">Active</span>
-                    )}
-                  </button>
-                  {hasActiveFilter && (
-                    <button onClick={clearFilters} className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300">
-                      <X size={12} /> Clear
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                  <div className="relative flex-1 min-w-[220px] max-w-md">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+                    <input
+                      value={filters.search}
+                      onChange={e => setFilter('search', e.target.value)}
+                      placeholder="Search serial, asset, site or brand..."
+                      aria-label="Search transfers"
+                      className={`${selectCls} pl-9`}
+                    />
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowFilters(!showFilters)}
+                      className="flex items-center gap-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                    >
+                      <Filter size={15} />
+                      Filters
+                      <ChevronDown size={14} className={`transition-transform ${showFilters ? 'rotate-180' : ''}`} />
+                      {hasActiveFilter && (
+                        <span className="bg-blue-600 text-white text-xs rounded-full px-2 py-0.5 ml-1">Active</span>
+                      )}
                     </button>
-                  )}
+                    {hasActiveFilter && (
+                      <button type="button" onClick={clearFilters} className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300">
+                        <X size={12} /> Clear
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <AnimatePresence>
                   {showFilters && (
@@ -852,81 +822,49 @@ export default function TyreExchange() {
                       className="overflow-hidden"
                     >
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-2">
-                        <div>
-                          <label className="text-xs text-[var(--text-muted)] mb-1 block">From Site</label>
-                          <select
-                            value={filterFromSite}
-                            onChange={e => { setFilterFromSite(e.target.value); setTxPage(1) }}
-                            className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] rounded-lg px-3 py-2 text-sm"
-                          >
+                        <label className="text-xs text-[var(--text-muted)] space-y-1">
+                          <span className="block">From Site</span>
+                          <select value={filters.fromSite} onChange={e => setFilter('fromSite', e.target.value)} className={selectCls}>
                             <option value="">All Sites</option>
-                            {uniqueSites.map(s => <option key={s} value={s}>{s}</option>)}
+                            {options.sites.map(s => <option key={s} value={s}>{s}</option>)}
                           </select>
-                        </div>
-                        <div>
-                          <label className="text-xs text-[var(--text-muted)] mb-1 block">To Site</label>
-                          <select
-                            value={filterToSite}
-                            onChange={e => { setFilterToSite(e.target.value); setTxPage(1) }}
-                            className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] rounded-lg px-3 py-2 text-sm"
-                          >
+                        </label>
+                        <label className="text-xs text-[var(--text-muted)] space-y-1">
+                          <span className="block">To Site</span>
+                          <select value={filters.toSite} onChange={e => setFilter('toSite', e.target.value)} className={selectCls}>
                             <option value="">All Sites</option>
-                            {uniqueSites.map(s => <option key={s} value={s}>{s}</option>)}
+                            {options.sites.map(s => <option key={s} value={s}>{s}</option>)}
                           </select>
-                        </div>
-                        <div>
-                          <label className="text-xs text-[var(--text-muted)] mb-1 block">Brand</label>
-                          <select
-                            value={filterBrand}
-                            onChange={e => { setFilterBrand(e.target.value); setTxPage(1) }}
-                            className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] rounded-lg px-3 py-2 text-sm"
-                          >
+                        </label>
+                        <label className="text-xs text-[var(--text-muted)] space-y-1">
+                          <span className="block">Brand</span>
+                          <select value={filters.brand} onChange={e => setFilter('brand', e.target.value)} className={selectCls}>
                             <option value="">All Brands</option>
-                            {uniqueBrands.map(b => <option key={b} value={b}>{b}</option>)}
+                            {options.brands.map(b => <option key={b} value={b}>{b}</option>)}
                           </select>
-                        </div>
-                        <div>
-                          <label className="text-xs text-[var(--text-muted)] mb-1 block">Transfer Type</label>
-                          <select
-                            value={filterTransferType}
-                            onChange={e => { setFilterTransferType(e.target.value); setTxPage(1) }}
-                            className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] rounded-lg px-3 py-2 text-sm"
-                          >
+                        </label>
+                        <label className="text-xs text-[var(--text-muted)] space-y-1">
+                          <span className="block">Transfer Type</span>
+                          <select value={filters.transferType} onChange={e => setFilter('transferType', e.target.value)} className={selectCls}>
                             <option value="">All Types</option>
-                            {['Inter-Vehicle', 'Inter-Site', 'Retread', 'Repair'].map(t => (
-                              <option key={t} value={t}>{t}</option>
-                            ))}
+                            {TRANSFER_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                           </select>
-                        </div>
-                        <div>
-                          <label className="text-xs text-[var(--text-muted)] mb-1 block">Category</label>
-                          <select
-                            value={filterCategory}
-                            onChange={e => { setFilterCategory(e.target.value); setTxPage(1) }}
-                            className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] rounded-lg px-3 py-2 text-sm"
-                          >
+                        </label>
+                        <label className="text-xs text-[var(--text-muted)] space-y-1">
+                          <span className="block">Category</span>
+                          <select value={filters.category} onChange={e => setFilter('category', e.target.value)} className={selectCls}>
                             <option value="">All Categories</option>
-                            {uniqueCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                            {options.categories.map(c => <option key={c} value={c}>{c}</option>)}
                           </select>
-                        </div>
-                        <div>
-                          <label className="text-xs text-[var(--text-muted)] mb-1 block">Date From</label>
-                          <input
-                            type="date"
-                            value={filterDateFrom}
-                            onChange={e => { setFilterDateFrom(e.target.value); setTxPage(1) }}
-                            className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] rounded-lg px-3 py-2 text-sm"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs text-[var(--text-muted)] mb-1 block">Date To</label>
-                          <input
-                            type="date"
-                            value={filterDateTo}
-                            onChange={e => { setFilterDateTo(e.target.value); setTxPage(1) }}
-                            className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] rounded-lg px-3 py-2 text-sm"
-                          />
-                        </div>
+                        </label>
+                        <label className="text-xs text-[var(--text-muted)] space-y-1">
+                          <span className="block">Date From</span>
+                          <input type="date" value={filters.dateFrom} onChange={e => setFilter('dateFrom', e.target.value)} className={selectCls} />
+                        </label>
+                        <label className="text-xs text-[var(--text-muted)] space-y-1">
+                          <span className="block">Date To</span>
+                          <input type="date" value={filters.dateTo} onChange={e => setFilter('dateTo', e.target.value)} className={selectCls} />
+                        </label>
                       </div>
                     </motion.div>
                   )}
@@ -937,113 +875,32 @@ export default function TyreExchange() {
               <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--input-border)]">
                   <span className="text-sm text-[var(--text-secondary)] font-medium">
-                    {filteredTransfers.length.toLocaleString()} transfer{filteredTransfers.length !== 1 ? 's' : ''} detected
+                    {filteredTransfers.length.toLocaleString()} of {transfers.length.toLocaleString()} transfer{transfers.length !== 1 ? 's' : ''} shown
                   </span>
                   <span className="text-xs text-[var(--text-muted)]">
                     Page {txPage} of {txTotalPages}
                   </span>
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="bg-gray-800/50 text-[var(--text-muted)] text-xs uppercase">
-                        <th className="text-left px-4 py-3">Serial</th>
-                        <th className="text-left px-4 py-3">Brand</th>
-                        <th className="text-left px-4 py-3">Size</th>
-                        <th className="text-left px-4 py-3">From Asset</th>
-                        <th className="text-left px-4 py-3">To Asset</th>
-                        <th className="text-left px-4 py-3">From Site</th>
-                        <th className="text-left px-4 py-3">To Site</th>
-                        <th className="text-left px-4 py-3">Transfer Date</th>
-                        <th className="text-right px-4 py-3">KM</th>
-                        <th className="text-left px-4 py-3">Type</th>
-                        <th className="text-right px-4 py-3">Tread</th>
-                        <th className="text-center px-4 py-3">Cert</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {txPagedData.length === 0 ? (
-                        <tr>
-                          <td colSpan={12} className="text-center py-12 text-[var(--text-muted)]">
-                            {transfers.length === 0
-                              ? 'No inter-vehicle or inter-site transfers detected in the current data set.'
-                              : 'No transfers match the active filters.'}
-                          </td>
-                        </tr>
-                      ) : (
-                        txPagedData.map(t => (
-                          <tr key={t.id} className="border-t border-[var(--input-border)] hover:bg-gray-800/30 transition-colors">
-                            <td className="px-4 py-3 font-mono text-blue-400 text-xs">{t.serial}</td>
-                            <td className="px-4 py-3 text-[var(--text-secondary)]">{t.brand}</td>
-                            <td className="px-4 py-3 text-[var(--text-muted)]">{t.size}</td>
-                            <td className="px-4 py-3 text-[var(--text-secondary)]">{t.fromAsset}</td>
-                            <td className="px-4 py-3 text-[var(--text-secondary)]">{t.toAsset}</td>
-                            <td className="px-4 py-3 text-[var(--text-muted)]">{t.fromSite}</td>
-                            <td className="px-4 py-3 text-[var(--text-muted)]">{t.toSite}</td>
-                            <td className="px-4 py-3 text-[var(--text-muted)] whitespace-nowrap">{fmtDate(t.transferDate)}</td>
-                            <td className="px-4 py-3 text-right text-[var(--text-secondary)]">
-                              {t.kmAtTransfer != null ? t.kmAtTransfer.toLocaleString() : '-'}
-                            </td>
-                            <td className="px-4 py-3">{transferTypeBadge(t.transferType)}</td>
-                            <td className="px-4 py-3 text-right text-[var(--text-secondary)]">
-                              {t.treadAtTransfer != null ? `${t.treadAtTransfer}mm` : '-'}
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              <button
-                                onClick={() => exportTransferCertificate(t)}
-                                className="text-[var(--text-muted)] hover:text-blue-400 transition-colors"
-                                title="Download Transfer Certificate"
-                              >
-                                <FileText size={14} />
-                              </button>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
+                <div className="p-3">
+                  <EnterpriseTable
+                    columns={transferColumns}
+                    data={txPagedData.map(t => ({ ...t }))}
+                    getRowId={(t) => t.id}
+                    enableGlobalFilter={false}
+                    enableColumnFilters={false}
+                    enableSorting={false}
+                    enableExport={false}
+                    manualPagination
+                    pageIndex={txPage - 1}
+                    pageCount={txTotalPages}
+                    pageSize={PAGE_SIZE}
+                    totalRows={filteredTransfers.length}
+                    onPageChange={(p) => setTxPage(p + 1)}
+                    emptyMessage={transfers.length === 0
+                      ? 'No inter-vehicle or inter-site transfers detected in the current data set.'
+                      : 'No transfers match the active filters.'}
+                  />
                 </div>
-                {/* Pagination */}
-                {txTotalPages > 1 && (
-                  <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--input-border)]">
-                    <button
-                      onClick={() => setTxPage(p => Math.max(1, p - 1))}
-                      disabled={txPage === 1}
-                      className="flex items-center gap-1 px-3 py-1.5 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      <ChevronLeft size={15} /> Previous
-                    </button>
-                    <div className="flex gap-1">
-                      {Array.from({ length: Math.min(7, txTotalPages) }, (_, i) => {
-                        let page
-                        if (txTotalPages <= 7) page = i + 1
-                        else if (txPage <= 4) page = i + 1
-                        else if (txPage >= txTotalPages - 3) page = txTotalPages - 6 + i
-                        else page = txPage - 3 + i
-                        return (
-                          <button
-                            key={page}
-                            onClick={() => setTxPage(page)}
-                            className={`w-8 h-8 rounded text-sm ${
-                              page === txPage
-                                ? 'bg-blue-600 text-white'
-                                : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg)]'
-                            }`}
-                          >
-                            {page}
-                          </button>
-                        )
-                      })}
-                    </div>
-                    <button
-                      onClick={() => setTxPage(p => Math.min(txTotalPages, p + 1))}
-                      disabled={txPage === txTotalPages}
-                      className="flex items-center gap-1 px-3 py-1.5 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      Next <ChevronRight size={15} />
-                    </button>
-                  </div>
-                )}
               </div>
             </div>
           )}
@@ -1051,94 +908,34 @@ export default function TyreExchange() {
           {/* ── Retread Tracking ── */}
           {activeTab === 'retreads' && (
             <div className="space-y-4">
-              {/* Summary row */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {[
-                  { label: 'Total Sent', value: retreads.length, color: 'text-blue-400' },
-                  { label: 'Returned', value: retreads.filter(r => r.returnStatus === 'Returned').length, color: 'text-green-400' },
-                  { label: 'Pending Return', value: retreads.filter(r => r.returnStatus === 'Pending Return').length, color: 'text-yellow-400' },
-                  { label: 'Overdue (>60 days)', value: retreads.filter(r => r.overdue).length, color: 'text-red-400' },
-                ].map(s => (
-                  <div key={s.label} className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
-                    <p className="text-xs text-[var(--text-muted)] mb-1">{s.label}</p>
-                    <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
-                  </div>
-                ))}
+                <Stat label="Total Sent" value={fmtNum(retreadStats.total)} tone="text-blue-400" />
+                <Stat label="Returned" value={fmtNum(retreadStats.returned)} tone="text-green-400" />
+                <Stat label="Pending Return" value={fmtNum(retreadStats.pending)} tone="text-yellow-400" />
+                <Stat label={`Overdue (over ${RETREAD_OVERDUE_DAYS} days)`} value={fmtNum(retreadStats.overdue)} tone="text-red-400" />
               </div>
 
-              {retreads.filter(r => r.overdue).length > 0 && (
+              {retreadStats.overdue > 0 && (
                 <div className="flex items-start gap-3 bg-red-900/20 border border-red-800/50 rounded-xl p-4 text-sm text-red-300">
                   <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />
                   <span>
-                    {retreads.filter(r => r.overdue).length} tyre{retreads.filter(r => r.overdue).length !== 1 ? 's' : ''} sent for retreading &gt;60 days ago with no return record detected.
+                    {retreadStats.overdue} tyre{retreadStats.overdue !== 1 ? 's' : ''} sent for retreading over {RETREAD_OVERDUE_DAYS} days ago with no return record detected.
                     Investigate with workshop immediately.
                   </span>
                 </div>
               )}
 
               <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
-                <div className="px-4 py-3 border-b border-[var(--input-border)] text-sm text-[var(--text-secondary)] font-medium">
-                  Retread Send-Out History ({retreads.length} records)
+                <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--input-border)]">
+                  <span className="text-sm text-[var(--text-secondary)] font-medium">Retread Send-Out History ({retreads.length} records)</span>
+                  {exportButtons(() => exportRegister('retreads', 'excel'), () => exportRegister('retreads', 'pdf'), retreads.length === 0)}
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="bg-gray-800/50 text-[var(--text-muted)] text-xs uppercase">
-                        <th className="text-left px-4 py-3">Serial</th>
-                        <th className="text-left px-4 py-3">Brand</th>
-                        <th className="text-left px-4 py-3">Size</th>
-                        <th className="text-left px-4 py-3">Sent From Asset</th>
-                        <th className="text-left px-4 py-3">Site</th>
-                        <th className="text-left px-4 py-3">Send Date</th>
-                        <th className="text-right px-4 py-3">KM at Removal</th>
-                        <th className="text-right px-4 py-3">Tread Sent</th>
-                        <th className="text-left px-4 py-3">Status</th>
-                        <th className="text-left px-4 py-3">Return Date</th>
-                        <th className="text-left px-4 py-3">Return Asset</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {retreads.length === 0 ? (
-                        <tr>
-                          <td colSpan={11} className="text-center py-12 text-[var(--text-muted)]">
-                            No retread records found. Records with category containing &quot;Retread&quot; will appear here.
-                          </td>
-                        </tr>
-                      ) : (
-                        retreadPager.pageRows.map((r, idx) => (
-                          <tr key={`${r.serial}-${idx}`} className={`border-t border-[var(--input-border)] hover:bg-gray-800/30 transition-colors ${r.overdue ? 'bg-red-900/10' : ''}`}>
-                            <td className="px-4 py-3 font-mono text-blue-400 text-xs">{r.serial}</td>
-                            <td className="px-4 py-3 text-[var(--text-secondary)]">{r.brand}</td>
-                            <td className="px-4 py-3 text-[var(--text-muted)]">{r.size}</td>
-                            <td className="px-4 py-3 text-[var(--text-secondary)]">{r.sentFromAsset}</td>
-                            <td className="px-4 py-3 text-[var(--text-muted)]">{r.sentFromSite}</td>
-                            <td className="px-4 py-3 text-[var(--text-muted)] whitespace-nowrap">{fmtDate(r.sendDate)}</td>
-                            <td className="px-4 py-3 text-right text-[var(--text-secondary)]">
-                              {r.kmAtRemoval != null ? r.kmAtRemoval.toLocaleString() : '-'}
-                            </td>
-                            <td className="px-4 py-3 text-right text-[var(--text-secondary)]">
-                              {r.treadAtSend != null ? `${r.treadAtSend}mm` : '-'}
-                            </td>
-                            <td className="px-4 py-3">
-                              <span className={`px-2 py-0.5 rounded-full text-xs border flex items-center gap-1 w-fit ${
-                                r.returnStatus === 'Returned'
-                                  ? 'bg-green-900/50 text-green-300 border-green-700/50'
-                                  : r.overdue
-                                  ? 'bg-red-900/50 text-red-300 border-red-700/50'
-                                  : 'bg-yellow-900/50 text-yellow-300 border-yellow-700/50'
-                              }`}>
-                                {r.overdue && <AlertTriangle size={10} />}
-                                {r.returnStatus}
-                                {r.overdue && ` (${r.daysSent}d)`}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-[var(--text-muted)] whitespace-nowrap">{fmtDate(r.returnDate)}</td>
-                            <td className="px-4 py-3 text-[var(--text-secondary)]">{r.returnAsset || '-'}</td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
+                <div className="p-3">
+                  <PagedTable
+                    columns={retreadColumns}
+                    rows={retreadPager.pageRows.map((r, idx) => ({ ...r, _key: `${r.serial}-${idx}` }))}
+                    emptyMessage='No retread records found. Records with category containing "Retread" will appear here.'
+                  />
                   <TablePagination {...retreadPager} />
                 </div>
               </div>
@@ -1149,11 +946,12 @@ export default function TyreExchange() {
           {activeTab === 'custody' && (
             <div className="space-y-6">
               <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
-                <label className="text-sm text-[var(--text-secondary)] font-medium mb-2 block">
+                <label htmlFor="custody-serial" className="text-sm text-[var(--text-secondary)] font-medium mb-2 block">
                   Search Serial Number
                 </label>
                 <div className="flex gap-2 max-w-lg">
                   <input
+                    id="custody-serial"
                     type="text"
                     value={custodyInput}
                     onChange={e => setCustodyInput(e.target.value)}
@@ -1167,6 +965,7 @@ export default function TyreExchange() {
                     className="flex-1 bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500"
                   />
                   <button
+                    type="button"
                     onClick={() => {
                       setCustodySerial(custodyInput.trim())
                       setCustodySearched(true)
@@ -1177,6 +976,8 @@ export default function TyreExchange() {
                   </button>
                   {custodySerial && (
                     <button
+                      type="button"
+                      aria-label="Clear serial search"
                       onClick={() => { setCustodySerial(''); setCustodyInput(''); setCustodySearched(false) }}
                       className="px-3 py-2.5 bg-[var(--input-bg)] hover:bg-gray-700 border border-[var(--input-border)] text-[var(--text-muted)] rounded-lg text-sm transition-colors"
                     >
@@ -1196,49 +997,28 @@ export default function TyreExchange() {
                 </div>
               )}
 
-              {custodyChain.length > 0 && (
+              {custody && (
                 <div className="space-y-4">
                   {/* Summary bar */}
                   <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4 flex flex-wrap gap-6">
-                    <div>
-                      <p className="text-xs text-[var(--text-muted)]">Serial</p>
-                      <p className="text-sm font-mono text-blue-400 font-semibold">{custodySerial}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-[var(--text-muted)]">Brand</p>
-                      <p className="text-sm text-[var(--text-secondary)]">{custodyChain[0]?.brand || '-'}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-[var(--text-muted)]">Size</p>
-                      <p className="text-sm text-[var(--text-secondary)]">{custodyChain[0]?.size || '-'}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-[var(--text-muted)]">Records</p>
-                      <p className="text-sm text-[var(--text-secondary)]">{custodyChain.length}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-[var(--text-muted)]">Unique Vehicles</p>
-                      <p className="text-sm text-[var(--text-secondary)]">
-                        {new Set(custodyChain.map(r => r.asset_no).filter(Boolean)).size}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-[var(--text-muted)]">Unique Sites</p>
-                      <p className="text-sm text-[var(--text-secondary)]">
-                        {new Set(custodyChain.map(r => r.site).filter(Boolean)).size}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-[var(--text-muted)]">First Seen</p>
-                      <p className="text-sm text-[var(--text-secondary)]">{fmtDate(custodyChain[0]?.issue_date)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-[var(--text-muted)]">Last Record</p>
-                      <p className="text-sm text-[var(--text-secondary)]">{fmtDate(custodyChain[custodyChain.length - 1]?.issue_date)}</p>
-                    </div>
+                    {[
+                      ['Serial', <span key="s" className="font-mono text-blue-400 font-semibold">{custodySerial}</span>],
+                      ['Brand', na(custody.brand)],
+                      ['Size', na(custody.size)],
+                      ['Records', custody.records],
+                      ['Unique Vehicles', custody.uniqueVehicles],
+                      ['Unique Sites', custody.uniqueSites],
+                      ['First Seen', fmtDate(custody.firstSeen)],
+                      ['Last Record', fmtDate(custody.lastRecord)],
+                    ].map(([label, value]) => (
+                      <div key={label}>
+                        <p className="text-xs text-[var(--text-muted)]">{label}</p>
+                        <p className="text-sm text-[var(--text-secondary)]">{value}</p>
+                      </div>
+                    ))}
                   </div>
 
-                  {/* Tyre Replacement Approval — Approval & Workflow Engine.
+                  {/* Tyre Replacement Approval - Approval & Workflow Engine.
                       Smart rule: replacement_cost > 5000 SAR routes to Fleet Manager. */}
                   {replacementRecord && (
                     <EntityApprovalPanel
@@ -1260,46 +1040,40 @@ export default function TyreExchange() {
                   {wfLocked && (
                     <div className="flex items-center gap-1.5 text-xs text-[var(--accent)] bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg px-3 py-2">
                       <Lock size={12} />
-                      Locked, in approval. This record’s return / write-off actions are disabled until the workflow completes.
+                      Locked, in approval. This record&apos;s return and write-off actions are disabled until the workflow completes.
                     </div>
                   )}
 
                   {/* Horizontal timeline */}
                   <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-6 overflow-x-auto">
                     <div className="flex items-start gap-0 min-w-max">
-                      {custodyChain.map((r, idx) => {
-                        const isLast = idx === custodyChain.length - 1
-                        const cat = (r.category || '').toLowerCase()
+                      {custodyTable.map((r, idx) => {
+                        const isLast = idx === custodyTable.length - 1
+                        const c = (r.category || '').toLowerCase()
                         const dotColor =
-                          cat.includes('scrap') ? 'bg-red-500' :
-                          cat.includes('retread') ? 'bg-green-500' :
-                          cat.includes('repair') ? 'bg-yellow-500' :
+                          c.includes('scrap') ? 'bg-red-500' :
+                          c.includes('retread') ? 'bg-green-500' :
+                          c.includes('repair') ? 'bg-yellow-500' :
                           idx === 0 ? 'bg-blue-500' : 'bg-gray-500'
                         return (
-                          <div key={r.id || idx} className="flex items-start">
+                          <div key={r.key} className="flex items-start">
                             <div className="flex flex-col items-center">
                               <div className={`w-4 h-4 rounded-full ${dotColor} ring-2 ring-[var(--surface-1)] z-10 mt-6`} />
                               {!isLast && <div className="h-0.5 w-24 bg-[var(--input-border)] mt-1.5" style={{ transform: 'translateX(50%)' }} />}
                             </div>
                             <div className="ml-[-8px] mt-10 mr-8 w-40">
                               <div className="bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg p-3 text-xs space-y-1">
-                                <p className="text-[var(--text-muted)] font-medium">{fmtDate(r.issue_date)}</p>
-                                <p className="text-blue-400 font-semibold">{r.asset_no || 'No Asset'}</p>
-                                <p className="text-[var(--text-muted)]">{r.site || '-'}</p>
-                                <p className="text-[var(--text-muted)]">Pos: {r.position || '-'}</p>
-                                {r.km_at_fitment != null && (
-                                  <p className="text-[var(--text-muted)]">Start: {r.km_at_fitment.toLocaleString()} km</p>
-                                )}
-                                {r.km_at_removal != null && (
-                                  <p className="text-[var(--text-muted)]">End: {r.km_at_removal.toLocaleString()} km</p>
-                                )}
-                                {r.tread_depth != null && (
-                                  <p className="text-[var(--text-muted)]">Tread: {r.tread_depth}mm</p>
-                                )}
+                                <p className="text-[var(--text-muted)] font-medium">{fmtDate(r.date)}</p>
+                                <p className="text-blue-400 font-semibold">{r.asset || 'No Asset'}</p>
+                                <p className="text-[var(--text-muted)]">{na(r.site)}</p>
+                                <p className="text-[var(--text-muted)]">Pos: {na(r.position)}</p>
+                                {r.kmStart != null && <p className="text-[var(--text-muted)]">Start: {r.kmStart.toLocaleString()} km</p>}
+                                {r.kmEnd != null && <p className="text-[var(--text-muted)]">End: {r.kmEnd.toLocaleString()} km</p>}
+                                {r.tread != null && <p className="text-[var(--text-muted)]">Tread: {r.tread}mm</p>}
                                 {r.category && (
                                   <span className={`inline-block px-1.5 py-0.5 rounded text-xs ${
-                                    cat.includes('scrap') ? 'bg-red-900/50 text-red-300' :
-                                    cat.includes('retread') ? 'bg-green-900/50 text-green-300' :
+                                    c.includes('scrap') ? 'bg-red-900/50 text-red-300' :
+                                    c.includes('retread') ? 'bg-green-900/50 text-green-300' :
                                     'bg-gray-700 text-[var(--text-secondary)]'
                                   }`}>
                                     {r.category}
@@ -1311,8 +1085,7 @@ export default function TyreExchange() {
                         )
                       })}
                     </div>
-                    {/* Legend */}
-                    <div className="flex gap-4 mt-6 text-xs text-[var(--text-muted)]">
+                    <div className="flex flex-wrap gap-4 mt-6 text-xs text-[var(--text-muted)]">
                       <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-blue-500 inline-block" /> First fitment</span>
                       <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-gray-500 inline-block" /> Transfer</span>
                       <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-green-500 inline-block" /> Retread</span>
@@ -1326,53 +1099,16 @@ export default function TyreExchange() {
                     <div className="px-4 py-3 border-b border-[var(--input-border)] text-sm text-[var(--text-secondary)] font-medium">
                       Full Record History
                     </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="bg-gray-800/50 text-[var(--text-muted)] text-xs uppercase">
-                            <th className="text-left px-4 py-3">#</th>
-                            <th className="text-left px-4 py-3">Fitment Date</th>
-                            <th className="text-left px-4 py-3">Asset</th>
-                            <th className="text-left px-4 py-3">Site</th>
-                            <th className="text-left px-4 py-3">Position</th>
-                            <th className="text-right px-4 py-3">KM Start</th>
-                            <th className="text-right px-4 py-3">KM End</th>
-                            <th className="text-right px-4 py-3">KM Run</th>
-                            <th className="text-right px-4 py-3">Tread</th>
-                            <th className="text-left px-4 py-3">Category</th>
-                            <th className="text-left px-4 py-3">Risk</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {custodyChain.map((r, idx) => {
-                            const kmRun = r.km_at_fitment != null && r.km_at_removal != null
-                              ? r.km_at_removal - r.km_at_fitment : null
-                            return (
-                              <tr key={r.id || idx} className="border-t border-[var(--input-border)] hover:bg-gray-800/30">
-                                <td className="px-4 py-3 text-[var(--text-muted)]">{idx + 1}</td>
-                                <td className="px-4 py-3 text-[var(--text-muted)] whitespace-nowrap">{fmtDate(r.issue_date)}</td>
-                                <td className="px-4 py-3 text-blue-400">{r.asset_no || '-'}</td>
-                                <td className="px-4 py-3 text-[var(--text-muted)]">{r.site || '-'}</td>
-                                <td className="px-4 py-3 text-[var(--text-muted)]">{r.position || '-'}</td>
-                                <td className="px-4 py-3 text-right text-[var(--text-muted)]">
-                                  {r.km_at_fitment != null ? r.km_at_fitment.toLocaleString() : '-'}
-                                </td>
-                                <td className="px-4 py-3 text-right text-[var(--text-muted)]">
-                                  {r.km_at_removal != null ? r.km_at_removal.toLocaleString() : '-'}
-                                </td>
-                                <td className="px-4 py-3 text-right text-[var(--text-secondary)]">
-                                  {kmRun != null ? kmRun.toLocaleString() : '-'}
-                                </td>
-                                <td className="px-4 py-3 text-right text-[var(--text-secondary)]">
-                                  {r.tread_depth != null ? `${r.tread_depth}mm` : '-'}
-                                </td>
-                                <td className="px-4 py-3 text-[var(--text-muted)]">{r.category || '-'}</td>
-                                <td className="px-4 py-3">{riskBadge(r.risk_level)}</td>
-                              </tr>
-                            )
-                          })}
-                        </tbody>
-                      </table>
+                    <div className="p-3">
+                      <EnterpriseTable
+                        columns={custodyColumns}
+                        data={custodyTable}
+                        getRowId={(r) => String(r.key)}
+                        enableColumnFilters={false}
+                        enableExport={false}
+                        searchPlaceholder="Search this history..."
+                        emptyMessage="No records for this serial."
+                      />
                     </div>
                   </div>
                 </div>
@@ -1391,133 +1127,61 @@ export default function TyreExchange() {
           {/* ── Pending Returns ── */}
           {activeTab === 'pending' && (
             <div className="space-y-4">
-              {pendingReturns.filter(p => p.daysPending > 60).length > 0 && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <Stat label="Pending Returns" value={fmtNum(pendingStats.total)} tone="text-blue-400" />
+                <Stat label="Over 30 days" value={fmtNum(pendingStats.over30)} tone="text-yellow-400" />
+                <Stat label={`Over ${PENDING_CRITICAL_DAYS} days`} value={fmtNum(pendingStats.over60)} tone="text-red-400" />
+                <Stat label="No removal date" value={fmtNum(pendingStats.undated)} tone="text-[var(--text-muted)]" />
+              </div>
+
+              {pendingStats.over60 > 0 && (
                 <div className="flex items-start gap-3 bg-red-900/20 border border-red-800/50 rounded-xl p-4 text-sm text-red-300">
                   <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
                   <span>
-                    {pendingReturns.filter(p => p.daysPending > 60).length} tyre{pendingReturns.filter(p => p.daysPending > 60).length !== 1 ? 's' : ''} pending return for over 60 days.
+                    {pendingStats.over60} tyre{pendingStats.over60 !== 1 ? 's' : ''} pending return for over {PENDING_CRITICAL_DAYS} days.
                     These should be investigated or written off.
                   </span>
                 </div>
               )}
 
               {markError && (
-                <div className="bg-red-900/30 border border-red-700 rounded-xl p-3 text-red-300 text-sm">{markError}</div>
+                <div role="alert" className="bg-red-900/30 border border-red-700 rounded-xl p-3 text-red-300 text-sm">{markError}</div>
               )}
 
               <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
-                <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--input-border)]">
-                  <span className="text-sm text-[var(--text-secondary)] font-medium">
-                    Pending Returns ({pendingReturns.length})
-                  </span>
-                  <span className="text-xs text-[var(--text-muted)]">
-                    Removed (Retread/Repair) with no subsequent fitment
-                  </span>
+                <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-[var(--input-border)]">
+                  <div>
+                    <span className="text-sm text-[var(--text-secondary)] font-medium">Pending Returns ({pendingReturns.length})</span>
+                    <p className="text-xs text-[var(--text-muted)]">Removed (Retread, Repair or Scrap) with no subsequent fitment</p>
+                  </div>
+                  {exportButtons(() => exportRegister('pending', 'excel'), () => exportRegister('pending', 'pdf'), pendingReturns.length === 0)}
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="bg-gray-800/50 text-[var(--text-muted)] text-xs uppercase">
-                        <th className="text-left px-4 py-3">Serial</th>
-                        <th className="text-left px-4 py-3">Brand</th>
-                        <th className="text-left px-4 py-3">Size</th>
-                        <th className="text-left px-4 py-3">Removed From</th>
-                        <th className="text-left px-4 py-3">Site</th>
-                        <th className="text-left px-4 py-3">Removal Date</th>
-                        <th className="text-left px-4 py-3">Category</th>
-                        <th className="text-right px-4 py-3">Days Pending</th>
-                        <th className="text-center px-4 py-3">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {pendingReturns.length === 0 ? (
-                        <tr>
-                          <td colSpan={9} className="text-center py-12 text-[var(--text-muted)]">
-                            No pending returns found. All retreaded/repaired tyres have subsequent fitment records.
-                          </td>
-                        </tr>
-                      ) : (
-                        pendingPager.pageRows.map((p, idx) => (
-                          <tr key={`${p.serial}-${idx}`} className={`border-t border-[var(--input-border)] hover:bg-gray-800/30 transition-colors ${
-                            p.daysPending > 60 ? 'bg-red-900/5' : p.daysPending > 30 ? 'bg-yellow-900/5' : ''
-                          }`}>
-                            <td className="px-4 py-3 font-mono text-blue-400 text-xs">{p.serial}</td>
-                            <td className="px-4 py-3 text-[var(--text-secondary)]">{p.brand}</td>
-                            <td className="px-4 py-3 text-[var(--text-muted)]">{p.size}</td>
-                            <td className="px-4 py-3 text-[var(--text-secondary)]">{p.removedFrom}</td>
-                            <td className="px-4 py-3 text-[var(--text-muted)]">{p.site}</td>
-                            <td className="px-4 py-3 text-[var(--text-muted)] whitespace-nowrap">{fmtDate(p.removalDate)}</td>
-                            <td className="px-4 py-3">
-                              <span className="px-2 py-0.5 bg-[var(--input-bg)] text-[var(--text-secondary)] border border-[var(--input-border)] rounded-full text-xs">
-                                {p.category}
-                              </span>
-                            </td>
-                            <td className={`px-4 py-3 text-right ${pendingDaysClass(p.daysPending)}`}>
-                              {p.daysPending != null ? (
-                                <span className="flex items-center justify-end gap-1">
-                                  {p.daysPending > 60 && <AlertTriangle size={12} />}
-                                  {p.daysPending > 30 && p.daysPending <= 60 && <AlertCircle size={12} />}
-                                  {p.daysPending}d
-                                </span>
-                              ) : '-'}
-                            </td>
-                            <td className="px-4 py-3">
-                              {(() => {
-                                const rowLocked = wfLocked && p.serial === replacementRecord?.serial
-                                return (
-                                  <div className="flex items-center justify-center gap-2">
-                                    {rowLocked && (
-                                      <span
-                                        className="flex items-center gap-1 text-[var(--accent)]"
-                                        title="Locked, in approval"
-                                      >
-                                        <Lock size={12} />
-                                      </span>
-                                    )}
-                                    <button
-                                      onClick={() => markReturned(p.serial)}
-                                      disabled={rowLocked}
-                                      className="flex items-center gap-1 px-2.5 py-1.5 bg-green-900/50 hover:bg-green-800/60 border border-green-700/50 text-green-300 rounded-lg text-xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-green-900/50"
-                                      title={rowLocked ? 'Locked, in approval' : 'Mark as Returned'}
-                                    >
-                                      <CheckSquare size={12} /> Returned
-                                    </button>
-                                    <button
-                                      onClick={() => markWrittenOff(p.serial)}
-                                      disabled={rowLocked}
-                                      className="flex items-center gap-1 px-2.5 py-1.5 bg-red-900/50 hover:bg-red-800/60 border border-red-700/50 text-red-300 rounded-lg text-xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-red-900/50"
-                                      title={rowLocked ? 'Locked, in approval' : 'Write Off'}
-                                    >
-                                      <XCircle size={12} /> Write Off
-                                    </button>
-                                  </div>
-                                )
-                              })()}
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
+                <div className="p-3">
+                  <PagedTable
+                    columns={pendingColumns}
+                    rows={pendingPager.pageRows.map((p, idx) => ({ ...p, _key: `${p.serial}-${idx}` }))}
+                    emptyMessage="No pending returns found. All retreaded or repaired tyres have subsequent fitment records."
+                  />
                   <TablePagination {...pendingPager} />
                 </div>
               </div>
 
               {(returnedSerials.length > 0 || writtenOffSerials.length > 0) && (
                 <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
-                  <p className="text-sm text-[var(--text-muted)] mb-2">Session Actions</p>
+                  <p className="text-sm text-[var(--text-muted)] mb-2">Recorded marks</p>
                   <div className="flex flex-wrap gap-3 text-xs">
                     {returnedSerials.length > 0 && (
                       <span className="flex items-center gap-1.5 text-green-400">
-                        <CheckCircle size={12} /> {returnedSerials.length} marked as returned this session
+                        <CheckCircle size={12} /> {returnedSerials.length} marked as returned
                       </span>
                     )}
                     {writtenOffSerials.length > 0 && (
                       <span className="flex items-center gap-1.5 text-red-400">
-                        <XCircle size={12} /> {writtenOffSerials.length} written off this session
+                        <XCircle size={12} /> {writtenOffSerials.length} written off
                       </span>
                     )}
                     <button
+                      type="button"
                       onClick={() => {
                         setReturnedSerials([])
                         setWrittenOffSerials([])
@@ -1541,96 +1205,58 @@ export default function TyreExchange() {
                 <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
                   <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-4">Transfers per Month (Last 12 Months)</h3>
                   {transfers.length === 0 ? (
-                    <div className="flex items-center justify-center h-48 text-[var(--text-muted)] text-sm">
-                      No transfer data available
-                    </div>
+                    <div className="flex items-center justify-center h-48 text-[var(--text-muted)] text-sm">No transfer data available</div>
                   ) : (
-                    <div className="h-56">
-                      <Bar data={monthlyBarData} options={BAR_OPTS} />
-                    </div>
+                    <div className="h-56"><Bar data={monthlyBarData} options={BAR_OPTS} /></div>
                   )}
                 </div>
                 <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
                   <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-4">Transfer Types Breakdown</h3>
                   {transfers.length === 0 ? (
-                    <div className="flex items-center justify-center h-48 text-[var(--text-muted)] text-sm">
-                      No transfer data available
-                    </div>
+                    <div className="flex items-center justify-center h-48 text-[var(--text-muted)] text-sm">No transfer data available</div>
                   ) : (
-                    <div className="h-56">
-                      <Doughnut data={transferTypeDonut} options={DONUT_OPTS} />
-                    </div>
+                    <div className="h-56"><Doughnut data={transferTypeDonut} options={DONUT_OPTS} /></div>
                   )}
                 </div>
               </div>
 
-              {/* Top transferred serials */}
               <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
                 <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-4">Most Transferred Serials</h3>
-                {(() => {
-                  const counts = {}
-                  for (const t of transfers) {
-                    counts[t.serial] = (counts[t.serial] || 0) + 1
-                  }
-                  const top = Object.entries(counts)
-                    .sort((a, b) => b[1] - a[1])
-                    .slice(0, 10)
-                  if (top.length === 0) {
-                    return <p className="text-sm text-[var(--text-muted)]">No data available.</p>
-                  }
-                  const maxCount = top[0]?.[1] || 1
-                  return (
-                    <div className="space-y-2">
-                      {top.map(([serial, count]) => {
-                        const rec = records.find(r => (r.serial_number || r.serial_no) === serial)
-                        return (
-                          <div key={serial} className="flex items-center gap-3">
-                            <span className="font-mono text-blue-400 text-xs w-32 truncate">{serial}</span>
-                            <span className="text-xs text-[var(--text-muted)] w-28 truncate">{rec?.brand || '-'}</span>
-                            <div className="flex-1 bg-[var(--input-bg)] rounded-full h-2">
-                              <div
-                                className="bg-blue-600 h-2 rounded-full"
-                                style={{ width: `${(count / maxCount) * 100}%` }}
-                              />
-                            </div>
-                            <span className="text-xs text-[var(--text-secondary)] w-12 text-right">{count} transfers</span>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )
-                })()}
+                {topSerials.length === 0 ? (
+                  <p className="text-sm text-[var(--text-muted)]">No data available.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {topSerials.map(({ serial, count, brand }) => (
+                      <div key={serial} className="flex items-center gap-3">
+                        <span className="font-mono text-blue-400 text-xs w-32 truncate">{serial}</span>
+                        <span className="text-xs text-[var(--text-muted)] w-28 truncate">{na(brand)}</span>
+                        <div className="flex-1 bg-[var(--input-bg)] rounded-full h-2">
+                          <div className="bg-blue-600 h-2 rounded-full" style={{ width: `${(count / topSerials[0].count) * 100}%` }} />
+                        </div>
+                        <span className="text-xs text-[var(--text-secondary)] w-20 text-right">{count} transfers</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
-              {/* Transfer stats by brand */}
               <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
                 <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-4">Transfers by Brand</h3>
-                {(() => {
-                  const counts = {}
-                  for (const t of transfers) {
-                    const b = t.brand || 'Unknown'
-                    counts[b] = (counts[b] || 0) + 1
-                  }
-                  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 8)
-                  if (sorted.length === 0) return <p className="text-sm text-[var(--text-muted)]">No data.</p>
-                  const max = sorted[0]?.[1] || 1
-                  return (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {sorted.map(([brand, count]) => (
-                        <div key={brand} className="flex items-center gap-3">
-                          <span className="text-xs text-[var(--text-secondary)] w-28 truncate">{brand}</span>
-                          <div className="flex-1 bg-[var(--input-bg)] rounded-full h-2">
-                            <div
-                              className="bg-purple-600 h-2 rounded-full"
-                              style={{ width: `${(count / max) * 100}%` }}
-                            />
-                          </div>
-                          <span className="text-xs text-[var(--text-muted)] w-10 text-right">{count}</span>
+                {byBrand.length === 0 ? (
+                  <p className="text-sm text-[var(--text-muted)]">No data.</p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {byBrand.map(({ brand, count }) => (
+                      <div key={brand} className="flex items-center gap-3">
+                        <span className="text-xs text-[var(--text-secondary)] w-28 truncate">{brand}</span>
+                        <div className="flex-1 bg-[var(--input-bg)] rounded-full h-2">
+                          <div className="bg-purple-600 h-2 rounded-full" style={{ width: `${(count / byBrand[0].count) * 100}%` }} />
                         </div>
-                      ))}
-                    </div>
-                  )
-                })()}
+                        <span className="text-xs text-[var(--text-muted)] w-10 text-right">{count}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1648,7 +1274,7 @@ export default function TyreExchange() {
                   </span>
                 </div>
 
-                {siteFlowMatrix.sites.length === 0 ? (
+                {flow.sites.length === 0 ? (
                   <EmptyState
                     illustration="module/inventory"
                     icon={Truck}
@@ -1656,115 +1282,35 @@ export default function TyreExchange() {
                     description="No inter-site transfers detected in the current data set."
                   />
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="text-xs border-collapse">
-                      <thead>
-                        <tr>
-                          <th className="text-left px-3 py-2 text-[var(--text-muted)] font-medium bg-[var(--input-bg)] border border-[var(--input-border)] min-w-[120px]">
-                            From ↓ / To →
-                          </th>
-                          {siteFlowMatrix.sites.map(site => (
-                            <th key={site} className="px-3 py-2 text-[var(--text-muted)] font-medium bg-[var(--input-bg)] border border-[var(--input-border)] min-w-[80px] text-center">
-                              {site}
-                            </th>
-                          ))}
-                          <th className="px-3 py-2 text-[var(--text-muted)] font-medium bg-gray-800/80 border border-[var(--input-border)] text-center">
-                            Total Out
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {siteFlowMatrix.sites.map(fromSite => {
-                          const rowTotal = siteFlowMatrix.sites.reduce(
-                            (s, toSite) => s + (siteFlowMatrix.matrix[fromSite]?.[toSite] || 0), 0
-                          )
-                          return (
-                            <tr key={fromSite}>
-                              <td className="px-3 py-2 text-[var(--text-secondary)] font-medium bg-gray-800/40 border border-[var(--input-border)]">
-                                {fromSite}
-                              </td>
-                              {siteFlowMatrix.sites.map(toSite => {
-                                const val = siteFlowMatrix.matrix[fromSite]?.[toSite] || 0
-                                const isSelf = fromSite === toSite
-                                return (
-                                  <td
-                                    key={toSite}
-                                    className={`px-3 py-2 text-center border border-[var(--input-border)] font-medium ${
-                                      isSelf ? 'bg-gray-800/20 text-[var(--text-dim)]' : val > 0 ? flowCellColor(val) : 'text-[var(--text-dim)]'
-                                    }`}
-                                  >
-                                    {isSelf ? '-' : val > 0 ? val : '·'}
-                                  </td>
-                                )
-                              })}
-                              <td className="px-3 py-2 text-center border border-[var(--input-border)] text-blue-400 font-semibold bg-gray-800/30">
-                                {rowTotal || '-'}
-                              </td>
-                            </tr>
-                          )
-                        })}
-                        {/* Column totals */}
-                        <tr className="bg-gray-800/30">
-                          <td className="px-3 py-2 text-[var(--text-muted)] font-medium border border-[var(--input-border)]">Total In</td>
-                          {siteFlowMatrix.sites.map(toSite => {
-                            const colTotal = siteFlowMatrix.sites.reduce(
-                              (s, fromSite) => s + (siteFlowMatrix.matrix[fromSite]?.[toSite] || 0), 0
-                            )
-                            return (
-                              <td key={toSite} className="px-3 py-2 text-center border border-[var(--input-border)] text-purple-400 font-semibold">
-                                {colTotal || '-'}
-                              </td>
-                            )
-                          })}
-                          <td className="px-3 py-2 border border-[var(--input-border)]" />
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
+                  <EnterpriseTable
+                    columns={flowColumns}
+                    data={flowRows}
+                    getRowId={(r) => r.key}
+                    enableGlobalFilter={false}
+                    enableColumnFilters={false}
+                    enableSorting={false}
+                    enableExport={false}
+                    stickyFirstColumn
+                    virtual
+                    maxHeight={520}
+                  />
                 )}
               </div>
 
-              {/* Net flow analysis */}
-              {siteFlowMatrix.sites.length > 0 && (
+              {netFlow.length > 0 && (
                 <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
-                  <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-4">Net Flow Analysis: Site Roles</h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="text-[var(--text-muted)] text-xs uppercase border-b border-[var(--input-border)]">
-                          <th className="text-left py-2 pr-4">Site</th>
-                          <th className="text-right py-2 px-4">Transfers Out</th>
-                          <th className="text-right py-2 px-4">Transfers In</th>
-                          <th className="text-right py-2 px-4">Net Flow</th>
-                          <th className="text-left py-2 pl-4">Role</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {siteFlowMatrix.sites.map(site => {
-                          const out = siteFlowMatrix.sites.reduce(
-                            (s, to) => s + (siteFlowMatrix.matrix[site]?.[to] || 0), 0
-                          )
-                          const inp = siteFlowMatrix.sites.reduce(
-                            (s, from) => s + (siteFlowMatrix.matrix[from]?.[site] || 0), 0
-                          )
-                          const net = inp - out
-                          const role = net > 2 ? 'Net Receiver' : net < -2 ? 'Net Sender' : 'Balanced'
-                          const roleColor = role === 'Net Receiver' ? 'text-green-400' : role === 'Net Sender' ? 'text-orange-400' : 'text-[var(--text-muted)]'
-                          return (
-                            <tr key={site} className="border-t border-[var(--input-border)] hover:bg-gray-800/20">
-                              <td className="py-2.5 pr-4 text-[var(--text-secondary)] font-medium">{site}</td>
-                              <td className="py-2.5 px-4 text-right text-orange-400">{out}</td>
-                              <td className="py-2.5 px-4 text-right text-green-400">{inp}</td>
-                              <td className={`py-2.5 px-4 text-right font-semibold ${net > 0 ? 'text-green-400' : net < 0 ? 'text-red-400' : 'text-[var(--text-muted)]'}`}>
-                                {net > 0 ? `+${net}` : net}
-                              </td>
-                              <td className={`py-2.5 pl-4 ${roleColor}`}>{role}</td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
+                  <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                    <h3 className="text-sm font-medium text-[var(--text-secondary)]">Net Flow Analysis: Site Roles</h3>
+                    {exportButtons(() => exportRegister('netflow', 'excel'), () => exportRegister('netflow', 'pdf'), false)}
                   </div>
+                  <EnterpriseTable
+                    columns={netColumns}
+                    data={netFlow}
+                    getRowId={(r) => r.site}
+                    enableColumnFilters={false}
+                    enableExport={false}
+                    searchPlaceholder="Search sites..."
+                  />
                 </div>
               )}
             </div>

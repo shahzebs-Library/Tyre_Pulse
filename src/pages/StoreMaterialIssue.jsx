@@ -36,7 +36,7 @@ import {
 import PageHeader from '../components/ui/PageHeader'
 import Card, { CardHeader } from '../components/ui/Card'
 import EChart from '../components/charts/EChart'
-import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import {
@@ -47,7 +47,7 @@ import {
 import { listMaterials } from '../lib/api/materialMaster'
 import {
   summarizeIssues, filterSlips, slipFilterOptions, monthlyIssueTrend,
-  bucketTotals, docTypeLabel, isReturn, DOC_TYPE_KEYS,
+  docTypeLabel, isReturn, DOC_TYPE_KEYS,
   SLIP_EXPORT_COLUMNS, slipExportRows, LINE_EXPORT_COLUMNS, lineExportRows,
   validateDraftIssue, draftLineValue, issueStatusLabel,
 } from '../lib/materialIssue'
@@ -56,6 +56,10 @@ import { colorAt, categorical, withAlpha } from '../lib/reportColors'
 import { formatCurrency } from '../lib/formatters'
 import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import {
+  singleCurrencyOf, headlineValue, categoryShare, docTypeShare, returnFlag,
+  recentSlipRows, topItemRows, slipLineRows,
+} from '../lib/storeMaterialIssueAnalytics'
 
 const WRITE_ROLES = new Set(['Admin', 'Manager', 'Director'])
 
@@ -235,11 +239,7 @@ export default function StoreMaterialIssue() {
     [returns],
   )
 
-  const singleCurrency = !summary.mixedCurrency
-    ? (Object.keys(summary.byCurrency)[0] || currencyForCountry(activeCountry) || null)
-    : null
-
-  const paged = usePagedRows(filtered, { pageSize: 50 })
+  const singleCurrency = singleCurrencyOf(summary, activeCountry)
 
   const toggleExpand = async (slip) => {
     if (expanded === slip.key) { setExpanded(null); setExpandedLines([]); return }
@@ -432,7 +432,6 @@ export default function StoreMaterialIssue() {
           filtered={filtered}
           summary={summary}
           singleCurrency={singleCurrency}
-          paged={paged}
           expanded={expanded}
           expandedLines={expandedLines}
           expandLoading={expandLoading}
@@ -477,8 +476,18 @@ export default function StoreMaterialIssue() {
  * countries. There is deliberately no combined total.                 *
  * ------------------------------------------------------------------ */
 function CountryMoney({ summary }) {
-  if (!summary.byCountry.length) return null
-  if (summary.byCountry.length === 1) return null
+  const columns = useMemo(() => [
+    { id: 'country', header: 'Country', accessorFn: (c) => txt(c.country), cell: ({ row }) => <span className="text-[var(--text-primary)]">{txt(row.original.country)}</span> },
+    { id: 'slips', header: 'Slips', accessorFn: (c) => c.slips, meta: { align: 'right' }, cell: ({ row }) => nOr(row.original.slips) },
+    { id: 'lines', header: 'Lines', accessorFn: (c) => c.lines, meta: { align: 'right' }, cell: ({ row }) => nOr(row.original.lines) },
+    {
+      id: 'value', header: 'Value (as booked)', accessorFn: (c) => c.bookedValue ?? -1, meta: { align: 'right' },
+      cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{money(row.original.bookedValue, row.original.currency)}</span>,
+    },
+    { id: 'mis', header: 'Issues', accessorFn: (c) => c.mis?.slips ?? 0, meta: { align: 'right' }, cell: ({ row }) => nOr(row.original.mis?.slips) },
+    { id: 'mrt', header: 'Returns', accessorFn: (c) => c.mrt?.slips ?? 0, meta: { align: 'right' }, cell: ({ row }) => nOr(row.original.mrt?.slips) },
+  ], [])
+  if (summary.byCountry.length <= 1) return null
   return (
     <Card>
       <CardHeader
@@ -486,35 +495,30 @@ function CountryMoney({ summary }) {
         title="Value by country"
         description="Each country reports in its own currency. These are never added together."
       />
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-[var(--text-muted)] border-b border-[var(--input-border)]">
-              <th className="py-2 pr-3 font-medium">Country</th>
-              <th className="py-2 pr-3 font-medium text-right">Slips</th>
-              <th className="py-2 pr-3 font-medium text-right">Lines</th>
-              <th className="py-2 pr-3 font-medium text-right">Value (as booked)</th>
-              <th className="py-2 pr-3 font-medium text-right">Issues</th>
-              <th className="py-2 pr-3 font-medium text-right">Returns</th>
-            </tr>
-          </thead>
-          <tbody>
-            {summary.byCountry.map((c) => (
-              <tr key={c.country} className="border-b border-[var(--input-border)] last:border-0">
-                <td className="py-2 pr-3 text-[var(--text-primary)]">{txt(c.country)}</td>
-                <td className="py-2 pr-3 text-right">{nOr(c.slips)}</td>
-                <td className="py-2 pr-3 text-right">{nOr(c.lines)}</td>
-                <td className="py-2 pr-3 text-right font-medium text-[var(--text-primary)]">
-                  {money(c.bookedValue, c.currency)}
-                </td>
-                <td className="py-2 pr-3 text-right">{nOr(c.mis.slips)}</td>
-                <td className="py-2 pr-3 text-right">{nOr(c.mrt.slips)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <EnterpriseTable
+        columns={columns}
+        data={summary.byCountry}
+        getRowId={(c) => String(c.country)}
+        enableGlobalFilter={false}
+        enableColumnFilters={false}
+        enableExport={false}
+        emptyMessage="No country has slips in this window."
+      />
     </Card>
+  )
+}
+
+function DocBadge({ slip }) {
+  return (
+    <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border ${
+      !slip.docTypeKnown
+        ? 'border-[var(--input-border)] text-[var(--text-muted)]'
+        : isReturn(slip.docType)
+          ? 'border-amber-500/30 bg-amber-500/10 text-amber-300'
+          : 'border-sky-500/30 bg-sky-500/10 text-sky-300'
+    }`}>
+      {slip.docTypeKnown ? docTypeLabel(slip.docType) : 'Unreadable number'}
+    </span>
   )
 }
 
@@ -522,13 +526,45 @@ function CountryMoney({ summary }) {
  * Tab 1 - the register                                                *
  * ------------------------------------------------------------------ */
 function RegisterTab({
-  loading, slips, filtered, summary, singleCurrency, paged,
+  loading, slips, filtered, summary, singleCurrency,
   expanded, expandedLines, expandLoading, toggleExpand,
   onExcel, onPdf, onLinesExcel,
 }) {
-  const valueLabel = singleCurrency
-    ? money(summary.byCurrency[singleCurrency]?.bookedValue, singleCurrency)
-    : 'Per country'
+  const booked = headlineValue(summary, singleCurrency)
+  const valueLabel = singleCurrency ? money(booked, singleCurrency) : 'Per country'
+  const openSlip = useMemo(() => filtered.find((s) => s.key === expanded) || null, [filtered, expanded])
+
+  const columns = useMemo(() => [
+    {
+      id: 'open', header: '', enableSorting: false, size: 36, meta: { export: false },
+      cell: ({ row }) => (expanded === row.original.key
+        ? <ChevronDown size={14} className="text-[var(--text-muted)]" />
+        : <ChevronRight size={14} className="text-[var(--text-muted)]" />),
+    },
+    { id: 'slip', header: 'Slip No', accessorFn: (s) => txt(s.issueNumber), cell: ({ row }) => <span className="font-mono text-xs text-[var(--text-primary)]">{txt(row.original.issueNumber)}</span> },
+    { id: 'doc', header: 'Document', accessorFn: (s) => (s.docTypeKnown ? docTypeLabel(s.docType) : 'Unreadable number'), cell: ({ row }) => <DocBadge slip={row.original} /> },
+    { id: 'date', header: 'Date', accessorFn: (s) => s.date || '', cell: ({ row }) => txt(row.original.date) },
+    {
+      id: 'job', header: 'Job card', accessorFn: (s) => txt(s.workOrderNo),
+      cell: ({ row }) => (
+        <span className="font-mono text-xs text-[var(--text-secondary)]">
+          {txt(row.original.workOrderNo)}
+          {row.original.workOrderCount > 1 && <span className="ml-1 text-amber-300">(+{row.original.workOrderCount - 1})</span>}
+        </span>
+      ),
+    },
+    { id: 'asset', header: 'Asset', accessorFn: (s) => txt(s.assetCode) },
+    { id: 'store', header: 'Store', accessorFn: (s) => txt(s.storeCode) },
+    { id: 'lines', header: 'Lines', accessorFn: (s) => s.lineCount ?? 0, meta: { align: 'right' }, cell: ({ row }) => nOr(row.original.lineCount) },
+    {
+      id: 'value', header: 'Value', accessorFn: (s) => s.bookedValue ?? -1, meta: { align: 'right' },
+      cell: ({ row }) => (
+        <span className={`font-medium ${row.original.returnSignAnomaly ? 'text-amber-300' : 'text-[var(--text-primary)]'}`}>
+          {money(row.original.bookedValue, row.original.currency)}
+        </span>
+      ),
+    },
+  ], [expanded])
 
   return (
     <div className="space-y-4">
@@ -558,7 +594,7 @@ function RegisterTab({
         <CardHeader
           icon={ClipboardList}
           title="Issue register"
-          description={`${nOr(filtered.length)} of ${nOr(slips.length)} shown`}
+          description={`${nOr(filtered.length)} of ${nOr(slips.length)} shown. Select a slip to see its items.`}
           actions={
             <>
               <button onClick={onExcel} disabled={filtered.length === 0} className={btnCls}>
@@ -571,162 +607,89 @@ function RegisterTab({
           }
         />
 
-        {loading ? (
-          <div className="space-y-2">
-            {[0, 1, 2, 3, 4].map((i) => <div key={i} className="h-9 bg-[var(--input-bg)] rounded animate-pulse" />)}
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="py-10 text-center text-[var(--text-muted)]">
-            <Receipt size={28} className="mx-auto mb-2 opacity-50" />
-            <p className="text-sm">
-              {slips.length === 0
-                ? 'No material issue slips in this window.'
-                : 'No slips match the filters.'}
-            </p>
-          </div>
-        ) : (
-          <>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-[var(--text-muted)] border-b border-[var(--input-border)]">
-                    <th className="py-2 pr-2 font-medium w-6" />
-                    <th className="py-2 pr-3 font-medium">Slip No</th>
-                    <th className="py-2 pr-3 font-medium">Document</th>
-                    <th className="py-2 pr-3 font-medium">Date</th>
-                    <th className="py-2 pr-3 font-medium">Job card</th>
-                    <th className="py-2 pr-3 font-medium">Asset</th>
-                    <th className="py-2 pr-3 font-medium">Store</th>
-                    <th className="py-2 pr-3 font-medium text-right">Lines</th>
-                    <th className="py-2 pr-3 font-medium text-right">Value</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {paged.pageRows.map((s) => {
-                    const open = expanded === s.key
-                    return (
-                      <FragmentRow
-                        key={s.key}
-                        slip={s}
-                        open={open}
-                        lines={open ? expandedLines : []}
-                        linesLoading={open && expandLoading}
-                        onToggle={() => toggleExpand(s)}
-                        onLinesExcel={onLinesExcel}
-                      />
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-            <TablePagination {...paged} />
-          </>
-        )}
+        {/* The page filters above drive this table (and the tiles), so the
+            table's own search stays off: two searches would let the rows and
+            the headline figures describe different populations. */}
+        <EnterpriseTable
+          columns={columns}
+          data={filtered}
+          getRowId={(s) => String(s.key)}
+          loading={loading}
+          enableGlobalFilter={false}
+          enableColumnFilters={false}
+          enableExport={false}
+          initialPageSize={50}
+          pageSizeOptions={[25, 50, 100]}
+          onRowClick={toggleExpand}
+          emptyMessage={slips.length === 0 ? 'No material issue slips in this window.' : 'No slips match the filters.'}
+        />
       </Card>
+
+      {openSlip && (
+        <SlipLines
+          slip={openSlip}
+          lines={expandedLines}
+          linesLoading={expandLoading}
+          onClose={() => toggleExpand(openSlip)}
+          onLinesExcel={onLinesExcel}
+        />
+      )}
     </div>
   )
 }
 
-function FragmentRow({ slip, open, lines, linesLoading, onToggle, onLinesExcel }) {
-  const flagTone = slip.returnSignAnomaly ? 'text-amber-300' : 'text-[var(--text-primary)]'
+function SlipLines({ slip, lines, linesLoading, onClose, onLinesExcel }) {
+  const rows = useMemo(() => slipLineRows(lines, slip.currency), [lines, slip.currency])
+  const columns = useMemo(() => [
+    { id: 'code', header: 'Item code', accessorFn: (l) => txt(l.item_code), cell: ({ row }) => <span className="font-mono">{txt(row.original.item_code)}</span> },
+    { id: 'desc', header: 'Description', accessorFn: (l) => txt(l.item_description) },
+    { id: 'qty', header: 'Qty', accessorFn: (l) => Number(l.qty) || 0, meta: { align: 'right' }, cell: ({ row }) => nOr(row.original.qty, 2) },
+    {
+      id: 'unit', header: 'Unit cost', accessorFn: (l) => l.unit_cost ?? -1, meta: { align: 'right' },
+      cell: ({ row }) => (row.original.unit_cost == null ? 'N/A' : money(row.original.unit_cost, row.original.currency)),
+    },
+    {
+      id: 'value', header: 'Value', accessorFn: (l) => l.line_cost ?? -1, meta: { align: 'right' },
+      cell: ({ row }) => <span className="text-[var(--text-primary)]">{money(row.original.line_cost, row.original.currency)}</span>,
+    },
+  ], [])
+
   return (
-    <>
-      <tr
-        className="border-b border-[var(--input-border)] hover:bg-[var(--input-bg)] cursor-pointer"
-        onClick={onToggle}
-      >
-        <td className="py-2 pr-2 text-[var(--text-muted)]">
-          {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-        </td>
-        <td className="py-2 pr-3 font-mono text-xs text-[var(--text-primary)]">{txt(slip.issueNumber)}</td>
-        <td className="py-2 pr-3">
-          <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border ${
-            !slip.docTypeKnown
-              ? 'border-[var(--input-border)] text-[var(--text-muted)]'
-              : isReturn(slip.docType)
-                ? 'border-amber-500/30 bg-amber-500/10 text-amber-300'
-                : 'border-sky-500/30 bg-sky-500/10 text-sky-300'
-          }`}>
-            {slip.docTypeKnown ? docTypeLabel(slip.docType) : 'Unreadable number'}
-          </span>
-        </td>
-        <td className="py-2 pr-3 text-[var(--text-secondary)]">{txt(slip.date)}</td>
-        <td className="py-2 pr-3 font-mono text-xs text-[var(--text-secondary)]">
-          {txt(slip.workOrderNo)}
-          {slip.workOrderCount > 1 && (
-            <span className="ml-1 text-amber-300">(+{slip.workOrderCount - 1})</span>
-          )}
-        </td>
-        <td className="py-2 pr-3 text-[var(--text-secondary)]">{txt(slip.assetCode)}</td>
-        <td className="py-2 pr-3 text-[var(--text-secondary)]">{txt(slip.storeCode)}</td>
-        <td className="py-2 pr-3 text-right">{nOr(slip.lineCount)}</td>
-        <td className={`py-2 pr-3 text-right font-medium ${flagTone}`}>
-          {money(slip.bookedValue, slip.currency)}
-        </td>
-      </tr>
-      {open && (
-        <tr className="border-b border-[var(--input-border)]">
-          <td colSpan={9} className="py-3 px-4 bg-[var(--input-bg)]">
-            {slip.returnSignAnomaly && (
-              <p className="text-[11px] text-amber-300 mb-2">
-                This is a return, and it is booked as a charge. Nothing has been changed
-                here; the figure above is exactly what the ledger holds.
-              </p>
-            )}
-            {linesLoading ? (
-              <p className="text-xs text-[var(--text-muted)]">Loading the items on this slip...</p>
-            ) : lines.length === 0 ? (
-              <p className="text-xs text-[var(--text-muted)]">No item lines are recorded on this slip.</p>
-            ) : (
-              <>
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-xs font-medium text-[var(--text-secondary)]">
-                    {nOr(lines.length)} item{lines.length === 1 ? '' : 's'} issued
-                  </span>
-                  <button
-                    className={`${btnCls} ml-auto`}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onLinesExcel(lines, `Material Issue ${slip.issueNumber}`)
-                    }}
-                  >
-                    <FileSpreadsheet size={13} /> Items
-                  </button>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="text-left text-[var(--text-muted)]">
-                        <th className="py-1 pr-3 font-medium">Item code</th>
-                        <th className="py-1 pr-3 font-medium">Description</th>
-                        <th className="py-1 pr-3 font-medium text-right">Qty</th>
-                        <th className="py-1 pr-3 font-medium text-right">Unit cost</th>
-                        <th className="py-1 pr-3 font-medium text-right">Value</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {lines.map((l, i) => (
-                        <tr key={l.id || i} className="text-[var(--text-secondary)]">
-                          <td className="py-1 pr-3 font-mono">{txt(l.item_code)}</td>
-                          <td className="py-1 pr-3">{txt(l.item_description)}</td>
-                          <td className="py-1 pr-3 text-right">{nOr(l.qty, 2)}</td>
-                          <td className="py-1 pr-3 text-right">
-                            {l.unit_cost == null ? 'N/A' : money(l.unit_cost, l.currency || slip.currency)}
-                          </td>
-                          <td className="py-1 pr-3 text-right text-[var(--text-primary)]">
-                            {money(l.line_cost, l.currency || slip.currency)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </>
-            )}
-          </td>
-        </tr>
+    <Card>
+      <CardHeader
+        icon={Hash}
+        title={`Slip ${txt(slip.issueNumber)}`}
+        description={linesLoading ? 'Loading the items on this slip...' : `${nOr(rows.length)} item${rows.length === 1 ? '' : 's'} issued`}
+        actions={
+          <>
+            <button
+              className={btnCls}
+              disabled={rows.length === 0}
+              onClick={() => onLinesExcel(lines, `Material Issue ${slip.issueNumber}`)}
+            >
+              <FileSpreadsheet size={13} /> Items
+            </button>
+            <button className={btnCls} onClick={onClose} aria-label="Close slip items"><X size={13} /> Close</button>
+          </>
+        }
+      />
+      {slip.returnSignAnomaly && (
+        <p className="text-[11px] text-amber-300 mb-2">
+          This is a return, and it is booked as a charge. Nothing has been changed
+          here; the figure above is exactly what the ledger holds.
+        </p>
       )}
-    </>
+      <EnterpriseTable
+        columns={columns}
+        data={rows}
+        getRowId={(l) => l.rowKey}
+        loading={linesLoading}
+        enableColumnFilters={false}
+        enableExport={false}
+        searchPlaceholder="Search items on this slip..."
+        emptyMessage="No item lines are recorded on this slip."
+      />
+    </Card>
   )
 }
 
@@ -735,6 +698,29 @@ function FragmentRow({ slip, open, lines, linesLoading, onToggle, onLinesExcel }
  * ------------------------------------------------------------------ */
 function ReturnsTab({ loading, returns, summary, singleCurrency, onExcel, onPdf }) {
   const anomalies = summary.returnSignAnomalies
+  const columns = useMemo(() => [
+    { id: 'slip', header: 'Slip No', accessorFn: (s) => txt(s.issueNumber), cell: ({ row }) => <span className="font-mono text-xs text-[var(--text-primary)]">{txt(row.original.issueNumber)}</span> },
+    { id: 'date', header: 'Date', accessorFn: (s) => s.date || '', cell: ({ row }) => txt(row.original.date) },
+    { id: 'job', header: 'Job card', accessorFn: (s) => txt(s.workOrderNo), cell: ({ row }) => <span className="font-mono text-xs">{txt(row.original.workOrderNo)}</span> },
+    { id: 'asset', header: 'Asset', accessorFn: (s) => txt(s.assetCode) },
+    { id: 'store', header: 'Store', accessorFn: (s) => txt(s.storeCode) },
+    { id: 'lines', header: 'Lines', accessorFn: (s) => s.lineCount ?? 0, meta: { align: 'right' }, cell: ({ row }) => nOr(row.original.lineCount) },
+    {
+      id: 'booked', header: 'As booked', accessorFn: (s) => s.bookedValue ?? -1, meta: { align: 'right' },
+      cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{money(row.original.bookedValue, row.original.currency)}</span>,
+    },
+    {
+      id: 'credited', header: 'If credited', accessorFn: (s) => s.creditedValue ?? -1, meta: { align: 'right' },
+      cell: ({ row }) => <span className="text-amber-300">{money(row.original.creditedValue, row.original.currency)}</span>,
+    },
+    {
+      id: 'flag', header: 'Flag', accessorFn: (s) => returnFlag(s).label,
+      cell: ({ row }) => {
+        const f = returnFlag(row.original)
+        return <span className={`text-[11px] ${f.anomaly ? 'text-amber-300' : 'text-[var(--text-muted)]'}`}>{f.label}</span>
+      },
+    },
+  ], [])
 
   return (
     <div className="space-y-4">
@@ -764,7 +750,7 @@ function ReturnsTab({ loading, returns, summary, singleCurrency, onExcel, onPdf 
         <Kpi
           label="Value as booked"
           value={loading ? '-' : (singleCurrency
-            ? money(summary.byCurrency[singleCurrency]?.bookedValue, singleCurrency)
+            ? money(headlineValue(summary, singleCurrency), singleCurrency)
             : 'Per country')}
           icon={Store}
           sub="What the ledger holds today"
@@ -772,7 +758,7 @@ function ReturnsTab({ loading, returns, summary, singleCurrency, onExcel, onPdf 
         <Kpi
           label="Value if credited"
           value={loading ? '-' : (singleCurrency
-            ? money(summary.byCurrency[singleCurrency]?.creditedValue, singleCurrency)
+            ? money(headlineValue(summary, singleCurrency, 'creditedValue'), singleCurrency)
             : 'Per country')}
           icon={Undo2}
           tone="text-amber-300"
@@ -799,57 +785,17 @@ function ReturnsTab({ loading, returns, summary, singleCurrency, onExcel, onPdf 
           }
         />
 
-        {loading ? (
-          <div className="space-y-2">
-            {[0, 1, 2].map((i) => <div key={i} className="h-9 bg-[var(--input-bg)] rounded animate-pulse" />)}
-          </div>
-        ) : returns.length === 0 ? (
-          <div className="py-10 text-center text-[var(--text-muted)]">
-            <Undo2 size={28} className="mx-auto mb-2 opacity-50" />
-            <p className="text-sm">No material returns in this window.</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-[var(--text-muted)] border-b border-[var(--input-border)]">
-                  <th className="py-2 pr-3 font-medium">Slip No</th>
-                  <th className="py-2 pr-3 font-medium">Date</th>
-                  <th className="py-2 pr-3 font-medium">Job card</th>
-                  <th className="py-2 pr-3 font-medium">Asset</th>
-                  <th className="py-2 pr-3 font-medium">Store</th>
-                  <th className="py-2 pr-3 font-medium text-right">Lines</th>
-                  <th className="py-2 pr-3 font-medium text-right">As booked</th>
-                  <th className="py-2 pr-3 font-medium text-right">If credited</th>
-                  <th className="py-2 pr-3 font-medium">Flag</th>
-                </tr>
-              </thead>
-              <tbody>
-                {returns.map((s) => (
-                  <tr key={s.key} className="border-b border-[var(--input-border)] last:border-0">
-                    <td className="py-2 pr-3 font-mono text-xs text-[var(--text-primary)]">{txt(s.issueNumber)}</td>
-                    <td className="py-2 pr-3 text-[var(--text-secondary)]">{txt(s.date)}</td>
-                    <td className="py-2 pr-3 font-mono text-xs text-[var(--text-secondary)]">{txt(s.workOrderNo)}</td>
-                    <td className="py-2 pr-3 text-[var(--text-secondary)]">{txt(s.assetCode)}</td>
-                    <td className="py-2 pr-3 text-[var(--text-secondary)]">{txt(s.storeCode)}</td>
-                    <td className="py-2 pr-3 text-right">{nOr(s.lineCount)}</td>
-                    <td className="py-2 pr-3 text-right font-medium text-[var(--text-primary)]">
-                      {money(s.bookedValue, s.currency)}
-                    </td>
-                    <td className="py-2 pr-3 text-right text-amber-300">
-                      {money(s.creditedValue, s.currency)}
-                    </td>
-                    <td className="py-2 pr-3 text-[11px]">
-                      {s.returnSignAnomaly
-                        ? <span className="text-amber-300">Booked as a charge</span>
-                        : <span className="text-[var(--text-muted)]">Credited already</span>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <EnterpriseTable
+          columns={columns}
+          data={returns}
+          getRowId={(r) => String(r.key)}
+          loading={loading}
+          enableGlobalFilter={false}
+          enableColumnFilters={false}
+          enableExport={false}
+          initialPageSize={25}
+          emptyMessage="No material returns in this window."
+        />
       </Card>
     </div>
   )
@@ -1300,43 +1246,33 @@ function RaiseTab({ canWrite, activeCountry, profileName, onSaved }) {
           title="Slips raised in this app"
           description={`${nOr(recent.length)} shown`}
         />
-        {recent.length === 0 ? (
-          <p className="py-6 text-center text-sm text-[var(--text-muted)]">
-            No slips have been raised in this app yet. The historical register on the
-            Issue register tab is unaffected by this.
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-[var(--text-muted)] border-b border-[var(--input-border)]">
-                  <th className="py-2 pr-3 font-medium">Slip No</th>
-                  <th className="py-2 pr-3 font-medium">Document</th>
-                  <th className="py-2 pr-3 font-medium">Job card</th>
-                  <th className="py-2 pr-3 font-medium">Asset</th>
-                  <th className="py-2 pr-3 font-medium">Issued</th>
-                  <th className="py-2 pr-3 font-medium">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recent.map((r) => (
-                  <tr key={r.id} className="border-b border-[var(--input-border)] last:border-0">
-                    <td className="py-2 pr-3 font-mono text-xs text-[var(--text-primary)]">{txt(r.issue_number)}</td>
-                    <td className="py-2 pr-3 text-[var(--text-secondary)]">{docTypeLabel(r.doc_type)}</td>
-                    <td className="py-2 pr-3 font-mono text-xs text-[var(--text-secondary)]">{txt(r.work_order_no)}</td>
-                    <td className="py-2 pr-3 text-[var(--text-secondary)]">{txt(r.asset_no)}</td>
-                    <td className="py-2 pr-3 text-[var(--text-secondary)]">
-                      {txt(String(r.issued_at || '').slice(0, 10))}
-                    </td>
-                    <td className="py-2 pr-3 text-[var(--text-secondary)]">{issueStatusLabel(r.status)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <RecentSlips recent={recent} />
       </Card>
     </div>
+  )
+}
+
+/** Slips raised in this app (V609), through the shared table. */
+function RecentSlips({ recent }) {
+  const rows = useMemo(() => recentSlipRows(recent), [recent])
+  const columns = useMemo(() => [
+    { id: 'slip', header: 'Slip No', accessorFn: (r) => txt(r.issueNumber), cell: ({ row }) => <span className="font-mono text-xs text-[var(--text-primary)]">{txt(row.original.issueNumber)}</span> },
+    { id: 'doc', header: 'Document', accessorKey: 'docType' },
+    { id: 'job', header: 'Job card', accessorFn: (r) => txt(r.workOrderNo), cell: ({ row }) => <span className="font-mono text-xs">{txt(row.original.workOrderNo)}</span> },
+    { id: 'asset', header: 'Asset', accessorFn: (r) => txt(r.assetNo) },
+    { id: 'issued', header: 'Issued', accessorFn: (r) => r.issuedDay || '', cell: ({ row }) => txt(row.original.issuedDay) },
+    { id: 'status', header: 'Status', accessorKey: 'status' },
+  ], [])
+  return (
+    <EnterpriseTable
+      columns={columns}
+      data={rows}
+      getRowId={(r) => String(r.id)}
+      enableColumnFilters={false}
+      enableExport={false}
+      searchPlaceholder="Search slips raised here..."
+      emptyMessage="No slips have been raised in this app yet. The historical register on the Issue register tab is unaffected by this."
+    />
   )
 }
 
@@ -1345,15 +1281,35 @@ function RaiseTab({ canWrite, activeCountry, profileName, onSaved }) {
  * ------------------------------------------------------------------ */
 function AnalyticsTab({ loading, filtered, summary, singleCurrency, onExcel, onPdf }) {
   const trend = useMemo(() => monthlyIssueTrend(filtered), [filtered])
-  const buckets = useMemo(
-    () => bucketTotals(filtered.flatMap((s) => s.lines || [])),
-    [filtered],
-  )
   const country = summary.byCountry[0]
+  // A mixed scope shows the category split for ONE country's currency (the same
+  // country the store chart uses); summing SAR, AED and EGP would be meaningless.
+  const shareCurrency = summary.byCountry.length > 1 ? (country?.currency || null) : null
+  const categories = useMemo(
+    () => categoryShare(filtered, { currency: shareCurrency }),
+    [filtered, shareCurrency],
+  )
   // Memoised so the fallback `[]` is not a new array identity on every render,
   // which would re-build the chart option (and re-render the chart) each time.
   const topStores = useMemo(() => country?.topStores || [], [country])
-  const topItems = useMemo(() => country?.topItems || [], [country])
+  const topItems = useMemo(() => topItemRows(country?.topItems), [country])
+  const itemColumns = useMemo(() => [
+    {
+      id: 'item', header: 'Item', accessorFn: (it) => `${txt(it.key)} ${it.description || ''}`,
+      cell: ({ row }) => (
+        <span>
+          <span className="font-mono text-[var(--text-primary)]">{txt(row.original.key)}</span>
+          {row.original.description && <span className="text-[var(--text-muted)]"> - {row.original.description}</span>}
+        </span>
+      ),
+    },
+    { id: 'lines', header: 'Lines', accessorFn: (it) => it.lines ?? 0, meta: { align: 'right' }, cell: ({ row }) => nOr(row.original.lines) },
+    { id: 'qty', header: 'Qty', accessorFn: (it) => Number(it.qty) || 0, meta: { align: 'right' }, cell: ({ row }) => nOr(row.original.qty, 2) },
+    {
+      id: 'value', header: 'Value', accessorFn: (it) => it.value ?? -1, meta: { align: 'right' },
+      cell: ({ row }) => <span className="text-[var(--text-primary)]">{money(row.original.value, country?.currency)}</span>,
+    },
+  ], [country])
 
   const trendOption = useMemo(() => {
     const months = trend.map((t) => t.month)
@@ -1395,11 +1351,7 @@ function AnalyticsTab({ loading, filtered, summary, singleCurrency, onExcel, onP
   }), [topStores])
 
   const bucketOption = useMemo(() => {
-    const data = [
-      { name: 'Tyres', value: buckets.tyre },
-      { name: 'Spares', value: buckets.spare },
-      { name: 'Oil and lubricants', value: buckets.oil },
-    ].filter((d) => d.value > 0)
+    const data = categories.data
     return {
       tooltip: { trigger: 'item' },
       legend: { bottom: 0, textStyle: { color: 'var(--text-muted)' } },
@@ -1410,14 +1362,10 @@ function AnalyticsTab({ loading, filtered, summary, singleCurrency, onExcel, onP
         color: categorical(Math.max(1, data.length)),
       }],
     }
-  }, [buckets])
+  }, [categories])
 
   const docOption = useMemo(() => {
-    const data = [
-      { name: 'Issues (MIS)', value: summary.docTypeSplit.MIS },
-      { name: 'Returns (MRT)', value: summary.docTypeSplit.MRT },
-      { name: 'Unreadable number', value: summary.docTypeSplit.unknown },
-    ].filter((d) => d.value > 0)
+    const data = docTypeShare(summary.docTypeSplit)
     return {
       tooltip: { trigger: 'item' },
       legend: { bottom: 0, textStyle: { color: 'var(--text-muted)' } },
@@ -1429,7 +1377,7 @@ function AnalyticsTab({ loading, filtered, summary, singleCurrency, onExcel, onP
     }
   }, [summary.docTypeSplit])
 
-  const bucketsUnavailable = buckets.tyre + buckets.spare + buckets.oil === 0
+  const bucketsUnavailable = categories.unavailable
 
   return (
     <div className="space-y-4">
@@ -1482,7 +1430,7 @@ function AnalyticsTab({ loading, filtered, summary, singleCurrency, onExcel, onP
           <CardHeader
             icon={PieChart}
             title="By category"
-            description="Tyre, spare and oil split"
+            description={shareCurrency ? `${txt(country?.country)} only, to keep one currency` : 'Tyre, spare and oil split'}
           />
           <div className="h-[260px]">
             {bucketsUnavailable
@@ -1505,35 +1453,17 @@ function AnalyticsTab({ loading, filtered, summary, singleCurrency, onExcel, onP
           {topItems.length === 0 ? (
             <div className="h-[260px]"><EmptyChart label="No item codes on these slips." /></div>
           ) : (
-            <div className="overflow-x-auto max-h-[260px]">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="text-left text-[var(--text-muted)] border-b border-[var(--input-border)]">
-                    <th className="py-1.5 pr-3 font-medium">Item</th>
-                    <th className="py-1.5 pr-3 font-medium text-right">Lines</th>
-                    <th className="py-1.5 pr-3 font-medium text-right">Qty</th>
-                    <th className="py-1.5 pr-3 font-medium text-right">Value</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {topItems.map((it) => (
-                    <tr key={it.key} className="border-b border-[var(--input-border)] last:border-0">
-                      <td className="py-1.5 pr-3">
-                        <span className="font-mono text-[var(--text-primary)]">{txt(it.key)}</span>
-                        {it.description && (
-                          <span className="text-[var(--text-muted)]"> - {it.description}</span>
-                        )}
-                      </td>
-                      <td className="py-1.5 pr-3 text-right">{nOr(it.lines)}</td>
-                      <td className="py-1.5 pr-3 text-right">{nOr(it.qty, 2)}</td>
-                      <td className="py-1.5 pr-3 text-right text-[var(--text-primary)]">
-                        {money(it.value, country?.currency)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <EnterpriseTable
+              columns={itemColumns}
+              data={topItems}
+              getRowId={(it) => it.rowKey}
+              enableGlobalFilter={false}
+              enableColumnFilters={false}
+              enableExport={false}
+              virtual
+              maxHeight={260}
+              emptyMessage="No item codes on these slips."
+            />
           )}
         </Card>
       </div>

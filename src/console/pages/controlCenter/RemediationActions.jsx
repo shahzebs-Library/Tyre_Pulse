@@ -35,6 +35,7 @@ import {
   LoadingState, ErrorState,
 } from '../../components/ui'
 import { toUserMessage } from '../../../lib/safeError'
+import Collapsible from '../opsKit/Collapsible'
 import { openConsoleRoute } from '../../lib/openRoute'
 import {
   listDuplicateTargets, previewDuplicates, resolveDuplicates,
@@ -383,12 +384,15 @@ export default function RemediationActions({ country }) {
         </p>
       </div>
 
-      <Note icon={ShieldCheck} tone="accent">
-        Every fix here is guarded on the server and asks before it runs. Removing
-        duplicates archives every row first and is undoable from Duplicate Control.
-        Brand fill and classification review are per-row decisions, so those cards
-        take you to the surface that owns them rather than guessing a value.
-      </Note>
+      <Collapsible icon={ShieldCheck} title="How these fixes stay safe"
+        subtitle="Server-guarded, confirmed first, archived or reversible.">
+        <Note icon={ShieldCheck} tone="accent">
+          Every fix here is guarded on the server and asks before it runs. Removing
+          duplicates archives every row first and is undoable from Duplicate Control.
+          Brand fill and classification review are per-row decisions, so those cards
+          take you to the surface that owns them rather than guessing a value.
+        </Note>
+      </Collapsible>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <ActionCard

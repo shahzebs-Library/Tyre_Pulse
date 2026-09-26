@@ -14,7 +14,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  Siren, RefreshCw, FileSpreadsheet, Plus, CheckCircle2, AlertTriangle, XCircle,
+  Siren, FileSpreadsheet, Plus, CheckCircle2, AlertTriangle, XCircle,
   Activity, Timer, Clock, Radio, Send, Database, ListChecks, Flame, UserCog, FileText, Trash2,
 } from 'lucide-react'
 import {
@@ -33,7 +33,12 @@ import {
   commanderCandidates, reassignError, canWritePostmortem, hasPostmortem, validatePostmortem, actionProgress,
 } from '../../lib/platformIncidents'
 import { toUserMessage } from '../../lib/safeError'
-import { exportToExcel, reportFileName } from '../../lib/exportUtils'
+import { exportToExcel, exportToPdf, reportFileName } from '../../lib/exportUtils'
+import OpsPageHeader from './opsKit/OpsPageHeader'
+import Pager, { usePaged, PAGE_SIZE } from './opsKit/Pager'
+import Drawer from './opsKit/Drawer'
+import AttentionList from './opsKit/AttentionList'
+import useUrlTab from './opsKit/useUrlTab'
 import { sortRows, useTableSort } from '../../lib/consoleTable'
 
 const WINDOW_DAYS = 90
@@ -60,7 +65,7 @@ export default function ConsoleIncidents() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [signals, setSignals] = useState(null)
-  const [view, setView] = useState('open')
+  const [view, setView] = useUrlTab(['open', 'resolved', 'all'], 'open', 'view')
   const [search, setSearch] = useState('')
   const [selectedId, setSelectedId] = useState(null)
   const [draft, setDraft] = useState(null)
@@ -69,7 +74,9 @@ export default function ConsoleIncidents() {
   const [update, setUpdate] = useState({ status: '', message: '' })
   const [updError, setUpdError] = useState('')
   const [posting, setPosting] = useState(false)
-  const [exporting, setExporting] = useState(false)
+  const [exporting, setExporting] = useState(null)
+  const [refreshedAt, setRefreshedAt] = useState(null)
+  const [tab, setTab] = useUrlTab(['incidents', 'trends', 'signals'], 'incidents')
   const [now, setNow] = useState(() => new Date())
   const [supers, setSupers] = useState(null)
   const [supersError, setSupersError] = useState('')
@@ -90,6 +97,7 @@ export default function ConsoleIncidents() {
       else setError(toUserMessage(list.reason, 'Could not load incidents.'))
       setSignals(sig.status === 'fulfilled' ? sig.value : { logs: { ok: false, rows: [] }, trust: { ok: false, rows: [] } })
       setNow(new Date())
+      setRefreshedAt(new Date().toISOString())
     } finally {
       setLoading(false)
     }
@@ -129,6 +137,65 @@ export default function ConsoleIncidents() {
       commander: (i) => i.commander_name,
     })
   }, [all, view, search, sort, now])
+
+  const paged = usePaged(listed, PAGE_SIZE, `${view}|${search}|${sort?.key}${sort?.dir}`)
+
+  const resolvedCount = useMemo(() => all.filter((i) => !isOpen(i)).length, [all])
+  const postmortemCount = useMemo(() => all.filter((i) => !isOpen(i) && hasPostmortem(i)).length, [all])
+  const topModules = useMemo(() => {
+    const m = new Map()
+    for (const i of all) for (const mod of (i.affected_modules || [])) m.set(mod, (m.get(mod) || 0) + 1)
+    return [...m.entries()].map(([module, count]) => ({ module, count })).sort((a, b) => b.count - a.count).slice(0, 8)
+  }, [all])
+
+  // What needs attention now, each with the one action that clears it.
+  const attention = useMemo(() => {
+    const out = []
+    const openList = all.filter(isOpen)
+    const sev1 = openList.filter((i) => i.severity === 'sev1')
+    if (sev1.length) out.push({
+      key: 'sev1', tone: 'danger',
+      text: `${sev1.length} SEV1 ${sev1.length === 1 ? 'incident is' : 'incidents are'} open: ${sev1[0].title}${sev1.length > 1 ? ' and more' : ''}.`,
+      action: { label: 'Open', onClick: () => openDetail(sev1[0]) },
+    })
+    const unacked = openList.filter((i) => !i.acknowledged_at && (durationMinutes(i.started_at, now) ?? 0) >= 15)
+    if (unacked.length) out.push({
+      key: 'unack', tone: 'warning',
+      text: `${unacked.length} open ${unacked.length === 1 ? 'incident has' : 'incidents have'} not been acknowledged after 15 minutes.`,
+      action: { label: 'Respond', onClick: () => openDetail(unacked[0]) },
+    })
+    const stale = openList.filter((i) => {
+      const times = (i.updates || []).map((u) => new Date(u.created_at).getTime()).filter(Number.isFinite)
+      const last = times.length ? Math.max(...times) : new Date(i.started_at).getTime()
+      return Number.isFinite(last) && now.getTime() - last > 4 * 3600000
+    })
+    if (stale.length) out.push({
+      key: 'stale', tone: 'warning',
+      text: `${stale.length} open ${stale.length === 1 ? 'incident has' : 'incidents have'} had no update for over 4 hours.`,
+      action: { label: 'Post update', onClick: () => openDetail(stale[0]) },
+    })
+    const noPm = resolvedCount - postmortemCount
+    if (noPm > 0) out.push({
+      key: 'pm', tone: 'info',
+      text: `${noPm} resolved ${noPm === 1 ? 'incident has' : 'incidents have'} no postmortem yet.`,
+      action: { label: 'Show resolved', onClick: () => { setView('resolved'); setTab('incidents') } },
+    })
+    if (signals && !signals.trust?.ok && !signals.logs?.ok) out.push({
+      key: 'sig-both', tone: 'warning', text: 'Neither signal source could be read, so new problems may not be listed.',
+      action: { label: 'Signals', onClick: () => setTab('signals') },
+    })
+    else if (signals && (!signals.trust?.ok || !signals.logs?.ok)) out.push({
+      key: 'sig', tone: 'warning',
+      text: `The ${!signals.trust?.ok ? 'data trust alert' : 'system error'} source could not be read, so its signals may be missing.`,
+      action: { label: 'Signals', onClick: () => setTab('signals') },
+    })
+    else if (signals?.logs?.rows?.some((r) => r.severity === 'critical')) out.push({
+      key: 'crit', tone: 'warning', text: 'Unresolved critical system errors are waiting as signals.',
+      action: { label: 'Review signals', onClick: () => setTab('signals') },
+    })
+    return out
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [all, now, signals, resolvedCount, postmortemCount])
 
   const selected = useMemo(() => all.find((i) => i.id === selectedId) || null, [all, selectedId])
   const timeline = useMemo(() => shapeTimeline(selected), [selected])
@@ -176,14 +243,20 @@ export default function ConsoleIncidents() {
     }
   }
 
-  async function exportExcel() {
-    setExporting(true)
+  async function exportFile(format) {
+    setExporting(format)
     try {
-      await exportToExcel(exportRows(all), EXPORT_COLUMNS, EXPORT_HEADERS, reportFileName('Platform Incidents'))
+      const rows = exportRows(all)
+      if (format === 'pdf') {
+        await exportToPdf(rows, EXPORT_COLUMNS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })),
+          'Platform Incidents', reportFileName('Platform Incidents'), 'landscape')
+      } else {
+        await exportToExcel(rows, EXPORT_COLUMNS, EXPORT_HEADERS, reportFileName('Platform Incidents'))
+      }
     } catch (e) {
       setError(toUserMessage(e, 'Could not export the incidents.'))
     } finally {
-      setExporting(false)
+      setExporting(null)
     }
   }
 
@@ -201,125 +274,161 @@ export default function ConsoleIncidents() {
 
   const level = LEVEL_META[status.level]
   const LevelIcon = level.icon
+  const signalCount = (signals?.logs?.rows?.length || 0) + (signals?.trust?.rows?.length || 0)
 
   return (
-    <div className="space-y-5 max-w-7xl">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1>
-            <Siren size={18} className="text-orange-400" /> Incidents &amp; Status
-          </h1>
-          <p className="text-xs text-gray-500 mt-1">
-            Platform incidents, their response times and the signals they start from. Last checked {fmtWhen(now)}.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Btn icon={FileSpreadsheet} onClick={exportExcel} busy={exporting} disabled={!all.length}>Excel</Btn>
+    <div className="space-y-4 max-w-7xl">
+      <OpsPageHeader
+        icon={Siren}
+        title={<>Incidents &amp; Status</>}
+        purpose="Platform incidents, their response times and the signals they start from."
+        refreshedAt={refreshedAt}
+        onRefresh={load}
+        busy={loading}
+        actions={(<>
+          <Btn icon={FileSpreadsheet} onClick={() => exportFile('excel')} busy={exporting === 'excel'} disabled={!all.length || !!exporting}>Excel</Btn>
+          <Btn icon={FileText} onClick={() => exportFile('pdf')} busy={exporting === 'pdf'} disabled={!all.length || !!exporting}>PDF</Btn>
           <Btn icon={Plus} variant="primary" onClick={() => startDraft(null)}>Open incident</Btn>
-          <Btn icon={RefreshCw} onClick={load} busy={loading}>Refresh</Btn>
-        </div>
-      </header>
+        </>)}
+      />
 
       {error && <Note icon={AlertTriangle} tone="warning">{error}</Note>}
 
       <section className={`rounded-xl border ${level.ring} bg-gray-900/50 p-4 flex items-center gap-4`} aria-live="polite">
-        <LevelIcon size={28} className={level.color} />
+        <LevelIcon size={28} className={level.color} aria-hidden="true" />
         <div className="flex-1 min-w-0">
           <p className={`text-base font-semibold ${level.color}`}>{status.label}</p>
           <p className="text-xs text-gray-500 mt-0.5">{status.detail}</p>
         </div>
         {status.open > 0 && (
-          <Btn size="xs" onClick={() => setView('open')}>View open</Btn>
+          <Btn size="xs" onClick={() => { setView('open'); setTab('incidents') }}>View open</Btn>
         )}
       </section>
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <StatTile label="Open incidents" value={openCount} icon={Activity}
-          tone={openCount ? 'warning' : 'good'} onClick={() => setView('open')} active={view === 'open'} />
+          tone={openCount ? 'warning' : 'good'} onClick={() => { setView('open'); setTab('incidents') }} active={tab === 'incidents' && view === 'open'} />
         <StatTile label="SEV1 open" value={openSev.sev1} icon={Flame} tone={openSev.sev1 ? 'danger' : 'default'} />
         <StatTile label={`MTTR ${WINDOW_DAYS}d`} value={formatDuration(mttr90)} icon={Timer}
-          sub={mttr90 === null ? 'No resolved incident yet' : 'Start to resolved'} tone={mttr90 === null ? 'muted' : 'default'} />
+          sub={mttr90 === null ? 'No resolved incident yet' : 'Start to resolved'} tone={mttr90 === null ? 'muted' : 'default'}
+          onClick={() => setTab('trends')} active={tab === 'trends'} />
         <StatTile label={`MTTA ${WINDOW_DAYS}d`} value={formatDuration(mtta90)} icon={Clock}
           sub={mtta90 === null ? 'Nothing acknowledged yet' : 'Start to first response'} tone={mtta90 === null ? 'muted' : 'default'} />
         <StatTile label={`Incidents ${WINDOW_DAYS}d`} value={count90} icon={ListChecks}
-          onClick={() => setView('all')} active={view === 'all'} />
+          onClick={() => { setView('all'); setTab('incidents') }} active={tab === 'incidents' && view === 'all'} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Panel className="lg:col-span-2">
-          <PanelHeader icon={Activity} title="Incidents per week" subtitle="Started in each of the last 12 weeks (Monday to Sunday, UTC)." />
-          <TrendChart labels={weekly.labels} series={[{ label: 'Incidents', values: weekly.values }]}
-            summary={`${weekly.values.reduce((s, v) => s + v, 0)} incidents started in the last 12 weeks.`}
-            emptyText="No incidents in the last 12 weeks." />
-        </Panel>
-        <Panel>
-          <PanelHeader icon={AlertTriangle} title="Open by severity" subtitle="What is still being worked on." />
-          <BarsChart bars={sevBars} summary={`${openCount} open incidents.`} emptyText="No open incidents." />
-        </Panel>
-      </div>
+      <AttentionList items={attention}
+        clear="Nothing needs attention: no unacknowledged or stale open incidents, and every resolved incident has a postmortem." />
 
-      <Panel flush>
-        <div className="p-4 pb-3">
-          <PanelHeader icon={ListChecks} title="Incidents"
-            subtitle={`Open incidents and everything started in the last ${WINDOW_DAYS} days.`} />
-          <Toolbar>
-            <Segmented value={view} onChange={setView} ariaLabel="Incident view" options={[
-              { key: 'open', label: 'Open', count: openCount },
-              { key: 'resolved', label: 'Resolved', count: all.length - openCount },
-              { key: 'all', label: 'All', count: all.length },
-            ]} />
-            <SearchInput value={search} onChange={setSearch} placeholder="Search title, module, commander" className="w-full sm:w-64"
-              ariaLabel="Search incidents" />
-            <span className="text-[11px] text-gray-500 ml-auto tabular-nums">{listed.length} shown</span>
-          </Toolbar>
-        </div>
-        {listed.length === 0 ? (
-          <div className="p-4 pt-0">
-            <EmptyState icon={CheckCircle2}
-              title={view === 'open' ? 'No open incidents' : 'No incidents match'}
-              reason={search ? 'Nothing matches this search.' : view === 'open'
-                ? 'The platform has nothing open right now.' : `No incidents recorded in the last ${WINDOW_DAYS} days.`} />
+      <Segmented value={tab} onChange={setTab} ariaLabel="Incident pages" options={[
+        { key: 'incidents', label: 'Incidents', count: openCount },
+        { key: 'trends', label: 'Trends' },
+        { key: 'signals', label: 'Signals', count: signals ? signalCount : undefined },
+      ]} />
+
+      {tab === 'incidents' && (
+        <Panel flush>
+          <div className="p-4 pb-3">
+            <PanelHeader icon={ListChecks} title="Incidents"
+              subtitle={`Open incidents and everything started in the last ${WINDOW_DAYS} days. Select one for its timeline and actions.`} />
+            <Toolbar>
+              <Segmented value={view} onChange={setView} ariaLabel="Incident view" options={[
+                { key: 'open', label: 'Open', count: openCount },
+                { key: 'resolved', label: 'Resolved', count: all.length - openCount },
+                { key: 'all', label: 'All', count: all.length },
+              ]} />
+              <SearchInput value={search} onChange={setSearch} placeholder="Search title, module, commander" className="w-full sm:w-64"
+                ariaLabel="Search incidents" />
+              <span className="text-[11px] text-gray-500 ml-auto tabular-nums">{listed.length} shown</span>
+            </Toolbar>
           </div>
-        ) : (
-          <Table>
-            <THead>
-              <Th sortKey="title" sort={sort} onSort={onSort}>Incident</Th>
-              <Th sortKey="severity" sort={sort} onSort={onSort}>Severity</Th>
-              <Th sortKey="status" sort={sort} onSort={onSort}>Status</Th>
-              <Th sortKey="started_at" sort={sort} onSort={onSort}>Started</Th>
-              <Th sortKey="duration" sort={sort} onSort={onSort}>Duration</Th>
-              <Th sortKey="commander" sort={sort} onSort={onSort}>Commander</Th>
-              <Th align="right" sortKey="updates" sort={sort} onSort={onSort}>Updates</Th>
-            </THead>
-            <tbody>
-              {listed.map((i) => (
-                <Tr key={i.id} onClick={() => openDetail(i)}>
-                  <Td>
-                    <p className="text-gray-200 font-medium">{i.title}</p>
-                    {(i.affected_modules || []).length > 0 && (
-                      <p className="text-[11px] text-gray-500 mt-0.5">{i.affected_modules.join(', ')}</p>
-                    )}
-                  </Td>
-                  <Td><Badge tone={SEV_TONE[i.severity]}>{SEVERITY_LABEL[i.severity] || i.severity}</Badge></Td>
-                  <Td><Badge tone={STATUS_TONE[i.status]}>{STATUS_LABEL[i.status] || i.status}</Badge></Td>
-                  <Td nowrap>{fmtWhen(i.started_at)}</Td>
-                  <Td nowrap>
-                    {isOpen(i)
-                      ? <span className="text-amber-300">{formatDuration(durationMinutes(i.started_at, now))} so far</span>
-                      : formatDuration(durationMinutes(i.started_at, i.resolved_at))}
-                  </Td>
-                  <Td>{i.commander_name || 'N/A'}</Td>
-                  <Td align="right">{(i.updates || []).length}</Td>
-                </Tr>
-              ))}
-            </tbody>
-          </Table>
-        )}
-      </Panel>
+          {listed.length === 0 ? (
+            <div className="p-4 pt-0">
+              <EmptyState icon={CheckCircle2}
+                title={view === 'open' ? 'No open incidents' : 'No incidents match'}
+                reason={search ? 'Nothing matches this search.' : view === 'open'
+                  ? 'The platform has nothing open right now.' : `No incidents recorded in the last ${WINDOW_DAYS} days.`} />
+            </div>
+          ) : (
+            <>
+              <Table className="border-x-0 rounded-none">
+                <THead>
+                  <Th sortKey="title" sort={sort} onSort={onSort}>Incident</Th>
+                  <Th sortKey="severity" sort={sort} onSort={onSort}>Severity</Th>
+                  <Th sortKey="status" sort={sort} onSort={onSort}>Status</Th>
+                  <Th sortKey="started_at" sort={sort} onSort={onSort}>Started</Th>
+                  <Th sortKey="duration" sort={sort} onSort={onSort}>Duration</Th>
+                  <Th sortKey="commander" sort={sort} onSort={onSort}>Commander</Th>
+                  <Th align="right" sortKey="updates" sort={sort} onSort={onSort}>Updates</Th>
+                </THead>
+                <tbody>
+                  {paged.slice.map((i) => (
+                    <Tr key={i.id} onClick={() => openDetail(i)}>
+                      <Td>
+                        <p className="text-gray-200 font-medium">{i.title}</p>
+                        {(i.affected_modules || []).length > 0 && (
+                          <p className="text-[11px] text-gray-500 mt-0.5">{i.affected_modules.join(', ')}</p>
+                        )}
+                      </Td>
+                      <Td><Badge tone={SEV_TONE[i.severity]}>{SEVERITY_LABEL[i.severity] || i.severity}</Badge></Td>
+                      <Td><Badge tone={STATUS_TONE[i.status]}>{STATUS_LABEL[i.status] || i.status}</Badge></Td>
+                      <Td nowrap>{fmtWhen(i.started_at)}</Td>
+                      <Td nowrap>
+                        {isOpen(i)
+                          ? <span className="text-amber-300">{formatDuration(durationMinutes(i.started_at, now))} so far</span>
+                          : formatDuration(durationMinutes(i.started_at, i.resolved_at))}
+                      </Td>
+                      <Td>{i.commander_name || 'N/A'}</Td>
+                      <Td align="right">{(i.updates || []).length}</Td>
+                    </Tr>
+                  ))}
+                </tbody>
+              </Table>
+              <div className="px-4 pb-3"><Pager {...paged} label="incidents" /></div>
+            </>
+          )}
+        </Panel>
+      )}
 
-      <SignalsPanel signals={signals} onOpen={(kind, row) => startDraft(draftFromSignal(kind, row))} />
+      {tab === 'trends' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <Panel className="lg:col-span-2">
+            <PanelHeader icon={Activity} title="Incidents per week" subtitle="Started in each of the last 12 weeks (Monday to Sunday, UTC)." />
+            <TrendChart labels={weekly.labels} series={[{ label: 'Incidents', values: weekly.values }]}
+              summary={`${weekly.values.reduce((s, v) => s + v, 0)} incidents started in the last 12 weeks.`}
+              emptyText="No incidents in the last 12 weeks." />
+          </Panel>
+          <Panel>
+            <PanelHeader icon={AlertTriangle} title="Open by severity" subtitle="What is still being worked on." />
+            <BarsChart bars={sevBars} summary={`${openCount} open incidents.`} emptyText="No open incidents." />
+          </Panel>
+          <Panel className="lg:col-span-2">
+            <PanelHeader icon={Flame} title="Most affected modules" subtitle={`Incidents naming each module, last ${WINDOW_DAYS} days.`} />
+            {topModules.length === 0 ? (
+              <EmptyState icon={CheckCircle2} title="No affected modules recorded"
+                reason="No incident in this window listed an affected module." />
+            ) : (
+              <BarsChart bars={topModules.map((m) => ({ label: m.module, value: m.count }))}
+                summary={topModules.map((m) => `${m.module} ${m.count}`).join(', ')} />
+            )}
+          </Panel>
+          <Panel>
+            <PanelHeader icon={FileText} title="Postmortem coverage" subtitle="Resolved incidents with a written postmortem." />
+            <StatTile label="Postmortems written"
+              value={resolvedCount ? `${postmortemCount} of ${resolvedCount}` : 'N/A'}
+              sub={resolvedCount ? `${Math.round((postmortemCount / resolvedCount) * 100)}% coverage` : 'No resolved incident yet'}
+              tone={!resolvedCount ? 'muted' : postmortemCount === resolvedCount ? 'good' : 'warning'}
+              onClick={resolvedCount ? () => { setView('resolved'); setTab('incidents') } : undefined} />
+          </Panel>
+        </div>
+      )}
 
-      <Modal open={!!selected} onClose={() => setSelectedId(null)} width="max-w-3xl"
+      {tab === 'signals' && (
+        <SignalsPanel signals={signals} onOpen={(kind, row) => startDraft(draftFromSignal(kind, row))} />
+      )}
+
+      <Drawer open={!!selected} onClose={() => setSelectedId(null)} width="max-w-3xl"
         title={selected?.title || ''}
         subtitle={selected ? `${SEVERITY_LABEL[selected.severity]} | ${STATUS_LABEL[selected.status]} | started ${fmtWhen(selected.started_at)}` : ''}>
         {selected && (
@@ -388,7 +497,7 @@ export default function ConsoleIncidents() {
             </div>
           </div>
         )}
-      </Modal>
+      </Drawer>
 
       <Modal open={!!draft} onClose={() => setDraft(null)} title="Open incident"
         subtitle="SEV1 and SEV2 notify every super admin straight away."

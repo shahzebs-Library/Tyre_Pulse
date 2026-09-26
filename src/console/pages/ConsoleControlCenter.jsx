@@ -36,6 +36,22 @@ import {
 import { exportControlCenter } from '../../lib/controlCenterExport'
 import { toUserMessage } from '../../lib/safeError'
 import { sortRows } from '../../lib/consoleTable'
+import OpsPageHeader from './opsKit/OpsPageHeader'
+import Pager, { usePaged, PAGE_SIZE } from './opsKit/Pager'
+import AttentionList from './opsKit/AttentionList'
+import useUrlTab from './opsKit/useUrlTab'
+import ExportButtons from './shared/ExportButtons'
+
+const IMPORT_EXPORT_COLUMNS = [
+  { key: 'module', header: 'Module' },
+  { key: 'file', header: 'File' },
+  { key: 'rows', header: 'Rows' },
+  { key: 'imported', header: 'Imported' },
+  { key: 'duplicates', header: 'Duplicates' },
+  { key: 'status', header: 'Status' },
+  { key: 'repeat_file', header: 'Repeat file', value: (r) => (r.repeat_file ? 'Yes' : 'No') },
+  { key: 'at', header: 'When' },
+]
 
 const COUNTRIES = ['All', 'KSA', 'UAE', 'Egypt']
 
@@ -83,7 +99,8 @@ function labelizeKey(k) {
 
 export default function ConsoleControlCenter() {
   const navigate = useNavigate()
-  const [country, setCountry] = useState('All')
+  const [country, setCountry] = useUrlTab(COUNTRIES, 'All', 'country')
+  const [tab, setTab] = useUrlTab(['confidence', 'diagnostics', 'fix', 'lineage'], 'confidence')
 
   // ── Trust + diagnostics (driven by country) ──
   const [report, setReport] = useState(null)     // buildTrustReport output
@@ -201,6 +218,37 @@ export default function ConsoleControlCenter() {
     setImportSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'desc' }))
   }, [])
 
+  const pagedImports = usePaged(sortedImports, PAGE_SIZE, `${domain}|${country}|${importSort.key}${importSort.dir}`)
+
+  const scored = domainCards.filter((c) => c.score != null)
+  const scoredCount = scored.length
+  const avgScore = scoredCount ? Math.round(scored.reduce((a, c) => a + c.score, 0) / scoredCount) : null
+  const weakest = scoredCount ? scored.reduce((w, c) => (c.score < w.score ? c : w), scored[0]) : null
+  const criticalCount = rankedIssues.filter((i) => i.severity === 'critical').length
+
+  // The worst issues each with the one page that clears them, then the single
+  // biggest confidence gain on offer.
+  const attention = useMemo(() => {
+    const out = rankedIssues
+      .filter((i) => i.severity === 'critical' || i.severity === 'warning')
+      .slice(0, 3)
+      .map((i) => {
+        const route = ISSUE_ROUTE[i.action]
+        return {
+          key: `issue:${i.key}`, tone: i.severity === 'critical' ? 'danger' : 'warning',
+          text: `${i.label}: ${fmtInt(i.count)}.`,
+          action: route ? { label: 'Open', to: route } : { label: 'Fix tab', onClick: () => setTab('fix') },
+        }
+      })
+    if (actions[0]) out.push({
+      key: 'top-action', tone: 'info',
+      text: `Biggest confidence gain: ${actions[0].label} in ${actions[0].country} (+${actions[0].impact} points).`,
+      action: { label: 'See all actions', onClick: () => setTab('confidence') },
+    })
+    return out
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rankedIssues, actions])
+
   const canExport = Boolean(report || summary || lineage)
   const [exporting, setExporting] = useState(null)
   const [exportError, setExportError] = useState(null)
@@ -216,18 +264,15 @@ export default function ConsoleControlCenter() {
   }, [country, report, summary, lineage])
 
   return (
-    <div className="space-y-6 max-w-7xl">
-      {/* Header + country selector */}
-      <div className="flex flex-col lg:flex-row lg:items-center gap-4">
-        <div className="flex-1">
-          <h1 className="text-xl font-bold text-white flex items-center gap-2">
-            <ShieldCheck size={18} className="text-orange-400" /> Data Trust &amp; Control Center
-          </h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            How much to trust every KPI, what is wrong with the data, and where each figure comes from | one place
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
+    <div className="space-y-4 max-w-7xl">
+      <OpsPageHeader
+        icon={ShieldCheck}
+        title={<>Data Trust &amp; Control Center</>}
+        purpose="How much to trust every KPI, what is wrong with the data, and where each figure comes from."
+        refreshedAt={lastUpdated}
+        onRefresh={refreshAll}
+        busy={refreshing}
+        actions={(<>
           <Segmented
             options={COUNTRIES.map((c) => ({ key: c, label: c }))}
             value={country}
@@ -243,15 +288,48 @@ export default function ConsoleControlCenter() {
             title="Download the diagnostics snapshot as PDF">
             PDF
           </Btn>
-          <Btn icon={RefreshCw} onClick={refreshAll} busy={refreshing}>
-            {refreshing ? 'Refreshing...' : 'Refresh'}
-          </Btn>
-        </div>
-      </div>
+        </>)}
+      />
 
       {exportError && <ErrorState message={exportError} onRetry={() => setExportError(null)} />}
 
-      {/* ── 1. Trust scores ── */}
+      {/* KPI row */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <StatTile icon={ShieldCheck} label="Average confidence"
+          value={loading ? 'N/A' : trustError || avgScore == null ? 'N/A' : avgScore}
+          sub={loading ? 'Scoring...' : trustError ? 'Could not be read' : avgScore == null ? 'Nothing measurable yet' : `across ${scoredCount} figures, out of 100`}
+          tone={avgScore == null ? 'muted' : avgScore >= 80 ? 'good' : avgScore >= 60 ? 'warning' : 'danger'}
+          onClick={() => setTab('confidence')} active={tab === 'confidence'} />
+        <StatTile icon={Activity} label="Weakest figure"
+          value={weakest ? weakest.score : 'N/A'}
+          sub={weakest ? weakest.label : loading ? 'Scoring...' : 'Nothing measurable yet'}
+          tone={!weakest ? 'muted' : weakest.score >= 80 ? 'good' : weakest.score >= 60 ? 'warning' : 'danger'}
+          onClick={() => setTab('confidence')} />
+        <StatTile icon={Database} label="Open issues"
+          value={loading ? 'N/A' : diagError || !summary ? 'N/A' : openIssues}
+          sub={diagError ? 'Could not be read' : `${criticalCount} critical`}
+          tone={!summary ? 'muted' : criticalCount > 0 ? 'danger' : openIssues > 0 ? 'warning' : 'good'}
+          onClick={() => setTab('diagnostics')} active={tab === 'diagnostics'} />
+        <StatTile icon={GitBranch} label="Imports behind figure"
+          value={lineageLoading ? 'N/A' : lineageError || !lineage ? 'N/A' : sortedImports.length}
+          sub={lineage ? `${DOMAIN_LABELS[domain] || domain}${repeatFileCount(sortedImports) ? `, ${repeatFileCount(sortedImports)} repeat` : ''}` : 'Lineage not read'}
+          tone={repeatFileCount(sortedImports) > 0 ? 'warning' : 'default'}
+          onClick={() => setTab('lineage')} active={tab === 'lineage'} />
+      </div>
+
+      {!loading && (
+        <AttentionList items={attention}
+          clear={diagError || trustError ? 'Part of the picture could not be read, so this list may be incomplete.' : 'Nothing needs attention: no critical data issues for this selection.'} />
+      )}
+
+      <Segmented value={tab} onChange={setTab} ariaLabel="Control center views" options={[
+        { key: 'confidence', label: 'KPI confidence' },
+        { key: 'diagnostics', label: 'Diagnostics', count: summary ? openIssues : undefined },
+        { key: 'fix', label: 'Fix' },
+        { key: 'lineage', label: 'Lineage' },
+      ]} />
+
+      {tab === 'confidence' && (
       <Panel>
         <PanelHeader icon={ShieldCheck} title="KPI confidence"
           subtitle="A 0 to 100 grade for each headline figure, with the specific gaps behind it" />
@@ -331,7 +409,9 @@ export default function ConsoleControlCenter() {
           </>
         )}
       </Panel>
+      )}
 
+      {tab === 'diagnostics' && (<>
       {/* ── 2. Diagnostics feed ── */}
       <Panel>
         <PanelHeader icon={Activity} title="Data-quality diagnostics"
@@ -400,9 +480,12 @@ export default function ConsoleControlCenter() {
         )}
       </Panel>
 
-      {/* ── 2b. Advanced remediation (one-click fixes) ── */}
-      <RemediationActions country={country} />
+      </>)}
 
+      {/* ── Advanced remediation (one-click fixes) ── */}
+      {tab === 'fix' && <RemediationActions country={country} />}
+
+      {tab === 'lineage' && (<>
       {/* ── 3. Lineage explorer ── */}
       <Panel>
         <PanelHeader icon={GitBranch} title="Figure lineage"
@@ -444,13 +527,17 @@ export default function ConsoleControlCenter() {
                 <p className="text-[11px] uppercase tracking-wider text-gray-500 font-semibold flex items-center gap-1.5">
                   <FileClock size={12} className="text-gray-600" /> Recent imports behind this figure
                 </p>
-                {repeatFileCount(sortedImports) > 0 && (
-                  <Badge tone="warning" title="Files whose content was seen before">
-                    {fmtInt(repeatFileCount(sortedImports))} repeat {repeatFileCount(sortedImports) === 1 ? 'file' : 'files'}
-                  </Badge>
-                )}
+                <span className="flex items-center gap-2">
+                  {repeatFileCount(sortedImports) > 0 && (
+                    <Badge tone="warning" title="Files whose content was seen before">
+                      {fmtInt(repeatFileCount(sortedImports))} repeat {repeatFileCount(sortedImports) === 1 ? 'file' : 'files'}
+                    </Badge>
+                  )}
+                  <ExportButtons rows={sortedImports} columns={IMPORT_EXPORT_COLUMNS} title={`Imports behind ${DOMAIN_LABELS[domain] || domain}`} />
+                </span>
               </div>
               {sortedImports.length > 0 ? (
+                <>
                 <Table>
                   <THead>
                     <Th sortKey="module" sort={importSort} onSort={onImportSort}>Module</Th>
@@ -462,7 +549,7 @@ export default function ConsoleControlCenter() {
                     <Th sortKey="at" sort={importSort} onSort={onImportSort}>When</Th>
                   </THead>
                   <tbody>
-                    {sortedImports.map((imp, i) => (
+                    {pagedImports.slice.map((imp, i) => (
                       <Tr key={i} tone={imp.repeat_file ? 'warning' : undefined}>
                         <Td nowrap>{imp.module || 'N/A'}</Td>
                         <Td>
@@ -480,6 +567,8 @@ export default function ConsoleControlCenter() {
                     ))}
                   </tbody>
                 </Table>
+                <Pager {...pagedImports} label="imports" />
+                </>
               ) : (
                 <Note>No import activity is recorded behind this figure. It may have been loaded directly rather than through the import pipeline.</Note>
               )}
@@ -487,6 +576,7 @@ export default function ConsoleControlCenter() {
           </>
         )}
       </Panel>
+      </>)}
     </div>
   )
 }

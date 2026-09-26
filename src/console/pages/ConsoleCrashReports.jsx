@@ -32,6 +32,11 @@ import {
 } from '../components/ui'
 import { sortRows } from '../../lib/consoleTable'
 import ExportButtons from './shared/ExportButtons'
+import OpsPageHeader from './opsKit/OpsPageHeader'
+import Pager, { usePaged, PAGE_SIZE } from './opsKit/Pager'
+import Drawer from './opsKit/Drawer'
+import AttentionList from './opsKit/AttentionList'
+import useUrlTab from './opsKit/useUrlTab'
 import { BarsChart, STATUS, useChartTheme } from '../components/ui/charts'
 
 const PERIODS = [
@@ -139,6 +144,7 @@ export default function ConsoleCrashReports() {
   const [alertsEnabled, setAlertsEnabled] = useState(false)
   const [saving, setSaving] = useState(false)
   const [notice, setNotice] = useState('')
+  const [refreshedAt, setRefreshedAt] = useState(null)
 
   const loadStatus = useCallback(async () => {
     setStatusLoading(true)
@@ -162,7 +168,7 @@ export default function ConsoleCrashReports() {
         else if (res?.reason !== 'not_configured') setError('Could not load crash reports. Try again.')
       }
     } catch (e) { setIssues([]); setReason('error'); setError(toUserMessage(e, 'Could not load crash reports.')) }
-    finally { setLoading(false) }
+    finally { setLoading(false); setRefreshedAt(new Date().toISOString()) }
   }, [activeQuery, period, projectId])
 
   const loadProjects = useCallback(async () => {
@@ -183,6 +189,7 @@ export default function ConsoleCrashReports() {
   useEffect(() => { if (status?.configured) { loadIssues(); loadProjects(); loadMembers() } }, [status?.configured, loadIssues, loadProjects, loadMembers])
 
   const [issueOrder, setIssueOrder] = useState('lastSeen')
+  const [tab, setTab] = useUrlTab(['issues', 'insights'], 'issues')
   // Sentry returns its own order; the reader can re-rank the loaded page locally.
   const sortedIssues = useMemo(() => {
     const spec = ISSUE_ORDERS.find(o => o.key === issueOrder) || ISSUE_ORDERS[0]
@@ -214,6 +221,49 @@ export default function ConsoleCrashReports() {
     .slice(0, 8)
     .map((i) => ({ label: shorten(i.shortId ? `${i.shortId} ${i.title}` : i.title, 44), value: i.count || 0, color: colors[levelMeta(i.level).color] })),
   [issues, colors])
+
+  const topUserBars = useMemo(() => [...issues]
+    .filter((i) => (i.userCount || 0) > 0)
+    .sort((a, b) => (b.userCount || 0) - (a.userCount || 0))
+    .slice(0, 8)
+    .map((i) => ({ label: shorten(i.shortId ? `${i.shortId} ${i.title}` : i.title, 44), value: i.userCount || 0, color: colors[levelMeta(i.level).color] })),
+  [issues, colors])
+  const projectBars = useMemo(() => {
+    const m = new Map()
+    for (const i of issues) if (i.project) m.set(i.project, (m.get(i.project) || 0) + 1)
+    return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([label, value]) => ({ label, value }))
+  }, [issues])
+  const newIssues = useMemo(() => issues
+    .filter((i) => { const t = new Date(i.firstSeen).getTime(); return Number.isFinite(t) && Date.now() - t <= 86400000 })
+    .sort((a, b) => new Date(b.firstSeen) - new Date(a.firstSeen)).slice(0, 10), [issues])
+  const pagedIssues = usePaged(sortedIssues, PAGE_SIZE, `${activeQuery}|${period}|${projectId}|${issueOrder}`)
+
+  const attention = useMemo(() => {
+    const out = []
+    const fatalUnassigned = issues.filter((i) => i.level === 'fatal' && i.status !== 'resolved' && !i.assignedTo)
+    if (fatalUnassigned.length) out.push({
+      key: 'fatal', tone: 'danger',
+      text: `${fatalUnassigned.length} fatal ${fatalUnassigned.length === 1 ? 'crash has' : 'crashes have'} nobody assigned: ${shorten(fatalUnassigned[0].title, 60)}.`,
+      action: { label: 'Triage', onClick: () => openDetail(fatalUnassigned[0]) },
+    })
+    if (newIssues.length) out.push({
+      key: 'new', tone: 'warning',
+      text: `${newIssues.length} ${newIssues.length === 1 ? 'issue was' : 'issues were'} first seen in the last 24 hours.`,
+      action: { label: 'Review new', onClick: () => setTab('insights') },
+    })
+    const heavy = issues.filter((i) => (i.userCount || 0) >= 10 && i.status !== 'resolved')
+    if (heavy.length) out.push({
+      key: 'users', tone: 'warning',
+      text: `${heavy.length} open ${heavy.length === 1 ? 'issue affects' : 'issues affect'} 10 or more users.`,
+      action: { label: 'Open worst', onClick: () => openDetail(heavy.sort((a, b) => (b.userCount || 0) - (a.userCount || 0))[0]) },
+    })
+    if (status?.configured && status.alerts_enabled !== true) out.push({
+      key: 'alerts', tone: 'info', text: 'Alerts on new fatal crashes are switched off, so nobody is emailed when the app crashes.',
+      action: { label: 'Connection', onClick: () => setShowSetup(true) },
+    })
+    return out
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [issues, newIssues, status])
 
   const onSave = async () => {
     setSaving(true); setError(''); setNotice('')
@@ -300,92 +350,96 @@ export default function ConsoleCrashReports() {
   const setupOpen = showSetup || (!statusLoading && !connected)
   const memberOptions = [{ value: '', label: 'Unassigned' }, ...members.map(m => ({ value: m.userId, label: m.name }))]
 
+  const setupForm = (
+    <>
+          <Note icon={Info}>
+        Paste a Sentry Auth Token with read (and, for triage, <Code>issue:write</Code>) scope.
+      </Note>
+      <div className="grid gap-3 sm:grid-cols-2 mt-3">
+        <label className="text-xs text-gray-400 space-y-1">
+          <span>Auth token {connected && <span className="text-emerald-400">(saved, leave blank to keep)</span>}</span>
+          <input type="password" value={token} onChange={e => setToken(e.target.value)} placeholder={connected ? '••••••••••••' : 'sntrys_...'} autoComplete="off"
+            className={INPUT} />
+        </label>
+        <label className="text-xs text-gray-400 space-y-1"><span>Organisation slug</span>
+          <input value={org} onChange={e => setOrg(e.target.value)} className={INPUT} /></label>
+        <label className="text-xs text-gray-400 space-y-1"><span>Region URL</span>
+          <input value={regionUrl} onChange={e => setRegionUrl(e.target.value)} placeholder="https://de.sentry.io" className={INPUT} /></label>
+        <label className="text-xs text-gray-400 space-y-1"><span>Project slug (optional)</span>
+          <input value={project} onChange={e => setProject(e.target.value)} placeholder="all projects" className={INPUT} /></label>
+      </div>
+      {/* Fatal-crash alerts */}
+      <div className="pt-3 mt-3 border-t border-gray-800 space-y-3">
+        <label className="flex items-center gap-2.5 cursor-pointer">
+          <button type="button" role="switch" aria-checked={alertsEnabled} onClick={() => setAlertsEnabled(v => !v)}
+            className={`relative w-10 h-5 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 ${alertsEnabled ? 'bg-orange-500' : 'bg-gray-700'}`}>
+            <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${alertsEnabled ? 'left-[22px]' : 'left-0.5'}`} />
+          </button>
+          <span className="text-sm text-gray-200 font-medium">Alert on new fatal crashes</span>
+          <Badge tone={alertsEnabled ? 'good' : 'quiet'}>{alertsEnabled ? 'On' : 'Off'}</Badge>
+        </label>
+        <p className="text-[11px] text-gray-500 flex items-start gap-1.5">
+          <Info size={12} className="mt-0.5 shrink-0" />
+          <span>Every 15 minutes we check for new <Code>level:fatal</Code> issues. Each new one is logged to System Health and emailed below (deduped, never twice).</span>
+        </p>
+        <label className="text-xs text-gray-400 space-y-1 block max-w-md">
+          <span>Alert email(s), comma separated</span>
+          <input value={alertEmail} onChange={e => setAlertEmail(e.target.value)} placeholder="ops@tyrepulse.app, you@company.com"
+            className={INPUT} />
+        </label>
+      </div>
+      <div className="flex items-center gap-2 mt-3">
+        <Btn variant="primary" icon={Save} onClick={onSave} busy={saving} disabled={!connected && !token.trim()}>
+          {saving ? 'Saving...' : 'Save connection'}
+        </Btn>
+      </div>
+    </>
+  )
+
   return (
     <div className="space-y-5 max-w-7xl">
-      {/* Header */}
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2">
-            <Bug size={18} className="text-orange-400" /> Crash &amp; Error Reports
-          </h1>
-          <p className="text-xs text-gray-500 mt-1">
-            Live Sentry issues from the mobile app and web, with triage.
-            {connected && status?.org && <span> | connected to {status.org}</span>}
-          </p>
-        </div>
-        <Toolbar>
-          <Btn icon={Settings} onClick={() => setShowSetup(s => !s)}>Connection</Btn>
-          <Btn variant="primary" icon={RefreshCw} onClick={loadIssues} busy={loading} disabled={!connected}>Refresh</Btn>
-        </Toolbar>
-      </header>
+      <OpsPageHeader
+        icon={Bug}
+        title={<>Crash &amp; Error Reports</>}
+        purpose={`Live Sentry issues from the mobile app and web, with triage.${connected && status?.org ? ` Connected to ${status.org}.` : ''}`}
+        refreshedAt={connected ? refreshedAt : null}
+        onRefresh={connected ? loadIssues : undefined}
+        busy={loading}
+        actions={<Btn icon={Settings} onClick={() => setShowSetup(s => !s)} aria-expanded={setupOpen}>Connection</Btn>}
+      />
 
       {notice && <Note icon={CheckCircle2} tone="accent">{notice}</Note>}
       <ErrorState message={error} onRetry={connected ? loadIssues : loadStatus} />
 
       {statusLoading && !status && <Panel><LoadingState label="Checking the Sentry connection" rows={2} /></Panel>}
 
-      {/* Connection / setup */}
-      {setupOpen && (
-        <Panel tone={connected ? undefined : 'accent'}>
-          <PanelHeader
-            icon={ShieldAlert}
-            title="Sentry connection"
-            subtitle="Stored on the server only. The token is never shown again."
-            actions={connected && <Badge tone="good" icon={CheckCircle2}>Connected to {status.org}</Badge>}
-          />
-          <Note icon={Info}>
-            Paste a Sentry Auth Token with read (and, for triage, <Code>issue:write</Code>) scope.
-          </Note>
-          <div className="grid gap-3 sm:grid-cols-2 mt-3">
-            <label className="text-xs text-gray-400 space-y-1">
-              <span>Auth token {connected && <span className="text-emerald-400">(saved, leave blank to keep)</span>}</span>
-              <input type="password" value={token} onChange={e => setToken(e.target.value)} placeholder={connected ? '••••••••••••' : 'sntrys_...'} autoComplete="off"
-                className={INPUT} />
-            </label>
-            <label className="text-xs text-gray-400 space-y-1"><span>Organisation slug</span>
-              <input value={org} onChange={e => setOrg(e.target.value)} className={INPUT} /></label>
-            <label className="text-xs text-gray-400 space-y-1"><span>Region URL</span>
-              <input value={regionUrl} onChange={e => setRegionUrl(e.target.value)} placeholder="https://de.sentry.io" className={INPUT} /></label>
-            <label className="text-xs text-gray-400 space-y-1"><span>Project slug (optional)</span>
-              <input value={project} onChange={e => setProject(e.target.value)} placeholder="all projects" className={INPUT} /></label>
-          </div>
-          {/* Fatal-crash alerts */}
-          <div className="pt-3 mt-3 border-t border-gray-800 space-y-3">
-            <label className="flex items-center gap-2.5 cursor-pointer">
-              <button type="button" role="switch" aria-checked={alertsEnabled} onClick={() => setAlertsEnabled(v => !v)}
-                className={`relative w-10 h-5 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 ${alertsEnabled ? 'bg-orange-500' : 'bg-gray-700'}`}>
-                <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${alertsEnabled ? 'left-[22px]' : 'left-0.5'}`} />
-              </button>
-              <span className="text-sm text-gray-200 font-medium">Alert on new fatal crashes</span>
-              <Badge tone={alertsEnabled ? 'good' : 'quiet'}>{alertsEnabled ? 'On' : 'Off'}</Badge>
-            </label>
-            <p className="text-[11px] text-gray-500 flex items-start gap-1.5">
-              <Info size={12} className="mt-0.5 shrink-0" />
-              <span>Every 15 minutes we check for new <Code>level:fatal</Code> issues. Each new one is logged to System Health and emailed below (deduped, never twice).</span>
-            </p>
-            <label className="text-xs text-gray-400 space-y-1 block max-w-md">
-              <span>Alert email(s), comma separated</span>
-              <input value={alertEmail} onChange={e => setAlertEmail(e.target.value)} placeholder="ops@tyrepulse.app, you@company.com"
-                className={INPUT} />
-            </label>
-          </div>
-          <div className="flex items-center gap-2 mt-3">
-            <Btn variant="primary" icon={Save} onClick={onSave} busy={saving} disabled={!connected && !token.trim()}>
-              {saving ? 'Saving...' : 'Save connection'}
-            </Btn>
-          </div>
+      {/* Connection / setup: inline until connected, then a dialog on demand */}
+      {!connected && setupOpen && (
+        <Panel tone="accent">
+          <PanelHeader icon={ShieldAlert} title="Sentry connection"
+            subtitle="Stored on the server only. The token is never shown again." />
+          {setupForm}
         </Panel>
       )}
+      <Modal open={connected && showSetup} onClose={() => setShowSetup(false)} width="max-w-2xl"
+        title="Sentry connection" subtitle="Stored on the server only. The token is never shown again.">
+        <div className="mb-3"><Badge tone="good" icon={CheckCircle2}>Connected to {status?.org}</Badge></div>
+        {setupForm}
+      </Modal>
 
       {connected && (
         <>
           {/* Summary tiles */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             <StatTile label="Issues" value={(loading || reason) ? 'N/A' : summary.total} icon={Bug}
-              sub={summary.total >= ISSUE_PAGE ? `First ${ISSUE_PAGE} shown` : 'In this window'} />
-            <StatTile label="Fatal" value={(loading || reason) ? 'N/A' : summary.fatal} tone={summary.fatal > 0 ? 'danger' : 'default'} icon={ShieldAlert} />
-            <StatTile label="Errors" value={(loading || reason) ? 'N/A' : summary.errors} tone={summary.errors > 0 ? 'accent' : 'default'} icon={Bug} />
-            <StatTile label="Events" value={(loading || reason) ? 'N/A' : nf.format(summary.events)} icon={Activity} sub="Across these issues" />
+              sub={summary.total >= ISSUE_PAGE ? `First ${ISSUE_PAGE} shown` : 'In this window'}
+              onClick={() => { applyPreset('is:unresolved'); setTab('issues') }} active={tab === 'issues' && activeQuery === 'is:unresolved'} />
+            <StatTile label="Fatal" value={(loading || reason) ? 'N/A' : summary.fatal} tone={summary.fatal > 0 ? 'danger' : 'default'} icon={ShieldAlert}
+              onClick={() => { applyPreset('is:unresolved level:fatal'); setTab('issues') }} active={activeQuery === 'is:unresolved level:fatal'} />
+            <StatTile label="Errors" value={(loading || reason) ? 'N/A' : summary.errors} tone={summary.errors > 0 ? 'accent' : 'default'} icon={Bug}
+              onClick={() => { applyPreset('is:unresolved level:error'); setTab('issues') }} active={activeQuery === 'is:unresolved level:error'} />
+            <StatTile label="Events" value={(loading || reason) ? 'N/A' : nf.format(summary.events)} icon={Activity} sub="Across these issues"
+              onClick={() => setTab('insights')} active={tab === 'insights'} />
             <StatTile label="Users affected" value={(loading || reason) ? 'N/A' : nf.format(summary.users)} tone={summary.users > 0 ? 'warning' : 'default'} icon={Users}
               sub="Summed per issue" />
           </div>
@@ -397,26 +451,20 @@ export default function ConsoleCrashReports() {
             </Note>
           )}
 
-          {/* Charts */}
-          {!loading && issues.length > 0 && (
-            <div className="grid gap-4 lg:grid-cols-5">
-              <Panel className="lg:col-span-2">
-                <PanelHeader icon={BarChart3} title="Issues by level" subtitle="How many distinct issues sit at each Sentry level." />
-                <BarsChart bars={levelBars} summary={levelBars.map(b => `${b.label} ${b.value}`).join(', ')} />
-              </Panel>
-              <Panel className="lg:col-span-3">
-                <PanelHeader icon={Activity} title="Top issues by events" subtitle="The issues producing the most events in this window, coloured by level." />
-                <BarsChart bars={topBars} valueFormat={(v) => `${nf.format(v)} events`}
-                  summary={topBars.map(b => `${b.label} ${b.value}`).join(', ')}
-                  emptyText="No events recorded against these issues." />
-              </Panel>
-            </div>
+          {!loading && !reason && (
+            <AttentionList items={attention} clear="Nothing needs attention: no unassigned fatal crashes and no new issues in the last 24 hours." />
           )}
 
-          {/* Filters */}
-          <Panel>
-            <PanelHeader icon={Bug} title="Issues" subtitle="Click an issue for its stack trace, device details and activity."
-              actions={<ExportButtons rows={sortedIssues} columns={ISSUE_EXPORT_COLUMNS} title="Crash Reports" />} />
+          <Segmented value={tab} onChange={setTab} ariaLabel="Crash report views" options={[
+            { key: 'issues', label: 'Issues', count: (loading || reason) ? undefined : summary.total },
+            { key: 'insights', label: 'Insights' },
+          ]} />
+
+          {tab === 'issues' && (
+            <div className="grid gap-4 xl:grid-cols-4">
+              <Panel className="xl:col-span-3">
+                <PanelHeader icon={Bug} title="Issues" subtitle="Click an issue for its stack trace, device details and activity."
+                  actions={<ExportButtons rows={sortedIssues} columns={ISSUE_EXPORT_COLUMNS} title="Crash Reports" />} />
             <div className="space-y-2 mb-3">
               <form onSubmit={submitSearch}>
                 <Toolbar>
@@ -458,7 +506,7 @@ export default function ConsoleCrashReports() {
                 reason="Nothing in Sentry matches this search, project and period." />
             ) : (
               <div className="space-y-2">
-                {sortedIssues.map(it => {
+                {pagedIssues.slice.map(it => {
                   const lvl = levelMeta(it.level)
                   return (
                     <div key={it.id} className="rounded-xl border border-gray-800 bg-gray-900/40 p-3.5 hover:border-gray-700 transition-colors">
@@ -499,19 +547,77 @@ export default function ConsoleCrashReports() {
                     </div>
                   )
                 })}
+                <Pager {...pagedIssues} label="issues" />
               </div>
             )}
-          </Panel>
+              </Panel>
+              <Panel>
+                <PanelHeader icon={BarChart3} title="Issues by level" subtitle="Distinct issues at each Sentry level." />
+                {loading ? <LoadingState label="Loading" rows={2} /> : issues.length === 0 ? (
+                  <EmptyState icon={BarChart3} title="Nothing to chart" reason={reason ? 'Issues could not be loaded.' : 'No issues in this window.'} />
+                ) : (
+                  <BarsChart bars={levelBars} summary={levelBars.map(b => `${b.label} ${b.value}`).join(', ')} />
+                )}
+              </Panel>
+            </div>
+          )}
+
+          {tab === 'insights' && (
+            loading ? <Panel><LoadingState label="Loading crash insights" rows={4} /></Panel>
+              : reason ? <Panel><EmptyState icon={Bug} title="Insights unavailable" reason="Issues could not be loaded, so nothing is charted rather than showing zeros."
+                action={<Btn icon={RefreshCw} onClick={loadIssues}>Retry</Btn>} /></Panel>
+              : issues.length === 0 ? <Panel><EmptyState icon={CheckCircle2} title="No issues to analyse" reason="Nothing in Sentry matches this search, project and period." /></Panel>
+              : (
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <Panel className="lg:col-span-2">
+                    <PanelHeader icon={Activity} title="Top issues by events" subtitle="The issues producing the most events in this window, coloured by level." />
+                    <BarsChart bars={topBars} valueFormat={(v) => `${nf.format(v)} events`}
+                      summary={topBars.map(b => `${b.label} ${b.value}`).join(', ')}
+                      emptyText="No events recorded against these issues." />
+                  </Panel>
+                  <Panel>
+                    <PanelHeader icon={Users} title="Top issues by users affected" subtitle="Where the most people hit a problem." />
+                    <BarsChart bars={topUserBars} valueFormat={(v) => `${nf.format(v)} users`}
+                      summary={topUserBars.map(b => `${b.label} ${b.value}`).join(', ')}
+                      emptyText="No affected users recorded." />
+                  </Panel>
+                  <Panel>
+                    <PanelHeader icon={Smartphone} title="Issues by project" subtitle="Which app the loaded issues come from." />
+                    <BarsChart bars={projectBars} summary={projectBars.map(b => `${b.label} ${b.value}`).join(', ')}
+                      emptyText="Sentry did not report a project for these issues." />
+                  </Panel>
+                  <Panel className="lg:col-span-2">
+                    <PanelHeader icon={Clock} title="New in the last 24 hours" subtitle="Issues first seen in the past day: usually a regression from the latest release." />
+                    {newIssues.length === 0 ? (
+                      <EmptyState icon={CheckCircle2} title="No new issues" reason="Every loaded issue was first seen more than 24 hours ago." />
+                    ) : (
+                      <ul className="space-y-1">
+                        {newIssues.map(it => (
+                          <li key={it.id}>
+                            <button type="button" onClick={() => openDetail(it)}
+                              className="w-full flex items-center gap-2 text-left rounded-lg px-2 py-1.5 hover:bg-gray-800/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
+                              <Badge tone={levelMeta(it.level).tone}>{(it.level || 'error').toUpperCase()}</Badge>
+                              <span className="text-xs text-gray-200 flex-1 min-w-0 truncate">{it.title}</span>
+                              <span className="text-[11px] text-gray-500 tabular-nums">{timeAgo(it.firstSeen)}</span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </Panel>
+                </div>
+              )
+          )}
         </>
       )}
 
-      {/* Detail dialog */}
-      <Modal
+      {/* Detail drawer */}
+      <Drawer
         open={!!detailFor}
         onClose={closeDetail}
         width="max-w-3xl"
         title={detailFor?.title || 'Issue'}
-        subtitle={detailFor?.culprit || undefined}
+        subtitle={detailFor?.culprit ? <span className="font-mono break-all">{detailFor.culprit}</span> : undefined}
       >
         {detailFor && (
           <div className="space-y-4">
@@ -627,7 +733,7 @@ export default function ConsoleCrashReports() {
             )}
           </div>
         )}
-      </Modal>
+      </Drawer>
     </div>
   )
 }

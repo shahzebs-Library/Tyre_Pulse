@@ -15,7 +15,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Activity, RefreshCw, ShieldAlert, CheckCircle2, Info, Database, HardDrive,
+  Activity, ShieldAlert, CheckCircle2, Info, Database, HardDrive,
   Zap, KeyRound, Table2, Server, Clock, Cpu, FileText, Archive, BarChart3, ListChecks,
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
@@ -31,9 +31,15 @@ import { toUserMessage } from '../../lib/safeError'
 import { fetchAllPages } from '../../lib/fetchAll'
 import { dailySeries } from '../../lib/consoleCharts'
 import {
-  Panel, PanelHeader, Note, StatTile, Badge, Btn, Select, Toolbar, SearchInput,
+  Panel, PanelHeader, Note, StatTile, Badge, Btn, Select, Toolbar, SearchInput, Segmented,
   Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, Modal,
 } from '../components/ui'
+import OpsPageHeader from './opsKit/OpsPageHeader'
+import Pager, { usePaged, PAGE_SIZE } from './opsKit/Pager'
+import Drawer from './opsKit/Drawer'
+import AttentionList from './opsKit/AttentionList'
+import ConsoleLink from './opsKit/ConsoleLink'
+import useUrlTab from './opsKit/useUrlTab'
 import { TrendChart, BarsChart, ScoreRing, STATUS, useChartTheme } from '../components/ui/charts'
 import { sortRows, searchRows, useTableSort } from '../../lib/consoleTable'
 import ExportButtons from './shared/ExportButtons'
@@ -195,6 +201,10 @@ export default function ConsoleSystemHealth() {
   const [resolvingId, setResolvingId] = useState(null)
   const [resolvingAll, setResolvingAll] = useState(false)
   const [confirmAll, setConfirmAll] = useState(false)
+  const [refreshedAt, setRefreshedAt] = useState(null)
+  const [sampleLogs, setSampleLogs] = useState([])   // null = the broad sample could not be read
+  const [drawerRow, setDrawerRow] = useState(null)
+  const [tab, setTab] = useUrlTab(['errors', 'score', 'subsystems'], 'errors')
 
   // Filters
   const [fSeverity, setFSeverity] = useState('all')
@@ -253,6 +263,7 @@ export default function ConsoleSystemHealth() {
     if (mountedRef.current) setReport(rep)
 
     // Module dropdown options from a broad (unfiltered) log sample.
+    if (mountedRef.current) setSampleLogs(optionsRes.status === 'fulfilled' && Array.isArray(optionsRes.value) ? optionsRes.value : null)
     if (optionsRes.status === 'fulfilled' && Array.isArray(optionsRes.value)) {
       const mods = Array.from(
         new Set(optionsRes.value.map(r => r?.module_id).filter(Boolean))
@@ -296,7 +307,7 @@ export default function ConsoleSystemHealth() {
   const refreshAll = useCallback(async () => {
     setRefreshing(true)
     await Promise.all([loadCore(), loadLogs()])
-    if (mountedRef.current) { setRefreshing(false); setLoading(false) }
+    if (mountedRef.current) { setRefreshing(false); setLoading(false); setRefreshedAt(new Date().toISOString()) }
   }, [loadCore, loadLogs])
 
   // Initial + filter-driven log reload.
@@ -434,6 +445,54 @@ export default function ConsoleSystemHealth() {
     [trend],
   )
 
+  // Noisiest modules across the broad (unfiltered) sample of recent logs: the
+  // quickest answer to "where are the problems coming from".
+  const noisyModules = useMemo(() => {
+    const open = (sampleLogs || []).filter(r => !(r?.resolved === true || r?.resolved_at != null))
+    const counts = new Map()
+    for (const r of open) {
+      const k = r?.module_id || r?.source || 'app'
+      counts.set(k, (counts.get(k) || 0) + 1)
+    }
+    return [...counts.entries()].map(([module, count]) => ({ module, count }))
+      .sort((a, b) => b.count - a.count).slice(0, 5)
+  }, [sampleLogs])
+
+  const paged = usePaged(visibleLogs, PAGE_SIZE, `${logQuery}|${fSeverity}|${fModule}|${fResolved}|${fSince}|${logSort?.key}${logSort?.dir}`)
+
+  const unresolvedCritical = metrics?.errors ? Number(metrics.errors.unresolvedCritical) || 0 : null
+  const unresolvedError = metrics?.errors ? Number(metrics.errors.unresolvedError) || 0 : null
+  const unresolvedTotal = unresolvedCritical == null ? null : unresolvedCritical + (unresolvedError || 0)
+  const subsystemsBad = (report?.checks ?? []).filter(c => c.status === 'down' || c.status === 'degraded')
+
+  const attention = useMemo(() => {
+    const out = []
+    if (unresolvedCritical > 0) out.push({
+      key: 'crit', tone: 'danger',
+      text: `${unresolvedCritical} critical ${unresolvedCritical === 1 ? 'problem is' : 'problems are'} still open.`,
+      action: { label: 'Show critical', onClick: () => { setFSeverity('critical'); setFResolved('open'); setTab('errors') } },
+    })
+    if (subsystemsBad.length) out.push({
+      key: 'sub', tone: subsystemsBad.some(c => c.status === 'down') ? 'danger' : 'warning',
+      text: `${subsystemsBad.length} ${subsystemsBad.length === 1 ? 'subsystem is' : 'subsystems are'} slow or down: ${subsystemsBad.slice(0, 3).map(c => c.label).join(', ')}.`,
+      action: { label: 'Open subsystems', onClick: () => setTab('subsystems') },
+    })
+    if (lastSync && freshnessTone(lastSync) === 'danger') out.push({
+      key: 'sync', tone: 'warning', text: `No new data has arrived for ${fmtRelative(lastSync).replace(' ago', '')}.`,
+      action: { label: 'Daily coverage', to: '/console/import-history' },
+    })
+    if (metrics?.ai && Number(metrics.ai.errors) > 0) out.push({
+      key: 'ai', tone: 'warning', text: `${metrics.ai.errors} AI ${Number(metrics.ai.errors) === 1 ? 'call' : 'calls'} failed recently.`,
+      action: { label: 'AI usage', to: '/console/ai-usage' },
+    })
+    if (metrics?.reports && Number(metrics.reports.failed) > 0) out.push({
+      key: 'rep', tone: 'warning', text: `${metrics.reports.failed} scheduled report ${Number(metrics.reports.failed) === 1 ? 'email' : 'emails'} failed.`,
+      action: { label: 'Delivery', to: '/console/delivery' },
+    })
+    return out
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unresolvedCritical, subsystemsBad.length, lastSync, metrics])
+
   if (!admin) {
     return (
       <div className="max-w-md mx-auto mt-16">
@@ -449,64 +508,51 @@ export default function ConsoleSystemHealth() {
     fModule !== 'all' ? `module ${fModule}` : 'every module',
   ].join(' and ')
 
+  const TABS = [
+    { key: 'errors', label: 'Errors', count: unresolvedTotal ?? undefined },
+    { key: 'score', label: 'Health score' },
+    { key: 'subsystems', label: 'Subsystems', count: report?.checks?.length || undefined },
+  ]
+
+  const drawerSev = drawerRow ? SEV_BY_KEY[canonSeverity(drawerRow.severity)] : null
+  const drawerResolved = drawerRow ? (drawerRow.resolved === true || drawerRow.resolved_at != null) : false
+
   return (
-    <div className="space-y-5 max-w-7xl">
-      {/* Header */}
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2">
-            <Activity size={18} className="text-orange-400" /> System Health
-          </h1>
-          <p className="text-xs text-gray-500 mt-1">
-            Live operating status of the whole platform
-            {report?.checkedAt && <span> | checked {fmtRelative(report.checkedAt)}</span>}
-          </p>
-        </div>
-        <Btn icon={RefreshCw} onClick={refreshAll} busy={refreshing}>Refresh</Btn>
-      </header>
+    <div className="space-y-4 max-w-7xl">
+      <OpsPageHeader
+        icon={Activity}
+        title="System Health"
+        purpose={`Live operating status of the whole platform${report?.checkedAt ? ` | probes ran ${fmtRelative(report.checkedAt)}` : ''}`}
+        refreshedAt={refreshedAt}
+        onRefresh={refreshAll}
+        busy={refreshing}
+      />
 
       <ErrorState message={error} onRetry={refreshAll} />
       <ErrorState message={actionError} />
 
-      {/* ── 1. Health score ── */}
-      <Panel>
-        <PanelHeader
-          icon={Activity}
-          title={<span className="inline-flex items-center">TyrePulse Health Score
-            <InfoDot text="A single 0 to 100 grade for the whole platform. Higher is healthier. It blends how fresh the data is, how many unresolved errors exist, and whether every subsystem is reachable." />
-          </span>}
-          subtitle="Blended from data freshness, unresolved errors and subsystem reachability."
-        />
-        {loading && !health ? (
-          <LoadingState label="Scoring the platform" rows={2} />
-        ) : (
-          <div className="flex flex-col lg:flex-row lg:items-center gap-5">
-            <ScoreRing score={score} label="Health score" />
-            <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {factors.map(f => (
-                <div key={f.key} title={f.hint || undefined}>
-                  <StatTile
-                    label={f.label}
-                    value={f.value == null ? 'N/A' : Math.round(f.value)}
-                    sub={f.value == null ? 'Not measured' : 'out of 100'}
-                    tone={scoreTone(f.value)}
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </Panel>
-
-      {/* ── 2. Status tiles ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      {/* ── KPI row ── */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+        <div title="A single 0 to 100 grade for the whole platform. It blends data freshness, unresolved errors and subsystem reachability.">
+          <StatTile icon={Activity} label="Health score" value={score == null ? 'N/A' : score}
+            sub={score == null ? (loading ? 'Scoring...' : 'Not measured') : 'out of 100'}
+            tone={scoreTone(score)} onClick={() => setTab('score')} active={tab === 'score'} />
+        </div>
         <StatusTile
           icon={Server} label="Supabase"
           tip="The cloud database and backend that powers TyrePulse. Green means the app can reach and read from it."
           tone={dbCheck ? checkTone(dbCheck.status) : 'quiet'}
           value={dbCheck ? statusWord(dbCheck.status) : 'N/A'}
           sub={dbCheck?.latencyMs != null ? `${dbCheck.latencyMs} ms response` : 'Connection'}
+          onClick={() => setTab('subsystems')} active={tab === 'subsystems'}
         />
+        <div title="Unresolved critical and error level problems. Opens the error log filtered to open problems.">
+          <StatTile icon={ShieldAlert} label="Open errors"
+            value={unresolvedTotal == null ? 'N/A' : unresolvedTotal}
+            sub={unresolvedCritical == null ? 'Could not be read' : `${unresolvedCritical} critical`}
+            tone={unresolvedTotal == null ? 'muted' : unresolvedCritical > 0 ? 'danger' : unresolvedTotal > 0 ? 'warning' : 'good'}
+            onClick={() => { setFResolved('open'); setTab('errors') }} active={tab === 'errors'} />
+        </div>
         <StatusTile
           icon={Clock} label="Last sync"
           tip="Sync means the newest piece of data recorded anywhere in the system. A recent time means data is flowing in."
@@ -528,206 +574,303 @@ export default function ConsoleSystemHealth() {
           value={lastReport ? fmtRelative(lastReport) : 'N/A'}
           sub={metrics?.reports ? `${metrics.reports.total ?? 0} sent, ${metrics.reports.failed ?? 0} failed` : 'No reports sent'}
         />
-        <StatusTile
-          icon={Archive} label="Last backup"
-          tip="Automated database backups are managed on the Backups page. This board does not read backup runs."
-          tone="quiet"
-          value="See Backups"
-          sub="Not read on this board"
-        />
       </div>
 
-      {/* ── 3. Subsystem tiles ── */}
-      <Panel>
-        <PanelHeader
-          icon={Server}
-          title={<span className="inline-flex items-center">Subsystems
-            <InfoDot text="A subsystem is one moving part of the platform: the database, the file storage, the background functions, and the login service. Each is pinged to confirm it responds." />
-          </span>}
-          subtitle="Reachability pings only. They never trigger AI calls or emails."
-        />
-        {grouped.length === 0 ? (
-          loading
-            ? <LoadingState label="Running subsystem checks" rows={2} />
-            : <EmptyState icon={Server} title="No subsystem results" reason="The reachability checks returned nothing. Refresh to run them again." />
-        ) : (
-          <div className="space-y-4">
-            {grouped.map(g => {
-              const worst = g.checks.some(c => c.status === 'down') ? 'danger'
-                : g.checks.some(c => c.status === 'degraded' || c.status === 'unknown') ? 'warning' : 'good'
-              const okCount = g.checks.filter(c => c.status === 'ok').length
-              const Icon = g.Icon
-              return (
-                <div key={g.key}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <Icon size={13} className="text-gray-500" />
-                    <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{g.label}</span>
-                    <Badge tone={worst}>{okCount}/{g.checks.length} healthy</Badge>
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-                    {g.checks.map(c => (
-                      <div key={c.id} className="rounded-lg border border-gray-800 bg-gray-900/40 p-3 min-w-0">
-                        <div className="flex items-center justify-between gap-2 min-w-0">
-                          <span className="text-xs font-medium text-gray-200 truncate" title={c.label}>{c.label}</span>
-                          <Badge tone={checkTone(c.status)}>{statusWord(c.status)}</Badge>
-                        </div>
-                        <div className="flex items-center justify-between gap-2 mt-1.5">
-                          <span className="text-[10px] text-gray-500 truncate" title={checkDetail(c)}>{checkDetail(c)}</span>
-                          <span className="text-[10px] text-gray-400 tabular-nums shrink-0">
-                            {c.latencyMs != null ? `${c.latencyMs} ms` : ''}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+      {!loading && (
+        <AttentionList items={attention}
+          clear={error ? 'Some health readings could not be taken, so this list may be incomplete.' : 'Nothing needs attention: no open critical problems, every probed subsystem responded and data is flowing.'} />
+      )}
+
+      <Segmented options={TABS} value={tab} onChange={setTab} ariaLabel="System health views" />
+
+      {tab === 'errors' && (
+        <div className="space-y-4" role="tabpanel" aria-label="Errors">
+          <div className="grid gap-4 lg:grid-cols-3">
+            <Panel className="lg:col-span-2">
+              <PanelHeader
+                icon={BarChart3}
+                title={<span className="inline-flex items-center">Errors per day
+                  <InfoDot text="How many problems were logged each day over the last two weeks, one line per severity. A rising line means problems are increasing." />
+                </span>}
+                subtitle={trend.split ? `Last ${TREND_DAYS} days, by severity` : `Last ${TREND_DAYS} days, all severities`}
+              />
+              {loading && !metrics && trendRows === null ? (
+                <LoadingState label="Loading the error trend" rows={3} />
+              ) : (
+                <TrendChart
+                  labels={trend.labels}
+                  series={trend.series}
+                  yLabel="Problems logged"
+                  summary={`${trend.total} problems logged in the last ${TREND_DAYS} days.`}
+                  emptyText={`No errors logged in the last ${TREND_DAYS} days. The system is quiet.`}
+                />
+              )}
+              {trendTruncated && (
+                <div className="mt-3">
+                  <Note icon={Info} tone="warning">
+                    More than {TREND_MAX_ROWS.toLocaleString()} problems were logged in this window, so the chart covers the oldest {TREND_MAX_ROWS.toLocaleString()} only.
+                  </Note>
                 </div>
-              )
-            })}
+              )}
+              {!trend.split && !loading && (
+                <div className="mt-3">
+                  <Note icon={Info}>The severity split could not be read, so this shows the daily total only.</Note>
+                </div>
+              )}
+            </Panel>
+            <Panel>
+              <PanelHeader icon={ListChecks} title="By severity" subtitle={`Totals, last ${TREND_DAYS} days`} />
+              {trend.split ? (
+                <BarsChart
+                  bars={severityBars}
+                  summary={severityBars.map(b => `${b.label} ${b.value}`).join(', ')}
+                  emptyText="No problems logged in this window."
+                />
+              ) : (
+                <EmptyState icon={ListChecks} title="Severity split not available" reason="The per-severity read failed. Refresh to try again." />
+              )}
+              <div className="mt-4 pt-3 border-t border-gray-800">
+                <p className="text-[11px] uppercase tracking-wide text-gray-500 mb-2">Noisiest modules (open)</p>
+                {sampleLogs === null ? (
+                  <p className="text-xs text-gray-500">The recent log sample could not be read.</p>
+                ) : noisyModules.length === 0 ? (
+                  <p className="text-xs text-gray-500">No open problems in the most recent 500 log rows.</p>
+                ) : (
+                  <ul className="space-y-1">
+                    {noisyModules.map(m => (
+                      <li key={m.module}>
+                        <button type="button" onClick={() => { setFModule(m.module); setFResolved('open') }}
+                          title={`Filter the log to ${m.module}`}
+                          className="w-full flex items-center justify-between gap-2 text-xs rounded px-1.5 py-1 text-gray-300 hover:bg-gray-800/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
+                          <span className="truncate">{m.module}</span>
+                          <span className="tabular-nums text-gray-400">{m.count}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </Panel>
           </div>
-        )}
-      </Panel>
 
-      {/* ── 4. Error trend ── */}
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Panel className="lg:col-span-2">
-          <PanelHeader
-            icon={BarChart3}
-            title={<span className="inline-flex items-center">Errors per day
-              <InfoDot text="How many problems were logged each day over the last two weeks, one line per severity. A rising line means problems are increasing." />
-            </span>}
-            subtitle={trend.split ? `Last ${TREND_DAYS} days, by severity` : `Last ${TREND_DAYS} days, all severities`}
-          />
-          {loading && !metrics && trendRows === null ? (
-            <LoadingState label="Loading the error trend" rows={3} />
-          ) : (
-            <TrendChart
-              labels={trend.labels}
-              series={trend.series}
-              yLabel="Problems logged"
-              summary={`${trend.total} problems logged in the last ${TREND_DAYS} days.`}
-              emptyText={`No errors logged in the last ${TREND_DAYS} days. The system is quiet.`}
+          <Panel>
+            <PanelHeader
+              icon={ListChecks}
+              title={<span className="inline-flex items-center">Error log
+                <InfoDot text="A running list of problems the app has recorded, newest first. Resolve marks a problem as handled so it drops off the open list." />
+              </span>}
+              subtitle={`Newest first, up to ${LOG_LIMIT} rows for the chosen filters. Select a row for its full detail.`}
+              actions={(<>
+                <ExportButtons rows={visibleLogs} title="System Error Log"
+                  columns={LOG_EXPORT_COLUMNS} />
+                <Btn variant="primary" icon={CheckCircle2} busy={resolvingAll} disabled={logs.length === 0}
+                  onClick={() => setConfirmAll(true)}
+                  title="Mark every problem matching the current module and severity filters as handled">
+                  Resolve all
+                </Btn>
+              </>)}
             />
-          )}
-          {trendTruncated && (
-            <div className="mt-3">
-              <Note icon={Info} tone="warning">
-                More than {TREND_MAX_ROWS.toLocaleString()} problems were logged in this window, so the chart covers the oldest {TREND_MAX_ROWS.toLocaleString()} only.
-              </Note>
-            </div>
-          )}
-          {!trend.split && !loading && (
-            <div className="mt-3">
-              <Note icon={Info}>The severity split could not be read, so this shows the daily total only.</Note>
-            </div>
-          )}
-        </Panel>
+            <Toolbar className="mb-3">
+              <SearchInput value={logQuery} onChange={setLogQuery} className="w-full sm:w-64"
+                placeholder="Search message, module or reference" ariaLabel="Search the error log" />
+              <Select value={fSeverity} onChange={setFSeverity} className="w-40" ariaLabel="Filter by severity"
+                options={[{ value: 'all', label: 'All severities' }, ...SEVERITIES.map(s => ({ value: s.key, label: s.label }))]} />
+              <Select value={fModule} onChange={setFModule} className="w-44" ariaLabel="Filter by module"
+                options={[{ value: 'all', label: 'All modules' }, ...moduleOptions.map(m => ({ value: m, label: m }))]} />
+              <Select value={fResolved} onChange={setFResolved} className="w-36" ariaLabel="Filter by status"
+                options={[{ value: 'open', label: 'Open only' }, { value: 'resolved', label: 'Resolved only' }, { value: 'all', label: 'All' }]} />
+              <Select value={fSince} onChange={setFSince} className="w-36" ariaLabel="Filter by time window"
+                options={[
+                  { value: '1', label: 'Last 24 hours' }, { value: '7', label: 'Last 7 days' },
+                  { value: '14', label: 'Last 14 days' }, { value: '30', label: 'Last 30 days' }, { value: 'all', label: 'All time' },
+                ]} />
+              <span className="text-[11px] text-gray-500 ml-auto tabular-nums">
+                {visibleLogs.length === logs.length ? `${logs.length} loaded` : `${visibleLogs.length} of ${logs.length} match`}
+              </span>
+            </Toolbar>
+
+            {logsError ? (
+              <ErrorState message={logsError} onRetry={loadLogs} />
+            ) : loading ? (
+              <LoadingState label="Loading error log" />
+            ) : logs.length === 0 ? (
+              <EmptyState icon={CheckCircle2} title="No problems match these filters"
+                reason="Nothing was logged for this severity, module and time window. The system is quiet here." />
+            ) : visibleLogs.length === 0 ? (
+              <EmptyState icon={ListChecks} title="No problems match this search"
+                reason="Clear or change the search text to see the loaded rows again."
+                action={<Btn onClick={() => setLogQuery('')}>Clear search</Btn>} />
+            ) : (
+              <>
+                <Table>
+                  <THead>
+                    <Th sortKey="created_at" sort={logSort} onSort={onLogSort}>Time</Th>
+                    <Th sortKey="severity" sort={logSort} onSort={onLogSort}>Severity</Th>
+                    <Th sortKey="module" sort={logSort} onSort={onLogSort}>Module</Th>
+                    <Th sortKey="message" sort={logSort} onSort={onLogSort}>Message</Th>
+                    <Th align="center" sortKey="status" sort={logSort} onSort={onLogSort}>Status</Th>
+                    <Th align="right">Action</Th>
+                  </THead>
+                  <tbody>
+                    {paged.slice.map(row => {
+                      const sev = SEV_BY_KEY[canonSeverity(row.severity)]
+                      const isResolved = row.resolved === true || row.resolved_at != null
+                      return (
+                        <Tr key={row.id} onClick={() => setDrawerRow(row)} ariaLabel={`Open detail for ${sev.label} problem`}>
+                          <Td nowrap><span className="text-gray-500" title={fmtDateTime(row.created_at)}>{fmtRelative(row.created_at)}</span></Td>
+                          <Td><Badge tone={sev.tone}>{sev.label}</Badge></Td>
+                          <Td nowrap><span className="text-gray-400">{row.module_id || row.source || 'app'}</span></Td>
+                          <Td className="max-w-md">
+                            <span className="line-clamp-2 break-words text-gray-300" title={row.message || ''}>{row.message || 'No message'}</span>
+                            {row.reference_id && <span className="block text-[10px] text-gray-500 font-mono mt-0.5 break-all">{row.reference_id}</span>}
+                          </Td>
+                          <Td align="center">
+                            {isResolved ? <Badge tone="good">Resolved</Badge> : <Badge tone="default">Open</Badge>}
+                          </Td>
+                          <Td align="right">
+                            {!isResolved && (
+                              <Btn size="xs" variant="ghost" busy={resolvingId === row.id}
+                                onClick={(e) => { e.stopPropagation(); handleResolve(row.id) }}>
+                                Resolve
+                              </Btn>
+                            )}
+                          </Td>
+                        </Tr>
+                      )
+                    })}
+                  </tbody>
+                </Table>
+                <Pager {...paged} label="problems" />
+              </>
+            )}
+          </Panel>
+        </div>
+      )}
+
+      {tab === 'score' && (
+        <div className="space-y-4" role="tabpanel" aria-label="Health score">
+          <Panel>
+            <PanelHeader
+              icon={Activity}
+              title={<span className="inline-flex items-center">TyrePulse Health Score
+                <InfoDot text="A single 0 to 100 grade for the whole platform. Higher is healthier. It blends how fresh the data is, how many unresolved errors exist, and whether every subsystem is reachable." />
+              </span>}
+              subtitle="Blended from data freshness, unresolved errors and subsystem reachability."
+            />
+            {loading && !health ? (
+              <LoadingState label="Scoring the platform" rows={2} />
+            ) : (
+              <div className="flex flex-col lg:flex-row lg:items-center gap-5">
+                <ScoreRing score={score} label="Health score" />
+                <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {factors.map(f => (
+                    <div key={f.key} title={f.hint || undefined}>
+                      <StatTile
+                        label={f.label}
+                        value={f.value == null ? 'N/A' : Math.round(f.value)}
+                        sub={f.value == null ? 'Not measured' : 'out of 100'}
+                        tone={scoreTone(f.value)}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </Panel>
+          <Note icon={Archive}>
+            <span className="font-medium text-gray-300">Last backup:</span> automated database backups are managed on the Backups page. This board does not read backup runs.{' '}
+            <ConsoleLink to="/console/backups" plain>Open Backups</ConsoleLink>
+          </Note>
+        </div>
+      )}
+
+      {tab === 'subsystems' && (
         <Panel>
-          <PanelHeader icon={ListChecks} title="By severity" subtitle={`Totals, last ${TREND_DAYS} days`} />
-          {trend.split ? (
-            <BarsChart
-              bars={severityBars}
-              summary={severityBars.map(b => `${b.label} ${b.value}`).join(', ')}
-              emptyText="No problems logged in this window."
-            />
+          <PanelHeader
+            icon={Server}
+            title={<span className="inline-flex items-center">Subsystems
+              <InfoDot text="A subsystem is one moving part of the platform: the database, the file storage, the background functions, and the login service. Each is pinged to confirm it responds." />
+            </span>}
+            subtitle="Reachability pings only. They never trigger AI calls or emails."
+          />
+          {grouped.length === 0 ? (
+            loading
+              ? <LoadingState label="Running subsystem checks" rows={2} />
+              : <EmptyState icon={Server} title="No subsystem results" reason="The reachability checks returned nothing. Refresh to run them again." />
           ) : (
-            <EmptyState icon={ListChecks} title="Severity split not available" reason="The per-severity read failed. Refresh to try again." />
-          )}
-        </Panel>
-      </div>
-
-      {/* ── 5. Error log table ── */}
-      <Panel>
-        <PanelHeader
-          icon={ListChecks}
-          title={<span className="inline-flex items-center">Error log
-            <InfoDot text="A running list of problems the app has recorded, newest first. Resolve marks a problem as handled so it drops off the open list." />
-          </span>}
-          subtitle={`Newest first, up to ${LOG_LIMIT} rows for the chosen filters.`}
-          actions={(<>
-            <ExportButtons rows={visibleLogs} title="System Error Log"
-              columns={LOG_EXPORT_COLUMNS} />
-            <Btn variant="primary" icon={CheckCircle2} busy={resolvingAll} disabled={logs.length === 0}
-              onClick={() => setConfirmAll(true)}
-              title="Mark every problem matching the current module and severity filters as handled">
-              Resolve all
-            </Btn>
-          </>)}
-        />
-        <Toolbar className="mb-3">
-          <SearchInput value={logQuery} onChange={setLogQuery} className="w-full sm:w-64"
-            placeholder="Search message, module or reference" ariaLabel="Search the error log" />
-          <Select value={fSeverity} onChange={setFSeverity} className="w-40" ariaLabel="Filter by severity"
-            options={[{ value: 'all', label: 'All severities' }, ...SEVERITIES.map(s => ({ value: s.key, label: s.label }))]} />
-          <Select value={fModule} onChange={setFModule} className="w-44" ariaLabel="Filter by module"
-            options={[{ value: 'all', label: 'All modules' }, ...moduleOptions.map(m => ({ value: m, label: m }))]} />
-          <Select value={fResolved} onChange={setFResolved} className="w-36" ariaLabel="Filter by status"
-            options={[{ value: 'open', label: 'Open only' }, { value: 'resolved', label: 'Resolved only' }, { value: 'all', label: 'All' }]} />
-          <Select value={fSince} onChange={setFSince} className="w-36" ariaLabel="Filter by time window"
-            options={[
-              { value: '1', label: 'Last 24 hours' }, { value: '7', label: 'Last 7 days' },
-              { value: '14', label: 'Last 14 days' }, { value: '30', label: 'Last 30 days' }, { value: 'all', label: 'All time' },
-            ]} />
-          <span className="text-[11px] text-gray-500 ml-auto tabular-nums">
-            {visibleLogs.length === logs.length ? `${logs.length} shown` : `${visibleLogs.length} of ${logs.length} shown`}
-          </span>
-        </Toolbar>
-
-        {logsError ? (
-          <ErrorState message={logsError} onRetry={loadLogs} />
-        ) : loading ? (
-          <LoadingState label="Loading error log" />
-        ) : logs.length === 0 ? (
-          <EmptyState icon={CheckCircle2} title="No problems match these filters"
-            reason="Nothing was logged for this severity, module and time window. The system is quiet here." />
-        ) : visibleLogs.length === 0 ? (
-          <EmptyState icon={ListChecks} title="No problems match this search"
-            reason="Clear or change the search text to see the loaded rows again."
-            action={<Btn onClick={() => setLogQuery('')}>Clear search</Btn>} />
-        ) : (
-          <Table>
-            <THead>
-              <Th sortKey="created_at" sort={logSort} onSort={onLogSort}>Time</Th>
-              <Th sortKey="severity" sort={logSort} onSort={onLogSort}>Severity</Th>
-              <Th sortKey="module" sort={logSort} onSort={onLogSort}>Module</Th>
-              <Th sortKey="message" sort={logSort} onSort={onLogSort}>Message</Th>
-              <Th align="center" sortKey="status" sort={logSort} onSort={onLogSort}>Status</Th>
-              <Th align="right">Action</Th>
-            </THead>
-            <tbody>
-              {visibleLogs.map(row => {
-                const sev = SEV_BY_KEY[canonSeverity(row.severity)]
-                const isResolved = row.resolved === true || row.resolved_at != null
+            <div className="space-y-4">
+              {grouped.map(g => {
+                const worst = g.checks.some(c => c.status === 'down') ? 'danger'
+                  : g.checks.some(c => c.status === 'degraded' || c.status === 'unknown') ? 'warning' : 'good'
+                const okCount = g.checks.filter(c => c.status === 'ok').length
+                const Icon = g.Icon
                 return (
-                  <Tr key={row.id}>
-                    <Td nowrap><span className="text-gray-500" title={fmtDateTime(row.created_at)}>{fmtRelative(row.created_at)}</span></Td>
-                    <Td><Badge tone={sev.tone}>{sev.label}</Badge></Td>
-                    <Td nowrap><span className="text-gray-400">{row.module_id || row.source || 'app'}</span></Td>
-                    <Td className="max-w-md">
-                      <span className="line-clamp-2 break-words text-gray-300" title={row.message || ''}>{row.message || 'No message'}</span>
-                      {row.reference_id && <span className="block text-[10px] text-gray-500 font-mono mt-0.5 break-all">{row.reference_id}</span>}
-                    </Td>
-                    <Td align="center">
-                      {isResolved ? <Badge tone="good">Resolved</Badge> : <Badge tone="default">Open</Badge>}
-                    </Td>
-                    <Td align="right">
-                      {!isResolved && (
-                        <Btn size="xs" variant="ghost" busy={resolvingId === row.id} onClick={() => handleResolve(row.id)}>
-                          Resolve
-                        </Btn>
-                      )}
-                    </Td>
-                  </Tr>
+                  <div key={g.key}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Icon size={13} className="text-gray-500" />
+                      <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{g.label}</span>
+                      <Badge tone={worst}>{okCount}/{g.checks.length} healthy</Badge>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                      {g.checks.map(c => (
+                        <div key={c.id} className="rounded-lg border border-gray-800 bg-gray-900/40 p-3 min-w-0">
+                          <div className="flex items-center justify-between gap-2 min-w-0">
+                            <span className="text-xs font-medium text-gray-200 truncate" title={c.label}>{c.label}</span>
+                            <Badge tone={checkTone(c.status)}>{statusWord(c.status)}</Badge>
+                          </div>
+                          <div className="flex items-center justify-between gap-2 mt-1.5">
+                            <span className="text-[10px] text-gray-500 truncate" title={checkDetail(c)}>{checkDetail(c)}</span>
+                            <span className="text-[10px] text-gray-400 tabular-nums shrink-0">
+                              {c.latencyMs != null ? `${c.latencyMs} ms` : ''}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )
               })}
-            </tbody>
-          </Table>
-        )}
-      </Panel>
+            </div>
+          )}
+        </Panel>
+      )}
 
       <p className="text-[11px] text-gray-500">
         This board refreshes automatically when a new error is recorded, and every 60 seconds as a fallback.
         Subsystem checks are reachability pings only and never trigger AI calls or emails.
       </p>
+
+      <Drawer
+        open={!!drawerRow}
+        title={drawerRow ? (drawerRow.message || 'No message') : ''}
+        subtitle={drawerRow ? `${drawerSev?.label} | ${drawerRow.module_id || drawerRow.source || 'app'}` : null}
+        onClose={() => setDrawerRow(null)}
+        footer={drawerRow && !drawerResolved ? (
+          <Btn variant="primary" icon={CheckCircle2} busy={resolvingId === drawerRow.id}
+            onClick={async () => { await handleResolve(drawerRow.id); setDrawerRow(null) }}>Mark resolved</Btn>
+        ) : null}
+      >
+        {drawerRow && (
+          <dl className="grid grid-cols-3 gap-x-3 gap-y-2 text-xs">
+            <dt className="text-gray-500">Status</dt>
+            <dd className="col-span-2">{drawerResolved ? <Badge tone="good">Resolved</Badge> : <Badge>Open</Badge>}</dd>
+            <dt className="text-gray-500">Severity</dt>
+            <dd className="col-span-2"><Badge tone={drawerSev?.tone}>{drawerSev?.label}</Badge></dd>
+            <dt className="text-gray-500">Logged</dt>
+            <dd className="col-span-2 text-gray-300">{fmtDateTime(drawerRow.created_at)} ({fmtRelative(drawerRow.created_at)})</dd>
+            {drawerRow.resolved_at && (<>
+              <dt className="text-gray-500">Resolved</dt>
+              <dd className="col-span-2 text-gray-300">{fmtDateTime(drawerRow.resolved_at)}</dd>
+            </>)}
+            <dt className="text-gray-500">Module</dt>
+            <dd className="col-span-2 text-gray-300">{drawerRow.module_id || drawerRow.source || 'app'}</dd>
+            <dt className="text-gray-500">Reference</dt>
+            <dd className="col-span-2 font-mono text-gray-300 break-all">{drawerRow.reference_id || 'None'}</dd>
+            <dt className="text-gray-500">Message</dt>
+            <dd className="col-span-2 text-gray-200 whitespace-pre-wrap break-words">{drawerRow.message || 'No message'}</dd>
+          </dl>
+        )}
+      </Drawer>
 
       <Modal
         open={confirmAll}
@@ -753,10 +896,10 @@ export default function ConsoleSystemHealth() {
 
 // ── Sub components + helpers ───────────────────────────────────────────────────
 
-function StatusTile({ icon, label, tip, tone, value, sub }) {
+function StatusTile({ icon, label, tip, tone, value, sub, onClick, active }) {
   return (
     <div title={tip}>
-      <StatTile icon={icon} label={label} value={value} sub={sub} tone={TILE_FROM_BADGE[tone] || 'muted'} />
+      <StatTile icon={icon} label={label} value={value} sub={sub} tone={TILE_FROM_BADGE[tone] || 'muted'} onClick={onClick} active={active} />
     </div>
   )
 }

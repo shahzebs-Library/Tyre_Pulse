@@ -17,7 +17,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Wand2, RefreshCw, ShieldAlert, ShieldCheck, CheckCircle2, AlertTriangle,
-  Info, Link2Off, Copy, Shuffle, Clock, Activity, BarChart3,
+  Info, Link2Off, Copy, Shuffle, Clock, Activity, BarChart3, List,
 } from 'lucide-react'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import {
@@ -27,10 +27,17 @@ import {
 import { detectStaleGroups, summarizeFindings } from '../../lib/selfHealing'
 import { toUserMessage } from '../../lib/safeError'
 import {
-  Panel, PanelHeader, Note, StatTile, Badge, Btn, Code,
-  LoadingState, EmptyState, ErrorState, Modal,
+  Panel, PanelHeader, Note, StatTile, Badge, Btn, Code, Segmented, SearchInput, Toolbar,
+  Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, Modal,
 } from '../components/ui'
 import ExportButtons from './shared/ExportButtons'
+import OpsPageHeader from './opsKit/OpsPageHeader'
+import Pager, { usePaged, PAGE_SIZE } from './opsKit/Pager'
+import Drawer from './opsKit/Drawer'
+import Collapsible from './opsKit/Collapsible'
+import AttentionList from './opsKit/AttentionList'
+import useUrlTab from './opsKit/useUrlTab'
+import { sortRows, searchRows, useTableSort } from '../../lib/consoleTable'
 import { BarsChart, STATUS, useChartTheme } from '../components/ui/charts'
 
 // ── Presentation helpers ──────────────────────────────────────────────────────
@@ -74,6 +81,60 @@ function fmtDateTime(v) {
   return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleString()
 }
 
+function deltaText(now, before) {
+  if (before == null) return ''
+  const d = now - before
+  if (d === 0) return 'same as the previous scan'
+  return d < 0 ? `${-d} fewer than the previous scan` : `${d} more than the previous scan`
+}
+
+/** Column specs for the "view all" drawer of each check. */
+const DETAIL_SPECS = {
+  orphans: {
+    title: 'Orphaned assets', search: ['asset_no', 'vehicle_type'],
+    columns: [
+      { key: 'asset_no', header: 'Asset' },
+      { key: 'vehicle_type', header: 'Vehicle type', value: (r) => r.vehicle_type || 'unknown type' },
+      { key: 'tyre_count', header: 'Tyres' },
+    ],
+    rowKey: (r) => r.asset_no, actionLabel: 'Backfill', busyKeyOf: (r) => `orphan:${r.asset_no}`,
+  },
+  duplicates: {
+    title: 'Exact-duplicate tyres', search: ['serial_no', 'asset_no'],
+    columns: [
+      { key: 'serial_no', header: 'Serial', value: (r) => r.serial_no || 'No serial' },
+      { key: 'asset_no', header: 'Asset', value: (r) => r.asset_no || 'N/A' },
+      { key: 'row_count', header: 'Identical copies' },
+    ],
+    rowKey: (r) => r.keep_id || `${r.serial_no}:${r.asset_no}`, actionLabel: 'Merge', busyKeyOf: (r) => `dup:${r.keep_id}`,
+  },
+  serialConflicts: {
+    title: 'Serial conflicts', search: ['serial_no'], readOnly: true,
+    columns: [
+      { key: 'serial_no', header: 'Serial' },
+      { key: 'asset_count', header: 'Assets' },
+    ],
+    rowKey: (r) => r.serial_no,
+  },
+  stale: {
+    title: 'Quiet sites', search: ['group'], readOnly: true,
+    columns: [
+      { key: 'group', header: 'Site' },
+      { key: 'daysStale', header: 'Days quiet' },
+      { key: 'lastSeen', header: 'Last activity', value: (r) => fmtDate(r.lastSeen) },
+    ],
+    rowKey: (r) => r.group,
+  },
+  anomalies: {
+    title: 'Unusual tyre patterns', search: ['message', 'severity'], readOnly: true,
+    columns: [
+      { key: 'severity', header: 'Severity', value: (r) => r.severity || 'low' },
+      { key: 'message', header: 'Finding' },
+    ],
+    rowKey: (r) => r.id,
+  },
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function ConsoleSelfHealing() {
@@ -91,6 +152,9 @@ export default function ConsoleSelfHealing() {
   const [busyKey, setBusyKey]     = useState(null) // which fix is running
   const [notice, setNotice]       = useState(null)
   const [pending, setPending]     = useState(null) // fix awaiting confirmation
+  const [history, setHistory]     = useState([])   // this session's scan totals, newest first
+  const [detailKey, setDetailKey] = useState(null) // which check's full list is open
+  const [tab, setTab] = useUrlTab(['findings', 'summary'], 'findings')
 
   const mountedRef = useRef(true)
 
@@ -128,7 +192,9 @@ export default function ConsoleSelfHealing() {
       setScan(buckets)
       setSummary(sum)
       setFailedChecks(failed)
-      setScannedAt(new Date().toISOString())
+      const at = new Date().toISOString()
+      setScannedAt(at)
+      setHistory((h) => [{ at, total: sum.total, failed: failed.length }, ...h].slice(0, 10))
       logHealFinding(sum) // fire-and-forget: surface findings on System Health
     } catch (err) {
       if (mountedRef.current) setError(toUserMessage(err, 'The scan could not complete. Please try again.'))
@@ -193,6 +259,33 @@ export default function ConsoleSelfHealing() {
     (n) => `${n || 0} duplicate row${n === 1 ? '' : 's'} removed.`,
   )
 
+  const prevTotal = history.length > 1 ? history[1].total : null
+
+  const attention = useMemo(() => {
+    const out = []
+    // A check that did not run is already stated (with Retry) in the danger note above.
+    const orphans = scan?.orphans?.length || 0
+    if (orphans) out.push({
+      key: 'orphans', tone: 'warning',
+      text: `${orphans} tyre-bearing ${orphans === 1 ? 'asset is' : 'assets are'} missing from the fleet list, so their tyres drop out of per-asset reports.`,
+      action: { label: 'Backfill all', onClick: backfillAll },
+    })
+    const dups = scan?.duplicates?.length || 0
+    if (dups) out.push({
+      key: 'dups', tone: 'warning',
+      text: `${dups} tyre ${dups === 1 ? 'record is' : 'records are'} saved more than once with every field identical.`,
+      action: { label: 'Review', onClick: () => setDetailKey('duplicates') },
+    })
+    const highAnom = (scan?.anomalies || []).filter((a) => a.severity === 'high').length
+    if (highAnom) out.push({
+      key: 'anom', tone: 'info',
+      text: `${highAnom} high-severity tyre ${highAnom === 1 ? 'pattern needs' : 'patterns need'} a human look.`,
+      action: { label: 'Review', onClick: () => setDetailKey('anomalies') },
+    })
+    return out
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scan, failedChecks])
+
   const itemsByKey = useMemo(
     () => Object.fromEntries((summary?.items || []).map(i => [i.key, i])),
     [summary],
@@ -216,35 +309,35 @@ export default function ConsoleSelfHealing() {
     )
   }
 
+  const detailSpec = detailKey ? DETAIL_SPECS[detailKey] : null
+
   const failedByKey = Object.fromEntries(failedChecks.map((f) => [f.key, f]))
   // "All clear" only when every check actually ran and found nothing.
   const nothingToHeal = summary && summary.total === 0 && failedChecks.length === 0
 
   return (
     <div className="space-y-5 max-w-7xl">
-      {/* Header */}
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2">
-            <Wand2 size={18} className="text-orange-400" /> Self-Healing
-          </h1>
-          <p className="text-xs text-gray-500 mt-1">
-            Scans for data issues and offers only safe, non-destructive fixes
-            {scannedAt && <span> | last scan {fmtDateTime(scannedAt)}</span>}
-          </p>
-        </div>
-        <Btn variant="primary" icon={RefreshCw} onClick={rescan} busy={scanning}>
-          {scanning ? 'Scanning...' : 'Scan now'}
-        </Btn>
-      </header>
+      <OpsPageHeader
+        icon={Wand2}
+        title="Self-Healing"
+        purpose="Scans for data issues and offers only safe, non-destructive fixes."
+        refreshedAt={scannedAt}
+        actions={(
+          <Btn variant="primary" icon={RefreshCw} onClick={rescan} busy={scanning}>
+            {scanning ? 'Scanning...' : 'Scan now'}
+          </Btn>
+        )}
+      />
 
-      {/* Safety note */}
-      <Note icon={ShieldCheck} tone="accent">
-        These actions are safe and non-destructive. The scan only reads data. Fixes are limited to
-        backfilling a missing asset and merging exact-duplicate rows, and both are guarded on the
-        server. Serial conflicts, stale sites and anomalies are flagged for review only, never
-        changed automatically.
-      </Note>
+      <Collapsible icon={ShieldCheck} title="How these fixes stay safe"
+        subtitle="The scan only reads. Two guarded fixes; everything else is review only.">
+        <Note icon={ShieldCheck} tone="accent">
+          These actions are safe and non-destructive. The scan only reads data. Fixes are limited to
+          backfilling a missing asset and merging exact-duplicate rows, and both are guarded on the
+          server. Serial conflicts, stale sites and anomalies are flagged for review only, never
+          changed automatically.
+        </Note>
+      </Collapsible>
 
       <ErrorState message={error} onRetry={rescan} />
       {failedChecks.length > 0 && (
@@ -267,22 +360,44 @@ export default function ConsoleSelfHealing() {
         <Note icon={CheckCircle2} tone="accent">{notice}</Note>
       )}
 
-      {/* Summary strip + chart */}
+      {/* KPI row */}
       {summary && (
-        <div className="grid gap-4 lg:grid-cols-3">
-          <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-3">
-            <div title="How many data issues the last scan found in total.">
-              <StatTile label="Total findings" value={summary.total}
-                tone={summary.total > 0 ? 'warning' : failedChecks.length > 0 ? 'default' : 'good'} icon={Wand2}
-                sub={failedChecks.length > 0 ? `Incomplete: ${failedChecks.length} check${failedChecks.length === 1 ? '' : 's'} did not run` : undefined} />
-            </div>
-            <div title="Issues worth acting on, some with a safe one-click fix.">
-              <StatTile label="Warnings" value={summary.bySeverity.warning} tone={summary.bySeverity.warning > 0 ? 'warning' : 'good'} icon={AlertTriangle} />
-            </div>
-            <div title="Informational items to check by hand. Nothing is changed automatically.">
-              <StatTile label="For review" value={summary.bySeverity.info} tone="default" icon={Info} />
-            </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div title="How many data issues the last scan found in total.">
+            <StatTile label="Total findings" value={summary.total}
+              tone={summary.total > 0 ? 'warning' : failedChecks.length > 0 ? 'default' : 'good'} icon={Wand2}
+              sub={failedChecks.length > 0 ? `Incomplete: ${failedChecks.length} check${failedChecks.length === 1 ? '' : 's'} did not run`
+                : prevTotal != null ? deltaText(summary.total, prevTotal) : undefined}
+              onClick={() => setTab('findings')} active={tab === 'findings'} />
           </div>
+          <div title="Issues worth acting on, some with a safe one-click fix.">
+            <StatTile label="Warnings" value={summary.bySeverity.warning} tone={summary.bySeverity.warning > 0 ? 'warning' : 'good'} icon={AlertTriangle} />
+          </div>
+          <div title="Informational items to check by hand. Nothing is changed automatically.">
+            <StatTile label="For review" value={summary.bySeverity.info} tone="default" icon={Info} />
+          </div>
+          <div title="Findings a one-click, server-guarded fix can clear.">
+            <StatTile label="Fixable now" icon={CheckCircle2}
+              value={(scan?.orphans?.length || 0) + (scan?.duplicates?.length || 0)}
+              tone={(scan?.orphans?.length || 0) + (scan?.duplicates?.length || 0) > 0 ? 'accent' : 'good'}
+              sub="Backfill or merge" onClick={() => setTab('summary')} active={tab === 'summary'} />
+          </div>
+        </div>
+      )}
+
+      {summary && !scanning && (
+        <AttentionList items={attention} clear={failedChecks.length ? 'Some checks did not run, so this list may be incomplete.' : 'Nothing needs attention: no fixable findings on the last scan.'} />
+      )}
+
+      {summary && (
+        <Segmented value={tab} onChange={setTab} ariaLabel="Self-healing views" options={[
+          { key: 'findings', label: 'Findings', count: summary.total },
+          { key: 'summary', label: 'Summary' },
+        ]} />
+      )}
+
+      {tab === 'summary' && summary && (
+        <div className="grid gap-4 lg:grid-cols-3">
           <Panel className="lg:col-span-2">
             <PanelHeader icon={BarChart3} title="Findings by check"
               subtitle="Bars are coloured by severity: amber is a warning, grey is review only."
@@ -297,6 +412,24 @@ export default function ConsoleSelfHealing() {
               emptyText="The last scan found nothing to show."
             />
           </Panel>
+          <Panel>
+            <PanelHeader icon={Clock} title="Scans this session" subtitle="Totals after each scan, newest first. Resets when the page is reopened." />
+            {history.length === 0 ? (
+              <EmptyState icon={Clock} title="No scans yet" reason="The first scan is still running." />
+            ) : (
+              <ul className="space-y-1">
+                {history.map((h, i) => (
+                  <li key={h.at} className="flex items-center justify-between gap-2 text-xs">
+                    <span className="text-gray-400">{fmtDateTime(h.at)}</span>
+                    <span className="tabular-nums text-gray-200">
+                      {h.total} finding{h.total === 1 ? '' : 's'}{h.failed ? `, ${h.failed} not run` : ''}
+                      {i < history.length - 1 && <span className="text-gray-500"> ({deltaText(h.total, history[i + 1].total)})</span>}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Panel>
         </div>
       )}
 
@@ -308,7 +441,7 @@ export default function ConsoleSelfHealing() {
           <EmptyState icon={ShieldCheck} title="Nothing needs healing, all clear"
             reason="The last scan found no data issues across the platform." />
         </Panel>
-      ) : scan ? (
+      ) : scan && tab === 'findings' ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Orphan assets - fixable */}
           <FindingCard meta={itemsByKey.orphans} failure={failedByKey.orphans} icon={CARD_META.orphans.Icon} tip={CARD_META.orphans.tip}
@@ -319,7 +452,7 @@ export default function ConsoleSelfHealing() {
               </Btn>
             )}>
             <RowList
-              rows={scan.orphans} empty="No orphaned assets."
+              rows={scan.orphans} onViewAll={() => setDetailKey('orphans')} empty="No orphaned assets."
               render={(r) => (
                 <div key={r.asset_no} className="flex items-center justify-between gap-3 py-1.5 border-b border-gray-800/60 last:border-0">
                   <div className="min-w-0 flex items-center gap-2">
@@ -338,7 +471,7 @@ export default function ConsoleSelfHealing() {
           {/* Duplicate tyres - fixable (identical only) */}
           <FindingCard meta={itemsByKey.duplicates} failure={failedByKey.duplicates} icon={CARD_META.duplicates.Icon} tip={CARD_META.duplicates.tip}>
             <RowList
-              rows={scan.duplicates} empty="No exact-duplicate tyre rows."
+              rows={scan.duplicates} onViewAll={() => setDetailKey('duplicates')} empty="No exact-duplicate tyre rows."
               render={(r) => (
                 <div key={r.keep_id || `${r.serial_no}:${r.asset_no}`} className="flex items-center justify-between gap-3 py-1.5 border-b border-gray-800/60 last:border-0">
                   <div className="min-w-0 flex items-center gap-2">
@@ -361,7 +494,7 @@ export default function ConsoleSelfHealing() {
               These are legitimate tyre movements between vehicles, not errors. Review only, no fix applied.
             </p>
             <RowList
-              rows={scan.serialConflicts} empty="No serial conflicts."
+              rows={scan.serialConflicts} onViewAll={() => setDetailKey('serialConflicts')} empty="No serial conflicts."
               render={(r) => (
                 <div key={r.serial_no} className="flex items-center justify-between gap-3 py-1.5 border-b border-gray-800/60 last:border-0">
                   <Code>{r.serial_no}</Code>
@@ -374,7 +507,7 @@ export default function ConsoleSelfHealing() {
           {/* Stale sites - read only */}
           <FindingCard meta={itemsByKey.stale} failure={failedByKey.stale} icon={CARD_META.stale.Icon} tip={CARD_META.stale.tip} readOnly>
             <RowList
-              rows={scan.stale} empty="Every site has recent activity."
+              rows={scan.stale} onViewAll={() => setDetailKey('stale')} empty="Every site has recent activity."
               render={(r) => (
                 <div key={r.group} className="flex items-center justify-between gap-3 py-1.5 border-b border-gray-800/60 last:border-0">
                   <span className="text-xs text-gray-200 font-medium min-w-0 break-words">{r.group}</span>
@@ -387,7 +520,7 @@ export default function ConsoleSelfHealing() {
           {/* Predictive anomalies - read only */}
           <FindingCard meta={itemsByKey.anomalies} failure={failedByKey.anomalies} icon={CARD_META.anomalies.Icon} tip={CARD_META.anomalies.tip} readOnly wide>
             <RowList
-              rows={scan.anomalies} empty="No unusual tyre patterns detected." max={12}
+              rows={scan.anomalies} onViewAll={() => setDetailKey('anomalies')} empty="No unusual tyre patterns detected." max={12}
               render={(a) => (
                 <div key={a.id} className="flex items-start gap-2 py-1.5 border-b border-gray-800/60 last:border-0">
                   <Badge tone={ANOMALY_TONE[a.severity] || 'quiet'}>
@@ -405,6 +538,16 @@ export default function ConsoleSelfHealing() {
         Self-Healing reuses the existing data reconciliation checks. It never deletes non-identical rows,
         never merges tyres that moved between vehicles, and always asks for confirmation before a fix.
       </p>
+
+      <Drawer open={!!detailSpec} onClose={() => setDetailKey(null)} width="max-w-3xl"
+        title={detailSpec ? `${SCAN_LABELS[detailKey] || detailSpec.title}: every finding` : ''}
+        subtitle={detailSpec?.readOnly ? 'Review only. Nothing here is changed automatically.' : 'Each fix asks for confirmation first.'}>
+        {detailSpec && (
+          <FindingTable spec={detailSpec} rows={scan?.[detailKey] || []} title={SCAN_LABELS[detailKey] || detailSpec.title}
+            busyKey={busyKey}
+            onRowAction={detailKey === 'orphans' ? (r) => backfillOne(r.asset_no) : detailKey === 'duplicates' ? (r) => mergeOne(r) : null} />
+        )}
+      </Drawer>
 
       <Modal
         open={!!pending}
@@ -459,7 +602,7 @@ function FindingCard({ meta, failure, icon: Icon, tip, action, children, readOnl
   )
 }
 
-function RowList({ rows, render, empty, max = 8 }) {
+function RowList({ rows, render, empty, max = 5, onViewAll }) {
   const list = Array.isArray(rows) ? rows : []
   if (list.length === 0) {
     return <p className="text-[11px] text-gray-400 py-2">{empty}</p>
@@ -469,7 +612,57 @@ function RowList({ rows, render, empty, max = 8 }) {
     <div>
       {shown.map(render)}
       {list.length > shown.length && (
-        <p className="text-[11px] text-gray-500 pt-2">+ {list.length - shown.length} more</p>
+        <div className="flex items-center justify-between gap-2 pt-2">
+          <span className="text-[11px] text-gray-500">+ {list.length - shown.length} more</span>
+          {onViewAll && <Btn size="xs" icon={List} onClick={onViewAll}>View all {list.length}</Btn>}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Every finding of one check: searchable, sortable, paged, exportable. */
+function FindingTable({ spec, rows, title, busyKey, onRowAction }) {
+  const [q, setQ] = useState('')
+  const { sort, onSort } = useTableSort(null)
+  const accessors = useMemo(() => Object.fromEntries(spec.columns.filter((c) => c.value).map((c) => [c.key, c.value])), [spec])
+  const visible = useMemo(() => sortRows(searchRows(rows, q, spec.search), sort, accessors), [rows, q, sort, spec, accessors])
+  const paged = usePaged(visible, PAGE_SIZE, `${q}|${sort?.key}${sort?.dir}`)
+  return (
+    <div className="space-y-3">
+      <Toolbar>
+        <SearchInput value={q} onChange={setQ} placeholder={`Search ${title.toLowerCase()}`} className="w-full sm:w-64" />
+        <span className="ml-auto flex items-center gap-2">
+          <ExportButtons rows={visible} columns={spec.columns} title={`Self Healing ${title}`} />
+        </span>
+      </Toolbar>
+      {visible.length === 0 ? (
+        <EmptyState title="Nothing matches" reason={q ? 'No finding matches this search.' : 'This check found nothing.'} />
+      ) : (
+        <>
+          <Table>
+            <THead>
+              {spec.columns.map((c) => <Th key={c.key} sortKey={c.key} sort={sort} onSort={onSort}>{c.header}</Th>)}
+              {onRowAction && <Th align="right">Fix</Th>}
+            </THead>
+            <tbody>
+              {paged.slice.map((r) => (
+                <Tr key={spec.rowKey(r)}>
+                  {spec.columns.map((c) => (
+                    <Td key={c.key} className="break-words">{c.value ? c.value(r) : (r[c.key] ?? 'N/A')}</Td>
+                  ))}
+                  {onRowAction && (
+                    <Td align="right">
+                      <Btn size="xs" busy={busyKey === spec.busyKeyOf(r)} disabled={!!busyKey && busyKey !== spec.busyKeyOf(r)}
+                        onClick={() => onRowAction(r)}>{spec.actionLabel}</Btn>
+                    </Td>
+                  )}
+                </Tr>
+              ))}
+            </tbody>
+          </Table>
+          <Pager {...paged} label="findings" />
+        </>
       )}
     </div>
   )

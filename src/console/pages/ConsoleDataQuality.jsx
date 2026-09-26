@@ -11,7 +11,8 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  ShieldCheck, RefreshCw, Play, AlertTriangle, CheckCircle2, ExternalLink,
+  ShieldCheck, RefreshCw, Play, AlertTriangle, CheckCircle2, ExternalLink, Download, FileText,
+  ListChecks, Users,
 } from 'lucide-react'
 import {
   Panel, PanelHeader, Note, StatTile, Badge, Btn, Select, SearchInput, Toolbar,
@@ -23,6 +24,9 @@ import {
 import { shapeQualityResults, qualitySummary } from '../../lib/dataTrustOps'
 import { COUNTRIES } from '../../contexts/SettingsContext'
 import { toUserMessage } from '../../lib/safeError'
+import { exportToExcel, exportToPdf, reportFileName } from '../../lib/exportUtils'
+import { useTableSort } from '../../lib/useTableSort'
+import { ShareChart, STATUS, useChartTheme } from '../components/ui/charts'
 
 const nf = new Intl.NumberFormat('en-US')
 const num = (v) => (v === null || v === undefined ? 'N/A' : nf.format(Number(v)))
@@ -47,6 +51,12 @@ function statusLabel(status) {
   if (status === 'pass') return 'Pass'
   return status || 'Unknown'
 }
+const STATUS_RANK = { fail: 0, warn: 1, pass: 2 }
+const SEVERITY_RANK = { critical: 0, error: 1, warning: 2, warn: 2, info: 3 }
+const EXPORT_COLS = [
+  ['check', 'Check'], ['dimension', 'Dimension'], ['severity', 'Severity'], ['status', 'Status'],
+  ['affected', 'Affected records'], ['message', 'Message'], ['checked_at', 'Checked at'],
+]
 /** A drilldown is only a link when it is a usable string path. */
 function drilldownHref(d) {
   if (typeof d !== 'string' || !d) return null
@@ -58,6 +68,9 @@ export default function ConsoleDataQuality() {
   const [country, setCountry] = useState('All')
   const [state, setState] = useState({ loading: true, error: null, results: [], rules: [] })
   const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
+  const [severityFilter, setSeverityFilter] = useState('')
+  const theme = useChartTheme()
   const [showRules, setShowRules] = useState(false)
   const [running, setRunning] = useState(false)
   const [flash, setFlash] = useState(null)
@@ -82,9 +95,7 @@ export default function ConsoleDataQuality() {
     setFlash(null)
     try {
       await runQualityChecks(country === 'All' ? null : country)
-      await load()
-      // load() has already refreshed results; summarise from the fresh state on
-      // the next tick via a direct re-read so the flash reflects what stored.
+      // One re-read of what the run stored, so the flash and the table agree.
       const fresh = shapeQualityResults(
         await listQualityResults({ country: country === 'All' ? null : country }),
       )
@@ -114,52 +125,112 @@ export default function ConsoleDataQuality() {
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return state.results
     return state.results.filter((r) => {
+      if (statusFilter && r.status !== statusFilter) return false
+      if (severityFilter && String(r.severity || 'info').toLowerCase() !== severityFilter) return false
+      if (!q) return true
       const name = ruleByKey.get(r.ruleKey)?.name || r.ruleKey
       return `${name} ${r.message}`.toLowerCase().includes(q)
     })
-  }, [state.results, search, ruleByKey])
+  }, [state.results, search, statusFilter, severityFilter, ruleByKey])
 
-  if (state.loading) return <LoadingState label="Reading data-quality results" rows={5} />
+  const accessors = useMemo(() => ({
+    name: (r) => ruleByKey.get(r.ruleKey)?.name || r.ruleKey,
+    severity: (r) => SEVERITY_RANK[String(r.severity || 'info').toLowerCase()] ?? 4,
+    status: (r) => STATUS_RANK[r.status] ?? 3,
+  }), [ruleByKey])
+  // Worst-first by default (status rank ascending), the order a triage starts in.
+  const { sort, onSort, sorted } = useTableSort(rows, { key: 'status', dir: 'asc' }, accessors)
+
+  const severityOptions = useMemo(() => {
+    const set = new Set(state.results.map((r) => String(r.severity || 'info').toLowerCase()))
+    return [...set].sort().map((v) => ({ value: v, label: v }))
+  }, [state.results])
+
+  const toggleStatus = (v) => setStatusFilter((cur) => (cur === v ? '' : v))
+
+  function exportRows(kind) {
+    const out = sorted.map((r) => {
+      const rule = ruleByKey.get(r.ruleKey)
+      return {
+        check: rule?.name || r.ruleKey,
+        dimension: rule?.dimension || 'N/A',
+        severity: r.severity || 'info',
+        status: statusLabel(r.status),
+        affected: r.failureCount,
+        message: r.message || 'N/A',
+        checked_at: r.checkedAt ? String(r.checkedAt).slice(0, 16).replace('T', ' ') : 'N/A',
+      }
+    })
+    const file = reportFileName('TyrePulse Data Quality', country)
+    if (kind === 'pdf') exportToPdf(out, EXPORT_COLS.map(([key, header]) => ({ key, header })), 'Data Quality Checks', file, 'landscape')
+    else exportToExcel(out, EXPORT_COLS.map(([k]) => k), EXPORT_COLS.map(([, h]) => h), file)
+  }
+
+  const header = (
+    <div className="flex items-start justify-between gap-3 flex-wrap">
+      <div>
+        <h1 className="text-lg font-semibold text-white flex items-center gap-2">
+          <ShieldCheck size={18} className="text-orange-400" aria-hidden="true" /> Data Quality Center
+        </h1>
+        <p className="text-xs text-gray-400 mt-1">
+          Governed checks over the fleet data: required fields, dates, integrity, freshness and business rules.
+        </p>
+      </div>
+      <Toolbar>
+        <Select ariaLabel="Country" value={country} onChange={setCountry} options={COUNTRY_OPTS} className="w-32" />
+        <Btn variant="primary" icon={Play} busy={running} disabled={state.loading} onClick={runNow}>Run checks now</Btn>
+        <Btn icon={RefreshCw} onClick={load} busy={state.loading}>Refresh</Btn>
+      </Toolbar>
+    </div>
+  )
+
+  if (state.loading) return <div className="space-y-4">{header}<LoadingState label="Reading data-quality results" rows={5} /></div>
   if (state.error) {
     return (
-      <Panel>
-        <PanelHeader icon={ShieldCheck} title="Data Quality Center" />
+      <div className="space-y-4">
+        {header}
         <ErrorState message={state.error} onRetry={load} />
-      </Panel>
+      </div>
     )
   }
 
   return (
     <div className="space-y-4">
+      {header}
       <Panel>
-        <PanelHeader
-          icon={ShieldCheck}
-          title="Data Quality Center"
-          subtitle="Governed checks over the fleet data - required fields, dates, integrity, freshness and business rules."
-          actions={(
-            <Toolbar>
-              <Select ariaLabel="Country" value={country} onChange={setCountry} options={COUNTRY_OPTS} className="w-32" />
-              <Btn variant="primary" icon={Play} busy={running} onClick={runNow}>Run checks now</Btn>
-              <Btn icon={RefreshCw} onClick={load}>Refresh</Btn>
-            </Toolbar>
-          )}
-        />
+        <PanelHeader icon={ListChecks} title="Summary" subtitle="Click a tile to filter the results to that status." />
 
         {flash && (
-          <div className="px-4 pb-3">
+          <div className="mb-3" role="status">
             <Note icon={flash.tone === 'accent' ? CheckCircle2 : AlertTriangle} tone={flash.tone}>
               {flash.text}
             </Note>
           </div>
         )}
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 p-4 pt-0">
-          <StatTile label="Checks" value={num(summary.total)} />
-          <StatTile label="Failing" value={num(summary.fail)} tone={summary.fail ? 'danger' : 'good'} />
-          <StatTile label="Warnings" value={num(summary.warn)} tone={summary.warn ? 'warning' : 'default'} />
-          <StatTile label="Affected records" value={num(summary.affected)} tone={summary.affected ? 'warning' : 'default'} />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="lg:col-span-2 grid grid-cols-2 gap-3 content-start">
+            <StatTile label="Checks" value={num(summary.total)} icon={ListChecks}
+              onClick={() => setStatusFilter('')} active={!statusFilter} />
+            <StatTile label="Failing" value={num(summary.fail)} icon={AlertTriangle} tone={summary.fail ? 'danger' : 'good'}
+              onClick={() => toggleStatus('fail')} active={statusFilter === 'fail'} />
+            <StatTile label="Warnings" value={num(summary.warn)} tone={summary.warn ? 'warning' : 'default'}
+              onClick={() => toggleStatus('warn')} active={statusFilter === 'warn'} />
+            <StatTile label="Affected records" value={num(summary.affected)} icon={Users} tone={summary.affected ? 'warning' : 'default'}
+              sub={`${num(summary.pass)} checks passing`} />
+          </div>
+          <ShareChart
+            height={150}
+            parts={[
+              { label: 'Failing', value: summary.fail, color: STATUS[theme].critical },
+              { label: 'Warning', value: summary.warn, color: STATUS[theme].medium },
+              { label: 'Pass', value: summary.pass, color: STATUS[theme].good },
+            ]}
+            center={{ value: num(summary.total), label: 'checks' }}
+            summary={`${summary.fail} failing, ${summary.warn} warning and ${summary.pass} passing checks.`}
+            emptyText="No checks have been run yet."
+          />
         </div>
       </Panel>
 
@@ -168,9 +239,22 @@ export default function ConsoleDataQuality() {
         <PanelHeader
           icon={ShieldCheck}
           title="Check results"
-          subtitle="Worst-first. A failing check names the rows it points at - open the drilldown to investigate."
-          actions={<SearchInput value={search} onChange={setSearch} placeholder="Search checks" className="w-56" />}
+          subtitle={`Worst-first. ${num(rows.length)} of ${num(state.results.length)} shown. A failing check names the rows it points at; open the drilldown to investigate.`}
+          actions={<>
+            <Btn icon={Download} onClick={() => exportRows('xlsx')} disabled={!sorted.length}>Excel</Btn>
+            <Btn icon={FileText} onClick={() => exportRows('pdf')} disabled={!sorted.length}>PDF</Btn>
+          </>}
         />
+        <Toolbar className="mb-3">
+          <SearchInput value={search} onChange={setSearch} placeholder="Search checks" className="w-full sm:w-64" />
+          <Select ariaLabel="Filter by status" value={statusFilter} onChange={setStatusFilter} placeholder="All statuses" className="w-36"
+            options={[{ value: 'fail', label: 'Failing' }, { value: 'warn', label: 'Warning' }, { value: 'pass', label: 'Pass' }]} />
+          <Select ariaLabel="Filter by severity" value={severityFilter} onChange={setSeverityFilter} placeholder="All severities" className="w-36"
+            options={severityOptions} />
+          {(search || statusFilter || severityFilter) && (
+            <Btn variant="quiet" onClick={() => { setSearch(''); setStatusFilter(''); setSeverityFilter('') }}>Clear filters</Btn>
+          )}
+        </Toolbar>
         {state.results.length === 0 ? (
           <EmptyState
             icon={ShieldCheck}
@@ -179,19 +263,19 @@ export default function ConsoleDataQuality() {
             action={<Btn variant="primary" icon={Play} busy={running} onClick={runNow}>Run checks now</Btn>}
           />
         ) : rows.length === 0 ? (
-          <EmptyState icon={ShieldCheck} title="No checks match your search" reason="Clear the search to see every check." />
+          <EmptyState icon={ShieldCheck} title="No checks match these filters" reason="Clear the search and filters to see every check." />
         ) : (
           <Table>
             <THead>
-              <Th>Check</Th>
-              <Th>Severity</Th>
-              <Th>Status</Th>
-              <Th align="right">Affected</Th>
+              <Th sortKey="name" sort={sort} onSort={onSort}>Check</Th>
+              <Th sortKey="severity" sort={sort} onSort={onSort}>Severity</Th>
+              <Th sortKey="status" sort={sort} onSort={onSort}>Status</Th>
+              <Th sortKey="failureCount" sort={sort} onSort={onSort} align="right">Affected</Th>
               <Th>Message</Th>
               <Th align="right">Investigate</Th>
             </THead>
             <tbody>
-              {rows.map((r) => {
+              {sorted.map((r) => {
                 const rule = ruleByKey.get(r.ruleKey)
                 const href = drilldownHref(r.drilldown)
                 return (
@@ -213,7 +297,7 @@ export default function ConsoleDataQuality() {
                           aria-label={`Open the rows behind ${rule?.name || r.ruleKey}`}
                           className="inline-flex items-center gap-1 text-orange-300 hover:text-orange-200 text-xs rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
                         >
-                          <ExternalLink size={12} /> Open
+                          <ExternalLink size={12} aria-hidden="true" /> Open
                         </a>
                       ) : (
                         <span className="text-gray-400 text-xs">N/A</span>
@@ -234,7 +318,7 @@ export default function ConsoleDataQuality() {
           title="Registered rules"
           subtitle="Every governed check, its dimension, the table it scopes and who owns it."
           actions={(
-            <Btn onClick={() => setShowRules((v) => !v)}>
+            <Btn onClick={() => setShowRules((v) => !v)} aria-expanded={showRules}>
               {showRules ? 'Hide' : `Show ${state.rules.length}`}
             </Btn>
           )}

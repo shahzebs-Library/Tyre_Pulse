@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   GitBranch, ArrowUp, ArrowDown, ArrowRight, Database, BarChart3,
-  LayoutDashboard, RefreshCw, AlertTriangle,
+  LayoutDashboard, RefreshCw, AlertTriangle, Download,
 } from 'lucide-react'
 import {
   Panel, PanelHeader, Note, StatTile, Badge, Btn, Select, SearchInput,
@@ -26,6 +26,7 @@ import {
 } from '../../lib/lineageOps'
 import EChart from '../../components/charts/EChart'
 import { toUserMessage } from '../../lib/safeError'
+import { exportToExcel, reportFileName } from '../../lib/exportUtils'
 
 const nf = new Intl.NumberFormat('en-US')
 
@@ -139,24 +140,32 @@ export default function ConsoleLineageExplorer() {
   const loadAssets = useCallback(async () => {
     setAssets((s) => ({ ...s, loading: true, error: null }))
     try {
-      const rows = await listDataAssets({ kind: kind || null })
-      setAssets({ loading: false, error: null, rows })
+      // Read every kind once and filter locally, so the per-kind tiles stay
+      // true while one kind is selected.
+      const rows = await listDataAssets({ kind: null })
+      setAssets({ loading: false, error: null, rows: Array.isArray(rows) ? rows : [] })
     } catch (e) {
       setAssets({ loading: false, error: toUserMessage(e), rows: [] })
     }
-  }, [kind])
+  }, [])
 
   useEffect(() => { loadAssets() }, [loadAssets])
 
+  const kindCounts = useMemo(() => {
+    const out = { table: 0, metric: 0, dashboard: 0 }
+    for (const a of assets.rows || []) if (a.kind in out) out[a.kind] += 1
+    return out
+  }, [assets.rows])
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    const rows = assets.rows || []
+    const rows = (assets.rows || []).filter((a) => !kind || a.kind === kind)
     if (!q) return rows
     return rows.filter((a) =>
       String(a.name || '').toLowerCase().includes(q)
       || String(a.module || '').toLowerCase().includes(q)
       || String(a.asset_id || '').toLowerCase().includes(q))
-  }, [assets.rows, search])
+  }, [assets.rows, search, kind])
 
   const loadDetail = useCallback(async (asset) => {
     if (!asset) return
@@ -185,14 +194,30 @@ export default function ConsoleLineageExplorer() {
 
   return (
     <div className="space-y-4">
-      <Panel>
-        <PanelHeader
-          icon={GitBranch}
-          title="Data Lineage Explorer"
-          subtitle="Trace any table, metric or dashboard upstream to its sources and downstream to everything it affects."
-          actions={<Btn icon={RefreshCw} onClick={loadAssets} busy={assets.loading}>Refresh</Btn>}
-        />
-      </Panel>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-lg font-semibold text-white flex items-center gap-2">
+            <GitBranch size={18} className="text-orange-400" aria-hidden="true" /> Data Lineage Explorer
+          </h1>
+          <p className="text-xs text-gray-400 mt-1">
+            Trace any table, metric or dashboard upstream to its sources and downstream to everything it affects.
+          </p>
+        </div>
+        <Btn icon={RefreshCw} onClick={loadAssets} busy={assets.loading}>Refresh</Btn>
+      </div>
+
+      {!assets.loading && !assets.error && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <StatTile label="Registered assets" value={nf.format((assets.rows || []).length)} icon={GitBranch}
+            onClick={() => setKind('')} active={!kind} />
+          <StatTile label="Tables" value={nf.format(kindCounts.table)} icon={Database}
+            onClick={() => setKind((k) => (k === 'table' ? '' : 'table'))} active={kind === 'table'} />
+          <StatTile label="Metrics" value={nf.format(kindCounts.metric)} icon={BarChart3}
+            onClick={() => setKind((k) => (k === 'metric' ? '' : 'metric'))} active={kind === 'metric'} />
+          <StatTile label="Dashboards" value={nf.format(kindCounts.dashboard)} icon={LayoutDashboard}
+            onClick={() => setKind((k) => (k === 'dashboard' ? '' : 'dashboard'))} active={kind === 'dashboard'} />
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* ── asset picker ────────────────────────────────────────────────── */}
@@ -246,7 +271,7 @@ export default function ConsoleLineageExplorer() {
                       <span className="text-xs font-medium text-gray-100 truncate" title={a.name || a.asset_id}>{a.name || assetShortName(a.asset_id)}</span>
                       <AssetBadge kind={a.kind} />
                     </div>
-                    {a.module && <p className="text-[11px] text-gray-500 mt-0.5 truncate">{a.module}</p>}
+                    {a.module && <p className="text-[11px] text-gray-400 mt-0.5 truncate">{a.module}</p>}
                   </button>
                 )
               })}
@@ -302,13 +327,25 @@ function LineageDetail({ asset, graph, impact, showEdges, onToggleEdges }) {
   const capped = upstream.length > GRAPH_CAP
     || (impacted.length ? impacted.length : downstream.length) > GRAPH_CAP
 
+  function exportLineage() {
+    const out = [
+      ...upstream.map((n) => ({ direction: 'Upstream source', name: n.name, kind: assetKindLabel(n.kind), module: n.module || 'Not set' })),
+      ...(impacted.length ? impacted : downstream).map((n) => ({ direction: 'Downstream affected', name: n.name, kind: assetKindLabel(n.kind), module: n.module || 'Not set' })),
+    ]
+    exportToExcel(out, ['direction', 'name', 'kind', 'module'], ['Direction', 'Asset', 'Kind', 'Module'],
+      reportFileName('TyrePulse Lineage', asset.name || assetShortName(asset.asset_id)))
+  }
+
   return (
     <div className="space-y-4">
       <PanelHeader
         icon={kindIcon(asset.kind)}
         title={asset.name || assetShortName(asset.asset_id)}
         subtitle={asset.module || 'Selected asset'}
-        actions={<AssetBadge kind={asset.kind} />}
+        actions={<>
+          <AssetBadge kind={asset.kind} />
+          <Btn icon={Download} onClick={exportLineage} disabled={nothing}>Excel</Btn>
+        </>}
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -345,26 +382,26 @@ function LineageDetail({ asset, graph, impact, showEdges, onToggleEdges }) {
           {/* visualization */}
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <GitBranch size={14} className="text-orange-400" />
+              <GitBranch size={14} className="text-orange-400" aria-hidden="true" />
               <h4 className="text-sm font-semibold text-gray-200">Visualization</h4>
             </div>
             <div className="rounded-lg border border-gray-800 bg-gray-950/40 p-2">
               <EChart option={lineageOption} style={{ height: 360 }} ariaLabel="Lineage diagram" />
             </div>
-            <p className="text-[11px] text-gray-500 mt-1">
+            <p className="text-[11px] text-gray-400 mt-1">
               Sources on the left feed this asset; arrows point to what a change affects. Drag to pan, scroll to zoom.
-              {capped ? ` Showing the first ${GRAPH_CAP} on each side - the tables below list every one.` : ''}
+              {capped ? ` Showing the first ${GRAPH_CAP} on each side; the tables below list every one.` : ''}
             </p>
           </div>
 
           {/* upstream */}
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <ArrowUp size={14} className="text-orange-400" />
-              <h4 className="text-sm font-semibold text-gray-200">Upstream (where the data comes from)</h4>
+              <ArrowUp size={14} className="text-orange-400" aria-hidden="true" />
+              <h4 className="text-sm font-semibold text-gray-200">Upstream: where the data comes from</h4>
             </div>
             {upstream.length === 0 ? (
-              <Note>No upstream sources are recorded for this asset - it is treated as an origin.</Note>
+              <Note>No upstream sources are recorded for this asset, so it is treated as an origin.</Note>
             ) : (
               <Table>
                 <THead>
@@ -388,11 +425,11 @@ function LineageDetail({ asset, graph, impact, showEdges, onToggleEdges }) {
           {/* downstream */}
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <ArrowDown size={14} className="text-amber-400" />
-              <h4 className="text-sm font-semibold text-gray-200">Downstream (what this affects - impact of a change)</h4>
+              <ArrowDown size={14} className="text-amber-400" aria-hidden="true" />
+              <h4 className="text-sm font-semibold text-gray-200">Downstream: what a change to this affects</h4>
             </div>
             {impacted.length === 0 ? (
-              <Note>Nothing depends on this asset - changing it affects no downstream metric or dashboard.</Note>
+              <Note>Nothing depends on this asset, so changing it affects no downstream metric or dashboard.</Note>
             ) : (
               <>
                 <Table>
@@ -422,7 +459,7 @@ function LineageDetail({ asset, graph, impact, showEdges, onToggleEdges }) {
           {edges.length > 0 && (
             <div>
               <Toolbar className="mb-2">
-                <Btn icon={GitBranch} onClick={onToggleEdges}>
+                <Btn icon={GitBranch} onClick={onToggleEdges} aria-expanded={showEdges}>
                   {showEdges ? 'Hide' : 'Show'} edges ({nf.format(edges.length)})
                 </Btn>
               </Toolbar>
@@ -439,7 +476,7 @@ function LineageDetail({ asset, graph, impact, showEdges, onToggleEdges }) {
                         <Td nowrap>{nameById.get(e.from) || assetShortName(e.from)}</Td>
                         <Td>
                           <span className="inline-flex items-center gap-1 text-gray-400">
-                            <ArrowRight size={12} />
+                            <ArrowRight size={12} aria-hidden="true" />
                             {e.type || 'feeds'}
                           </span>
                         </Td>

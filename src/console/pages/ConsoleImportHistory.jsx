@@ -29,7 +29,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   History, RefreshCw, AlertTriangle, FileUp, Info, Activity, Download, CopyX,
-  CalendarDays, Shuffle,
+  CalendarDays, Shuffle, FileText, CheckCircle2, XCircle,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import {
@@ -37,10 +37,15 @@ import {
   importRowOutcome, OUTCOME_META,
 } from '../../lib/api/importHistory'
 import { listDuplicateTargets } from '../../lib/api/duplicateControl'
-import { exportToExcel, reportFileName } from '../../lib/exportUtils'
+import { exportToExcel, exportToPdf, reportFileName } from '../../lib/exportUtils'
+import { toUserMessage } from '../../lib/safeError'
+import { useTableSort } from '../../lib/useTableSort'
 import UploadCoveragePanel from './importHistory/UploadCoveragePanel'
 import DecisionsPanel from './importHistory/DecisionsPanel'
-import { Btn, ErrorState, Badge, LoadingState } from '../components/ui'
+import {
+  Btn, ErrorState, Badge, LoadingState, EmptyState, Panel, PanelHeader, Note, StatTile,
+  SearchInput, Select, Toolbar, Segmented, Table, THead, Th, Tr, Td,
+} from '../components/ui'
 
 const fmtNum = (n) => (Number.isFinite(Number(n)) ? Number(n).toLocaleString() : 'N/A')
 const fmtTime = (v) => {
@@ -56,6 +61,18 @@ const fmtBytes = (n) => {
   return `${(b / (1024 * 1024)).toFixed(1)} MB`
 }
 
+// Derived sort keys: the outcome is a label, the repeat flag a boolean.
+const UPLOAD_ACCESSORS = {
+  outcome: (r) => OUTCOME_META[importRowOutcome(r)].label,
+  repeat: (r) => (r.reupload_of ? 1 : 0),
+}
+
+const UPLOAD_COLS = [
+  ['file', 'File'], ['module', 'Module'], ['country', 'Country'], ['uploaded_at', 'Uploaded at'],
+  ['size', 'Size'], ['outcome', 'Outcome'], ['rows_read', 'Rows read'], ['rows_imported', 'Rows imported'],
+  ['duplicates_flagged', 'Duplicates flagged'], ['errors', 'Errors'], ['same_file_imported_before', 'Same file imported before'],
+]
+
 export default function ConsoleImportHistory() {
   const [tab, setTab] = useState('uploads')
   const [rows, setRows] = useState([])
@@ -63,28 +80,36 @@ export default function ConsoleImportHistory() {
   const [targetKey, setTargetKey] = useState('parts_expense')
   const [clusters, setClusters] = useState([])
   const [loading, setLoading] = useState(true)
+  const [clusterLoading, setClusterLoading] = useState(false)
   const [error, setError] = useState('')
   const [clusterError, setClusterError] = useState('')
+  const [search, setSearch] = useState('')
+  const [moduleFilter, setModuleFilter] = useState('')
+  const [outcomeFilter, setOutcomeFilter] = useState('')
+  const [onlyRepeats, setOnlyRepeats] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
     try {
       const [h, t] = await Promise.all([listImportHistory(200), listDuplicateTargets()])
-      setRows(h); setTargets(t)
+      setRows(Array.isArray(h) ? h : []); setTargets(Array.isArray(t) ? t : [])
     } catch (e) {
-      setError(e?.message || 'Could not load import history.')
+      setError(toUserMessage(e, 'Could not load import history.'))
     } finally {
       setLoading(false)
     }
   }, [])
 
   const loadClusters = useCallback(async (key) => {
-    setClusterError('')
+    setClusterError(''); setClusterLoading(true)
     try {
-      setClusters(await listUnloggedImports(key, 80))
+      const c = await listUnloggedImports(key, 80)
+      setClusters(Array.isArray(c) ? c : [])
     } catch (e) {
-      setClusterError(e?.message || 'Could not load import activity.')
+      setClusterError(toUserMessage(e, 'Could not load import activity.'))
       setClusters([])
+    } finally {
+      setClusterLoading(false)
     }
   }, [])
 
@@ -95,234 +120,280 @@ export default function ConsoleImportHistory() {
   const suspiciousCount = useMemo(() => flagged.filter((c) => c.suspicious).length, [flagged])
   const reuploads = useMemo(() => rows.filter((r) => r.reupload_of), [rows])
 
-  function downloadUploads() {
-    const out = rows.map((r) => ({
-      file: r.filename,
+  const stats = useMemo(() => {
+    let imported = 0; let errors = 0; let unfinished = 0
+    for (const r of rows) {
+      imported += Number(r.imported_rows) || 0
+      errors += Number(r.error_rows) || 0
+      if (importRowOutcome(r) === 'unfinished') unfinished += 1
+    }
+    return { files: rows.length, imported, errors, unfinished }
+  }, [rows])
+
+  const moduleOptions = useMemo(() => {
+    const set = new Set(rows.map((r) => r.module).filter(Boolean))
+    return [...set].sort().map((m) => ({ value: m, label: m }))
+  }, [rows])
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return rows.filter((r) => {
+      if (moduleFilter && r.module !== moduleFilter) return false
+      if (outcomeFilter && importRowOutcome(r) !== outcomeFilter) return false
+      if (onlyRepeats && !r.reupload_of) return false
+      if (!q) return true
+      return [r.filename, r.module, r.country].some((v) => String(v || '').toLowerCase().includes(q))
+    })
+  }, [rows, search, moduleFilter, outcomeFilter, onlyRepeats])
+
+  const uploadsSort = useTableSort(filtered, { key: 'uploaded_at', dir: 'desc' }, UPLOAD_ACCESSORS)
+  const activitySort = useTableSort(flagged, { key: 'inserted_at', dir: 'desc' })
+
+  function uploadExportRows() {
+    return uploadsSort.sorted.map((r) => ({
+      file: r.filename || 'N/A',
       module: r.module || 'N/A',
       country: r.country || 'N/A',
       uploaded_at: fmtTime(r.uploaded_at),
       size: fmtBytes(r.size_bytes),
+      outcome: OUTCOME_META[importRowOutcome(r)].label,
       rows_read: r.total_rows ?? 0,
       rows_imported: r.imported_rows ?? 0,
       duplicates_flagged: r.duplicate_rows ?? 0,
       errors: r.error_rows ?? 0,
-      status: r.import_status || r.approval_status || 'N/A',
       same_file_imported_before: r.reupload_of ? fmtTime(r.reupload_first_seen) : 'No',
     }))
-    const keys = Object.keys(out[0] || { file: '' })
-    exportToExcel(out, keys, keys.map((k) => k.replace(/_/g, ' ')),
-      reportFileName('TyrePulse Import History'))
   }
+  function downloadUploads(kind) {
+    const out = uploadExportRows()
+    const keys = UPLOAD_COLS.map(([k]) => k)
+    const heads = UPLOAD_COLS.map(([, h]) => h)
+    if (kind === 'pdf') {
+      exportToPdf(out, UPLOAD_COLS.map(([key, header]) => ({ key, header })), 'Import History',
+        reportFileName('TyrePulse Import History'), 'landscape')
+    } else {
+      exportToExcel(out, keys, heads, reportFileName('TyrePulse Import History'))
+    }
+  }
+  function downloadActivity() {
+    const target = targets.find((t) => t.key === targetKey)
+    const out = activitySort.sorted.map((c) => ({
+      landed: fmtTime(c.inserted_at),
+      country: c.country || 'N/A',
+      rows: c.rows ?? 0,
+      note: c.suspicious ? `Same size as ${fmtTime(c.pairedWith)}` : 'Looks normal',
+    }))
+    exportToExcel(out, ['landed', 'country', 'rows', 'note'], ['Landed', 'Country', 'Rows', 'Note'],
+      reportFileName('TyrePulse Load Activity', target?.label || targetKey))
+  }
+
+  const tabs = [
+    { key: 'uploads', label: <><FileUp size={13} aria-hidden="true" /> Uploads</>, count: loading || error ? null : rows.length, hint: 'Files loaded through the app, and repeats of the same file' },
+    { key: 'activity', label: <><Activity size={13} aria-hidden="true" /> Load activity</>, hint: 'Loads done straight through the database, reconstructed' },
+    { key: 'coverage', label: <><CalendarDays size={13} aria-hidden="true" /> Daily coverage</>, hint: 'Which days have data and which are empty' },
+    { key: 'decisions', label: <><Shuffle size={13} aria-hidden="true" /> What we changed</>, hint: 'Where we filed something differently from your file' },
+  ]
+  const filtersActive = search || moduleFilter || outcomeFilter || onlyRepeats
 
   return (
     <div className="space-y-5">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-lg font-semibold text-white flex items-center gap-2">
-            <History size={18} className="text-orange-400" /> Import History
+            <History size={18} className="text-orange-400" aria-hidden="true" /> Import History
           </h1>
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-gray-400 mt-1">
             Every data load, who did it, and whether the same file has been imported before.
           </p>
         </div>
-        <div className="flex gap-2">
-          {tab === 'uploads' && rows.length > 0 && (
-            <Btn icon={Download} onClick={downloadUploads}>Excel</Btn>
-          )}
-          {/* Coverage and decisions load their own data and carry their own
-              refresh, so a second one here would be a button that does nothing
-              on two of the four tabs. */}
-          {(tab === 'uploads' || tab === 'activity') && (
-            <Btn icon={RefreshCw} onClick={load} busy={loading}>Refresh</Btn>
-          )}
-        </div>
+        {/* Coverage and decisions load their own data and carry their own
+            refresh, so a second one here would be a button that does nothing
+            on two of the four tabs. */}
+        {(tab === 'uploads' || tab === 'activity') && (
+          <Btn icon={RefreshCw} onClick={() => (tab === 'activity' ? loadClusters(targetKey) : load())}
+            busy={tab === 'activity' ? clusterLoading : loading}>Refresh</Btn>
+        )}
       </div>
 
-      <div className="flex gap-1.5 border-b border-gray-800 overflow-x-auto" role="tablist" aria-label="Import history views">
-        {[
-          ['uploads', 'Uploads', FileUp, 'Files loaded through the app, and repeats of the same file'],
-          ['activity', 'Load activity', Activity, 'Loads done straight through the database, reconstructed'],
-          ['coverage', 'Daily coverage', CalendarDays, 'Which days have data and which are empty'],
-          ['decisions', 'What we changed', Shuffle, 'Where we filed something differently from your file'],
-        ].map(([k, label, Icon, hint]) => (
-          <button key={k} onClick={() => setTab(k)} title={hint} role="tab" aria-selected={tab === k}
-            className={`px-3 py-2 text-xs font-semibold flex items-center gap-1.5 border-b-2 -mb-px transition-colors ${
-              tab === k ? 'border-orange-500 text-orange-300' : 'border-transparent text-gray-500 hover:text-gray-300'
-            } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500`}>
-            <Icon size={13} /> {label}
-          </button>
-        ))}
-      </div>
+      <Segmented ariaLabel="Import history views" options={tabs} value={tab} onChange={setTab} />
 
-      <ErrorState message={error} onRetry={load} />
-
-      {/* These two load their own data, so they render before the shared spinner. */}
       {tab === 'coverage' ? (
         <UploadCoveragePanel />
       ) : tab === 'decisions' ? (
         <DecisionsPanel />
-      ) : loading ? (
-        <LoadingState label="Loading import history" />
       ) : tab === 'uploads' ? (
-        <>
-          {reuploads.length > 0 && (
-            <div className="flex items-start gap-2 px-4 py-2.5 rounded-xl bg-amber-950/30 border border-amber-800/40">
-              <AlertTriangle size={14} className="text-amber-400 flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-amber-200">
+        loading ? (
+          <LoadingState label="Loading import history" />
+        ) : error ? (
+          <ErrorState message={error} onRetry={load} />
+        ) : (
+          <>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <StatTile label="Uploads recorded" value={fmtNum(stats.files)} icon={FileText} sub="Latest 200 files" />
+              <StatTile label="Rows imported" value={fmtNum(stats.imported)} icon={CheckCircle2} tone={stats.imported ? 'good' : 'default'} />
+              <StatTile label="Repeat uploads" value={fmtNum(reuploads.length)} icon={CopyX}
+                tone={reuploads.length ? 'warning' : 'default'} sub="Same file content seen before"
+                onClick={reuploads.length ? () => setOnlyRepeats((v) => !v) : undefined} active={onlyRepeats} />
+              <StatTile label="Never approved" value={fmtNum(stats.unfinished)} icon={XCircle}
+                tone={stats.unfinished ? 'warning' : 'default'} sub={`${fmtNum(stats.errors)} row errors in total`}
+                onClick={stats.unfinished ? () => setOutcomeFilter((v) => (v === 'unfinished' ? '' : 'unfinished')) : undefined}
+                active={outcomeFilter === 'unfinished'} />
+            </div>
+
+            {reuploads.length > 0 && (
+              <Note icon={AlertTriangle} tone="warning">
                 {reuploads.length === 1
                   ? '1 file has been uploaded more than once.'
                   : `${reuploads.length} files have been uploaded more than once.`}
                 {' '}They are marked below. Check{' '}
                 <Link to="/console/duplicates" className="underline hover:text-amber-100 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">Duplicate Control</Link>
                 {' '}if any of them added rows.
-              </p>
-            </div>
-          )}
+              </Note>
+            )}
 
-          {error ? null : rows.length === 0 ? (
-            <div className="text-center text-sm text-gray-500 py-16 border border-gray-800 rounded-xl">
-              No uploads recorded yet. Files loaded straight through the Supabase Table Editor
-              do not appear here; see the Load activity tab.
-            </div>
-          ) : (
-            <div className="rounded-xl border border-gray-800 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left">
-                  <thead className="bg-black/30 text-[10px] uppercase tracking-wide text-gray-500">
-                    <tr>
-                      <th className="px-4 py-2.5 font-semibold">File</th>
-                      <th className="px-3 py-2.5 font-semibold">Module</th>
-                      <th className="px-3 py-2.5 font-semibold">Country</th>
-                      <th className="px-3 py-2.5 font-semibold">When</th>
-                      <th className="px-3 py-2.5 font-semibold">Rows</th>
-                      <th className="px-3 py-2.5 font-semibold">Repeat upload</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-800/60">
-                    {rows.map((r, i) => (
-                      <tr key={`${r.file_id}-${r.batch_id || i}`} className="hover:bg-black/20">
-                        <td className="px-4 py-2.5">
-                          <p className="text-xs text-gray-200 truncate max-w-[260px]" title={r.filename}>
-                            {r.filename || 'N/A'}
-                          </p>
-                          <p className="text-[10px] text-gray-400">{fmtBytes(r.size_bytes)}</p>
-                        </td>
-                        <td className="px-3 py-2.5 text-[11px] text-gray-400">{r.module || 'N/A'}</td>
-                        <td className="px-3 py-2.5 text-[11px] text-gray-400">{r.country || 'N/A'}</td>
-                        <td className="px-3 py-2.5 text-[11px] text-gray-400 whitespace-nowrap">
-                          {fmtTime(r.uploaded_at)}
-                        </td>
-                        <td className="px-3 py-2.5">
-                          {/* The badge answers "is this finished?" at a glance.
-                              A staged draft and a completed load both showed
-                              0 imported and were impossible to tell apart. */}
-                          <p className="text-[11px] text-gray-300 flex items-center gap-1.5 flex-wrap">
-                            <Badge tone={OUTCOME_META[importRowOutcome(r)].tone}>
-                              {OUTCOME_META[importRowOutcome(r)].label}
-                            </Badge>
-                            {importRowSummary(r)}
-                          </p>
-                          {Number(r.duplicate_rows) > 0 && (
-                            <p className="text-[10px] text-amber-400">
-                              {fmtNum(r.duplicate_rows)} flagged as duplicate
-                            </p>
-                          )}
-                          {Number(r.error_rows) > 0 && (
-                            <p className="text-[10px] text-red-400">{fmtNum(r.error_rows)} errors</p>
-                          )}
-                        </td>
-                        <td className="px-3 py-2.5">
-                          {r.reupload_of ? (
-                            <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold text-amber-300 border border-amber-800/50 bg-amber-900/20 whitespace-nowrap">
-                              Same file as {fmtTime(r.reupload_first_seen)}
-                            </span>
-                          ) : (
-                            <span className="text-[10px] text-gray-400">First time</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </>
+            {rows.length === 0 ? (
+              <EmptyState icon={FileUp} title="No uploads recorded yet"
+                reason="Files loaded straight through the Supabase Table Editor do not appear here; see the Load activity tab." />
+            ) : (
+              <Panel>
+                <PanelHeader icon={FileUp} title="Uploaded files"
+                  subtitle={`${fmtNum(filtered.length)} of ${fmtNum(rows.length)} shown`}
+                  actions={<>
+                    <Btn icon={Download} onClick={() => downloadUploads('xlsx')} disabled={!filtered.length}>Excel</Btn>
+                    <Btn icon={FileText} onClick={() => downloadUploads('pdf')} disabled={!filtered.length}>PDF</Btn>
+                  </>} />
+                <Toolbar className="mb-3">
+                  <SearchInput value={search} onChange={setSearch} placeholder="Search file, module or country" className="w-full sm:w-72" />
+                  <Select value={moduleFilter} onChange={setModuleFilter} placeholder="All modules" options={moduleOptions} ariaLabel="Filter by module" className="w-40" />
+                  <Select value={outcomeFilter} onChange={setOutcomeFilter} placeholder="All outcomes" ariaLabel="Filter by outcome" className="w-44"
+                    options={Object.entries(OUTCOME_META).map(([value, m]) => ({ value, label: m.label }))} />
+                  {filtersActive && (
+                    <Btn variant="quiet" onClick={() => { setSearch(''); setModuleFilter(''); setOutcomeFilter(''); setOnlyRepeats(false) }}>Clear filters</Btn>
+                  )}
+                </Toolbar>
+                {filtered.length === 0 ? (
+                  <EmptyState title="No uploads match these filters" reason="Clear the filters to see every recorded upload." />
+                ) : (
+                  <Table>
+                    <THead>
+                        <Th sortKey="filename" sort={uploadsSort.sort} onSort={uploadsSort.onSort}>File</Th>
+                        <Th sortKey="module" sort={uploadsSort.sort} onSort={uploadsSort.onSort}>Module</Th>
+                        <Th sortKey="country" sort={uploadsSort.sort} onSort={uploadsSort.onSort}>Country</Th>
+                        <Th sortKey="uploaded_at" sort={uploadsSort.sort} onSort={uploadsSort.onSort}>When</Th>
+                        <Th sortKey="imported_rows" sort={uploadsSort.sort} onSort={uploadsSort.onSort}>Rows</Th>
+                        <Th sortKey="repeat" sort={uploadsSort.sort} onSort={uploadsSort.onSort}>Repeat upload</Th>
+                      </THead>
+                    <tbody>
+                      {uploadsSort.sorted.map((r, i) => {
+                        const meta = OUTCOME_META[importRowOutcome(r)]
+                        return (
+                          <Tr key={`${r.file_id}-${r.batch_id || i}`} tone={r.reupload_of ? 'warning' : undefined}>
+                            <Td>
+                              <p className="text-gray-200 truncate max-w-[260px]" title={r.filename}>{r.filename || 'N/A'}</p>
+                              <p className="text-[10px] text-gray-400">{fmtBytes(r.size_bytes)}</p>
+                            </Td>
+                            <Td className="text-gray-400">{r.module || 'N/A'}</Td>
+                            <Td className="text-gray-400">{r.country || 'N/A'}</Td>
+                            <Td className="text-gray-400 tabular-nums" nowrap>{fmtTime(r.uploaded_at)}</Td>
+                            <Td>
+                              {/* The badge answers "is this finished?" at a glance.
+                                  A staged draft and a completed load both showed
+                                  0 imported and were impossible to tell apart. */}
+                              <p className="text-gray-300 flex items-center gap-1.5 flex-wrap">
+                                <Badge tone={meta.tone}>{meta.label}</Badge>
+                                {importRowSummary(r)}
+                              </p>
+                              {Number(r.duplicate_rows) > 0 && (
+                                <p className="text-[10px] text-amber-400">{fmtNum(r.duplicate_rows)} flagged as duplicate</p>
+                              )}
+                              {Number(r.error_rows) > 0 && (
+                                <p className="text-[10px] text-red-400">{fmtNum(r.error_rows)} errors</p>
+                              )}
+                            </Td>
+                            <Td>
+                              {r.reupload_of ? (
+                                <Badge tone="warning" icon={CopyX}>Same file as {fmtTime(r.reupload_first_seen)}</Badge>
+                              ) : (
+                                <span className="text-[10px] text-gray-400">First time</span>
+                              )}
+                            </Td>
+                          </Tr>
+                        )
+                      })}
+                    </tbody>
+                  </Table>
+                )}
+              </Panel>
+            )}
+          </>
+        )
       ) : (
         <>
-          <div className="flex items-start gap-2 px-4 py-2.5 rounded-xl bg-blue-950/30 border border-blue-800/40">
-            <Info size={14} className="text-blue-400 flex-shrink-0 mt-0.5" />
-            <p className="text-xs text-blue-200">
-              Loads done straight through the Supabase Table Editor leave no upload record, so
-              this rebuilds them from when the rows actually landed. Two loads of the SAME row
-              count within a few minutes usually means one upload was sent twice.
-            </p>
-          </div>
+          <Note icon={Info} tone="accent">
+            Loads done straight through the Supabase Table Editor leave no upload record, so
+            this rebuilds them from when the rows actually landed. Two loads of the SAME row
+            count within a few minutes usually means one upload was sent twice.
+          </Note>
 
-          <div className="flex flex-wrap items-center gap-1.5">
-            {targets.map((t) => (
-              <button key={t.key} onClick={() => setTargetKey(t.key)} aria-pressed={targetKey === t.key}
-                className={`px-2.5 py-1 rounded-lg text-[11px] border ${
-                  targetKey === t.key ? 'bg-orange-600 border-orange-500 text-white'
-                    : 'bg-gray-800 border-gray-700 text-gray-300 hover:text-white'} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500`}>
-                {t.label}
-              </button>
-            ))}
-          </div>
-
-          {suspiciousCount > 0 && (
-            <div className="flex items-start gap-2 px-4 py-2.5 rounded-xl bg-amber-950/30 border border-amber-800/40">
-              <AlertTriangle size={14} className="text-amber-400 flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-amber-200">
-                {suspiciousCount} load(s) here match another load of the same size.{' '}
-                <Link to="/console/duplicates" className="underline hover:text-amber-100 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
-                  Check Duplicate Control
-                </Link>{' '}to see whether they actually added duplicate rows.
-              </p>
-            </div>
+          {loading ? (
+            <LoadingState label="Loading tables" rows={1} />
+          ) : error ? (
+            <ErrorState message={error} onRetry={load} />
+          ) : (
+            <Segmented role="group" ariaLabel="Destination table" value={targetKey} onChange={setTargetKey}
+              options={targets.map((t) => ({ key: t.key, label: t.label }))} />
           )}
 
-          <ErrorState message={clusterError} onRetry={() => loadClusters(targetKey)} />
+          {suspiciousCount > 0 && (
+            <Note icon={AlertTriangle} tone="warning">
+              {suspiciousCount} load(s) here match another load of the same size.{' '}
+              <Link to="/console/duplicates" className="underline hover:text-amber-100 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
+                Check Duplicate Control
+              </Link>{' '}to see whether they actually added duplicate rows.
+            </Note>
+          )}
 
-          {clusterError ? null : flagged.length === 0 ? (
-            <div className="text-center text-sm text-gray-500 py-16 border border-gray-800 rounded-xl">
-              No load activity recorded for this table.
-            </div>
+          {clusterLoading ? (
+            <LoadingState label="Loading load activity" />
+          ) : clusterError ? (
+            <ErrorState message={clusterError} onRetry={() => loadClusters(targetKey)} />
+          ) : flagged.length === 0 ? (
+            <EmptyState icon={Activity} title="No load activity recorded for this table"
+              reason="Nothing has landed in this table recently, or every load went through the app and is on the Uploads tab." />
           ) : (
-            <div className="rounded-xl border border-gray-800 overflow-hidden">
+            <Panel>
+              <PanelHeader icon={Activity} title="Reconstructed loads"
+                subtitle={`${fmtNum(flagged.length)} loads, ${fmtNum(suspiciousCount)} look like a resent chunk`}
+                actions={<Btn icon={Download} onClick={downloadActivity}>Excel</Btn>} />
               <div className="max-h-[520px] overflow-auto">
-                <table className="w-full text-left">
-                  <thead className="bg-black/30 text-[10px] uppercase tracking-wide text-gray-500 sticky top-0">
-                    <tr>
-                      <th className="px-4 py-2.5 font-semibold">Landed</th>
-                      <th className="px-3 py-2.5 font-semibold">Country</th>
-                      <th className="px-3 py-2.5 font-semibold">Rows</th>
-                      <th className="px-3 py-2.5 font-semibold">Note</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-800/60">
-                    {flagged.map((c, i) => (
-                      <tr key={i} className={c.suspicious ? 'bg-amber-950/10' : 'hover:bg-black/20'}>
-                        <td className="px-4 py-2 text-[11px] text-gray-300 whitespace-nowrap">
-                          {fmtTime(c.inserted_at)}
-                        </td>
-                        <td className="px-3 py-2 text-[11px] text-gray-400">{c.country || 'N/A'}</td>
-                        <td className="px-3 py-2 text-[11px] text-gray-200">{fmtNum(c.rows)}</td>
-                        <td className="px-3 py-2">
+                <Table>
+                  <THead>
+                      <Th sortKey="inserted_at" sort={activitySort.sort} onSort={activitySort.onSort}>Landed</Th>
+                      <Th sortKey="country" sort={activitySort.sort} onSort={activitySort.onSort}>Country</Th>
+                      <Th sortKey="rows" sort={activitySort.sort} onSort={activitySort.onSort} align="right">Rows</Th>
+                      <Th>Note</Th>
+                    </THead>
+                  <tbody>
+                    {activitySort.sorted.map((c, i) => (
+                      <Tr key={`${c.inserted_at}-${i}`} tone={c.suspicious ? 'warning' : undefined}>
+                        <Td className="text-gray-300 tabular-nums" nowrap>{fmtTime(c.inserted_at)}</Td>
+                        <Td className="text-gray-400">{c.country || 'N/A'}</Td>
+                        <Td align="right" className="text-gray-200 tabular-nums">{fmtNum(c.rows)}</Td>
+                        <Td>
                           {c.suspicious ? (
                             <span className="text-[10px] text-amber-300 flex items-center gap-1">
-                              <CopyX size={10} /> same size as {fmtTime(c.pairedWith)}
+                              <CopyX size={10} aria-hidden="true" /> same size as {fmtTime(c.pairedWith)}
                             </span>
                           ) : (
                             <span className="text-[10px] text-gray-400">Looks normal</span>
                           )}
-                        </td>
-                      </tr>
+                        </Td>
+                      </Tr>
                     ))}
                   </tbody>
-                </table>
+                </Table>
               </div>
-            </div>
+            </Panel>
           )}
         </>
       )}

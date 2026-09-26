@@ -13,12 +13,15 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  Brain, TrendingUp, TrendingDown, AlertTriangle, Check, X, Eye, RefreshCw, Sparkles,
+  Brain, TrendingUp, TrendingDown, AlertTriangle, Check, X, Eye, RefreshCw, Sparkles, Download,
 } from 'lucide-react'
 import {
   Panel, PanelHeader, Note, StatTile, Badge, Btn, Table, THead, Th, Tr, Td,
-  LoadingState, EmptyState, ErrorState, Modal, Toolbar,
+  LoadingState, EmptyState, ErrorState, Modal, Toolbar, Segmented,
 } from '../components/ui'
+import { TrendChart, BarsChart } from '../components/ui/charts'
+import { exportToExcel, reportFileName } from '../../lib/exportUtils'
+import { useTableSort } from '../../lib/useTableSort'
 import {
   loadLearningOverview, previewLearnedRule, decideRule, applyLearnedRule,
 } from '../../lib/api/classificationLearning'
@@ -31,11 +34,37 @@ import { toUserMessage } from '../../lib/safeError'
 const nf = new Intl.NumberFormat('en-US')
 const money = (v) => (v === null || v === undefined ? 'N/A' : nf.format(Math.round(Number(v))))
 
+const PROPOSAL_ACCESSORS = {
+  lines: (p) => impactOf(p)?.lines ?? null,
+  value: (p) => impactOf(p)?.value ?? null,
+  lift: (p) => Number(p.lift),
+  category: (p) => categoryLabel(p.category),
+}
+const RULE_ACCESSORS = { category: (r) => categoryLabel(r.category) }
+
+function PageHead({ onRefresh, busy }) {
+  return (
+    <div className="flex items-start justify-between gap-3 flex-wrap">
+      <div>
+        <h1 className="text-lg font-semibold text-white flex items-center gap-2">
+          <Brain size={18} className="text-orange-400" aria-hidden="true" /> Teach the Classifier
+        </h1>
+        <p className="text-xs text-gray-400 mt-1 max-w-3xl">
+          Every category you correct is measured against what the machine would have said. What it gets wrong
+          becomes the next thing it learns.
+        </p>
+      </div>
+      <Btn icon={RefreshCw} onClick={onRefresh} busy={busy}>Refresh</Btn>
+    </div>
+  )
+}
+
 export default function ConsoleClassificationLearning() {
   const [state, setState] = useState({ loading: true, error: null, data: null })
   const [preview, setPreview] = useState(null)   // {proposal, rows, loading, error}
   const [busy, setBusy] = useState('')
   const [flash, setFlash] = useState(null)
+  const [ruleView, setRuleView] = useState('all')
 
   const load = useCallback(async () => {
     setState((s) => ({ ...s, loading: true, error: null }))
@@ -56,6 +85,35 @@ export default function ConsoleClassificationLearning() {
   const spots = useMemo(() => rankWeakSpots(state.data?.spots || []), [state.data])
   const rules = useMemo(() => state.data?.rules || [], [state.data])
   const trend = useMemo(() => accuracyTrend(state.data?.periods || []), [state.data])
+  const periodsSorted = useMemo(() => [...(state.data?.periods || [])].sort((a, b) =>
+    String(a.period).localeCompare(String(b.period))), [state.data])
+  const proposalSort = useTableSort(proposals, { key: null, dir: 'desc' }, PROPOSAL_ACCESSORS)
+  const visibleRules = useMemo(() => rules.filter((r) => ruleView === 'all'
+    || (ruleView === 'active' ? r.status === 'active' : r.status !== 'active')), [rules, ruleView])
+  const ruleSort = useTableSort(visibleRules, { key: 'token', dir: 'asc' }, RULE_ACCESSORS)
+  const spotBars = useMemo(() => spots.slice(0, 8).map((w) => ({
+    label: w.machine_source || 'Unknown', value: Number(w.share_of_source_pct) || 0,
+  })), [spots])
+
+  function exportRules() {
+    exportToExcel(ruleSort.sorted.map((r) => ({
+      token: r.token, category: categoryLabel(r.category),
+      decision: r.status === 'active' ? 'Learned' : 'Ruled out', note: r.note || 'No reason given',
+    })), ['token', 'category', 'decision', 'note'], ['Word', 'Means', 'Decision', 'Why'],
+    reportFileName('TyrePulse Classifier Rules'))
+  }
+  function exportProposals() {
+    exportToExcel(proposalSort.sorted.map((p) => {
+      const imp = impactOf(p)
+      return {
+        token: p.token, category: categoryLabel(p.category), evidence: liftBand(p.lift).label,
+        lift: p.lift, lines: imp ? imp.lines : 0, value: imp ? Math.round(Number(imp.value) || 0) : 0,
+      }
+    }), ['token', 'category', 'evidence', 'lift', 'lines', 'value'],
+    ['Word', 'Should mean', 'Evidence', 'Lift', 'Lines it would change', 'Value'],
+    reportFileName('TyrePulse Classifier Suggestions'))
+  }
+
   const latest = useMemo(() => {
     const p = [...(state.data?.periods || [])].sort((a, b) =>
       String(a.period).localeCompare(String(b.period)))
@@ -111,7 +169,7 @@ export default function ConsoleClassificationLearning() {
         tone: 'ok',
         text: res.items
           ? `Marked ${res.items} more item code${res.items === 1 ? '' : 's'} for "${r.token}".`
-          : `Nothing left to mark for "${r.token}" - it has already been applied.`,
+          : `Nothing left to mark for "${r.token}" : it has already been applied.`,
       })
       await load()
     } catch (e) {
@@ -121,30 +179,30 @@ export default function ConsoleClassificationLearning() {
     }
   }
 
-  if (state.loading) return <LoadingState label="Reading what the classifier has learned" rows={5} />
-  if (state.error) return <ErrorState message={state.error} onRetry={load} />
+  if (state.loading) return <div className="space-y-4"><PageHead onRefresh={load} busy /><LoadingState label="Reading what the classifier has learned" rows={5} /></div>
+  if (state.error) return <div className="space-y-4"><PageHead onRefresh={load} /><ErrorState message={state.error} onRetry={load} /></div>
 
   const d = state.data
 
   return (
     <div className="space-y-4">
+      <PageHead onRefresh={load} busy={state.loading} />
       <Panel>
         <PanelHeader
           icon={Brain}
           title="How the classifier is learning"
-          subtitle="Every category you correct is measured against what the machine would have said. What it gets wrong becomes the next thing it learns."
-          actions={<Btn icon={RefreshCw} onClick={load} busy={state.loading}>Refresh</Btn>}
+          subtitle="Agreement between your decisions and what the machine would have said, month by month."
         />
 
         {flash && (
-          <div className="px-4 pb-3">
+          <div className="mb-3" role="status">
             <Note icon={flash.tone === 'ok' ? Check : AlertTriangle} tone={flash.tone === 'ok' ? 'accent' : 'danger'}>
               {flash.text}
             </Note>
           </div>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-4 pt-0">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <StatTile
             label="Agreement with you"
             value={latest ? `${latest.agreement_pct}%` : 'N/A'}
@@ -174,8 +232,20 @@ export default function ConsoleClassificationLearning() {
           />
         </div>
 
+        <div className="mt-4">
+          <TrendChart
+            height={180}
+            labels={periodsSorted.map((p) => String(p.period))}
+            series={[{ label: 'Agreement %', values: periodsSorted.map((p) => (p.agreement_pct == null ? null : Number(p.agreement_pct))) }]}
+            yLabel="Agreement %"
+            yMax={100}
+            summary={latest ? `Latest agreement ${latest.agreement_pct}% over ${periodsSorted.length} months.` : 'No decisions recorded yet.'}
+            emptyText="No decisions recorded yet, so there is no agreement trend."
+          />
+        </div>
+
         {d?.failed > 0 && (
-          <div className="px-4 pb-4">
+          <div className="mt-3">
             <Note icon={AlertTriangle} tone="warning">
               {d.failed} of the four sections could not be loaded, so part of this page is missing rather than empty.
             </Note>
@@ -189,6 +259,7 @@ export default function ConsoleClassificationLearning() {
           icon={Sparkles}
           title="Suggestions from what you have reviewed"
           subtitle="A word is only suggested when items carrying it are far more likely to be one category than items in general. Anything you reject is never suggested again."
+          actions={<Btn icon={Download} onClick={exportProposals} disabled={!proposals.length}>Excel</Btn>}
         />
         {proposals.length === 0 ? (
           <EmptyState
@@ -203,15 +274,15 @@ export default function ConsoleClassificationLearning() {
         ) : (
           <Table>
             <THead>
-              <Th>Word</Th>
-              <Th>Should mean</Th>
-              <Th>Evidence</Th>
-              <Th align="right">Would change</Th>
-              <Th align="right">Value</Th>
+              <Th sortKey="token" sort={proposalSort.sort} onSort={proposalSort.onSort}>Word</Th>
+              <Th sortKey="category" sort={proposalSort.sort} onSort={proposalSort.onSort}>Should mean</Th>
+              <Th sortKey="lift" sort={proposalSort.sort} onSort={proposalSort.onSort}>Evidence</Th>
+              <Th sortKey="lines" sort={proposalSort.sort} onSort={proposalSort.onSort} align="right">Would change</Th>
+              <Th sortKey="value" sort={proposalSort.sort} onSort={proposalSort.onSort} align="right">Value</Th>
               <Th align="right">Decide</Th>
             </THead>
             <tbody>
-              {proposals.map((p) => {
+              {proposalSort.sorted.map((p) => {
                 const band = liftBand(p.lift)
                 const imp = impactOf(p)
                 return (
@@ -228,13 +299,12 @@ export default function ConsoleClassificationLearning() {
                     <Td align="right">{imp ? money(imp.value) : 'N/A'}</Td>
                     <Td align="right">
                       <Toolbar className="justify-end">
-                        <Btn icon={Eye} onClick={() => openPreview(p)} ariaLabel={`Look at the items "${p.token}" would change`}>Look</Btn>
+                        <Btn icon={Eye} onClick={() => openPreview(p)} title={`Look at the items "${p.token}" would change`}>Look</Btn>
                         <Btn
                           icon={X}
                           onClick={() => decide(p, 'reject')}
                           busy={busy === `${p.token}:${p.category}:reject`}
-                          ariaLabel={`Reject "${p.token}" as ${categoryLabel(p.category)}`}
-                          title="Reject this suggestion. It will not be suggested again."
+                          title={`Reject "${p.token}" as ${categoryLabel(p.category)}. It will not be suggested again.`}
                         >
                           No
                         </Btn>
@@ -262,15 +332,20 @@ export default function ConsoleClassificationLearning() {
             reason="Either the classifier has agreed with every decision you made, or no decisions have been recorded yet."
           />
         ) : (
-          <div className="p-4 pt-0 space-y-2">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <BarsChart bars={spotBars} valueFormat={(v) => `${v}%`}
+              summary={spotBars.length ? `${spotBars[0].label} is overruled on ${spotBars[0].value}% of its decisions.` : ''}
+              emptyText="Nothing has been overruled." />
+          <div className="space-y-2">
             {spots.map((w, i) => (
               <div key={i} className="rounded border border-gray-800 bg-gray-900/50 p-3">
                 <div className="text-sm text-gray-200">{describeWeakSpot(w)}</div>
                 {w.sample && (
-                  <div className="text-xs text-gray-500 mt-1">For example: {w.sample}</div>
+                  <div className="text-xs text-gray-400 mt-1">For example: {w.sample}</div>
                 )}
               </div>
             ))}
+          </div>
           </div>
         )}
       </Panel>
@@ -281,6 +356,14 @@ export default function ConsoleClassificationLearning() {
           icon={Check}
           title="What it has been taught"
           subtitle="Accepted words and the ones you ruled out. A rejected word is never suggested again."
+          actions={<>
+            <Segmented role="group" ariaLabel="Show rules" value={ruleView} onChange={setRuleView} options={[
+              { key: 'all', label: 'All', count: rules.length },
+              { key: 'active', label: 'Learned', count: rules.filter((r) => r.status === 'active').length },
+              { key: 'ruled_out', label: 'Ruled out', count: rules.filter((r) => r.status !== 'active').length },
+            ]} />
+            <Btn icon={Download} onClick={exportRules} disabled={!visibleRules.length}>Excel</Btn>
+          </>}
         />
         {rules.length === 0 ? (
           <EmptyState
@@ -288,17 +371,19 @@ export default function ConsoleClassificationLearning() {
             title="Nothing decided yet"
             reason="Accept or reject a suggestion above and it will be recorded here."
           />
+        ) : visibleRules.length === 0 ? (
+          <EmptyState icon={Brain} title="No rules in this view" reason="Switch to All to see every decision." />
         ) : (
           <Table>
             <THead>
-              <Th>Word</Th>
-              <Th>Means</Th>
-              <Th>Decision</Th>
+              <Th sortKey="token" sort={ruleSort.sort} onSort={ruleSort.onSort}>Word</Th>
+              <Th sortKey="category" sort={ruleSort.sort} onSort={ruleSort.onSort}>Means</Th>
+              <Th sortKey="status" sort={ruleSort.sort} onSort={ruleSort.onSort}>Decision</Th>
               <Th>Why</Th>
               <Th align="right"><span className="sr-only">Action</span></Th>
             </THead>
             <tbody>
-              {rules.map((r) => (
+              {ruleSort.sorted.map((r) => (
                 <Tr key={r.id}>
                   <Td><span className="font-medium text-gray-100">{r.token}</span></Td>
                   <Td>{categoryLabel(r.category)}</Td>

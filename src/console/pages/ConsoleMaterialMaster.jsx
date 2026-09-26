@@ -44,9 +44,17 @@ import {
 } from '../../lib/materialMaster'
 import { exportToExcel, reportFileName } from '../../lib/exportUtils'
 import { toUserMessage } from '../../lib/safeError'
+import { useTableSort } from '../../lib/useTableSort'
 
 const COUNTRIES = ['KSA', 'UAE', 'Egypt']
 const CURRENCY = Object.freeze({ KSA: 'SAR', UAE: 'AED', Egypt: 'EGP' })
+// Status ranks the rows that need a person first.
+const MM_ACCESSORS = {
+  category: (r) => labelFor(r.category),
+  agreement: (r) => descriptionAgreement(r),
+  txn_value: (r) => (r.txn_value == null ? null : Number(r.txn_value)),
+  status: (r) => (r.conflicting && !r.reviewed ? 0 : r.reviewed ? 2 : 1),
+}
 
 const fmtNum = (n) => (Number.isFinite(Number(n)) ? Number(n).toLocaleString() : 'N/A')
 const fmtMoney = (n) => (Number.isFinite(Number(n))
@@ -110,6 +118,8 @@ export default function ConsoleMaterialMaster() {
     if (agree === 'any') return rows
     return rows.filter((r) => descriptionAgreement(r) === agree)
   }, [rows, agree])
+
+  const { sort, onSort, sorted } = useTableSort(visible, { key: null, dir: 'desc' }, MM_ACCESSORS)
 
   const selectableIds = useMemo(
     () => visible.filter((r) => !r.reviewed).map((r) => r.id),
@@ -277,8 +287,8 @@ export default function ConsoleMaterialMaster() {
     <div className="space-y-5 max-w-7xl pb-24">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="flex items-center gap-2"><Boxes size={18} className="text-orange-400" /> Material Master</h1>
-          <p className="text-xs text-gray-500 mt-1">
+          <h1 className="flex items-center gap-2"><Boxes size={18} className="text-orange-400" aria-hidden="true" /> Material Master</h1>
+          <p className="text-xs text-gray-400 mt-1">
             Decide what each item actually is. Your decision overrides whatever the
             description says, so a spare part can never be counted as a tyre.
           </p>
@@ -359,7 +369,7 @@ export default function ConsoleMaterialMaster() {
       ) : (
         <>
           {unreviewedCount > 0 && (
-            <p className="text-[11px] text-gray-500 flex flex-wrap items-center gap-2">
+            <p className="text-[11px] text-gray-400 flex flex-wrap items-center gap-2">
               {fmtNum(unreviewedCount)} of the {fmtNum(visible.length)} shown are still using the
               description as a guess.
               {selectableIds.length > 0 && (
@@ -377,15 +387,15 @@ export default function ConsoleMaterialMaster() {
                     disabled={selectableIds.length === 0} aria-label="Select all unreviewed on this page"
                     className="accent-orange-500 disabled:opacity-30" title="Select all unreviewed on this page" />
                 </Th>
-                <Th>Item</Th>
-                <Th>Counted as</Th>
-                <Th>Description</Th>
-                <Th align="right">Spend</Th>
-                <Th>Status</Th>
+                <Th sortKey="item_code" sort={sort} onSort={onSort}>Item</Th>
+                <Th sortKey="category" sort={sort} onSort={onSort}>Counted as</Th>
+                <Th sortKey="agreement" sort={sort} onSort={onSort}>Description</Th>
+                <Th sortKey="txn_value" sort={sort} onSort={onSort} align="right">Spend</Th>
+                <Th sortKey="status" sort={sort} onSort={onSort}>Status</Th>
                 <Th align="right">Action</Th>
               </THead>
               <tbody>
-                {visible.map((r) => {
+                {sorted.map((r) => {
                   const ag = descriptionAgreement(r)
                   const isSel = selected.has(r.id)
                   return (
@@ -399,7 +409,7 @@ export default function ConsoleMaterialMaster() {
                       </Td>
                       <Td>
                         <Code>{r.item_code}</Code>
-                        <p className="text-[10px] text-gray-500 truncate max-w-[240px] mt-1" title={r.item_name}>
+                        <p className="text-[10px] text-gray-400 truncate max-w-[240px] mt-1" title={r.item_name}>
                           {r.item_name || 'No description on record'}
                         </p>
                         {(r.brand || r.subcategory) && (
@@ -426,9 +436,9 @@ export default function ConsoleMaterialMaster() {
                           {!r.reviewed && (
                             <Btn size="xs" variant="good" icon={Check} onClick={() => confirmOne(r)}
                               busy={confirmingId === r.id} disabled={busy}
-                              title="Confirm as its current category" ariaLabel={`Confirm ${r.item_code} as its current category`}>Confirm</Btn>
+                              title={`Confirm ${r.item_code} as its current category`}>Confirm</Btn>
                           )}
-                          <Btn size="xs" onClick={() => openDetail(r)} ariaLabel={`${r.reviewed ? 'Edit' : 'Review'} ${r.item_code}`}>{r.reviewed ? 'Edit' : 'Review'}</Btn>
+                          <Btn size="xs" onClick={() => openDetail(r)} title={`${r.reviewed ? 'Edit' : 'Review'} ${r.item_code}`}>{r.reviewed ? 'Edit' : 'Review'}</Btn>
                         </span>
                       </Td>
                     </Tr>

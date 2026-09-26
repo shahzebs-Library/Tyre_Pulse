@@ -38,6 +38,7 @@ import {
 import * as imports from '../../lib/api/imports'
 import { checkImportFingerprint, fileSha256 } from '../../lib/api/importHistory'
 import { toUserMessage } from '../../lib/safeError'
+import { COUNTRIES } from '../../contexts/SettingsContext'
 
 const MODULE_LABELS = {
   fleet: 'Vehicles / Fleet', tyre: 'Tyres', stock: 'Stock / Inventory',
@@ -305,8 +306,8 @@ export default function ConsoleSmartImport() {
     <div className="space-y-5 max-w-7xl">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="flex items-center gap-2"><Wand2 size={18} className="text-orange-400" /> Smart Import</h1>
-          <p className="text-xs text-gray-500 mt-1">Upload any Excel or CSV file. The console detects what it is, maps the columns, and loads it.</p>
+          <h1 className="flex items-center gap-2"><Wand2 size={18} className="text-orange-400" aria-hidden="true" /> Smart Import</h1>
+          <p className="text-xs text-gray-400 mt-1">Upload any Excel or CSV file. The console detects what it is, maps the columns, and loads it.</p>
         </div>
         {phase !== 'idle' && (
           <Btn icon={RefreshCw} onClick={reset} disabled={phase === 'committing' || phase === 'parsing'}>Start over</Btn>
@@ -331,7 +332,7 @@ export default function ConsoleSmartImport() {
             aria-label="Choose a file to import" />
           <UploadCloud className="mx-auto text-orange-400" size={36} />
           <p className="mt-3 text-sm font-semibold text-gray-200">Choose a file or drag it here</p>
-          <p className="text-xs text-gray-500 mt-1">Excel (.xlsx, .xls) or CSV. Vehicles, tyres, stock, accidents, inspections, work orders, warranty, gate passes, suppliers, drivers.</p>
+          <p className="text-xs text-gray-400 mt-1">Excel (.xlsx, .xls) or CSV. Vehicles, tyres, stock, accidents, inspections, work orders, warranty, gate passes, suppliers, drivers.</p>
         </label>
       )}
 
@@ -356,14 +357,16 @@ export default function ConsoleSmartImport() {
                     ? <Badge tone="good" icon={CheckCircle2}>Confident</Badge>
                     : <Badge tone="warning" icon={Info}>Please confirm</Badge>}
                 </div>
-                <p className="mt-1 text-xs text-gray-500">Loads into <Code>{MODULE_TABLES[module] || 'N/A'}</Code></p>
+                <p className="mt-1 text-xs text-gray-400">Loads into <Code>{MODULE_TABLES[module] || 'N/A'}</Code></p>
               </div>
               <div>
-                <p className="text-[11px] uppercase tracking-wide text-gray-500">Country (optional)</p>
-                <input value={country} onChange={(e) => setCountry(e.target.value)} placeholder="Leave blank to use your default scope"
-                  disabled={phase !== 'ready'} aria-label="Country"
-                  className="mt-1 w-full px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 placeholder-gray-600 focus:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 disabled:opacity-50" />
-                <p className="mt-1 text-xs text-gray-500">Stamps every imported row with this country for data isolation.</p>
+                <label htmlFor="smart-import-country" className="text-[11px] uppercase tracking-wide text-gray-500">Country (optional)</label>
+                {/* A picker, not free text: a typo here stamps every row with a
+                    country no scope matches, which hides the whole load. */}
+                <Select id="smart-import-country" ariaLabel="Country" className="mt-1" value={country} onChange={setCountry}
+                  disabled={phase !== 'ready'} placeholder="Your default scope"
+                  options={COUNTRIES.map((c) => ({ value: c, label: c }))} />
+                <p className="mt-1 text-xs text-gray-400">Stamps every imported row with this country for data isolation.</p>
               </div>
             </div>
           </Panel>
@@ -469,7 +472,7 @@ export default function ConsoleSmartImport() {
                 busy={phase === 'committing'} onClick={commit} disabled={!canCommit}>
                 {commitLabel}{phase !== 'committing' && <ArrowRight size={14} />}
               </Btn>
-              <span className="text-xs text-gray-500">Rows that would fail are skipped automatically.</span>
+              <span className="text-xs text-gray-400">Rows that would fail are skipped automatically.</span>
             </div>
           )}
         </div>

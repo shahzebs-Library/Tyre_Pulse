@@ -12,11 +12,13 @@
  * with no versions is not the same as a registry we could not read.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Ruler, RefreshCw, ChevronRight, Database, GitBranch } from 'lucide-react'
+import { Ruler, RefreshCw, ChevronRight, Database, GitBranch, Download, FileText, Users, LayoutDashboard } from 'lucide-react'
 import {
-  Panel, PanelHeader, Note, Badge, Btn, Table, THead, Th, Tr, Td,
+  Panel, PanelHeader, Note, Badge, Btn, Table, THead, Th, Tr, Td, StatTile, Select,
   SearchInput, Toolbar, LoadingState, EmptyState, ErrorState,
 } from '../components/ui'
+import { exportToExcel, exportToPdf, reportFileName } from '../../lib/exportUtils'
+import { useTableSort } from '../../lib/useTableSort'
 import { listMetrics, getMetric } from '../../lib/api/metricRegistry'
 import { fmtList } from '../../lib/metricExplain'
 import { toUserMessage } from '../../lib/safeError'
@@ -38,6 +40,20 @@ const dashCount = (row) => {
   return Array.isArray(d) ? d.length : (d ? 1 : 0)
 }
 
+const ACCESSORS = {
+  name: (r) => field(r, 'name'),
+  id: (r) => field(r, 'metric_id', 'id'),
+  owner: (r) => field(r, 'business_owner', 'owner'),
+  unit: (r) => field(r, 'unit'),
+  source: (r) => field(r, 'source_table'),
+  sla: (r) => field(r, 'refresh_sla'),
+  dashboards: (r) => dashCount(r),
+}
+const EXPORT_COLS = [
+  ['name', 'Metric'], ['id', 'ID'], ['owner', 'Owner'], ['unit', 'Unit'], ['source', 'Source table'],
+  ['sla', 'Refresh SLA'], ['dashboards', 'Dashboards'],
+]
+
 /* One labelled fact in the detail panel. */
 function Detail({ label, value, mono = false, full = false }) {
   return (
@@ -53,6 +69,8 @@ function Detail({ label, value, mono = false, full = false }) {
 export default function ConsoleMetricCatalogue() {
   const [state, setState] = useState({ loading: true, error: null, rows: [] })
   const [query, setQuery] = useState('')
+  const [owner, setOwner] = useState('')
+  const [unusedOnly, setUnusedOnly] = useState(false)
   const [selected, setSelected] = useState(null) // metric id
   const [detail, setDetail] = useState({ loading: false, error: null, data: null })
 
@@ -82,7 +100,11 @@ export default function ConsoleMetricCatalogue() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    const rows = state.rows
+    const rows = state.rows.filter((r) => {
+      if (owner && field(r, 'business_owner', 'owner') !== owner) return false
+      if (unusedOnly && dashCount(r) > 0) return false
+      return true
+    })
     if (!q) return rows
     return rows.filter((r) => {
       const hay = [
@@ -95,22 +117,66 @@ export default function ConsoleMetricCatalogue() {
       ].filter(Boolean).join(' ').toLowerCase()
       return hay.includes(q)
     })
-  }, [state.rows, query])
+  }, [state.rows, query, owner, unusedOnly])
+
+  const { sort, onSort, sorted } = useTableSort(filtered, { key: 'name', dir: 'asc' }, ACCESSORS)
+  const stats = useMemo(() => {
+    const owners = new Set(); const sources = new Set(); let unused = 0
+    for (const r of state.rows) {
+      const o = field(r, 'business_owner', 'owner'); if (o) owners.add(o)
+      const t = field(r, 'source_table'); if (t) sources.add(t)
+      if (dashCount(r) === 0) unused += 1
+    }
+    return { owners: [...owners].sort(), sources: sources.size, unused }
+  }, [state.rows])
+
+  function exportRows(kind) {
+    const out = sorted.map((r) => Object.fromEntries(EXPORT_COLS.map(([k]) => [k, k === 'dashboards' ? dashCount(r) : na(ACCESSORS[k](r))])))
+    const file = reportFileName('TyrePulse Metric Catalogue')
+    if (kind === 'pdf') exportToPdf(out, EXPORT_COLS.map(([key, header]) => ({ key, header })), 'Metric Catalogue', file, 'landscape')
+    else exportToExcel(out, EXPORT_COLS.map(([k]) => k), EXPORT_COLS.map(([, h]) => h), file)
+  }
 
   const metric = detail.data?.metric || null
   const versions = Array.isArray(detail.data?.versions) ? detail.data.versions : []
 
   return (
     <div className="space-y-4">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-lg font-semibold text-white flex items-center gap-2">
+            <Ruler size={18} className="text-orange-400" aria-hidden="true" /> Metric Catalogue
+          </h1>
+          <p className="text-xs text-gray-400 mt-1">
+            Every KPI has one governed, versioned definition. All dashboards reference these.
+          </p>
+        </div>
+        <Btn icon={RefreshCw} onClick={load} busy={state.loading}>Refresh</Btn>
+      </div>
+
+      {!state.loading && !state.error && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <StatTile label="Governed metrics" value={state.rows.length.toLocaleString()} icon={Ruler} />
+          <StatTile label="Business owners" value={stats.owners.length.toLocaleString()} icon={Users} />
+          <StatTile label="Source tables" value={stats.sources.toLocaleString()} icon={Database} />
+          <StatTile label="Not on any dashboard" value={stats.unused.toLocaleString()} icon={LayoutDashboard}
+            tone={stats.unused ? 'warning' : 'default'}
+            onClick={stats.unused ? () => setUnusedOnly((v) => !v) : undefined} active={unusedOnly} />
+        </div>
+      )}
+
       <Panel>
         <PanelHeader
           icon={Ruler}
-          title="Metric Catalogue"
-          subtitle="Every KPI has one governed, versioned definition. All dashboards reference these."
-          actions={<Btn icon={RefreshCw} onClick={load} busy={state.loading}>Refresh</Btn>}
+          title="Registry"
+          subtitle={!state.loading && !state.error ? `${filtered.length} of ${state.rows.length} metrics shown. Click a metric to read its definition.` : 'Click a metric to read its definition.'}
+          actions={<>
+            <Btn icon={Download} onClick={() => exportRows('xlsx')} disabled={!sorted.length}>Excel</Btn>
+            <Btn icon={FileText} onClick={() => exportRows('pdf')} disabled={!sorted.length}>PDF</Btn>
+          </>}
         />
 
-        <div className="px-4 pb-4 space-y-3">
+        <div className="space-y-3">
           <Toolbar>
             <SearchInput
               value={query}
@@ -118,10 +184,10 @@ export default function ConsoleMetricCatalogue() {
               placeholder="Search by name, id, owner or source table"
               className="w-full sm:w-96"
             />
-            {!state.loading && !state.error && (
-              <span className="text-xs text-gray-500">
-                {filtered.length} of {state.rows.length} metrics
-              </span>
+            <Select ariaLabel="Filter by owner" value={owner} onChange={setOwner} placeholder="All owners" className="w-44"
+              options={stats.owners.map((o) => ({ value: o, label: o }))} />
+            {(query || owner || unusedOnly) && (
+              <Btn variant="quiet" onClick={() => { setQuery(''); setOwner(''); setUnusedOnly(false) }}>Clear filters</Btn>
             )}
           </Toolbar>
 
@@ -138,23 +204,23 @@ export default function ConsoleMetricCatalogue() {
             ) : filtered.length === 0 ? (
               <EmptyState
                 icon={Ruler}
-                title="No metrics match your search"
-                reason="No metric name, id, owner or source table contains that text."
+                title="No metrics match these filters"
+                reason="No metric name, id, owner or source table matches. Clear the search and filters to see every metric."
               />
             ) : (
               <Table>
                 <THead>
-                  <Th>Metric</Th>
-                  <Th>ID</Th>
-                  <Th>Owner</Th>
-                  <Th>Unit</Th>
-                  <Th>Source table</Th>
-                  <Th>Refresh SLA</Th>
-                  <Th align="right">Dashboards</Th>
+                  <Th sortKey="name" sort={sort} onSort={onSort}>Metric</Th>
+                  <Th sortKey="id" sort={sort} onSort={onSort}>ID</Th>
+                  <Th sortKey="owner" sort={sort} onSort={onSort}>Owner</Th>
+                  <Th sortKey="unit" sort={sort} onSort={onSort}>Unit</Th>
+                  <Th sortKey="source" sort={sort} onSort={onSort}>Source table</Th>
+                  <Th sortKey="sla" sort={sort} onSort={onSort}>Refresh SLA</Th>
+                  <Th sortKey="dashboards" sort={sort} onSort={onSort} align="right">Dashboards</Th>
                   <Th align="right"><span className="sr-only">Open</span></Th>
                 </THead>
                 <tbody>
-                  {filtered.map((r) => {
+                  {sorted.map((r) => {
                     const id = field(r, 'metric_id', 'id')
                     const on = id === selected
                     return (
@@ -187,7 +253,7 @@ export default function ConsoleMetricCatalogue() {
             actions={<Btn onClick={() => { setSelected(null); setDetail({ loading: false, error: null, data: null }) }}>Close</Btn>}
           />
 
-          <div className="px-4 pb-4 space-y-4">
+          <div className="space-y-4">
             {detail.loading && <LoadingState label="Reading the metric definition" rows={4} />}
             {!detail.loading && detail.error && <ErrorState message={detail.error} onRetry={() => openDetail(selected)} />}
 
@@ -199,7 +265,7 @@ export default function ConsoleMetricCatalogue() {
 
                 {/* definition + source */}
                 <div className="rounded-lg border border-gray-800 bg-gray-900/40 p-3">
-                  <h4 className="text-xs font-semibold text-gray-300 mb-2.5">Definition &amp; source</h4>
+                  <h4 className="text-xs font-semibold text-gray-300 mb-2.5">Definition and source</h4>
                   <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2.5">
                     <Detail label="Business owner" value={field(metric, 'business_owner', 'owner')} />
                     <Detail label="Unit" value={field(metric, 'unit')} />
@@ -224,7 +290,7 @@ export default function ConsoleMetricCatalogue() {
                 {/* versions */}
                 <div>
                   <h4 className="flex items-center gap-1.5 text-xs font-semibold text-gray-300 mb-2">
-                    <GitBranch size={13} className="text-orange-400" />
+                    <GitBranch size={13} className="text-orange-400" aria-hidden="true" />
                     Formula history
                   </h4>
                   {versions.length === 0 ? (
@@ -253,7 +319,7 @@ export default function ConsoleMetricCatalogue() {
                             <Td>
                               {field(v, 'approver')
                                 ? <Badge tone="good">{field(v, 'approver')}</Badge>
-                                : <span className="text-gray-500">N/A</span>}
+                                : <span className="text-gray-400">N/A</span>}
                             </Td>
                             <Td>{na(field(v, 'change_note'))}</Td>
                           </Tr>

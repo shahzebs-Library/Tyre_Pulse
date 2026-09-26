@@ -19,7 +19,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   GraduationCap, RefreshCw, Sparkles, Check, X, AlertTriangle, BookOpen,
-  Wand2, ListChecks, FileSpreadsheet, Undo2,
+  Wand2, ListChecks, FileSpreadsheet, Undo2, Download,
 } from 'lucide-react'
 import {
   Panel, PanelHeader, StatTile, Badge, Btn, Select, SearchInput, Note,
@@ -35,6 +35,8 @@ import {
 } from '../../lib/tyreLearning'
 import { toUserMessage } from '../../lib/safeError'
 import { COUNTRIES } from '../../contexts/SettingsContext'
+import { exportToExcel, reportFileName } from '../../lib/exportUtils'
+import { useTableSort } from '../../lib/useTableSort'
 
 const nf = new Intl.NumberFormat('en-US')
 const num = (v) => (v === null || v === undefined ? 'N/A' : nf.format(Number(v)))
@@ -56,6 +58,9 @@ function pctTone(p) {
   return 'danger'
 }
 
+const matchTypeLabel = (t) => (t === 'serial' ? 'Serial' : 'Spelling')
+const FACT_ACCESSORS = { field: (f) => TARGET_FIELDS[f.target_field] || f.target_field, state: (f) => (f.active ? 1 : 0) }
+
 export default function ConsoleDataLearning() {
   const [country, setCountry] = useState('All')
   const [field, setField] = useState(SUGGESTABLE_FIELDS[0] || 'brand')
@@ -70,6 +75,8 @@ export default function ConsoleDataLearning() {
   const [flash, setFlash] = useState(null)       // { tone, text }
   const [lastBatch, setLastBatch] = useState(null)
   const [suggestSearch, setSuggestSearch] = useState('')
+  const [factSearch, setFactSearch] = useState('')
+  const [lowFillOnly, setLowFillOnly] = useState(false)
 
   // manual teach form
   const [teach, setTeach] = useState({
@@ -107,6 +114,35 @@ export default function ConsoleDataLearning() {
   }, [suggestions, suggestSearch])
 
   const fieldLabel = TARGET_FIELDS[field] || field
+
+  const sugSort = useTableSort(shownSuggestions, { key: 'rows', dir: 'desc' })
+  const shownFacts = useMemo(() => {
+    const q = factSearch.trim().toUpperCase()
+    if (!q) return facts
+    return facts.filter((f) => [f.match_value, f.target_value, f.country].some((v) => String(v || '').toUpperCase().includes(q)))
+  }, [facts, factSearch])
+  const factSort = useTableSort(shownFacts, { key: 'match_value', dir: 'asc' }, FACT_ACCESSORS)
+  const shownColumns = useMemo(() => (lowFillOnly
+    ? master.columns.filter((c) => c.pct != null && c.pct < LOW_FILL_PCT)
+    : master.columns), [master.columns, lowFillOnly])
+  const colSort = useTableSort(shownColumns, { key: 'pct', dir: 'asc' })
+  const lowFillCount = useMemo(() => master.columns.filter((c) => c.pct != null && c.pct < LOW_FILL_PCT).length, [master.columns])
+
+  const exportSuggestions = () => exportToExcel(
+    sugSort.sorted.map((r) => ({ serial: r.serialNo, country: r.country || 'All', rows: r.rows, value: r.value, source: r.source === 'self' ? 'Same serial' : 'Master' })),
+    ['serial', 'country', 'rows', 'value', 'source'], ['Serial', 'Country', 'Rows', `Suggested ${fieldLabel}`, 'Source'],
+    reportFileName('TyrePulse Learning Suggestions', fieldLabel, country),
+  )
+  const exportFacts = () => exportToExcel(
+    factSort.sorted.map((f) => ({ match: `${matchTypeLabel(f.match_type)} ${f.match_value}`, value: f.target_value, field: TARGET_FIELDS[f.target_field] || f.target_field, country: f.country || 'All', state: f.active ? 'On' : 'Off' })),
+    ['match', 'value', 'field', 'country', 'state'], ['Rule', 'Fills with', 'Field', 'Country', 'State'],
+    reportFileName('TyrePulse Learned Rules', country),
+  )
+  const exportColumns = () => exportToExcel(
+    colSort.sorted.map((c) => ({ column: c.column, filled: c.filled, blank: c.blank, pct: c.pct ?? 'N/A' })),
+    ['column', 'filled', 'blank', 'pct'], ['Column', 'Filled', 'Blank', '% filled'],
+    reportFileName('TyrePulse Master File Completeness'),
+  )
 
   /* ── confirm a serial suggestion ──────────────────────────────────────── */
   const confirmSuggestion = async (row) => {
@@ -207,45 +243,37 @@ export default function ConsoleDataLearning() {
     }
   }
 
-  const matchTypeLabel = (t) => (t === 'serial' ? 'Serial' : 'Spelling')
 
-  if (state.loading) return <LoadingState label="Reading tyre data gaps and learned facts" rows={6} />
+  const header = (
+    <div className="flex items-start justify-between gap-3 flex-wrap">
+      <div>
+        <h1 className="text-lg font-semibold text-white flex items-center gap-2">
+          <GraduationCap size={18} className="text-orange-400" aria-hidden="true" /> Data Learning
+        </h1>
+        <p className="text-xs text-gray-400 mt-1">
+          Confirm once: fix every matching row now and auto-apply to future imports. Never touches cost.
+        </p>
+      </div>
+      <div className="flex items-center gap-2">
+        <Select ariaLabel="Country" value={country} onChange={setCountry} options={COUNTRY_OPTS} className="w-40" />
+        <Btn icon={RefreshCw} onClick={load} busy={state.loading}>Refresh</Btn>
+      </div>
+    </div>
+  )
+
+  if (state.loading) return <div className="space-y-4">{header}<LoadingState label="Reading tyre data gaps and learned facts" rows={6} /></div>
 
   return (
     <div className="space-y-4">
-      {/* ── header ───────────────────────────────────────────────────────── */}
-      <Panel>
-        <PanelHeader
-          icon={GraduationCap}
-          title="Data Learning"
-          subtitle="Confirm once - fix every matching row now and auto-apply to future imports. Never touches cost."
-          actions={(
-            <div className="flex items-center gap-2">
-              <Select ariaLabel="Country"
-                value={country}
-                onChange={setCountry}
-                options={COUNTRY_OPTS}
-                className="w-40"
-              />
-              <Btn icon={RefreshCw} onClick={load}>Refresh</Btn>
-            </div>
-          )}
-        />
-
-        {flash && (
-          <div className="pb-1">
-            <Note icon={flash.tone === 'accent' ? Check : AlertTriangle} tone={flash.tone}>
-              {flash.text}
-            </Note>
-          </div>
-        )}
-
-        {state.error && (
-          <div className="pt-1">
-            <ErrorState message={state.error} onRetry={load} />
-          </div>
-        )}
-      </Panel>
+      {header}
+      {flash && (
+        <div role="status">
+          <Note icon={flash.tone === 'accent' ? Check : AlertTriangle} tone={flash.tone}>
+            {flash.text}
+          </Note>
+        </div>
+      )}
+      {state.error && <ErrorState message={state.error} onRetry={load} />}
 
       {/* A failed read hides the read-derived panels: an empty gap list or
           suggestion list would claim "nothing to fix". The error + Retry above
@@ -271,7 +299,7 @@ export default function ConsoleDataLearning() {
             {gap.map((g) => (
               <StatTile
                 key={g.field}
-                label={`${g.label} - blank`}
+                label={`${g.label}: blank`}
                 value={num(g.blank)}
                 sub={
                   (g.recoverable != null ? `${num(g.recoverable)} recoverable` : 'recoverable N/A')
@@ -297,6 +325,7 @@ export default function ConsoleDataLearning() {
                 {lastBatch && (
                   <Btn icon={Undo2} onClick={undoLast} busy={busy === 'undo'}>Undo last</Btn>
                 )}
+                <Btn icon={Download} onClick={exportSuggestions} disabled={!sugSort.sorted.length}>Excel</Btn>
               </div>
             )}
           />
@@ -307,7 +336,7 @@ export default function ConsoleDataLearning() {
               placeholder="Search serial or value"
               className="w-full sm:w-64"
             />
-            <div className="text-[11px] text-gray-500">
+            <div className="text-[11px] text-gray-400">
               {num(sugSummary.serials)} serial{sugSummary.serials === 1 ? '' : 's'}
               {' | '}
               {num(sugSummary.rows)} row{sugSummary.rows === 1 ? '' : 's'} affected
@@ -330,15 +359,15 @@ export default function ConsoleDataLearning() {
         ) : (
           <Table>
             <THead>
-              <Th>Serial</Th>
-              <Th>Country</Th>
-              <Th align="right">Rows</Th>
-              <Th>Suggested {fieldLabel.toLowerCase()}</Th>
-              <Th>Source</Th>
+              <Th sortKey="serialNo" sort={sugSort.sort} onSort={sugSort.onSort}>Serial</Th>
+              <Th sortKey="country" sort={sugSort.sort} onSort={sugSort.onSort}>Country</Th>
+              <Th sortKey="rows" sort={sugSort.sort} onSort={sugSort.onSort} align="right">Rows</Th>
+              <Th sortKey="value" sort={sugSort.sort} onSort={sugSort.onSort}>Suggested {fieldLabel.toLowerCase()}</Th>
+              <Th sortKey="source" sort={sugSort.sort} onSort={sugSort.onSort}>Source</Th>
               <Th align="right">Confirm</Th>
             </THead>
             <tbody>
-              {shownSuggestions.map((r) => {
+              {sugSort.sorted.map((r) => {
                 const key = `sug:${r.serialNo}:${r.country}`
                 return (
                   <Tr key={key}>
@@ -375,42 +404,42 @@ export default function ConsoleDataLearning() {
         <PanelHeader
           icon={Wand2}
           title="Teach it directly"
-          subtitle="By serial fills every row of that serial. Normalize a spelling fixes that raw value everywhere - now and on future imports."
+          subtitle="By serial fills every row of that serial. Normalize a spelling fixes that raw value everywhere, now and on future imports."
         />
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
           <div>
-            <label className="text-[11px] uppercase tracking-wide text-gray-500 block mb-1">Match by</label>
-            <Select ariaLabel="Match by"
+            <label htmlFor="dl-match-by" className="text-[11px] uppercase tracking-wide text-gray-500 block mb-1">Match by</label>
+            <Select id="dl-match-by"
               value={teach.matchType}
               onChange={(v) => setTeach((t) => ({ ...t, matchType: v }))}
               options={MATCH_OPTS}
             />
           </div>
           <div>
-            <label className="text-[11px] uppercase tracking-wide text-gray-500 block mb-1">Fix field</label>
-            <Select ariaLabel="Fix field"
+            <label htmlFor="dl-fix-field" className="text-[11px] uppercase tracking-wide text-gray-500 block mb-1">Fix field</label>
+            <Select id="dl-fix-field"
               value={teach.targetField}
               onChange={(v) => setTeach((t) => ({ ...t, targetField: v }))}
               options={TARGET_OPTS}
             />
           </div>
           <div>
-            <label className="text-[11px] uppercase tracking-wide text-gray-500 block mb-1">
+            <label htmlFor="dl-match-value" className="text-[11px] uppercase tracking-wide text-gray-500 block mb-1">
               {teach.matchType === 'serial' ? 'Serial number' : 'Wrong spelling'}
             </label>
             <input
+              id="dl-match-value"
               value={teach.matchValue}
-              aria-label={teach.matchType === 'serial' ? 'Serial number' : 'Wrong spelling'}
               onChange={(e) => setTeach((t) => ({ ...t, matchValue: e.target.value }))}
               placeholder={teach.matchType === 'serial' ? 'e.g. EP060420711' : 'e.g. TRAINGLE'}
               className="w-full px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 placeholder-gray-600 focus:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
             />
           </div>
           <div>
-            <label className="text-[11px] uppercase tracking-wide text-gray-500 block mb-1">Correct value</label>
+            <label htmlFor="dl-target-value" className="text-[11px] uppercase tracking-wide text-gray-500 block mb-1">Correct value</label>
             <input
+              id="dl-target-value"
               value={teach.targetValue}
-              aria-label="Correct value"
               onChange={(e) => setTeach((t) => ({ ...t, targetValue: e.target.value }))}
               placeholder="e.g. TRIANGLE"
               className="w-full px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 placeholder-gray-600 focus:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
@@ -418,11 +447,11 @@ export default function ConsoleDataLearning() {
           </div>
         </div>
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-          <p className="text-[11px] text-gray-500">
+          <p className="text-[11px] text-gray-400">
             Applies to {country === 'All' ? 'all countries' : country}. Cost is never changed.
           </p>
           <Btn variant="primary" icon={Check} onClick={submitTeach} busy={busy === 'teach'}>
-            Confirm &amp; learn
+            Confirm and learn
           </Btn>
         </div>
       </Panel>
@@ -435,6 +464,10 @@ export default function ConsoleDataLearning() {
             icon={BookOpen}
             title="What it has learned"
             subtitle="Confirmed rules that fill new rows automatically. Turn one off to stop future auto-fill; past fills stay."
+            actions={<>
+              <SearchInput value={factSearch} onChange={setFactSearch} placeholder="Search rules" className="w-48" />
+              <Btn icon={Download} onClick={exportFacts} disabled={!factSort.sorted.length}>Excel</Btn>
+            </>}
           />
         </div>
         {facts.length === 0 ? (
@@ -443,20 +476,22 @@ export default function ConsoleDataLearning() {
             title="Nothing learned yet"
             reason="Confirm a suggestion or teach a fact above and it will be recorded here."
           />
+        ) : factSort.sorted.length === 0 ? (
+          <EmptyState icon={BookOpen} title="No rules match your search" reason="Clear the search to see every learned rule." />
         ) : (
           <Table>
             <THead>
-              <Th>Rule</Th>
-              <Th>Fills</Th>
-              <Th>Country</Th>
-              <Th>State</Th>
+              <Th sortKey="match_value" sort={factSort.sort} onSort={factSort.onSort}>Rule</Th>
+              <Th sortKey="field" sort={factSort.sort} onSort={factSort.onSort}>Fills</Th>
+              <Th sortKey="country" sort={factSort.sort} onSort={factSort.onSort}>Country</Th>
+              <Th sortKey="state" sort={factSort.sort} onSort={factSort.onSort}>State</Th>
               <Th align="right">Action</Th>
             </THead>
             <tbody>
-              {facts.map((f) => (
+              {factSort.sorted.map((f) => (
                 <Tr key={f.id}>
                   <Td>
-                    <span className="text-gray-500">{matchTypeLabel(f.match_type)}</span>{' '}
+                    <span className="text-gray-400">{matchTypeLabel(f.match_type)}</span>{' '}
                     <span className="font-medium text-gray-100">{f.match_value}</span>
                     <span className="text-gray-400"> {'->'} </span>
                     <span className="text-gray-100">{f.target_value}</span>
@@ -491,9 +526,17 @@ export default function ConsoleDataLearning() {
             icon={FileSpreadsheet}
             title="Master file completeness"
             subtitle={`Per-column fill of the KSA master upload${master.total ? ` (${num(master.total)} rows)` : ''}. The columns you can trust most.`}
+            actions={<>
+              {lowFillCount > 0 && (
+                <Btn onClick={() => setLowFillOnly((v) => !v)} aria-pressed={lowFillOnly}>
+                  {lowFillOnly ? 'Show all columns' : `Only low fill (${lowFillCount})`}
+                </Btn>
+              )}
+              <Btn icon={Download} onClick={exportColumns} disabled={!colSort.sorted.length}>Excel</Btn>
+            </>}
           />
           <Note icon={AlertTriangle} tone="warning">
-            Columns filled below {LOW_FILL_PCT}% are the least trustworthy - treat their values with care before learning from them.
+            Columns filled below {LOW_FILL_PCT}% are the least trustworthy; treat their values with care before learning from them.
           </Note>
         </div>
         {master.columns.length === 0 ? (
@@ -506,13 +549,13 @@ export default function ConsoleDataLearning() {
           <div className="max-h-96 overflow-y-auto">
             <Table>
               <THead>
-                <Th>Column</Th>
-                <Th align="right">Filled</Th>
-                <Th align="right">Blank</Th>
-                <Th align="right">% filled</Th>
+                <Th sortKey="column" sort={colSort.sort} onSort={colSort.onSort}>Column</Th>
+                <Th sortKey="filled" sort={colSort.sort} onSort={colSort.onSort} align="right">Filled</Th>
+                <Th sortKey="blank" sort={colSort.sort} onSort={colSort.onSort} align="right">Blank</Th>
+                <Th sortKey="pct" sort={colSort.sort} onSort={colSort.onSort} align="right">% filled</Th>
               </THead>
               <tbody>
-                {master.columns.map((c) => (
+                {colSort.sorted.map((c) => (
                   <Tr key={c.column}>
                     <Td><span className="font-mono text-[11px] text-gray-300">{c.column}</span></Td>
                     <Td align="right">{num(c.filled)}</Td>

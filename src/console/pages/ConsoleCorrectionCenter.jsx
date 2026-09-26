@@ -10,10 +10,11 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  ClipboardList, Plus, RefreshCw, ArrowRight, Check, AlertTriangle,
+  ClipboardList, Plus, RefreshCw, ArrowRight, Check, AlertTriangle, Download, FileText,
+  FolderOpen, Hourglass, CheckCircle2, Flame,
 } from 'lucide-react'
 import {
-  Panel, PanelHeader, Note, Badge, Btn, Select, Toolbar,
+  Panel, PanelHeader, Note, Badge, Btn, Select, Toolbar, SearchInput, StatTile,
   Table, THead, Th, Tr, Td, Modal,
   LoadingState, EmptyState, ErrorState,
 } from '../components/ui'
@@ -27,6 +28,8 @@ import {
 } from '../../lib/dataTrustOps'
 import { COUNTRIES } from '../../contexts/SettingsContext'
 import { toUserMessage } from '../../lib/safeError'
+import { exportToExcel, exportToPdf, reportFileName } from '../../lib/exportUtils'
+import { useTableSort } from '../../lib/useTableSort'
 
 function when(ts) {
   if (!ts) return 'N/A'
@@ -40,6 +43,18 @@ const COUNTRY_OPTS = [{ value: 'All', label: 'All countries' }, ...COUNTRIES.map
 const STATUS_FILTER_OPTS = [{ value: 'all', label: 'All statuses' }, ...CASE_STATUSES.map((s) => ({ value: s, label: CASE_STATUS_LABEL[s] || s }))]
 const SEVERITY_OPTS = CASE_SEVERITIES.map((s) => ({ value: s, label: s.charAt(0).toUpperCase() + s.slice(1) }))
 const ROOT_CAUSE_OPTS = ROOT_CAUSE_CATEGORIES.map((r) => ({ value: r, label: r }))
+
+const TERMINAL = new Set(['closed', 'reconciled', 'rejected'])
+const SEVERITY_RANK = { critical: 0, high: 1, medium: 2, low: 3 }
+const ACCESSORS = {
+  status: (r) => CASE_STATUSES.indexOf(r.status),
+  severity: (r) => SEVERITY_RANK[String(r.severity || '').toLowerCase()] ?? 4,
+}
+const EXPORT_COLS = [
+  ['case_no', 'Case no'], ['title', 'Title'], ['metric', 'Metric'], ['country', 'Country'], ['status', 'Status'],
+  ['severity', 'Severity'], ['original_value', 'Original value'], ['corrected_value', 'Corrected value'],
+  ['root_cause', 'Root cause'], ['created', 'Created'],
+]
 
 const EMPTY_NEW = { title: '', metricId: '', suspectedCause: '', severity: 'medium', originalValue: '' }
 
@@ -59,6 +74,9 @@ export default function ConsoleCorrectionCenter() {
   const [edit, setEdit] = useState({ root_cause_category: '', proposed_action: '', corrected_value: '' })
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState('')
+  const [confirmReject, setConfirmReject] = useState(false)
+  const [search, setSearch] = useState('')
+  const [severityFilter, setSeverityFilter] = useState('')
 
   const load = useCallback(async () => {
     setState((s) => ({ ...s, loading: true, error: null }))
@@ -73,6 +91,37 @@ export default function ConsoleCorrectionCenter() {
   useEffect(() => { load() }, [load])
 
   const cases = useMemo(() => state.cases || [], [state.cases])
+  const stats = useMemo(() => {
+    const open = cases.filter((c) => !TERMINAL.has(c.status))
+    return {
+      total: cases.length,
+      open: open.length,
+      awaiting: cases.filter((c) => c.status === 'proposed').length,
+      urgent: open.filter((c) => ['critical', 'high'].includes(String(c.severity || '').toLowerCase())).length,
+      closed: cases.filter((c) => c.status === 'closed' || c.status === 'reconciled').length,
+    }
+  }, [cases])
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return cases.filter((c) => {
+      if (severityFilter && String(c.severity || '').toLowerCase() !== severityFilter) return false
+      if (!q) return true
+      return [c.case_no, c.title, c.metric_id, c.suspected_cause].some((v) => String(v || '').toLowerCase().includes(q))
+    })
+  }, [cases, search, severityFilter])
+  const { sort, onSort, sorted } = useTableSort(filtered, { key: 'created_at', dir: 'desc' }, ACCESSORS)
+
+  function exportRows(kind) {
+    const out = sorted.map((r) => ({
+      case_no: r.case_no || 'N/A', title: r.title || 'Untitled', metric: show(r.metric_id), country: show(r.country),
+      status: CASE_STATUS_LABEL[r.status] || show(r.status), severity: show(r.severity),
+      original_value: show(r.original_value), corrected_value: show(r.corrected_value),
+      root_cause: show(r.root_cause_category), created: when(r.created_at),
+    }))
+    const file = reportFileName('TyrePulse Correction Cases', country)
+    if (kind === 'pdf') exportToPdf(out, EXPORT_COLS.map(([key, header]) => ({ key, header })), 'Correction Cases', file, 'landscape')
+    else exportToExcel(out, EXPORT_COLS.map(([k]) => k), EXPORT_COLS.map(([, h]) => h), file)
+  }
 
   const submitNew = async () => {
     if (!form.title.trim()) return
@@ -134,8 +183,10 @@ export default function ConsoleCorrectionCenter() {
     }
   }
 
-  const doTransition = async (toStatus) => {
+  const doTransition = async (toStatus, confirmed = false) => {
     if (!detail?.case) return
+    if (toStatus === 'rejected' && !confirmed) { setConfirmReject(true); return }
+    setConfirmReject(false)
     setBusy(`t:${toStatus}`)
     try {
       await transitionCorrectionCase(detail.case.id, toStatus, note.trim() || null)
@@ -155,63 +206,89 @@ export default function ConsoleCorrectionCenter() {
 
   return (
     <div className="space-y-4">
-      <Panel>
-        <PanelHeader
-          icon={ClipboardList}
-          title="Correction & Investigation Center"
-          subtitle="Do not edit a dashboard total directly. Open a case: freeze the value, investigate, propose, approve, apply, reconcile, close - with full history and rollback."
-          actions={(
-            <Toolbar>
-              <Select ariaLabel="Country" value={country} onChange={setCountry} options={COUNTRY_OPTS} className="w-40" />
-              <Select ariaLabel="Case status" value={status} onChange={setStatus} options={STATUS_FILTER_OPTS} className="w-44" />
-              <Btn icon={RefreshCw} onClick={load} busy={state.loading}>Refresh</Btn>
-              <Btn variant="primary" icon={Plus} onClick={() => { setForm(EMPTY_NEW); setFlash(null); setCreating(true) }}>New case</Btn>
-            </Toolbar>
-          )}
-        />
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="min-w-0">
+          <h1 className="text-lg font-semibold text-white flex items-center gap-2">
+            <ClipboardList size={18} className="text-orange-400" aria-hidden="true" /> Correction and Investigation Center
+          </h1>
+          <p className="text-xs text-gray-400 mt-1 max-w-3xl">
+            Do not edit a dashboard total directly. Open a case: freeze the value, investigate, propose, approve,
+            apply, reconcile and close, with full history and rollback.
+          </p>
+        </div>
+        <Toolbar>
+          <Select ariaLabel="Country" value={country} onChange={setCountry} options={COUNTRY_OPTS} className="w-40" />
+          <Select ariaLabel="Case status" value={status} onChange={setStatus} options={STATUS_FILTER_OPTS} className="w-44" />
+          <Btn icon={RefreshCw} onClick={load} busy={state.loading}>Refresh</Btn>
+          <Btn variant="primary" icon={Plus} onClick={() => { setForm(EMPTY_NEW); setFlash(null); setCreating(true) }}>New case</Btn>
+        </Toolbar>
+      </div>
 
-        {flash && (
-          <div className="px-4 pb-3">
-            <Note icon={flash.tone === 'ok' ? Check : AlertTriangle} tone={flash.tone === 'ok' ? 'accent' : 'danger'}>
-              {flash.text}
-            </Note>
-          </div>
-        )}
-
-        <div className="px-4 pb-4">
-          <Note>
-            A case is governance and audit - it records the decision and the original value. It does not itself mutate
-            business tables; apply the actual fix through the linked data tool, then reconcile and close the case here.
+      {flash && (
+        <div role="status">
+          <Note icon={flash.tone === 'ok' ? Check : AlertTriangle} tone={flash.tone === 'ok' ? 'accent' : 'danger'}>
+            {flash.text}
           </Note>
         </div>
-      </Panel>
+      )}
+
+      {!state.loading && !state.error && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <StatTile label="Open cases" value={stats.open.toLocaleString()} icon={FolderOpen} tone={stats.open ? 'accent' : 'default'}
+            sub={`${stats.total.toLocaleString()} cases in view`} />
+          <StatTile label="Awaiting approval" value={stats.awaiting.toLocaleString()} icon={Hourglass} tone={stats.awaiting ? 'warning' : 'default'}
+            onClick={() => setStatus((v) => (v === 'proposed' ? 'all' : 'proposed'))} active={status === 'proposed'} />
+          <StatTile label="Critical or high, open" value={stats.urgent.toLocaleString()} icon={Flame} tone={stats.urgent ? 'danger' : 'default'} />
+          <StatTile label="Closed or reconciled" value={stats.closed.toLocaleString()} icon={CheckCircle2} tone={stats.closed ? 'good' : 'default'} />
+        </div>
+      )}
+
+      <Note>
+        A case is governance and audit: it records the decision and the original value. It does not itself mutate
+        business tables; apply the actual fix through the linked data tool, then reconcile and close the case here.
+      </Note>
 
       {state.error && <Panel><ErrorState message={state.error} onRetry={load} /></Panel>}
 
       <Panel>
-        <PanelHeader icon={ClipboardList} title="Correction cases" subtitle="Newest first. Click a case to investigate and move it forward." />
+        <PanelHeader icon={ClipboardList} title="Correction cases"
+          subtitle={`Newest first, ${filtered.length.toLocaleString()} of ${cases.length.toLocaleString()} shown. Click a case to investigate and move it forward.`}
+          actions={<>
+            <Btn icon={Download} onClick={() => exportRows('xlsx')} disabled={!sorted.length}>Excel</Btn>
+            <Btn icon={FileText} onClick={() => exportRows('pdf')} disabled={!sorted.length}>PDF</Btn>
+          </>} />
+        {!state.loading && !state.error && cases.length > 0 && (
+          <Toolbar className="mb-3">
+            <SearchInput value={search} onChange={setSearch} placeholder="Search case no, title or metric" className="w-full sm:w-72" />
+            <Select ariaLabel="Filter by severity" value={severityFilter} onChange={setSeverityFilter} placeholder="All severities"
+              options={SEVERITY_OPTS} className="w-36" />
+            {(search || severityFilter) && <Btn variant="quiet" onClick={() => { setSearch(''); setSeverityFilter('') }}>Clear filters</Btn>}
+          </Toolbar>
+        )}
         {state.loading ? (
           <LoadingState label="Reading correction cases" rows={5} />
         ) : state.error ? (
-          <p className="text-xs text-gray-500 px-1">The case list could not be read, so it is not shown. Use Retry above.</p>
+          <p className="text-xs text-gray-400 px-1">The case list could not be read, so it is not shown. Use Retry above.</p>
         ) : cases.length === 0 ? (
           <EmptyState
             icon={ClipboardList}
             title="No correction cases yet"
             reason={status !== 'all' ? 'No case matches this status filter.' : 'When a number looks wrong, open a case here instead of editing the total.'}
           />
+        ) : sorted.length === 0 ? (
+          <EmptyState icon={ClipboardList} title="No cases match these filters" reason="Clear the search and severity filter to see every case in view." />
         ) : (
           <Table>
             <THead>
-              <Th>Case no</Th>
-              <Th>Title</Th>
-              <Th>Metric</Th>
-              <Th>Status</Th>
-              <Th>Severity</Th>
-              <Th>Created</Th>
+              <Th sortKey="case_no" sort={sort} onSort={onSort}>Case no</Th>
+              <Th sortKey="title" sort={sort} onSort={onSort}>Title</Th>
+              <Th sortKey="metric_id" sort={sort} onSort={onSort}>Metric</Th>
+              <Th sortKey="status" sort={sort} onSort={onSort}>Status</Th>
+              <Th sortKey="severity" sort={sort} onSort={onSort}>Severity</Th>
+              <Th sortKey="created_at" sort={sort} onSort={onSort}>Created</Th>
             </THead>
             <tbody>
-              {cases.map((r) => (
+              {sorted.map((r) => (
                 <Tr key={r.id} onClick={() => { setFlash(null); openDetail(r) }}>
                   <Td nowrap><button type="button" onClick={(e) => { e.stopPropagation(); setFlash(null); openDetail(r) }} aria-label={`Open case ${r.case_no || r.title || ''}`} className="font-mono text-gray-300 hover:text-orange-300 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 rounded">{r.case_no || 'N/A'}</button></Td>
                   <Td><span className="text-gray-100">{r.title || 'Untitled'}</span></Td>
@@ -291,7 +368,7 @@ export default function ConsoleCorrectionCenter() {
         open={!!detail}
         title={kase ? `${kase.case_no || 'Case'} - ${kase.title || 'Untitled'}` : 'Case'}
         subtitle={kase ? `${CASE_STATUS_LABEL[kase.status] || kase.status || ''} | ${show(kase.country)}` : ''}
-        onClose={() => setDetail(null)}
+        onClose={() => { setDetail(null); setConfirmReject(false) }}
         width="max-w-3xl"
       >
         {detail?.loading && <LoadingState label="Reading case" rows={4} />}
@@ -331,10 +408,10 @@ export default function ConsoleCorrectionCenter() {
                 {CASE_STATUSES.map((s, i) => (
                   <span key={s} className="inline-flex items-center gap-1.5">
                     <Badge tone={s === kase.status ? caseStatusTone(s) : 'quiet'}>
-                      {s === kase.status ? <Check size={10} /> : null}
+                      {s === kase.status ? <Check size={10} aria-hidden="true" /> : null}
                       {CASE_STATUS_LABEL[s] || s}
                     </Badge>
-                    {i < CASE_STATUSES.length - 1 && <ArrowRight size={11} className="text-gray-700" />}
+                    {i < CASE_STATUSES.length - 1 && <ArrowRight size={11} className="text-gray-600" aria-hidden="true" />}
                   </span>
                 ))}
               </div>
@@ -387,6 +464,15 @@ export default function ConsoleCorrectionCenter() {
                     placeholder="Note for this step (optional)"
                     className={INPUT}
                   />
+                  {confirmReject && (
+                    <Note icon={AlertTriangle} tone="danger">
+                      <p>Reject this case? It becomes terminal and cannot be moved forward again.</p>
+                      <Toolbar className="mt-2 justify-end">
+                        <Btn onClick={() => setConfirmReject(false)}>Keep it open</Btn>
+                        <Btn variant="danger" onClick={() => doTransition('rejected', true)} busy={busy === 't:rejected'}>Yes, reject case</Btn>
+                      </Toolbar>
+                    </Note>
+                  )}
                   <Toolbar className="justify-end">
                     {nextStatuses(kase.status).map((s) => (
                       <Btn
@@ -424,7 +510,7 @@ export default function ConsoleCorrectionCenter() {
                         <Td>{show(ev.event_type)}</Td>
                         <Td nowrap>
                           {ev.from_status || ev.to_status
-                            ? <span className="text-gray-400">{show(ev.from_status)} <ArrowRight size={10} className="inline" /> {show(ev.to_status)}</span>
+                            ? <span className="text-gray-400">{show(ev.from_status)} <ArrowRight size={10} className="inline" aria-label="to" /> {show(ev.to_status)}</span>
                             : <span className="text-gray-400">N/A</span>}
                         </Td>
                         <Td>{show(ev.note)}</Td>

@@ -15,11 +15,11 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  Trash2, RefreshCw, AlertTriangle, Info, Database, ShieldCheck, Eye, CheckCircle2, BarChart3,
+  Trash2, RefreshCw, AlertTriangle, Info, Database, ShieldCheck, Eye, CheckCircle2, BarChart3, Download,
 } from 'lucide-react'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import {
-  Panel, PanelHeader, Note, StatTile, Badge, Btn, Segmented, Table, THead, Th, Tr, Td,
+  Panel, PanelHeader, Note, StatTile, Badge, Btn, Segmented, Table, THead, Th, Tr, Td, SearchInput, Toolbar,
   LoadingState, EmptyState, ErrorState, Modal,
 } from '../components/ui'
 import { BarsChart, STATUS, SERIES, useChartTheme } from '../components/ui/charts'
@@ -27,6 +27,8 @@ import {
   listCleanupTargets, previewCleanup, runCleanup, monthsAgoISO, AGE_PRESETS,
 } from '../../lib/api/dataCleanup'
 import { toUserMessage } from '../../lib/safeError'
+import { useTableSort } from '../../lib/useTableSort'
+import { exportToExcel, reportFileName } from '../../lib/exportUtils'
 
 const fmtDate = (v) => {
   if (!v) return 'N/A'
@@ -134,6 +136,23 @@ export default function ConsoleDataCleanup() {
       color: t.kind === 'business' ? STATUS[theme].critical : SERIES[theme][1],
     })), [targets, theme])
 
+  const [kindFilter, setKindFilter] = useState('')
+  const [search, setSearch] = useState('')
+  const shownTargets = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return targets.filter((t) => {
+      if (kindFilter === 'business' && t.kind !== 'business') return false
+      if (kindFilter === 'logs' && t.kind === 'business') return false
+      return !q || String(t.label || '').toLowerCase().includes(q)
+    })
+  }, [targets, kindFilter, search])
+  const { sort, onSort, sorted } = useTableSort(shownTargets, { key: 'total', dir: 'desc' })
+  const exportTargets = () => exportToExcel(
+    sorted.map((t) => ({ target: t.label, kind: t.kind === 'business' ? 'Business data' : 'Logs', rows: Number(t.total) || 0, oldest: fmtDate(t.oldest), newest: fmtDate(t.newest) })),
+    ['target', 'kind', 'rows', 'oldest', 'newest'], ['Target', 'Kind', 'Rows', 'Oldest', 'Newest'],
+    reportFileName('TyrePulse Cleanup Targets'),
+  )
+
   const confirmOk = confirmText.trim().toUpperCase() === CONFIRM_WORD
   const presetOptions = AGE_PRESETS.map((p) => ({ key: monthsAgoISO(p.months), label: p.label }))
 
@@ -141,8 +160,8 @@ export default function ConsoleDataCleanup() {
     <div className="space-y-5 max-w-7xl">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="flex items-center gap-2"><Trash2 size={18} className="text-orange-400" /> Data Cleanup</h1>
-          <p className="text-xs text-gray-500 mt-1">Delete old records you no longer need. A recovery snapshot is taken automatically before anything is removed.</p>
+          <h1 className="flex items-center gap-2"><Trash2 size={18} className="text-orange-400" aria-hidden="true" /> Data Cleanup</h1>
+          <p className="text-xs text-gray-400 mt-1">Delete old records you no longer need. A recovery snapshot is taken automatically before anything is removed.</p>
         </div>
         <Btn icon={RefreshCw} onClick={load} busy={loading}>Refresh</Btn>
       </header>
@@ -180,21 +199,36 @@ export default function ConsoleDataCleanup() {
 
           <div className="grid gap-4 lg:grid-cols-2">
             <Panel flush>
-              <div className="px-4 pt-4"><PanelHeader icon={Database} title="Targets" subtitle="Select one to clean up." /></div>
+              <div className="px-4 pt-4">
+                <PanelHeader icon={Database} title="Targets" subtitle={`Select one to clean up. ${sorted.length} of ${targets.length} shown.`}
+                  actions={<Btn icon={Download} onClick={exportTargets} disabled={!sorted.length}>Excel</Btn>} />
+                <Toolbar className="mb-3">
+                  <SearchInput value={search} onChange={setSearch} placeholder="Search targets" className="w-full sm:w-52" />
+                  <Segmented role="group" ariaLabel="Target kind" value={kindFilter} onChange={setKindFilter} options={[
+                    { key: '', label: 'All' }, { key: 'logs', label: 'Logs' }, { key: 'business', label: 'Business' },
+                  ]} />
+                </Toolbar>
+              </div>
               <div className="max-h-[520px] overflow-y-auto px-4 pb-4">
                 <Table>
                   <THead>
-                    <Th>Target</Th><Th>Kind</Th><Th align="right">Rows</Th><Th>Date range</Th>
+                    <Th sortKey="label" sort={sort} onSort={onSort}>Target</Th>
+                    <Th sortKey="kind" sort={sort} onSort={onSort}>Kind</Th>
+                    <Th sortKey="total" sort={sort} onSort={onSort} align="right">Rows</Th>
+                    <Th sortKey="oldest" sort={sort} onSort={onSort}>Date range</Th>
                   </THead>
                   <tbody>
-                    {targets.map((t) => {
+                    {sorted.length === 0 && (
+                      <tr><Td colSpan={4}><span className="text-gray-400">No target matches these filters.</span></Td></tr>
+                    )}
+                    {sorted.map((t) => {
                       const active = selected?.key === t.key
                       return (
                         <Tr key={t.key} onClick={() => selectTarget(t)} className={active ? 'bg-orange-950/20' : ''}>
                           <Td><button type="button" aria-pressed={active} onClick={(e) => { e.stopPropagation(); selectTarget(t) }} className={`text-left break-words ${active ? 'text-orange-200 font-medium' : 'text-gray-200 hover:text-orange-300'} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 rounded`}>{t.label}</button></Td>
                           <Td><Badge tone={t.kind === 'business' ? 'danger' : 'default'}>{t.kind === 'business' ? 'Business data' : 'Logs'}</Badge></Td>
                           <Td align="right" nowrap><span className="tabular-nums text-gray-300">{fmtNum(t.total)}</span></Td>
-                          <Td nowrap><span className="text-gray-500">{fmtDate(t.oldest)} to {fmtDate(t.newest)}</span></Td>
+                          <Td nowrap><span className="text-gray-400">{fmtDate(t.oldest)} to {fmtDate(t.newest)}</span></Td>
                         </Tr>
                       )
                     })}
@@ -227,7 +261,7 @@ export default function ConsoleDataCleanup() {
                       onChange={(e) => changeCutoff(e.target.value)} aria-label="Cutoff date"
                       className="w-full px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 focus:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />
                     <p className="text-[10px] text-gray-400 mt-1 flex items-center gap-1">
-                      <Info size={10} /> Cutoff {fmtDate(before)}. Records dated before this are removed; newer records are kept.
+                      <Info size={10} aria-hidden="true" /> Cutoff {fmtDate(before)}. Records dated before this are removed; newer records are kept.
                     </p>
                   </div>
 

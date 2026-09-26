@@ -40,6 +40,7 @@ import {
 } from '../../lib/queryBuilder'
 import { exportToExcel } from '../../lib/exportUtils'
 import { toUserMessage } from '../../lib/safeError'
+import { useTableSort } from '../../lib/useTableSort'
 
 const LIMIT_OPTIONS = [50, 100, 500]
 const EMPTY_FILTER = { column: '', op: 'eq', value: '' }
@@ -83,6 +84,9 @@ export default function ConsoleDataBrowser() {
     () => (rows.length ? Object.keys(rows[0]) : columns.map(c => c.column_name)),
     [rows, columns],
   )
+  // Sorting reorders the rows already loaded; it never re-queries the table.
+  const { sort, onSort, sorted: sortedRows, setSort } = useTableSort(rows, { key: null, dir: 'desc' })
+  useEffect(() => { setSort({ key: null, dir: 'desc' }) }, [selected, setSort])
 
   // ── Initial load: the safelisted tables with row counts ──
   // Show any prior edits/deletes so the undo list survives a page reload.
@@ -246,7 +250,7 @@ export default function ConsoleDataBrowser() {
     const keys = rowKeys
     try {
       await exportToExcel(
-        rows,
+        sortedRows,
         keys,
         keys,
         `TyrePulse ${selected} Data`,
@@ -354,8 +358,8 @@ export default function ConsoleDataBrowser() {
     <div className="space-y-5 max-w-7xl">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="flex items-center gap-2"><Database size={18} className="text-orange-400" /> Data Browser</h1>
-          <p className="text-xs text-gray-500 mt-1">
+          <h1 className="flex items-center gap-2"><Database size={18} className="text-orange-400" aria-hidden="true" /> Data Browser</h1>
+          <p className="text-xs text-gray-400 mt-1">
             {admin?.full_name ? `${admin.full_name} | ` : ''}Browse, filter and export operational data with no SQL, and correct or remove a single row.
           </p>
         </div>
@@ -460,7 +464,7 @@ export default function ConsoleDataBrowser() {
           <Panel>
             <PanelHeader icon={Filter} title={selected ? `Filter on ${selected}` : 'Filter'} />
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
-              <Select className="sm:col-span-4" value={filter.column} placeholder="All columns (no filter)"
+              <Select ariaLabel="Filter column" className="sm:col-span-4" value={filter.column} placeholder="All columns (no filter)"
                 options={columnOptions} onChange={(v) => setFilter((f) => ({ ...f, column: v }))} />
               <Select ariaLabel="Filter operator" className="sm:col-span-3" value={filter.op} options={opOptions}
                 onChange={(v) => setFilter((f) => ({ ...f, op: v }))} />
@@ -477,8 +481,8 @@ export default function ConsoleDataBrowser() {
               </div>
             </div>
             <div className="flex items-center justify-between mt-3 flex-wrap gap-2">
-              <p className="text-[11px] text-gray-500 flex items-center gap-1.5">
-                <Info size={12} /> {filterSummary}
+              <p className="text-[11px] text-gray-400 flex items-center gap-1.5">
+                <Info size={12} aria-hidden="true" /> {filterSummary}
                 {filter.column && (
                   <Btn size="xs" variant="quiet" icon={X}
                     onClick={() => { const nf = EMPTY_FILTER; setFilter(nf); run(selected, nf, limit) }}
@@ -486,7 +490,7 @@ export default function ConsoleDataBrowser() {
                 )}
               </p>
               <div className="flex items-center gap-2">
-                <span className="text-[11px] text-gray-500">Rows</span>
+                <span className="text-[11px] text-gray-400">Rows</span>
                 <Segmented ariaLabel="Rows to show" role="group" value={limit} onChange={handleLimit}
                   options={LIMIT_OPTIONS.map((n) => ({ key: n, label: String(n), hint: `Show up to ${n} rows.` }))} />
               </div>
@@ -496,7 +500,7 @@ export default function ConsoleDataBrowser() {
           <Panel>
             <PanelHeader title="Results"
               subtitle={ran && !running
-                ? `${rows.length} row${rows.length === 1 ? '' : 's'}${rows.length === limit ? `, showing first ${limit}` : ''}`
+                ? `${rows.length} row${rows.length === 1 ? '' : 's'}${rows.length === limit ? `, showing first ${limit}` : ''}. Click a column to sort the rows shown.`
                 : undefined}
               actions={(
                 <Btn icon={Download} onClick={handleExport} disabled={!canExport}
@@ -517,10 +521,10 @@ export default function ConsoleDataBrowser() {
                       <Table>
                         <THead>
                           {canEditRows && <Th className="w-20">Actions</Th>}
-                          {rowKeys.map((k) => <Th key={k} className="whitespace-nowrap">{k}</Th>)}
+                          {rowKeys.map((k) => <Th key={k} sortKey={k} sort={sort} onSort={onSort} className="whitespace-nowrap">{k}</Th>)}
                         </THead>
                         <tbody>
-                          {rows.map((r, i) => (
+                          {sortedRows.map((r, i) => (
                             <Tr key={r.id || i}>
                               {canEditRows && (
                                 <Td nowrap>
@@ -528,12 +532,12 @@ export default function ConsoleDataBrowser() {
                                     <button type="button" onClick={() => openEdit(r)} disabled={busy} aria-label={`Edit row ${r.id ?? i + 1}`}
                                       title="Correct a value in this row"
                                       className="p-1 rounded text-gray-400 hover:text-orange-300 hover:bg-gray-800 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
-                                      <Pencil size={12} />
+                                      <Pencil size={12} aria-hidden="true" />
                                     </button>
                                     <button type="button" onClick={() => { setConfirmDelete(r); setNotice('') }} disabled={busy} aria-label={`Delete row ${r.id ?? i + 1}`}
                                       title="Delete this row (can be undone)"
                                       className="p-1 rounded text-gray-400 hover:text-red-300 hover:bg-gray-800 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
-                                      <Trash2 size={12} />
+                                      <Trash2 size={12} aria-hidden="true" />
                                     </button>
                                   </span>
                                 </Td>

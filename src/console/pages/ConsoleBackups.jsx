@@ -24,7 +24,7 @@ import {
 } from 'lucide-react'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import {
-  Panel, PanelHeader, Note, StatTile, Badge, Code, Btn, Table, THead, Th, Tr, Td,
+  Panel, PanelHeader, Note, StatTile, Badge, Code, Btn, Table, THead, Th, Tr, Td, Segmented,
   LoadingState, EmptyState, ErrorState, Modal,
 } from '../components/ui'
 import { TrendChart, BarsChart } from '../components/ui/charts'
@@ -77,7 +77,7 @@ function fmtRelative(v) {
 }
 
 function fmtNum(n) {
-  return n != null && Number.isFinite(Number(n)) ? Number(n).toLocaleString() : '0'
+  return n != null && Number.isFinite(Number(n)) ? Number(n).toLocaleString() : 'N/A'
 }
 
 /** A snapshot is "nightly" when its reason marks it as automatic. */
@@ -266,6 +266,15 @@ export default function ConsoleBackups() {
     }
   }, [snapshots])
 
+  // A nightly job that silently stops is the failure that matters most here
+  // (it happened once for 20 days), so the age of the newest copy is checked.
+  const STALE_HOURS = 36
+  const newestAgeHours = newest?.taken_at ? (Date.now() - new Date(newest.taken_at).getTime()) / 3600000 : null
+  const stale = newestAgeHours != null && Number.isFinite(newestAgeHours) && newestAgeHours > STALE_HOURS
+  const [kindView, setKindView] = useState('all')
+  const shownSnapshots = useMemo(() => (kindView === 'all' ? snapshots
+    : snapshots.filter((s) => (kindView === 'nightly' ? isNightly(s.reason) : !isNightly(s.reason)))), [snapshots, kindView])
+
   const tableBars = useMemo(() => (Array.isArray(newest?.tables) ? newest.tables : [])
     .map(t => ({ label: t.table_name, value: Number(t.row_count) || 0 }))
     .sort((a, b) => b.value - a.value), [newest])
@@ -285,8 +294,8 @@ export default function ConsoleBackups() {
     <div className="space-y-5 max-w-7xl">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="flex items-center gap-2"><Archive size={18} className="text-orange-400" /> Automated Backups</h1>
-          <p className="text-xs text-gray-500 mt-1 max-w-2xl">
+          <h1 className="flex items-center gap-2"><Archive size={18} className="text-orange-400" aria-hidden="true" /> Automated Backups</h1>
+          <p className="text-xs text-gray-400 mt-1 max-w-2xl">
             Automatic nightly backups of your core data. Kept 30 days.
             <InfoDot text="Retention: how long a backup is stored before it is automatically deleted. Backups older than 30 days are removed to save space." />
             {' '}You can also make a backup now.
@@ -310,6 +319,13 @@ export default function ConsoleBackups() {
       )}
 
       <ErrorState message={error} onRetry={refresh} />
+
+      {!loading && stale && (
+        <Note icon={AlertTriangle} tone="warning">
+          The newest backup was taken {fmtRelative(newest.taken_at)} ({fmtDateTime(newest.taken_at)}). The nightly backup should have run since then;
+          check Automation Health for the backup job, or make a backup now.
+        </Note>
+      )}
 
       {!loading && snapshots.length > 0 && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -349,7 +365,14 @@ export default function ConsoleBackups() {
               Stored backups
               <InfoDot text="Each row is one snapshot: a complete saved copy of your core tables taken at a point in time. Expand a snapshot to see how many rows were saved per table." />
             </span>
-          )} subtitle="Expand a backup to preview what it could recover, table by table." />
+          )} subtitle="Expand a backup to preview what it could recover, table by table."
+            actions={snapshots.length > 0 ? (
+              <Segmented role="group" ariaLabel="Backup type" value={kindView} onChange={setKindView} options={[
+                { key: 'all', label: 'All', count: snapshots.length },
+                { key: 'nightly', label: 'Nightly', count: stats.nightly },
+                { key: 'manual', label: 'Manual', count: stats.manual },
+              ]} />
+            ) : null} />
         </div>
 
         {loading ? (
@@ -362,23 +385,26 @@ export default function ConsoleBackups() {
           )
         ) : (
           <div className="divide-y divide-gray-800/70 border-t border-gray-800">
-            {snapshots.map(snap => {
+            {shownSnapshots.length === 0 && (
+              <EmptyState icon={Archive} title="No backups of this type" reason="Switch to All to see every stored backup." />
+            )}
+            {shownSnapshots.map(snap => {
               const isOpen = expanded.has(snap.id)
               const nightly = isNightly(snap.reason)
               return (
                 <div key={snap.id}>
                   <button onClick={() => toggleExpand(snap.id)} aria-expanded={isOpen}
                     className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-900/60 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-orange-500">
-                    <span className="text-gray-500">
+                    <span className="text-gray-500" aria-hidden="true">
                       {isOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
                     </span>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-medium text-gray-200">{fmtDateTime(snap.taken_at)}</span>
                         <Badge tone={nightly ? 'info' : 'accent'}>{nightly ? 'Nightly' : 'Manual'}</Badge>
-                        <span className="text-[10px] text-gray-500">{fmtRelative(snap.taken_at)}</span>
+                        <span className="text-[10px] text-gray-400">{fmtRelative(snap.taken_at)}</span>
                       </div>
-                      <p className="text-[11px] text-gray-500 mt-0.5 truncate">
+                      <p className="text-[11px] text-gray-400 mt-0.5 truncate">
                         {fmtNum(snap.table_count)} tables, {fmtNum(snap.total_rows)} rows saved
                         {snap.taken_by ? ` | by ${snap.taken_by}` : ''}
                       </p>
@@ -401,7 +427,7 @@ export default function ConsoleBackups() {
                               return (
                                 <Fragment key={key}>
                                   <Tr>
-                                    <Td><span className="inline-flex items-center gap-2"><Database size={11} className="text-gray-600" /><Code>{t.table_name}</Code></span></Td>
+                                    <Td><span className="inline-flex items-center gap-2"><Database size={11} className="text-gray-600" aria-hidden="true" /><Code>{t.table_name}</Code></span></Td>
                                     <Td align="right"><span className="tabular-nums text-gray-400">{fmtNum(t.row_count)}</span></Td>
                                     <Td align="right">
                                       <Btn size="xs" variant="quiet" icon={RotateCcw}

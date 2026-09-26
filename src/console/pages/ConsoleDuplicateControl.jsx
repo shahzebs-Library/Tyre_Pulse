@@ -36,6 +36,7 @@ import {
 import { IMPORT_TARGETS, importTargetRows, uploadWorkbookSheets } from '../../lib/importTargets'
 import { exportToExcel, reportFileName } from '../../lib/exportUtils'
 import { toUserMessage } from '../../lib/safeError'
+import { useTableSort } from '../../lib/useTableSort'
 
 const COUNTRIES = ['KSA', 'UAE', 'Egypt']
 const CONFIRM_WORD = 'REMOVE'
@@ -164,6 +165,13 @@ export default function ConsoleDuplicateControl() {
   const money = Number(preview?.money_deletable) || 0
 
   const openBatches = useMemo(() => batches.filter((b) => !b.restored), [batches])
+  const groupSort = useTableSort(groups, { key: 'copies', dir: 'desc' }, { verdict: (g) => (g.verdict === 'genuine' ? 1 : 0) })
+  const batchSort = useTableSort(batches, { key: 'created_at', dir: 'desc' }, { restored: (b) => (b.restored ? 1 : 0) })
+  const exportHistory = () => exportToExcel(
+    batchSort.sorted.map((b) => ({ when: fmtTime(b.created_at), table: b.tbl, country: b.country || 'All', rows: Number(b.rows) || 0, state: b.restored ? 'Put back' : 'Removed, undoable' })),
+    ['when', 'table', 'country', 'rows', 'state'], ['When', 'Table', 'Country', 'Rows', 'State'],
+    reportFileName('TyrePulse Duplicate Removals'),
+  )
 
   // Rows removed per table, from the removal history. A count of rows, never
   // money, so it is safe to add across countries.
@@ -182,8 +190,8 @@ export default function ConsoleDuplicateControl() {
     <div className="space-y-5 max-w-7xl">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="flex items-center gap-2"><CopyX size={18} className="text-orange-400" /> Duplicate Control</h1>
-          <p className="text-xs text-gray-500 mt-1">
+          <h1 className="flex items-center gap-2"><CopyX size={18} className="text-orange-400" aria-hidden="true" /> Duplicate Control</h1>
+          <p className="text-xs text-gray-400 mt-1">
             Find and remove rows that got imported twice, and see where each file should be uploaded.
           </p>
         </div>
@@ -332,9 +340,13 @@ export default function ConsoleDuplicateControl() {
                           <p className="text-[11px] font-semibold text-gray-400 mb-1.5">Groups found (showing up to 100)</p>
                           <div className="max-h-64 overflow-y-auto">
                             <Table>
-                              <THead><Th>Business key</Th><Th align="right">Copies</Th><Th>Verdict</Th></THead>
+                              <THead>
+                                <Th sortKey="bkey" sort={groupSort.sort} onSort={groupSort.onSort}>Business key</Th>
+                                <Th sortKey="copies" sort={groupSort.sort} onSort={groupSort.onSort} align="right">Copies</Th>
+                                <Th sortKey="verdict" sort={groupSort.sort} onSort={groupSort.onSort}>Verdict</Th>
+                              </THead>
                               <tbody>
-                                {groups.map((g, i) => (
+                                {groupSort.sorted.map((g, i) => (
                                   <Tr key={i}>
                                     <Td><span className="block max-w-[260px] truncate text-gray-400" title={g.bkey}>{g.bkey}</span></Td>
                                     <Td align="right"><span className="tabular-nums text-gray-300">{fmtNum(g.copies)}</span></Td>
@@ -366,7 +378,8 @@ export default function ConsoleDuplicateControl() {
 
               <Panel flush>
                 <div className="px-4 pt-4">
-                  <PanelHeader icon={Undo2} title="Removal history" subtitle="Every removal stays undoable." />
+                  <PanelHeader icon={Undo2} title="Removal history" subtitle="Every removal stays undoable."
+                    actions={batches.length > 0 ? <Btn icon={Download} onClick={exportHistory}>Excel</Btn> : null} />
                 </div>
                 {batches.length === 0 ? (
                   loadError ? (
@@ -378,9 +391,15 @@ export default function ConsoleDuplicateControl() {
                 ) : (
                   <div className="max-h-72 overflow-y-auto px-4 pb-4">
                     <Table>
-                      <THead><Th>When</Th><Th>Table</Th><Th>Country</Th><Th align="right">Rows</Th><Th align="right">Action</Th></THead>
+                      <THead>
+                        <Th sortKey="created_at" sort={batchSort.sort} onSort={batchSort.onSort}>When</Th>
+                        <Th sortKey="tbl" sort={batchSort.sort} onSort={batchSort.onSort}>Table</Th>
+                        <Th sortKey="country" sort={batchSort.sort} onSort={batchSort.onSort}>Country</Th>
+                        <Th sortKey="rows" sort={batchSort.sort} onSort={batchSort.onSort} align="right">Rows</Th>
+                        <Th sortKey="restored" sort={batchSort.sort} onSort={batchSort.onSort} align="right">Action</Th>
+                      </THead>
                       <tbody>
-                        {batches.map((b) => (
+                        {batchSort.sorted.map((b) => (
                           <Tr key={b.batch_id}>
                             <Td nowrap><span className="text-gray-400">{fmtTime(b.created_at)}</span></Td>
                             <Td><Code>{b.tbl}</Code></Td>
@@ -389,7 +408,7 @@ export default function ConsoleDuplicateControl() {
                             <Td align="right">
                               {b.restored
                                 ? <Badge tone="good" icon={CheckCircle2}>Put back</Badge>
-                                : <Btn size="xs" icon={Undo2} onClick={() => doRestore(b.batch_id)} disabled={busy} ariaLabel={`Undo removal of ${fmtNum(b.rows)} rows from ${b.tbl}`}>Undo</Btn>}
+                                : <Btn size="xs" icon={Undo2} onClick={() => doRestore(b.batch_id)} disabled={busy} title={`Undo removal of ${fmtNum(b.rows)} rows from ${b.tbl}`}>Undo</Btn>}
                             </Td>
                           </Tr>
                         ))}
@@ -401,7 +420,7 @@ export default function ConsoleDuplicateControl() {
 
               {openBatches.length > 0 && (
                 <p className="text-[10px] text-gray-400 flex items-center gap-1">
-                  <Info size={10} /> {openBatches.length} removal(s) can still be undone.
+                  <Info size={10} aria-hidden="true" /> {openBatches.length} removal(s) can still be undone.
                 </p>
               )}
             </>

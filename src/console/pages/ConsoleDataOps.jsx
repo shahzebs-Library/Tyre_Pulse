@@ -1,17 +1,19 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ShieldCheck, ListTree, CopyX, Brain,
   DollarSign, TrendingUp, Boxes, Archive, Table2, Activity,
   UploadCloud, History, Wand2, Layers,
   Database, AlertTriangle, RefreshCw,
-  LayoutList, Scale, ClipboardList, GitBranch, BellRing, Rocket, Sparkles,
+  LayoutList, Scale, ClipboardList, GitBranch, BellRing, Rocket, Sparkles, ArrowRight,
 } from 'lucide-react'
-import { getControlCenterSummary, openIssueCount } from '../../lib/api/controlCenter'
+import {
+  getControlCenterSummary, openIssueCount, rankIssues, ISSUE_ROUTE, ISSUE_SEVERITY_TONE,
+} from '../../lib/api/controlCenter'
 import { openConsoleRoute, isConsoleRoute } from '../lib/openRoute'
 import { toUserMessage } from '../../lib/safeError'
 import {
-  Panel, PanelHeader, StatTile, Btn, Badge, Note,
+  Panel, PanelHeader, StatTile, Btn, Badge, Note, SearchInput,
   LoadingState, EmptyState, ErrorState,
 } from '../components/ui'
 
@@ -30,7 +32,7 @@ import {
 const GROUPS = [
   {
     key: 'trust',
-    title: 'Trust & quality',
+    title: 'Trust and quality',
     subtitle: 'Find and fix data-quality problems before they reach a report.',
     icon: ShieldCheck,
     cards: [
@@ -46,7 +48,7 @@ const GROUPS = [
   },
   {
     key: 'lineage',
-    title: 'Data trust & lineage',
+    title: 'Data trust and lineage',
     subtitle: 'Governed metric definitions, quality checks and where every number comes from.',
     icon: ShieldCheck,
     cards: [
@@ -59,7 +61,7 @@ const GROUPS = [
       { icon: Scale, title: 'Reconciliation', route: '/console/reconciliation',
         desc: 'Expected vs actual across cost, fleet and production, with the gap.' },
       { icon: Activity, title: 'Pipeline Monitor', route: '/console/pipeline-monitor',
-        desc: 'Import jobs and integration events - what ran and what failed.' },
+        desc: 'Import jobs and integration events: what ran and what failed.' },
       { icon: ClipboardList, title: 'Correction Center', route: '/console/correction-center',
         desc: 'Governed correction cases from reported through to reconciled.' },
       { icon: GitBranch, title: 'Lineage Explorer', route: '/console/lineage',
@@ -72,7 +74,7 @@ const GROUPS = [
   },
   {
     key: 'cost',
-    title: 'Cost & production',
+    title: 'Cost and production',
     subtitle: 'Operating cost per unit and the production data behind it.',
     icon: DollarSign,
     cards: [
@@ -92,7 +94,7 @@ const GROUPS = [
   },
   {
     key: 'imports',
-    title: 'Imports & masters',
+    title: 'Imports and masters',
     subtitle: 'Load data and keep the reference masters clean.',
     icon: UploadCloud,
     cards: [
@@ -113,10 +115,9 @@ export default function ConsoleDataOps() {
   const [summary, setSummary] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [search, setSearch] = useState('')
 
-  useEffect(() => { load() }, [])
-
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true); setError('')
     try {
       const data = await getControlCenterSummary()
@@ -132,7 +133,18 @@ export default function ConsoleDataOps() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  const groups = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return GROUPS
+    return GROUPS
+      .map((g) => ({ ...g, cards: g.cards.filter((c) => `${c.title} ${c.desc} ${c.route}`.toLowerCase().includes(q)) }))
+      .filter((g) => g.cards.length > 0)
+  }, [search])
+  const topIssues = useMemo(() => rankIssues(summary?.issues || []).filter((i) => Number(i.count) > 0).slice(0, 6), [summary])
 
   const openIssues = summary ? openIssueCount(summary.issues) : 0
   const vol = summary?.volumes || {}
@@ -142,12 +154,14 @@ export default function ConsoleDataOps() {
       {/* ── header ── */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-white">Data Operations</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
+          <h1 className="text-lg font-semibold text-white flex items-center gap-2">
+            <Layers size={18} className="text-orange-400" aria-hidden="true" /> Data Operations
+          </h1>
+          <p className="text-xs text-gray-400 mt-1">
             One launchpad for every data-management surface.
           </p>
         </div>
-        <Btn icon={RefreshCw} onClick={load} busy={loading} title="Refresh">Refresh</Btn>
+        <Btn icon={RefreshCw} onClick={load} busy={loading}>Refresh</Btn>
       </div>
 
       {/* ── headline strip ── */}
@@ -177,6 +191,7 @@ export default function ConsoleDataOps() {
             reason="No summary was returned for the current data set."
           />
         ) : (
+          <>
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
             <StatTile
               label="Open issues"
@@ -191,11 +206,39 @@ export default function ConsoleDataOps() {
             <StatTile label="Fleet rows" value={fmtInt(vol.fleet_rows)} icon={Database} />
             <StatTile label="Work orders" value={fmtInt(vol.work_orders)} icon={Database} />
           </div>
+          {topIssues.length > 0 && (
+            <div className="mt-4">
+              <p className="text-[11px] uppercase tracking-wide text-gray-500 mb-2">Worst open issues</p>
+              <ul className="divide-y divide-gray-800/70 border border-gray-800 rounded-xl">
+                {topIssues.map((issue) => {
+                  const route = ISSUE_ROUTE[issue.action]
+                  return (
+                    <li key={issue.key} className="flex items-center gap-3 px-3 py-2">
+                      <Badge tone={ISSUE_SEVERITY_TONE[issue.severity] || 'info'}>{issue.severity || 'info'}</Badge>
+                      <span className="flex-1 min-w-0 text-xs text-gray-300 truncate" title={issue.label}>{issue.label || issue.key}</span>
+                      <span className="text-xs tabular-nums text-gray-200">{fmtInt(issue.count)}</span>
+                      {route ? (
+                        <Btn size="xs" icon={ArrowRight} onClick={() => openConsoleRoute(route, navigate)}>Fix</Btn>
+                      ) : null}
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          )}
+          </>
         )}
       </Panel>
 
       {/* ── launchpad groups ── */}
-      {GROUPS.map((g) => (
+      <div className="flex flex-wrap items-center gap-2">
+        <SearchInput value={search} onChange={setSearch} placeholder="Find a data tool" className="w-full sm:w-80" />
+        {search && <span className="text-xs text-gray-400">{groups.reduce((n, g) => n + g.cards.length, 0)} tools match</span>}
+      </div>
+      {groups.length === 0 && (
+        <EmptyState title="No data tool matches that search" reason="Try a module name such as Import, Cost or Lineage." />
+      )}
+      {groups.map((g) => (
         <Panel key={g.key}>
           <PanelHeader icon={g.icon} title={g.title} subtitle={g.subtitle} />
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
@@ -218,14 +261,14 @@ function LinkCard({ card, onOpen }) {
     >
       <div className="flex items-start gap-2.5">
         <span className="w-8 h-8 rounded-lg bg-orange-500/10 border border-orange-800/40 flex items-center justify-center shrink-0">
-          <Icon size={16} className="text-orange-400" />
+          <Icon size={16} className="text-orange-400" aria-hidden="true" />
         </span>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-gray-200 truncate">{title}</p>
           <p className="text-[11px] font-mono text-gray-400 truncate">{route}</p>
         </div>
       </div>
-      <p className="text-xs text-gray-500 flex-1">{desc}</p>
+      <p className="text-xs text-gray-400 flex-1">{desc}</p>
       <span className="text-xs text-orange-400 font-medium mt-1">{isConsoleRoute(route) ? 'Open' : 'Open in new tab'}</span>
     </button>
   )

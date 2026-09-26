@@ -1,7 +1,7 @@
 -- ============================================================================
 -- ACCIDENT MOCK FIELD PARITY (2026-09-16)
--- STATUS: AUTHORED, NOT APPLIED. Owner instruction: production must not be
--- disturbed; apply only on an explicit go-ahead. Everything here is ADDITIVE
+-- STATUS: APPLIED LIVE 2026-09-26 (owner go-ahead). Verified: 16 policies, anon no access,
+-- delivered_to_workshop_at now timestamptz. Everything here is ADDITIVE
 -- (nullable columns, widened CHECKs, two new tables). No existing row changes.
 --
 -- Source: the owner's 10 accident mock screens. Fields the mocks show that had

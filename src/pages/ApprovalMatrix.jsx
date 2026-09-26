@@ -10,6 +10,50 @@ import { listSites } from '../lib/api/sites'
 import { approvalPolicyCopy } from '../lib/approvalPolicyCopy'
 import { toUserMessage } from '../lib/safeError'
 import { Link } from 'react-router-dom'
+import { buildApprovalCoverage, approvalCoverageKpis, filterGaps, gapExportRows, APPROVAL_ENTITY_TYPES } from '../lib/approvalCoverageAnalytics'
+
+const CELL_TONE = { covered: 'text-green-600', partial: 'text-amber-600', none: 'text-red-500' }
+const CELL_TEXT = { covered: 'Covered', partial: 'Partial', none: 'No rule' }
+function CoverageCheck({ policies, sites, countries, c, disabled }) {
+  const [typeFilter, setTypeFilter] = useState('all')
+  const [stateFilter, setStateFilter] = useState('none')
+  const [query, setQuery] = useState('')
+  const [exportMsg, setExportMsg] = useState('')
+  const coverage = useMemo(() => buildApprovalCoverage({ policies, sites, countries }), [policies, sites, countries])
+  const kpis = useMemo(() => approvalCoverageKpis(policies, coverage), [policies, coverage])
+  const gaps = useMemo(() => filterGaps(coverage.gaps, { entityType: typeFilter, state: stateFilter, search: query }), [coverage, typeFilter, stateFilter, query])
+  const labels = Object.fromEntries(APPROVAL_ENTITY_TYPES.map(t => [t, c[t] || t]))
+  async function doExport(kind) {
+    setExportMsg('')
+    try {
+      const { exportToExcel, exportToPdf, reportFileName } = await import('../lib/exportUtils')
+      const rows = gapExportRows(gaps, labels); const cols = ['type', 'country', 'region', 'site', 'coverage']; const heads = ['Approval type', 'Country', 'Region', 'Site', 'Coverage']
+      const name = reportFileName('Approval Coverage Gaps')
+      if (kind === 'excel') await exportToExcel(rows, cols, heads, name)
+      else await exportToPdf(rows, cols.map((k, i) => ({ key: k, header: heads[i] })), 'Approval Coverage Gaps', name, 'landscape')
+    } catch (e) { setExportMsg(toUserMessage(e, 'The export could not be created.')) }
+  }
+  return <section className="card space-y-4" aria-label="Coverage check">
+    <div><h2 className="font-bold">Coverage check</h2><p className="text-sm text-[var(--text-muted)]">Where a submission would find no published rule. Partial means only a role or person specific rule applies, so some submitters are not routed. Use the simulation below to confirm a specific case.</p></div>
+    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+      {[['Live rules', kpis.published], ['Scheduled', kpis.scheduled], ['Drafts', kpis.drafts], ['Types with no rule', kpis.typesWithoutRule], ['Sites with no rule', kpis.siteGaps], ['Sites partly covered', kpis.partialSites]].map(([l, v]) => <div key={l} className="rounded-lg border border-[var(--hairline)] p-3"><p className="text-xs text-[var(--text-muted)]">{l}</p><p className="text-xl font-bold">{v}</p></div>)}
+    </div>
+    <div className="overflow-x-auto"><table className="w-full text-sm text-start"><thead><tr><th className="p-2 text-start">{c.type}</th>{countries.map(k => <th key={k} className="p-2 text-start">{k}</th>)}<th className="p-2 text-start">{c.draft}</th></tr></thead><tbody>
+      {coverage.matrix.map(r => <tr key={r.entityType} className="border-t border-[var(--hairline)]"><td className="p-2">{labels[r.entityType]}</td>{countries.map(k => { const cell = r.cells[k]; return <td key={k} className={`p-2 ${CELL_TONE[cell.status]}`}>{CELL_TEXT[cell.status]}{cell.sites > 0 && cell.gapSites > 0 && <span className="block text-xs text-[var(--text-muted)]">{cell.gapSites} of {cell.sites} sites uncovered</span>}</td> })}<td className="p-2">{r.drafts}{r.scheduled > 0 && <span className="block text-xs text-[var(--text-muted)]">{r.scheduled} scheduled</span>}</td></tr>)}
+    </tbody></table></div>
+    {!sites.length && <p className="text-sm text-[var(--text-muted)]">No active sites were read, so coverage is judged at country level only.</p>}
+    <div className="flex flex-wrap gap-3 items-end">
+      <Field label="Search gaps"><input className={inputCls} value={query} onChange={e => setQuery(e.target.value)} /></Field>
+      <Field label="Gap type"><select className={inputCls} value={typeFilter} onChange={e => setTypeFilter(e.target.value)}><option value="all">{c.all}</option>{APPROVAL_ENTITY_TYPES.map(t => <option key={t} value={t}>{labels[t]}</option>)}</select></Field>
+      <Field label="Gap kind"><select className={inputCls} value={stateFilter} onChange={e => setStateFilter(e.target.value)}><option value="all">{c.all}</option><option value="none">No rule</option><option value="partial">Partial</option></select></Field>
+      <button className={buttonCls} disabled={disabled || !gaps.length} onClick={() => doExport('excel')}>Export gaps Excel</button>
+      <button className={buttonCls} disabled={disabled || !gaps.length} onClick={() => doExport('pdf')}>Export gaps PDF</button>
+    </div>
+    {exportMsg && <p className="text-sm text-red-500">{exportMsg}</p>}
+    {!coverage.gaps.length ? <p className="text-sm">Every active site has a published rule for every approval type.</p> : !gaps.length ? <p className="text-sm text-[var(--text-muted)]">No gaps match these filters.</p>
+      : <div className="overflow-x-auto max-h-80"><table className="w-full text-sm text-start"><thead><tr>{[c.type, c.country, c.region, c.site, 'Coverage'].map(h => <th key={h} className="p-2 text-start">{h}</th>)}</tr></thead><tbody>{gaps.slice(0, 300).map(g => <tr key={`${g.entityType}:${g.country}:${g.site}`} className="border-t border-[var(--hairline)]"><td className="p-2">{labels[g.entityType]}</td><td className="p-2">{g.country}</td><td className="p-2">{g.region || 'N/A'}</td><td className="p-2">{g.site}</td><td className={`p-2 ${CELL_TONE[g.state]}`}>{CELL_TEXT[g.state]}</td></tr>)}</tbody></table>{gaps.length > 300 && <p className="text-xs text-[var(--text-muted)] p-2">Showing 300 of {gaps.length}. Export for the full list.</p>}</div>}
+  </section>
+}
 
 const inputCls = 'min-h-11 rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2 text-sm text-[var(--text-primary)] w-full'
 const buttonCls = 'min-h-11 rounded-lg border border-[var(--input-border)] px-3 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-hover)] disabled:opacity-40'
@@ -148,6 +192,7 @@ export default function ApprovalMatrix() {
       <div className="flex flex-wrap gap-3 items-end"><Field label={c.search}><input className={inputCls} value={search} onChange={e => setSearch(e.target.value)} /></Field><Field label={c.policies}><select className={inputCls} value={stateFilter} onChange={e => setStateFilter(e.target.value)}><option value="">{c.all}</option>{['draft', 'published', 'retired'].map(s => <option key={s} value={s}>{c[s]}</option>)}</select></Field><button className={buttonCls} disabled={disabled} onClick={() => openEditor(blankPolicy(scope))}>{c.new}</button></div>
       {loading ? <p role="status">{c.loading}</p> : !error && !scopedPolicies.length ? <p>{c.empty}</p> : <><div className="overflow-x-auto"><table className="w-full text-sm text-start"><thead><tr>{[c.name, c.type, c.scope, c.version, c.policies, c.actions].map((h, i) => <th key={i} className="p-2 text-start">{h}</th>)}</tr></thead><tbody>{pager.pageRows.map(p => <tr key={p.id} className="border-t border-[var(--hairline)]"><td className="p-2">{p.name}</td><td className="p-2">{c[p.entity_type]}</td><td className="p-2">{[p.match_country, p.match_region, p.match_site, p.match_role, users[p.match_user_id]?.full_name].filter(Boolean).join(' · ') || c.anyScope}</td><td className="p-2">{p.version}</td><td className="p-2">{c[p.state]}{p.effective_at && <time className="block text-xs text-[var(--text-muted)]" dateTime={p.effective_at}>{new Date(p.effective_at).toLocaleString(language)}</time>}</td><td className="p-2"><div className="flex flex-wrap gap-2"><button className={buttonCls} disabled={disabled} onClick={() => openEditor(p.state === 'draft' ? structuredClone(p) : { ...structuredClone(p), id: undefined, updated_at: undefined, state: 'draft', change_reason: '' })}>{p.state === 'draft' ? c.edit : c.clone}</button><button className={buttonCls} disabled={disabled} onClick={() => showHistory(p)}>{c.history}</button>{p.state !== 'retired' && <button className={buttonCls} disabled={disabled || (dirty && form?.id === p.id)} onClick={() => { setReason(''); setEffectiveAt(''); setReview({ policy: p, action: p.state === 'draft' ? 'publish' : 'retire' }) }}>{p.state === 'draft' ? c.publish : c.retire}</button>}</div></td></tr>)}</tbody></table></div><TablePagination {...pager} /></>}
     </section>
+    {!loading && !error && <CoverageCheck policies={policies} sites={sites} countries={scope ? [scope] : COUNTRIES} c={c} disabled={busy} />}
     {form && <section ref={editorRef} tabIndex={-1} className="card space-y-4" aria-label={c.editor}><div className="flex justify-between"><h2 className="font-bold">{c.editor}</h2><button className={buttonCls} disabled={busy} onClick={() => { setForm(null); setIncludeDraft(false); setPreview(null) }}>{c.close}</button></div><fieldset disabled={disabled} className="space-y-4"><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
       <Field label={c.name}><input className={inputCls} value={form.name} maxLength={160} onChange={e => patch({ name: e.target.value })} /></Field>
       <Field label={c.type}><select className={inputCls} value={form.entity_type} onChange={e => patch({ entity_type: e.target.value })}>{['inspection', 'checklist', 'work_order', 'tyre_change'].map(t => <option key={t} value={t}>{c[t]}</option>)}</select></Field>

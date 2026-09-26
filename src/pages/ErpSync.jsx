@@ -8,6 +8,7 @@ import PageHeader from '../components/ui/PageHeader'
 import { useLanguage } from '../contexts/LanguageContext'
 import ErpConnectionPanel from '../components/erp/ErpConnectionPanel'
 import WebhooksPanel from '../components/integrations/WebhooksPanel'
+import ErpLoadHistoryPanel from '../components/erp/ErpLoadHistoryPanel'
 
 // ── Honest state ──────────────────────────────────────────────────────────────
 // No ERP connector is provisioned for this project yet. Rather than fabricate
@@ -94,6 +95,9 @@ export default function ErpSync() {
           <Upload size={15} /> {t('erpsync.banner.cta')} <ArrowRight size={14} />
         </Link>
       </div>
+
+      {/* What actually reached the system: batches, feed freshness, rejects */}
+      <ErpLoadHistoryPanel />
 
       {/* ERP connection config */}
       <ErpConnectionPanel />

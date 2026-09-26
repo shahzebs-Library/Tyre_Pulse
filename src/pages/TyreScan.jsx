@@ -1,12 +1,17 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ScanLine, History, Clock, Trash2, CheckCircle, AlertCircle, ChevronRight } from 'lucide-react'
+import { ScanLine, History, Clock, Trash2, CheckCircle, AlertCircle, ChevronRight, FileSpreadsheet, FileText } from 'lucide-react'
 import TyreScanCamera from '../components/TyreScanCamera'
 import { useNavigate } from 'react-router-dom'
 import { useLanguage } from '../contexts/LanguageContext'
+import { normaliseHistory, scanKpis, riskBreakdown, filterScans, sortScans, passportPath, scanExportRows } from '../lib/tyreScanAnalytics'
+import { toUserMessage } from '../lib/safeError'
+
+const EXPORT_COLS = ['serial', 'outcome', 'brand', 'asset', 'site', 'risk', 'tread', 'scanned_at']
+const EXPORT_HEADERS = ['Serial', 'Outcome', 'Brand', 'Asset', 'Site', 'Risk', 'Tread', 'Scanned at']
 
 const HISTORY_KEY = 'tp_scan_history'
-const MAX_HISTORY = 25
+const MAX_HISTORY = 200
 
 const RISK_STYLE = {
   Critical: { bg: 'rgba(239,68,68,0.08)',  border: 'rgba(239,68,68,0.25)',  text: '#f87171' },
@@ -16,7 +21,7 @@ const RISK_STYLE = {
 }
 
 function loadHistory() {
-  try { return JSON.parse(localStorage.getItem(HISTORY_KEY) ?? '[]') }
+  try { return normaliseHistory(JSON.parse(localStorage.getItem(HISTORY_KEY) ?? '[]')) }
   catch { return [] }
 }
 
@@ -43,6 +48,25 @@ export default function TyreScan() {
   const [scanOpen, setScanOpen] = useState(false)
   const [history, setHistory] = useState(loadHistory)
   const [, tick]              = useState(0)
+  const [outcome, setOutcome] = useState('all')
+  const [risk, setRisk]       = useState('all')
+  const [search, setSearch]   = useState('')
+  const [sort, setSort]       = useState('newest')
+  const [exportError, setExportError] = useState('')
+  const kpis    = useMemo(() => scanKpis(history), [history])
+  const risks   = useMemo(() => riskBreakdown(history), [history])
+  const shown   = useMemo(() => sortScans(filterScans(history, { outcome, risk, search }), sort), [history, outcome, risk, search, sort])
+  const failed  = useMemo(() => history.filter(e => !e.found), [history])
+
+  async function doExport(kind) {
+    setExportError('')
+    try {
+      const { exportToExcel, exportToPdf, reportFileName } = await import('../lib/exportUtils')
+      const rows = scanExportRows(shown); const name = reportFileName('Tyre Scan History')
+      if (kind === 'excel') await exportToExcel(rows, EXPORT_COLS, EXPORT_HEADERS, name)
+      else await exportToPdf(rows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Tyre Scan History', name, 'landscape')
+    } catch (err) { setExportError(toUserMessage(err, 'The export could not be created.')) }
+  }
 
   // Refresh relative timestamps every minute
   useEffect(() => {
@@ -62,7 +86,7 @@ export default function TyreScan() {
       found:     !!result.tyre,
       scannedAt: new Date().toISOString(),
     }
-    setHistory(prev => saveHistory(entry, prev))
+    setHistory(prev => normaliseHistory(saveHistory(entry, prev)))
   }
 
   function clearHistory() {
@@ -150,17 +174,48 @@ export default function TyreScan() {
             </button>
           </div>
 
+          <p className="text-[11px] text-gray-500">This history is kept on this device only and holds your last {MAX_HISTORY} distinct scans. Tap a found tyre to open its passport.</p>
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2">
+            {[['Scans', kpis.total], ['Found', kpis.found], ['Not found', kpis.notFound], ['Found rate', kpis.foundRate == null ? 'N/A' : `${kpis.foundRate}%`], ['High or critical', kpis.atRisk], ['Vehicles', kpis.assets]].map(([label, value]) => (
+              <div key={label} className="card py-2 px-3"><p className="text-[10px] text-gray-500">{label}</p><p className="text-lg font-bold text-[var(--text-primary)]">{value}</p></div>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-2 text-[11px]">
+            {Object.entries(risks).map(([k, v]) => <span key={k} className="px-2 py-1 rounded-lg border border-[var(--input-border)] text-[var(--text-secondary)]">{k}: {v}</span>)}
+          </div>
+          {failed.length > 0 && (
+            <div className="card py-2 px-3">
+              <p className="text-xs font-semibold text-amber-500">Failed lookups ({failed.length})</p>
+              <p className="text-[11px] text-gray-500 mb-1">These serials were not found in tyre records. Check the serial or register the tyre.</p>
+              <div className="flex flex-wrap gap-1.5">{failed.slice(0, 30).map(e => <button key={e.serial + e.scannedAt} onClick={() => navigate(passportPath(e.serial))} className="font-mono text-[11px] px-2 py-0.5 rounded border border-amber-500/30 text-amber-500">{e.serial}</button>)}</div>
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <input className="input flex-1 min-w-[160px]" aria-label="Search scans" placeholder="Search serial, brand, vehicle, site" value={search} onChange={e => setSearch(e.target.value)} />
+            <select className="input" aria-label="Scan outcome" value={outcome} onChange={e => setOutcome(e.target.value)}><option value="all">All outcomes</option><option value="found">Found</option><option value="not_found">Not found</option></select>
+            <select className="input" aria-label="Risk" value={risk} onChange={e => setRisk(e.target.value)}><option value="all">Any risk</option>{Object.keys(risks).map(k => <option key={k} value={k}>{k}</option>)}</select>
+            <select className="input" aria-label="Sort scans" value={sort} onChange={e => setSort(e.target.value)}><option value="newest">Newest</option><option value="oldest">Oldest</option><option value="risk">Highest risk</option><option value="serial">Serial</option></select>
+            <button className="btn-secondary text-xs inline-flex items-center gap-1" onClick={() => doExport('excel')} disabled={!shown.length}><FileSpreadsheet className="w-3.5 h-3.5" /> Excel</button>
+            <button className="btn-secondary text-xs inline-flex items-center gap-1" onClick={() => doExport('pdf')} disabled={!shown.length}><FileText className="w-3.5 h-3.5" /> PDF</button>
+          </div>
+          {exportError && <p className="text-xs text-red-500">{exportError}</p>}
+          {!shown.length && <p className="text-xs text-gray-500 text-center py-4">No scans match these filters.</p>}
+
           <AnimatePresence initial={false}>
-            {history.map((entry, i) => {
+            {shown.map((entry, i) => {
               const rs = entry.risk ? RISK_STYLE[entry.risk] : null
               return (
                 <motion.div
                   key={entry.serial + entry.scannedAt}
+                  role="link"
+                  tabIndex={0}
+                  onClick={() => navigate(passportPath(entry.serial))}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(passportPath(entry.serial)) } }}
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, x: -20 }}
-                  transition={{ delay: i * 0.03 }}
-                  className="flex items-center gap-3 p-3.5 rounded-2xl"
+                  transition={{ delay: Math.min(i, 10) * 0.03 }}
+                  className="flex items-center gap-3 p-3.5 rounded-2xl cursor-pointer"
                   style={{
                     background: rs?.bg ?? 'rgba(255,255,255,0.03)',
                     border: `1px solid ${rs?.border ?? 'rgba(255,255,255,0.06)'}`,

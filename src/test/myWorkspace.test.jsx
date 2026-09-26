@@ -6,6 +6,7 @@ vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ profile: h.profile
 vi.mock('../contexts/SettingsContext', () => ({ useSettings: () => ({ activeCountry: h.country }) }))
 vi.mock('../contexts/LanguageContext', () => ({ useLanguage: () => ({ t: text => text }) }))
 vi.mock('../lib/api/workspace', () => ({ loadWorkspaceCount: h.count }))
+vi.mock('../lib/api/myQueue', () => ({ QUEUE_LIST_LIMIT: 200, loadMyQueue: vi.fn().mockResolvedValue({ sources: {}, totals: {}, unavailable: {} }) }))
 import MyWorkspace from '../pages/MyWorkspace'
 import { WorkspaceNavigationContext } from '../contexts/WorkspaceNavigationContext'
 import { executiveHomeAllowed } from '../lib/workspaceAccess'

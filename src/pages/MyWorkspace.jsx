@@ -7,6 +7,7 @@ import { useWorkspaceNavigation } from '../contexts/WorkspaceNavigationContext'
 import { governingModuleKey } from '../lib/navAccess'
 import { moduleAvailable, WORKSPACE_COUNTS } from '../lib/workspaceAccess'
 import { loadWorkspaceCount } from '../lib/api/workspace'
+import MyQueuePanel from '../components/workspace/MyQueuePanel'
 
 export default function MyWorkspace() {
   const auth = useAuth()
@@ -15,10 +16,10 @@ export default function MyWorkspace() {
   const modules = navigation.filter(item => item.to !== '/' && moduleAvailable(auth, governingModuleKey(item.to)))
   const summaries = moduleAvailable(auth, 'dashboard')
   const scope = JSON.stringify([auth.profile?.id, auth.profile?.role, auth.profile?.country, auth.profile?.site, auth.profile?.sites, activeCountry, summaries, modules.map(item => item.to)])
-  return <Workspace key={scope} modules={modules} summaries={summaries} profile={auth.profile} country={activeCountry} />
+  return <Workspace key={scope} modules={modules} summaries={summaries} profile={auth.profile} country={activeCountry} isSuperAdmin={auth.isSuperAdmin === true} />
 }
 
-function Workspace({ modules, summaries, profile, country }) {
+function Workspace({ modules, summaries, profile, country, isSuperAdmin }) {
   const { t } = useLanguage()
   const [counts, setCounts] = useState({})
   const [attempt, setAttempt] = useState(0)
@@ -46,6 +47,7 @@ function Workspace({ modules, summaries, profile, country }) {
         {summaries && metric && <p className="text-sm mt-3 text-[var(--text-secondary)]">{metric.label}: {result?.error ? 'Unavailable, open module to retry' : result ? result.count.toLocaleString() : 'Loading...'}</p>}
       </Link>
     })}</div>
+    <MyQueuePanel profile={profile} country={country} isSuperAdmin={isSuperAdmin} />
     <Link to="/settings" className="btn-secondary inline-block">Settings</Link>
   </div>
 }

@@ -2,12 +2,12 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { supabase } from '../lib/supabase'
-import { Bar } from 'react-chartjs-2'
+import { Bar, Line } from 'react-chartjs-2'
 import {
-  Chart as ChartJS, CategoryScale, LinearScale, BarElement,
+  Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement, PointElement,
   Title, Tooltip, Legend,
 } from 'chart.js'
-import { GitCompare, BarChart2, Globe, AlertTriangle, RefreshCw } from 'lucide-react'
+import { GitCompare, BarChart2, Globe, AlertTriangle, RefreshCw, TrendingUp, FileSpreadsheet, FileText } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { useReportMeta } from '../hooks/useReportMeta'
@@ -15,8 +15,10 @@ import { formatCurrencyCompact } from '../lib/formatters'
 import { fetchAllPages } from '../lib/fetchAll'
 import { computeCountryMetrics } from '../lib/analyticsEngine'
 import { toUserMessage } from '../lib/safeError'
+import { getExpensePeriodTrend } from '../lib/api/expenseTrends'
+import { currencyFor, comparability, bestValue, pricedCoverage, trendByCountry, comparisonExportRows } from '../lib/countryComparisonAnalytics'
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
+ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend)
 
 // Hard row ceiling for the bounded client read. tyre_records can grow to millions
 // of rows, so the full-set read that builds the country list + per-country metrics
@@ -40,6 +42,7 @@ const KPI_ROWS = [
   { key: 'avgCpk',         i18n: 'kpiRows.avgCpk',         fallback: 'Avg CPK',         icon: '📉', format: 'cpk',      lowerIsBetter: true,  agg: 'avg' },
   { key: 'highRiskPct',    i18n: 'kpiRows.highRiskPct',    fallback: 'High Risk %',     icon: '🔴', format: 'pct',      lowerIsBetter: true,  agg: 'avg' },
   { key: 'brandCount',     i18n: 'kpiRows.brandCount',     fallback: 'Brands Used',     icon: '🏷️', format: 'int',      lowerIsBetter: false, agg: 'sum' },
+  { key: 'pricedPct',      i18n: null,                    fallback: 'Priced Records %', icon: '🧾', format: 'pct',     lowerIsBetter: false, agg: 'avg' },
 ]
 
 const CHART_OPTS = {
@@ -61,13 +64,29 @@ export default function CountryComparison() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [truncated, setTruncated] = useState(false)
+  const [trendRows, setTrendRows] = useState([])
+  const [trendState, setTrendState] = useState({ loading: true, error: '' })
+  const [trendAttempt, setTrendAttempt] = useState(0)
+  const [exportError, setExportError] = useState('')
 
-  const fmt = useCallback((format, val) => {
+  useEffect(() => {
+    let live = true
+    setTrendState({ loading: true, error: '' })
+    getExpensePeriodTrend({ country: activeCountry && activeCountry !== 'All' ? activeCountry : 'All', grain: 'month' })
+      .then(rows => { if (live) { setTrendRows(rows); setTrendState({ loading: false, error: '' }) } })
+      .catch(err => { if (live) { setTrendRows([]); setTrendState({ loading: false, error: toUserMessage(err, 'The expense trend could not be loaded.') }) } })
+    return () => { live = false }
+  }, [activeCountry, trendAttempt])
+
+  const fmt = useCallback((format, val, country) => {
     if (val == null || Number.isNaN(val)) return t('countrycomparison.states.na')
     switch (format) {
-      case 'currency': return formatCurrencyCompact(val, activeCurrency)
+      case 'currency': {
+        const cur = country ? currencyFor(country) : activeCurrency
+        return cur ? formatCurrencyCompact(val, cur) : `${Math.round(val).toLocaleString()} (currency unknown)`
+      }
       case 'pct':      return `${val.toFixed(1)}%`
-      case 'cpk':      return val.toFixed(2)
+      case 'cpk':      return country && currencyFor(country) ? `${val.toFixed(2)} ${currencyFor(country)}/km` : val.toFixed(2)
       case 'int':      return Math.round(val).toLocaleString()
       default:         return String(val)
     }
@@ -86,9 +105,10 @@ export default function CountryComparison() {
       const { data, error: e, truncated: tr } = await fetchAllPages((from, to) => {
         return supabase
           .from('tyre_records')
-          .select('country, brand, site, category, risk_level, cost_per_tyre, qty, km_at_fitment, km_at_removal')
+          .select('id, country, brand, site, category, risk_level, cost_per_tyre, qty, km_at_fitment, km_at_removal')
           .not('country', 'is', null)
           .order('country')
+          .order('id')
           .range(from, to)
       }, { max: ROW_CAP })
       if (e) throw new Error(e.message || e)
@@ -125,15 +145,18 @@ export default function CountryComparison() {
     const scoped = records.filter(r => countries.includes(String(r.country).trim()))
     const byCountry = computeCountryMetrics(scoped)
     // Keep only the selected countries and order them as selected for stable UX.
-    const map = Object.fromEntries(byCountry.map(m => [m.country, m]))
+    const priced = pricedCoverage(scoped)
+    const map = Object.fromEntries(byCountry.map(m => [m.country, { ...m, pricedPct: priced[m.country]?.pct ?? null }]))
     return countries.map(c => map[c]).filter(Boolean)
   }, [records, countries])
+
+  const trends = useMemo(() => trendByCountry(trendRows, { countries, last: 12 }), [trendRows, countries])
 
   // Table rows: one row per KPI, one column per selected country.
   const tableData = useMemo(() => {
     if (metrics.length === 0) return []
     return KPI_ROWS.map(kpi => {
-      const row = { key: kpi.key, label: t(`countrycomparison.${kpi.i18n}`) || kpi.fallback, icon: kpi.icon }
+      const row = { key: kpi.key, label: (kpi.i18n ? (t(`countrycomparison.${kpi.i18n}`) || kpi.fallback) : kpi.fallback), icon: kpi.icon }
       metrics.forEach(m => { row[m.country] = m[kpi.key] })
       return row
     })
@@ -152,8 +175,11 @@ export default function CountryComparison() {
         size: 200,
         enableSorting: false,
         cell: ({ row }) => (
-          <span className="font-medium text-white flex items-center gap-2">
-            <span>{row.original.icon}</span>{row.original.label}
+          <span className="font-medium text-white flex flex-col">
+            <span className="flex items-center gap-2"><span>{row.original.icon}</span>{row.original.label}</span>
+            {!comparability(KPI_ROWS.find(k => k.key === row.original.key)?.format, selectedCountries).comparable && (
+              <span className="text-[10px] font-normal text-amber-400">Not comparable: {comparability(KPI_ROWS.find(k => k.key === row.original.key)?.format, selectedCountries).reason}</span>
+            )}
           </span>
         ),
       },
@@ -170,17 +196,12 @@ export default function CountryComparison() {
           const kpi = KPI_ROWS.find(k => k.key === row.original.key)
           const val = row.original[c]
           // Highlight the best value in each row across the compared countries.
-          const rowVals = selectedCountries
-            .map(cc => row.original[cc])
-            .filter(v => v != null && !Number.isNaN(v))
-          let isBest = false
-          if (rowVals.length > 1 && val != null && !Number.isNaN(val)) {
-            const best = kpi.lowerIsBetter ? Math.min(...rowVals) : Math.max(...rowVals)
-            isBest = val === best
-          }
+          const { comparable } = comparability(kpi.format, selectedCountries)
+          const best = bestValue(selectedCountries.map(cc => row.original[cc]), kpi.lowerIsBetter, comparable)
+          const isBest = best != null && val === best
           return (
             <span className={isBest ? 'text-emerald-400 font-semibold' : 'text-gray-300'}>
-              {fmt(kpi.format, val)}
+              {fmt(kpi.format, val, c)}
             </span>
           )
         },
@@ -197,13 +218,14 @@ export default function CountryComparison() {
   const summaryCards = useMemo(() => {
     return KPI_ROWS.map(kpi => {
       const vals = metrics.map(m => m[kpi.key]).filter(v => v != null && !Number.isNaN(v))
-      const blendsCurrency = MONEY_FORMATS.has(kpi.format) && metrics.length > 1
+      const blendsCurrency = MONEY_FORMATS.has(kpi.format) && !comparability(kpi.format, metrics.map(m => m.country)).comparable
       let agg = null
       if (vals.length > 0 && !blendsCurrency) {
         const total = vals.reduce((s, v) => s + v, 0)
         agg = kpi.agg === 'avg' ? total / vals.length : total
       }
-      return { key: kpi.key, label: t(`countrycomparison.${kpi.i18n}`) || kpi.fallback, value: fmt(kpi.format, agg) }
+      const single = metrics.length === 1 ? metrics[0].country : (MONEY_FORMATS.has(kpi.format) && metrics.length ? metrics[0].country : undefined)
+      return { key: kpi.key, label: (kpi.i18n ? (t(`countrycomparison.${kpi.i18n}`) || kpi.fallback) : kpi.fallback), value: fmt(kpi.format, agg, single) }
     })
   }, [metrics, fmt, t])
 
@@ -211,9 +233,24 @@ export default function CountryComparison() {
     labels: metrics.map(m => m.country),
     datasets: [
       { label: t('countrycomparison.kpiRows.count') || 'Fleet Records', data: metrics.map(m => m.count), backgroundColor: 'rgba(59,130,246,0.7)', borderRadius: 4, yAxisID: 'y' },
-      { label: t('countrycomparison.kpiRows.avgCostPerTyre') || 'Avg Cost / Tyre', data: metrics.map(m => m.avgCostPerTyre), backgroundColor: 'rgba(16,185,129,0.7)', borderRadius: 4, yAxisID: 'y1' },
+      { label: `${t('countrycomparison.kpiRows.highRiskPct') || 'High Risk %'}`, data: metrics.map(m => m.highRiskPct), backgroundColor: 'rgba(239,68,68,0.6)', borderRadius: 4, yAxisID: 'y1' },
+      { label: 'Priced records %', data: metrics.map(m => m.pricedPct), backgroundColor: 'rgba(16,185,129,0.7)', borderRadius: 4, yAxisID: 'y1' },
     ],
   }), [metrics, t])
+
+  const exportComparison = useCallback(async (kind) => {
+    setExportError('')
+    try {
+      const { exportToExcel, exportToPdf, reportFileName } = await import('../lib/exportUtils')
+      const kpis = KPI_ROWS.map(k => ({ ...k, label: k.i18n ? (t(`countrycomparison.${k.i18n}`) || k.fallback) : k.fallback }))
+      const rows = comparisonExportRows(kpis, metrics, (k, v, c) => fmt(k.format, v, c))
+      const cols = ['metric', ...metrics.map(m => m.country), 'comparable']
+      const heads = ['Metric', ...metrics.map(m => m.country), 'Comparable across countries']
+      const name = reportFileName('Country Comparison')
+      if (kind === 'excel') await exportToExcel(rows, cols, heads, name)
+      else await exportToPdf(rows, cols.map((k, i) => ({ key: k, header: heads[i] })), 'Country Comparison', name, 'landscape')
+    } catch (err) { setExportError(toUserMessage(err, 'The export could not be created.')) }
+  }, [metrics, fmt, t])
 
   const toggleCountry = useCallback((c) => {
     setCountries(prev => prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c].sort())
@@ -306,11 +343,16 @@ export default function CountryComparison() {
                   Money totals are not combined across countries (currencies may differ). See each country's own value in the table below.
                 </p>
               )}
+              {metrics.some(m => m.pricedPct != null && m.pricedPct < 50) && (
+                <p className="text-[11px] text-amber-400">
+                  Cost figures come from tyre record prices. Under half the records are priced in: {metrics.filter(m => m.pricedPct != null && m.pricedPct < 50).map(m => `${m.country} (${m.pricedPct}%)`).join(', ')}. The expense trend below is the authoritative spend.
+                </p>
+              )}
 
               {/* Chart */}
               <div className="card">
                 <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
-                  <BarChart2 size={15} className="text-blue-400" /> {t('countrycomparison.charts.costByCountry')}
+                  <BarChart2 size={15} className="text-blue-400" /> Records, risk and price coverage by country
                 </h3>
                 <div style={{ height: 300 }}>
                   <Bar data={chartData} options={{
@@ -323,11 +365,39 @@ export default function CountryComparison() {
                 </div>
               </div>
 
+              {/* Per-country expense trend, each in its own currency */}
+              <div className="card space-y-3">
+                <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                  <TrendingUp size={15} className="text-blue-400" /> Monthly expense trend per country (last 12 months with data)
+                </h3>
+                <p className="text-[11px] text-gray-500">From the expense grid. Each chart is in that country's own currency, so the lines are not drawn on one axis.</p>
+                {trendState.loading ? <div className="animate-pulse h-40 rounded bg-white/5" />
+                  : trendState.error ? <p className="text-sm text-red-300">{trendState.error} <button className="underline" onClick={() => setTrendAttempt(n => n + 1)}>{t('countrycomparison.states.retry')}</button></p>
+                  : !trends.length ? <p className="text-sm text-gray-500">No expense lines recorded for the selected countries.</p>
+                  : <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">{trends.map(tr => (
+                    <div key={tr.country} className="rounded-xl border border-[var(--border-dim)] p-3">
+                      <div className="flex items-baseline justify-between"><p className="font-semibold text-white">{tr.country}</p><p className="text-[11px] text-gray-500">{tr.currency || 'Currency unknown'}</p></div>
+                      <p className="text-xs text-gray-400">Latest month {tr.latest == null ? 'N/A' : (tr.currency ? formatCurrencyCompact(tr.latest, tr.currency) : tr.latest.toLocaleString())}{tr.changePct != null && <span className={tr.changePct > 0 ? 'text-red-300' : 'text-emerald-300'}> ({tr.changePct > 0 ? '+' : ''}{tr.changePct}% vs prior month)</span>}</p>
+                      <div style={{ height: 150 }}>
+                        <Line data={{ labels: tr.points.map(p => p.period), datasets: [
+                          { label: 'Total', data: tr.points.map(p => p.total), borderColor: '#60a5fa', backgroundColor: 'transparent', tension: 0.3, pointRadius: 2 },
+                          { label: 'Tyres', data: tr.points.map(p => p.tyre), borderColor: '#34d399', backgroundColor: 'transparent', tension: 0.3, pointRadius: 2 },
+                        ] }} options={{ ...CHART_OPTS, plugins: { legend: { labels: { color: '#9ca3af', boxWidth: 8 } } } }} />
+                      </div>
+                    </div>
+                  ))}</div>}
+              </div>
+
               {/* Detailed metrics table */}
               <div className="card p-0 overflow-hidden">
-                <div className="px-4 py-3 border-b border-[var(--border-dim)]">
+                <div className="px-4 py-3 border-b border-[var(--border-dim)] flex flex-wrap items-center justify-between gap-2">
                   <h3 className="text-sm font-semibold text-white">{t('countrycomparison.table.title')}</h3>
+                  <div className="flex gap-2">
+                    <button className="btn-secondary text-xs inline-flex items-center gap-1" onClick={() => exportComparison('excel')}><FileSpreadsheet size={13} /> Excel</button>
+                    <button className="btn-secondary text-xs inline-flex items-center gap-1" onClick={() => exportComparison('pdf')}><FileText size={13} /> PDF</button>
+                  </div>
                 </div>
+                {exportError && <p className="px-4 pt-2 text-xs text-red-300">{exportError}</p>}
                 <EnterpriseTable
                   reportMeta={reportMeta}
                   columns={tableColumns}

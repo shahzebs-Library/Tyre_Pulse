@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
 import { useLanguage } from '../contexts/LanguageContext'
 import PageHeader from '../components/ui/PageHeader'
@@ -10,6 +10,34 @@ import { RECEIPT_STATEMENT, RECORD_TYPES, RESOLUTIONS, recordLabel, signatureIma
 import { toUserMessage } from '../lib/safeError'
 import { driverCopy } from '../lib/driverWorkspaceCopy'
 import { exportDriverFineCasePdf } from '../lib/driverFineReports'
+import { rosterKpis, filterRoster, sortRoster, rosterSites, rosterExportRows, fineSummary, filterFines, ROSTER_FILTERS } from '../lib/driverRosterAnalytics'
+
+const ROSTER_COLS = ['driver_name', 'driver_id', 'site', 'country', 'open_fines', 'awaiting_response', 'pending_supervisor', 'pending_finance', 'overdue_fines', 'login']
+const ROSTER_HEADERS = ['Driver', 'Employee ID', 'Site', 'Country', 'Open fines', 'Awaiting driver', 'Pending supervisor', 'Pending finance', 'Overdue', 'Login']
+
+function StatTile({ label, value, tone = '' }) {
+  return <div className="rounded-xl border border-[var(--input-border)] p-3"><p className="text-xs text-[var(--text-muted)]">{label}</p><p className={`text-xl font-bold mt-1 ${tone}`}>{value.toLocaleString()}</p></div>
+}
+function RosterTiles({ kpis }) {
+  return <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+    <StatTile label="Drivers in view" value={kpis.drivers} />
+    <StatTile label="Open fines" value={kpis.openFines} />
+    <StatTile label="Awaiting driver" value={kpis.awaitingResponse} tone={kpis.awaitingResponse ? 'text-amber-500' : ''} />
+    <StatTile label="Pending review" value={kpis.pendingReview} />
+    <StatTile label="Overdue fines" value={kpis.overdue} tone={kpis.overdue ? 'text-red-500' : ''} />
+    <StatTile label="Login not linked" value={kpis.loginNotLinked} />
+  </div>
+}
+function FineSummaryTiles({ summary }) {
+  if (!summary.total) return null
+  return <div className="space-y-2"><div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+    <StatTile label="Fines recorded" value={summary.total} />
+    <StatTile label="Open" value={summary.open} />
+    <StatTile label="Awaiting driver" value={summary.awaiting} tone={summary.awaiting ? 'text-amber-500' : ''} />
+    <StatTile label="Past due date" value={summary.overdue} tone={summary.overdue ? 'text-red-500' : ''} />
+  </div>
+  <div className="flex flex-wrap gap-3 text-sm">{summary.byCurrency.map(c => <p key={c.currency} className="rounded border border-[var(--input-border)] px-3 py-2">{c.currency}: issued {c.issued.toLocaleString()} | paid {c.paid.toLocaleString()} | open balance {c.outstanding.toLocaleString()}</p>)}</div></div>
+}
 
 const labels = {
   direct_payment: 'I will pay directly', already_paid: 'Already paid', dispute: 'Dispute / incorrect assignment', company_recovery: 'Request company payment / recovery', instalments: 'Request instalments',
@@ -118,7 +146,20 @@ export default function DriverWorkspace() {
   const { isRTL, language } = useLanguage()
   const tr = value => driverCopy(value, language)
   const [workspace, setWorkspace] = useState(null); const [error, setError] = useState(''); const [loading, setLoading] = useState(true); const [action, setAction] = useState(null); const [search, setSearch] = useState('')
+  const [rosterFilter, setRosterFilter] = useState('all'); const [rosterSite, setRosterSite] = useState(''); const [rosterSort, setRosterSort] = useState('name'); const [fineSearch, setFineSearch] = useState(''); const [fineStatus, setFineStatus] = useState('all')
   const data = workspace?.driverId === driverId ? workspace.data : null
+  const rosterStats = useMemo(() => rosterKpis(data?.drivers || []), [data])
+  const roster = useMemo(() => sortRoster(filterRoster(data?.drivers || [], { filter: rosterFilter, search, site: rosterSite }), rosterSort), [data, rosterFilter, search, rosterSite, rosterSort])
+  const fines = useMemo(() => fineSummary(data?.fines || []), [data])
+  const visibleFines = useMemo(() => filterFines(data?.fines || [], { status: fineStatus, search: fineSearch }), [data, fineStatus, fineSearch])
+  async function exportRoster(kind) {
+    try {
+      const { exportToExcel, exportToPdf, reportFileName } = await import('../lib/exportUtils')
+      const rows = rosterExportRows(roster); const name = reportFileName('Driver Roster')
+      if (kind === 'excel') await exportToExcel(rows, ROSTER_COLS, ROSTER_HEADERS, name)
+      else await exportToPdf(rows, ROSTER_COLS.map((k, i) => ({ key: k, header: ROSTER_HEADERS[i] })), 'Driver Roster', name, 'landscape')
+    } catch (e) { setError(toUserMessage(e, 'The roster export could not be created.')) }
+  }
   const load = useCallback(async (isActive = () => true) => { setLoading(true); setError(''); setWorkspace(null); try { const result = await loadDriverWorkspace(driverId); if (isActive()) setWorkspace({ driverId, data: result }) } catch (e) { if (isActive()) setError(toUserMessage(e, 'Driver workspace unavailable. Check access and backend configuration.')) } finally { if (isActive()) setLoading(false) } }, [driverId])
   useEffect(() => { let active = true; load(() => active); return () => { active = false } }, [load])
   async function exportReport() {
@@ -135,11 +176,11 @@ export default function DriverWorkspace() {
     <PageHeader title={tr('Driver workspace')} subtitle={tr('Fines, verified work records, supervisors and vehicle assignments')} />
     <div className="flex flex-wrap gap-2">{driverId && <button className="btn-secondary" onClick={() => setParams({})}>Back to drivers</button>}<button className="btn-secondary" onClick={() => load()}>Refresh</button><Link className="btn-secondary" to="/driver-management">Driver Intelligence</Link>{data?.can_manage && !driverId && <button className="btn-primary" onClick={() => setAction({ name: 'create_driver' })}>Add verified driver</button>}</div>
     {loading && <p role="status">Loading driver workspace…</p>}{error && <p role="alert" className="text-red-500">{error}</p>}{data?.truncated && <p role="alert">This view reached 10,000 records. The report is incomplete; narrow the workspace before exporting.</p>}
-    {data && !driverId && <><DriverFineRegister canRunReminders={data.can_manage || data.can_finance} onOpenDriver={id => setParams({ driver: id })} /><input className="input w-full" aria-label="Search drivers" placeholder="Search name, employee ID or site" value={search} onChange={e => setSearch(e.target.value)} />{data.drivers.length === 0 && <p>No linked driver or assigned team is available. An authorized manager must verify the driver record, login and team assignment.</p>}<div className="grid md:grid-cols-2 gap-3">{data.drivers.filter(d => `${d.driver_name} ${d.driver_id} ${d.site}`.toLowerCase().includes(search.toLowerCase())).map(d => <button key={d.id} className="text-start rounded-xl border border-[var(--input-border)] p-4" onClick={() => setParams({ driver: d.id })}><strong>{d.driver_name} · {d.driver_id}</strong><p>{d.position || tr('Position not recorded')}</p><p>{d.site} · {d.country}</p><p>{d.open_fines} open fines | {d.awaiting_response} awaiting driver | {d.pending_supervisor || 0} supervisor | {d.pending_finance || 0} finance | {d.overdue_fines || 0} overdue</p><p>{d.user_id ? 'Login linked' : 'Login not linked'} · {human(d.access)}</p></button>)}</div></>}
+    {data && !driverId && <><DriverFineRegister canRunReminders={data.can_manage || data.can_finance} onOpenDriver={id => setParams({ driver: id })} /><RosterTiles kpis={rosterStats} /><div className="flex flex-wrap gap-2 items-end"><input className="input flex-1 min-w-[200px]" aria-label="Search drivers" placeholder="Search name, employee ID or site" value={search} onChange={e => setSearch(e.target.value)} /><select className="input" aria-label="Driver filter" value={rosterFilter} onChange={e => setRosterFilter(e.target.value)}>{Object.entries(ROSTER_FILTERS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select><select className="input" aria-label="Site filter" value={rosterSite} onChange={e => setRosterSite(e.target.value)}><option value="">All sites</option>{rosterSites(data.drivers).map(s => <option key={s} value={s}>{s}</option>)}</select><select className="input" aria-label="Sort drivers" value={rosterSort} onChange={e => setRosterSort(e.target.value)}><option value="name">Name</option><option value="open">Most open fines</option><option value="overdue">Most overdue</option></select><button className="btn-secondary" disabled={!roster.length} onClick={() => exportRoster('excel')}>Roster Excel</button><button className="btn-secondary" disabled={!roster.length} onClick={() => exportRoster('pdf')}>Roster PDF</button></div>{data.drivers.length === 0 && <p>No linked driver or assigned team is available. An authorized manager must verify the driver record, login and team assignment.</p>}{data.drivers.length > 0 && roster.length === 0 && <p className="text-sm text-[var(--text-muted)]">No drivers match these filters.</p>}<div className="grid md:grid-cols-2 gap-3">{roster.map(d => <button key={d.id} className="text-start rounded-xl border border-[var(--input-border)] p-4" onClick={() => setParams({ driver: d.id })}><strong>{d.driver_name} · {d.driver_id}</strong><p>{d.position || tr('Position not recorded')}</p><p>{d.site} · {d.country}</p><p>{d.open_fines} open fines | {d.awaiting_response} awaiting driver | {d.pending_supervisor || 0} supervisor | {d.pending_finance || 0} finance | {d.overdue_fines || 0} overdue</p><p>{d.user_id ? 'Login linked' : 'Login not linked'} · {human(d.access)}</p></button>)}</div></>}
     {data?.driver && <><h2 className="text-xl font-bold">{data.driver.driver_name} · {data.driver.driver_id}</h2><p>{data.driver.position || tr('Position not recorded')}</p><p>{data.driver.country} · {data.driver.site}</p>
       <div className="flex flex-wrap gap-2">{data.can_manage && ['link_account', 'assign_team', 'link_record'].map(name => <button key={name} className="btn-secondary" onClick={() => setAction({ name })}>{human(name)}</button>)}{(data.can_manage || data.access === 'supervisor') && <button className="btn-primary" onClick={() => setAction({ name: 'create_fine' })}>Issue traffic fine</button>}<button className="btn-secondary" disabled={data.truncated} onClick={exportReport}>Export fine statement PDF</button></div>
       <div className="flex gap-3">{data.balances.map(b => <p key={b.currency} className="rounded border p-3">Outstanding: {b.outstanding} {b.currency}</p>)}</div>
-      <h3 className="font-semibold">Traffic fines</h3>{data.fines.length === 0 && <p>No fines recorded for this driver.</p>}{data.fines.map(f => <FineCard key={`${f.id}-${f.version}`} fine={f} data={data} onAction={(name, fine) => setAction({ name, fine })} refresh={load} />)}
+      <h3 className="font-semibold">Traffic fines</h3><FineSummaryTiles summary={fines} />{data.fines.length > 0 && <div className="flex flex-wrap gap-2"><input className="input flex-1 min-w-[200px]" aria-label="Search fines" placeholder="Search notice, authority, vehicle" value={fineSearch} onChange={e => setFineSearch(e.target.value)} /><select className="input" aria-label="Fine status" value={fineStatus} onChange={e => setFineStatus(e.target.value)}><option value="all">All fines</option>{[...new Set(data.fines.map(f => f.status).filter(Boolean))].map(v => <option key={v} value={v}>{human(v)}</option>)}</select></div>}{data.fines.length === 0 && <p>No fines recorded for this driver.</p>}{data.fines.length > 0 && visibleFines.length === 0 && <p className="text-sm text-[var(--text-muted)]">No fines match these filters.</p>}{visibleFines.map(f => <FineCard key={`${f.id}-${f.version}`} fine={f} data={data} onAction={(name, fine) => setAction({ name, fine })} refresh={load} />)}
       <h3 className="font-semibold">Team and vehicle assignment history</h3>{data.assignments.length === 0 && <p>No assignment recorded.</p>}{data.assignments.map(a => <div key={a.id} className="rounded border border-[var(--input-border)] p-3"><p>{a.ends_at ? 'Previous assignment' : 'Current assignment'} · {a.asset_no || 'No vehicle'}</p><p>Supervisor: {a.supervisor_name || 'Not assigned'} · Manager: {a.manager_name || 'Not assigned'}</p><p>{new Date(a.starts_at).toLocaleString()} → {a.ends_at ? new Date(a.ends_at).toLocaleString() : 'Present'}</p><p>{a.reason}</p></div>)}
       <h3 className="font-semibold">Assigned work</h3>{(data.work || []).map(w => <div key={w.id} className="rounded border p-3"><strong>{w.title}</strong><p>{human(w.status || 'Not supplied')}</p></div>)}
       <h3 className="font-semibold">Verified work and driver records</h3><p>Only records explicitly linked to this driver are shown. Unmatched historical records require identity review.</p>{data.records.map(l => <div key={l.id} className="rounded border border-[var(--input-border)] p-3"><strong>{human(l.source_type)}</strong><p>{recordLabel(l.record)}</p>{l.record && <dl className="grid sm:grid-cols-2 gap-1">{Object.entries(l.record).filter(([k, v]) => k !== 'id' && v !== null).map(([k, v]) => <div key={k}><dt className="text-sm text-[var(--text-muted)]">{human(k)}</dt><dd>{String(v)}</dd></div>)}</dl>}</div>)}

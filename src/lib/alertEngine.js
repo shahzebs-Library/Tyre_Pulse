@@ -370,7 +370,9 @@ export async function detectAlerts(supabase, country = null, { badgeOnly = false
       title:     a.title,
       message:   a.message,
       link:      '/analytics',
-      data:      a.meta,
+      // The site rides with the alert so per-site views can place it; the rule
+      // already knew it (it prints it in the message) but dropped it here.
+      data:      { ...a.meta, site: a.site ?? null },
       createdAt: now.toISOString(),
     })
   })

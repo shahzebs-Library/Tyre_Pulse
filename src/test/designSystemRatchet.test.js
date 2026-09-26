@@ -82,10 +82,11 @@ const PAGES_DIR = resolve(process.cwd(), 'src/pages')
  * outcome here, not an outstanding task - do not read this number as debt.
  *
  * 194 -> 191 (2026-09-26): RecallDetail, SanyDelayPenalty and CostScenarioPlanner
- * moved onto EnterpriseTable when they were deepened.
+ * moved onto EnterpriseTable when they were deepened. DataIntakeHistory moved
+ * all six of its tables when it was deepened (one step of the 190 -> 189 drop).
  */
 const BASELINE = {
-  rawTable: 191,
+  rawTable: 189,
   rawOverlay: 103,
 }
 

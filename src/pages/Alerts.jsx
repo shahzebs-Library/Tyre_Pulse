@@ -1,21 +1,23 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Clock, TrendingUp, AlertTriangle, Bell, ArrowRight, X, RefreshCw,
-  CheckCircle2, Search, Download, FileText, SlidersHorizontal,
-  ChevronDown, ChevronUp, Eye, EyeOff, AlertCircle,
+  Bell, RefreshCw, Download, FileText, AlertCircle, CheckCircle2, Clock,
+  Eye, EyeOff, ArrowRight, MapPin, Layers, Percent, Search,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { safeInternalPath } from '../lib/safeUrl'
 import { useSettings } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
+import { detectAlerts, ALERT_TYPE_LABELS } from '../lib/alertEngine'
 import {
-  detectAlerts, countAlertsBySeverity,
-  SEVERITY_CONFIG, ALERT_TYPE_LABELS, ALERT_TYPES,
-} from '../lib/alertEngine'
+  buildAlertRows, summarizeAlerts, filterAlertRows, sortAlertRows, alertExportRows,
+  ALERT_EXPORT_COLS, ALERT_EXPORT_HEADERS, AGE_THRESHOLDS, DEFAULT_AGE_THRESHOLD,
+  SEVERITY_ORDER, UNRATED, NO_SITE,
+} from '../lib/alertsAnalytics'
+import { SEVERITY_META } from '../lib/severity'
 import PageHeader from '../components/ui/PageHeader'
 import Skeleton from '../components/ui/Skeleton'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { cn } from '../lib/cn'
 import { toUserMessage } from '../lib/safeError'
 
@@ -23,45 +25,100 @@ import { toUserMessage } from '../lib/safeError'
 // trigger, so it loads on first click instead of riding with the route chunk.
 const loadExportUtils = () => import('../lib/exportUtils')
 
-// ── Style maps ─────────────────────────────────────────────────────────────────
-const TYPE_ICON_CONFIG = {
-  [ALERT_TYPES.VEHICLE_INACTIVE]: { Icon: Clock,         color: 'text-orange-400', bg: 'bg-orange-500/10' },
-  [ALERT_TYPES.HIGH_CPK]:         { Icon: TrendingUp,    color: 'text-red-400',    bg: 'bg-red-500/10'    },
-  [ALERT_TYPES.DATA_QUALITY]:     { Icon: AlertTriangle, color: 'text-yellow-400', bg: 'bg-yellow-500/10' },
+const DISMISS_KEY = 'tp_dismissed_alerts'
+const UNRATED_BADGE = 'bg-gray-500/15 text-gray-400 border border-gray-500/30'
+
+function sevBadge(sev) {
+  return SEVERITY_META[sev]?.badge || UNRATED_BADGE
 }
 
-const SEV_STYLE = {
-  critical: { ring: 'ring-red-500/30',    dot: 'bg-red-500',    text: 'text-red-400',    bar: 'bg-red-500',    label: 'Critical', pill: 'bg-red-500/15 text-red-300 border-red-500/20',    order: 0 },
-  high:     { ring: 'ring-orange-500/30', dot: 'bg-orange-500', text: 'text-orange-400', bar: 'bg-orange-500', label: 'High',     pill: 'bg-orange-500/15 text-orange-300 border-orange-500/20', order: 1 },
-  medium:   { ring: 'ring-yellow-500/30', dot: 'bg-yellow-500', text: 'text-yellow-400', bar: 'bg-yellow-500', label: 'Medium',   pill: 'bg-yellow-500/15 text-yellow-300 border-yellow-500/20', order: 2 },
-  info:     { ring: 'ring-blue-500/30',   dot: 'bg-blue-500',   text: 'text-blue-400',   bar: 'bg-blue-500',   label: 'Info',     pill: 'bg-blue-500/15 text-blue-300 border-blue-500/20',    order: 3 },
+function readDismissed() {
+  try { return new Set(JSON.parse(localStorage.getItem(DISMISS_KEY) || '[]')) }
+  catch { return new Set() }
 }
 
-const SEV_SORT_ORDER = { critical: 0, high: 1, medium: 2, info: 3 }
+function fmtAge(days) {
+  if (days == null) return 'N/A'
+  return days === 1 ? '1 day' : `${days} days`
+}
 
-// ── Main page ──────────────────────────────────────────────────────────────────
+function KpiCard({ label, value, sub, active, onClick, dot }) {
+  const body = (
+    <>
+      <div className="flex items-center gap-2">
+        {dot && <span className={cn('w-2 h-2 rounded-full', dot)} />}
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted truncate">{label}</span>
+      </div>
+      <p className="text-2xl font-bold tabular-nums text-[var(--text-primary)] mt-2">{value}</p>
+      {sub && <p className="text-xs text-muted mt-1">{sub}</p>}
+    </>
+  )
+  if (!onClick) return <div className="card !p-4">{body}</div>
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn('card !p-4 text-left transition-colors', active && 'ring-1 ring-[var(--accent)]')}
+    >
+      {body}
+    </button>
+  )
+}
+
+function BreakdownList({ title, icon: Icon, items, activeValue, onPick }) {
+  const max = items.length ? items[0].count : 0
+  return (
+    <div className="card !p-4">
+      <p className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2 mb-3">
+        <Icon size={14} className="text-muted" /> {title}
+      </p>
+      {items.length === 0 ? (
+        <p className="text-xs text-muted">No open alerts.</p>
+      ) : (
+        <ul className="space-y-2">
+          {items.slice(0, 8).map((it) => (
+            <li key={it.name}>
+              <button
+                type="button"
+                onClick={() => onPick(activeValue === it.name ? 'all' : it.name)}
+                className="w-full text-left"
+                aria-pressed={activeValue === it.name}
+              >
+                <div className="flex justify-between text-xs">
+                  <span className={cn('truncate', activeValue === it.name ? 'text-[var(--text-primary)] font-semibold' : 'text-secondary')}>{it.name}</span>
+                  <span className="text-muted tabular-nums">{it.count}</span>
+                </div>
+                <div className="h-1.5 mt-1 rounded-full bg-[var(--input-bg)] overflow-hidden">
+                  <div className="h-full rounded-full bg-[var(--accent)]" style={{ width: `${max ? (it.count / max) * 100 : 0}%` }} />
+                </div>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 export default function Alerts() {
   const navigate = useNavigate()
   const { activeCountry } = useSettings()
   const { t } = useLanguage()
-  const sevLabel = (key) => t(`alerts.severity.${key}`)
 
-  const [alerts, setAlerts]     = useState([])
-  const [loading, setLoading]   = useState(true)
+  const [alerts, setAlerts] = useState([])
+  const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [lastRefresh, setLastRefresh] = useState(null)
 
-  const [sevFilter, setSevFilter]   = useState('all')
+  const [status, setStatus] = useState('open')
+  const [sevFilter, setSevFilter] = useState('all')
   const [typeFilter, setTypeFilter] = useState('all')
-  const [search, setSearch]         = useState('')
-  const [sortBy, setSortBy]         = useState('severity')
-  const [showDismissed, setShowDismissed] = useState(false)
-  const [showFilters, setShowFilters]     = useState(false)
-
-  const [dismissed, setDismissed] = useState(() => {
-    try { return new Set(JSON.parse(localStorage.getItem('tp_dismissed_alerts') || '[]')) }
-    catch { return new Set() }
-  })
+  const [siteFilter, setSiteFilter] = useState('all')
+  const [search, setSearch] = useState('')
+  const [olderThan, setOlderThan] = useState(DEFAULT_AGE_THRESHOLD)
+  const [agedOnly, setAgedOnly] = useState(false)
+  const [dismissed, setDismissed] = useState(readDismissed)
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -81,239 +138,148 @@ export default function Alerts() {
 
   useEffect(() => { refresh() }, [refresh])
 
-  // Persist dismissals via an effect — never inside a setState updater (React
-  // StrictMode double-invokes updaters, which would double-write).
+  // Persist dismissals via an effect, never inside a setState updater (StrictMode
+  // double-invokes updaters, which would double-write).
   useEffect(() => {
-    try { localStorage.setItem('tp_dismissed_alerts', JSON.stringify([...dismissed])) }
+    try { localStorage.setItem(DISMISS_KEY, JSON.stringify([...dismissed])) }
     catch { /* storage disabled */ }
   }, [dismissed])
 
-  // ── Dismiss helpers ───────────────────────────────────────────────────────────
-  function dismiss(id) {
-    setDismissed(prev => new Set(prev).add(id))
+  const dismiss = (id) => setDismissed((prev) => new Set(prev).add(id))
+  const restore = (id) => setDismissed((prev) => { const n = new Set(prev); n.delete(id); return n })
+
+  // ── Derived ───────────────────────────────────────────────────────────────
+  const rows = useMemo(
+    () => buildAlertRows(alerts, dismissed, { now: lastRefresh || new Date(), typeLabels: ALERT_TYPE_LABELS }),
+    [alerts, dismissed, lastRefresh],
+  )
+  const kpi = useMemo(() => summarizeAlerts(rows, { olderThanDays: olderThan }), [rows, olderThan])
+
+  const visible = useMemo(() => sortAlertRows(filterAlertRows(rows, {
+    status, severity: sevFilter, type: typeFilter, site: siteFilter, search,
+    minAgeDays: agedOnly ? olderThan : null,
+  })), [rows, status, sevFilter, typeFilter, siteFilter, search, agedOnly, olderThan])
+
+  const typeOptions = useMemo(() => {
+    const m = new Map()
+    rows.forEach((r) => { if (r.type) m.set(r.type, r.typeLabel) })
+    return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1]))
+  }, [rows])
+  const siteOptions = useMemo(
+    () => [...new Set(rows.map((r) => r.site ?? NO_SITE))].sort(),
+    [rows],
+  )
+  const severityTiles = SEVERITY_ORDER.filter((s) => s !== UNRATED || kpi.bySeverity[UNRATED] > 0)
+    .filter((s) => s !== 'Low' || kpi.bySeverity.Low > 0)
+
+  const filtersActive = status !== 'open' || sevFilter !== 'all' || typeFilter !== 'all'
+    || siteFilter !== 'all' || search || agedOnly
+  const clearFilters = () => {
+    setStatus('open'); setSevFilter('all'); setTypeFilter('all'); setSiteFilter('all'); setSearch(''); setAgedOnly(false)
   }
+  const dismissVisible = () => setDismissed((prev) => {
+    const n = new Set(prev); visible.forEach((r) => { if (!r.dismissed) n.add(r.id) }); return n
+  })
 
-  function undismiss(id) {
-    setDismissed(prev => { const next = new Set(prev); next.delete(id); return next })
-  }
-
-  function dismissFiltered() {
-    setDismissed(prev => { const next = new Set(prev); visible.forEach(a => next.add(a.id)); return next })
-  }
-
-  function clearAllDismissed() {
-    setDismissed(new Set())
-  }
-
-  // ── Derived data ──────────────────────────────────────────────────────────────
-  const active   = useMemo(() => alerts.filter(a => !dismissed.has(a.id)), [alerts, dismissed])
-  const dismissedAlerts = useMemo(() => alerts.filter(a => dismissed.has(a.id)), [alerts, dismissed])
-  const counts   = useMemo(() => countAlertsBySeverity(active), [active])
-
-  const visible = useMemo(() => {
-    let arr = active
-
-    if (sevFilter !== 'all')  arr = arr.filter(a => a.severity === sevFilter)
-    if (typeFilter !== 'all') arr = arr.filter(a => a.type === typeFilter)
-
-    if (search) {
-      const q = search.toLowerCase()
-      arr = arr.filter(a =>
-        a.title?.toLowerCase().includes(q) ||
-        a.message?.toLowerCase().includes(q) ||
-        (ALERT_TYPE_LABELS[a.type] ?? '').toLowerCase().includes(q)
-      )
-    }
-
-    return [...arr].sort((a, b) => {
-      if (sortBy === 'severity') return (SEV_SORT_ORDER[a.severity] ?? 4) - (SEV_SORT_ORDER[b.severity] ?? 4)
-      if (sortBy === 'type')     return (a.type ?? '').localeCompare(b.type ?? '')
-      return 0
-    })
-  }, [active, sevFilter, typeFilter, search, sortBy])
-
-  const typesPresent = useMemo(() => {
-    const m = {}
-    active.forEach(a => { m[a.type] = (m[a.type] ?? 0) + 1 })
-    return m
-  }, [active])
-
-  // ── Exports ───────────────────────────────────────────────────────────────────
+  // ── Exports ───────────────────────────────────────────────────────────────
+  const exportRows = useMemo(() => alertExportRows(visible), [visible])
   async function doExcelExport() {
-    const { exportToExcel } = await loadExportUtils()
-    exportToExcel(
-      visible.map(a => ({ severity: SEV_STYLE[a.severity]?.label ?? a.severity, type: ALERT_TYPE_LABELS[a.type] ?? a.type, title: a.title, message: a.message })),
-      ['severity','type','title','message'],
-      ['Severity','Type','Alert','Message'],
-      'TyrePulse_Alerts'
-    )
+    const { exportToExcel, reportFileName, reportDateLabel } = await loadExportUtils()
+    exportToExcel(exportRows, ALERT_EXPORT_COLS, ALERT_EXPORT_HEADERS,
+      reportFileName('TyrePulse Alerts', activeCountry !== 'All' ? activeCountry : null, reportDateLabel()))
   }
-
   async function doPdfExport() {
-    const { exportToPdf } = await loadExportUtils()
+    const { exportToPdf, reportFileName, reportDateLabel } = await loadExportUtils()
     exportToPdf(
-      visible.map(a => ({ severity: SEV_STYLE[a.severity]?.label ?? a.severity, type: ALERT_TYPE_LABELS[a.type] ?? a.type, title: a.title, message: a.message })),
-      [
-        { key: 'severity', header: 'Severity' },
-        { key: 'type',     header: 'Type' },
-        { key: 'title',    header: 'Alert' },
-        { key: 'message',  header: 'Message' },
-      ],
-      'Active Alerts Report',
-      'TyrePulse_Alerts',
-      'landscape'
+      exportRows,
+      ALERT_EXPORT_COLS.map((key, i) => ({ key, header: ALERT_EXPORT_HEADERS[i] })),
+      'Operational Alerts Report',
+      reportFileName('TyrePulse Alerts', activeCountry !== 'All' ? activeCountry : null, reportDateLabel()),
+      'landscape',
     )
   }
 
-  // ── Render ────────────────────────────────────────────────────────────────────
+  // ── Table ─────────────────────────────────────────────────────────────────
+  const columns = useMemo(() => [
+    {
+      id: 'severity', header: 'Severity', accessorFn: (r) => r.rank, size: 100,
+      cell: ({ row }) => (
+        <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium', sevBadge(row.original.severity))}>{row.original.severity}</span>
+      ),
+    },
+    {
+      id: 'title', header: 'Alert', accessorFn: (r) => r.title, size: 360,
+      cell: ({ row }) => (
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-[var(--text-primary)] truncate">{row.original.title}</p>
+          <p className="text-xs text-muted line-clamp-2">{row.original.message}</p>
+        </div>
+      ),
+    },
+    { id: 'type', header: 'Type', accessorFn: (r) => r.typeLabel, size: 130 },
+    { id: 'site', header: 'Site', accessorFn: (r) => r.site ?? 'N/A', size: 120 },
+    {
+      id: 'age', header: 'Condition age', accessorFn: (r) => r.ageDays ?? -1, size: 120, meta: { align: 'right' },
+      cell: ({ row }) => (
+        <span className={cn('tabular-nums', row.original.ageDays != null && row.original.ageDays >= olderThan ? 'text-amber-400' : 'text-muted')}>
+          {fmtAge(row.original.ageDays)}
+        </span>
+      ),
+    },
+    {
+      id: 'actions', header: '', enableSorting: false, size: 170, meta: { export: false },
+      cell: ({ row }) => {
+        const r = row.original
+        const to = safeInternalPath(r.link)
+        return (
+          <div className="flex items-center justify-end gap-2">
+            {to && (
+              <button type="button" onClick={() => navigate(to)}
+                className="text-xs px-2 py-1 rounded-lg border border-[var(--input-border)] text-secondary hover:text-[var(--text-primary)] inline-flex items-center gap-1">
+                {t('alerts.item.view')} <ArrowRight size={12} />
+              </button>
+            )}
+            {r.dismissed ? (
+              <button type="button" onClick={() => restore(r.id)} className="text-xs text-muted hover:text-[var(--text-primary)] inline-flex items-center gap-1">
+                <Eye size={12} /> {t('alerts.dismissed.restore')}
+              </button>
+            ) : (
+              <button type="button" onClick={() => dismiss(r.id)} className="text-xs text-muted hover:text-[var(--text-primary)] inline-flex items-center gap-1">
+                <EyeOff size={12} /> {t('alerts.item.dismiss')}
+              </button>
+            )}
+          </div>
+        )
+      },
+    },
+  ], [navigate, t, olderThan])
+
+  const selectCls = 'input text-xs py-1.5 w-auto'
+
   return (
     <div className="space-y-5">
       <PageHeader
         title={t('alerts.header.title')}
         subtitle={t('alerts.header.subtitle')}
         icon={Bell}
-        badge={active.length > 0 ? t('alerts.header.badge', { count: active.length }) : undefined}
-      />
-
-      {/* Severity KPI cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {(['critical','high','medium','info']).map((key, i) => {
-          const s     = SEV_STYLE[key]
-          const count = counts[key] ?? 0
-          const isActive = sevFilter === key
-          return (
-            <motion.button
-              key={key}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.06, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-              onClick={() => setSevFilter(isActive ? 'all' : key)}
-              className={cn(
-                'card text-left transition-colors duration-200',
-                isActive && `ring-1 ${s.ring} shadow-[var(--shadow-card)]`
-              )}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <div className={cn('w-2 h-2 rounded-full', s.dot, count > 0 && 'animate-pulse')} />
-                {isActive && <span className="text-[10px] text-muted font-medium">{t('alerts.card.filtered')}</span>}
-              </div>
-              <p className={cn('text-2xl font-bold tabular-nums', s.text)}>{count}</p>
-              <p className="text-xs text-muted mt-1 font-medium">{sevLabel(key)}</p>
-              <div className={cn('w-full h-0.5 rounded-full mt-3 opacity-40', s.bar)} />
-            </motion.button>
-          )
-        })}
-      </div>
-
-      {/* Toolbar */}
-      <div className="space-y-2">
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Search */}
-          <div className="relative flex-1 min-w-[200px] max-w-xs">
-            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-            <input
-              className="input pl-8 text-sm"
-              placeholder={t('alerts.toolbar.searchPlaceholder')}
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
-          </div>
-
-          {/* Filter toggle */}
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={cn(
-              'flex items-center gap-1.5 text-sm px-3 py-1.5 border rounded-lg transition-colors',
-              showFilters ? 'bg-blue-900/30 text-blue-300 border-blue-700/50' : 'bg-gray-800 text-gray-400 border-gray-700 hover:text-white'
-            )}
-          >
-            <SlidersHorizontal size={13} /> {t('alerts.toolbar.filters')}
-            {(sevFilter !== 'all' || typeFilter !== 'all') && (
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-400 ml-0.5" />
-            )}
-          </button>
-
-          <div className="ml-auto flex items-center gap-2">
-            {/* Refresh */}
-            <button
-              onClick={refresh}
-              disabled={loading}
-              className="flex items-center gap-1.5 btn-secondary text-sm px-3 py-1.5"
-              title={lastRefresh ? t('alerts.toolbar.lastScanned', { time: lastRefresh.toLocaleTimeString() }) : t('alerts.toolbar.scanTooltip')}
-            >
+        badge={kpi.open > 0 ? t('alerts.header.badge', { count: kpi.open }) : undefined}
+        actions={(
+          <div className="flex items-center gap-2 flex-wrap">
+            <button onClick={refresh} disabled={loading} className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+              title={lastRefresh ? t('alerts.toolbar.lastScanned', { time: lastRefresh.toLocaleTimeString() }) : t('alerts.toolbar.scanTooltip')}>
               <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
               {loading ? t('alerts.toolbar.scanning') : t('alerts.toolbar.refresh')}
             </button>
-
-            {/* Exports */}
-            <button onClick={doExcelExport} className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5">
+            <button onClick={doExcelExport} disabled={!exportRows.length} className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5 disabled:opacity-40">
               <Download size={13} /> {t('alerts.toolbar.excel')}
             </button>
-            <button onClick={doPdfExport} className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5">
+            <button onClick={doPdfExport} disabled={!exportRows.length} className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5 disabled:opacity-40">
               <FileText size={13} /> {t('alerts.toolbar.pdf')}
             </button>
           </div>
-        </div>
-
-        {/* Expanded filters */}
-        {showFilters && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden"
-          >
-            <div className="card py-3 px-4 flex flex-wrap gap-3 items-center">
-              {/* Type pills */}
-              <div className="flex flex-wrap gap-1.5 items-center">
-                <span className="text-xs text-gray-500 font-medium">{t('alerts.filters.type')}</span>
-                <button
-                  onClick={() => setTypeFilter('all')}
-                  className={cn('px-2.5 py-1 rounded-full text-xs font-medium border transition-all',
-                    typeFilter === 'all' ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-800 text-gray-400 border-gray-700 hover:text-white')}
-                >
-                  {t('alerts.filters.all', { count: active.length })}
-                </button>
-                {Object.entries(typesPresent).map(([type, cnt]) => (
-                  <button key={type}
-                    onClick={() => setTypeFilter(typeFilter === type ? 'all' : type)}
-                    className={cn('px-2.5 py-1 rounded-full text-xs font-medium border transition-all',
-                      typeFilter === type ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-800 text-gray-400 border-gray-700 hover:text-white')}
-                  >
-                    {ALERT_TYPE_LABELS[type] || type} ({cnt})
-                  </button>
-                ))}
-              </div>
-
-              {/* Sort */}
-              <div className="flex items-center gap-2 ml-auto">
-                <span className="text-xs text-gray-500">{t('alerts.filters.sort')}</span>
-                <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="input text-xs py-1 w-32">
-                  <option value="severity">{t('alerts.filters.sortSeverity')}</option>
-                  <option value="type">{t('alerts.filters.sortType')}</option>
-                </select>
-              </div>
-            </div>
-          </motion.div>
         )}
-      </div>
+      />
 
-      {/* List meta */}
-      {!loading && visible.length > 0 && (
-        <div className="flex items-center justify-between text-xs">
-          <p className="text-muted">
-            {t('alerts.list.count', { count: visible.length })}
-            {lastRefresh && ` · ${t('alerts.list.scannedAt', { time: lastRefresh.toLocaleTimeString() })}`}
-          </p>
-          {visible.length > 1 && (
-            <button onClick={dismissFiltered} className="text-muted hover:text-white transition-colors flex items-center gap-1">
-              <EyeOff size={11} /> {t('alerts.list.dismissAllVisible')}
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Alert list */}
       {loadError ? (
         <div role="alert" className="card py-10 px-6 flex flex-col items-center gap-3 text-center border border-red-700/40">
           <AlertCircle className="w-8 h-8 text-red-400" />
@@ -321,139 +287,130 @@ export default function Alerts() {
           <p className="text-muted text-sm max-w-md">{loadError} No all-clear conclusion is shown until every safety source can be checked.</p>
           <button type="button" onClick={refresh} className="btn-secondary text-sm inline-flex items-center gap-1.5"><RefreshCw size={14} /> Retry scan</button>
         </div>
-      ) : loading && active.length === 0 ? (
-        <div className="space-y-2">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-[76px] w-full rounded-2xl" />
-          ))}
+      ) : loading && alerts.length === 0 ? (
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
+            {Array.from({ length: 7 }).map((_, i) => <Skeleton key={i} className="h-[96px] w-full rounded-2xl" />)}
+          </div>
+          {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-[56px] w-full rounded-xl" />)}
         </div>
-      ) : visible.length === 0 ? (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.97 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="card py-16 flex flex-col items-center gap-3"
-        >
-          <CheckCircle2 className="w-10 h-10 text-brand-bright opacity-60" />
-          <p className="text-[var(--text-primary)] font-semibold">
-            {sevFilter !== 'all' || typeFilter !== 'all' || search ? t('alerts.states.noMatch') : t('alerts.states.allClear')}
-          </p>
-          <p className="text-muted text-sm">
-            {sevFilter !== 'all' || typeFilter !== 'all' || search
-              ? t('alerts.states.noMatchDesc')
-              : t('alerts.states.allClearDesc')}
-          </p>
-          {(sevFilter !== 'all' || typeFilter !== 'all' || search) && (
-            <button
-              onClick={() => { setSevFilter('all'); setTypeFilter('all'); setSearch('') }}
-              className="text-xs text-blue-400 hover:text-blue-300 transition-colors mt-1"
-            >
-              {t('alerts.states.clearFilters')}
-            </button>
-          )}
-        </motion.div>
       ) : (
-        <div className="space-y-2">
-          <AnimatePresence>
-            {visible.map((alert, i) => {
-              const sev     = SEV_STYLE[alert.severity] ?? SEV_STYLE.info
-              const typeCfg = TYPE_ICON_CONFIG[alert.type]
-              return (
-                <motion.div
-                  key={alert.id}
-                  initial={{ opacity: 0, x: -8 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 8, scale: 0.97 }}
-                  transition={{ delay: i * 0.025, duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-                  className={cn(
-                    'flex items-start gap-4 p-4 rounded-2xl border transition-all duration-200',
-                    'bg-surface-1 hover:bg-surface-2',
-                    `ring-1 ${sev.ring}`
-                  )}
-                >
-                  {/* Type icon */}
-                  <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center shrink-0', typeCfg?.bg || 'bg-surface-3')}>
-                    {typeCfg
-                      ? <typeCfg.Icon className={cn('w-4 h-4', typeCfg.color)} />
-                      : <div className={cn('w-2.5 h-2.5 rounded-full', sev.dot)} />
-                    }
-                  </div>
+        <>
+          {/* Severity KPIs (open alerts) */}
+          <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
+            {severityTiles.map((sev) => (
+              <KpiCard
+                key={sev}
+                label={`${sev} open`}
+                value={kpi.bySeverity[sev] ?? 0}
+                dot={SEVERITY_META[sev]?.dot || 'bg-gray-500'}
+                active={sevFilter === sev}
+                onClick={() => setSevFilter(sevFilter === sev ? 'all' : sev)}
+              />
+            ))}
+            <KpiCard
+              label={`Older than ${olderThan} days`}
+              value={kpi.olderThan ?? 'N/A'}
+              sub={kpi.oldestDays != null ? `Oldest ${fmtAge(kpi.oldestDays)}` : 'No dated conditions'}
+              active={agedOnly}
+              onClick={() => setAgedOnly((v) => !v)}
+            />
+            <KpiCard
+              label="Dismissed rate"
+              value={kpi.ackRate == null ? 'N/A' : `${kpi.ackRate}%`}
+              sub={`${kpi.acknowledged} of ${kpi.total} on this device`}
+            />
+          </div>
 
-                  {/* Body */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className={cn('text-sm font-semibold', sev.text)}>{alert.title}</span>
-                      <span className={cn('text-xs px-2 py-0.5 rounded-full border font-medium', sev.pill)}>
-                        {sevLabel(alert.severity)}
-                      </span>
-                      <span className="text-xs bg-surface-3 text-muted px-2 py-0.5 rounded-full border border-[var(--border-dim)]">
-                        {ALERT_TYPE_LABELS[alert.type] || alert.type}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-300 mt-1 leading-relaxed">{alert.message}</p>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex flex-col items-end gap-2 shrink-0">
-                    {safeInternalPath(alert.link) && (
-                      <button
-                        onClick={() => { const to = safeInternalPath(alert.link); if (to) navigate(to) }}
-                        className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-surface-3 text-gray-300 hover:bg-brand hover:text-white border border-[var(--border-dim)] hover:border-brand-600 transition-all duration-150"
-                      >
-                        {t('alerts.item.view')} <ArrowRight className="w-3 h-3" />
-                      </button>
-                    )}
-                    <button
-                      onClick={() => dismiss(alert.id)}
-                      className="flex items-center gap-1 text-xs text-muted hover:text-white transition-colors"
-                    >
-                      <X className="w-3 h-3" /> {t('alerts.item.dismiss')}
-                    </button>
-                  </div>
-                </motion.div>
-              )
-            })}
-          </AnimatePresence>
-        </div>
-      )}
-
-      {/* Dismissed section */}
-      {dismissedAlerts.length > 0 && (
-        <div className="border-t border-gray-800 pt-4">
-          <button
-            onClick={() => setShowDismissed(!showDismissed)}
-            className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-300 transition-colors w-full"
-          >
-            {showDismissed ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-            <EyeOff size={13} />
-            {t('alerts.dismissed.count', { count: dismissedAlerts.length })}
-            <span className="ml-auto text-xs text-gray-600 hover:text-red-400 transition-colors" onClick={e => { e.stopPropagation(); clearAllDismissed() }}>
-              {t('alerts.dismissed.restoreAll')}
-            </span>
-          </button>
-
-          {showDismissed && (
-            <div className="mt-3 space-y-1.5">
-              {dismissedAlerts.map(alert => {
-                const sev = SEV_STYLE[alert.severity] ?? SEV_STYLE.info
-                return (
-                  <div key={alert.id} className="flex items-center gap-3 px-4 py-2.5 rounded-xl border border-gray-800 bg-gray-900/40 opacity-60 hover:opacity-90 transition-opacity">
-                    <div className={cn('w-1.5 h-1.5 rounded-full flex-shrink-0', sev.dot)} />
-                    <div className="flex-1 min-w-0">
-                      <span className="text-sm text-gray-400">{alert.title}</span>
-                      <span className="text-xs text-gray-600 ml-2">{ALERT_TYPE_LABELS[alert.type] || alert.type}</span>
-                    </div>
-                    <button
-                      onClick={() => undismiss(alert.id)}
-                      className="flex items-center gap-1 text-xs text-gray-500 hover:text-blue-400 transition-colors flex-shrink-0"
-                    >
-                      <Eye size={11} /> {t('alerts.dismissed.restore')}
-                    </button>
-                  </div>
-                )
-              })}
+          {/* Breakdowns */}
+          <div className="grid md:grid-cols-3 gap-3">
+            <BreakdownList title="Open alerts by site" icon={MapPin} items={kpi.bySite} activeValue={siteFilter} onPick={setSiteFilter} />
+            <BreakdownList
+              title="Open alerts by type"
+              icon={Layers}
+              items={kpi.byType}
+              activeValue={typeOptions.find(([k]) => k === typeFilter)?.[1]}
+              onPick={(label) => setTypeFilter(label === 'all' ? 'all' : (typeOptions.find(([, l]) => l === label)?.[0] ?? 'all'))}
+            />
+            <div className="card !p-4 space-y-2 text-xs">
+              <p className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2"><Percent size={14} className="text-muted" /> Coverage</p>
+              <div className="flex justify-between"><span className="text-muted">Critical and high open</span><span className="tabular-nums text-[var(--text-primary)]">{kpi.urgent}</span></div>
+              <div className="flex justify-between"><span className="text-muted">Sites affected</span><span className="tabular-nums text-[var(--text-primary)]">{kpi.sitesAffected}</span></div>
+              <div className="flex justify-between"><span className="text-muted">Open alerts with a dated condition</span><span className="tabular-nums text-[var(--text-primary)]">{kpi.ageCoverage == null ? 'N/A' : `${kpi.ageCoverage}%`}</span></div>
+              <p className="text-muted pt-1">
+                Age is measured from the source record: an action&apos;s due date, an inspection&apos;s scheduled date or a vehicle&apos;s last activity.
+                Stock, budget, cost and data quality alerts carry no such date, so their age reads N/A.
+              </p>
+              {lastRefresh && <p className="text-dim flex items-center gap-1"><Clock size={11} /> {t('alerts.list.scannedAt', { time: lastRefresh.toLocaleTimeString() })}</p>}
             </div>
+          </div>
+
+          {/* Filters */}
+          <div className="card !p-3 flex flex-wrap items-center gap-2">
+            <div className="relative flex-1 min-w-[200px] max-w-xs">
+              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+              <input className="input pl-8 text-sm" placeholder={t('alerts.toolbar.searchPlaceholder')} value={search}
+                onChange={(e) => setSearch(e.target.value)} aria-label="Search alerts" />
+            </div>
+            <select className={selectCls} value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Filter by status">
+              <option value="open">Open</option>
+              <option value="dismissed">Dismissed</option>
+              <option value="all">All</option>
+            </select>
+            <select className={selectCls} value={sevFilter} onChange={(e) => setSevFilter(e.target.value)} aria-label="Filter by severity">
+              <option value="all">All severities</option>
+              {SEVERITY_ORDER.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <select className={selectCls} value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} aria-label="Filter by type">
+              <option value="all">All types</option>
+              {typeOptions.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+            </select>
+            <select className={selectCls} value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} aria-label="Filter by site">
+              <option value="all">All sites</option>
+              {siteOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <select className={selectCls} value={olderThan} onChange={(e) => setOlderThan(Number(e.target.value))} aria-label="Age threshold in days">
+              {AGE_THRESHOLDS.map((d) => <option key={d} value={d}>Older than {d} days</option>)}
+            </select>
+            <label className="text-xs text-secondary inline-flex items-center gap-1.5">
+              <input type="checkbox" checked={agedOnly} onChange={(e) => setAgedOnly(e.target.checked)} /> Only older ones
+            </label>
+            <span className="ml-auto text-xs text-muted">{visible.length} shown</span>
+            {filtersActive && (
+              <button type="button" onClick={clearFilters} className="text-xs text-blue-400 hover:text-blue-300">{t('alerts.states.clearFilters')}</button>
+            )}
+            {status !== 'dismissed' && visible.some((r) => !r.dismissed) && visible.length > 1 && (
+              <button type="button" onClick={dismissVisible} className="text-xs text-muted hover:text-[var(--text-primary)] inline-flex items-center gap-1">
+                <EyeOff size={11} /> {t('alerts.list.dismissAllVisible')}
+              </button>
+            )}
+            {dismissed.size > 0 && (
+              <button type="button" onClick={() => setDismissed(new Set())} className="text-xs text-muted hover:text-[var(--text-primary)]">
+                {t('alerts.dismissed.restoreAll')}
+              </button>
+            )}
+          </div>
+
+          {rows.length === 0 ? (
+            <div className="card py-16 flex flex-col items-center gap-3 text-center">
+              <CheckCircle2 className="w-10 h-10 text-brand-bright opacity-60" />
+              <p className="text-[var(--text-primary)] font-semibold">{t('alerts.states.allClear')}</p>
+              <p className="text-muted text-sm">{t('alerts.states.allClearDesc')}</p>
+            </div>
+          ) : (
+            <EnterpriseTable
+              columns={columns}
+              data={visible}
+              getRowId={(r) => String(r.id)}
+              loading={loading}
+              enableGlobalFilter={false}
+              enableColumnFilters={false}
+              enableExport={false}
+              initialPageSize={25}
+              emptyMessage={filtersActive ? t('alerts.states.noMatch') : 'No open alerts. Every alert in this scan has been dismissed.'}
+            />
           )}
-        </div>
+        </>
       )}
     </div>
   )

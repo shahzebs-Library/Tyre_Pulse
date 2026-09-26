@@ -7,6 +7,7 @@
  * labelled assumptions. Scenarios are saved on this device (roiScenarios.js).
  */
 import { useState, useMemo, useCallback } from 'react'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import {
   Chart as ChartJS, ArcElement, CategoryScale, LinearScale, BarElement, Tooltip, Legend,
 } from 'chart.js'
@@ -230,15 +231,24 @@ export default function RoiCalculator() {
             {scenarioMsg && <p className="text-xs text-[var(--text-secondary)]">{scenarioMsg}</p>}
             {!comparison.length ? <p className="text-xs text-[var(--text-muted)]">No saved scenarios yet. Scenarios are kept on this device.</p> : <>
               {mixedCurrency(comparison) && <p className="text-xs text-amber-500">These scenarios use different currencies. Compare each against its own currency only.</p>}
-              <div className="overflow-x-auto"><table className="w-full text-sm">
-                <thead><tr className="text-left text-xs text-[var(--text-muted)]">{['Scenario', 'Country', 'Fleet', 'Net benefit', 'ROI', 'Payback', ''].map(h => <th key={h} className="p-2">{h}</th>)}</tr></thead>
-                <tbody>{comparison.map((c) => { const sc = scenarios.find(x => x.id === c.id); return <tr key={c.id} className="border-t border-[var(--hairline)]">
-                  <td className="p-2 font-medium">{c.name}</td><td className="p-2">{c.country}</td><td className="p-2">{c.fleet_size}</td>
-                  <td className={`p-2 ${c.net_benefit >= 0 ? 'text-green-500' : 'text-red-500'}`}>{c.currency} {Number(c.net_benefit).toLocaleString()}</td>
-                  <td className="p-2">{c.roi_pct}%</td><td className="p-2">{c.payback_months === 'N/A' ? 'N/A' : `${c.payback_months} mo`}</td>
-                  <td className="p-2"><div className="flex gap-2 justify-end"><button className="btn-secondary text-xs" onClick={() => loadScenario(sc)}>Load</button><button className="btn-secondary text-xs" aria-label={`Delete ${c.name}`} onClick={() => deleteScenario(c.id)}><Trash2 size={12} /></button></div></td>
-                </tr> })}</tbody>
-              </table></div>
+              <EnterpriseTable
+                data={comparison}
+                getRowId={(c) => c.id}
+                enableGlobalFilter={false}
+                enableColumnFilters={false}
+                columns={[
+                  { id: 'name', header: 'Scenario', accessorFn: (c) => c.name, cell: ({ getValue }) => <span className="font-medium">{getValue()}</span> },
+                  { id: 'country', header: 'Country', accessorFn: (c) => c.country },
+                  { id: 'fleet', header: 'Fleet', accessorFn: (c) => c.fleet_size },
+                  { id: 'net', header: 'Net benefit', accessorFn: (c) => c.net_benefit,
+                    cell: ({ row }) => { const c = row.original; return <span className={c.net_benefit >= 0 ? 'text-green-500' : 'text-red-500'}>{c.currency} {Number(c.net_benefit).toLocaleString()}</span> } },
+                  { id: 'roi', header: 'ROI', accessorFn: (c) => c.roi_pct, cell: ({ getValue }) => `${getValue()}%` },
+                  { id: 'payback', header: 'Payback', accessorFn: (c) => c.payback_months,
+                    cell: ({ getValue }) => (getValue() === 'N/A' ? 'N/A' : `${getValue()} mo`) },
+                  { id: 'actions', header: '', enableSorting: false, meta: { export: false },
+                    cell: ({ row }) => { const c = row.original; const sc = scenarios.find(x => x.id === c.id); return <div className="flex gap-2 justify-end"><button className="btn-secondary text-xs" onClick={() => loadScenario(sc)}>Load</button><button className="btn-secondary text-xs" aria-label={`Delete ${c.name}`} onClick={() => deleteScenario(c.id)}><Trash2 size={12} /></button></div> } },
+                ]}
+              />
             </>}
           </div>
         </div>

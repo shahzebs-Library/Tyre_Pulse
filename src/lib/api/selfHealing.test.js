@@ -25,6 +25,8 @@ vi.mock('./_client', () => ({
   // The real helper; the builder below serves .range() windows so these tests
   // exercise the paging the service now relies on rather than mocking it away.
   fetchAllPages: fetchAllPagesReal,
+  isNotProvisioned: (e) => ['42P01', 'PGRST205', '42883', 'PGRST202'].includes(e?.code),
+  ServiceError: class ServiceError extends Error {},
 }))
 
 const { fetchAllPages: fetchAllPagesReal } = await import('../fetchAll')
@@ -56,14 +58,15 @@ beforeEach(() => {
 })
 
 describe('selfHealing service - runScans', () => {
-  it('degrades to [] per source on error', async () => {
+  it('degrades each failed source to [] and names it in failed (never reads as "no findings")', async () => {
     h.recon.listOrphanAssets.mockRejectedValue(new Error('rpc down'))
     h.recon.listDuplicateTyres.mockRejectedValue(new Error('rpc down'))
     h.recon.listSerialConflicts.mockRejectedValue(new Error('rpc down'))
     h.supabase.from.mockImplementation(() => { throw new Error('no table') })
 
     const res = await svc.runScans()
-    expect(res).toEqual({ orphans: [], duplicates: [], serialConflicts: [], staleRows: [] })
+    expect(res).toMatchObject({ orphans: [], duplicates: [], serialConflicts: [], staleRows: [] })
+    expect(res.failed.map((f) => f.key)).toEqual(expect.arrayContaining(['orphans', 'duplicates', 'serialConflicts', 'stale']))
   })
 
   it('degrades staleRows to [] when the stale query returns an error', async () => {
@@ -98,10 +101,15 @@ describe('selfHealing service - runScans', () => {
 })
 
 describe('selfHealing service - scanAnomalies', () => {
-  it('returns [] on a query error', async () => {
-    h.supabase.from.mockReturnValue(builder({ data: null, error: { message: 'x' } }))
-    expect(await svc.scanAnomalies()).toEqual([])
+  it('throws on a real query error so the check reads "could not run"', async () => {
+    h.supabase.from.mockReturnValue(builder({ data: null, error: { message: 'x', code: '42501' } }))
+    await expect(svc.scanAnomalies()).rejects.toBeTruthy()
     expect(h.anomaly.detectAnomalies).not.toHaveBeenCalled()
+  })
+
+  it('returns [] when tyre_records is not provisioned', async () => {
+    h.supabase.from.mockReturnValue(builder({ data: null, error: { message: 'x', code: '42P01' } }))
+    expect(await svc.scanAnomalies()).toEqual([])
   })
 
   it('runs the anomaly engine on returned rows', async () => {
@@ -113,9 +121,9 @@ describe('selfHealing service - scanAnomalies', () => {
     expect(out).toEqual([{ id: 'anom-1' }])
   })
 
-  it('never throws when supabase.from itself throws', async () => {
+  it('surfaces a thrown client error rather than reporting no anomalies', async () => {
     h.supabase.from.mockImplementation(() => { throw new Error('boom') })
-    await expect(svc.scanAnomalies()).resolves.toEqual([])
+    await expect(svc.scanAnomalies()).rejects.toBeTruthy()
   })
 })
 

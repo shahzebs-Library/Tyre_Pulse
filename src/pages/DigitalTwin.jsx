@@ -11,12 +11,12 @@ import { useParams, useNavigate } from 'react-router-dom'
 import {
   Cpu, Search, Truck, Gauge, Activity, AlertTriangle, ArrowLeft, CircleDot,
   Loader2, Package, MapPin, Wind, Clock, DollarSign, ShieldCheck,
-  FileSpreadsheet, FileText, ArrowUpDown, Hourglass,
+  FileSpreadsheet, FileText, Hourglass,
 } from 'lucide-react'
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js'
 import { Doughnut } from 'react-chartjs-2'
 import VehicleTyreDiagram from '../components/VehicleTyreDiagram'
-import { TablePagination, usePagedRows } from '../components/ui/TablePagination'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { getTyreRunningLife } from '../lib/api/tyreRunningLife'
 import { getVehicle } from '../lib/api/vehicle360'
 import { shapeRunningLife, BAND_META } from '../lib/tyreRunningLife'
@@ -35,10 +35,6 @@ const BAND_HEX = { overdue: '#ef4444', 'due-soon': '#f59e0b', 'mid-life': '#3b82
 const BAND_KEYS = ['overdue', 'due-soon', 'mid-life', 'healthy', 'unknown']
 const fmtInt = (v) => (v == null || !Number.isFinite(Number(v)) ? 'N/A' : Math.round(Number(v)).toLocaleString())
 const unitLabel = (u) => (u === 'hours' ? 'h' : u === 'km' ? 'km' : '')
-const TABLE_COLS = [
-  ['position', 'Position'], ['band', 'Life state'], ['remaining', 'Remaining'], ['usedPct', 'Life used'],
-  ['remainingDays', 'Days left'], ['health', 'Health'],
-]
 
 const AGE_BADGE = {
   non_compliant: 'bg-red-900/40 text-red-300 border border-red-700/50',
@@ -183,7 +179,7 @@ export default function DigitalTwin() {
   const [vehicleType, setVehicleType] = useState('')
   const [search, setSearch] = useState('')
   const [bandFilter, setBandFilter] = useState('all')
-  const [sort, setSort] = useState({ key: 'band', dir: 'asc' })
+  const [sort] = useState({ key: 'band', dir: 'asc' })
 
   const load = useCallback(async (an) => {
     if (!an) { setRecords(null); return }
@@ -228,8 +224,6 @@ export default function DigitalTwin() {
     () => (deep ? sortPositions(filterPositions(deep.positions, { search, band: bandFilter }), sort.key, sort.dir) : []),
     [deep, search, bandFilter, sort],
   )
-  const pager = usePagedRows(tableRows, { pageSize: 25 })
-  const toggleSort = (key) => setSort((o) => ({ key, dir: o.key === key && o.dir === 'asc' ? 'desc' : 'asc' }))
   const bandChart = deep ? {
     labels: BAND_KEYS.map((k) => (BAND_META[k] || BAND_META.unknown).label),
     datasets: [{ data: BAND_KEYS.map((k) => deep.bandCounts[k] || 0), backgroundColor: BAND_KEYS.map((k) => BAND_HEX[k]), borderWidth: 0 }],
@@ -379,32 +373,28 @@ export default function DigitalTwin() {
                   <p className="px-4 py-8 text-center text-sm text-[var(--text-muted)]">No positions match these filters.</p>
                 ) : (
                   <>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs">
-                        <thead className="bg-[var(--table-head-bg)] text-[var(--table-head-text)]">
-                          <tr>
-                            {TABLE_COLS.map(([k, label]) => (
-                              <th key={k} className="text-left px-3 py-2"><button type="button" className="inline-flex items-center gap-1" onClick={() => toggleSort(k)}>{label} <ArrowUpDown size={11} className="opacity-50" /></button></th>
-                            ))}
-                            <th className="text-left px-3 py-2">Serial</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {pager.pageRows.map((p) => (
-                            <tr key={p.id ?? `${p.position}-${p.serial}`} className="border-t border-[var(--table-cell-border)]">
-                              <td className="px-3 py-2 font-medium text-[var(--text-primary)]">{p.displayPosition || 'N/A'}</td>
-                              <td className="px-3 py-2"><span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ background: BAND_HEX[p.band] }} />{p.bandLabel}</span></td>
-                              <td className="px-3 py-2 tabular-nums">{p.remaining == null ? 'N/A' : `${fmtInt(p.remaining)} ${unitLabel(p.remainingUnit)}`}{p.onFallback ? ' *' : ''}</td>
-                              <td className="px-3 py-2 tabular-nums">{p.usedPct == null ? 'N/A' : `${Math.round(p.usedPct)}%`}</td>
-                              <td className="px-3 py-2 tabular-nums">{fmtInt(p.remainingDays)}</td>
-                              <td className="px-3 py-2 tabular-nums">{p.health == null ? 'N/A' : p.health}</td>
-                              <td className="px-3 py-2 font-mono text-[var(--text-muted)]">{p.serial || 'N/A'}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                    <TablePagination {...pager} />
+                    <EnterpriseTable
+                      data={tableRows}
+                      getRowId={(p) => p.id ?? `${p.position}-${p.serial}`}
+                      enableGlobalFilter={false}
+                      enableColumnFilters={false}
+                      columns={[
+                        { id: 'position', header: 'Position', accessorFn: (p) => p.displayPosition || 'N/A',
+                          cell: ({ getValue }) => <span className="font-medium text-[var(--text-primary)]">{getValue()}</span> },
+                        { id: 'band', header: 'Life state', accessorFn: (p) => p.bandLabel,
+                          cell: ({ row }) => <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ background: BAND_HEX[row.original.band] }} />{row.original.bandLabel}</span> },
+                        { id: 'remaining', header: 'Remaining', accessorFn: (p) => p.remaining,
+                          cell: ({ row }) => { const p = row.original; return <span className="tabular-nums">{p.remaining == null ? 'N/A' : `${fmtInt(p.remaining)} ${unitLabel(p.remainingUnit)}`}{p.onFallback ? ' *' : ''}</span> } },
+                        { id: 'usedPct', header: 'Life used', accessorFn: (p) => p.usedPct,
+                          cell: ({ getValue }) => <span className="tabular-nums">{getValue() == null ? 'N/A' : `${Math.round(getValue())}%`}</span> },
+                        { id: 'remainingDays', header: 'Days left', accessorFn: (p) => p.remainingDays,
+                          cell: ({ getValue }) => <span className="tabular-nums">{fmtInt(getValue())}</span> },
+                        { id: 'health', header: 'Health', accessorFn: (p) => p.health,
+                          cell: ({ getValue }) => <span className="tabular-nums">{getValue() == null ? 'N/A' : getValue()}</span> },
+                        { id: 'serial', header: 'Serial', accessorFn: (p) => p.serial || 'N/A',
+                          cell: ({ getValue }) => <span className="font-mono text-[var(--text-muted)]">{getValue()}</span> },
+                      ]}
+                    />
                     {tableRows.some((p) => p.onFallback) && <p className="px-4 pb-3 text-[11px] text-[var(--text-muted)]">* Measured on the other meter because this machine's own meter has never been read.</p>}
                   </>
                 )}

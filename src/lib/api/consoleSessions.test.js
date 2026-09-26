@@ -16,6 +16,7 @@ const h = vi.hoisted(() => {
       select() { return b },
       order() { return b },
       limit() { return b },
+      range() { return b },
       then(onF, onR) { return Promise.resolve(state.result).then(onF, onR) },
     }
     state.last = b
@@ -48,9 +49,9 @@ beforeEach(() => {
 })
 
 describe('service layer - consoleSessions', () => {
-  it('listConsoleSessions []-degrades on error', async () => {
+  it('listConsoleSessions throws on error (never reads a failure as "no activity")', async () => {
     h.state.result = { data: null, error: { message: 'relation "console_sessions" does not exist', code: '42P01' } }
-    expect(await svc.listConsoleSessions()).toEqual([])
+    await expect(svc.listConsoleSessions()).rejects.toBeTruthy()
     expect(h.state.last._table).toBe('console_sessions')
   })
 
@@ -59,9 +60,9 @@ describe('service layer - consoleSessions', () => {
     expect(await svc.listConsoleSessions()).toEqual([{ id: 's1', action: 'lock' }])
   })
 
-  it('listUserDevices []-degrades on error', async () => {
+  it('listUserDevices throws on error', async () => {
     h.state.result = { data: null, error: { message: 'permission denied', code: '42501' } }
-    expect(await svc.listUserDevices()).toEqual([])
+    await expect(svc.listUserDevices()).rejects.toBeTruthy()
     expect(h.state.last._table).toBe('profiles')
   })
 

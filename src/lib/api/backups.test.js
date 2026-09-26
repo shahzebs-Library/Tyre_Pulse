@@ -50,10 +50,15 @@ describe('service layer - backups', () => {
     expect(out).toEqual(rows)
   })
 
-  it('listBackupSnapshots degrades to [] on error', async () => {
+  it('listBackupSnapshots throws on a permission error (never reads as "no backups")', async () => {
     h.state.rpc = { data: null, error: { message: 'permission denied', code: '42501' } }
-    expect(await backups.listBackupSnapshots()).toEqual([])
+    await expect(backups.listBackupSnapshots()).rejects.toBeTruthy()
     expect(h.state.lastRpc.args).toEqual({ p_limit: 60 })
+  })
+
+  it('listBackupSnapshots degrades to [] only when the RPC is not provisioned', async () => {
+    h.state.rpc = { data: null, error: { message: 'function does not exist', code: '42883' } }
+    expect(await backups.listBackupSnapshots()).toEqual([])
   })
 
   it('listBackupSnapshots degrades to [] when data is not an array', async () => {

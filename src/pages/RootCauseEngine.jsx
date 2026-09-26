@@ -1,671 +1,341 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { Link } from 'react-router-dom'
 import {
-  Chart as ChartJS, CategoryScale, LinearScale, BarElement,
-  ArcElement, Title, Tooltip, Legend,
+  Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend,
 } from 'chart.js'
-import { Bar, Doughnut } from 'react-chartjs-2'
+import { Bar } from 'react-chartjs-2'
 import {
-  AlertOctagon, Download, FileText, ChevronLeft, ChevronRight,
-  ExternalLink, AlertTriangle, TrendingUp, DollarSign, Activity,
-  Filter, BarChart2, ShieldAlert, Layers,
+  AlertOctagon, Download, FileText, AlertTriangle, TrendingUp, Coins, Activity,
+  Filter, BarChart2, ShieldAlert, Layers, RefreshCw, Search, X, ExternalLink, Gauge,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import useLatestRequest from '../lib/useLatestRequest'
 import { useSettings } from '../contexts/SettingsContext'
 import PageHeader from '../components/ui/PageHeader'
+import StatTile from '../components/ui/StatTile'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import SectionTabs, { RCA_TABS } from '../components/ui/SectionTabs'
+import { colorAt, withAlpha } from '../lib/reportColors'
+import {
+  ROOT_CAUSES, DATE_PRESETS, RISK_LEVELS, presetCutoff, resolveCurrency, filterRecords,
+  classifyAll, computeCauseStats, sortCauses, summarize, buildHeatmap, heatBand, deepDive,
+  worstVehicles, recordExportRows, causeSummaryRows, RECORD_EXPORT_COLS, lineCost, kmLife,
+  findingsText, pct,
+} from '../lib/rootCauseEngineAnalytics'
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// exportUtils is heavy and only needed on click.
+const loadExportUtils = () => import('../lib/exportUtils')
 
-const ROOT_CAUSES = [
-  'Under Inflation',
-  'Over Inflation',
-  'Alignment Issues',
-  'Suspension Issues',
-  'Wheel Balancing',
-  'Brake Problems',
-  'Driver Behavior',
-  'Road Conditions',
-  'Load Conditions',
-  'Overloading',
-  'Maintenance Quality',
-  'Manufacturing Defects',
-  'Rotation Compliance',
-  'Operational Misuse',
-]
-
-const PREVENTION_MAP = {
-  'Under Inflation': 'Implement weekly pressure checks. Install TPMS sensors on all vehicles. Train drivers on visual inspection. Set pressure alert threshold at ±10 PSI from spec.',
-  'Over Inflation': 'Review inflation procedures. Calibrate all pressure gauges quarterly. Enforce manufacturer spec inflation. Avoid inflating tyres hot.',
-  'Alignment Issues': 'Schedule alignment checks every 20,000 km or after impact events. Inspect after any suspension repair. Review camber and toe settings.',
-  'Suspension Issues': 'Inspect shock absorbers every 50,000 km. Implement suspension check during tyre rotation. Replace worn components before tyre installation.',
-  'Wheel Balancing': 'Balance all tyres at fitment. Re-balance at 10,000 km intervals. Inspect wheel weights after any impact.',
-  'Brake Problems': 'Inspect braking system before tyre installation on affected axles. Address brake drag immediately. Train drivers on smooth braking technique.',
-  'Driver Behavior': 'Implement driver behavior monitoring (telematics). Run defensive driving training. Review high-km-loss records with fleet managers.',
-  'Road Conditions': 'Map high-risk routes and apply tyre specification upgrades. Increase inspection frequency for affected routes. Carry puncture repair kits.',
-  'Load Conditions': 'Audit load distribution procedures. Verify load ratings match tyre spec. Inspect tyres after heavy load runs.',
-  'Overloading': 'Enforce maximum load compliance. Install load monitoring. Reject overloaded assignments until corrected.',
-  'Maintenance Quality': 'Audit workshop quality standards. Implement pre-fitment tread depth check. Enforce mandatory service intervals.',
-  'Manufacturing Defects': 'Raise warranty claims for qualifying records. Audit supplier quality. Implement incoming tyre inspection before fitment.',
-  'Rotation Compliance': 'Implement rotation schedule at 10,000 km intervals. Log all rotations in system. Audit steer position wear patterns monthly.',
-  'Operational Misuse': 'Enforce tyre specification matching for vehicle type. Prohibit retread use on steer axles if policy violated. Audit mixed tyre usage.',
-}
-
-const DATE_PRESETS = [
-  { label: 'Last 30d', days: 30 },
-  { label: 'Last 90d', days: 90 },
-  { label: 'Last 6mo', days: 180 },
-  { label: 'Last 1yr', days: 365 },
-  { label: 'All Time', days: null },
-]
-
-const RISK_COLORS_MAP = {
-  Critical: '#dc2626',
-  High: '#ea580c',
-  Medium: '#d97706',
-  Low: '#16a34a',
-}
-
-const CHART_DARK = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: { display: false },
-    tooltip: {
-      backgroundColor: 'var(--panel-2)',
-      borderColor: 'var(--hairline)',
-      borderWidth: 1,
-      titleColor: '#f9fafb',
-      bodyColor: '#d1d5db',
-    },
-  },
-  scales: {
-    x: {
-      grid: { color:'var(--text-muted)' },
-      ticks: { color: '#9ca3af', font: { size: 11 } },
-    },
-    y: {
-      grid: { color:'var(--text-muted)' },
-      ticks: { color: '#9ca3af', font: { size: 11 } },
-    },
-  },
-}
-
-const RECORDS_PER_PAGE = 20
+const ROW_CEILING = 50000
 const TOP_CAUSES_HEATMAP = 8
+const FOCUS = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-bright,#22c55e)]'
+const SELECT_CLS = `min-h-[44px] bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] text-sm rounded-lg px-3 ${FOCUS}`
 
-// ─── Root Cause Classification ────────────────────────────────────────────────
-
-function classifyRootCauses(record) {
-  const findings = (record.findings || record.description || record.remarks || '').toLowerCase()
-  const category = (record.category || '').toLowerCase()
-  const removalReason = (record.removal_reason || '').toLowerCase()
-  const position = (record.position || '').toLowerCase()
-  const combined = findings + ' ' + category + ' ' + removalReason
-
-  const pressure = parseFloat(record.pressure_reading)
-  const tread = parseFloat(record.tread_depth)
-  const kmFit = parseFloat(record.km_at_fitment)
-  const kmRem = parseFloat(record.km_at_removal)
-  const cost = parseFloat(record.cost_per_tyre)
-  const kmLife = !isNaN(kmFit) && !isNaN(kmRem) ? kmRem - kmFit : NaN
-  const riskLevel = (record.risk_level || '').trim()
-
-  const matched = []
-
-  // 1. Under Inflation
-  if (
-    /under|low pressure|under inflat|deflat|flat/.test(combined) ||
-    (!isNaN(pressure) && pressure < 70) ||
-    (!isNaN(tread) && tread < 2 && riskLevel === 'Critical')
-  ) {
-    matched.push('Under Inflation')
-  }
-
-  // 2. Over Inflation
-  if (
-    /over inflat|over pressure|high pressure|burst|blowout/.test(combined) ||
-    (!isNaN(pressure) && pressure > 130)
-  ) {
-    matched.push('Over Inflation')
-  }
-
-  // 3. Alignment Issues
-  if (
-    /align|toe|camber|caster|irregular wear|one-sided|feathering/.test(combined) ||
-    /alignment|irregular/.test(category)
-  ) {
-    matched.push('Alignment Issues')
-  }
-
-  // 4. Suspension Issues
-  if (/suspension|shock|absorber|strut|cupping|scallop/.test(combined)) {
-    matched.push('Suspension Issues')
-  }
-
-  // 5. Wheel Balancing
-  if (/balanc|vibrat|wobble|shimmy|cupping/.test(combined)) {
-    matched.push('Wheel Balancing')
-  }
-
-  // 6. Brake Problems
-  if (/brake|lock|flat spot|skid|drag/.test(combined)) {
-    matched.push('Brake Problems')
-  }
-
-  // 7. Driver Behavior
-  if (
-    /driver|speeding|hard brake|curb|pothole strike|impact|abuse/.test(combined) ||
-    (!isNaN(kmLife) && kmLife < 10000 && riskLevel === 'Critical')
-  ) {
-    matched.push('Driver Behavior')
-  }
-
-  // 8. Road Conditions
-  if (
-    /road|gravel|debris|nail|cut|puncture|kerb|pothole/.test(combined) ||
-    /puncture|cut|impact/.test(category)
-  ) {
-    matched.push('Road Conditions')
-  }
-
-  // 9. Load Conditions
-  if (/\bload\b|weight|cargo/.test(combined) && !/overload/.test(combined)) {
-    matched.push('Load Conditions')
-  }
-
-  // 10. Overloading
-  if (
-    /overload|excess load|over weight|over capacity/.test(combined) ||
-    (!isNaN(kmLife) && kmLife < 20000 && !isNaN(cost) && cost > 1500)
-  ) {
-    matched.push('Overloading')
-  }
-
-  // 11. Maintenance Quality
-  if (
-    /maintenan|service|neglect|worn|deteriorat|age/.test(combined) ||
-    (!isNaN(tread) && tread < 1.6)
-  ) {
-    matched.push('Maintenance Quality')
-  }
-
-  // 12. Manufacturing Defects
-  if (
-    /defect|manufactur|warranty|delamination|bead|sidewall crack|bulge/.test(combined) ||
-    /defect|warranty/.test(category)
-  ) {
-    matched.push('Manufacturing Defects')
-  }
-
-  // 13. Rotation Compliance
-  if (
-    /rotat|not rotated|overdue rotation/.test(combined) ||
-    (
-      /steer/.test(position) &&
-      !isNaN(kmLife) && kmLife < 30000 &&
-      (riskLevel === 'High' || riskLevel === 'Critical')
-    )
-  ) {
-    matched.push('Rotation Compliance')
-  }
-
-  // 14. Operational Misuse
-  if (
-    /misuse|wrong tyre|wrong size|retread abuse|off-road|overspec/.test(combined) ||
-    /misuse/.test(category)
-  ) {
-    matched.push('Operational Misuse')
-  }
-
-  return matched
+// Semantic risk tones: colour is paired with the level text, never alone.
+const RISK_TONE = {
+  Critical: '#dc2626', High: '#ea580c', Medium: '#d97706', Low: '#16a34a',
 }
+// Heat map intensity: one hue, alpha steps, the count is always printed.
+const HEAT_HUE = '#ef4444'
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+const AXIS = { color: 'var(--text-muted)', font: { size: 11 } }
+const GRID = { color: 'var(--panel-2)' }
 
-function applyDatePreset(preset) {
-  if (!preset || preset.days === null) return null
-  const d = new Date()
-  d.setDate(d.getDate() - preset.days)
-  return d.toISOString().slice(0, 10)
-}
-
-function fmtCost(n, currency = '') {
-  const c = currency ? `${currency} ` : ''
-  if (n == null || isNaN(n)) return 'N/A'
-  return `${c}${Math.round(n).toLocaleString()}`
-}
-
-function fmtNum(n) {
-  return (n || 0).toLocaleString()
-}
-
-function topN(arr, key, n = 5) {
-  const counts = {}
-  arr.forEach(r => {
-    const val = r[key]
-    if (val) counts[val] = (counts[val] || 0) + 1
-  })
-  return Object.entries(counts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, n)
-    .map(([name, count]) => ({ name, count }))
-}
-
-function barColor(count, total) {
-  if (total === 0) return '#4b5563'
-  const pct = count / total
-  if (pct > 0.2) return '#dc2626'
-  if (pct > 0.1) return '#d97706'
-  return '#16a34a'
-}
-
-function heatIntensity(count, max) {
-  if (!count || !max) return ''
-  const ratio = count / max
-  if (ratio > 0.75) return 'bg-red-700 text-white'
-  if (ratio > 0.5) return 'bg-orange-700 text-white'
-  if (ratio > 0.25) return 'bg-yellow-700 text-gray-900'
-  if (ratio > 0) return 'bg-green-900 text-green-200'
-  return ''
-}
-
-// ─── Stat Card ────────────────────────────────────────────────────────────────
-
-function StatCard({ icon: Icon, label, value, sub, color = 'text-blue-400' }) {
+function RiskPill({ level }) {
+  const lvl = String(level || '').trim()
+  const tone = RISK_TONE[lvl]
+  if (!tone) return <span className="text-xs text-[var(--text-muted)]">{lvl || 'N/A'}</span>
   return (
-    <div className="card p-4 flex items-start gap-3">
-      <div className={`mt-0.5 ${color}`}>
-        <Icon size={20} />
-      </div>
-      <div className="min-w-0">
-        <p className="text-xs text-[var(--text-muted)] uppercase tracking-wide">{label}</p>
-        <p className={`text-xl font-bold mt-0.5 ${color}`}>{value}</p>
-        {sub && <p className="text-xs text-[var(--text-muted)] mt-0.5">{sub}</p>}
-      </div>
+    <span
+      className="px-1.5 py-0.5 rounded text-[11px] font-semibold"
+      style={{ backgroundColor: withAlpha(tone, 0.16), color: tone, border: `1px solid ${withAlpha(tone, 0.4)}` }}
+    >{lvl}</span>
+  )
+}
+
+function StateCard({ icon: Icon, title, body, action }) {
+  return (
+    <div className="card p-8 text-center" role="status">
+      <Icon size={28} className="text-[var(--text-dim)] mx-auto mb-3" aria-hidden="true" />
+      <p className="text-[var(--text-primary)] font-semibold mb-1">{title}</p>
+      {body && <p className="text-[var(--text-muted)] text-sm max-w-md mx-auto">{body}</p>}
+      {action && <div className="mt-4">{action}</div>}
     </div>
   )
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+function RankList({ title, items, mono }) {
+  return (
+    <div className="bg-[var(--input-bg)] rounded-lg p-3">
+      <p className="text-xs text-[var(--text-muted)] uppercase tracking-wide mb-2 font-medium">{title}</p>
+      {items.length === 0 ? (
+        <p className="text-[var(--text-dim)] text-xs">No records</p>
+      ) : (
+        <ol className="space-y-1.5">
+          {items.map((a, i) => (
+            <li key={a.name} className="flex items-center justify-between gap-2">
+              <span className="flex items-center gap-2 min-w-0">
+                <span className="text-[11px] text-[var(--text-dim)] w-4 tabular-nums">{i + 1}.</span>
+                <span className={`text-[var(--text-secondary)] text-xs truncate ${mono ? 'font-mono' : ''}`}>{a.name}</span>
+              </span>
+              <span className="text-xs font-bold text-[var(--text-primary)] tabular-nums">{a.count}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  )
+}
 
 export default function RootCauseEngine() {
   const { activeCurrency, activeCountry } = useSettings()
-  // Currency comes from the active country/settings; never a hard-coded code.
-  const currency = activeCurrency || ''
 
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [truncated, setTruncated] = useState(false)
+  const [reloadKey, setReloadKey] = useState(0)
 
   const [datePreset, setDatePreset] = useState('All Time')
   const [siteFilter, setSiteFilter] = useState('all')
   const [riskFilter, setRiskFilter] = useState('all')
   const [minRecords, setMinRecords] = useState(1)
+  const [search, setSearch] = useState('')
+  const [activeCause, setActiveCause] = useState(ROOT_CAUSES[0])
 
-  const [activeTab, setActiveTab] = useState('Under Inflation')
-  const [deepDivePage, setDeepDivePage] = useState(1)
+  const dateCutoff = useMemo(() => presetCutoff(datePreset, new Date()), [datePreset])
 
-  // ── Date cutoff ─────────────────────────────────────────────────────────────
-  const dateCutoff = useMemo(() => {
-    const preset = DATE_PRESETS.find(p => p.label === datePreset)
-    return preset ? applyDatePreset(preset) : null
-  }, [datePreset])
-
-  // Moving the date preset refetches while the previous read is still paging.
-  // If the earlier one finishes last, the root causes describe the PREVIOUS
-  // window under the new cutoff - an analysis that looks fine and is not.
+  // A superseded read (preset moved while paging) must not paint its rows.
   const latestLoad = useLatestRequest()
 
-  // ── Data fetch ──────────────────────────────────────────────────────────────
   useEffect(() => {
     const stale = latestLoad.begin()
     setLoading(true)
     setError(null)
-
     fetchAllPages((from, to) => {
       let q = supabase
         .from('tyre_records')
         .select(
-          'id,asset_no,site,brand,tyre_serial,category,risk_level,findings,description,remarks,' +
-          'tread_depth,pressure_reading,km_at_fitment,km_at_removal,cost_per_tyre,' +
-          'issue_date,removal_reason,position'
+          'id,asset_no,site,country,brand,tyre_serial,category,risk_level,findings,description,remarks,' +
+          'tread_depth,pressure_reading,km_at_fitment,km_at_removal,cost_per_tyre,qty,' +
+          'issue_date,removal_reason,position',
         )
         .order('issue_date', { ascending: false })
-      if (activeCountry && activeCountry !== 'All') {
-        q = q.eq('country', activeCountry)
-      }
-      // Server-side date window: mirror the client filter exactly (rows with no
-      // issue_date are kept), so the pull is bounded without changing any count.
+        .order('id', { ascending: true })
+      if (activeCountry && activeCountry !== 'All') q = q.eq('country', activeCountry)
+      // Server-side window that mirrors the client filter (undated rows kept).
       if (dateCutoff) q = q.or(`issue_date.is.null,issue_date.gte.${dateCutoff}`)
       return q.range(from, to)
-    }, { max: 50000 }).then(({ data, error: err, truncated: trunc }) => {
-      // A superseded read must not paint its rows, raise a banner over data that
-      // loaded fine, or clear the newer load's spinner.
+    }, { max: ROW_CEILING }).then(({ data, error: err, truncated: trunc }) => {
       if (stale()) return
       if (err) {
         setError(toUserMessage(err, 'Could not load root cause data.'))
+        setRecords([])
       } else {
         setRecords(data || [])
         setTruncated(!!trunc)
       }
       setLoading(false)
     })
-  }, [activeCountry, dateCutoff, latestLoad])
+  }, [activeCountry, dateCutoff, latestLoad, reloadKey])
 
-  // ── Sites list ──────────────────────────────────────────────────────────────
-  const allSites = useMemo(() => {
-    const s = new Set(records.map(r => r.site).filter(Boolean))
-    return ['all', ...[...s].sort()]
-  }, [records])
+  const retry = useCallback(() => setReloadKey(k => k + 1), [])
 
-  // ── Filtered records ────────────────────────────────────────────────────────
-  const filtered = useMemo(() => {
-    return records.filter(r => {
-      if (dateCutoff && r.issue_date && r.issue_date < dateCutoff) return false
-      if (siteFilter !== 'all' && r.site !== siteFilter) return false
-      if (riskFilter !== 'all') {
-        if ((r.risk_level || '').trim() !== riskFilter) return false
-      }
-      return true
-    })
-  }, [records, dateCutoff, siteFilter, riskFilter])
+  // Money is only stated when every loaded row shares one currency.
+  const currency = useMemo(
+    () => resolveCurrency(records, activeCountry, activeCurrency),
+    [records, activeCountry, activeCurrency],
+  )
+  const moneyOk = !!currency
+  const fmtMoney = useCallback((n) => {
+    if (!moneyOk || n === null || n === undefined || !Number.isFinite(n)) return 'N/A'
+    return `${currency} ${Math.round(n).toLocaleString()}`
+  }, [moneyOk, currency])
+  const fmtCpk = useCallback((n) => {
+    if (!moneyOk || n === null || n === undefined) return 'N/A'
+    return `${currency} ${n.toFixed(4)}`
+  }, [moneyOk, currency])
 
-  // ── Classification ──────────────────────────────────────────────────────────
-  const classifiedRecords = useMemo(() => {
-    return filtered.map(r => ({
-      ...r,
-      rootCauses: classifyRootCauses(r),
-    }))
-  }, [filtered])
+  const allSites = useMemo(
+    () => [...new Set(records.map(r => r.site).filter(Boolean))].sort(),
+    [records],
+  )
 
-  // ── Cause stats ─────────────────────────────────────────────────────────────
-  const causeStats = useMemo(() => {
-    const stats = {}
-    ROOT_CAUSES.forEach(c => {
-      stats[c] = { count: 0, totalCost: 0, records: [] }
-    })
+  const filtered = useMemo(
+    () => filterRecords(records, { cutoff: dateCutoff, site: siteFilter, risk: riskFilter, search }),
+    [records, dateCutoff, siteFilter, riskFilter, search],
+  )
+  const classified = useMemo(() => classifyAll(filtered), [filtered])
+  const causeStats = useMemo(() => computeCauseStats(classified), [classified])
+  const sorted = useMemo(() => sortCauses(causeStats, minRecords), [causeStats, minRecords])
+  const summary = useMemo(() => summarize(classified, sorted), [classified, sorted])
+  const heatmap = useMemo(() => buildHeatmap(classified, sorted, TOP_CAUSES_HEATMAP), [classified, sorted])
+  const dive = useMemo(() => deepDive(causeStats[activeCause], filtered.length), [causeStats, activeCause, filtered.length])
+  const worst = useMemo(() => worstVehicles(classified, 15), [classified])
 
-    classifiedRecords.forEach(r => {
-      const causes = r.rootCauses.length > 0 ? r.rootCauses : []
-      causes.forEach(cause => {
-        if (stats[cause]) {
-          stats[cause].count++
-          stats[cause].totalCost += (parseFloat(r.cost_per_tyre) || 0) * (Number(r.qty) || 1)
-          stats[cause].records.push(r)
-        }
-      })
-    })
-
-    return stats
-  }, [classifiedRecords])
-
-  // ── Causes sorted by count ──────────────────────────────────────────────────
-  const sortedCauses = useMemo(() => {
-    return ROOT_CAUSES
-      .map(c => ({ cause: c, ...causeStats[c] }))
-      .filter(c => c.count >= minRecords)
-      .sort((a, b) => b.count - a.count)
-  }, [causeStats, minRecords])
-
-  const totalClassified = useMemo(() => {
-    const ids = new Set()
-    classifiedRecords.forEach(r => {
-      if (r.rootCauses.length > 0) ids.add(r.id)
-    })
-    return ids.size
-  }, [classifiedRecords])
-
-  const topCause = sortedCauses[0] || null
-
-  // ── Frequency chart data ────────────────────────────────────────────────────
-  const freqChartData = useMemo(() => {
-    const total = sortedCauses.reduce((s, c) => s + c.count, 0)
-    return {
-      labels: sortedCauses.map(c => c.cause),
-      datasets: [{
-        label: 'Records',
-        data: sortedCauses.map(c => c.count),
-        backgroundColor: sortedCauses.map(c => barColor(c.count, total)),
-        borderRadius: 4,
-        borderSkipped: false,
-      }],
-    }
-  }, [sortedCauses])
-
-  // ── Financial chart data ────────────────────────────────────────────────────
-  const financialChartData = useMemo(() => {
-    const sorted = [...sortedCauses].sort((a, b) => b.totalCost - a.totalCost)
-    return {
-      labels: sorted.map(c => c.cause),
-      datasets: [{
-        label: 'Total Cost',
-        data: sorted.map(c => Math.round(c.totalCost)),
-        backgroundColor: sorted.map((_, i) => {
-          const opacity = 1 - (i / sorted.length) * 0.6
-          return `rgba(99,102,241,${opacity})`
-        }),
-        borderRadius: 4,
-        borderSkipped: false,
-      }],
-    }
-  }, [sortedCauses])
-
-  // ── Heat map ─────────────────────────────────────────────────────────────────
-  const heatMapData = useMemo(() => {
-    const topCauses = sortedCauses.slice(0, TOP_CAUSES_HEATMAP).map(c => c.cause)
-    const sites = allSites.filter(s => s !== 'all')
-
-    const matrix = {}
-    sites.forEach(site => {
-      matrix[site] = {}
-      topCauses.forEach(c => { matrix[site][c] = 0 })
-    })
-
-    classifiedRecords.forEach(r => {
-      if (!r.site) return
-      r.rootCauses.forEach(cause => {
-        if (topCauses.includes(cause) && matrix[r.site]) {
-          matrix[r.site][cause] = (matrix[r.site][cause] || 0) + 1
-        }
-      })
-    })
-
-    // Only include sites that have at least 1 match
-    const activeSites = sites.filter(s => topCauses.some(c => matrix[s][c] > 0))
-    const maxVal = Math.max(
-      1,
-      ...activeSites.flatMap(s => topCauses.map(c => matrix[s][c] || 0))
-    )
-
-    return { topCauses, activeSites, matrix, maxVal }
-  }, [sortedCauses, allSites, classifiedRecords])
-
-  // ── Deep dive data for active tab ───────────────────────────────────────────
-  const deepDiveData = useMemo(() => {
-    const stat = causeStats[activeTab] || { count: 0, totalCost: 0, records: [] }
-    const recs = stat.records
-    const total = filtered.length
-
-    const kmLifeValues = recs
-      .map(r => {
-        const fit = parseFloat(r.km_at_fitment)
-        const rem = parseFloat(r.km_at_removal)
-        return !isNaN(fit) && !isNaN(rem) && rem > fit ? rem - fit : null
-      })
-      .filter(v => v !== null)
-
-    const costValues = recs.map(r => parseFloat(r.cost_per_tyre)).filter(v => !isNaN(v) && v > 0)
-    const avgCPK = kmLifeValues.length > 0 && costValues.length > 0
-      ? (costValues.reduce((a, b) => a + b, 0) / costValues.length) /
-        (kmLifeValues.reduce((a, b) => a + b, 0) / kmLifeValues.length)
-      : null
-
-    const totalPages = Math.ceil(recs.length / RECORDS_PER_PAGE)
-    const paginated = recs.slice((deepDivePage - 1) * RECORDS_PER_PAGE, deepDivePage * RECORDS_PER_PAGE)
-
-    return {
-      count: stat.count,
-      pct: total > 0 ? ((stat.count / total) * 100).toFixed(1) : '0.0',
-      totalCost: stat.totalCost,
-      avgCPK,
-      topAssets: topN(recs, 'asset_no', 5),
-      topBrands: topN(recs, 'brand', 5),
-      topSites: topN(recs, 'site', 5),
-      prevention: PREVENTION_MAP[activeTab] || '',
-      paginated,
-      totalPages,
-      totalRecs: recs.length,
-    }
-  }, [activeTab, causeStats, filtered.length, deepDivePage])
-
-  // Reset page when tab changes
-  const handleTabChange = useCallback((tab) => {
-    setActiveTab(tab)
-    setDeepDivePage(1)
-  }, [])
-
-  // ── Worst vehicles ──────────────────────────────────────────────────────────
-  const worstVehicles = useMemo(() => {
-    const vehicleMap = {}
-
-    classifiedRecords.forEach(r => {
-      if (!r.asset_no || r.rootCauses.length === 0) return
-      if (!vehicleMap[r.asset_no]) {
-        vehicleMap[r.asset_no] = {
-          asset_no: r.asset_no,
-          site: r.site || '-',
-          totalIncidents: 0,
-          causeCounts: {},
-          totalCost: 0,
-          kmLifeSum: 0,
-          kmLifeCount: 0,
-        }
-      }
-      const v = vehicleMap[r.asset_no]
-      v.totalIncidents += r.rootCauses.length
-      const cost = parseFloat(r.cost_per_tyre) || 0
-      v.totalCost += cost
-      r.rootCauses.forEach(c => {
-        v.causeCounts[c] = (v.causeCounts[c] || 0) + 1
-      })
-      const kmFit = parseFloat(r.km_at_fitment)
-      const kmRem = parseFloat(r.km_at_removal)
-      if (!isNaN(kmFit) && !isNaN(kmRem) && kmRem > kmFit) {
-        v.kmLifeSum += kmRem - kmFit
-        v.kmLifeCount++
-      }
-    })
-
-    return Object.values(vehicleMap)
-      .map(v => {
-        const topCauseEntry = Object.entries(v.causeCounts).sort((a, b) => b[1] - a[1])[0]
-        const avgKmLife = v.kmLifeCount > 0 ? v.kmLifeSum / v.kmLifeCount : null
-        const avgCost = v.totalCost / Math.max(v.kmLifeCount || 1, 1)
-        const avgCPK = avgKmLife && avgCost ? avgCost / avgKmLife : null
-        return {
-          ...v,
-          topCause: topCauseEntry ? topCauseEntry[0] : '-',
-          avgCPK,
-        }
-      })
-      .sort((a, b) => b.totalIncidents - a.totalIncidents)
-      .slice(0, 15)
-  }, [classifiedRecords])
-
-  // ── Exports ─────────────────────────────────────────────────────────────────
-  function handleExcelExport() {
-    const rows = classifiedRecords.map(r => ({
-      asset_no: r.asset_no || '',
-      site: r.site || '',
-      brand: r.brand || '',
-      issue_date: r.issue_date || '',
-      risk_level: r.risk_level || '',
-      root_causes: r.rootCauses.join('; ') || 'Unclassified',
-      cost_per_tyre: r.cost_per_tyre || '',
-      findings: (r.findings || r.description || r.remarks || '').slice(0, 200),
-    }))
-    exportToExcel(
-      rows,
-      ['asset_no', 'site', 'brand', 'issue_date', 'risk_level', 'root_causes', 'cost_per_tyre', 'findings'],
-      ['Asset No', 'Site', 'Brand', 'Date', 'Risk Level', 'Root Causes', (currency ? `Cost (${currency})` : 'Cost'), 'Findings'],
-      'TyrePulse_RootCause_Export',
-      'Root Causes'
-    )
+  const filtersActive = datePreset !== 'All Time' || siteFilter !== 'all' || riskFilter !== 'all' || minRecords > 1 || search.trim() !== ''
+  const clearFilters = () => {
+    setDatePreset('All Time'); setSiteFilter('all'); setRiskFilter('all'); setMinRecords(1); setSearch('')
   }
 
-  function handlePdfExport() {
-    const rows = sortedCauses.map(c => ({
-      cause: c.cause,
-      count: c.count.toLocaleString(),
-      total_cost: Math.round(c.totalCost).toLocaleString(),
-      pct: filtered.length > 0 ? ((c.count / filtered.length) * 100).toFixed(1) + '%' : '0%',
-      top_asset: topN(c.records, 'asset_no', 1)[0]?.name || '-',
-    }))
-    exportToPdf(
-      rows,
-      [
-        { key: 'cause', header: 'Root Cause' },
-        { key: 'count', header: 'Records' },
-        { key: 'pct', header: '% of Total' },
-        { key: 'total_cost', header: (currency ? `Cost (${currency})` : 'Cost') },
-        { key: 'top_asset', header: 'Top Asset' },
-      ],
-      'Root Cause Intelligence Summary',
-      'TyrePulse_RootCause_Summary',
-      'landscape'
-    )
+  // ── Charts ──────────────────────────────────────────────────────────────────
+  const freqChart = useMemo(() => ({
+    labels: sorted.map(c => c.cause),
+    datasets: [{
+      label: 'Records',
+      data: sorted.map(c => c.count),
+      backgroundColor: sorted.map((_, i) => withAlpha(colorAt(i), 0.85)),
+      borderRadius: 4,
+    }],
+  }), [sorted])
+
+  const costRanked = useMemo(
+    () => sorted.filter(c => c.totalCost !== null).sort((a, b) => b.totalCost - a.totalCost),
+    [sorted],
+  )
+  const costChart = useMemo(() => ({
+    labels: costRanked.map(c => c.cause),
+    datasets: [{
+      label: 'Cost',
+      data: costRanked.map(c => Math.round(c.totalCost)),
+      backgroundColor: costRanked.map((_, i) => withAlpha(colorAt(i), 0.85)),
+      borderRadius: 4,
+    }],
+  }), [costRanked])
+
+  const barOpts = useCallback((valueLabel) => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    indexAxis: 'y',
+    plugins: {
+      legend: { display: false },
+      tooltip: { callbacks: { label: valueLabel } },
+    },
+    scales: {
+      x: { grid: GRID, ticks: AXIS, beginAtZero: true },
+      y: { grid: { display: false }, ticks: { ...AXIS, color: 'var(--text-secondary)' } },
+    },
+  }), [])
+
+  // ── Tables ──────────────────────────────────────────────────────────────────
+  const heatColumns = useMemo(() => [
+    { id: 'site', header: 'Site', accessorFn: r => r.site, size: 160 },
+    ...heatmap.topCauses.map(c => ({
+      id: c,
+      header: c,
+      accessorFn: r => r[c],
+      size: 110,
+      meta: { align: 'center' },
+      cell: ({ row }) => {
+        const count = row.original[c]
+        const band = heatBand(count, heatmap.maxVal)
+        if (!count) return <span className="text-[var(--text-dim)]" aria-label="none">0</span>
+        return (
+          <span
+            className="inline-block min-w-[2rem] px-1.5 py-0.5 rounded font-semibold tabular-nums text-[var(--text-primary)]"
+            style={{ backgroundColor: withAlpha(HEAT_HUE, 0.12 + band * 0.14) }}
+            title={`${count} records, intensity ${band} of 4`}
+          >{count}</span>
+        )
+      },
+    })),
+    { id: 'total', header: 'Total', accessorFn: r => r.total, size: 90, meta: { align: 'right' } },
+  ], [heatmap])
+
+  const recordColumns = useMemo(() => [
+    { id: 'asset_no', header: 'Asset No', accessorFn: r => r.asset_no || '', size: 110,
+      cell: ({ row }) => <span className="font-mono">{row.original.asset_no || 'N/A'}</span> },
+    { id: 'site', header: 'Site', accessorFn: r => r.site || '', size: 120 },
+    { id: 'brand', header: 'Brand', accessorFn: r => r.brand || '', size: 120 },
+    { id: 'issue_date', header: 'Date', accessorFn: r => (r.issue_date ? String(r.issue_date).slice(0, 10) : ''), size: 110 },
+    { id: 'risk_level', header: 'Risk', accessorFn: r => r.risk_level || '', size: 100,
+      cell: ({ row }) => <RiskPill level={row.original.risk_level} /> },
+    { id: 'cost', header: 'Cost', accessorFn: r => (moneyOk ? lineCost(r) : null), size: 110, meta: { align: 'right' },
+      cell: ({ row }) => <span className="tabular-nums">{fmtMoney(lineCost(row.original))}</span> },
+    { id: 'km_life', header: 'Km life', accessorFn: r => kmLife(r), size: 100, meta: { align: 'right' },
+      cell: ({ row }) => { const k = kmLife(row.original); return <span className="tabular-nums">{k === null ? 'N/A' : Math.round(k).toLocaleString()}</span> } },
+    { id: 'findings', header: 'Findings', accessorFn: r => findingsText(r), size: 320,
+      cell: ({ row }) => {
+        const f = findingsText(row.original)
+        return <span className="block truncate max-w-[320px]" title={f}>{f || 'N/A'}</span>
+      } },
+  ], [fmtMoney, moneyOk])
+
+  const worstColumns = useMemo(() => [
+    { id: 'asset_no', header: 'Asset No', accessorFn: r => r.asset_no, size: 110,
+      cell: ({ row }) => <span className="font-mono font-semibold">{row.original.asset_no}</span> },
+    { id: 'site', header: 'Site', accessorFn: r => r.site || '', size: 120,
+      cell: ({ row }) => row.original.site || 'N/A' },
+    { id: 'incidents', header: 'Cause matches', accessorFn: r => r.incidents, size: 120, meta: { align: 'right' } },
+    { id: 'records', header: 'Records', accessorFn: r => r.records, size: 90, meta: { align: 'right' } },
+    { id: 'topCause', header: 'Top cause', accessorFn: r => r.topCause || '', size: 170 },
+    { id: 'totalCost', header: 'Cost', accessorFn: r => (moneyOk ? r.totalCost : null), size: 120, meta: { align: 'right' },
+      cell: ({ row }) => <span className="tabular-nums">{fmtMoney(row.original.totalCost)}</span> },
+    { id: 'avgCPK', header: 'CPK', accessorFn: r => (moneyOk ? r.avgCPK : null), size: 120, meta: { align: 'right' },
+      cell: ({ row }) => <span className="tabular-nums">{fmtCpk(row.original.avgCPK)}</span> },
+    { id: 'history', header: '', enableSorting: false, size: 90, meta: { export: false },
+      cell: ({ row }) => (
+        <Link
+          to={`/vehicle-history?q=${encodeURIComponent(row.original.asset_no)}`}
+          className={`inline-flex items-center gap-1 min-h-[44px] px-2 text-xs font-medium text-[var(--accent)] hover:underline rounded ${FOCUS}`}
+          aria-label={`View history for ${row.original.asset_no}`}
+        >
+          <ExternalLink size={12} aria-hidden="true" /> History
+        </Link>
+      ) },
+  ], [fmtMoney, fmtCpk, moneyOk])
+
+  // ── Exports (full filtered set, never a visible page) ───────────────────────
+  const [exporting, setExporting] = useState(false)
+  async function handleExcelExport() {
+    setExporting(true)
+    try {
+      const { exportToExcel, reportFileName } = await loadExportUtils()
+      const costHeader = moneyOk ? `Cost (${currency})` : 'Cost (mixed currencies, withheld)'
+      const rows = recordExportRows(classified).map(r => (moneyOk ? r : { ...r, cost: '' }))
+      await exportToExcel(
+        rows,
+        RECORD_EXPORT_COLS,
+        ['Asset No', 'Site', 'Brand', 'Date', 'Risk Level', 'Root Causes', costHeader, 'Km Life', 'Findings'],
+        reportFileName('TyrePulse Root Cause Records', activeCountry, datePreset),
+        'Root Causes',
+      )
+    } catch (e) {
+      setError(toUserMessage(e, 'Could not export. Try again.'))
+    } finally { setExporting(false) }
+  }
+  async function handlePdfExport() {
+    setExporting(true)
+    try {
+      const { exportToPdf, reportFileName } = await loadExportUtils()
+      const rows = causeSummaryRows(sorted, filtered.length)
+        .map(r => (moneyOk ? r : { ...r, total_cost: 'N/A', cpk: 'N/A' }))
+      await exportToPdf(
+        rows,
+        [
+          { key: 'cause', header: 'Root Cause' },
+          { key: 'count', header: 'Records' },
+          { key: 'pct', header: '% of Total' },
+          { key: 'total_cost', header: moneyOk ? `Cost (${currency})` : 'Cost' },
+          { key: 'cpk', header: moneyOk ? `CPK (${currency})` : 'CPK' },
+          { key: 'top_asset', header: 'Top Asset' },
+        ],
+        'Root Cause Intelligence Summary',
+        reportFileName('TyrePulse Root Cause Summary', activeCountry, datePreset),
+        'landscape',
+        '',
+        { currency: currency || undefined, subtitleNote: `${filtered.length.toLocaleString()} records in scope` },
+      )
+    } catch (e) {
+      setError(toUserMessage(e, 'Could not export. Try again.'))
+    } finally { setExporting(false) }
   }
 
-  // ─── Render ─────────────────────────────────────────────────────────────────
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[var(--surface-1)] flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-10 h-10 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-          <p className="text-[var(--text-muted)] text-sm">Loading classification engine...</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen bg-[var(--surface-1)] flex items-center justify-center">
-        <div className="bg-[var(--surface-1)] border border-red-900 rounded-xl p-8 text-center max-w-md">
-          <AlertOctagon size={32} className="text-red-500 mx-auto mb-3" />
-          <p className="text-red-400 font-semibold mb-1">Failed to load records</p>
-          <p className="text-[var(--text-muted)] text-sm">{error}</p>
-        </div>
-      </div>
-    )
-  }
-
-  // Full-page empty only when the unwindowed pull is genuinely empty. With a date
-  // window active, fall through so the filters stay visible and the user can widen it.
-  if (records.length === 0 && !dateCutoff) {
-    return (
-      <div className="min-h-screen bg-[var(--surface-1)] flex items-center justify-center">
-        <div className="card p-8 text-center max-w-md">
-          <Layers size={32} className="text-[var(--text-dim)] mx-auto mb-3" />
-          <p className="text-[var(--text-muted)] font-semibold mb-1">No tyre records found</p>
-          <p className="text-[var(--text-dim)] text-sm">Upload tyre change records to enable root cause analysis.</p>
-        </div>
-      </div>
-    )
-  }
-
-  const coveragePct = filtered.length > 0
-    ? ((totalClassified / filtered.length) * 100).toFixed(1)
-    : '0.0'
+  const noData = !loading && !error && records.length === 0 && !dateCutoff
 
   return (
     <div className="space-y-6">
@@ -675,604 +345,294 @@ export default function RootCauseEngine() {
         subtitle="Rule-based classification of 14 engineering root causes across the fleet"
         icon={AlertOctagon}
         actions={
-          <div className="flex gap-2">
-            <button
-              onClick={handleExcelExport}
-              className="flex items-center gap-2 px-3 py-2 bg-green-900/40 border border-green-700/50 text-green-400 rounded-lg text-sm hover:bg-green-900/60 transition-colors"
-            >
-              <Download size={15} />
-              Excel
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={retry} disabled={loading}
+              className={`btn-secondary min-h-[44px] flex items-center gap-2 text-sm disabled:opacity-50 ${FOCUS}`}>
+              <RefreshCw size={15} className={loading ? 'animate-spin' : ''} aria-hidden="true" /> Refresh
             </button>
-            <button
-              onClick={handlePdfExport}
-              className="flex items-center gap-2 px-3 py-2 bg-red-900/40 border border-red-700/50 text-red-400 rounded-lg text-sm hover:bg-red-900/60 transition-colors"
-            >
-              <FileText size={15} />
-              PDF
+            <button type="button" onClick={handleExcelExport} disabled={loading || exporting || classified.length === 0}
+              className={`btn-secondary min-h-[44px] flex items-center gap-2 text-sm disabled:opacity-50 ${FOCUS}`}>
+              <Download size={15} aria-hidden="true" /> Excel
+            </button>
+            <button type="button" onClick={handlePdfExport} disabled={loading || exporting || sorted.length === 0}
+              className={`btn-secondary min-h-[44px] flex items-center gap-2 text-sm disabled:opacity-50 ${FOCUS}`}>
+              <FileText size={15} aria-hidden="true" /> PDF
             </button>
           </div>
         }
       />
 
-      {/* ── Filters ── */}
-      <div className="card p-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Filter size={14} className="text-[var(--text-muted)]" />
-          <span className="text-xs text-[var(--text-muted)] uppercase tracking-wide font-medium">Filters</span>
-        </div>
-        <div className="flex flex-wrap gap-3 items-end">
-          {/* Date presets */}
-          <div>
-            <p className="text-xs text-[var(--text-dim)] mb-1.5">Date Range</p>
-            <div className="flex gap-1.5 flex-wrap">
-              {DATE_PRESETS.map(p => (
-                <button
-                  key={p.label}
-                  onClick={() => setDatePreset(p.label)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
-                    datePreset === p.label
-                      ? 'bg-indigo-600 border-indigo-500 text-white'
-                      : 'bg-[var(--input-bg)] border-[var(--input-border)] text-[var(--text-muted)] hover:bg-[var(--input-bg-hover)]'
-                  }`}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
+      {error && (
+        <div role="alert" className="card p-4 flex flex-wrap items-center gap-3 border border-red-500/40">
+          <AlertOctagon size={18} className="text-red-500 shrink-0" aria-hidden="true" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-[var(--text-primary)]">Root cause data could not be loaded</p>
+            <p className="text-sm text-[var(--text-muted)]">{error}</p>
           </div>
-
-          {/* Site filter */}
-          <div>
-            <p className="text-xs text-[var(--text-dim)] mb-1.5">Site</p>
-            <select
-              value={siteFilter}
-              onChange={e => setSiteFilter(e.target.value)}
-              className="bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:border-indigo-500"
-            >
-              <option value="all">All Sites</option>
-              {allSites.filter(s => s !== 'all').map(s => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Risk filter */}
-          <div>
-            <p className="text-xs text-[var(--text-dim)] mb-1.5">Risk Level</p>
-            <select
-              value={riskFilter}
-              onChange={e => setRiskFilter(e.target.value)}
-              className="bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:border-indigo-500"
-            >
-              <option value="all">All Levels</option>
-              <option value="Critical">Critical</option>
-              <option value="High">High</option>
-              <option value="Medium">Medium</option>
-              <option value="Low">Low</option>
-            </select>
-          </div>
-
-          {/* Min records */}
-          <div>
-            <p className="text-xs text-[var(--text-dim)] mb-1.5">Min Records: <span className="text-[var(--text-muted)]">{minRecords}</span></p>
-            <input
-              type="range"
-              min={1}
-              max={50}
-              value={minRecords}
-              onChange={e => setMinRecords(Number(e.target.value))}
-              className="w-28 accent-indigo-500"
-            />
-          </div>
-
-          <div className="ml-auto text-xs text-[var(--text-dim)]">
-            {fmtNum(filtered.length)} records in view
-          </div>
-        </div>
-      </div>
-
-      {/* ── Capped view note ── */}
-      {truncated && (
-        <div className="card p-3 flex items-start gap-2 border border-yellow-800 bg-yellow-900/20 text-xs text-yellow-300">
-          <AlertTriangle size={16} className="shrink-0 mt-0.5" />
-          <span>
-            Capped view: showing the first {(50000).toLocaleString()} records for the selected country and
-            date window. Narrow the date range or country to see the full detail.
-          </span>
+          <button type="button" onClick={retry} className={`btn-secondary min-h-[44px] flex items-center gap-2 text-sm ${FOCUS}`}>
+            <RefreshCw size={14} aria-hidden="true" /> Retry
+          </button>
         </div>
       )}
 
-      {/* ── Summary Stats ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard
-          icon={Activity}
-          label="Total Records"
-          value={fmtNum(filtered.length)}
-          sub="in current filter"
-          color="text-blue-400"
-        />
-        <StatCard
-          icon={ShieldAlert}
-          label="Cause Coverage"
-          value={`${coveragePct}%`}
-          sub={`${fmtNum(totalClassified)} records classified`}
-          color="text-indigo-400"
-        />
-        <StatCard
-          icon={TrendingUp}
-          label="Top Root Cause"
-          value={topCause ? topCause.cause.split(' ').slice(0, 2).join(' ') : '-'}
-          sub={topCause ? `${fmtNum(topCause.count)} records` : 'No data'}
-          color="text-red-400"
-        />
-        <StatCard
-          icon={DollarSign}
-          label="Top Cause Cost"
-          value={topCause ? fmtCost(topCause.totalCost, currency) : '-'}
-          sub={topCause ? `for ${topCause.cause}` : 'No data'}
-          color="text-amber-400"
-        />
-      </div>
-
-      {/* ── Charts row ── */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        {/* Frequency chart */}
-        <div className="card p-4">
-          <div className="flex items-center gap-2 mb-4">
-            <BarChart2 size={16} className="text-indigo-400" />
-            <h2 className="text-sm font-semibold text-[var(--text-primary)]">Root Cause Frequency</h2>
-          </div>
-          {sortedCauses.length === 0 ? (
-            <div className="flex items-center justify-center h-48 text-[var(--text-dim)] text-sm">
-              No causes meet the minimum records threshold
-            </div>
-          ) : (
-            <div style={{ height: Math.max(sortedCauses.length * 36, 200) }}>
-              <Bar
-                data={freqChartData}
-                options={{
-                  ...CHART_DARK,
-                  indexAxis: 'y',
-                  plugins: {
-                    ...CHART_DARK.plugins,
-                    tooltip: {
-                      ...CHART_DARK.plugins.tooltip,
-                      callbacks: {
-                        label: ctx => ` ${ctx.parsed.x.toLocaleString()} records`,
-                      },
-                    },
-                  },
-                  scales: {
-                    x: {
-                      grid: { color:'var(--text-muted)' },
-                      ticks: { color: '#9ca3af', font: { size: 11 } },
-                    },
-                    y: {
-                      grid: { color: 'transparent' },
-                      ticks: { color: '#d1d5db', font: { size: 11 } },
-                    },
-                  },
-                }}
-              />
-            </div>
-          )}
-          <div className="flex gap-4 mt-3 text-xs text-[var(--text-dim)]">
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-600 inline-block" /> &gt;20% of total</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-600 inline-block" /> 10-20%</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-700 inline-block" /> &lt;10%</span>
-          </div>
-        </div>
-
-        {/* Financial impact chart */}
-        <div className="card p-4">
-          <div className="flex items-center gap-2 mb-4">
-            <DollarSign size={16} className="text-amber-400" />
-            <h2 className="text-sm font-semibold text-[var(--text-primary)]">Financial Impact by Root Cause</h2>
-            {currency && <span className="text-xs text-[var(--text-dim)] ml-1">({currency})</span>}
-          </div>
-          {sortedCauses.length === 0 ? (
-            <div className="flex items-center justify-center h-48 text-[var(--text-dim)] text-sm">
-              No data available
-            </div>
-          ) : (
-            <div style={{ height: Math.max(sortedCauses.length * 36, 200) }}>
-              <Bar
-                data={financialChartData}
-                options={{
-                  ...CHART_DARK,
-                  indexAxis: 'y',
-                  plugins: {
-                    ...CHART_DARK.plugins,
-                    tooltip: {
-                      ...CHART_DARK.plugins.tooltip,
-                      callbacks: {
-                        label: ctx => ` ${fmtCost(ctx.parsed.x, currency)}`,
-                      },
-                    },
-                  },
-                  scales: {
-                    x: {
-                      grid: { color:'var(--text-muted)' },
-                      ticks: {
-                        color: '#9ca3af',
-                        font: { size: 11 },
-                        callback: v => `${currency ? currency + ' ' : ''}${(v / 1000).toFixed(0)}K`,
-                      },
-                    },
-                    y: {
-                      grid: { color: 'transparent' },
-                      ticks: { color: '#d1d5db', font: { size: 11 } },
-                    },
-                  },
-                }}
-              />
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ── Heat Map ── */}
-      <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4 overflow-x-auto">
-        <div className="flex items-center gap-2 mb-4">
-          <Layers size={16} className="text-purple-400" />
-          <h2 className="text-sm font-semibold text-[var(--text-primary)]">Site × Root Cause Heat Map</h2>
-          <span className="text-xs text-[var(--text-dim)] ml-1">(top {TOP_CAUSES_HEATMAP} causes)</span>
-        </div>
-        {heatMapData.activeSites.length === 0 ? (
-          <p className="text-[var(--text-dim)] text-sm text-center py-8">No site data available</p>
-        ) : (
-          <table className="min-w-full text-xs border-collapse">
-            <thead>
-              <tr>
-                <th className="text-left text-[var(--text-muted)] font-medium py-2 pr-4 border-b border-[var(--input-border)] whitespace-nowrap">Site</th>
-                {heatMapData.topCauses.map(c => (
-                  <th
-                    key={c}
-                    className="text-[var(--text-muted)] font-medium py-2 px-2 border-b border-[var(--input-border)] text-center whitespace-nowrap"
-                    style={{ maxWidth: 80 }}
-                  >
-                    <span
-                      className="block truncate"
-                      style={{ maxWidth: 80 }}
-                      title={c}
-                    >
-                      {c}
-                    </span>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {heatMapData.activeSites.map(site => (
-                <tr key={site} className="border-b border-[var(--input-border)]/50">
-                  <td className="py-2 pr-4 text-[var(--text-secondary)] font-medium whitespace-nowrap">{site}</td>
-                  {heatMapData.topCauses.map(cause => {
-                    const count = heatMapData.matrix[site]?.[cause] || 0
-                    const cls = heatIntensity(count, heatMapData.maxVal)
-                    return (
-                      <td key={cause} className="py-1 px-2 text-center">
-                        {count > 0 ? (
-                          <span className={`inline-block min-w-[2rem] px-1.5 py-0.5 rounded text-center font-semibold ${cls}`}>
-                            {count}
-                          </span>
-                        ) : (
-                          <span className="text-[var(--text-dim)]">-</span>
-                        )}
-                      </td>
-                    )
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-        <div className="flex gap-4 mt-3 text-xs text-[var(--text-dim)] flex-wrap">
-          <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-red-700" /> High (&gt;75%)</span>
-          <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-orange-700" /> Medium-High</span>
-          <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-yellow-700" /> Medium</span>
-          <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-green-900" /> Low</span>
-        </div>
-      </div>
-
-      {/* ── Deep Dive Tabs ── */}
-      <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
-        <div className="p-4 border-b border-[var(--input-border)]">
-          <div className="flex items-center gap-2 mb-3">
-            <AlertTriangle size={16} className="text-amber-400" />
-            <h2 className="text-sm font-semibold text-[var(--text-primary)]">Root Cause Deep Dive</h2>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {ROOT_CAUSES.map(cause => {
-              const count = causeStats[cause]?.count || 0
-              const isActive = activeTab === cause
-              return (
-                <button
-                  key={cause}
-                  onClick={() => handleTabChange(cause)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors border flex items-center gap-1.5 ${
-                    isActive
-                      ? 'bg-indigo-600 border-indigo-500 text-white'
-                      : 'bg-[var(--input-bg)] border-[var(--input-border)] text-[var(--text-muted)] hover:bg-[var(--input-bg-hover)]'
-                  }`}
-                >
-                  {cause}
-                  {count > 0 && (
-                    <span className={`rounded-full px-1.5 py-0 text-[10px] font-bold ${
-                      isActive ? 'bg-indigo-500 text-white' : 'bg-[var(--input-bg)] text-[var(--text-muted)]'
-                    }`}>
-                      {count}
-                    </span>
-                  )}
+      {noData ? (
+        <StateCard icon={Layers} title="No tyre records found"
+          body="Upload tyre change records to enable root cause analysis." />
+      ) : !error && (
+        <>
+          {/* ── Filters ── */}
+          <section className="card p-4" aria-label="Filters">
+            <div className="flex items-center gap-2 mb-3">
+              <Filter size={14} className="text-[var(--text-muted)]" aria-hidden="true" />
+              <h2 className="text-xs text-[var(--text-muted)] uppercase tracking-wide font-medium">Filters</h2>
+              {filtersActive && (
+                <button type="button" onClick={clearFilters}
+                  className={`ml-auto min-h-[44px] inline-flex items-center gap-1 px-3 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-lg ${FOCUS}`}>
+                  <X size={12} aria-hidden="true" /> Clear filters
                 </button>
-              )
-            })}
-          </div>
-        </div>
-
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={activeTab}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.18 }}
-            className="p-4 space-y-4"
-          >
-            {/* KPI row */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div className="bg-[var(--input-bg)]/60 rounded-lg p-3">
-                <p className="text-xs text-[var(--text-muted)] mb-1">Records</p>
-                <p className="text-lg font-bold text-[var(--text-primary)]">{fmtNum(deepDiveData.count)}</p>
-                <p className="text-xs text-[var(--text-dim)]">{deepDiveData.pct}% of total</p>
-              </div>
-              <div className="bg-[var(--input-bg)]/60 rounded-lg p-3">
-                <p className="text-xs text-[var(--text-muted)] mb-1">Total Cost</p>
-                <p className="text-lg font-bold text-amber-400">{fmtCost(deepDiveData.totalCost, currency)}</p>
-              </div>
-              <div className="bg-[var(--input-bg)]/60 rounded-lg p-3">
-                <p className="text-xs text-[var(--text-muted)] mb-1">Avg CPK</p>
-                <p className="text-lg font-bold text-indigo-400">
-                  {deepDiveData.avgCPK != null
-                    ? `${currency ? currency + ' ' : ''}${deepDiveData.avgCPK.toFixed(4)}`
-                    : '-'}
-                </p>
-                <p className="text-xs text-[var(--text-dim)]">Cost per km</p>
-              </div>
-              <div className="bg-[var(--input-bg)]/60 rounded-lg p-3">
-                <p className="text-xs text-[var(--text-muted)] mb-1">Coverage %</p>
-                <p className="text-lg font-bold text-blue-400">{deepDiveData.pct}%</p>
-                <p className="text-xs text-[var(--text-dim)]">of filtered records</p>
-              </div>
+              )}
             </div>
-
-            {/* Top lists */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              {/* Top assets */}
-              <div className="bg-[var(--input-bg)]/50 rounded-lg p-3">
-                <p className="text-xs text-[var(--text-muted)] uppercase tracking-wide mb-2 font-medium">Top 5 Affected Assets</p>
-                {deepDiveData.topAssets.length === 0 ? (
-                  <p className="text-[var(--text-dim)] text-xs">No data</p>
-                ) : (
-                  <ul className="space-y-1.5">
-                    {deepDiveData.topAssets.map((a, i) => (
-                      <li key={a.name} className="flex items-center justify-between">
-                        <span className="flex items-center gap-2">
-                          <span className="text-[10px] text-[var(--text-dim)] w-4">{i + 1}.</span>
-                          <span className="text-[var(--text-secondary)] text-xs font-mono">{a.name}</span>
-                        </span>
-                        <span className="text-xs font-bold text-[var(--text-primary)] bg-[var(--input-bg)] px-2 py-0.5 rounded">
-                          {a.count}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-
-              {/* Top brands */}
-              <div className="bg-[var(--input-bg)]/50 rounded-lg p-3">
-                <p className="text-xs text-[var(--text-muted)] uppercase tracking-wide mb-2 font-medium">Top 5 Affected Brands</p>
-                {deepDiveData.topBrands.length === 0 ? (
-                  <p className="text-[var(--text-dim)] text-xs">No data</p>
-                ) : (
-                  <ul className="space-y-1.5">
-                    {deepDiveData.topBrands.map((b, i) => (
-                      <li key={b.name} className="flex items-center justify-between">
-                        <span className="flex items-center gap-2">
-                          <span className="text-[10px] text-[var(--text-dim)] w-4">{i + 1}.</span>
-                          <span className="text-[var(--text-secondary)] text-xs">{b.name}</span>
-                        </span>
-                        <span className="text-xs font-bold text-[var(--text-primary)] bg-[var(--input-bg)] px-2 py-0.5 rounded">
-                          {b.count}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-
-              {/* Top sites */}
-              <div className="bg-[var(--input-bg)]/50 rounded-lg p-3">
-                <p className="text-xs text-[var(--text-muted)] uppercase tracking-wide mb-2 font-medium">Top 5 Affected Sites</p>
-                {deepDiveData.topSites.length === 0 ? (
-                  <p className="text-[var(--text-dim)] text-xs">No data</p>
-                ) : (
-                  <ul className="space-y-1.5">
-                    {deepDiveData.topSites.map((s, i) => (
-                      <li key={s.name} className="flex items-center justify-between">
-                        <span className="flex items-center gap-2">
-                          <span className="text-[10px] text-[var(--text-dim)] w-4">{i + 1}.</span>
-                          <span className="text-[var(--text-secondary)] text-xs">{s.name}</span>
-                        </span>
-                        <span className="text-xs font-bold text-[var(--text-primary)] bg-[var(--input-bg)] px-2 py-0.5 rounded">
-                          {s.count}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </div>
-
-            {/* Prevention recommendation */}
-            {deepDiveData.prevention && (
-              <div className="bg-amber-950/30 border border-amber-800/40 rounded-lg p-3 flex gap-3">
-                <AlertTriangle size={16} className="text-amber-400 shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-xs font-semibold text-amber-400 mb-1">Prevention Recommendation</p>
-                  <p className="text-sm text-amber-200/80 leading-relaxed">{deepDiveData.prevention}</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
+              <div className="sm:col-span-2 lg:col-span-4">
+                <p className="text-xs text-[var(--text-dim)] mb-1.5" id="rca-range-label">Date range</p>
+                <div className="flex gap-1.5 flex-wrap" role="group" aria-labelledby="rca-range-label">
+                  {DATE_PRESETS.map(p => (
+                    <button key={p.label} type="button" onClick={() => setDatePreset(p.label)}
+                      aria-pressed={datePreset === p.label}
+                      className={`min-h-[44px] px-3 rounded-lg text-xs font-medium border transition-colors ${FOCUS} ${
+                        datePreset === p.label
+                          ? 'bg-[var(--accent)] border-[var(--accent)] text-white'
+                          : 'bg-[var(--input-bg)] border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                      }`}>{p.label}</button>
+                  ))}
                 </div>
               </div>
-            )}
+              <label className="block">
+                <span className="text-xs text-[var(--text-dim)] mb-1.5 block">Search</span>
+                <span className="relative block">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+                  <input type="search" value={search} onChange={e => setSearch(e.target.value)}
+                    placeholder="Asset, brand, serial, findings"
+                    className={`w-full pl-9 ${SELECT_CLS}`} />
+                </span>
+              </label>
+              <label className="block">
+                <span className="text-xs text-[var(--text-dim)] mb-1.5 block">Site</span>
+                <select value={siteFilter} onChange={e => setSiteFilter(e.target.value)} className={`w-full ${SELECT_CLS}`}>
+                  <option value="all">All sites</option>
+                  {allSites.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-xs text-[var(--text-dim)] mb-1.5 block">Risk level</span>
+                <select value={riskFilter} onChange={e => setRiskFilter(e.target.value)} className={`w-full ${SELECT_CLS}`}>
+                  <option value="all">All levels</option>
+                  {RISK_LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-xs text-[var(--text-dim)] mb-1.5 block">
+                  Minimum records per cause: <span className="text-[var(--text-secondary)] tabular-nums">{minRecords}</span>
+                </span>
+                <input type="range" min={1} max={50} value={minRecords}
+                  onChange={e => setMinRecords(Number(e.target.value))}
+                  className={`w-full min-h-[44px] accent-[var(--accent)] ${FOCUS}`} />
+              </label>
+            </div>
+            <p className="mt-3 text-xs text-[var(--text-dim)]" aria-live="polite">
+              {loading ? 'Loading records...' : `${filtered.length.toLocaleString()} records in view`}
+            </p>
+          </section>
 
-            {/* Records table */}
-            {deepDiveData.totalRecs > 0 && (
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs text-[var(--text-muted)] font-medium">
-                    Affected Records - {fmtNum(deepDiveData.totalRecs)} total
-                  </p>
-                  {deepDiveData.totalPages > 1 && (
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => setDeepDivePage(p => Math.max(1, p - 1))}
-                        disabled={deepDivePage === 1}
-                        className="p-1 rounded bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] disabled:opacity-30 transition-colors"
-                      >
-                        <ChevronLeft size={14} />
-                      </button>
-                      <span className="text-xs text-[var(--text-muted)]">
-                        {deepDivePage} / {deepDiveData.totalPages}
-                      </span>
-                      <button
-                        onClick={() => setDeepDivePage(p => Math.min(deepDiveData.totalPages, p + 1))}
-                        disabled={deepDivePage === deepDiveData.totalPages}
-                        className="p-1 rounded bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] disabled:opacity-30 transition-colors"
-                      >
-                        <ChevronRight size={14} />
-                      </button>
+          {truncated && (
+            <div role="status" className="card p-3 flex items-start gap-2 border border-amber-500/40 text-xs text-[var(--text-secondary)]">
+              <AlertTriangle size={16} className="shrink-0 mt-0.5 text-amber-500" aria-hidden="true" />
+              <span>
+                Capped view: showing the newest {ROW_CEILING.toLocaleString()} records for this country and date window.
+                Narrow the date range or country to analyse the full detail.
+              </span>
+            </div>
+          )}
+
+          {!moneyOk && !loading && records.length > 0 && (
+            <div role="status" className="card p-3 flex items-start gap-2 border border-[var(--input-border)] text-xs text-[var(--text-secondary)]">
+              <Coins size={16} className="shrink-0 mt-0.5 text-[var(--text-muted)]" aria-hidden="true" />
+              <span>
+                These records span countries that report in different currencies, so cost and CPK are withheld
+                rather than added together. Pick one country to see money figures.
+              </span>
+            </div>
+          )}
+
+          {/* ── KPI strip ── */}
+          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+            <StatTile icon={Activity} label="Records in view" value={loading ? '...' : filtered.length.toLocaleString()}
+              sub={`${summary.critical.toLocaleString()} rated Critical`} />
+            <StatTile icon={ShieldAlert} label="Cause coverage"
+              value={summary.coveragePct === null ? 'N/A' : `${summary.coveragePct.toFixed(1)}%`}
+              sub={`${summary.classified.toLocaleString()} classified`} tone="info" />
+            <StatTile icon={AlertTriangle} label="Unclassified" value={summary.unclassified.toLocaleString()}
+              sub="No rule matched the record" tone={summary.unclassified > 0 ? 'warn' : 'neutral'} />
+            <StatTile icon={TrendingUp} label="Top root cause" value={summary.topCause ? summary.topCause.count.toLocaleString() : 'N/A'}
+              sub={summary.topCause ? summary.topCause.cause : 'No cause meets the threshold'} tone="crit" />
+            <StatTile icon={Coins} label="Classified cost" value={fmtMoney(summary.classifiedCost)}
+              sub={summary.pricedShare === null ? 'No classified records' : `${summary.pricedShare.toFixed(0)}% of classified records priced`} />
+            <StatTile icon={Gauge} label="Causes per record"
+              value={summary.avgCausesPerRecord === null ? 'N/A' : summary.avgCausesPerRecord.toFixed(2)}
+              sub={`${summary.causesActive} causes active`} />
+          </div>
+
+          {loading ? (
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4" aria-busy="true">
+              {[0, 1].map(i => <div key={i} className="card h-72 animate-pulse" />)}
+            </div>
+          ) : filtered.length === 0 ? (
+            <StateCard icon={Search} title="No records match these filters"
+              body="Widen the date range or clear the site, risk and search filters."
+              action={filtersActive && (
+                <button type="button" onClick={clearFilters} className={`btn-secondary min-h-[44px] text-sm ${FOCUS}`}>Clear filters</button>
+              )} />
+          ) : (
+            <>
+              {/* ── Charts ── */}
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                <section className="card p-4" aria-labelledby="rca-freq">
+                  <div className="flex items-center gap-2 mb-4">
+                    <BarChart2 size={16} className="text-[var(--text-muted)]" aria-hidden="true" />
+                    <h2 id="rca-freq" className="text-sm font-semibold text-[var(--text-primary)]">Root cause frequency</h2>
+                  </div>
+                  {sorted.length === 0 ? (
+                    <p className="h-48 flex items-center justify-center text-[var(--text-dim)] text-sm">No cause meets the minimum records threshold</p>
+                  ) : (
+                    <div style={{ height: Math.max(sorted.length * 32, 200) }} role="img"
+                      aria-label={`Bar chart of records per root cause. Highest: ${sorted[0].cause} with ${sorted[0].count} records.`}>
+                      <Bar data={freqChart} options={barOpts(ctx => ` ${ctx.parsed.x.toLocaleString()} records (${(pct(ctx.parsed.x, filtered.length) ?? 0).toFixed(1)}%)`)} />
                     </div>
                   )}
-                </div>
-                <div className="overflow-x-auto rounded-lg border border-[var(--input-border)]">
-                  <table className="min-w-full text-xs">
-                    <thead>
-                      <tr className="bg-[var(--input-bg)]/70 text-[var(--text-muted)]">
-                        <th className="text-left py-2 px-3 font-medium">Asset No</th>
-                        <th className="text-left py-2 px-3 font-medium">Site</th>
-                        <th className="text-left py-2 px-3 font-medium">Brand</th>
-                        <th className="text-left py-2 px-3 font-medium">Date</th>
-                        <th className="text-left py-2 px-3 font-medium">Risk</th>
-                        <th className="text-left py-2 px-3 font-medium">Findings</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[var(--input-border)]/50">
-                      {deepDiveData.paginated.map(r => (
-                        <tr key={r.id} className="hover:bg-[var(--input-bg)]/30 transition-colors">
-                          <td className="py-2 px-3 text-[var(--text-secondary)] font-mono">{r.asset_no || '-'}</td>
-                          <td className="py-2 px-3 text-[var(--text-secondary)]">{r.site || '-'}</td>
-                          <td className="py-2 px-3 text-[var(--text-secondary)]">{r.brand || '-'}</td>
-                          <td className="py-2 px-3 text-[var(--text-muted)]">{r.issue_date || '-'}</td>
-                          <td className="py-2 px-3">
-                            <span
-                              className="px-1.5 py-0.5 rounded text-[10px] font-semibold"
-                              style={{
-                                backgroundColor: (RISK_COLORS_MAP[r.risk_level] || '#4b5563') + '30',
-                                color: RISK_COLORS_MAP[r.risk_level] || '#9ca3af',
-                                border: `1px solid ${(RISK_COLORS_MAP[r.risk_level] || '#4b5563')}60`,
-                              }}
-                            >
-                              {r.risk_level || 'N/A'}
-                            </span>
-                          </td>
-                          <td className="py-2 px-3 text-[var(--text-muted)] max-w-xs">
-                            <span
-                              title={r.findings || r.description || r.remarks || ''}
-                              className="block truncate"
-                              style={{ maxWidth: 260 }}
-                            >
-                              {(r.findings || r.description || r.remarks || '-').slice(0, 90)}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                </section>
+
+                <section className="card p-4" aria-labelledby="rca-cost">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Coins size={16} className="text-[var(--text-muted)]" aria-hidden="true" />
+                    <h2 id="rca-cost" className="text-sm font-semibold text-[var(--text-primary)]">Financial impact by root cause</h2>
+                    {moneyOk && <span className="text-xs text-[var(--text-dim)]">({currency})</span>}
+                  </div>
+                  {!moneyOk ? (
+                    <p className="h-48 flex items-center justify-center text-center text-[var(--text-dim)] text-sm px-4">Cost is withheld: the records mix currencies. Pick one country.</p>
+                  ) : costRanked.length === 0 ? (
+                    <p className="h-48 flex items-center justify-center text-[var(--text-dim)] text-sm">No classified record carries a price</p>
+                  ) : (
+                    <div style={{ height: Math.max(costRanked.length * 32, 200) }} role="img"
+                      aria-label={`Bar chart of cost per root cause. Highest: ${costRanked[0].cause}.`}>
+                      <Bar data={costChart} options={barOpts(ctx => ` ${fmtMoney(ctx.parsed.x)}`)} />
+                    </div>
+                  )}
+                  <p className="mt-2 text-xs text-[var(--text-dim)]">A record matching several causes counts toward each of them.</p>
+                </section>
               </div>
-            )}
 
-            {deepDiveData.totalRecs === 0 && (
-              <div className="text-center py-10 text-[var(--text-dim)] text-sm">
-                No records classified under <span className="text-[var(--text-muted)] font-medium">{activeTab}</span> with current filters.
-              </div>
-            )}
-          </motion.div>
-        </AnimatePresence>
-      </div>
+              {/* ── Heat map ── */}
+              <section className="card p-4 space-y-3" aria-labelledby="rca-heat">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Layers size={16} className="text-[var(--text-muted)]" aria-hidden="true" />
+                  <h2 id="rca-heat" className="text-sm font-semibold text-[var(--text-primary)]">Site by root cause heat map</h2>
+                  <span className="text-xs text-[var(--text-dim)]">(top {TOP_CAUSES_HEATMAP} causes, counts printed in each cell)</span>
+                </div>
+                <EnterpriseTable
+                  columns={heatColumns}
+                  data={heatmap.rows}
+                  getRowId={r => r.site}
+                  enableColumnFilters={false}
+                  searchPlaceholder="Search sites"
+                  initialPageSize={25}
+                  exportFileName="root-cause-site-heatmap"
+                  emptyMessage="No site carries a classified record"
+                />
+              </section>
 
-      {/* ── Worst Vehicles Table ── */}
-      <div className="card p-4">
-        <div className="flex items-center gap-2 mb-4">
-          <AlertOctagon size={16} className="text-red-400" />
-          <h2 className="text-sm font-semibold text-[var(--text-primary)]">Worst Vehicles by Root Cause Incidents</h2>
-          <span className="text-xs text-[var(--text-dim)] ml-1">(top 15)</span>
-        </div>
-        {worstVehicles.length === 0 ? (
-          <p className="text-[var(--text-dim)] text-sm text-center py-8">No vehicle data available</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-xs">
-              <thead>
-                <tr className="bg-[var(--input-bg)]/70 text-[var(--text-muted)]">
-                  <th className="text-left py-2 px-3 font-medium w-6">#</th>
-                  <th className="text-left py-2 px-3 font-medium">Asset No</th>
-                  <th className="text-left py-2 px-3 font-medium">Site</th>
-                  <th className="text-right py-2 px-3 font-medium">Incidents</th>
-                  <th className="text-left py-2 px-3 font-medium">Top Cause</th>
-                  <th className="text-right py-2 px-3 font-medium">Total Cost</th>
-                  <th className="text-right py-2 px-3 font-medium">Avg CPK</th>
-                  <th className="text-center py-2 px-3 font-medium">History</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--input-border)]/50">
-                {worstVehicles.map((v, i) => (
-                  <tr key={v.asset_no} className="hover:bg-[var(--input-bg)]/30 transition-colors">
-                    <td className="py-2 px-3 text-[var(--text-dim)]">{i + 1}</td>
-                    <td className="py-2 px-3 text-[var(--text-secondary)] font-mono font-semibold">{v.asset_no}</td>
-                    <td className="py-2 px-3 text-[var(--text-secondary)]">{v.site}</td>
-                    <td className="py-2 px-3 text-right">
-                      <span className={`font-bold ${
-                        v.totalIncidents >= 10 ? 'text-red-400' :
-                        v.totalIncidents >= 5 ? 'text-amber-400' : 'text-[var(--text-secondary)]'
-                      }`}>
-                        {v.totalIncidents.toLocaleString()}
-                      </span>
-                    </td>
-                    <td className="py-2 px-3 text-[var(--text-muted)]">{v.topCause}</td>
-                    <td className="py-2 px-3 text-right text-amber-400 font-medium">
-                      {fmtCost(v.totalCost, currency)}
-                    </td>
-                    <td className="py-2 px-3 text-right text-[var(--text-muted)]">
-                      {v.avgCPK != null ? `${currency ? currency + ' ' : ''}${v.avgCPK.toFixed(4)}` : '-'}
-                    </td>
-                    <td className="py-2 px-3 text-center">
-                      <a
-                        href={`/vehicle-history?q=${encodeURIComponent(v.asset_no)}`}
-                        className="inline-flex items-center gap-1 text-indigo-400 hover:text-indigo-300 transition-colors text-[11px] font-medium"
-                      >
-                        <ExternalLink size={12} />
-                        View
-                      </a>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+              {/* ── Deep dive ── */}
+              <section className="card p-4 space-y-4" aria-labelledby="rca-dive">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle size={16} className="text-[var(--text-muted)]" aria-hidden="true" />
+                  <h2 id="rca-dive" className="text-sm font-semibold text-[var(--text-primary)]">Root cause deep dive</h2>
+                </div>
+                <div className="flex flex-wrap gap-1.5" role="group" aria-label="Choose a root cause">
+                  {ROOT_CAUSES.map(cause => {
+                    const count = causeStats[cause]?.count || 0
+                    const active = activeCause === cause
+                    return (
+                      <button key={cause} type="button" onClick={() => setActiveCause(cause)} aria-pressed={active}
+                        className={`min-h-[44px] px-3 rounded-lg text-xs font-medium border flex items-center gap-1.5 transition-colors ${FOCUS} ${
+                          active
+                            ? 'bg-[var(--accent)] border-[var(--accent)] text-white'
+                            : 'bg-[var(--input-bg)] border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                        }`}>
+                        {cause}
+                        <span className="tabular-nums opacity-80">({count})</span>
+                      </button>
+                    )
+                  })}
+                </div>
 
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <StatTile label="Records" value={dive.count.toLocaleString()}
+                    sub={dive.pct === null ? 'N/A of total' : `${dive.pct.toFixed(1)}% of records in view`} />
+                  <StatTile label="Total cost" value={fmtMoney(dive.totalCost)}
+                    sub={`${dive.pricedCount.toLocaleString()} of ${dive.count.toLocaleString()} priced`} />
+                  <StatTile label="Cost per km" value={fmtCpk(dive.avgCPK)} sub="Priced tyres with a measured km life" />
+                  <StatTile label="Top asset" value={dive.topAssets[0]?.name || 'N/A'}
+                    sub={dive.topAssets[0] ? `${dive.topAssets[0].count} records` : 'No records'} />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <RankList title="Top 5 affected assets" items={dive.topAssets} mono />
+                  <RankList title="Top 5 affected brands" items={dive.topBrands} />
+                  <RankList title="Top 5 affected sites" items={dive.topSites} />
+                </div>
+
+                {dive.prevention && (
+                  <div className="rounded-lg p-3 flex gap-3 border border-amber-500/40 bg-[var(--input-bg)]">
+                    <AlertTriangle size={16} className="text-amber-500 shrink-0 mt-0.5" aria-hidden="true" />
+                    <div>
+                      <p className="text-xs font-semibold text-[var(--text-primary)] mb-1">Prevention recommendation</p>
+                      <p className="text-sm text-[var(--text-secondary)] leading-relaxed">{dive.prevention}</p>
+                    </div>
+                  </div>
+                )}
+
+                <EnterpriseTable
+                  columns={recordColumns}
+                  data={dive.records}
+                  getRowId={r => String(r.id)}
+                  searchPlaceholder={`Search ${activeCause} records`}
+                  initialPageSize={25}
+                  exportFileName={`root-cause-${activeCause.toLowerCase().replace(/\s+/g, '-')}`}
+                  emptyMessage={`No records classified under ${activeCause} with the current filters.`}
+                />
+              </section>
+
+              {/* ── Worst vehicles ── */}
+              <section className="card p-4 space-y-3" aria-labelledby="rca-worst">
+                <div className="flex items-center gap-2">
+                  <AlertOctagon size={16} className="text-[var(--text-muted)]" aria-hidden="true" />
+                  <h2 id="rca-worst" className="text-sm font-semibold text-[var(--text-primary)]">Worst vehicles by root cause matches</h2>
+                  <span className="text-xs text-[var(--text-dim)]">(top 15)</span>
+                </div>
+                <EnterpriseTable
+                  columns={worstColumns}
+                  data={worst}
+                  getRowId={r => r.asset_no}
+                  enableColumnFilters={false}
+                  searchPlaceholder="Search vehicles"
+                  initialPageSize={25}
+                  exportFileName="root-cause-worst-vehicles"
+                  emptyMessage="No vehicle carries a classified record"
+                />
+              </section>
+            </>
+          )}
+        </>
+      )}
     </div>
   )
 }

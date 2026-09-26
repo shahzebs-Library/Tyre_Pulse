@@ -1,8 +1,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // StockReplenishment.jsx - Automated Stock Replenishment Intelligence · /stock-replenishment
+// All calculations live in src/lib/stockReplenishmentAnalytics.js.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { Link } from 'react-router-dom'
 import {
   Chart as ChartJS,
   CategoryScale, LinearScale, BarElement, PointElement, LineElement,
@@ -10,152 +11,172 @@ import {
 } from 'chart.js'
 import { Bar, Line } from 'react-chartjs-2'
 import {
-  Package, AlertTriangle, TrendingDown, TrendingUp, ShoppingCart,
-  RefreshCw, Loader2, Search, X, Plus, FileText,
-  FileSpreadsheet, ChevronDown, ChevronUp, Edit2, CheckCircle,
-  Clock, BarChart2, Layers, Zap, ExternalLink,
+  Package, AlertTriangle, TrendingDown, TrendingUp, ShoppingCart, RefreshCw, Loader2, Search, X, Plus,
+  FileText, FileSpreadsheet, Edit2, CheckCircle, Clock, BarChart2, Layers, Zap, ExternalLink, Download,
+  PackageX, ChevronUp, ChevronDown, ChevronsUpDown, Coins,
 } from 'lucide-react'
 import * as purchaseOrders from '../lib/api/purchaseOrders'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useTenant } from '../contexts/TenantContext'
 import { formatCurrency as fmtCurrency, formatDate, formatMonthYear, formatDateTime } from '../lib/formatters'
-import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
+import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme, exportToExcel, reportFileName } from '../lib/exportUtils'
 import { useLanguage } from '../contexts/LanguageContext'
 import { toUserMessage } from '../lib/safeError'
 import PageHeader from '../components/ui/PageHeader'
+import StatTile from '../components/ui/StatTile'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import { loadAutoTable } from '../lib/pdfEngine'
+import { sortRows, nextSort } from '../lib/consoleTableSort'
+import { colorAt, withAlpha } from '../lib/reportColors'
+import { resolveCurrency } from '../lib/rootCauseEngineAnalytics'
+import {
+  URGENCIES, URGENCY_LABEL, loadSince, consumptionRates, avgUnitCosts, buildMatrix, filterMatrix,
+  plannedQty, summarizeMatrix, consumptionBySize, trendForSize, allSizes as listSizes, consumptionGrid,
+  seasonalVariance, orderTotals, matrixExportRows, MATRIX_EXPORT_COLS, MATRIX_EXPORT_HEADERS,
+} from '../lib/stockReplenishmentAnalytics'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, PointElement, LineElement,
   Title, Tooltip, Legend, Filler,
 )
 
-// ── Constants ──────────────────────────────────────────────────────────────────
-const TABS = ['Replenishment Matrix', 'Consumption Analysis', 'Order Generator']
-// i18n key lookup for TABS/URGENCY_CONFIG labels (constants stay stable for logic/indexing)
-const TAB_I18N_KEYS = ['matrix', 'consumption', 'orderGenerator']
+const TABS = [
+  { key: 'matrix', label: 'Replenishment Matrix', icon: Layers },
+  { key: 'consumption', label: 'Consumption Analysis', icon: BarChart2 },
+  { key: 'order', label: 'Order Generator', icon: ShoppingCart },
+]
 
-const URGENCY_CONFIG = {
-  Critical:    { color: 'text-red-400',    bg: 'bg-red-900/20',    border: 'border-red-700',    row: 'bg-red-950/20 border-l-2 border-l-red-600' },
-  Low:         { color: 'text-yellow-400', bg: 'bg-yellow-900/20', border: 'border-yellow-700', row: 'bg-yellow-950/10 border-l-2 border-l-yellow-600' },
-  Normal:      { color: 'text-green-400',  bg: 'bg-green-900/20',  border: 'border-green-700',  row: '' },
-  Overstocked: { color: 'text-blue-400',   bg: 'bg-blue-900/20',   border: 'border-blue-700',   row: 'bg-blue-950/10' },
+const FOCUS = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-bright,#22c55e)]'
+const CTRL = `min-h-[44px] bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-primary)] text-sm rounded-lg px-3 ${FOCUS}`
+const CELL_INPUT = `min-h-[40px] px-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded text-[var(--text-primary)] text-sm ${FOCUS}`
+
+// Semantic urgency tones: always shown with the text label.
+const URGENCY_TONE = {
+  Critical: '#dc2626', Low: '#d97706', Normal: '#16a34a', Overstocked: '#2563eb', Idle: '#6b7280',
 }
 
+const AXIS = { color: 'var(--text-muted)', font: { size: 11 } }
+const GRID = { color: 'var(--panel-2)' }
 const CHART_OPTS = {
   responsive: true,
   maintainAspectRatio: false,
-  plugins: {
-    legend: { labels: { color: '#9ca3af', boxWidth: 12, font: { size: 11 } } },
-    tooltip: {
-      backgroundColor: 'var(--panel)',
-      borderColor: 'var(--hairline)',
-      borderWidth: 1,
-      titleColor: '#f9fafb',
-      bodyColor: '#d1d5db',
-    },
-  },
-  scales: {
-    x: { ticks: { color: '#9ca3af', font: { size: 11 } }, grid: { color: 'var(--panel-2)' } },
-    y: { ticks: { color: '#9ca3af', font: { size: 11 } }, grid: { color: 'var(--panel-2)' } },
-  },
+  plugins: { legend: { labels: { color: 'var(--text-secondary)', boxWidth: 12, font: { size: 11 } } } },
+  scales: { x: { ticks: AXIS, grid: GRID }, y: { ticks: AXIS, grid: GRID, beginAtZero: true } },
 }
 
-const BAR_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4']
-
-// Static Tailwind classes so the JIT compiler does not purge dynamically
-// interpolated `text-${color}-400` KPI colours in production builds.
-const KPI_TEXT_COLOR = {
-  red:     'text-red-400',
-  orange:  'text-orange-400',
-  yellow:  'text-yellow-400',
-  emerald: 'text-emerald-400',
-  gray:    'text-gray-400',
-  blue:    'text-blue-400',
-}
-const kpiText = (c) => KPI_TEXT_COLOR[c] || 'text-[var(--text-primary)]'
-
-// ── Helpers ────────────────────────────────────────────────────────────────────
-function computeUrgency(daysRemaining, leadTimeDays) {
-  if (daysRemaining <= 0) return 'Critical'
-  if (daysRemaining < Math.max(leadTimeDays, 30)) return 'Critical'
-  if (daysRemaining < 60) return 'Low'
-  if (daysRemaining > 180) return 'Overstocked'
-  return 'Normal'
-}
-
-// ── Skeleton ───────────────────────────────────────────────────────────────────
-function Skeleton({ className = '' }) {
-  return <div className={`animate-pulse bg-[var(--input-bg)] rounded ${className}`} />
-}
-
-// ── Urgency Badge ─────────────────────────────────────────────────────────────
 function UrgencyBadge({ urgency }) {
   const { t } = useLanguage()
-  const cfg = URGENCY_CONFIG[urgency] || URGENCY_CONFIG.Normal
+  const tone = URGENCY_TONE[urgency] || URGENCY_TONE.Idle
+  const label = urgency === 'Idle' ? URGENCY_LABEL.Idle : t(`stockreplenish.urgency.${urgency}`)
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${cfg.color} ${cfg.bg} ${cfg.border}`}>
-      {urgency === 'Critical' && <Zap size={10} className="mr-1" />}
-      {t(`stockreplenish.urgency.${urgency}`)}
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border"
+      style={{ color: tone, borderColor: withAlpha(tone, 0.45), backgroundColor: withAlpha(tone, 0.1) }}>
+      {urgency === 'Critical' && <Zap size={10} aria-hidden="true" />}
+      {label}
     </span>
   )
 }
 
-// ── Main Component ─────────────────────────────────────────────────────────────
+function SortButton({ label, active, dir, onClick, align }) {
+  const Icon = !active ? ChevronsUpDown : dir === 'asc' ? ChevronUp : ChevronDown
+  return (
+    <button type="button" onClick={onClick}
+      className={`inline-flex items-center gap-1 min-h-[32px] rounded ${FOCUS} ${align === 'right' ? 'flex-row-reverse' : ''} ${active ? 'text-[var(--text-primary)]' : ''}`}
+      aria-label={`Sort by ${label}${active ? `, currently ${dir === 'asc' ? 'ascending' : 'descending'}` : ''}`}>
+      {label}
+      <Icon size={12} aria-hidden="true" />
+    </button>
+  )
+}
+
+/** EnterpriseTable over the shared pager; sorting runs on the FULL set before paging. */
+function SortedPagedTable({ columns, rows, defaultSort, getRowId, emptyMessage, loading, error, onRetry }) {
+  const [sort, setSort] = useState(defaultSort)
+  const sorted = useMemo(() => {
+    const col = columns.find(c => c.id === sort?.key)
+    return col?.sort ? sortRows(rows, sort, { [col.id]: col.sort }) : rows
+  }, [rows, columns, sort])
+  const pager = usePagedRows(sorted)
+  const tableColumns = useMemo(() => columns.map(c => ({
+    id: c.id,
+    accessorFn: c.sort || (r => r[c.id]),
+    header: c.sort
+      ? () => <SortButton label={c.header} align={c.align} active={sort?.key === c.id} dir={sort?.dir}
+          onClick={() => setSort(s => nextSort(s, c.id, c.firstDir || 'desc'))} />
+      : c.header,
+    cell: c.cell ? ({ row }) => c.cell(row.original) : undefined,
+    size: c.size,
+    enableSorting: false,
+    meta: { align: c.align, export: c.id !== 'actions' },
+  })), [columns, sort])
+  return (
+    <div className="space-y-2">
+      <EnterpriseTable
+        columns={tableColumns}
+        data={pager.pageRows}
+        getRowId={getRowId}
+        loading={loading}
+        error={error || null}
+        onRetry={onRetry}
+        enableGlobalFilter={false}
+        enableColumnFilters={false}
+        enableSorting={false}
+        enableExport={false}
+        emptyMessage={emptyMessage}
+      />
+      {!loading && !error && <TablePagination {...pager} />}
+    </div>
+  )
+}
+
 export default function StockReplenishment() {
   const { t } = useLanguage()
   const { activeCurrency, activeCountry, appSettings } = useSettings()
   const { user, profile } = useAuth()
   const { branding } = useTenant()
 
-  // ── Raw data ───────────────────────────────────────────────────────────────
-  const [stockData, setStockData]           = useState([])
-  const [tyreRecords, setTyreRecords]       = useState([])
-  const [loading, setLoading]               = useState(true)
-  const [error, setError]                   = useState(null)
-  const [lastSync, setLastSync]             = useState(null)
+  const [stockData, setStockData]     = useState([])
+  const [tyreRecords, setTyreRecords] = useState([])
+  const [loading, setLoading]         = useState(true)
+  const [loadError, setLoadError]     = useState(null)
+  const [actionError, setActionError] = useState(null)
+  const [lastSync, setLastSync]       = useState(null)
+  const [now, setNow]                 = useState(() => new Date())
 
-  // ── UI state ───────────────────────────────────────────────────────────────
-  const [activeTab, setActiveTab]           = useState(0)
-  const [search, setSearch]                 = useState('')
-  const [siteFilter, setSiteFilter]         = useState('All')
-  const [leadTimeDays, setLeadTimeDays]     = useState(7)
-  const [leadTimeEdit, setLeadTimeEdit]     = useState(false)
-  const [leadTimeInput, setLeadTimeInput]   = useState('7')
-  const [sortField, setSortField]           = useState('days_remaining')
-  const [sortDir, setSortDir]               = useState('asc')
-  const [selectedSize, setSelectedSize]     = useState('')
+  const [activeTab, setActiveTab]         = useState('matrix')
+  const [search, setSearch]               = useState('')
+  const [siteFilter, setSiteFilter]       = useState('All')
+  const [urgencyFilter, setUrgencyFilter] = useState('All')
+  const [leadTimeDays, setLeadTimeDays]   = useState(7)
+  const [leadTimeEdit, setLeadTimeEdit]   = useState(false)
+  const [leadTimeInput, setLeadTimeInput] = useState('7')
+  const [selectedSize, setSelectedSize]   = useState('')
 
-  // ── Order Generator state ──────────────────────────────────────────────────
-  const [orderLines, setOrderLines]         = useState([])
-  const [creatingPO, setCreatingPO]         = useState(false)
-  const [poResult, setPoResult]             = useState(null) // { type:'success'|'error', message }
+  const [orderLines, setOrderLines] = useState([])
+  const [creatingPO, setCreatingPO] = useState(false)
+  const [poResult, setPoResult]     = useState(null)
+  const [editingQty, setEditingQty] = useState({})
 
-  // ── Inline qty edit in matrix ──────────────────────────────────────────────
-  const [editingQty, setEditingQty]         = useState({}) // key → overridden qty
-
-  // ── Load data ──────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
     setLoading(true)
-    setError(null)
+    setLoadError(null)
+    const at = new Date()
     try {
-      // Load ~6 months so the 6-bucket consumption bar/trend charts are fully populated.
-      const sinceDate = new Date()
-      sinceDate.setDate(sinceDate.getDate() - 183)
-      const sinceStr = sinceDate.toISOString().slice(0, 10)
-
       const [stockRows, tyreRows] = await Promise.all([
         purchaseOrders.listReplenishmentStock({ country: activeCountry }),
-        purchaseOrders.listReplenishmentTyreRecords({ country: activeCountry, sinceDate: sinceStr }),
+        purchaseOrders.listReplenishmentTyreRecords({ country: activeCountry, sinceDate: loadSince(at) }),
       ])
-
       setStockData(stockRows || [])
       setTyreRecords(tyreRows || [])
-      setLastSync(new Date())
+      setNow(at)
+      setLastSync(at)
     } catch (e) {
-      setError(toUserMessage(e, 'Something went wrong. Please try again.'))
+      // A failed read must never render as "no stock".
+      setStockData([])
+      setTyreRecords([])
+      setLoadError(toUserMessage(e, 'Replenishment data could not be loaded.'))
     } finally {
       setLoading(false)
     }
@@ -163,275 +184,92 @@ export default function StockReplenishment() {
 
   useEffect(() => { load() }, [load])
 
-  // ── Derived: consumption map (site+brand+size → qty/month over loaded window) ─
-  const consumptionMap = useMemo(() => {
-    // Restrict to the trailing 90 days so the per-month rate stays a true 90-day
-    // rate even though tyre_records is now loaded over a ~6-month window (for charts).
-    const ninetyDaysAgo = new Date()
-    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
-    const map = {}
-    tyreRecords.forEach(r => {
-      if (r.issue_date && new Date(r.issue_date) < ninetyDaysAgo) return
-      const key = `${r.site}||${r.brand}||${r.size}`
-      map[key] = (map[key] || 0) + 1
-    })
-    // convert to per-month rate (÷3 for 90d window)
-    const rates = {}
-    Object.entries(map).forEach(([k, count]) => {
-      rates[k] = count / 3
-    })
-    return rates
-  }, [tyreRecords])
-  // ── Derived: avg cost from tyre_records per brand+size ────────────────────
-  const avgCostMap = useMemo(() => {
-    const sums = {}, counts = {}
-    tyreRecords.forEach(r => {
-      if (!r.cost_per_tyre) return
-      const k = `${r.brand}||${r.size}`
-      sums[k] = (sums[k] || 0) + parseFloat(r.cost_per_tyre) * (Number(r.qty) || 1)
-      counts[k] = (counts[k] || 0) + 1
-    })
-    const result = {}
-    Object.keys(sums).forEach(k => { result[k] = sums[k] / counts[k] })
-    return result
-  }, [tyreRecords])
-
-  // ── Derived: enriched matrix rows ─────────────────────────────────────────
-  const matrixRows = useMemo(() => {
-    return stockData.map(item => {
-      const cKey = `${item.site}||${item.brand}||${item.size}`
-      const cosKey = `${item.brand}||${item.size}`
-
-      // Real column is `quantity`. There is no `qty_on_order` column on `stock`,
-      // so on-order is treated as 0 (managed in the Procurement module).
-      const qtyInStock = Number.isFinite(parseInt(item.quantity)) ? parseInt(item.quantity) : 0
-      const qtyOnOrder = 0
-      const available  = qtyInStock + qtyOnOrder
-
-      const consumptionPerMonth = consumptionMap[cKey] || 0
-      const consumptionPerDay   = consumptionPerMonth / 30
-      const daysRemaining       = consumptionPerDay < 0.001
-        ? (available > 0 ? 9999 : 0)
-        : Math.round(available / consumptionPerDay)
-
-      // 2-month buffer suggested order (net of stock already on hand / on order)
-      const buffer2Month        = consumptionPerMonth * 2
-      const suggestedQty        = Math.max(0, Math.round(buffer2Month - available))
-
-      // unit cost: prefer stock table, fallback avg from tyre_records
-      const unitCost = parseFloat(item.unit_cost) > 0
-        ? parseFloat(item.unit_cost)
-        : (avgCostMap[cosKey] || 0)
-
-      const estimatedCost = suggestedQty * unitCost
-      const urgency       = computeUrgency(daysRemaining, leadTimeDays)
-
-      return {
-        ...item,
-        qtyInStock,
-        qtyOnOrder,
-        consumptionPerMonth,
-        consumptionPerDay,
-        daysRemaining,
-        suggestedQty,
-        unitCost,
-        estimatedCost,
-        urgency,
-        _key: cKey,
-      }
-    })
-  }, [stockData, consumptionMap, avgCostMap, leadTimeDays])
-
-  // ── Distinct sites ─────────────────────────────────────────────────────────
-  const allSites = useMemo(() => (
-    ['All', ...Array.from(new Set(matrixRows.map(r => r.site).filter(Boolean))).sort()]
-  ), [matrixRows])
-
-  // ── Filtered + sorted matrix ───────────────────────────────────────────────
-  const filteredMatrix = useMemo(() => {
-    let rows = [...matrixRows]
-    // Country filtering is applied server-side (null-safe via `.or(country.eq/.is.null)`).
-    // Keep a defensive client-side guard that never drops null-country rows.
-    if (activeCountry && activeCountry !== 'All') {
-      rows = rows.filter(r => r.country == null || r.country === activeCountry)
-    }
-    if (siteFilter !== 'All') rows = rows.filter(r => r.site === siteFilter)
-    if (search.trim()) {
-      const q = search.toLowerCase()
-      rows = rows.filter(r =>
-        r.brand?.toLowerCase().includes(q) ||
-        r.size?.toLowerCase().includes(q) ||
-        r.site?.toLowerCase().includes(q)
-      )
-    }
-    rows.sort((a, b) => {
-      const av = a[sortField] ?? 0
-      const bv = b[sortField] ?? 0
-      if (typeof av === 'number') return sortDir === 'asc' ? av - bv : bv - av
-      return sortDir === 'asc'
-        ? String(av).localeCompare(String(bv))
-        : String(bv).localeCompare(String(av))
-    })
-    return rows
-  }, [matrixRows, activeCountry, siteFilter, search, sortField, sortDir])
-
-  // ── KPIs ───────────────────────────────────────────────────────────────────
-  const kpis = useMemo(() => {
-    const needsReorder    = matrixRows.filter(r => r.daysRemaining < 30 && r.daysRemaining !== 9999).length
-    const totalReorderVal = matrixRows.reduce((s, r) => {
-      const qty = editingQty[r._key] !== undefined ? editingQty[r._key] : r.suggestedQty
-      return s + qty * r.unitCost
-    }, 0)
-    const validRows       = matrixRows.filter(r => r.daysRemaining !== 9999)
-    const avgDays         = validRows.length
-      ? Math.round(validRows.reduce((s, r) => s + r.daysRemaining, 0) / validRows.length)
-      : 0
-    const criticalStockouts = matrixRows.filter(r => r.qtyInStock <= 0).length
-    const overstocked       = matrixRows.filter(r => r.daysRemaining > 180 && r.daysRemaining !== 9999).length
-    return { needsReorder, totalReorderVal, avgDays, criticalStockouts, overstocked }
-  }, [matrixRows, editingQty])
-
-  // ── Chart: monthly consumption by top 5 sizes (last 6 months) ─────────────
-  const consumptionBarData = useMemo(() => {
-    const months = Array.from({ length: 6 }, (_, i) => {
-      const d = new Date(); d.setMonth(d.getMonth() - 5 + i)
-      return d.toISOString().slice(0, 7)
-    })
-    // tyre_records is loaded over ~6 months so all six monthly buckets populate
-    const sizeTotals = {}
-    tyreRecords.forEach(r => {
-      sizeTotals[r.size] = (sizeTotals[r.size] || 0) + 1
-    })
-    const top5 = Object.entries(sizeTotals)
-      .sort((a, b) => b[1] - a[1]).slice(0, 5).map(([k]) => k)
-
-    return {
-      labels: months.map(m => {
-        const [y, mo] = m.split('-')
-        return formatMonthYear(new Date(parseInt(y), parseInt(mo) - 1))
-      }),
-      datasets: top5.map((size, idx) => ({
-        label: size,
-        data: months.map(month => {
-          return tyreRecords.filter(r =>
-            r.size === size && r.issue_date?.startsWith(month)
-          ).length
-        }),
-        backgroundColor: BAR_COLORS[idx] + 'cc',
-        borderColor: BAR_COLORS[idx],
-        borderWidth: 1,
-        borderRadius: 4,
-      })),
-    }
-  }, [tyreRecords])
-
-  // ── Chart: consumption trend for selected size ─────────────────────────────
-  const allSizes = useMemo(() => (
-    Array.from(new Set(tyreRecords.map(r => r.size).filter(Boolean))).sort()
-  ), [tyreRecords])
-
-  useEffect(() => {
-    if (!selectedSize && allSizes.length > 0) setSelectedSize(allSizes[0])
-  }, [allSizes, selectedSize])
-
-  const trendLineData = useMemo(() => {
-    const months = Array.from({ length: 6 }, (_, i) => {
-      const d = new Date(); d.setMonth(d.getMonth() - 5 + i)
-      return d.toISOString().slice(0, 7)
-    })
-    const counts = months.map(m =>
-      tyreRecords.filter(r => r.size === selectedSize && r.issue_date?.startsWith(m)).length
-    )
-    return {
-      labels: months.map(m => {
-        const [y, mo] = m.split('-')
-        return formatMonthYear(new Date(parseInt(y), parseInt(mo) - 1))
-      }),
-      datasets: [{
-        label: selectedSize || 'Selected Size',
-        data: counts,
-        borderColor: '#10b981',
-        backgroundColor: 'rgba(16,185,129,0.15)',
-        tension: 0.4,
-        fill: true,
-        pointRadius: 4,
-        pointBackgroundColor: '#10b981',
-      }],
-    }
-  }, [tyreRecords, selectedSize])
-
-  // ── Consumption matrix: size × site (last 30d from loaded 90d data) ────────
-  const consumptionMatrix = useMemo(() => {
-    const thirtyDaysAgo = new Date()
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-    const recent = tyreRecords.filter(r => new Date(r.issue_date) >= thirtyDaysAgo)
-    const sizeSet = new Set(), siteSet = new Set()
-    recent.forEach(r => { if (r.size) sizeSet.add(r.size); if (r.site) siteSet.add(r.site) })
-    const sizes = [...sizeSet].sort()
-    const sites = [...siteSet].sort()
-    const grid = {}
-    recent.forEach(r => {
-      const k = `${r.size}||${r.site}`
-      grid[k] = (grid[k] || 0) + 1
-    })
-    return { sizes, sites, grid }
-  }, [tyreRecords])
-
-  const matrixPager = usePagedRows(filteredMatrix)
-  const consumptionPager = usePagedRows(consumptionMatrix.sizes)
-  const indexedOrderLines = useMemo(
-    () => orderLines.map((line, index) => ({ line, index })),
-    [orderLines],
+  // Money is stated only in one currency; mixed-country stock withholds it.
+  const currency = useMemo(
+    () => resolveCurrency(stockData, activeCountry, activeCurrency),
+    [stockData, activeCountry, activeCurrency],
   )
-  const orderPager = usePagedRows(indexedOrderLines)
+  const moneyOk = !!currency
+  const money = useCallback(
+    (n) => (!moneyOk || n === null || n === undefined || !Number.isFinite(n) ? 'N/A' : fmtCurrency(n, currency)),
+    [moneyOk, currency],
+  )
 
-  // ── Seasonal variance note ─────────────────────────────────────────────────
-  const seasonalNote = useMemo(() => {
-    const months = Array.from({ length: 6 }, (_, i) => {
-      const d = new Date(); d.setMonth(d.getMonth() - 5 + i)
-      return d.toISOString().slice(0, 7)
-    })
-    const counts = months.map(m => tyreRecords.filter(r => r.issue_date?.startsWith(m)).length)
-    const avg = counts.reduce((a, b) => a + b, 0) / counts.length || 1
-    const maxVariance = Math.max(...counts.map(c => Math.abs((c - avg) / avg))) * 100
-    return maxVariance > 20
-      ? t('stockreplenish.consumption.seasonalNote', { pct: maxVariance.toFixed(0) })
-      : null
-  }, [tyreRecords, t])
+  const rates = useMemo(() => consumptionRates(tyreRecords, now), [tyreRecords, now])
+  const unitCosts = useMemo(() => avgUnitCosts(tyreRecords), [tyreRecords])
+  const matrixRows = useMemo(
+    () => buildMatrix(stockData, rates, unitCosts, leadTimeDays),
+    [stockData, rates, unitCosts, leadTimeDays],
+  )
+  const allSites = useMemo(
+    () => ['All', ...[...new Set(matrixRows.map(r => r.site).filter(Boolean))].sort()],
+    [matrixRows],
+  )
+  const filteredMatrix = useMemo(
+    () => filterMatrix(matrixRows, { activeCountry, site: siteFilter, urgency: urgencyFilter, search }),
+    [matrixRows, activeCountry, siteFilter, urgencyFilter, search],
+  )
+  const kpis = useMemo(() => summarizeMatrix(filteredMatrix, editingQty), [filteredMatrix, editingQty])
+  const filtersActive = search.trim() !== '' || siteFilter !== 'All' || urgencyFilter !== 'All'
+  const clearFilters = () => { setSearch(''); setSiteFilter('All'); setUrgencyFilter('All') }
 
-  // ── Sort helper ────────────────────────────────────────────────────────────
-  function handleSort(field) {
-    if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
-    else { setSortField(field); setSortDir('asc') }
-  }
-  function SortIcon({ field }) {
-    if (sortField !== field) return <ChevronDown size={12} className="text-[var(--text-dim)]" />
-    return sortDir === 'asc'
-      ? <ChevronUp size={12} className="text-emerald-400" />
-      : <ChevronDown size={12} className="text-emerald-400" />
-  }
+  // ── Consumption analysis ────────────────────────────────────────────────────
+  const monthLabel = useCallback((m) => {
+    const [y, mo] = m.split('-')
+    return formatMonthYear(new Date(parseInt(y, 10), parseInt(mo, 10) - 1))
+  }, [])
+  const bySize = useMemo(() => consumptionBySize(tyreRecords, now), [tyreRecords, now])
+  const consumptionBarData = useMemo(() => ({
+    labels: bySize.months.map(monthLabel),
+    datasets: bySize.series.map((s, i) => ({
+      label: s.size,
+      data: s.data,
+      backgroundColor: withAlpha(colorAt(i), 0.8),
+      borderColor: colorAt(i),
+      borderWidth: 1,
+      borderRadius: 4,
+    })),
+  }), [bySize, monthLabel])
 
-  // ── Add row to Order Generator ─────────────────────────────────────────────
+  const sizes = useMemo(() => listSizes(tyreRecords), [tyreRecords])
+  useEffect(() => {
+    if (sizes.length && !sizes.includes(selectedSize)) setSelectedSize(sizes[0])
+  }, [sizes, selectedSize])
+  const trend = useMemo(() => trendForSize(tyreRecords, selectedSize, now), [tyreRecords, selectedSize, now])
+  const trendLineData = useMemo(() => ({
+    labels: trend.months.map(monthLabel),
+    datasets: [{
+      label: selectedSize || 'Selected size',
+      data: trend.data,
+      borderColor: colorAt(1),
+      backgroundColor: withAlpha(colorAt(1), 0.15),
+      tension: 0.4,
+      fill: true,
+      pointRadius: 4,
+      pointBackgroundColor: colorAt(1),
+    }],
+  }), [trend, selectedSize, monthLabel])
+
+  const grid = useMemo(() => consumptionGrid(tyreRecords, now, 30), [tyreRecords, now])
+  const seasonal = useMemo(() => seasonalVariance(tyreRecords, now), [tyreRecords, now])
+  const issuedInWindow = useMemo(() => bySize.series.reduce((s, x) => s + x.data.reduce((a, b) => a + b, 0), 0), [bySize])
+
+  // ── Order generator ─────────────────────────────────────────────────────────
+  const totals = useMemo(() => orderTotals(orderLines), [orderLines])
+
   function addToOrder(row) {
-    const qty = editingQty[row._key] !== undefined ? editingQty[row._key] : row.suggestedQty
+    const qty = plannedQty(row, editingQty)
     if (qty <= 0) return
+    const unitCost = row.unitCost ?? 0
     setOrderLines(prev => {
       const existing = prev.findIndex(l => l._key === row._key)
-      if (existing >= 0) {
-        return prev.map((l, i) => i === existing ? { ...l, qty } : l)
-      }
+      if (existing >= 0) return prev.map((l, i) => (i === existing ? { ...l, qty, totalCost: qty * (parseFloat(l.unitCost) || 0) } : l))
       return [...prev, {
-        _key:      row._key,
-        brand:     row.brand,
-        size:      row.size,
-        site:      row.site,
-        qty,
-        unitCost:  row.unitCost,
-        supplier:  '',
-        totalCost: qty * row.unitCost,
+        _key: row._key, brand: row.brand, size: row.size, site: row.site,
+        qty, unitCost, supplier: '', totalCost: qty * unitCost,
       }]
     })
-    setActiveTab(2)
+    setActiveTab('order')
   }
 
   function updateOrderLine(idx, field, value) {
@@ -444,66 +282,53 @@ export default function StockReplenishment() {
       return updated
     }))
   }
-
-  function removeOrderLine(idx) {
-    setOrderLines(prev => prev.filter((_, i) => i !== idx))
-  }
-
+  function removeOrderLine(idx) { setOrderLines(prev => prev.filter((_, i) => i !== idx)) }
   function addBlankOrderLine() {
     setOrderLines(prev => [...prev, {
-      _key:      `manual-${Date.now()}`,
-      brand:     '',
-      size:      '',
-      site:      '',
-      qty:       1,
-      unitCost:  0,
-      supplier:  '',
-      totalCost: 0,
+      _key: `manual-${Date.now()}`, brand: '', size: '', site: '', qty: 1, unitCost: 0, supplier: '', totalCost: 0,
     }])
   }
+  function clearOrder() {
+    if (orderLines.length && !window.confirm('Remove every line from this order?')) return
+    setOrderLines([])
+  }
 
-  const orderTotal = useMemo(() =>
-    orderLines.reduce((s, l) => s + (parseFloat(l.totalCost) || 0), 0),
-    [orderLines]
-  )
-
-  // ── Lead time save ─────────────────────────────────────────────────────────
   function saveLeadTime() {
-    const v = parseInt(leadTimeInput)
+    const v = parseInt(leadTimeInput, 10)
     if (!isNaN(v) && v > 0) setLeadTimeDays(v)
     setLeadTimeEdit(false)
   }
 
-  // ── Export PO to Excel ─────────────────────────────────────────────────────
+  // ── Exports ─────────────────────────────────────────────────────────────────
+  async function exportMatrixExcel() {
+    try {
+      await exportToExcel(
+        matrixExportRows(filteredMatrix, editingQty, moneyOk),
+        MATRIX_EXPORT_COLS,
+        MATRIX_EXPORT_HEADERS.map(h => (moneyOk && /Cost/.test(h) ? `${h} (${currency})` : h)),
+        reportFileName('Stock Replenishment Matrix', activeCountry, formatDate(now)),
+        'Replenishment',
+      )
+    } catch (e) { setActionError(toUserMessage(e, 'Could not export. Try again.')) }
+  }
+
   async function exportOrderExcel() {
     try {
       const XLSX = await import('xlsx')
       const rows = orderLines.map((l, i) => ({
-        '#':               i + 1,
-        'Brand':           l.brand,
-        'Size':            l.size,
-        'Site':            l.site,
-        'Quantity':        l.qty,
-        'Unit Cost':       l.unitCost,
-        'Total Cost':      l.totalCost,
-        'Preferred Supplier': l.supplier,
+        '#': i + 1, Brand: l.brand, Size: l.size, Site: l.site, Quantity: l.qty,
+        'Unit Cost': l.unitCost, 'Total Cost': l.totalCost, 'Preferred Supplier': l.supplier,
       }))
-      rows.push({
-        '#': '', Brand: '', Size: '', Site: '', Quantity: '',
-        'Unit Cost': 'TOTAL',
-        'Total Cost': orderTotal,
-        'Preferred Supplier': '',
-      })
+      rows.push({ '#': '', Brand: '', Size: '', Site: '', Quantity: '', 'Unit Cost': 'TOTAL', 'Total Cost': totals.total, 'Preferred Supplier': '' })
       const ws = XLSX.utils.json_to_sheet(rows)
       const wb = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(wb, ws, 'Purchase Order')
-      XLSX.writeFile(wb, `replenishment-po-${new Date().toISOString().slice(0, 10)}.xlsx`)
+      XLSX.writeFile(wb, `${reportFileName('Replenishment PO', formatDate(new Date()))}.xlsx`)
     } catch (e) {
-      setError(toUserMessage(e, 'Could not export. Try again.'))
+      setActionError(toUserMessage(e, 'Could not export. Try again.'))
     }
   }
 
-  // ── Export PO to PDF ───────────────────────────────────────────────────────
   async function exportOrderPDF() {
     try {
       const { default: jsPDF } = await import('jspdf')
@@ -512,160 +337,217 @@ export default function StockReplenishment() {
       const brand = await resolvePdfBrand(branding)
       const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
       const poRef = `REPO-${new Date().getFullYear()}-${Date.now().toString().slice(-5)}`
+      const cur = currency || activeCurrency
+      const fileBase = reportFileName('Replenishment PO', formatDate(new Date()))
 
       pdfHeader(doc, 'Stock Replenishment Purchase Order',
-        `Ref: ${poRef} · Lead Time: ${leadTimeDays} days · ${formatDateTime(new Date())}`, company, brand)
+        `Ref: ${poRef} | Lead Time: ${leadTimeDays} days | ${formatDateTime(new Date())}`, company, brand)
 
-      // Empty state - no order lines to bill
       if (orderLines.length === 0) {
         pdfEmptyState(doc, 'No order lines to include in this purchase order',
           'Add lines from the Replenishment Matrix and export again.')
         pdfFooter(doc, 1, 1, company, brand)
-        doc.save(`replenishment-po-${new Date().toISOString().slice(0, 10)}.pdf`)
+        doc.save(`${fileBase}.pdf`)
         return
       }
 
-      // Summary row
       autoTable(doc, {
         ...pdfTableTheme(brand.accent),
         startY: 30,
         head: [['Field', 'Value', 'Field', 'Value']],
         body: [
-          ['PO Reference', poRef,                                  'Date',          formatDate(new Date())],
-          ['Generated By', user?.email || 'TyrePulse System',      'Currency',      activeCurrency],
-          ['Total Lines',  `${orderLines.length} items`,           'Total Value',   fmtCurrency(orderTotal, activeCurrency)],
+          ['PO Reference', poRef, 'Date', formatDate(new Date())],
+          ['Generated By', user?.email || 'TyrePulse System', 'Currency', cur || 'N/A'],
+          ['Total Lines', `${orderLines.length} items`, 'Total Value', fmtCurrency(totals.total, cur)],
         ],
         columnStyles: { 0: { fontStyle: 'bold', cellWidth: 38 }, 2: { fontStyle: 'bold', cellWidth: 38 } },
         margin: { left: 14, right: 14 },
       })
-
-      let y = (doc.lastAutoTable?.finalY || 70) + 8
-
-      // Line items
+      const y = (doc.lastAutoTable?.finalY || 70) + 8
       autoTable(doc, {
         ...pdfTableTheme(brand.accent),
         startY: y,
         head: [['#', 'Brand', 'Size', 'Site', 'Qty', 'Unit Cost', 'Total', 'Supplier']],
         body: orderLines.map((l, i) => [
-          i + 1, l.brand, l.size, l.site || '-', l.qty,
-          fmtCurrency(l.unitCost, activeCurrency),
-          fmtCurrency(l.totalCost, activeCurrency),
-          l.supplier || '-',
+          i + 1, l.brand, l.size, l.site || 'N/A', l.qty,
+          fmtCurrency(l.unitCost, cur), fmtCurrency(l.totalCost, cur), l.supplier || 'N/A',
         ]),
-        foot: [['', '', '', '', '', 'TOTAL', fmtCurrency(orderTotal, activeCurrency), '']],
+        foot: [['', '', '', '', '', 'TOTAL', fmtCurrency(totals.total, cur), '']],
         footStyles: { fillColor: brand.accent, textColor: 255, fontStyle: 'bold' },
         margin: { left: 14, right: 14 },
       })
-
       const totalPages = doc.internal.getNumberOfPages()
       for (let p = 1; p <= totalPages; p++) { doc.setPage(p); pdfFooter(doc, p, totalPages, company, brand) }
-      doc.save(`replenishment-po-${new Date().toISOString().slice(0, 10)}.pdf`)
+      doc.save(`${fileBase}.pdf`)
     } catch (e) {
-      setError(toUserMessage(e, 'Could not export. Try again.'))
+      setActionError(toUserMessage(e, 'Could not export. Try again.'))
     }
   }
 
-  // ── Create Purchase Order (persist to purchase_orders) ─────────────────────
+  // ── Create Purchase Order (persist to purchase_orders) - unchanged contract ─
   const handleCreatePurchaseOrder = useCallback(async () => {
     if (orderLines.length === 0) {
       setPoResult({ type: 'error', message: t('stockreplenish.order.errors.noLines') })
       return
     }
-    // A single PO requires a single vendor - derive from the first supplied supplier.
     const vendorName = (orderLines.find(l => l.supplier?.trim())?.supplier || '').trim()
     if (!vendorName) {
       setPoResult({ type: 'error', message: t('stockreplenish.order.errors.noSupplier') })
       return
     }
-
     setCreatingPO(true)
     setPoResult(null)
     try {
-      // Build items jsonb in the same shape the Procurement module consumes.
       const items = orderLines.map(l => ({
-        brand:        (l.brand || '').toString().trim(),
-        size:         (l.size || '').toString().trim(),
-        site:         (l.site || '').toString().trim() || null,
-        quantity:     parseInt(l.qty) || 0,
-        unit_price:   parseFloat(l.unitCost) || 0,
+        brand: (l.brand || '').toString().trim(),
+        size: (l.size || '').toString().trim(),
+        site: (l.site || '').toString().trim() || null,
+        quantity: parseInt(l.qty, 10) || 0,
+        unit_price: parseFloat(l.unitCost) || 0,
         received_qty: 0,
-        supplier:     (l.supplier || '').toString().trim() || null,
+        supplier: (l.supplier || '').toString().trim() || null,
       }))
-
-      const subtotal     = items.reduce((s, it) => s + it.quantity * it.unit_price, 0)
-      const tax_amount   = 0
+      const subtotal = items.reduce((s, it) => s + it.quantity * it.unit_price, 0)
+      const tax_amount = 0
       const total_amount = subtotal + tax_amount
 
-      // Generate PO number via RPC, fall back to client-side sequence.
-      let poNumber
       let poNo = null
-      try {
-        poNo = await purchaseOrders.generatePoNumber()
-      } catch {
-        poNo = null
-      }
-      if (!poNo) {
-        poNumber = `PO-${new Date().getFullYear()}-${Date.now().toString().slice(-5)}`
-      } else {
-        poNumber = poNo
-      }
+      try { poNo = await purchaseOrders.generatePoNumber() } catch { poNo = null }
+      const poNumber = poNo || `PO-${new Date().getFullYear()}-${Date.now().toString().slice(-5)}`
 
       const poCountry = activeCountry && activeCountry !== 'All' ? activeCountry : null
-      const poSite    = items.find(it => it.site)?.site || null
+      const poSite = items.find(it => it.site)?.site || null
 
-      // Whitelisted insert - only known purchase_orders columns.
       const payload = {
-        po_number:     poNumber,
-        vendor_name:   vendorName,
+        po_number: poNumber,
+        vendor_name: vendorName,
         supplier_name: vendorName,
-        order_date:    new Date().toISOString().slice(0, 10),
-        status:        'Draft',
-        priority:      'Normal',
+        order_date: new Date().toISOString().slice(0, 10),
+        status: 'Draft',
+        priority: 'Normal',
         items,
         subtotal,
         tax_amount,
         total_amount,
-        site:          poSite,
-        country:       poCountry,
-        requested_by:  profile?.full_name || profile?.email || user?.email || null,
-        created_by:    profile?.id || user?.id || null,
-        notes:         'Generated from Stock Replenishment intelligence.',
+        site: poSite,
+        country: poCountry,
+        requested_by: profile?.full_name || profile?.email || user?.email || null,
+        created_by: profile?.id || user?.id || null,
+        notes: 'Generated from Stock Replenishment intelligence.',
       }
-
       await purchaseOrders.createPurchaseOrder(payload)
-
       setPoResult({ type: 'success', message: t('stockreplenish.order.createSuccess', { poNumber }) })
       setOrderLines([])
     } catch (e) {
-      setPoResult({ type: 'error', message: e.message || t('stockreplenish.order.errors.createFailed') })
+      setPoResult({ type: 'error', message: toUserMessage(e, t('stockreplenish.order.errors.createFailed')) })
     } finally {
       setCreatingPO(false)
     }
   }, [orderLines, activeCountry, profile, user, t])
 
-  // ── Loading skeleton ───────────────────────────────────────────────────────
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center gap-3">
-          <Skeleton className="w-10 h-10 rounded-xl" />
-          <div className="space-y-2">
-            <Skeleton className="h-6 w-48" />
-            <Skeleton className="h-4 w-72" />
-          </div>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-24 rounded-xl" />
-          ))}
-        </div>
-        <Skeleton className="h-12 rounded-xl" />
-        <Skeleton className="h-96 rounded-xl" />
-      </div>
-    )
-  }
+  // ── Table columns ───────────────────────────────────────────────────────────
+  const matrixColumns = useMemo(() => [
+    { id: 'brand', header: 'Brand', sort: r => r.brand, size: 120, firstDir: 'asc',
+      cell: r => <span className="font-medium text-[var(--text-primary)]">{r.brand || 'N/A'}</span> },
+    { id: 'size', header: 'Size', sort: r => r.size, size: 120, firstDir: 'asc',
+      cell: r => <span className="font-mono text-xs">{r.size || 'N/A'}</span> },
+    { id: 'site', header: 'Site', sort: r => r.site, size: 110, firstDir: 'asc',
+      cell: r => r.site || 'N/A' },
+    { id: 'qtyInStock', header: 'In stock', sort: r => r.qtyInStock, size: 90, align: 'right',
+      cell: r => (
+        <span className={`tabular-nums ${r.qtyInStock <= 0 ? 'text-red-500 font-bold' : 'text-[var(--text-primary)]'}`}>
+          {r.qtyInStock}{r.qtyInStock <= 0 && <span className="sr-only"> (stocked out)</span>}
+        </span>
+      ) },
+    { id: 'consumptionPerDay', header: 'Daily usage', sort: r => r.consumptionPerDay, size: 100, align: 'right',
+      cell: r => <span className="tabular-nums text-[var(--text-muted)]">{r.consumptionPerDay > 0 ? r.consumptionPerDay.toFixed(2) : 'None'}</span> },
+    { id: 'daysRemaining', header: 'Days left', sort: r => r.daysRemaining, size: 100, align: 'right', firstDir: 'asc',
+      cell: r => (
+        <span className="tabular-nums" title={r.daysRemaining === null ? 'No consumption in the last 90 days, so cover cannot be measured' : undefined}>
+          {r.daysRemaining === null ? 'N/A' : `${r.daysRemaining}d`}
+        </span>
+      ) },
+    { id: 'plannedQty', header: 'Order qty', sort: r => plannedQty(r, editingQty), size: 110, align: 'right',
+      cell: r => (
+        <input type="number" min="0" value={plannedQty(r, editingQty)}
+          aria-label={`Order quantity for ${r.brand || ''} ${r.size || ''} at ${r.site || 'site'}`}
+          onChange={e => setEditingQty(prev => ({ ...prev, [r._key]: Math.max(0, parseInt(e.target.value, 10) || 0) }))}
+          className={`w-20 text-center ${CELL_INPUT}`} />
+      ) },
+    { id: 'estimatedCost', header: 'Est. cost', sort: r => (moneyOk && r.unitCost !== null ? plannedQty(r, editingQty) * r.unitCost : null), size: 120, align: 'right',
+      cell: r => {
+        const q = plannedQty(r, editingQty)
+        if (!moneyOk || r.unitCost === null) {
+          return <span className="text-xs text-[var(--text-dim)]" title={r.unitCost === null ? 'No unit cost recorded for this brand and size' : 'Mixed currencies'}>N/A</span>
+        }
+        return (
+          <span className="tabular-nums text-xs text-[var(--text-secondary)]" title={r.unitCostSource === 'issues' ? 'Unit cost derived from priced tyre issues' : 'Unit cost from the stock record'}>
+            {money(q * r.unitCost)}
+          </span>
+        )
+      } },
+    { id: 'urgency', header: 'Status', sort: r => URGENCIES.indexOf(r.urgency), size: 120, firstDir: 'asc',
+      cell: r => <UrgencyBadge urgency={r.urgency} /> },
+    { id: 'actions', header: '', size: 110,
+      cell: r => {
+        const q = plannedQty(r, editingQty)
+        return (
+          <button type="button" onClick={() => addToOrder(r)} disabled={q <= 0}
+            aria-label={`Add ${r.brand || ''} ${r.size || ''} to order`}
+            className={`min-h-[44px] inline-flex items-center gap-1 px-3 rounded-lg text-xs font-medium border border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-40 disabled:cursor-not-allowed ${FOCUS}`}>
+            <Plus size={12} aria-hidden="true" /> Order
+          </button>
+        )
+      } },
+  // addToOrder closes over editingQty, which is already a dependency.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [editingQty, moneyOk, money])
 
-  // ── RENDER ─────────────────────────────────────────────────────────────────
+  const gridColumns = useMemo(() => [
+    { id: 'size', header: 'Size', sort: r => r.size, size: 130, firstDir: 'asc',
+      cell: r => <span className="font-mono text-[var(--text-primary)]">{r.size}</span> },
+    ...grid.sites.map(site => ({
+      id: `site:${site}`, header: site, sort: r => r[site], size: 90, align: 'right',
+      cell: r => <span className={`tabular-nums ${r[site] > 0 ? 'text-[var(--text-primary)]' : 'text-[var(--text-dim)]'}`}>{r[site]}</span>,
+    })),
+    { id: 'total', header: 'Total', sort: r => r.total, size: 90, align: 'right',
+      cell: r => <span className="tabular-nums font-semibold text-[var(--text-primary)]">{r.total}</span> },
+  ], [grid.sites])
+
+  const indexedOrderLines = useMemo(() => orderLines.map((line, index) => ({ ...line, index })), [orderLines])
+  const orderColumns = useMemo(() => [
+    { id: 'brand', header: 'Brand', size: 150,
+      cell: l => <input value={l.brand} aria-label={`Brand, line ${l.index + 1}`} placeholder="Brand"
+        onChange={e => updateOrderLine(l.index, 'brand', e.target.value)} className={`w-full ${CELL_INPUT}`} /> },
+    { id: 'size', header: 'Size', size: 140,
+      cell: l => <input value={l.size} aria-label={`Size, line ${l.index + 1}`} placeholder="Size"
+        onChange={e => updateOrderLine(l.index, 'size', e.target.value)} className={`w-full font-mono ${CELL_INPUT}`} /> },
+    { id: 'site', header: 'Site', size: 130,
+      cell: l => <input value={l.site} aria-label={`Site, line ${l.index + 1}`} placeholder="Site"
+        onChange={e => updateOrderLine(l.index, 'site', e.target.value)} className={`w-full ${CELL_INPUT}`} /> },
+    { id: 'qty', header: 'Qty', size: 90, align: 'right',
+      cell: l => <input type="number" min="1" value={l.qty} aria-label={`Quantity, line ${l.index + 1}`}
+        onChange={e => updateOrderLine(l.index, 'qty', parseInt(e.target.value, 10) || 1)} className={`w-20 text-center ${CELL_INPUT}`} /> },
+    { id: 'unitCost', header: 'Unit cost', size: 130, align: 'right',
+      cell: l => <input type="number" min="0" step="0.01" value={l.unitCost} aria-label={`Unit cost, line ${l.index + 1}`}
+        onChange={e => updateOrderLine(l.index, 'unitCost', parseFloat(e.target.value) || 0)} className={`w-28 text-right ${CELL_INPUT}`} /> },
+    { id: 'totalCost', header: 'Total', size: 120, align: 'right',
+      cell: l => <span className="tabular-nums font-medium text-[var(--text-primary)] whitespace-nowrap">{fmtCurrency(l.totalCost, currency || activeCurrency)}</span> },
+    { id: 'supplier', header: 'Supplier', size: 170,
+      cell: l => <input value={l.supplier} aria-label={`Supplier, line ${l.index + 1}`} placeholder="Supplier name"
+        onChange={e => updateOrderLine(l.index, 'supplier', e.target.value)} className={`w-full ${CELL_INPUT}`} /> },
+    { id: 'actions', header: '', size: 60,
+      cell: l => (
+        <button type="button" onClick={() => removeOrderLine(l.index)} aria-label={`Remove line ${l.index + 1}`}
+          className={`min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:text-red-500 ${FOCUS}`}>
+          <X size={16} aria-hidden="true" />
+        </button>
+      ) },
+  ], [currency, activeCurrency])
+
+  const noStock = !loading && !loadError && stockData.length === 0
+
+  // ── RENDER ──────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
       <PageHeader
@@ -676,141 +558,101 @@ export default function StockReplenishment() {
         })}
         icon={Package}
         actions={
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1">
-              {leadTimeEdit ? (
-                <>
-                  <input
-                    type="number" min="1" max="365"
-                    value={leadTimeInput}
-                    onChange={e => setLeadTimeInput(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && saveLeadTime()}
-                    className="w-16 px-2 py-1.5 bg-[var(--input-bg)] border border-emerald-600 rounded-lg text-[var(--text-primary)] text-sm focus:outline-none"
-                    autoFocus
-                  />
-                  <span className="text-[var(--text-muted)] text-xs">days</span>
-                  <button onClick={saveLeadTime} className="px-2 py-1.5 bg-emerald-700 text-white text-xs rounded-lg">
-                    <CheckCircle size={13} />
-                  </button>
-                  <button onClick={() => setLeadTimeEdit(false)} className="px-2 py-1.5 bg-[var(--input-bg)] text-[var(--text-secondary)] text-xs rounded-lg">
-                    <X size={13} />
-                  </button>
-                </>
-              ) : (
-                <button
-                  onClick={() => { setLeadTimeEdit(true); setLeadTimeInput(leadTimeDays.toString()) }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] text-xs rounded-lg hover:border-emerald-600 transition-colors"
-                  title="Edit lead time"
-                >
-                  <Clock size={13} className="text-emerald-400" />
-                  Lead: {leadTimeDays}d
-                  <Edit2 size={11} className="text-[var(--text-dim)]" />
+          <div className="flex flex-wrap items-center gap-2">
+            {leadTimeEdit ? (
+              <div className="flex items-center gap-1">
+                <label className="sr-only" htmlFor="lead-time-input">Supplier lead time in days</label>
+                <input id="lead-time-input" type="number" min="1" max="365" value={leadTimeInput}
+                  onChange={e => setLeadTimeInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') saveLeadTime(); if (e.key === 'Escape') setLeadTimeEdit(false) }}
+                  className={`w-20 ${CTRL}`} autoFocus />
+                <span className="text-[var(--text-muted)] text-xs">days</span>
+                <button type="button" onClick={saveLeadTime} aria-label="Save lead time"
+                  className={`min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg bg-[var(--accent)] text-white ${FOCUS}`}>
+                  <CheckCircle size={16} aria-hidden="true" />
                 </button>
-              )}
-            </div>
-            <button
-              onClick={load}
-              className="p-2 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
-              title="Refresh"
-            >
-              <RefreshCw size={16} />
+                <button type="button" onClick={() => setLeadTimeEdit(false)} aria-label="Cancel lead time edit"
+                  className={`min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg border border-[var(--input-border)] text-[var(--text-secondary)] ${FOCUS}`}>
+                  <X size={16} aria-hidden="true" />
+                </button>
+              </div>
+            ) : (
+              <button type="button"
+                onClick={() => { setLeadTimeEdit(true); setLeadTimeInput(String(leadTimeDays)) }}
+                className={`btn-secondary min-h-[44px] flex items-center gap-1.5 text-sm ${FOCUS}`}>
+                <Clock size={14} aria-hidden="true" /> Lead time: {leadTimeDays}d <Edit2 size={12} aria-hidden="true" />
+              </button>
+            )}
+            <button type="button" onClick={exportMatrixExcel} disabled={loading || filteredMatrix.length === 0}
+              className={`btn-secondary min-h-[44px] flex items-center gap-1.5 text-sm disabled:opacity-50 ${FOCUS}`}>
+              <Download size={14} aria-hidden="true" /> Excel
+            </button>
+            <button type="button" onClick={load} disabled={loading}
+              className={`btn-secondary min-h-[44px] flex items-center gap-1.5 text-sm disabled:opacity-50 ${FOCUS}`}>
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} aria-hidden="true" /> Refresh
             </button>
           </div>
         }
       />
 
-      {/* ── Error ────────────────────────────────────────────────────────────── */}
-      {error && (
-        <div className="bg-red-900/30 border border-red-700 rounded-xl p-4 flex items-center gap-3 text-red-300">
-          <AlertTriangle size={18} className="flex-shrink-0" />
-          <span className="text-sm">{error}</span>
-          <button
-            onClick={load}
-            className="ml-auto flex items-center gap-1.5 px-3 py-1.5 bg-red-800/40 border border-red-600 rounded-lg text-red-200 text-xs hover:bg-red-800/70 transition-colors"
-          >
-            <RefreshCw size={13} />Retry
-          </button>
-          <button onClick={() => setError(null)} className="text-red-300 hover:text-white">
-            <X size={16} />
+      {loadError && (
+        <div role="alert" className="card p-4 flex flex-wrap items-center gap-3 border border-red-500/40">
+          <AlertTriangle size={18} className="text-red-500 shrink-0" aria-hidden="true" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-[var(--text-primary)]">Replenishment data could not be loaded</p>
+            <p className="text-sm text-[var(--text-muted)]">{loadError}</p>
+          </div>
+          <button type="button" onClick={load} className={`btn-secondary min-h-[44px] flex items-center gap-1.5 text-sm ${FOCUS}`}>
+            <RefreshCw size={14} aria-hidden="true" /> Retry
           </button>
         </div>
       )}
 
-      {/* ── KPI Cards ────────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-        {[
-          {
-            label:  'Needs Reorder',
-            value:  kpis.needsReorder,
-            color:  'red',
-            icon:   AlertTriangle,
-            sub:    `items < ${leadTimeDays}d stock`,
-          },
-          {
-            label:  'Reorder Value',
-            value:  kpis.totalReorderVal >= 1_000_000
-              ? `${activeCurrency} ${(kpis.totalReorderVal / 1_000_000).toFixed(2)}M`
-              : `${activeCurrency} ${(kpis.totalReorderVal / 1000).toFixed(1)}k`,
-            color:  'orange',
-            icon:   ShoppingCart,
-            sub:    'Suggested orders',
-          },
-          {
-            label:  'Avg Days Remaining',
-            value:  `${kpis.avgDays}d`,
-            color:  kpis.avgDays < 30 ? 'red' : kpis.avgDays < 60 ? 'yellow' : 'emerald',
-            icon:   Clock,
-            sub:    'Fleet average',
-          },
-          {
-            label:  'Critical Stockouts',
-            value:  kpis.criticalStockouts,
-            color:  kpis.criticalStockouts > 0 ? 'red' : 'gray',
-            icon:   Zap,
-            sub:    'Zero qty in stock',
-          },
-          {
-            label:  'Over-Stocked',
-            value:  kpis.overstocked,
-            color:  'blue',
-            icon:   TrendingUp,
-            sub:    'Items > 180 days',
-          },
-        ].map(({ label, value, color, icon: Icon, sub }) => (
-          <motion.div
-            key={label}
-            className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            <div className="flex items-center gap-2 mb-2">
-              <Icon size={15} className={kpiText(color)} />
-              <span className="text-[var(--text-muted)] text-xs">{label}</span>
-            </div>
-            <div className={`text-2xl font-bold ${kpiText(color)}`}>{value}</div>
-            {sub && <p className="text-[var(--text-muted)] text-xs mt-1">{sub}</p>}
-          </motion.div>
-        ))}
+      {actionError && (
+        <div role="alert" className="card p-3 flex items-center gap-3 border border-red-500/40">
+          <AlertTriangle size={16} className="text-red-500 shrink-0" aria-hidden="true" />
+          <p className="text-sm text-[var(--text-secondary)] flex-1">{actionError}</p>
+          <button type="button" onClick={() => setActionError(null)} aria-label="Dismiss error"
+            className={`min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg text-[var(--text-muted)] ${FOCUS}`}>
+            <X size={16} aria-hidden="true" />
+          </button>
+        </div>
+      )}
+
+      {!moneyOk && !loading && stockData.length > 0 && (
+        <div role="status" className="card p-3 flex items-start gap-2 border border-[var(--input-border)] text-xs text-[var(--text-secondary)]">
+          <Coins size={16} className="shrink-0 mt-0.5 text-[var(--text-muted)]" aria-hidden="true" />
+          <span>Stock spans countries with different currencies, so reorder value is withheld rather than added together. Pick one country to see money figures.</span>
+        </div>
+      )}
+
+      {/* ── KPI strip ── */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+        <StatTile icon={AlertTriangle} label="Needs reorder" value={loading ? '...' : kpis.needsReorder.toLocaleString()}
+          sub="Under 30 days of cover" tone={kpis.needsReorder > 0 ? 'crit' : 'neutral'} />
+        <StatTile icon={ShoppingCart} label="Reorder value" value={money(kpis.reorderValue)}
+          sub={kpis.unvaluedLines ? `${kpis.unvaluedLines} lines have no unit cost` : `${kpis.reorderUnits.toLocaleString()} units planned`} />
+        <StatTile icon={Clock} label="Avg days of cover" value={kpis.avgDays === null ? 'N/A' : `${kpis.avgDays}d`}
+          sub={kpis.measuredItems ? `${kpis.measuredItems} items with usage` : 'No usage recorded'}
+          tone={kpis.avgDays !== null && kpis.avgDays < 30 ? 'crit' : 'info'} />
+        <StatTile icon={PackageX} label="Stocked out" value={kpis.stockouts.toLocaleString()}
+          sub="Zero quantity on hand" tone={kpis.stockouts > 0 ? 'crit' : 'neutral'} />
+        <StatTile icon={TrendingUp} label="Overstocked" value={kpis.overstocked.toLocaleString()} sub="Over 180 days of cover" />
+        <StatTile icon={TrendingDown} label="No usage" value={kpis.idle.toLocaleString()} sub="In stock, not issued in 90 days" />
       </div>
 
-      {/* ── Tabs ─────────────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-1 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-1 w-fit">
-        {TABS.map((tab, idx) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(idx)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
-              activeTab === idx
-                ? 'bg-emerald-700 text-white shadow'
-                : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-            }`}
-          >
-            {idx === 0 && <Layers size={14} />}
-            {idx === 1 && <BarChart2 size={14} />}
-            {idx === 2 && <ShoppingCart size={14} />}
-            {tab}
-            {idx === 2 && orderLines.length > 0 && (
-              <span className="bg-emerald-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+      {/* ── Tabs ── */}
+      <div role="tablist" aria-label="Replenishment views"
+        className="flex flex-wrap items-center gap-1 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-1 w-fit max-w-full">
+        {TABS.map(({ key, label, icon: Icon }) => (
+          <button key={key} type="button" role="tab" aria-selected={activeTab === key} onClick={() => setActiveTab(key)}
+            className={`min-h-[44px] px-4 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${FOCUS} ${
+              activeTab === key ? 'bg-[var(--accent)] text-white shadow' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+            }`}>
+            <Icon size={14} aria-hidden="true" />
+            {label}
+            {key === 'order' && orderLines.length > 0 && (
+              <span className="bg-[var(--input-bg)] text-[var(--text-primary)] text-xs rounded-full min-w-[1.25rem] h-5 px-1 flex items-center justify-center font-bold">
                 {orderLines.length}
               </span>
             )}
@@ -818,579 +660,238 @@ export default function StockReplenishment() {
         ))}
       </div>
 
-      {/* ── Tab Content ──────────────────────────────────────────────────────── */}
-      <AnimatePresence mode="wait">
-
-        {/* ═══════════════════════════════════════════════════════════════════
-            TAB 0: REPLENISHMENT MATRIX
-        ═══════════════════════════════════════════════════════════════════ */}
-        {activeTab === 0 && (
-          <motion.div
-            key="matrix"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            className="space-y-4"
-          >
-            {/* Filters */}
-            <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
-              <div className="flex flex-wrap gap-3">
-                <div className="relative flex-1 min-w-48">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-                  <input
-                    value={search}
-                    onChange={e => setSearch(e.target.value)}
-                    placeholder="Search brand, size, site..."
-                    className="w-full pl-9 pr-4 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-[var(--text-primary)] text-sm placeholder-gray-500 focus:outline-none focus:border-emerald-500"
-                  />
-                </div>
-                {/* Site filter pills */}
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  {allSites.map(site => (
-                    <button
-                      key={site}
-                      onClick={() => setSiteFilter(site)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
-                        siteFilter === site
-                          ? 'bg-emerald-700 border-emerald-600 text-white'
-                          : 'bg-[var(--input-bg)] border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                      }`}
-                    >
-                      {site}
-                    </button>
-                  ))}
-                </div>
-                {(search || siteFilter !== 'All') && (
-                  <button
-                    onClick={() => { setSearch(''); setSiteFilter('All') }}
-                    className="px-3 py-1.5 bg-red-900/30 border border-red-700 rounded-lg text-red-400 text-xs hover:bg-red-900/50 transition-colors"
-                  >
-                    Clear
-                  </button>
-                )}
-                <span className="ml-auto self-center text-[var(--text-muted)] text-sm">
-                  {filteredMatrix.length} items
+      {/* ═══ TAB: MATRIX ═══ */}
+      {activeTab === 'matrix' && (
+        <div className="space-y-4">
+          <section className="card p-4" aria-label="Filters">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
+              <label className="block lg:col-span-2">
+                <span className="text-xs text-[var(--text-dim)] mb-1.5 block">Search</span>
+                <span className="relative block">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+                  <input type="search" value={search} onChange={e => setSearch(e.target.value)}
+                    placeholder="Brand, size, site" className={`w-full pl-9 ${CTRL}`} />
                 </span>
-              </div>
+              </label>
+              <label className="block">
+                <span className="text-xs text-[var(--text-dim)] mb-1.5 block">Site</span>
+                <select value={siteFilter} onChange={e => setSiteFilter(e.target.value)} className={`w-full ${CTRL}`}>
+                  {allSites.map(s => <option key={s} value={s}>{s === 'All' ? 'All sites' : s}</option>)}
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-xs text-[var(--text-dim)] mb-1.5 block">Status</span>
+                <select value={urgencyFilter} onChange={e => setUrgencyFilter(e.target.value)} className={`w-full ${CTRL}`}>
+                  <option value="All">All statuses</option>
+                  {URGENCIES.map(u => <option key={u} value={u}>{URGENCY_LABEL[u]}</option>)}
+                </select>
+              </label>
             </div>
+            <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-[var(--text-dim)]" aria-live="polite">
+              <span>{loading ? 'Loading...' : `${filteredMatrix.length.toLocaleString()} of ${matrixRows.length.toLocaleString()} items`}</span>
+              {filtersActive && (
+                <button type="button" onClick={clearFilters}
+                  className={`min-h-[44px] inline-flex items-center gap-1 px-3 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] ${FOCUS}`}>
+                  <X size={12} aria-hidden="true" /> Clear filters
+                </button>
+              )}
+              <span className="ml-auto flex flex-wrap items-center gap-2">
+                {URGENCIES.map(u => (
+                  <span key={u} className="inline-flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: URGENCY_TONE[u] }} aria-hidden="true" />
+                    {URGENCY_LABEL[u]}: {kpis.byUrgency[u] || 0}
+                  </span>
+                ))}
+              </span>
+            </div>
+          </section>
 
-            {/* Empty state */}
-            {filteredMatrix.length === 0 ? (
-              <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-16 text-center">
-                <Package size={48} className="mx-auto mb-4 text-[var(--text-dim)]" />
-                <p className="text-[var(--text-muted)] text-lg font-medium">No stock data found</p>
-                <p className="text-[var(--text-dim)] text-sm mt-2">Add stock records to see replenishment recommendations</p>
+          {noStock ? (
+            <div className="card p-12 text-center" role="status">
+              <Package size={40} className="mx-auto mb-3 text-[var(--text-dim)]" aria-hidden="true" />
+              <p className="text-[var(--text-primary)] font-medium">No stock records found</p>
+              <p className="text-[var(--text-muted)] text-sm mt-1">Add stock records to see replenishment recommendations.</p>
+            </div>
+          ) : (
+            <SortedPagedTable
+              columns={matrixColumns}
+              rows={filteredMatrix}
+              defaultSort={{ key: 'daysRemaining', dir: 'asc' }}
+              getRowId={r => r._key + (r.id ? `|${r.id}` : '')}
+              loading={loading}
+              error={loadError}
+              onRetry={load}
+              emptyMessage="No stock items match these filters"
+            />
+          )}
+          <p className="text-xs text-[var(--text-dim)]">
+            Cover uses tyres issued in the last 90 days. Suggested quantity covers 2 months of usage, net of stock on hand.
+            Items with stock but no usage show N/A cover, not an invented number.
+          </p>
+        </div>
+      )}
+
+      {/* ═══ TAB: CONSUMPTION ═══ */}
+      {activeTab === 'consumption' && (
+        <div className="space-y-6">
+          {seasonal !== null && seasonal > 20 && (
+            <div role="status" className="card p-4 flex items-start gap-3 border border-amber-500/40">
+              <TrendingDown size={18} className="text-amber-500 mt-0.5 shrink-0" aria-hidden="true" />
+              <p className="text-[var(--text-secondary)] text-sm">{t('stockreplenish.consumption.seasonalNote', { pct: seasonal.toFixed(0) })}</p>
+            </div>
+          )}
+
+          <section className="card p-5" aria-labelledby="rep-bysize">
+            <h3 id="rep-bysize" className="text-[var(--text-primary)] font-semibold mb-4">Monthly consumption by top 5 tyre sizes (last 6 months)</h3>
+            <div className="h-64">
+              {loading ? <div className="h-full animate-pulse bg-[var(--input-bg)] rounded" aria-busy="true" />
+                : consumptionBarData.datasets.length > 0 ? (
+                  <div className="h-full" role="img" aria-label={`Stacked monthly issues for the top ${bySize.series.length} sizes, ${issuedInWindow} tyres in total.`}>
+                    <Bar data={consumptionBarData} options={{ ...CHART_OPTS, plugins: { ...CHART_OPTS.plugins, legend: { ...CHART_OPTS.plugins.legend, position: 'top' } } }} />
+                  </div>
+                ) : (
+                  <p className="h-full flex items-center justify-center text-[var(--text-dim)] text-sm">No tyre issue records in the last 6 months</p>
+                )}
+            </div>
+          </section>
+
+          <section className="card p-5" aria-labelledby="rep-trend">
+            <div className="flex flex-wrap items-end justify-between gap-3 mb-4">
+              <h3 id="rep-trend" className="text-[var(--text-primary)] font-semibold">Consumption trend by size</h3>
+              {sizes.length > 0 && (
+                <label className="block">
+                  <span className="sr-only">Tyre size</span>
+                  <select value={selectedSize} onChange={e => setSelectedSize(e.target.value)} className={CTRL}>
+                    {sizes.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </label>
+              )}
+            </div>
+            <div className="h-56">
+              {selectedSize ? (
+                <div className="h-full" role="img" aria-label={`Monthly issues of ${selectedSize}: ${trend.data.join(', ')}.`}>
+                  <Line data={trendLineData} options={{ ...CHART_OPTS, plugins: { ...CHART_OPTS.plugins, legend: { display: false } } }} />
+                </div>
+              ) : (
+                <p className="h-full flex items-center justify-center text-[var(--text-dim)] text-sm">No size data available</p>
+              )}
+            </div>
+          </section>
+
+          <section className="card p-5 space-y-3" aria-labelledby="rep-grid">
+            <h3 id="rep-grid" className="text-[var(--text-primary)] font-semibold">Size by site consumption (last 30 days)</h3>
+            <SortedPagedTable
+              columns={gridColumns}
+              rows={grid.rows}
+              defaultSort={{ key: 'total', dir: 'desc' }}
+              getRowId={r => r.size}
+              loading={loading}
+              error={loadError}
+              onRetry={load}
+              emptyMessage="No tyre issues in the last 30 days"
+            />
+          </section>
+        </div>
+      )}
+
+      {/* ═══ TAB: ORDER GENERATOR ═══ */}
+      {activeTab === 'order' && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <StatTile icon={Coins} label="Total PO value" value={fmtCurrency(totals.total, currency || activeCurrency)} sub={`${totals.lines} line items`} />
+            <StatTile icon={Package} label="Total units" value={totals.units.toLocaleString()} sub="Tyres across all lines" />
+            <StatTile icon={Layers} label="Sites covered" value={totals.sites.toLocaleString()} sub="Unique sites" />
+            <StatTile icon={AlertTriangle} label="Lines to complete" value={(totals.unpriced + totals.missingSupplier).toLocaleString()}
+              sub={`${totals.unpriced} unpriced, ${totals.missingSupplier} without supplier`}
+              tone={totals.unpriced + totals.missingSupplier > 0 ? 'warn' : 'neutral'} />
+          </div>
+
+          <section className="card p-0 overflow-hidden" aria-labelledby="rep-order">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-4 border-b border-[var(--input-border)]">
+              <h3 id="rep-order" className="text-[var(--text-primary)] font-semibold flex items-center gap-2">
+                <ShoppingCart size={16} className="text-[var(--text-muted)]" aria-hidden="true" /> Purchase order lines
+              </h3>
+              <button type="button" onClick={addBlankOrderLine}
+                className={`btn-secondary min-h-[44px] flex items-center gap-1.5 text-sm ${FOCUS}`}>
+                <Plus size={14} aria-hidden="true" /> Add line
+              </button>
+            </div>
+            {orderLines.length === 0 ? (
+              <div className="py-14 text-center px-4" role="status">
+                <ShoppingCart size={40} className="mx-auto mb-3 text-[var(--text-dim)]" aria-hidden="true" />
+                <p className="text-[var(--text-primary)] font-medium">No order lines yet</p>
+                <p className="text-[var(--text-muted)] text-sm mt-1">Choose Order in the Replenishment Matrix or add lines manually.</p>
+                <button type="button" onClick={() => setActiveTab('matrix')}
+                  className={`btn-secondary min-h-[44px] mt-4 inline-flex items-center gap-1.5 text-sm ${FOCUS}`}>
+                  <Layers size={14} aria-hidden="true" /> Go to the Replenishment Matrix
+                </button>
               </div>
             ) : (
-              <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-[var(--input-border)] bg-[var(--surface-1)]/80">
-                        {[
-                          { label: 'Brand',        field: 'brand'         },
-                          { label: 'Size',         field: 'size'          },
-                          { label: 'Site',         field: 'site'          },
-                          { label: 'In Stock',     field: 'qtyInStock'    },
-                          { label: 'On Order',     field: 'qtyOnOrder'    },
-                          { label: 'Daily Usage',  field: 'consumptionPerDay' },
-                          { label: 'Days Left',    field: 'days_remaining' },
-                          { label: 'Suggest Qty',  field: 'suggestedQty'  },
-                          { label: 'Est. Cost',    field: 'estimatedCost' },
-                          { label: 'Status',       field: 'urgency'       },
-                          { label: 'Action',       field: null            },
-                        ].map(({ label, field }) => (
-                          <th
-                            key={label}
-                            onClick={() => {
-                              if (field && field !== 'days_remaining') handleSort(field)
-                              else if (field === 'days_remaining') handleSort('daysRemaining')
-                            }}
-                            className={`px-4 py-3 text-left text-[var(--text-muted)] font-medium text-xs uppercase tracking-wide whitespace-nowrap ${
-                              field ? 'cursor-pointer hover:text-[var(--text-primary)]' : ''
-                            }`}
-                          >
-                            <div className="flex items-center gap-1">
-                              {label}
-                              {field && <SortIcon field={
-                                field === 'days_remaining' ? 'daysRemaining' : field
-                              } />}
-                            </div>
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {matrixPager.pageRows.map(row => {
-                        const cfg = URGENCY_CONFIG[row.urgency] || URGENCY_CONFIG.Normal
-                        const suggestedDisplay = editingQty[row._key] !== undefined
-                          ? editingQty[row._key]
-                          : row.suggestedQty
-                        const estCostDisplay = suggestedDisplay * row.unitCost
-                        return (
-                          <tr
-                            key={row._key}
-                            className={`border-b border-[var(--input-border)]/60 hover:bg-[var(--input-bg)]/40 transition-colors ${cfg.row}`}
-                          >
-                            <td className="px-4 py-3 text-[var(--text-primary)] font-medium">{row.brand || '-'}</td>
-                            <td className="px-4 py-3 text-[var(--text-secondary)] font-mono text-xs">{row.size || '-'}</td>
-                            <td className="px-4 py-3 text-[var(--text-muted)]">{row.site || '-'}</td>
-                            <td className="px-4 py-3 text-center">
-                              <span className={row.qtyInStock <= 0 ? 'text-red-400 font-bold' : 'text-[var(--text-primary)]'}>
-                                {row.qtyInStock ?? 0}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-center text-yellow-400">
-                              {row.qtyOnOrder ?? 0}
-                            </td>
-                            <td className="px-4 py-3 text-center text-[var(--text-muted)]">
-                              {row.consumptionPerDay > 0
-                                ? row.consumptionPerDay.toFixed(2)
-                                : <span className="text-[var(--text-dim)]">-</span>}
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              <span className={
-                                row.daysRemaining === 9999 ? 'text-[var(--text-muted)]' :
-                                row.daysRemaining < 30 ? 'text-red-400 font-bold' :
-                                row.daysRemaining < 60 ? 'text-yellow-400' :
-                                row.daysRemaining > 180 ? 'text-blue-400' :
-                                'text-green-400'
-                              }>
-                                {row.daysRemaining === 9999 ? '∞' : `${row.daysRemaining}d`}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3">
-                              {/* Inline editable suggested qty */}
-                              <input
-                                type="number"
-                                min="0"
-                                value={suggestedDisplay}
-                                onChange={e => setEditingQty(prev => ({
-                                  ...prev,
-                                  [row._key]: Math.max(0, parseInt(e.target.value) || 0),
-                                }))}
-                                className="w-16 px-2 py-1 bg-[var(--input-bg)] border border-[var(--input-border)] rounded text-[var(--text-primary)] text-xs text-center focus:outline-none focus:border-emerald-500"
-                              />
-                            </td>
-                            <td className="px-4 py-3 text-right">
-                              <span className={estCostDisplay > 0 ? 'text-emerald-400 text-xs' : 'text-[var(--text-dim)] text-xs'}>
-                                {estCostDisplay > 0
-                                  ? `${activeCurrency} ${estCostDisplay.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
-                                  : '-'}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3">
-                              <UrgencyBadge urgency={row.urgency} />
-                            </td>
-                            <td className="px-4 py-3">
-                              <button
-                                onClick={() => addToOrder(row)}
-                                disabled={suggestedDisplay <= 0}
-                                title="Add to order"
-                                className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-700/30 border border-emerald-700 text-emerald-400 rounded-lg text-xs font-medium hover:bg-emerald-700/60 transition-colors disabled:opacity-30 disabled:cursor-not-allowed whitespace-nowrap"
-                              >
-                                <Plus size={12} />Order
-                              </button>
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                  <TablePagination {...matrixPager} />
-                </div>
-
-                {/* Urgency legend */}
-                <div className="flex items-center gap-4 px-4 py-3 border-t border-[var(--input-border)] text-xs text-[var(--text-muted)]">
-                  <span className="font-medium text-[var(--text-muted)]">Legend:</span>
-                  {Object.entries(URGENCY_CONFIG).map(([k, v]) => (
-                    <span key={k} className={`flex items-center gap-1 ${v.color}`}>
-                      <span className={`w-2 h-2 rounded-full inline-block ${v.bg.replace('/20', '')} border ${v.border}`} />
-                      {k}
-                    </span>
-                  ))}
+              <div className="p-3">
+                <SortedPagedTable
+                  columns={orderColumns}
+                  rows={indexedOrderLines}
+                  getRowId={l => l._key}
+                  emptyMessage="No order lines"
+                />
+                <div className="flex flex-wrap items-center justify-between gap-2 px-2 pt-3 text-sm">
+                  <span className="text-[var(--text-muted)]">
+                    {totals.lines} line{totals.lines !== 1 ? 's' : ''}, {totals.units} units
+                  </span>
+                  <span className="text-[var(--text-muted)]">
+                    Total PO value: <span className="text-[var(--text-primary)] text-lg font-bold tabular-nums">{fmtCurrency(totals.total, currency || activeCurrency)}</span>
+                  </span>
                 </div>
               </div>
             )}
-          </motion.div>
-        )}
+          </section>
 
-        {/* ═══════════════════════════════════════════════════════════════════
-            TAB 1: CONSUMPTION ANALYSIS
-        ═══════════════════════════════════════════════════════════════════ */}
-        {activeTab === 1 && (
-          <motion.div
-            key="consumption"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            className="space-y-6"
-          >
-            {/* Seasonal alert */}
-            {seasonalNote && (
-              <div className="bg-yellow-900/20 border border-yellow-700 rounded-xl p-4 flex items-start gap-3">
-                <TrendingDown size={18} className="text-yellow-400 mt-0.5 flex-shrink-0" />
-                <p className="text-yellow-300 text-sm">{seasonalNote}</p>
-              </div>
-            )}
-
-            {/* Bar chart: top 5 sizes */}
-            <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
-              <h3 className="text-[var(--text-primary)] font-semibold mb-4">
-                Monthly Consumption by Top 5 Tyre Sizes (Last 6 Months)
-              </h3>
-              <div className="h-64">
-                {consumptionBarData.datasets.length > 0 ? (
-                  <Bar
-                    data={consumptionBarData}
-                    options={{
-                      ...CHART_OPTS,
-                      plugins: {
-                        ...CHART_OPTS.plugins,
-                        legend: { position: 'top', labels: { color: '#9ca3af', boxWidth: 12, font: { size: 10 } } },
-                      },
-                    }}
-                  />
-                ) : (
-                  <div className="h-full flex items-center justify-center text-[var(--text-dim)] text-sm">
-                    No tyre issue records in last 90 days
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Line chart: single size trend */}
-            <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-[var(--text-primary)] font-semibold">Consumption Trend by Size</h3>
-                {allSizes.length > 0 && (
-                  <select
-                    value={selectedSize}
-                    onChange={e => setSelectedSize(e.target.value)}
-                    className="px-3 py-1.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-emerald-500"
-                  >
-                    {allSizes.map(s => <option key={s}>{s}</option>)}
-                  </select>
-                )}
-              </div>
-              <div className="h-56">
-                {selectedSize ? (
-                  <Line
-                    data={trendLineData}
-                    options={{
-                      ...CHART_OPTS,
-                      plugins: {
-                        ...CHART_OPTS.plugins,
-                        legend: { display: false },
-                      },
-                    }}
-                  />
-                ) : (
-                  <div className="h-full flex items-center justify-center text-[var(--text-dim)] text-sm">
-                    No size data available
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Consumption matrix: size × site */}
-            <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
-              <h3 className="text-[var(--text-primary)] font-semibold mb-4">
-                Size × Site Consumption Matrix (Last 30 Days)
-              </h3>
-              {consumptionMatrix.sizes.length === 0 ? (
-                <div className="py-8 text-center text-[var(--text-dim)] text-sm">No issue records in last 30 days</div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="text-xs">
-                    <thead>
-                      <tr className="border-b border-[var(--input-border)]">
-                        <th className="px-3 py-2 text-left text-[var(--text-muted)] font-medium whitespace-nowrap">Size</th>
-                        {consumptionMatrix.sites.map(site => (
-                          <th key={site} className="px-3 py-2 text-center text-[var(--text-muted)] font-medium whitespace-nowrap">
-                            {site}
-                          </th>
-                        ))}
-                        <th className="px-3 py-2 text-center text-[var(--text-secondary)] font-semibold">Total</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {consumptionPager.pageRows.map(size => {
-                        const rowTotal = consumptionMatrix.sites.reduce(
-                          (s, site) => s + (consumptionMatrix.grid[`${size}||${site}`] || 0), 0
-                        )
-                        return (
-                          <tr key={size} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/30 transition-colors">
-                            <td className="px-3 py-2 text-[var(--text-primary)] font-mono">{size}</td>
-                            {consumptionMatrix.sites.map(site => {
-                              const val = consumptionMatrix.grid[`${size}||${site}`] || 0
-                              return (
-                                <td key={site} className="px-3 py-2 text-center">
-                                  {val > 0 ? (
-                                    <span className={`font-medium ${
-                                      val >= 10 ? 'text-emerald-400' :
-                                      val >= 5  ? 'text-yellow-400' :
-                                                  'text-[var(--text-muted)]'
-                                    }`}>{val}</span>
-                                  ) : (
-                                    <span className="text-[var(--text-dim)]">-</span>
-                                  )}
-                                </td>
-                              )
-                            })}
-                            <td className="px-3 py-2 text-center text-[var(--text-primary)] font-semibold">{rowTotal}</td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                  <TablePagination {...consumptionPager} />
-                </div>
+          {poResult && (
+            <div role={poResult.type === 'success' ? 'status' : 'alert'}
+              className={`card p-4 flex flex-wrap items-center gap-3 border text-sm ${poResult.type === 'success' ? 'border-green-500/40' : 'border-red-500/40'}`}>
+              {poResult.type === 'success'
+                ? <CheckCircle size={18} className="shrink-0 text-green-500" aria-hidden="true" />
+                : <AlertTriangle size={18} className="shrink-0 text-red-500" aria-hidden="true" />}
+              <span className="text-[var(--text-secondary)]">{poResult.message}</span>
+              {poResult.type === 'success' && (
+                <Link to="/procurement" className={`inline-flex items-center gap-1 text-[var(--accent)] hover:underline rounded ${FOCUS}`}>
+                  <ExternalLink size={14} aria-hidden="true" /> Open Procurement
+                </Link>
               )}
+              <button type="button" onClick={() => setPoResult(null)} aria-label="Dismiss message"
+                className={`ml-auto min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg text-[var(--text-muted)] ${FOCUS}`}>
+                <X size={16} aria-hidden="true" />
+              </button>
             </div>
-          </motion.div>
-        )}
+          )}
 
-        {/* ═══════════════════════════════════════════════════════════════════
-            TAB 2: ORDER GENERATOR
-        ═══════════════════════════════════════════════════════════════════ */}
-        {activeTab === 2 && (
-          <motion.div
-            key="order"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            className="space-y-6"
-          >
-            {/* PO summary card */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
-                <p className="text-[var(--text-muted)] text-xs mb-1">Total PO Value</p>
-                <p className="text-2xl font-bold text-emerald-400">
-                  {fmtCurrency(orderTotal, activeCurrency)}
-                </p>
-                <p className="text-[var(--text-muted)] text-xs mt-1">{orderLines.length} line items</p>
-              </div>
-              <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
-                <p className="text-[var(--text-muted)] text-xs mb-1">Total Units</p>
-                <p className="text-2xl font-bold text-[var(--text-primary)]">
-                  {orderLines.reduce((s, l) => s + (parseInt(l.qty) || 0), 0)}
-                </p>
-                <p className="text-[var(--text-muted)] text-xs mt-1">tyres across all lines</p>
-              </div>
-              <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
-                <p className="text-[var(--text-muted)] text-xs mb-1">Sites Covered</p>
-                <p className="text-2xl font-bold text-[var(--text-primary)]">
-                  {new Set(orderLines.map(l => l.site).filter(Boolean)).size}
-                </p>
-                <p className="text-[var(--text-muted)] text-xs mt-1">unique sites</p>
-              </div>
+          {orderLines.length > 0 && (
+            <div className="flex flex-wrap items-center gap-3">
+              <button type="button" onClick={handleCreatePurchaseOrder} disabled={creatingPO}
+                className={`btn-primary min-h-[44px] flex items-center gap-2 text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed ${FOCUS}`}>
+                {creatingPO ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <ShoppingCart size={16} aria-hidden="true" />}
+                {creatingPO ? 'Creating PO...' : 'Create Purchase Order'}
+              </button>
+              <button type="button" onClick={exportOrderExcel}
+                className={`btn-secondary min-h-[44px] flex items-center gap-2 text-sm ${FOCUS}`}>
+                <FileSpreadsheet size={16} aria-hidden="true" /> Export PO to Excel
+              </button>
+              <button type="button" onClick={exportOrderPDF}
+                className={`btn-secondary min-h-[44px] flex items-center gap-2 text-sm ${FOCUS}`}>
+                <FileText size={16} aria-hidden="true" /> Export PO to PDF
+              </button>
+              <button type="button" onClick={clearOrder}
+                className={`min-h-[44px] flex items-center gap-2 px-4 rounded-lg border border-red-500/40 text-red-500 text-sm font-medium hover:bg-red-500/10 ${FOCUS}`}>
+                <X size={16} aria-hidden="true" /> Clear all lines
+              </button>
+              <Link to="/procurement"
+                className={`ml-auto min-h-[44px] inline-flex items-center gap-1.5 text-sm text-[var(--accent)] hover:underline rounded ${FOCUS}`}>
+                <ExternalLink size={14} aria-hidden="true" /> Manage full POs in Procurement
+              </Link>
             </div>
-
-            {/* Order table */}
-            <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
-              <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--input-border)]">
-                <h3 className="text-[var(--text-primary)] font-semibold flex items-center gap-2">
-                  <ShoppingCart size={16} className="text-emerald-400" />
-                  Purchase Order Lines
-                </h3>
-                <button
-                  onClick={addBlankOrderLine}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-700/30 border border-emerald-700 text-emerald-400 text-sm rounded-lg hover:bg-emerald-700/50 transition-colors"
-                >
-                  <Plus size={14} />Add Line
-                </button>
-              </div>
-
-              {orderLines.length === 0 ? (
-                <div className="py-16 text-center">
-                  <ShoppingCart size={48} className="mx-auto mb-4 text-[var(--text-dim)]" />
-                  <p className="text-[var(--text-muted)] font-medium">No order lines yet</p>
-                  <p className="text-[var(--text-dim)] text-sm mt-2">
-                    Click "Order" in the Replenishment Matrix or add lines manually
-                  </p>
-                  <button
-                    onClick={() => setActiveTab(0)}
-                    className="mt-4 text-emerald-400 hover:text-emerald-300 text-sm flex items-center gap-1 mx-auto"
-                  >
-                    <Layers size={14} />Go to Replenishment Matrix →
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-[var(--input-border)] bg-[var(--surface-1)]/50">
-                          <th className="px-4 py-3 text-left text-[var(--text-muted)] text-xs font-medium uppercase tracking-wide">Brand</th>
-                          <th className="px-4 py-3 text-left text-[var(--text-muted)] text-xs font-medium uppercase tracking-wide">Size</th>
-                          <th className="px-4 py-3 text-left text-[var(--text-muted)] text-xs font-medium uppercase tracking-wide">Site</th>
-                          <th className="px-4 py-3 text-center text-[var(--text-muted)] text-xs font-medium uppercase tracking-wide">Qty</th>
-                          <th className="px-4 py-3 text-right text-[var(--text-muted)] text-xs font-medium uppercase tracking-wide">Unit Cost</th>
-                          <th className="px-4 py-3 text-right text-[var(--text-muted)] text-xs font-medium uppercase tracking-wide">Total</th>
-                          <th className="px-4 py-3 text-left text-[var(--text-muted)] text-xs font-medium uppercase tracking-wide">Supplier</th>
-                          <th className="px-4 py-3 w-8"></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {orderPager.pageRows.map(({ line, index: idx }) => (
-                          <tr key={line._key} className="border-b border-[var(--input-border)]/60 hover:bg-[var(--input-bg)]/30 transition-colors">
-                            <td className="px-4 py-2">
-                              <input
-                                value={line.brand}
-                                onChange={e => updateOrderLine(idx, 'brand', e.target.value)}
-                                placeholder="Brand"
-                                className="w-full px-2 py-1.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded text-[var(--text-primary)] text-sm focus:outline-none focus:border-emerald-500"
-                              />
-                            </td>
-                            <td className="px-4 py-2">
-                              <input
-                                value={line.size}
-                                onChange={e => updateOrderLine(idx, 'size', e.target.value)}
-                                placeholder="Size"
-                                className="w-full px-2 py-1.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded text-[var(--text-primary)] text-xs font-mono focus:outline-none focus:border-emerald-500"
-                              />
-                            </td>
-                            <td className="px-4 py-2">
-                              <input
-                                value={line.site}
-                                onChange={e => updateOrderLine(idx, 'site', e.target.value)}
-                                placeholder="Site"
-                                className="w-full px-2 py-1.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded text-[var(--text-primary)] text-sm focus:outline-none focus:border-emerald-500"
-                              />
-                            </td>
-                            <td className="px-4 py-2">
-                              <input
-                                type="number"
-                                min="1"
-                                value={line.qty}
-                                onChange={e => updateOrderLine(idx, 'qty', parseInt(e.target.value) || 1)}
-                                className="w-16 px-2 py-1.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded text-[var(--text-primary)] text-sm text-center focus:outline-none focus:border-emerald-500 mx-auto block"
-                              />
-                            </td>
-                            <td className="px-4 py-2">
-                              <input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                value={line.unitCost}
-                                onChange={e => updateOrderLine(idx, 'unitCost', parseFloat(e.target.value) || 0)}
-                                className="w-28 px-2 py-1.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded text-[var(--text-primary)] text-sm text-right focus:outline-none focus:border-emerald-500 ml-auto block"
-                              />
-                            </td>
-                            <td className="px-4 py-2 text-right">
-                              <span className="text-emerald-400 font-medium text-sm whitespace-nowrap">
-                                {fmtCurrency(line.totalCost, activeCurrency)}
-                              </span>
-                            </td>
-                            <td className="px-4 py-2">
-                              <input
-                                value={line.supplier}
-                                onChange={e => updateOrderLine(idx, 'supplier', e.target.value)}
-                                placeholder="Supplier name"
-                                className="w-full px-2 py-1.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded text-[var(--text-primary)] text-sm focus:outline-none focus:border-emerald-500"
-                              />
-                            </td>
-                            <td className="px-4 py-2">
-                              <button
-                                onClick={() => removeOrderLine(idx)}
-                                className="p-1 rounded text-[var(--text-muted)] hover:text-red-400 hover:bg-red-900/20 transition-colors"
-                              >
-                                <X size={14} />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    <TablePagination {...orderPager} />
-                  </div>
-
-                  {/* Total row */}
-                  <div className="flex items-center justify-between px-5 py-4 border-t border-[var(--input-border)] bg-[var(--input-bg)]/30">
-                    <span className="text-[var(--text-muted)] text-sm font-medium">
-                      {orderLines.length} line{orderLines.length !== 1 ? 's' : ''} ·{' '}
-                      {orderLines.reduce((s, l) => s + (parseInt(l.qty) || 0), 0)} units total
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[var(--text-muted)] text-sm">Total PO Value:</span>
-                      <span className="text-emerald-400 text-xl font-bold">
-                        {fmtCurrency(orderTotal, activeCurrency)}
-                      </span>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* PO creation result banner */}
-            {poResult && (
-              <div className={`rounded-xl p-4 flex items-center gap-3 border text-sm ${
-                poResult.type === 'success'
-                  ? 'bg-emerald-900/20 border-emerald-700 text-emerald-300'
-                  : 'bg-red-900/30 border-red-700 text-red-300'
-              }`}>
-                {poResult.type === 'success'
-                  ? <CheckCircle size={18} className="flex-shrink-0" />
-                  : <AlertTriangle size={18} className="flex-shrink-0" />}
-                <span>{poResult.message}</span>
-                {poResult.type === 'success' && (
-                  <a href="/procurement" className="ml-2 inline-flex items-center gap-1 text-emerald-400 hover:text-emerald-300">
-                    <ExternalLink size={14} />Open Procurement
-                  </a>
-                )}
-                <button onClick={() => setPoResult(null)} className="ml-auto text-[var(--text-muted)] hover:text-[var(--text-primary)]">
-                  <X size={16} />
-                </button>
-              </div>
-            )}
-
-            {/* Export actions */}
-            {orderLines.length > 0 && (
-              <div className="flex flex-wrap items-center gap-3">
-                <button
-                  onClick={handleCreatePurchaseOrder}
-                  disabled={creatingPO}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-emerald-700 border border-emerald-600 text-white text-sm font-semibold rounded-xl hover:bg-emerald-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {creatingPO
-                    ? <Loader2 size={16} className="animate-spin" />
-                    : <ShoppingCart size={16} />}
-                  {creatingPO ? 'Creating PO...' : 'Create Purchase Order'}
-                </button>
-                <button
-                  onClick={exportOrderExcel}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-sm font-medium rounded-xl transition-colors"
-                >
-                  <FileSpreadsheet size={16} className="text-emerald-400" />
-                  Export PO to Excel
-                </button>
-                <button
-                  onClick={exportOrderPDF}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-sm font-medium rounded-xl transition-colors"
-                >
-                  <FileText size={16} className="text-red-400" />
-                  Export PO to PDF
-                </button>
-                <button
-                  onClick={() => setOrderLines([])}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-red-900/20 border border-red-800 text-red-400 text-sm font-medium rounded-xl hover:bg-red-900/40 transition-colors"
-                >
-                  <X size={16} />
-                  Clear All Lines
-                </button>
-                <a
-                  href="/procurement"
-                  className="ml-auto flex items-center gap-1.5 text-sm text-emerald-400 hover:text-emerald-300 transition-colors"
-                >
-                  <ExternalLink size={14} />
-                  Manage full POs in Procurement →
-                </a>
-              </div>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+          )}
+        </div>
+      )}
     </div>
   )
 }

@@ -1,54 +1,43 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Zap, Plus, Edit2, Trash2, X, Loader2, Search, Filter,
-  ToggleLeft, ToggleRight, XCircle, ChevronRight, ChevronDown,
-  Bell, Clock, History, AlertTriangle, CheckCircle,
+  ToggleLeft, ToggleRight, XCircle, Bell, Clock, History, AlertTriangle, CheckCircle,
+  PauseCircle, Ban, FileSpreadsheet, FileText, RefreshCw, Activity,
 } from 'lucide-react'
 import * as businessRules from '../lib/api/businessRules'
 import { toUserMessage } from '../lib/safeError'
 import { formatDistanceToNow } from 'date-fns'
 import { formatDateTime } from '../lib/formatters'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
+import {
+  EXECUTION_SAMPLE_LIMIT, EXECUTION_STATUS_LABEL, DORMANT_DAYS,
+  automationKpis, filterRules, ruleEventTypes, ruleTableRows, executionStatusBreakdown,
+  activityLabel, ruleExportRows, RULE_EXPORT_COLS, RULE_EXPORT_HEADERS,
+} from '../lib/automationRulesAnalytics'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const OPERATORS = [
-  { value: 'lt',       label: '<',        text: 'less than' },
-  { value: 'lte',      label: '≤',        text: 'less than or equal' },
-  { value: 'gt',       label: '>',        text: 'greater than' },
-  { value: 'gte',      label: '≥',        text: 'greater than or equal' },
-  { value: 'eq',       label: '=',        text: 'equals' },
-  { value: 'neq',      label: '≠',        text: 'not equal' },
-  { value: 'contains', label: 'contains', text: 'contains' },
-]
-
-const ROLES = [
-  { value: 'admin',    label: 'Admin' },
-  { value: 'manager',  label: 'Manager' },
-  { value: 'director', label: 'Director' },
-]
-
 const EXECUTION_STATUS = {
-  actioned:           { label: 'Actioned',       badge: 'bg-green-500/20 text-green-400',  icon: CheckCircle },
-  conditions_not_met: { label: 'Conditions not met', badge: 'bg-gray-600/40 text-gray-400', icon: Filter },
-  skipped_cooldown:   { label: 'Cooldown',       badge: 'bg-yellow-500/20 text-yellow-400', icon: Clock },
-  error:              { label: 'Error',          badge: 'bg-red-500/20 text-red-400',      icon: AlertTriangle },
+  actioned:           { badge: 'bg-green-500/20 text-green-400',   icon: CheckCircle },
+  conditions_not_met: { badge: 'bg-gray-600/40 text-gray-400',     icon: Filter },
+  skipped_cooldown:   { badge: 'bg-yellow-500/20 text-yellow-400', icon: Clock },
+  error:              { badge: 'bg-red-500/20 text-red-400',       icon: AlertTriangle },
 }
 
-function opSymbol(op) { return OPERATORS.find(o => o.value === op)?.label || op }
-
-function conditionSummary(conditions) {
-  if (!Array.isArray(conditions) || conditions.length === 0) return 'Always (no conditions)'
-  return conditions.map(c => `${c.field} ${opSymbol(c.operator)} ${c.value}`).join(' AND ')
+const BAR_TONE = {
+  actioned: 'bg-green-500/70',
+  conditions_not_met: 'bg-gray-500/70',
+  skipped_cooldown: 'bg-yellow-500/70',
+  error: 'bg-red-500/70',
 }
 
-function actionSummary(actions) {
-  if (!Array.isArray(actions) || actions.length === 0) return 'N/A'
-  return actions.map(a =>
-    a.type === 'notify_role'
-      ? `Notify ${ROLES.find(r => r.value === a.role)?.label || a.role}`
-      : `Emit rule.${a.event_type}`,
-  ).join(' · ')
+const ACTIVITY_TONE = {
+  never: 'bg-gray-700 text-gray-300',
+  dormant: 'bg-yellow-500/20 text-yellow-400',
+  recent: 'bg-green-500/20 text-green-400',
+  fired: 'bg-blue-500/20 text-blue-300',
 }
 
 function relativeTime(ts) {
@@ -57,154 +46,90 @@ function relativeTime(ts) {
   catch { return null }
 }
 
-// ─── Rule card ────────────────────────────────────────────────────────────────
+const fmtNum = (v) => (v == null ? 'N/A' : Number(v).toLocaleString())
+const fmtPct = (v) => (v == null ? 'N/A' : `${(v * 100).toFixed(1)}%`)
 
-function RuleCard({ rule, onEdit, onDelete, onToggle }) {
-  const [deleting, setDeleting] = useState(false)
-  const [toggling, setToggling] = useState(false)
-  const [drawerOpen, setDrawerOpen] = useState(false)
-  const [executions, setExecutions] = useState(null)   // null = not loaded
-  const [execError, setExecError] = useState(null)
+function Kpi({ icon: Icon, label, value, hint, tone = 'text-orange-400', loading, onClick, active }) {
+  const Tag = onClick ? 'button' : 'div'
+  return (
+    <Tag
+      onClick={onClick}
+      className={`text-left bg-gray-800 border rounded-xl px-4 py-3 ${active ? 'border-orange-500' : 'border-gray-700'} ${onClick ? 'hover:border-gray-500 transition-colors' : ''}`}
+    >
+      <div className="flex items-center gap-2 text-gray-400 text-xs"><Icon className={`w-4 h-4 ${tone}`} /> {label}</div>
+      {loading
+        ? <div className="h-7 mt-1.5 w-16 rounded bg-gray-700/60 animate-pulse" />
+        : <p className="text-white font-bold text-xl mt-1">{value}</p>}
+      {hint && !loading && <p className="text-gray-500 text-[11px] mt-0.5">{hint}</p>}
+    </Tag>
+  )
+}
 
-  async function handleDelete() {
-    if (!window.confirm(`Delete rule "${rule.name}"? Its execution history will also be removed.`)) return
-    setDeleting(true)
-    await onDelete(rule.id)
-    setDeleting(false)
-  }
+// ─── Rule detail (recent runs of one rule) ────────────────────────────────────
 
-  async function handleToggle() {
-    setToggling(true)
-    await onToggle(rule.id, !rule.active)
-    setToggling(false)
-  }
+function RuleDetail({ rule, onClose }) {
+  const [executions, setExecutions] = useState(null)
+  const [error, setError] = useState(null)
 
-  async function toggleDrawer() {
-    const opening = !drawerOpen
-    setDrawerOpen(opening)
-    if (opening && executions === null) {
-      try {
-        const rows = await businessRules.listRuleExecutions({ ruleId: rule.id, limit: 20 })
-        setExecutions(rows || [])
-      } catch (err) {
-        setExecError(toUserMessage(err, 'Failed to load executions'))
-        setExecutions([])
-      }
+  const load = useCallback(async () => {
+    setExecutions(null)
+    setError(null)
+    try {
+      const rows = await businessRules.listRuleExecutions({ ruleId: rule.id, limit: 20 })
+      setExecutions(rows || [])
+    } catch (err) {
+      setError(toUserMessage(err, 'Failed to load executions'))
     }
-  }
+  }, [rule.id])
 
-  const triggered = relativeTime(rule.last_triggered_at)
+  useEffect(() => { load() }, [load])
 
   return (
-    <div className="relative bg-gray-800 rounded-xl border border-gray-700 border-l-4 border-l-purple-500 overflow-hidden hover:border-gray-600 transition-all">
-      <div className="p-4 pb-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-start gap-3 min-w-0">
-            <div className="shrink-0 mt-0.5 p-2 rounded-lg bg-purple-500/20 text-purple-400">
-              <Zap className="w-4 h-4" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-white font-semibold text-sm truncate">{rule.name}</p>
-              {rule.description && <p className="text-gray-500 text-xs mt-0.5 line-clamp-2">{rule.description}</p>}
-            </div>
-          </div>
-          <button
-            onClick={handleToggle}
-            disabled={toggling}
-            title={rule.active ? 'Disable' : 'Enable'}
-            className="shrink-0 text-gray-400 hover:text-white transition-colors disabled:opacity-50"
-          >
-            {toggling
-              ? <Loader2 className="w-5 h-5 animate-spin" />
-              : rule.active ? <ToggleRight className="w-6 h-6 text-orange-500" /> : <ToggleLeft className="w-6 h-6" />}
-          </button>
+    <div className="bg-gray-800 border border-gray-700 rounded-xl p-4 space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-white font-semibold text-sm">{rule.name}</h2>
+          {rule.description && <p className="text-gray-500 text-xs mt-0.5">{rule.description}</p>}
         </div>
-
-        {/* Event type chips */}
-        <div className="flex flex-wrap gap-1.5 mt-2.5 ml-11">
-          {(rule.event_types || []).map(ev => (
-            <span key={ev} className="px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-300 text-[10px] font-mono">{ev}</span>
-          ))}
+        <button onClick={onClose} aria-label="Close rule detail" className="text-gray-500 hover:text-white"><X className="w-4 h-4" /></button>
+      </div>
+      <div className="grid sm:grid-cols-2 gap-3 text-xs">
+        <div className="flex items-start gap-1.5">
+          <Filter className="w-3.5 h-3.5 text-blue-400 shrink-0 mt-0.5" />
+          <p className="text-gray-300 font-mono text-[11px]">{rule.conditionText}</p>
         </div>
-
-        {/* Condition + action summaries */}
-        <div className="mt-3 ml-11 space-y-1.5">
-          <div className="flex items-start gap-1.5 text-xs">
-            <Filter className="w-3.5 h-3.5 text-blue-400 shrink-0 mt-0.5" />
-            <p className="text-gray-300 font-mono text-[11px] leading-relaxed">{conditionSummary(rule.conditions)}</p>
-          </div>
-          <div className="flex items-start gap-1.5 text-xs">
-            <Bell className="w-3.5 h-3.5 text-orange-400 shrink-0 mt-0.5" />
-            <p className="text-gray-300 text-[11px] leading-relaxed">{actionSummary(rule.actions)}</p>
-          </div>
+        <div className="flex items-start gap-1.5">
+          <Bell className="w-3.5 h-3.5 text-orange-400 shrink-0 mt-0.5" />
+          <p className="text-gray-300 text-[11px]">{rule.actionText}</p>
         </div>
       </div>
-
-      <div className="px-4 py-2.5 border-t border-gray-700/60 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 text-xs text-gray-500 flex-wrap">
-          <span>
-            {rule.triggered_count > 0
-              ? `Triggered ${rule.triggered_count} time${rule.triggered_count !== 1 ? 's' : ''}`
-              : 'Never triggered'}
-          </span>
-          {triggered && <span className="text-gray-600">· {triggered}</span>}
-          {rule.cooldown_minutes > 0 && (
-            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-gray-700 text-gray-400 text-[10px]">
-              <Clock className="w-2.5 h-2.5" /> {rule.cooldown_minutes}m cooldown
-            </span>
-          )}
+      <p className="text-gray-500 text-[10px] font-semibold uppercase tracking-widest">Recent executions</p>
+      {error ? (
+        <div className="flex items-center gap-2 text-xs text-red-400">
+          <XCircle className="w-4 h-4" /> {error}
+          <button onClick={load} className="ml-auto px-2 py-1 rounded bg-red-500/15 text-red-300 border border-red-500/30">Retry</button>
         </div>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={toggleDrawer}
-            className={`inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-semibold transition-all ${
-              drawerOpen ? 'text-orange-300 bg-orange-500/15' : 'text-gray-400 hover:text-white hover:bg-gray-700'
-            }`}
-            title="Recent executions"
-          >
-            <History className="w-3.5 h-3.5" /> Runs
-            {drawerOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-          </button>
-          <button onClick={() => onEdit(rule)} className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-gray-700 transition-all" title="Edit">
-            <Edit2 className="w-3.5 h-3.5" />
-          </button>
-          <button onClick={handleDelete} disabled={deleting} className="p-1.5 rounded-lg text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-all disabled:opacity-50" title="Delete">
-            {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-          </button>
-        </div>
-      </div>
-
-      {/* Executions drawer */}
-      {drawerOpen && (
-        <div className="px-4 py-3 border-t border-gray-700/60 bg-gray-900/50">
-          <p className="text-gray-500 text-[10px] font-semibold uppercase tracking-widest mb-2">Recent executions</p>
-          {executions === null ? (
-            <div className="py-2 flex justify-center"><Loader2 className="w-4 h-4 text-orange-500 animate-spin" /></div>
-          ) : execError ? (
-            <p className="text-red-400 text-xs">{execError}</p>
-          ) : executions.length === 0 ? (
-            <p className="text-gray-600 text-xs">No executions recorded yet.</p>
-          ) : (
-            <ul className="space-y-1.5">
-              {executions.map(ex => {
-                const meta = EXECUTION_STATUS[ex.status] || EXECUTION_STATUS.error
-                const Icon = meta.icon
-                return (
-                  <li key={ex.id} className="flex items-center gap-2.5 text-xs">
-                    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold shrink-0 ${meta.badge}`}>
-                      <Icon className="w-2.5 h-2.5" /> {meta.label}
-                    </span>
-                    <span className="text-gray-400">{formatDateTime(ex.created_at)}</span>
-                    {ex.event_id && <span className="text-gray-600 font-mono text-[10px]">event #{ex.event_id}</span>}
-                  </li>
-                )
-              })}
-            </ul>
-          )}
-        </div>
+      ) : executions === null ? (
+        <div className="py-2 flex justify-center"><Loader2 className="w-4 h-4 text-orange-500 animate-spin" /></div>
+      ) : executions.length === 0 ? (
+        <p className="text-gray-500 text-xs">No executions recorded yet.</p>
+      ) : (
+        <ul className="space-y-1.5">
+          {executions.map(ex => {
+            const meta = EXECUTION_STATUS[ex.status] || EXECUTION_STATUS.error
+            const Icon = meta.icon
+            return (
+              <li key={ex.id} className="flex items-center gap-2.5 text-xs flex-wrap">
+                <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold shrink-0 ${meta.badge}`}>
+                  <Icon className="w-2.5 h-2.5" /> {EXECUTION_STATUS_LABEL[ex.status] || 'Error'}
+                </span>
+                <span className="text-gray-400">{formatDateTime(ex.created_at)}</span>
+                {ex.event_id && <span className="text-gray-600 font-mono text-[10px]">event #{ex.event_id}</span>}
+              </li>
+            )
+          })}
+        </ul>
       )}
-
-      {!rule.active && !drawerOpen && <div className="absolute inset-0 bg-gray-900/40 rounded-xl pointer-events-none" />}
     </div>
   )
 }
@@ -221,49 +146,200 @@ export default function AutomationRules() {
   const [rules, setRules]     = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState(null)
+  const [actionError, setActionError] = useState(null)
+  const [executions, setExecutions] = useState(null)   // null = not read
+  const [execLoading, setExecLoading] = useState(true)
+  const [execError, setExecError] = useState(null)
   const [search, setSearch]   = useState('')
-  const [filterActive, setFilterActive] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [activity, setActivity] = useState('all')
+  const [eventType, setEventType] = useState('all')
+  const [selectedId, setSelectedId] = useState(null)
+  const [busyId, setBusyId]   = useState(null)
+  const [now, setNow]         = useState(() => new Date())
 
-  const fetch = useCallback(async () => {
+  const fetchRules = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
       const rows = await businessRules.listBusinessRules()
       setRules(rows || [])
+      setNow(new Date())
     } catch (err) { setError(toUserMessage(err, 'Failed to load rules')) }
     finally { setLoading(false) }
   }, [])
 
-  useEffect(() => { fetch() }, [fetch])
-
-  const q = search.trim().toLowerCase()
-  const visible = rules.filter(r => {
-    const matchSearch = !q
-      || (r.name || '').toLowerCase().includes(q)
-      || (r.description || '').toLowerCase().includes(q)
-      || (r.event_types || []).some(ev => ev.toLowerCase().includes(q))
-    const matchActive = filterActive === 'all' || (filterActive === 'active' ? r.active : !r.active)
-    return matchSearch && matchActive
-  })
-
-  async function handleDelete(id) {
-    setError(null)
+  const fetchExecutions = useCallback(async () => {
+    setExecLoading(true)
+    setExecError(null)
     try {
-      await businessRules.deleteBusinessRule(id)
-      setRules(prev => prev.filter(r => r.id !== id))
-    } catch (err) { setError(toUserMessage(err, 'Delete failed')) }
+      const rows = await businessRules.listRuleExecutions({ limit: EXECUTION_SAMPLE_LIMIT })
+      setExecutions(rows || [])
+    } catch (err) {
+      setExecutions(null)
+      setExecError(toUserMessage(err, 'Failed to load rule executions'))
+    } finally { setExecLoading(false) }
+  }, [])
+
+  useEffect(() => { fetchRules() }, [fetchRules])
+  useEffect(() => { fetchExecutions() }, [fetchExecutions])
+
+  const kpis = useMemo(() => automationKpis({ rules, executions, now }), [rules, executions, now])
+  const breakdown = useMemo(() => executionStatusBreakdown(executions || []), [executions])
+  const eventTypes = useMemo(() => ruleEventTypes(rules), [rules])
+  const tableRows = useMemo(() => ruleTableRows(
+    filterRules(rules, { search, status: statusFilter, activity, eventType, now }),
+    executions || [], { now },
+  ), [rules, executions, search, statusFilter, activity, eventType, now])
+  const selected = selectedId ? ruleTableRows(rules.filter((r) => r.id === selectedId), executions || [], { now })[0] : null
+
+  const hasFilters = !!search.trim() || statusFilter !== 'all' || activity !== 'all' || eventType !== 'all'
+  function clearFilters() { setSearch(''); setStatusFilter('all'); setActivity('all'); setEventType('all') }
+
+  async function handleDelete(rule) {
+    if (!window.confirm(`Delete rule "${rule.name}"? Its execution history will also be removed.`)) return
+    setActionError(null)
+    setBusyId(rule.id)
+    try {
+      await businessRules.deleteBusinessRule(rule.id)
+      setRules(prev => prev.filter(r => r.id !== rule.id))
+      if (selectedId === rule.id) setSelectedId(null)
+    } catch (err) { setActionError(toUserMessage(err, 'Delete failed')) }
+    finally { setBusyId(null) }
   }
 
-  async function handleToggle(id, active) {
-    setError(null)
+  async function handleToggle(rule) {
+    setActionError(null)
+    setBusyId(rule.id)
     try {
-      await businessRules.updateBusinessRule(id, { active })
-      setRules(prev => prev.map(r => r.id === id ? { ...r, active } : r))
-    } catch (err) { setError(toUserMessage(err, 'Update failed')) }
+      await businessRules.updateBusinessRule(rule.id, { active: !rule.active })
+      setRules(prev => prev.map(r => r.id === rule.id ? { ...r, active: !rule.active } : r))
+    } catch (err) { setActionError(toUserMessage(err, 'Update failed')) }
+    finally { setBusyId(null) }
   }
 
-  const activeCount = rules.filter(r => r.active).length
-  const triggeredTotal = rules.reduce((s, r) => s + (r.triggered_count || 0), 0)
+  const columns = useMemo(() => [
+    {
+      id: 'name',
+      header: 'Rule',
+      accessorKey: 'name',
+      cell: ({ row }) => (
+        <div className="min-w-[180px]">
+          <p className="text-white text-sm font-medium">{row.original.name}</p>
+          <p className="text-gray-500 text-[11px] font-mono truncate max-w-[260px]" title={row.original.conditionText}>{row.original.conditionText}</p>
+        </div>
+      ),
+    },
+    {
+      id: 'active',
+      header: 'Status',
+      accessorFn: (r) => (r.active ? 'Active' : 'Paused'),
+      cell: ({ row }) => (
+        <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold ${row.original.active ? 'bg-green-500/20 text-green-400' : 'bg-gray-700 text-gray-400'}`}>
+          {row.original.active ? 'Active' : 'Paused'}
+        </span>
+      ),
+    },
+    {
+      id: 'event_types',
+      header: 'Event Types',
+      accessorFn: (r) => (r.event_types || []).join(', '),
+      cell: ({ row }) => (
+        <div className="flex flex-wrap gap-1 max-w-[220px]">
+          {(row.original.event_types || []).map(ev => (
+            <span key={ev} className="px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-300 text-[10px] font-mono">{ev}</span>
+          ))}
+          {!(row.original.event_types || []).length && <span className="text-gray-500 text-xs">N/A</span>}
+        </div>
+      ),
+    },
+    {
+      id: 'actions',
+      header: 'Actions',
+      accessorKey: 'actionText',
+      cell: ({ getValue }) => <span className="text-gray-300 text-xs">{getValue()}</span>,
+    },
+    {
+      id: 'triggered',
+      header: 'Triggered',
+      accessorFn: (r) => r.triggered ?? -1,
+      meta: { align: 'right' },
+      cell: ({ row }) => <span className="text-gray-300 text-xs">{fmtNum(row.original.triggered)}</span>,
+    },
+    {
+      id: 'last',
+      header: 'Last Fired',
+      accessorFn: (r) => r.lastTriggeredMs ?? 0,
+      cell: ({ row }) => (
+        <span className="text-gray-400 text-xs whitespace-nowrap">
+          {row.original.last_triggered_at ? relativeTime(row.original.last_triggered_at) : 'Never'}
+        </span>
+      ),
+    },
+    {
+      id: 'activity',
+      header: 'Activity',
+      accessorFn: (r) => activityLabel(r.activity),
+      cell: ({ row }) => (
+        <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold ${ACTIVITY_TONE[row.original.activity] || ACTIVITY_TONE.never}`}>
+          {activityLabel(row.original.activity)}
+        </span>
+      ),
+    },
+    {
+      id: 'runs',
+      header: 'Recent Runs',
+      accessorFn: (r) => r.sampleRuns,
+      meta: { align: 'right' },
+      cell: ({ row }) => (
+        <span className="text-xs text-gray-300">
+          {row.original.sampleRuns}
+          {row.original.sampleErrors > 0 && <span className="text-red-400"> ({row.original.sampleErrors} errors)</span>}
+        </span>
+      ),
+    },
+    {
+      id: 'controls',
+      header: '',
+      enableSorting: false,
+      meta: { export: false },
+      cell: ({ row }) => {
+        const r = row.original
+        const busy = busyId === r.id
+        return (
+          <div className="flex items-center gap-1 justify-end" onClick={(e) => e.stopPropagation()}>
+            <button onClick={() => handleToggle(r)} disabled={busy} title={r.active ? 'Pause rule' : 'Activate rule'} aria-label={r.active ? 'Pause rule' : 'Activate rule'} className="p-1 text-gray-400 hover:text-white disabled:opacity-50">
+              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : r.active ? <ToggleRight className="w-5 h-5 text-orange-500" /> : <ToggleLeft className="w-5 h-5" />}
+            </button>
+            <button onClick={() => setSelectedId(r.id)} title="Recent runs" aria-label="Recent runs" className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-gray-700">
+              <History className="w-3.5 h-3.5" />
+            </button>
+            <button onClick={() => navigate(`/automation-rules/builder/${r.id}`)} title="Edit" aria-label="Edit rule" className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-gray-700">
+              <Edit2 className="w-3.5 h-3.5" />
+            </button>
+            <button onClick={() => handleDelete(r)} disabled={busy} title="Delete" aria-label="Delete rule" className="p-1.5 rounded-lg text-gray-400 hover:text-red-400 hover:bg-red-500/10 disabled:opacity-50">
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )
+      },
+    },
+  // handleToggle/handleDelete close over state setters only; busyId drives the spinner.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [busyId, navigate])
+
+  const exportRows = ruleExportRows(tableRows)
+  const fileBase = reportFileName('Automation Rules', hasFilters ? 'filtered' : '')
+  const doExcel = () => exportToExcel(exportRows, RULE_EXPORT_COLS, RULE_EXPORT_HEADERS, fileBase, 'Rules')
+  const doPdf = () => exportToPdf(
+    exportRows,
+    RULE_EXPORT_COLS.map((k, i) => ({ key: k, header: RULE_EXPORT_HEADERS[i] })),
+    'Automation Rules', fileBase, 'landscape',
+  )
+
+  const runsHint = kpis.runs == null
+    ? 'Executions unavailable'
+    : `${kpis.sampleTruncated ? 'Latest ' : ''}${kpis.runs.toLocaleString()} run${kpis.runs === 1 ? '' : 's'}`
 
   return (
     <div className="text-white space-y-6">
@@ -278,89 +354,119 @@ export default function AutomationRules() {
           </div>
           <p className="text-gray-400 text-sm ml-11">If-this-then-that rules evaluated on every domain event</p>
         </div>
-        <button
-          onClick={() => navigate('/automation-rules/builder')}
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm text-white bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 shadow-lg shadow-orange-500/25 transition-all whitespace-nowrap self-start"
-        >
-          <Plus className="w-4 h-4" /> New Rule
-        </button>
+        <div className="flex flex-wrap gap-2 self-start">
+          <button onClick={doExcel} disabled={loading || tableRows.length === 0} className="inline-flex items-center gap-2 px-3 py-2.5 rounded-xl font-semibold text-sm bg-gray-800 border border-gray-700 hover:bg-gray-700 disabled:opacity-50">
+            <FileSpreadsheet className="w-4 h-4" /> Excel
+          </button>
+          <button onClick={doPdf} disabled={loading || tableRows.length === 0} className="inline-flex items-center gap-2 px-3 py-2.5 rounded-xl font-semibold text-sm bg-gray-800 border border-gray-700 hover:bg-gray-700 disabled:opacity-50">
+            <FileText className="w-4 h-4" /> PDF
+          </button>
+          <button onClick={() => { fetchRules(); fetchExecutions() }} disabled={loading} className="inline-flex items-center gap-2 px-3 py-2.5 rounded-xl font-semibold text-sm bg-gray-800 border border-gray-700 hover:bg-gray-700 disabled:opacity-50">
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
+          </button>
+          <button
+            onClick={() => navigate('/automation-rules/builder')}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm text-white bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 shadow-lg shadow-orange-500/25 transition-all whitespace-nowrap"
+          >
+            <Plus className="w-4 h-4" /> New Rule
+          </button>
+        </div>
       </div>
 
-      {/* ── Stats ── */}
-      {rules.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {[
-            { label: 'Total Rules',     value: rules.length,   icon: Zap,         color: 'text-purple-400' },
-            { label: 'Active',          value: activeCount,     icon: CheckCircle, color: 'text-green-400' },
-            { label: 'Total Triggered', value: triggeredTotal,  icon: Bell,        color: 'text-yellow-400' },
-          ].map(s => {
-            const Icon = s.icon
-            return (
-              <div key={s.label} className="bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 flex items-center gap-3">
-                <Icon className={`w-5 h-5 ${s.color} shrink-0`} />
-                <div>
-                  <p className="text-white font-bold text-xl leading-none">{s.value}</p>
-                  <p className="text-gray-500 text-xs mt-0.5">{s.label}</p>
-                </div>
-              </div>
-            )
-          })}
+      {/* ── KPIs ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+        <Kpi icon={Zap} label="Active rules" value={`${kpis.active} of ${kpis.total}`} tone="text-green-400" loading={loading}
+          onClick={() => setStatusFilter(statusFilter === 'active' ? 'all' : 'active')} active={statusFilter === 'active'} hint="Click to filter" />
+        <Kpi icon={PauseCircle} label="Paused" value={fmtNum(kpis.paused)} tone="text-gray-400" loading={loading}
+          onClick={() => setStatusFilter(statusFilter === 'paused' ? 'all' : 'paused')} active={statusFilter === 'paused'} hint="Click to filter" />
+        <Kpi icon={Bell} label="Times triggered" value={fmtNum(kpis.triggeredTotal)} tone="text-yellow-400" loading={loading} hint="All time, all rules" />
+        <Kpi icon={Activity} label="Run success rate" value={fmtPct(kpis.successRate)} tone="text-green-400" loading={execLoading} hint={runsHint} />
+        <Kpi icon={AlertTriangle} label="Run failure rate" value={fmtPct(kpis.failureRate)} tone="text-red-400" loading={execLoading}
+          hint={kpis.errors == null ? 'Executions unavailable' : `${kpis.errors.toLocaleString()} errors`} />
+        <Kpi icon={Ban} label="Never fired" value={fmtNum(kpis.neverFired)} tone="text-purple-400" loading={loading}
+          onClick={() => setActivity(activity === 'never' ? 'all' : 'never')} active={activity === 'never'}
+          hint={`${kpis.dormant} active but silent over ${DORMANT_DAYS} days`} />
+      </div>
+
+      {/* ── Execution breakdown ── */}
+      {execError ? (
+        <div className="flex items-center gap-2.5 p-3 rounded-xl bg-red-500/10 border border-red-500/30">
+          <XCircle className="w-4 h-4 text-red-400 shrink-0" />
+          <p className="text-red-400 text-sm">{execError}</p>
+          <button onClick={fetchExecutions} className="ml-auto px-3 py-1 text-xs font-semibold text-red-300 bg-red-500/15 rounded-lg border border-red-500/30">Retry</button>
+        </div>
+      ) : !execLoading && kpis.runs > 0 && (
+        <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <h2 className="text-sm font-semibold text-white">Recent run outcomes</h2>
+            <span className="text-[11px] text-gray-500">
+              {kpis.sampleTruncated ? `Newest ${kpis.runs.toLocaleString()} runs only` : `All ${kpis.runs.toLocaleString()} recorded runs`}
+            </span>
+          </div>
+          <div className="flex h-3 rounded overflow-hidden bg-gray-700">
+            {breakdown.filter((b) => b.count > 0).map((b) => (
+              <div key={b.status} className={BAR_TONE[b.status]} style={{ width: `${(b.share || 0) * 100}%` }} title={`${b.label}: ${b.count}`} />
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-x-5 gap-y-1 mt-2 text-xs text-gray-400">
+            {breakdown.map((b) => (
+              <span key={b.status} className="inline-flex items-center gap-1.5">
+                <span className={`w-2 h-2 rounded-sm ${BAR_TONE[b.status]}`} /> {b.label}: {b.count.toLocaleString()} ({fmtPct(b.share)})
+              </span>
+            ))}
+          </div>
         </div>
       )}
 
       {/* ── Filters ── */}
-      {rules.length > 0 && (
-        <div className="flex flex-col sm:flex-row gap-3">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-            <input
-              type="text"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Search rules..."
-              className="w-full bg-gray-800 border border-gray-700 rounded-xl pl-9 pr-4 py-2.5 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
-            />
-            {search && (
-              <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white" aria-label="Clear search">
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-          <select
-            value={filterActive}
-            onChange={e => setFilterActive(e.target.value)}
-            className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all appearance-none cursor-pointer"
-          >
-            <option value="all">All Status</option>
-            <option value="active">Active only</option>
-            <option value="inactive">Inactive only</option>
-          </select>
+      <div className="flex flex-col lg:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search rules by name, description or event type..."
+            aria-label="Search rules"
+            className="w-full bg-gray-800 border border-gray-700 rounded-xl pl-9 pr-4 py-2.5 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
+          />
+          {search && (
+            <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white" aria-label="Clear search">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
-      )}
+        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} aria-label="Rule status" className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-sm text-white cursor-pointer">
+          <option value="all">All statuses</option>
+          <option value="active">Active</option>
+          <option value="paused">Paused</option>
+        </select>
+        <select value={activity} onChange={e => setActivity(e.target.value)} aria-label="Rule activity" className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-sm text-white cursor-pointer">
+          <option value="all">All activity</option>
+          <option value="recent">Recently fired</option>
+          <option value="dormant">Dormant (active, silent)</option>
+          <option value="never">Never fired</option>
+          <option value="fired">Fired (paused or undated)</option>
+        </select>
+        <select value={eventType} onChange={e => setEventType(e.target.value)} aria-label="Event type" className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-sm text-white cursor-pointer">
+          <option value="all">All event types</option>
+          {eventTypes.map((t) => <option key={t} value={t}>{t}</option>)}
+        </select>
+        {hasFilters && (
+          <button onClick={clearFilters} className="px-3 py-2.5 rounded-xl text-sm text-orange-400 border border-gray-700 bg-gray-800">Clear filters</button>
+        )}
+      </div>
 
-      {/* ── Error ── */}
-      {error && (
-        <div className="flex items-center gap-2.5 p-4 rounded-xl bg-red-500/10 border border-red-500/30">
+      {actionError && (
+        <div className="flex items-center gap-2.5 p-3 rounded-xl bg-red-500/10 border border-red-500/30">
           <XCircle className="w-4 h-4 text-red-400 shrink-0" />
-          <p className="text-red-400 text-sm">{error}</p>
-          <button
-            onClick={fetch}
-            className="ml-auto shrink-0 px-3 py-1 text-xs font-semibold text-red-300 bg-red-500/15 hover:bg-red-500/25 rounded-lg border border-red-500/30 transition-all"
-          >
-            Retry
-          </button>
+          <p className="text-red-400 text-sm">{actionError}</p>
+          <button onClick={() => setActionError(null)} aria-label="Dismiss" className="ml-auto text-red-300"><X className="w-4 h-4" /></button>
         </div>
       )}
 
-      {/* ── Loading ── */}
-      {loading && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-44 rounded-xl bg-gray-800 border border-gray-700 animate-pulse" />)}
-        </div>
-      )}
-
-      {/* ── Empty ── */}
-      {!loading && rules.length === 0 && !error && (
+      {/* ── Empty (no rules at all) ── */}
+      {!loading && !error && rules.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 gap-6">
           <div className="w-20 h-20 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center">
             <Zap className="w-9 h-9 text-gray-500" />
@@ -368,42 +474,35 @@ export default function AutomationRules() {
           <div className="text-center max-w-md">
             <p className="text-gray-300 text-lg font-medium">No automation rules yet</p>
             <p className="text-gray-500 text-sm mt-1">
-              React to fleet events automatically, e.g. notify managers when an inspection records tread depth
+              React to fleet events automatically, for example notify managers when an inspection records tread depth
               below 3&nbsp;mm at a specific site, or emit follow-up events for webhooks.
             </p>
             <button
               onClick={() => navigate('/automation-rules/builder')}
               className="mt-4 inline-flex items-center gap-2 text-orange-400 hover:text-orange-300 text-sm font-medium transition-colors"
             >
-              Create your first rule <ChevronRight className="w-4 h-4" />
+              <Plus className="w-4 h-4" /> Create your first rule
             </button>
           </div>
         </div>
-      )}
-
-      {/* ── Grid ── */}
-      {!loading && rules.length > 0 && (
-        visible.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 gap-3">
-            <Filter className="w-8 h-8 text-gray-600" />
-            <p className="text-gray-400 text-sm">No rules match your filters.</p>
-            <button onClick={() => { setSearch(''); setFilterActive('all') }} className="text-orange-400 text-xs hover:text-orange-300 transition-colors">
-              Clear filters
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {visible.map(r => (
-              <RuleCard
-                key={r.id}
-                rule={r}
-                onEdit={rule => navigate(`/automation-rules/builder/${rule.id}`)}
-                onDelete={handleDelete}
-                onToggle={handleToggle}
-              />
-            ))}
-          </div>
-        )
+      ) : (
+        <div className="space-y-4">
+          <EnterpriseTable
+            columns={columns}
+            data={tableRows}
+            getRowId={(r) => String(r.id)}
+            loading={loading}
+            error={error}
+            onRetry={fetchRules}
+            emptyMessage="No rules match your filters"
+            emptyIcon={<Filter className="w-7 h-7 text-gray-500" />}
+            enableGlobalFilter={false}
+            enableExport={false}
+            initialPageSize={25}
+            onRowClick={(r) => setSelectedId((cur) => (cur === r.id ? null : r.id))}
+          />
+          {selected && <RuleDetail key={selected.id} rule={selected} onClose={() => setSelectedId(null)} />}
+        </div>
       )}
     </div>
   )

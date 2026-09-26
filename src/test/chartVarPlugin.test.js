@@ -70,4 +70,17 @@ describe('chartVarResolverPlugin', () => {
     expect(() => run({ options: a, data: {} })).not.toThrow()
     expect(a.color).toBe('#111827')
   })
+
+  it('walks the raw config, never the Chart.js options proxy', () => {
+    // Chart.js's resolver proxy throws when enumerated (Proxy invariant on
+    // non-configurable defaults). The plugin must read chart.config.options.
+    const raw = { plugins: { tooltip: { backgroundColor: 'var(--panel)' } } }
+    const hostile = new Proxy({}, {
+      ownKeys() { throw new TypeError("'getOwnPropertyDescriptor' on proxy") },
+      getOwnPropertyDescriptor() { throw new TypeError('trap') },
+    })
+    const chart = { options: hostile, config: { options: raw, data: {} }, data: {} }
+    expect(() => run(chart)).not.toThrow()
+    expect(raw.plugins.tooltip.backgroundColor).toBe('#111827')
+  })
 })

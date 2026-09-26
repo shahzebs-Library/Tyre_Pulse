@@ -124,8 +124,10 @@ export function ConsoleAuthProvider({ children }) {
    *   { mfaRequired: true, factorId, challengeId } - TOTP enrolled, step 2 needed
    *   { error: null }                    - fully logged in (no MFA enrolled)
    */
-  async function signIn(email, password) {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+  async function signIn(email, password, captchaToken) {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email, password, ...(captchaToken ? { options: { captchaToken } } : {}),
+    })
     if (error) return { error }
 
     // Check super admin

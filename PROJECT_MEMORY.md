@@ -55,6 +55,24 @@ batching stops them being started at all.
 
 ---
 
+# ⚑ SESSION 2026-09-26 (part 2) — SUPER-ADMIN LOCKOUT = CAPTCHA; CONSOLE CRASH = CHART PLUGIN; TURNSTILE WIRED.
+- **Login outage cause:** Supabase Auth CAPTCHA protection was switched on while NO client sent a captcha_token
+  (grant_type=password -> captcha_failed). Owner turned it off; login restored.
+- **Post-login "Something went wrong" on /console:** chart.js TypeError "'getOwnPropertyDescriptor' on proxy: trap
+  reported non-configurability for property 'color'". Cause = the GLOBAL `chartVarPlugin` walked `chart.options`,
+  which is Chart.js's resolver Proxy; enumerating it breaks a Proxy invariant. Now walks the RAW
+  `chart.config.options` + try/catch. RULE: never enumerate `chart.options` in a plugin.
+- **Turnstile CAPTCHA wired (web + console), INERT until configured:** `src/components/auth/TurnstileWidget.jsx`
+  (VITE_TURNSTILE_SITE_KEY; renders nothing when unset). Token passed on signInWithPassword (main + console),
+  signUp, signInWithSSO; reset after every attempt (single use); a captcha refusal never counts toward lockout.
+  CSP allows challenges.cloudflare.com (script/frame/connect).
+  **ORDER TO TURN ON: (1) create Turnstile site in Cloudflare, (2) set VITE_TURNSTILE_SITE_KEY in Vercel + redeploy,
+  (3) paste the SECRET into Supabase Auth -> Attack Protection -> CAPTCHA (Turnstile), enable.**
+  **WARNING: the Expo mobile app + Flutter send no token, so enabling CAPTCHA LOCKS OUT EVERY PHONE LOGIN until a
+  new mobile build ships (builds frozen by owner). Keep CAPTCHA OFF until mobile carries a token.**
+
+---
+
 # ⚑ SESSION 2026-09-26 — POSTGRES "MANY ERRORS" = A WEEK-LONG POSTGREST RETRY LOOP. 3 migrations APPLIED LIVE.
 - **8.6M ERROR lines/day were ONE bug**: "Meter changed; refresh before saving" at a flat ~100/s, 24/7, since
   2026-09-19. `save_vehicle_meter_readings` raised its optimistic-concurrency refusal with ERRCODE **40001**

@@ -541,7 +541,7 @@ export function AuthProvider({ children }) {
     })
   }, [profile, hasPermission, capabilities, isSuperAdmin, roleCapabilities])
 
-  const signIn = useCallback(async (identifier, password) => {
+  const signIn = useCallback(async (identifier, password, captchaToken) => {
     let email = identifier.trim()
 
     if (!email.includes('@')) {
@@ -554,7 +554,9 @@ export function AuthProvider({ children }) {
 
     manualSignInRef.current = true
     try {
-      const { data: authData, error } = await supabase.auth.signInWithPassword({ email, password })
+      const { data: authData, error } = await supabase.auth.signInWithPassword({
+        email, password, ...(captchaToken ? { options: { captchaToken } } : {}),
+      })
       if (error) return error
 
       // The password was valid — but the account may be pending approval or

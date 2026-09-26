@@ -18,6 +18,7 @@ import TwoFactorChallenge from '../components/TwoFactorChallenge'
 import { Illustration } from '../components/illustrations'
 import BrandIcon from '../components/ui/BrandIcon'
 import ThemeToggle from '../components/ui/ThemeToggle'
+import TurnstileWidget, { captchaEnabled } from '../components/auth/TurnstileWidget'
 import {
   RECOVERY_GENERIC_MESSAGE,
   RECOVERY_SMS_ENABLED,
@@ -215,6 +216,11 @@ export default function Login() {
   const [employeeId, setEmployeeId]   = useState('')
   const [error, setError]             = useState('')
   const [loading, setLoading]         = useState(false)
+  // Cloudflare Turnstile token (single use). Null until the widget is solved;
+  // the widget renders nothing when VITE_TURNSTILE_SITE_KEY is not set.
+  const [captchaToken, setCaptchaToken] = useState(null)
+  const captchaRef = useRef(null)
+  const needsCaptcha = captchaEnabled()
   const [signupDone, setSignupDone]   = useState(false)
   const [pendingApproval, setPendingApproval] = useState(false)
   const [showLoginPw, setShowLoginPw] = useState(false)
@@ -280,6 +286,7 @@ export default function Login() {
       setError(t('auth.login.errTooManyAttempts', { secs }))
       return
     }
+    if (needsCaptcha && !captchaToken) { setError(t('auth.login.errCaptcha')); return }
     setError(''); setLoading(true)
     // Server-enforced lockout (System Configuration -> Max Login Attempts, V287).
     // Fail-safe: a not-locked / errored probe never blocks a real sign-in.
@@ -291,11 +298,21 @@ export default function Login() {
     }
     let result
     try {
-      result = await signIn(identifier, password)
+      result = await signIn(identifier, password, captchaToken)
     } catch (err) {
       // Any unexpected failure (network drop, RPC crash) must surface a message
       // and release the button — never leave it stuck on "Signing in…".
+      captchaRef.current?.reset()
       setError(err?.message || t('auth.login.errUnexpected'))
+      setLoading(false)
+      return
+    }
+    // A Turnstile token works once; get a fresh one for any next attempt.
+    captchaRef.current?.reset()
+    // A refused security check is not a wrong password: never count it
+    // towards the lockout.
+    if (result?.code === 'captcha_failed' || /captcha/i.test(result?.message || '')) {
+      setError(t('auth.login.errCaptcha'))
       setLoading(false)
       return
     }
@@ -364,7 +381,8 @@ export default function Login() {
     if (!domain) { setError('Enter your work email above to sign in with SSO.'); return }
     setError(''); setSsoLoading(true)
     try {
-      const { data, error: ssoErr } = await supabase.auth.signInWithSSO({ domain })
+      const { data, error: ssoErr } = await supabase.auth.signInWithSSO({ domain, ...(captchaToken ? { options: { captchaToken } } : {}) })
+      captchaRef.current?.reset()
       if (ssoErr) {
         setError(/no sso provider|not found/i.test(ssoErr.message || '')
           ? 'Single sign-on is not enabled for this email domain.'
@@ -401,6 +419,7 @@ export default function Login() {
     if (uname.length < 3)       { setError(t('auth.login.errUsernameRequired')); return }
     if (!/^[a-zA-Z0-9._-]+$/.test(uname)) { setError('Username may only contain letters, numbers, and . _ -'); return }
     if (!empId)                 { setError('Employee ID is required.'); return }
+    if (needsCaptcha && !captchaToken) { setError(t('auth.login.errCaptcha')); return }
     setLoading(true)
     try {
       // Supabase Auth needs an email, but users sign up with just a username +
@@ -413,8 +432,12 @@ export default function Login() {
       const { error: authErr } = await supabase.auth.signUp({
         email: syntheticEmail,
         password,
-        options: { data: { username: uname, full_name: fullName.trim() || null, employee_id: empId, region: 'KSA' } },
+        options: {
+          data: { username: uname, full_name: fullName.trim() || null, employee_id: empId, region: 'KSA' },
+          ...(captchaToken ? { captchaToken } : {}),
+        },
       })
+      captchaRef.current?.reset()
       if (authErr) {
         const taken = /already registered|already been registered|duplicate|already exists|database error/i.test(authErr.message || '')
         setError(taken ? 'That username or Employee ID is already taken. Please choose another.' : authErr.message)
@@ -861,8 +884,11 @@ export default function Login() {
                     </div>
                   </div>
 
+                  <TurnstileWidget ref={captchaRef} onToken={setCaptchaToken} onError={setError}
+                    className="flex justify-center" />
+
                   {/* Submit */}
-                  <button type="submit" disabled={loading || !isOnline} className="tp-btn-shine" style={{
+                  <button type="submit" disabled={loading || !isOnline || (needsCaptcha && !captchaToken)} className="tp-btn-shine" style={{
                     width:'100%', padding:'13px', borderRadius:14, border:'none',
                     background: loading
                       ? 'rgba(22,163,74,0.3)'
@@ -1092,7 +1118,10 @@ export default function Login() {
                     {t('auth.login.approvalNotice')}
                   </div>
 
-                  <button type="submit" disabled={loading || signupClosed} className="tp-btn-shine" style={{
+                  <TurnstileWidget ref={captchaRef} onToken={setCaptchaToken} onError={setError}
+                    className="flex justify-center" />
+
+                  <button type="submit" disabled={loading || signupClosed || (needsCaptcha && !captchaToken)} className="tp-btn-shine" style={{
                     width:'100%', padding:'13px', borderRadius:14, border:'none',
                     background: (loading || signupClosed) ? 'rgba(22,163,74,0.3)' : 'linear-gradient(135deg, #16a34a, #15803d)',
                     color:'#fff', fontSize:14, fontWeight:700, cursor:(loading || signupClosed)?'not-allowed':'pointer',

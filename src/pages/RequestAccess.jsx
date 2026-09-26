@@ -24,6 +24,7 @@ import {
 } from '../lib/requestAccess'
 import { REGISTRY_LABEL } from '../lib/moduleCatalog'
 import { toUserMessage } from '../lib/safeError'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 
 const inputCls = 'w-full rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2 text-sm text-[var(--text-primary)]'
 const labelCls = 'text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]'
@@ -292,57 +293,58 @@ export default function RequestAccess() {
         ) : visible.length === 0 ? (
           <div className="py-8 text-center text-sm text-[var(--text-tertiary)]">No requests match these filters.</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-[11px] uppercase tracking-wide text-[var(--text-muted)]">
-                  <th className="py-2 pr-3">Module</th>
-                  <th className="py-2 pr-3">Capability</th>
-                  <th className="py-2 pr-3">Duration</th>
-                  <th className="py-2 pr-3">Status</th>
-                  <th className="py-2 pr-3">Requested</th>
-                  <th className="py-2 pr-3">Reason / decision</th>
-                  <th className="py-2" />
-                </tr>
-              </thead>
-              <tbody>
-                {visible.map((r) => {
-                  const st = requesterStatus(r, now)
+          <EnterpriseTable
+            data={visible}
+            getRowId={(r) => r.id}
+            enableGlobalFilter={false}
+            enableColumnFilters={false}
+            columns={[
+              { id: 'module', header: 'Module', accessorFn: (r) => moduleLabel(r.module_key),
+                cell: ({ getValue }) => <span className="text-[var(--text-primary)]">{getValue()}</span> },
+              { id: 'capability', header: 'Capability', accessorFn: (r) => capLabel(r.capability) },
+              { id: 'duration', header: 'Duration', accessorFn: (r) => r.granted_minutes ?? r.requested_minutes,
+                cell: ({ row }) => {
+                  const r = row.original
                   return (
-                    <tr key={r.id} className="border-t border-[var(--border-subtle)] align-top">
-                      <td className="py-2 pr-3 text-[var(--text-primary)]">{moduleLabel(r.module_key)}</td>
-                      <td className="py-2 pr-3 text-[var(--text-secondary)]">{capLabel(r.capability)}</td>
-                      <td className="py-2 pr-3 text-[var(--text-secondary)]">
-                        {formatMinutes(r.granted_minutes ?? r.requested_minutes)}
-                        {st === 'active' && (
-                          <div className="mt-0.5 flex items-center gap-1 text-[11px] text-emerald-400">
-                            <Timer size={12} /> {formatRemaining(remainingMs(r, now))} left
-                          </div>
-                        )}
-                      </td>
-                      <td className="py-2 pr-3"><StatusPill status={st} /></td>
-                      <td className="py-2 pr-3 whitespace-nowrap text-[var(--text-secondary)]">{fmtDate(r.created_at)}</td>
-                      <td className="py-2 pr-3 max-w-md">
-                        <div className="text-[var(--text-secondary)]">{r.reason}</div>
-                        {(r.decision_note || r.revoke_reason) && (
-                          <div className="mt-1 text-[11px] text-[var(--text-tertiary)]">
-                            {r.revoke_reason ? `Revoked: ${r.revoke_reason}` : `Note: ${r.decision_note}`}
-                          </div>
-                        )}
-                      </td>
-                      <td className="py-2 text-right">
-                        {canCancel(r, now) && (
-                          <button type="button" className="btn-ghost" disabled={busyId === r.id} onClick={() => cancel(r.id)}>
-                            <XCircle size={14} /> {busyId === r.id ? 'Withdrawing' : 'Withdraw'}
-                          </button>
-                        )}
-                      </td>
-                    </tr>
+                    <>
+                      {formatMinutes(r.granted_minutes ?? r.requested_minutes)}
+                      {requesterStatus(r, now) === 'active' && (
+                        <div className="mt-0.5 flex items-center gap-1 text-[11px] text-emerald-400">
+                          <Timer size={12} /> {formatRemaining(remainingMs(r, now))} left
+                        </div>
+                      )}
+                    </>
                   )
-                })}
-              </tbody>
-            </table>
-          </div>
+                } },
+              { id: 'status', header: 'Status', accessorFn: (r) => requesterStatus(r, now),
+                cell: ({ getValue }) => <StatusPill status={getValue()} /> },
+              { id: 'requested', header: 'Requested', accessorFn: (r) => r.created_at,
+                cell: ({ getValue }) => <span className="whitespace-nowrap">{fmtDate(getValue())}</span> },
+              { id: 'reason', header: 'Reason / decision', accessorFn: (r) => r.reason, enableSorting: false,
+                cell: ({ row }) => {
+                  const r = row.original
+                  return (
+                    <div className="max-w-md">
+                      <div>{r.reason}</div>
+                      {(r.decision_note || r.revoke_reason) && (
+                        <div className="mt-1 text-[11px] text-[var(--text-tertiary)]">
+                          {r.revoke_reason ? `Revoked: ${r.revoke_reason}` : `Note: ${r.decision_note}`}
+                        </div>
+                      )}
+                    </div>
+                  )
+                } },
+              { id: 'actions', header: '', enableSorting: false, meta: { export: false, align: 'right' },
+                cell: ({ row }) => {
+                  const r = row.original
+                  return canCancel(r, now) ? (
+                    <button type="button" className="btn-ghost" disabled={busyId === r.id} onClick={() => cancel(r.id)}>
+                      <XCircle size={14} /> {busyId === r.id ? 'Withdrawing' : 'Withdraw'}
+                    </button>
+                  ) : null
+                } },
+            ]}
+          />
         )}
       </div>
     </div>

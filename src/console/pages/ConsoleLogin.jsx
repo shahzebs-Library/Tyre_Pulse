@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Shield, Eye, EyeOff, AlertTriangle, Lock, Smartphone, ChevronLeft } from 'lucide-react'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import { toUserMessage } from '../../lib/safeError'
+import TurnstileWidget, { captchaEnabled } from '../../components/auth/TurnstileWidget'
 
 // step: 'credentials' | 'totp'
 export default function ConsoleLogin() {
@@ -15,6 +16,9 @@ export default function ConsoleLogin() {
   const [showPass, setShowPass]   = useState(false)
   const [loading, setLoading]     = useState(false)
   const [error, setError]         = useState(null)
+  const [captchaToken, setCaptchaToken] = useState(null)
+  const captchaRef = useRef(null)
+  const needsCaptcha = captchaEnabled()
 
   // TOTP step state
   const [totpCode, setTotpCode]   = useState(['', '', '', '', '', ''])
@@ -32,6 +36,7 @@ export default function ConsoleLogin() {
   async function handleCredentials(e) {
     e.preventDefault()
     if (!email.trim() || !password) { setError('Email and password are required.'); return }
+    if (needsCaptcha && !captchaToken) { setError('Complete the security check, then try again.'); return }
     setLoading(true); setError(null)
 
     // signIn RETURNS an error for a bad password but can still THROW on a dead
@@ -39,12 +44,15 @@ export default function ConsoleLogin() {
     // is a page reload - the worst possible failure on a login screen.
     let res
     try {
-      res = await signIn(email.trim().toLowerCase(), password)
+      res = await signIn(email.trim().toLowerCase(), password, captchaToken)
     } catch (e) {
+      captchaRef.current?.reset()
       setError(toUserMessage(e, 'Could not reach the server. Check your connection and try again.'))
       setLoading(false)
       return
     }
+    // A Turnstile token works once; get a fresh one for any next attempt.
+    captchaRef.current?.reset()
     const { error: err, mfaRequired, factorId: fid, challengeId: cid } = res || {}
 
     if (err) {
@@ -188,7 +196,9 @@ export default function ConsoleLogin() {
                     </button>
                   </div>
                 </div>
-                <button type="submit" disabled={loading}
+                <TurnstileWidget ref={captchaRef} onToken={setCaptchaToken} onError={setError}
+                  theme="dark" className="flex justify-center" />
+                <button type="submit" disabled={loading || (needsCaptcha && !captchaToken)}
                   className="w-full h-11 rounded-xl font-semibold text-sm transition-all disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 flex items-center justify-center gap-2"
                   style={{ background: loading ? 'rgba(249,115,22,0.4)' : 'linear-gradient(135deg, #ea580c, #f97316)', boxShadow: loading ? 'none' : '0 4px 20px rgba(249,115,22,0.35)' }}>
                   {loading

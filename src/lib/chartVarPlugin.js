@@ -73,12 +73,25 @@ export const chartVarResolverPlugin = {
   id: 'cssVarResolver',
   // beforeLayout runs after options/data are set but before any pixels are
   // computed, so tooltips, scales and elements all read resolved colours.
+  //
+  // Walk the RAW config (chart.config.options), never chart.options. The latter
+  // is Chart.js's option-resolver Proxy; enumerating it fires its
+  // getOwnPropertyDescriptor trap, which violates a Proxy invariant for
+  // properties Chart.js defines as non-configurable on its defaults (e.g.
+  // 'color') and throws a TypeError that took down the whole page. The raw
+  // object is what the resolver reads from, so rewriting it has the same effect.
+  // Wrapped so a colour-token pass can never crash a chart.
   beforeLayout(chart) {
     _cache = new Map()
-    const seen = new WeakSet()
-    walk(chart.options, seen)
-    walk(chart.data, seen)
-    _cache = null
+    try {
+      const seen = new WeakSet()
+      walk(chart.config ? chart.config.options : chart.options, seen)
+      walk(chart.config?.data ?? chart.data, seen)
+    } catch {
+      /* leave colours unresolved rather than break the chart */
+    } finally {
+      _cache = null
+    }
   },
 }
 

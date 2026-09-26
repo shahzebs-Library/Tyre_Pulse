@@ -13,9 +13,11 @@ import { getCompanyLogo, setCompanyLogo, getDiagramBg, setDiagramBg } from '../.
 import { safeImageSrc } from '../../lib/safeUrl'
 import { toUserMessage } from '../../lib/safeError'
 import {
-  Panel, PanelHeader, Note, Badge, Code, Btn, LoadingState, ErrorState,
-  Modal,
+  Note, Badge, Code, Btn, LoadingState, ErrorState,
+  Modal, StatTile,
 } from '../components/ui'
+import { PageHeader, useUrlTab, AttentionList, Collapsible } from './platformOps/kit'
+import { auditPalette, isLightBackground, contrastRatio } from './appearance/paletteCheck'
 
 ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, Tooltip)
 
@@ -27,6 +29,8 @@ const PREVIEW_OPTS = {
   scales: { x: { display: false }, y: { display: false } },
 }
 const DOUGHNUT_PREVIEW = { responsive: true, maintainAspectRatio: false, cutout: '55%', plugins: { legend: { display: false }, tooltip: { enabled: false } } }
+
+const SECTIONS = ['theme', 'logo', 'diagram', 'none']
 
 const FIELD_LABEL = 'block text-[11px] font-semibold uppercase tracking-wider text-gray-500 mb-1'
 
@@ -77,6 +81,9 @@ export default function ConsoleReportAppearance() {
   const [diagBgSaving, setDiagBgSaving] = useState(false)
   const [diagBgSaved, setDiagBgSaved] = useState(false)
   const [diagBgError, setDiagBgError] = useState('')
+  const [diagBgStored, setDiagBgStored] = useState(DEFAULT_DIAGRAM_BG)
+  const [readAt, setReadAt] = useState(null)
+  const [section, setSection] = useUrlTab(SECTIONS, 'theme', 'section')
 
   const load = useCallback(async () => {
     setLoading(true); setSaved(false); setError(''); setLoadError('')
@@ -117,11 +124,12 @@ export default function ConsoleReportAppearance() {
 
   // Loaded on its own so a logo read failure no longer leaves the diagram
   // colour stuck on its default (getDiagramBg never throws).
-  useEffect(() => {
-    let alive = true
-    getDiagramBg().then((bg) => { if (alive) setDiagBg(bg || DEFAULT_DIAGRAM_BG) })
-    return () => { alive = false }
+  const loadDiagBg = useCallback(async () => {
+    const bg = await getDiagramBg()
+    setDiagBg(bg || DEFAULT_DIAGRAM_BG)
+    setDiagBgStored(bg || DEFAULT_DIAGRAM_BG)
   }, [])
+  useEffect(() => { loadDiagBg() }, [loadDiagBg])
 
   async function saveLogo() {
     setLogoSaving(true); setLogoError(''); setLogoSaved(false)
@@ -143,6 +151,7 @@ export default function ConsoleReportAppearance() {
     try {
       await setDiagramBg(value)
       setDiagBg(value || DEFAULT_DIAGRAM_BG)
+      setDiagBgStored(value || DEFAULT_DIAGRAM_BG)
       await audit(logAction, 'update_config', null, 'report_diagram_bg', { value: value || 'default' })
       setDiagBgSaved(true)
     } catch (e) {
@@ -214,38 +223,88 @@ export default function ConsoleReportAppearance() {
   }
 
   function resetDefault() { setSel(DEFAULT_PRESET); setSaved(false) }
+  function revertTheme() {
+    setSel(savedSel)
+    if (Array.isArray(savedSel)) setCustom(savedSel)
+    setSaved(false)
+  }
+
+  const refreshAll = useCallback(async () => {
+    await Promise.all([load(), loadLogo(), loadDiagBg()])
+    setReadAt(Date.now())
+  }, [load, loadLogo, loadDiagBg])
+  useEffect(() => { if (!loading && !logoLoading && !readAt) setReadAt(Date.now()) }, [loading, logoLoading, readAt])
+
+  const paletteAudit = useMemo(() => auditPalette(activeColors), [activeColors])
+  const diagDirty = diagBg !== diagBgStored
+  const diagLight = isLightBackground(diagBg)
+  const openSection = (key) => setSection(key)
+
+
+  const attention = []
+  if (!loading && !loadError && themeDirty) {
+    attention.push({ key: 'theme', tone: 'warning', text: 'The colour theme has unsaved changes. Reports keep the saved theme until you save.', actionLabel: 'Review theme', onAction: () => openSection('theme') })
+  }
+  if (!loading && paletteAudit.weak.length) {
+    attention.push({ key: 'weak', tone: 'warning', text: `${paletteAudit.weak.length} ${paletteAudit.weak.length === 1 ? 'colour is' : 'colours are'} too pale to see clearly on a white report page (below 3:1 contrast).`, actionLabel: 'Review theme', onAction: () => openSection('theme') })
+  }
+  if (!loading && paletteAudit.duplicates.length) {
+    attention.push({ key: 'dupe', tone: 'info', text: `${paletteAudit.duplicates.length} ${paletteAudit.duplicates.length === 1 ? 'pair of colours looks' : 'pairs of colours look'} almost the same, so a legend cannot tell those series apart.`, actionLabel: 'Review theme', onAction: () => openSection('theme') })
+  }
+  if (!logoLoading && !logoError && !logoUrl) {
+    attention.push({ key: 'logo', tone: 'info', text: 'No company logo is set, so shared TV boards and public report links show no brand mark.', actionLabel: 'Set a logo', onAction: () => openSection('logo') })
+  }
+  if (diagLight) {
+    attention.push({ key: 'diag', tone: 'warning', text: 'The inspection diagram background is light. The wheel labels are light too and will be hard to read.', actionLabel: 'Change it', onAction: () => openSection('diagram') })
+  }
+
+  const toggle = (key) => (open) => setSection(open ? key : 'none')
 
   return (
-    <div className="space-y-5 max-w-7xl">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1>
-            <Palette size={18} className="text-orange-400" /> Report Appearance
-          </h1>
-          <p className="text-xs text-gray-500 mt-1 max-w-2xl">
-            The colour theme for every report chart (Board Overview, Executive, Accident and analytics reports),
-            the company logo on shared boards, and the inspection diagram background. Applies org-wide.
-          </p>
-        </div>
-      </header>
+    <div className="space-y-4 max-w-7xl">
+      <PageHeader
+        icon={Palette}
+        title="Report Appearance"
+        purpose="The colour theme for every report chart (Board Overview, Executive, Accident and analytics reports), the company logo on shared boards, and the inspection diagram background. Applies org-wide."
+        refreshedAt={readAt}
+        onRefresh={refreshAll}
+        refreshing={loading || logoLoading}
+      />
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <StatTile icon={Layers} label="Colour theme" value={loadError ? 'N/A' : loading ? '...' : themeName}
+          sub={loadError ? 'could not be read' : themeDirty ? 'Unsaved change' : 'Saved and in use'} tone={themeDirty ? 'warning' : 'default'}
+          onClick={() => openSection('theme')} active={section === 'theme'} />
+        <StatTile label="Readable on white" value={loading ? '...' : `${paletteAudit.checked - paletteAudit.weak.length} of ${paletteAudit.checked}`}
+          sub="colours at 3:1 or better" tone={paletteAudit.weak.length ? 'warning' : 'good'}
+          onClick={() => openSection('theme')} />
+        <StatTile icon={ImageIcon} label="Logo" value={logoError ? 'N/A' : logoLoading ? '...' : logoUrl ? 'Set' : 'Not set'}
+          sub={logoError ? 'could not be read' : logoDirty ? 'Unsaved change' : 'On shared boards'} tone={logoUrl ? 'good' : 'muted'}
+          onClick={() => openSection('logo')} active={section === 'logo'} />
+        <StatTile label="Diagram colour" value={diagBgStored} sub={diagDirty ? 'Unsaved change' : diagLight ? 'Too light for labels' : 'Behind the tyre map'}
+          tone={diagLight ? 'warning' : 'default'} onClick={() => openSection('diagram')} active={section === 'diagram'} />
+      </div>
+
+      <AttentionList items={attention} clear="The theme, logo and diagram colour are all set and readable." />
 
       {/* ── Colour theme ─────────────────────────────────────────────────── */}
-      <Panel>
-        <PanelHeader
-          icon={Layers}
-          title="Chart colour theme"
-          subtitle={loading ? 'Loading current theme' : `Selected: ${themeName}`}
-          actions={(
-            <>
-              {themeDirty && !loading && <Badge tone="warning">Unsaved</Badge>}
-              <Btn icon={RotateCcw} onClick={resetDefault} disabled={loading || saving}>Default</Btn>
-              <Btn variant="primary" icon={Save} onClick={handleSave} busy={saving} disabled={loading}>
-                Save theme
-              </Btn>
-            </>
-          )}
-        />
-
+      <Collapsible
+        icon={Layers}
+        title="Chart colour theme"
+        subtitle={loading ? 'Loading current theme' : `Selected: ${themeName}`}
+        open={section === 'theme'}
+        onToggle={toggle('theme')}
+        actions={(
+          <>
+            {themeDirty && !loading && <Badge tone="warning">Unsaved</Badge>}
+            {themeDirty && !loading && <Btn onClick={revertTheme} disabled={saving}>Revert</Btn>}
+            <Btn icon={RotateCcw} onClick={resetDefault} disabled={loading || saving}>Default</Btn>
+            <Btn variant="primary" icon={Save} onClick={handleSave} busy={saving} disabled={loading || !!loadError}>
+              Save theme
+            </Btn>
+          </>
+        )}
+      >
         <div className="space-y-3">
           <ErrorState message={loadError} onRetry={load} />
           <ErrorState message={error} />
@@ -265,12 +324,16 @@ export default function ConsoleReportAppearance() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {PRESET_KEYS.map((key) => {
                     const active = !isCustom && sel === key
+                    const weakHere = auditPalette(PRESETS[key]).weak.length
                     return (
                       <button type="button" key={key} onClick={() => { setSel(key); setSaved(false) }} aria-pressed={active}
                         className={`focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 rounded-xl border p-3 text-left transition-colors ${active ? 'border-orange-600/60 bg-orange-950/20' : 'border-gray-800 hover:border-gray-700 bg-gray-900/50'}`}>
-                        <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center justify-between mb-2 gap-2">
                           <span className="text-sm font-semibold text-gray-100">{PRESET_LABELS[key] || key}</span>
-                          {active && <Badge tone="accent" icon={CheckCircle2}>Selected</Badge>}
+                          <span className="flex items-center gap-1">
+                            {weakHere > 0 && <Badge tone="warning" title="Colours below 3:1 contrast on a white page">{weakHere} pale</Badge>}
+                            {active && <Badge tone="accent" icon={CheckCircle2}>Selected</Badge>}
+                          </span>
                         </div>
                         <Swatches colors={PRESETS[key]} />
                       </button>
@@ -280,7 +343,7 @@ export default function ConsoleReportAppearance() {
                   <button type="button" onClick={chooseCustom} aria-pressed={isCustom}
                     className={`focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 rounded-xl border p-3 text-left transition-colors ${isCustom ? 'border-orange-600/60 bg-orange-950/20' : 'border-gray-800 hover:border-gray-700 bg-gray-900/50'}`}>
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-semibold text-gray-100 inline-flex items-center gap-1.5"><Sparkles size={14} className="text-orange-400" /> Custom</span>
+                      <span className="text-sm font-semibold text-gray-100 inline-flex items-center gap-1.5"><Sparkles size={14} className="text-orange-400" aria-hidden="true" /> Custom</span>
                       {isCustom && <Badge tone="accent" icon={CheckCircle2}>Selected</Badge>}
                     </div>
                     <Swatches colors={custom} />
@@ -291,11 +354,19 @@ export default function ConsoleReportAppearance() {
                   <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-3">
                     <p className={FIELD_LABEL}>Custom colours</p>
                     <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
-                      {custom.map((c, i) => (
-                        <input key={i} type="color" value={c} onChange={(e) => editCustom(i, e.target.value)}
-                          className="h-9 w-full rounded cursor-pointer bg-transparent border border-gray-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" aria-label={`Colour ${i + 1}`} />
-                      ))}
+                      {custom.map((c, i) => {
+                        const ratio = contrastRatio(c, '#ffffff')
+                        const pale = ratio != null && ratio < 3
+                        return (
+                          <div key={i} className="space-y-0.5">
+                            <input type="color" value={c} onChange={(e) => editCustom(i, e.target.value)}
+                              className={`h-9 w-full rounded cursor-pointer bg-transparent border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 ${pale ? 'border-amber-600' : 'border-gray-800'}`} aria-label={`Colour ${i + 1}`} />
+                            <p className={`text-[10px] tabular-nums text-center ${pale ? 'text-amber-300' : 'text-gray-500'}`}>{ratio == null ? 'N/A' : `${ratio.toFixed(1)}:1`}</p>
+                          </div>
+                        )
+                      })}
                     </div>
+                    <p className="text-[11px] text-gray-500 mt-2">The ratio under each colour is its contrast on a white page. Aim for 3:1 or more.</p>
                   </div>
                 )}
               </div>
@@ -312,27 +383,28 @@ export default function ConsoleReportAppearance() {
             </div>
           )}
         </div>
-      </Panel>
+      </Collapsible>
 
       {/* ── Company logo ─────────────────────────────────────────────────── */}
-      <Panel>
-        <PanelHeader
-          icon={ImageIcon}
-          title="Company logo"
-          subtitle="Shows on every shared TV report and public report link."
-          actions={(
-            <>
-              {logoDirty && !logoLoading && <Badge tone="warning">Unsaved</Badge>}
-              <Btn icon={Trash2} onClick={() => setConfirmClearLogo(true)}
-                disabled={logoSaving || logoLoading || (logoInput.trim() === '' && logoUrl === '')}>
-                Clear
-              </Btn>
-              <Btn variant="primary" icon={Save} onClick={saveLogo} busy={logoSaving} disabled={logoLoading}>
-                Save logo
-              </Btn>
-            </>
-          )}
-        />
+      <Collapsible
+        icon={ImageIcon}
+        title="Company logo"
+        subtitle="Shows on every shared TV report and public report link."
+        open={section === 'logo'}
+        onToggle={toggle('logo')}
+        actions={(
+          <>
+            {logoDirty && !logoLoading && <Badge tone="warning">Unsaved</Badge>}
+            <Btn icon={Trash2} onClick={() => setConfirmClearLogo(true)}
+              disabled={logoSaving || logoLoading || (logoInput.trim() === '' && logoUrl === '')}>
+              Clear
+            </Btn>
+            <Btn variant="primary" icon={Save} onClick={saveLogo} busy={logoSaving} disabled={logoLoading || (!!logoInput.trim() && !logoPreview)}>
+              Save logo
+            </Btn>
+          </>
+        )}
+      >
         <div className="space-y-3">
           <ErrorState message={logoError} onRetry={logoLoading ? undefined : loadLogo} />
           {logoSaved && (
@@ -348,9 +420,11 @@ export default function ConsoleReportAppearance() {
                 <input id="company-logo-url" type="url" inputMode="url" spellCheck={false}
                   value={logoInput} onChange={(e) => { setLogoInput(e.target.value); setLogoSaved(false); setLogoError('') }}
                   placeholder="https://your-company.com/logo.png"
+                  aria-describedby="company-logo-help"
                   className="w-full rounded-lg bg-gray-900 border border-gray-800 text-gray-200 text-sm px-3 py-2 placeholder-gray-500 focus:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />
-                <p className="text-[11px] text-gray-500 mt-1.5">
+                <p id="company-logo-help" className="text-[11px] text-gray-500 mt-1.5">
                   Paste a public image URL (http or https) or a data:image URI. Use a wide, high-contrast mark so it reads on a wall board.
+                  {logoInput.trim() && !logoPreview ? ' This address is not a usable image, so it cannot be saved.' : ''}
                 </p>
               </div>
 
@@ -369,22 +443,25 @@ export default function ConsoleReportAppearance() {
             </div>
           )}
         </div>
-      </Panel>
+      </Collapsible>
 
       {/* ── Inspection diagram background ────────────────────────────────── */}
-      <Panel>
-        <PanelHeader
-          title="Inspection diagram background"
-          subtitle="The colour behind the tyre map on inspection and checklist reports."
-          actions={(
-            <>
-              <Btn icon={RotateCcw} onClick={() => saveDiagBg('')} disabled={diagBgSaving}>Reset to black</Btn>
-              <Btn variant="primary" icon={Save} onClick={() => saveDiagBg(diagBg)} busy={diagBgSaving}>Save colour</Btn>
-            </>
-          )}
-        />
+      <Collapsible
+        title="Inspection diagram background"
+        subtitle="The colour behind the tyre map on inspection and checklist reports."
+        open={section === 'diagram'}
+        onToggle={toggle('diagram')}
+        tone={diagLight ? 'warning' : undefined}
+        actions={(
+          <>
+            {diagDirty && <Badge tone="warning">Unsaved</Badge>}
+            <Btn icon={RotateCcw} onClick={() => saveDiagBg('')} disabled={diagBgSaving}>Reset to black</Btn>
+            <Btn variant="primary" icon={Save} onClick={() => saveDiagBg(diagBg)} busy={diagBgSaving}>Save colour</Btn>
+          </>
+        )}
+      >
         <div className="space-y-3">
-          <Note>Keep it dark. The wheel labels are light and disappear on a light background.</Note>
+          <Note tone={diagLight ? 'warning' : 'default'}>Keep it dark. The wheel labels are light and disappear on a light background.</Note>
           <ErrorState message={diagBgError} />
           {diagBgSaved && (
             <Note icon={CheckCircle2} tone="accent">Saved. Every new inspection and checklist PDF uses this colour now.</Note>
@@ -403,7 +480,7 @@ export default function ConsoleReportAppearance() {
             </div>
           </div>
         </div>
-      </Panel>
+      </Collapsible>
 
       <Modal open={confirmClearLogo} onClose={() => setConfirmClearLogo(false)} width="max-w-md"
         title="Remove the company logo?"

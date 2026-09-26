@@ -88,13 +88,13 @@ export default function FxRatesPanel() {
     <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-5 space-y-4">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h3 className="text-sm font-semibold text-white">Exchange rates</h3>
+          <h3 className="text-sm font-semibold text-gray-100">Exchange rates</h3>
           <p className="text-xs text-gray-400 mt-0.5">
             Needed before any figure can combine KSA, UAE and Egypt into one number.
           </p>
         </div>
         <button type="button" onClick={load} disabled={busy}
-          className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 h-8 px-3 rounded-lg bg-gray-800 border border-gray-700 text-xs text-gray-300 hover:text-white inline-flex items-center gap-1.5 disabled:opacity-50">
+          className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 h-8 px-3 rounded-lg bg-gray-800 border border-gray-700 text-xs text-gray-300 hover:text-gray-100 inline-flex items-center gap-1.5 disabled:opacity-50">
           <RefreshCw size={12} aria-hidden="true" /> Refresh
         </button>
       </div>
@@ -172,7 +172,7 @@ export default function FxRatesPanel() {
             className="block mt-1 h-8 px-2 rounded-lg bg-gray-950 border border-gray-800 text-xs text-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />
         </label>
         <button type="button" onClick={add} disabled={busy || !form.rate}
-          className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 h-8 px-3 rounded-lg bg-orange-600 hover:bg-orange-500 text-xs text-white font-medium inline-flex items-center gap-1.5 disabled:opacity-50">
+          className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 h-8 px-3 rounded-lg bg-orange-600 hover:bg-orange-500 text-xs text-gray-100 font-medium inline-flex items-center gap-1.5 disabled:opacity-50">
           {busy ? 'Saving...' : <><Plus size={12} aria-hidden="true" /> Add rate</>}
         </button>
       </div>
@@ -218,7 +218,7 @@ export default function FxRatesPanel() {
                   </td>
                   <td className="py-2 pl-3 text-right whitespace-nowrap">
                     <button type="button" onClick={() => act(setRateApproval, r.id, !r.approved)} disabled={busy}
-                      className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 h-7 px-2 rounded bg-gray-800 border border-gray-700 text-gray-300 hover:text-white inline-flex items-center gap-1 disabled:opacity-50">
+                      className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 h-7 px-2 rounded bg-gray-800 border border-gray-700 text-gray-300 hover:text-gray-100 inline-flex items-center gap-1 disabled:opacity-50">
                       {r.approved ? <><X size={11} /> Withdraw</> : <><Check size={11} /> Approve</>}
                     </button>
                     <button type="button" onClick={() => setConfirmDelete(r)} disabled={busy}

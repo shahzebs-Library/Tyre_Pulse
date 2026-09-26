@@ -1,1203 +1,514 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { Bar, Line } from 'react-chartjs-2'
+import {
+  Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement, PointElement,
+  Title, Tooltip, Legend, Filler,
+} from 'chart.js'
+import {
+  MapPin, RefreshCw, AlertTriangle, Download, FileText, Info, Activity, Gauge,
+  Truck, Layers, BarChart2, Wrench, Tag, ListChecks, LayoutGrid,
+} from 'lucide-react'
+import PageHeader from '../components/ui/PageHeader'
+import Card from '../components/ui/Card'
+import StatTile from '../components/ui/StatTile'
+import FilterBar from '../components/ui/FilterBar'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import EmailPdfButton from '../components/EmailPdfButton'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { toUserMessage } from '../lib/safeError'
-import { useSettings } from '../contexts/SettingsContext'
-import { formatCurrency as _fmtCurrencyBase } from '../lib/formatters'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
-import { AXLE_GROUPS, GROUP_ICONS, normalizePosition } from '../lib/tyrePositions'
-import PageHeader from '../components/ui/PageHeader'
-import Card, { CardHeader } from '../components/ui/Card'
-import EmailPdfButton from '../components/EmailPdfButton'
+import { useSettings, COUNTRIES, COUNTRY_CURRENCY } from '../contexts/SettingsContext'
+import { formatCurrency } from '../lib/formatters'
+import { colorAt, withAlpha } from '../lib/reportColors'
 import {
-  MapPin, Download, FileText, AlertTriangle, CheckCircle,
-  TrendingUp, TrendingDown, Minus, ChevronDown, RefreshCw,
-  Activity, Layers, Truck, Settings2, BarChart3, Target,
-} from 'lucide-react'
-import {
-  Chart as ChartJS,
-  CategoryScale, LinearScale, BarElement, LineElement, PointElement,
-  RadialLinearScale, ArcElement, Title, Tooltip, Legend, Filler, RadarController,
-} from 'chart.js'
-import { Bar, Doughnut } from 'react-chartjs-2'
+  groupMetrics, positionCodeMetrics, siteGroupMatrix, brandsForGroup, assetsForGroup,
+  monthlyRemovals, filterRecords, fleetPositionKpis, positionInsights, positionExportRows,
+  POSITION_EXPORT_COLS, POSITION_EXPORT_HEADERS,
+} from '../lib/positionIntelligenceAnalytics'
 
-ChartJS.register(
-  CategoryScale, LinearScale, BarElement, LineElement, PointElement,
-  RadialLinearScale, ArcElement, Title, Tooltip, Legend, Filler, RadarController,
-)
+ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend, Filler)
 
-// ── Constants ──────────────────────────────────────────────────────────────────
-// Canonical axle groups + icons are sourced from lib/tyrePositions (single
-// source of truth, shared with Upload mapping and the inspection diagrams).
-const POSITIONS = AXLE_GROUPS
-const POSITION_ICONS = GROUP_ICONS
+const loadExportUtils = () => import('../lib/exportUtils')
 
-const CHART_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899']
+const ROW_CAP = 50000
+const COLS = 'id,issue_date,asset_no,serial_no,brand,site,country,cost_per_tyre,qty,km_at_fitment,km_at_removal,removal_date,removal_reason,position,tyre_position,status'
 
-const DATE_PRESETS = [
-  { label: '30d', days: 30 },
-  { label: '90d', days: 90 },
-  { label: '6mo', days: 180 },
-  { label: '1yr', days: 365 },
-  { label: 'All', days: null },
+const fmtN = (v, d = 0) => (v == null || !Number.isFinite(v) ? 'N/A' : Number(v).toLocaleString(undefined, { maximumFractionDigits: d, minimumFractionDigits: d }))
+const fmtPct = (v, d = 1) => (v == null || !Number.isFinite(v) ? 'N/A' : `${v.toFixed(d)}%`)
+const fmtKm = (v) => (v == null || !Number.isFinite(v) ? 'N/A' : `${Math.round(v).toLocaleString()} km`)
+const fmtCpk = (v) => (v == null || !Number.isFinite(v) ? 'N/A' : v.toFixed(4))
+
+const TABS = [
+  { key: 'overview', label: 'Axle groups', icon: Layers },
+  { key: 'positions', label: 'Wheel positions', icon: MapPin },
+  { key: 'sites', label: 'Site matrix', icon: LayoutGrid },
+  { key: 'brands', label: 'Brands', icon: Tag },
+  { key: 'assets', label: 'Assets', icon: Truck },
+  { key: 'findings', label: 'Findings', icon: ListChecks },
 ]
 
-const COUNTRIES_ALL = ['All', 'KSA', 'UAE', 'Egypt']
+const DATE_PRESETS = [
+  { key: '90', label: '90 days', days: 90 },
+  { key: '180', label: '6 months', days: 180 },
+  { key: '365', label: '12 months', days: 365 },
+  { key: 'all', label: 'All time', days: 0 },
+]
 
-const BAR_OPTS = (horizontal = false) => ({
-  responsive: true,
-  maintainAspectRatio: false,
-  indexAxis: horizontal ? 'y' : 'x',
-  plugins: { legend: { display: false } },
-  scales: {
-    x: { grid: { color:'var(--text-muted)' }, ticks: { color: '#9ca3af', font: { size: 11 } } },
-    y: { grid: { color:'var(--text-muted)' }, ticks: { color: '#9ca3af', font: { size: 11 } } },
-  },
-})
-
-const DOUGHNUT_OPTS = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: {
-      position: 'right',
-      labels: { color: '#9ca3af', font: { size: 11 }, padding: 12, boxWidth: 12 },
-    },
-  },
+function isoDaysAgo(days) {
+  if (!days) return ''
+  return new Date(Date.now() - days * 86400000).toISOString().slice(0, 10)
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
-function recordCost(r) {
-  return (r.cost_per_tyre || 0) * (r.qty || 1)
-}
-
-function safeMean(arr) {
-  const valid = arr.filter(v => Number.isFinite(v) && v > 0)
-  if (!valid.length) return null
-  return valid.reduce((a, b) => a + b, 0) / valid.length
-}
-
-function fmtNum(n, decimals = 1) {
-  if (n == null || !Number.isFinite(n)) return 'N/A'
-  return n.toFixed(decimals)
-}
-
-function fmtCurrency(n, currency) {
-  if (n == null || !Number.isFinite(n)) return 'N/A'
-  return _fmtCurrencyBase(n, currency, 0)
-}
-
-function statusBadge(failureRate) {
-  if (failureRate >= 30) return { label: 'Critical', cls: 'bg-red-900/60 text-red-300 border border-red-700/40' }
-  if (failureRate >= 20) return { label: 'Elevated', cls: 'bg-yellow-900/60 text-yellow-300 border border-yellow-700/40' }
-  return { label: 'Normal', cls: 'bg-green-900/60 text-green-300 border border-green-700/40' }
-}
-
-function buildRecommendation(pos, metrics) {
-  const { failureRate, avgCpk, avgKmLife } = metrics
-  if (pos === 'Steer') {
-    if (failureRate > 30) return 'Critical: High steer tyre failure rate indicates alignment or inflation issues. Inspect alignment immediately.'
-    if (avgCpk != null && avgCpk > 2) return 'Steer CPK above fleet average. Review inflation pressure policy for steer axles.'
-    if (failureRate > 20) return 'Elevated steer failures. Schedule alignment checks and pressure audits across fleet.'
-  }
-  if (pos === 'Drive') {
-    if (failureRate > 25) return 'Drive axle failures elevated. Check overloading and driver behaviour records.'
-    if (avgKmLife != null && avgKmLife < 30000) return 'Drive tyre life below benchmark. Evaluate brand switch or rotation policy.'
-    if (failureRate > 15) return 'Drive axle failure rate above threshold. Investigate load compliance and tyre rotation intervals.'
-  }
-  if (pos === 'Trailer') {
-    if (failureRate > 20) return 'Trailer failures above threshold. Inspect for road damage and misalignment.'
-    if (failureRate > 12) return 'Trailer failure rate trending up. Review tyre inspection frequency for trailer axles.'
-  }
-  if (pos === 'Lift Axle') {
-    if (failureRate > 20) return 'Lift axle failures elevated. Ensure correct inflation when axle is deployed.'
-    if (failureRate > 10) return 'Review lift axle deployment procedures and associated tyre pressure compliance.'
-  }
-  if (pos === 'Tag Axle') {
-    if (failureRate > 20) return 'Tag axle failures above fleet norm. Check for uneven load distribution and misalignment.'
-  }
-  // Generic fallback
-  if (failureRate > 25) return `${pos} position showing high failure rate (${fmtNum(failureRate)}%). Immediate review required.`
-  if (failureRate > 15) return `${pos} position failure rate elevated. Schedule inspection and root cause review.`
-  if (avgCpk != null && avgCpk > 2.5) return `CPK for ${pos} is high (${fmtNum(avgCpk, 2)} ${''}/km). Evaluate tyre specification and brand selection.`
-  return 'Position performing within acceptable parameters.'
-}
-
-function applyDatePreset(days) {
-  if (!days) return { from: '', to: '' }
-  const to = new Date()
-  const from = new Date()
-  from.setDate(from.getDate() - days)
+function chartOptions({ horizontal = false, xTitle = '', yTitle = '', legend = false, pctAxis = false, max } = {}) {
+  const axis = (title) => ({
+    grid: { color: 'var(--panel-2)' },
+    ticks: { color: 'var(--text-muted)', font: { size: 11 } },
+    title: title ? { display: true, text: title, color: 'var(--text-muted)', font: { size: 11 } } : { display: false },
+  })
+  const value = { ...axis(horizontal ? xTitle : yTitle), min: 0, ...(max != null ? { max } : {}) }
+  if (pctAxis) value.ticks = { ...value.ticks, callback: (v) => `${v}%` }
   return {
-    from: from.toISOString().slice(0, 10),
-    to: to.toISOString().slice(0, 10),
+    responsive: true,
+    maintainAspectRatio: false,
+    indexAxis: horizontal ? 'y' : 'x',
+    plugins: { legend: { display: legend, labels: { color: 'var(--text-secondary)', font: { size: 11 }, boxWidth: 12 } } },
+    scales: horizontal ? { x: value, y: axis(yTitle) } : { x: axis(xTitle), y: value },
   }
 }
 
-function heatColor(rate) {
-  if (!rate) return 'transparent'
-  const intensity = Math.min(rate / 50, 1)
-  return `rgba(239,68,68,${(intensity * 0.75).toFixed(2)})`
+function Section({ title, subtitle, icon: Icon, actions, children }) {
+  return (
+    <Card>
+      <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
+            {Icon && <Icon size={15} className="text-[var(--text-muted)]" aria-hidden="true" />}{title}
+          </h2>
+          {subtitle && <p className="text-xs text-[var(--text-muted)] mt-0.5">{subtitle}</p>}
+        </div>
+        {actions}
+      </div>
+      {children}
+    </Card>
+  )
 }
 
-// ── Main Component ─────────────────────────────────────────────────────────────
+function ChartBox({ empty, label, height = 260, children }) {
+  if (empty) return <div className="flex items-center justify-center text-sm text-[var(--text-muted)] text-center px-4" style={{ height }}>{empty}</div>
+  return <div role="img" aria-label={label} style={{ height }}>{children}</div>
+}
+
+/** Failure-rate band shown in words and colour. */
+function RateBadge({ value, sample }) {
+  if (value == null) return <span className="text-xs text-[var(--text-muted)]" title="No removal with a usable reason">N/A</span>
+  const band = value >= 30 ? ['Critical', 'bg-red-500/15 text-red-300 border-red-500/40']
+    : value >= 15 ? ['Elevated', 'bg-amber-500/15 text-amber-300 border-amber-500/40']
+      : ['Normal', 'bg-green-500/15 text-green-300 border-green-500/40']
+  return (
+    <span className="inline-flex items-center gap-1.5" title={`${sample} removals with a reason`}>
+      <span className="tabular-nums text-[var(--text-primary)]">{value.toFixed(1)}%</span>
+      <span className={`text-[11px] px-1.5 py-0.5 rounded-full border ${band[1]}`}>{band[0]}</span>
+    </span>
+  )
+}
+
 export default function PositionIntelligence() {
-  const { activeCountry, activeCurrency } = useSettings()
+  const { activeCountry, appSettings } = useSettings()
+  const company = appSettings?.company_name || ''
 
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  // True when the read hit the 50,000-row ceiling (millions-row safety cap).
   const [capped, setCapped] = useState(false)
-  // Guards against a slow earlier response overwriting a newer one after the
-  // country or date window changes (fetch-race cancellation).
   const reqIdRef = useRef(0)
 
-  // Filters
-  const [countryChip, setCountryChip] = useState('All')
-  const [siteFilter, setSiteFilter] = useState('')
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
-  const [activePreset, setActivePreset] = useState('All')
+  const [country, setCountry] = useState(activeCountry !== 'All' ? activeCountry : '')
+  const [preset, setPreset] = useState('all')
+  const [search, setSearch] = useState('')
+  const [site, setSite] = useState('')
+  const [group, setGroup] = useState('')
+  const [brand, setBrand] = useState('')
+  const [tab, setTab] = useState('overview')
+  const [brandGroup, setBrandGroup] = useState('Steer')
+  const [exportError, setExportError] = useState(null)
 
-  // Tabs
-  const [activeTab, setActiveTab] = useState('Steer')
+  useEffect(() => { setCountry(activeCountry !== 'All' ? activeCountry : '') }, [activeCountry])
 
-  // ── Data loading ─────────────────────────────────────────────────────────────
+  const dateFrom = useMemo(() => isoDaysAgo(DATE_PRESETS.find((p) => p.key === preset)?.days || 0), [preset])
+
   const load = useCallback(async () => {
-    const myReq = ++reqIdRef.current
+    const my = ++reqIdRef.current
     setLoading(true)
     setError(null)
     try {
-      const country = countryChip !== 'All' ? countryChip : (activeCountry !== 'All' ? activeCountry : null)
-
-      // Bound the read for millions-row scale: country AND the active date window
-      // are applied SERVER-SIDE, capped at 50,000 rows (most recent first). The
-      // client-side `filtered` memo still applies the same date/site filters, so
-      // displayed numbers are identical for data under the cap.
-      const { data, error: err, truncated } = await fetchAllPages((from, to) => {
-        let q = supabase
-          .from('tyre_records')
-          .select('id,issue_date,asset_no,brand,site,country,cost_per_tyre,qty,risk_level,km_at_fitment,km_at_removal,position,category,remarks')
-          .order('issue_date', { ascending: false })
+      // Country and date window applied server-side, bounded, paged with an id
+      // tiebreak so a page boundary never drops or repeats a row.
+      const { data, error: err, truncated } = await fetchAllPages((f, t) => {
+        let q = supabase.from('tyre_records').select(COLS)
         if (country) q = q.eq('country', country)
         if (dateFrom) q = q.gte('issue_date', dateFrom)
-        if (dateTo) q = q.lte('issue_date', dateTo)
-        return q.range(from, to)
-      }, { max: 50000 })
-      if (myReq !== reqIdRef.current) return
+        return q.order('issue_date', { ascending: false }).order('id', { ascending: false }).range(f, t)
+      }, { max: ROW_CAP })
+      if (my !== reqIdRef.current) return
       if (err) throw err
       setRecords(data || [])
       setCapped(Boolean(truncated))
     } catch (e) {
-      if (myReq === reqIdRef.current) setError(toUserMessage(e, 'Could not load position data.'))
+      if (my === reqIdRef.current) setError(toUserMessage(e, 'Could not load position data.'))
     } finally {
-      if (myReq === reqIdRef.current) setLoading(false)
+      if (my === reqIdRef.current) setLoading(false)
     }
-  }, [activeCountry, countryChip, dateFrom, dateTo])
+  }, [country, dateFrom])
 
   useEffect(() => { load() }, [load])
 
-  // ── Derived filters ───────────────────────────────────────────────────────────
-  const uniqueSites = useMemo(() => {
-    const s = new Set(records.map(r => r.site).filter(Boolean))
-    return ['', ...([...s].sort())]
-  }, [records])
+  const sites = useMemo(() => [...new Set(records.map((r) => r.site).filter(Boolean))].sort(), [records])
+  const brands = useMemo(() => [...new Set(records.map((r) => String(r.brand || '').trim().toUpperCase()).filter(Boolean))].sort(), [records])
 
-  const filtered = useMemo(() => {
-    return records.filter(r => {
-      if (dateFrom && r.issue_date && r.issue_date < dateFrom) return false
-      if (dateTo && r.issue_date && r.issue_date > dateTo) return false
-      if (siteFilter && r.site !== siteFilter) return false
-      return true
-    })
-  }, [records, dateFrom, dateTo, siteFilter])
+  const filtered = useMemo(() => filterRecords(records, { site, group, brand, search }), [records, site, group, brand, search])
+  const kpis = useMemo(() => fleetPositionKpis(filtered), [filtered])
+  const groups = useMemo(() => groupMetrics(filtered), [filtered])
+  const codes = useMemo(() => positionCodeMetrics(filtered), [filtered])
+  const matrix = useMemo(() => siteGroupMatrix(filtered), [filtered])
+  const brandRows = useMemo(() => brandsForGroup(filtered, brandGroup), [filtered, brandGroup])
+  const assetRows = useMemo(() => assetsForGroup(filtered, group), [filtered, group])
+  const trend = useMemo(() => monthlyRemovals(filtered, { now: Date.now() }), [filtered])
+  const insights = useMemo(() => positionInsights(filtered), [filtered])
+  const groupOptions = useMemo(() => groups.map((g) => g.group), [groups])
 
-  // ── Position metrics (core computation) ──────────────────────────────────────
-  const positionMetrics = useMemo(() => {
-    const byPos = {}
-    POSITIONS.forEach(p => { byPos[p] = [] })
+  // A recorded tyre price can only be totalled inside one currency.
+  const currency = country ? COUNTRY_CURRENCY[country] : null
+  const fmtMoney = (v) => (currency && v != null ? formatCurrency(v, currency, 0) : 'N/A')
 
-    filtered.forEach(r => {
-      const pos = normalizePosition(r.position)
-      byPos[pos].push(r)
-    })
+  const filtersActive = Boolean(search || site || group || brand)
+  const clearAll = () => { setSearch(''); setSite(''); setGroup(''); setBrand('') }
 
-    return POSITIONS.map(pos => {
-      const recs = byPos[pos]
-      const count = recs.length
-      const totalCost = recs.reduce((s, r) => s + recordCost(r), 0)
-      const avgCost = count ? totalCost / count : 0
-
-      const highRisk = recs.filter(r => {
-        const lvl = (r.risk_level || '').toLowerCase()
-        return lvl === 'high' || lvl === 'critical'
-      })
-      const criticalRecs = recs.filter(r => (r.risk_level || '').toLowerCase() === 'critical')
-
-      const highRiskCount = highRisk.length
-      const failureRate = count ? (highRiskCount / count) * 100 : 0
-      const criticalRate = count ? (criticalRecs.length / count) * 100 : 0
-
-      // CPK = cost_per_tyre / (km_at_removal - km_at_fitment)
-      const cpkValues = recs
-        .filter(r => r.km_at_fitment != null && r.km_at_removal != null && r.km_at_removal > r.km_at_fitment && r.cost_per_tyre > 0)
-        .map(r => r.cost_per_tyre / (r.km_at_removal - r.km_at_fitment))
-
-      const avgCpk = safeMean(cpkValues)
-      const cpkValidCount = cpkValues.length
-
-      const kmLifeValues = recs
-        .filter(r => r.km_at_fitment != null && r.km_at_removal != null && r.km_at_removal > r.km_at_fitment)
-        .map(r => r.km_at_removal - r.km_at_fitment)
-
-      const avgKmLife = safeMean(kmLifeValues)
-
-      // Pressure issues approximated from remarks/category
-      const pressureIssueCount = recs.filter(r => {
-        const remarks = (r.remarks || '').toLowerCase()
-        const category = (r.category || '').toLowerCase()
-        return remarks.includes('pressure') || remarks.includes('inflation') ||
-               category.includes('pressure') || category.includes('inflation') ||
-               ((r.risk_level || '').toLowerCase() === 'high' &&
-                (remarks.includes('flat') || remarks.includes('blow')))
-      }).length
-
-      // Brands breakdown
-      const brandMap = {}
-      recs.forEach(r => {
-        if (!r.brand) return
-        if (!brandMap[r.brand]) brandMap[r.brand] = { brand: r.brand, recs: [], cpkVals: [] }
-        brandMap[r.brand].recs.push(r)
-        const km = r.km_at_removal - r.km_at_fitment
-        if (r.km_at_fitment != null && r.km_at_removal != null && km > 0 && r.cost_per_tyre > 0) {
-          brandMap[r.brand].cpkVals.push(r.cost_per_tyre / km)
-        }
-      })
-      const brands = Object.values(brandMap).map(b => ({
-        brand: b.brand,
-        count: b.recs.length,
-        avgCpk: safeMean(b.cpkVals),
-        failureRate: b.recs.length
-          ? (b.recs.filter(r => ['high', 'critical'].includes((r.risk_level || '').toLowerCase())).length / b.recs.length) * 100
-          : 0,
-        avgKmLife: safeMean(
-          b.recs
-            .filter(r => r.km_at_fitment != null && r.km_at_removal != null && r.km_at_removal > r.km_at_fitment)
-            .map(r => r.km_at_removal - r.km_at_fitment)
-        ),
-      })).sort((a, b) => (a.avgCpk ?? Infinity) - (b.avgCpk ?? Infinity))
-
-      // Top failure categories
-      const catMap = {}
-      recs.forEach(r => {
-        const cat = r.category || 'Unclassified'
-        catMap[cat] = (catMap[cat] || 0) + 1
-      })
-      const topFailureCauses = Object.entries(catMap)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5)
-        .map(([cat]) => cat)
-
-      // Worst assets (highest CPK or highest failure rate)
-      const assetMap = {}
-      recs.forEach(r => {
-        if (!r.asset_no) return
-        if (!assetMap[r.asset_no]) assetMap[r.asset_no] = { asset_no: r.asset_no, recs: [] }
-        assetMap[r.asset_no].recs.push(r)
-      })
-      const worstAssets = Object.values(assetMap).map(a => {
-        const aRecs = a.recs
-        const aCpkVals = aRecs
-          .filter(r => r.km_at_fitment != null && r.km_at_removal != null && r.km_at_removal > r.km_at_fitment && r.cost_per_tyre > 0)
-          .map(r => r.cost_per_tyre / (r.km_at_removal - r.km_at_fitment))
-        const aHighRisk = aRecs.filter(r => ['high', 'critical'].includes((r.risk_level || '').toLowerCase()))
-        return {
-          asset_no: a.asset_no,
-          count: aRecs.length,
-          avgCpk: safeMean(aCpkVals),
-          failureRate: aRecs.length ? (aHighRisk.length / aRecs.length) * 100 : 0,
-          totalCost: aRecs.reduce((s, r) => s + recordCost(r), 0),
-        }
-      })
-        .sort((a, b) => (b.avgCpk ?? 0) - (a.avgCpk ?? 0))
-        .slice(0, 5)
-
-      const recommendation = buildRecommendation(pos, { failureRate, avgCpk, avgKmLife })
-
-      return {
-        position: pos,
-        count,
-        totalCost,
-        avgCost,
-        highRiskCount,
-        failureRate,
-        criticalRate,
-        avgCpk,
-        avgKmLife,
-        cpkValidCount,
-        pressureIssueCount,
-        brands,
-        topFailureCauses,
-        recommendation,
-        worstAssets,
-        catMap,
-      }
-    })
-  }, [filtered])
-
-  // ── Derived summaries ─────────────────────────────────────────────────────────
-  const totalRecords = useMemo(() => filtered.length, [filtered])
-
-  const worstPos = useMemo(() => {
-    const withData = positionMetrics.filter(p => p.count > 0)
-    if (!withData.length) return null
-    return withData.reduce((a, b) => a.failureRate > b.failureRate ? a : b)
-  }, [positionMetrics])
-
-  const bestPos = useMemo(() => {
-    const withData = positionMetrics.filter(p => p.count > 0 && p.avgCpk != null)
-    if (!withData.length) return null
-    return withData.reduce((a, b) => a.avgCpk < b.avgCpk ? a : b)
-  }, [positionMetrics])
-
-  // ── Heat map: site × position ─────────────────────────────────────────────────
-  const heatMapData = useMemo(() => {
-    const siteSet = new Set(filtered.map(r => r.site).filter(Boolean))
-    const sites = [...siteSet].sort().slice(0, 15)
-
-    const matrix = sites.map(site => {
-      const row = { site }
-      POSITIONS.forEach(pos => {
-        const recs = filtered.filter(r => r.site === site && normalizePosition(r.position) === pos)
-        if (!recs.length) { row[pos] = null; return }
-        const high = recs.filter(r => ['high', 'critical'].includes((r.risk_level || '').toLowerCase()))
-        row[pos] = recs.length ? (high.length / recs.length) * 100 : 0
-      })
-      return row
-    })
-    return { sites, matrix }
-  }, [filtered])
-
-  // ── Chart datasets ────────────────────────────────────────────────────────────
-  const cpkChartData = useMemo(() => {
-    const data = positionMetrics.map(p => p.avgCpk)
+  // ── charts ────────────────────────────────────────────────────────────────
+  const rateData = useMemo(() => {
+    const rows = groups.filter((g) => g.failureRatePct != null)
     return {
-      labels: POSITIONS,
-      datasets: [{
-        label: 'Avg CPK',
-        data,
-        backgroundColor: data.map(v =>
-          v == null ? '#374151' : v >= 2 ? '#ef4444' : v >= 1 ? '#f59e0b' : '#10b981'
-        ),
-        borderRadius: 4,
-      }],
+      labels: rows.map((g) => g.group),
+      datasets: [
+        { label: 'Failure removals %', data: rows.map((g) => Number(g.failureRatePct.toFixed(1))), backgroundColor: withAlpha(colorAt(3), 0.75), borderRadius: 3 },
+        { label: 'Wear-out removals %', data: rows.map((g) => Number((g.wearRatePct ?? 0).toFixed(1))), backgroundColor: withAlpha(colorAt(1), 0.75), borderRadius: 3 },
+      ],
     }
-  }, [positionMetrics])
+  }, [groups])
 
-  const failureChartData = useMemo(() => {
-    const sorted = [...positionMetrics].sort((a, b) => b.failureRate - a.failureRate)
-    return {
-      labels: sorted.map(p => p.position),
-      datasets: [{
-        label: 'Failure Rate %',
-        data: sorted.map(p => p.failureRate),
-        backgroundColor: sorted.map(p =>
-          p.failureRate > 25 ? '#ef4444' : p.failureRate > 15 ? '#f59e0b' : '#10b981'
-        ),
-        borderRadius: 4,
-      }],
+  const lifeRows = useMemo(() => groups.filter((g) => g.avgLifeKm != null), [groups])
+  const lifeData = useMemo(() => ({
+    labels: lifeRows.map((g) => g.group),
+    datasets: [{ label: 'Average tyre life (km)', data: lifeRows.map((g) => Math.round(g.avgLifeKm)), backgroundColor: lifeRows.map((_, i) => withAlpha(colorAt(i), 0.75)), borderRadius: 3 }],
+  }), [lifeRows])
+
+  const trendData = useMemo(() => ({
+    labels: trend.months.map((m) => {
+      const [y, mo] = m.split('-')
+      return new Date(Number(y), Number(mo) - 1, 1).toLocaleString('en', { month: 'short', year: '2-digit' })
+    }),
+    datasets: trend.series.map((s, i) => ({
+      label: s.group, data: s.data, borderColor: colorAt(i), backgroundColor: withAlpha(colorAt(i), 0.1), tension: 0.3, pointRadius: 2,
+    })),
+  }), [trend])
+
+  // ── table columns ─────────────────────────────────────────────────────────
+  const metricCols = useCallback((first) => [
+    ...first,
+    { id: 'count', header: 'Tyre records', accessorFn: (r) => r.count, size: 110, meta: { align: 'right' } },
+    { id: 'removed', header: 'Removed', accessorFn: (r) => r.removed, size: 90, meta: { align: 'right' } },
+    { id: 'withReason', header: 'With reason', accessorFn: (r) => r.withReason, size: 100, meta: { align: 'right' } },
+    {
+      id: 'failure', header: 'Failure removals', accessorFn: (r) => r.failureRatePct ?? -1, size: 170,
+      meta: { exportValue: (r) => (r.failureRatePct == null ? 'N/A' : Number(r.failureRatePct.toFixed(1))) },
+      cell: ({ row }) => <RateBadge value={row.original.failureRatePct} sample={row.original.withReason} />,
+    },
+    { id: 'life', header: 'Avg life', accessorFn: (r) => r.avgLifeKm ?? -1, size: 120, meta: { align: 'right', exportValue: (r) => (r.avgLifeKm == null ? 'N/A' : Math.round(r.avgLifeKm)) }, cell: ({ row }) => fmtKm(row.original.avgLifeKm) },
+    { id: 'lifeN', header: 'Life sample', accessorFn: (r) => r.lifeSample, size: 100, meta: { align: 'right' } },
+    { id: 'cpk', header: 'Avg CPK', accessorFn: (r) => r.avgCpk ?? -1, size: 100, meta: { align: 'right', exportValue: (r) => (r.avgCpk == null ? 'N/A' : Number(r.avgCpk.toFixed(4))) }, cell: ({ row }) => fmtCpk(row.original.avgCpk) },
+    { id: 'reason', header: 'Top reason', accessorFn: (r) => r.topReasons[0]?.reason || 'N/A', size: 170 },
+  ], [])
+
+  const groupColumns = useMemo(() => metricCols([
+    { id: 'group', header: 'Axle group', accessorFn: (r) => r.group, size: 120 },
+    { id: 'share', header: 'Share', accessorFn: (r) => r.sharePct ?? 0, size: 80, meta: { align: 'right' }, cell: ({ row }) => fmtPct(row.original.sharePct, 0) },
+  ]), [metricCols])
+
+  const codeColumns = useMemo(() => metricCols([
+    { id: 'code', header: 'Position', accessorFn: (r) => r.code, size: 90 },
+    { id: 'label', header: 'Description', accessorFn: (r) => r.label, size: 200 },
+    { id: 'group', header: 'Axle', accessorFn: (r) => r.group, size: 90, meta: { filterVariant: 'select' } },
+  ]), [metricCols])
+
+  const brandColumns = useMemo(() => metricCols([
+    { id: 'brand', header: 'Brand', accessorFn: (r) => r.brand, size: 150 },
+  ]), [metricCols])
+
+  const assetColumns = useMemo(() => metricCols([
+    { id: 'asset', header: 'Asset', accessorFn: (r) => r.asset_no, size: 110 },
+    { id: 'site', header: 'Site', accessorFn: (r) => r.site || 'N/A', size: 110 },
+    { id: 'failures', header: 'Failure removals', accessorFn: (r) => r.failures, size: 130, meta: { align: 'right' } },
+  ]), [metricCols])
+
+  const matrixColumns = useMemo(() => [
+    { id: 'site', header: 'Site', accessorFn: (r) => r.site, size: 150 },
+    { id: 'count', header: 'Tyre records', accessorFn: (r) => r.count, size: 110, meta: { align: 'right' } },
+    ...matrix.groups.map((g) => ({
+      id: g, header: `${g} failure %`, size: 140,
+      accessorFn: (r) => r[g]?.failureRatePct ?? -1,
+      meta: { align: 'right', exportValue: (r) => (r[g]?.failureRatePct == null ? 'N/A' : Number(r[g].failureRatePct.toFixed(1))) },
+      cell: ({ row }) => {
+        const c = row.original[g]
+        if (!c) return <span className="text-[var(--text-muted)]">None</span>
+        if (c.failureRatePct == null) return <span className="text-[var(--text-muted)]" title={`${c.count} records, none with a removal reason`}>N/A</span>
+        return <RateBadge value={c.failureRatePct} sample={c.withReason} />
+      },
+    })),
+  ], [matrix.groups])
+
+  // ── exports ───────────────────────────────────────────────────────────────
+  const scopeLabel = [country || 'All countries', DATE_PRESETS.find((p) => p.key === preset)?.label, site, group, brand].filter(Boolean).join(' | ')
+
+  async function exportExcel() {
+    setExportError(null)
+    try {
+      const { exportSheetsToExcel, reportFileName, reportDateLabel } = await loadExportUtils()
+      const groupRows = groups.map((g) => ({
+        group: g.group, count: g.count, removed: g.removed, withReason: g.withReason, failures: g.failures,
+        failureRatePct: g.failureRatePct == null ? 'N/A' : Number(g.failureRatePct.toFixed(1)),
+        avgLifeKm: g.avgLifeKm == null ? 'N/A' : Math.round(g.avgLifeKm),
+        avgCpk: g.avgCpk == null ? 'N/A' : Number(g.avgCpk.toFixed(4)),
+        recordedPrice: currency && g.recordedPrice != null ? Math.round(g.recordedPrice) : 'N/A',
+      }))
+      await exportSheetsToExcel([
+        { name: 'Axle groups', rows: groupRows, columns: ['group', 'count', 'removed', 'withReason', 'failures', 'failureRatePct', 'avgLifeKm', 'avgCpk', 'recordedPrice'], headers: ['Axle group', 'Tyre records', 'Removed', 'Removals with reason', 'Failure removals', 'Failure rate %', 'Avg life km', 'Avg CPK', `Recorded tyre price ${currency || ''}`.trim()] },
+        { name: 'Wheel positions', rows: positionExportRows(filtered), columns: POSITION_EXPORT_COLS, headers: POSITION_EXPORT_HEADERS },
+        { name: 'Findings', rows: insights, columns: ['priority', 'message'], headers: ['Priority', 'Finding'] },
+      ], reportFileName('Tyre Position Intelligence', reportDateLabel()), {
+        title: 'Tyre Position Intelligence', company,
+        notes: [scopeLabel, 'Failure rate = removals whose recorded reason names a failure (damage, puncture, burst, separation, flat) over removals with a usable reason.'],
+      })
+    } catch (e) {
+      setExportError(toUserMessage(e, 'The Excel file could not be created.'))
     }
-  }, [positionMetrics])
+  }
 
-  const kmLifeChartData = useMemo(() => {
-    const sorted = [...positionMetrics]
-      .filter(p => p.avgKmLife != null)
-      .sort((a, b) => b.avgKmLife - a.avgKmLife)
-    return {
-      labels: sorted.map(p => p.position),
-      datasets: [{
-        label: 'Avg KM Life',
-        data: sorted.map(p => p.avgKmLife),
-        backgroundColor: '#3b82f6',
-        borderRadius: 4,
-      }],
+  async function exportPdf(opts = {}) {
+    setExportError(null)
+    try {
+      const { exportToPdf, reportFileName, reportDateLabel } = await loadExportUtils()
+      return await exportToPdf(
+        positionExportRows(filtered),
+        POSITION_EXPORT_COLS.map((key, i) => ({ key, header: POSITION_EXPORT_HEADERS[i] })),
+        'Tyre Position Intelligence',
+        reportFileName('Tyre Position Intelligence', reportDateLabel()),
+        'landscape',
+        company,
+        { subtitleNote: `${scopeLabel} | failure rate over removals with a reason`, emptyHint: 'No tyre records carry a position for these filters.', ...opts },
+      )
+    } catch (e) {
+      setExportError(toUserMessage(e, 'The PDF could not be created.'))
+      return null
     }
-  }, [positionMetrics])
-
-  const costDoughnutData = useMemo(() => {
-    const withCost = positionMetrics.filter(p => p.totalCost > 0)
-    return {
-      labels: withCost.map(p => p.position),
-      datasets: [{
-        data: withCost.map(p => p.totalCost),
-        backgroundColor: CHART_COLORS.slice(0, withCost.length),
-        borderColor: 'rgba(0,0,0,0.3)',
-        borderWidth: 2,
-      }],
-    }
-  }, [positionMetrics])
-
-  // ── Export helpers ────────────────────────────────────────────────────────────
-  function handleExcelExport() {
-    const rows = positionMetrics.map(p => ({
-      position: p.position,
-      count: p.count,
-      failureRate: fmtNum(p.failureRate),
-      avgCpk: fmtNum(p.avgCpk, 4),
-      avgKmLife: p.avgKmLife ? Math.round(p.avgKmLife) : '',
-      totalCost: Math.round(p.totalCost),
-      highRiskCount: p.highRiskCount,
-      recommendation: p.recommendation,
-    }))
-    exportToExcel(
-      rows,
-      ['position', 'count', 'failureRate', 'avgCpk', 'avgKmLife', 'totalCost', 'highRiskCount', 'recommendation'],
-      ['Position', 'Records', 'Failure Rate %', 'Avg CPK', 'Avg KM Life', 'Total Cost', 'High Risk Count', 'Recommendation'],
-      'position-intelligence',
-      'Position Summary',
-    )
   }
 
-  function handlePdfExport(opts = {}) {
-    const rows = positionMetrics.map(p => ({
-      position: p.position,
-      count: p.count,
-      failureRate: fmtNum(p.failureRate) + '%',
-      avgCpk: p.avgCpk != null ? fmtNum(p.avgCpk, 4) : 'N/A',
-      avgKmLife: p.avgKmLife ? Math.round(p.avgKmLife).toLocaleString() + ' km' : 'N/A',
-      totalCost: fmtCurrency(p.totalCost, activeCurrency),
-    }))
-    return exportToPdf(
-      rows,
-      ['position', 'count', 'failureRate', 'avgCpk', 'avgKmLife', 'totalCost'],
-      ['Position', 'Records', 'Failure Rate', 'Avg CPK', 'Avg KM Life', 'Total Cost'],
-      'Tyre Position Intelligence Report',
-      'position-intelligence',
-      '',
-      opts,
-    )
-  }
+  const hasData = records.length > 0
 
-  // ── Tab metric ────────────────────────────────────────────────────────────────
-  const activeMetrics = useMemo(() =>
-    positionMetrics.find(p => p.position === activeTab) || positionMetrics[0],
-    [positionMetrics, activeTab]
-  )
-
-  // ── Corrective action recommendations ────────────────────────────────────────
-  const correctiveRecs = useMemo(() =>
-    positionMetrics.filter(p => p.count > 0 && p.failureRate > 20),
-    [positionMetrics]
-  )
-
-  // ── Loading / Error ───────────────────────────────────────────────────────────
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 gap-4 text-gray-400">
-        <RefreshCw className="animate-spin" size={32} />
-        <span className="text-sm">Analyzing tyre position data...</span>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 gap-3 text-red-400">
-        <AlertTriangle size={32} />
-        <span className="text-sm">{error}</span>
-        <button className="btn-secondary text-xs" onClick={load}>Retry</button>
-      </div>
-    )
-  }
-
-  if (totalRecords === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 gap-3 text-gray-500">
-        <MapPin size={32} />
-        <span className="text-sm">No position data available. Ensure tyre records include position field.</span>
-        <button className="btn-secondary text-xs" onClick={load}>Reload</button>
-      </div>
-    )
-  }
-
-  // ── Render ────────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6 pb-10">
-
+    <div className="space-y-5 pb-10">
       <PageHeader
         title="Tyre Position Intelligence"
-        subtitle="Performance analysis by axle position: fastest wear, highest cost, failure-prone positions"
+        subtitle="Which axles and wheels fail, wear out and cost the most, from recorded tyre changes"
         icon={MapPin}
         actions={
-          <div className="flex items-center gap-2">
-            <button className="btn-secondary text-xs flex items-center gap-1" onClick={handleExcelExport}>
-              <Download size={14} /> Excel
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={load} disabled={loading} className="btn-secondary text-xs min-h-[40px] px-3 inline-flex items-center gap-1.5 disabled:opacity-50">
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} aria-hidden="true" /> Refresh
             </button>
-            <button className="btn-secondary text-xs flex items-center gap-1" onClick={() => handlePdfExport()}>
-              <FileText size={14} /> PDF
+            <button type="button" onClick={exportExcel} disabled={!hasData} className="btn-secondary text-xs min-h-[40px] px-3 inline-flex items-center gap-1.5 disabled:opacity-50">
+              <Download size={14} aria-hidden="true" /> Excel
+            </button>
+            <button type="button" onClick={() => exportPdf()} disabled={!hasData} className="btn-secondary text-xs min-h-[40px] px-3 inline-flex items-center gap-1.5 disabled:opacity-50">
+              <FileText size={14} aria-hidden="true" /> PDF
             </button>
             <EmailPdfButton
-              className="btn-secondary text-xs flex items-center gap-1"
+              className="btn-secondary text-xs min-h-[40px] px-3 inline-flex items-center gap-1.5"
+              disabled={!hasData}
               getPdf={async () => ({
-                base64: await handlePdfExport({ returnBase64: true }),
-                filename: 'Tyre Position Intelligence Report.pdf',
-                subject: 'Position Intelligence',
-                bodyHtml: '<p>Attached is the Position Intelligence report.</p>',
+                base64: await exportPdf({ returnBase64: true }),
+                filename: 'Tyre Position Intelligence.pdf',
+                subject: 'Tyre Position Intelligence',
+                bodyHtml: '<p>Attached is the Tyre Position Intelligence report.</p>',
               })}
             />
           </div>
         }
       />
-      {/* ── Filters ────────────────────────────────────────────────────────── */}
-      {/* Card is flex-col by default and Tailwind emits .flex-col after
-          .flex-row, so a row here has to come from `style`, which Card spreads
-          last. `flex-wrap` and `gap-3` are plain classes Card never sets. */}
-      <Card className="flex-wrap items-center gap-3" style={{ flexDirection: 'row' }}>
-        {/* Country chips */}
-        <div className="flex items-center gap-1">
-          {COUNTRIES_ALL.map(c => (
-            <button
-              key={c}
-              onClick={() => setCountryChip(c)}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
-                countryChip === c
-                  ? 'bg-green-600 text-white'
-                  : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-              }`}
-            >
-              {c}
-            </button>
-          ))}
-        </div>
 
-        {/* Site select */}
-        <select
-          className="input text-sm py-1 pl-3 pr-8 min-w-[140px]"
-          value={siteFilter}
-          onChange={e => setSiteFilter(e.target.value)}
-        >
-          <option value="">All Sites</option>
-          {uniqueSites.filter(Boolean).map(s => (
-            <option key={s} value={s}>{s}</option>
-          ))}
-        </select>
+      {exportError && <div role="alert" className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm text-red-300">{exportError}</div>}
 
-        {/* Date presets */}
-        <div className="flex items-center gap-1">
-          {DATE_PRESETS.map(p => (
-            <button
-              key={p.label}
-              onClick={() => {
-                setActivePreset(p.label)
-                const { from, to } = applyDatePreset(p.days)
-                setDateFrom(from)
-                setDateTo(to)
-              }}
-              className={`px-3 py-1 rounded text-xs font-medium transition-all ${
-                activePreset === p.label
-                  ? 'bg-green-700 text-white'
-                  : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-              }`}
-            >
+      <FilterBar
+        search={search}
+        onSearch={setSearch}
+        placeholder="Search asset, serial, brand, position or reason"
+        searchLabel="Search tyre records"
+        resultCount={hasData ? filtered.length : null}
+        onClearAll={filtersActive ? clearAll : undefined}
+        selects={[
+          { key: 'country', value: country, onChange: setCountry, placeholder: 'All countries', ariaLabel: 'Filter by country', options: COUNTRIES.map((c) => ({ value: c, label: c })) },
+          { key: 'site', value: site, onChange: setSite, placeholder: 'All sites', ariaLabel: 'Filter by site', options: sites.map((s) => ({ value: s, label: s })) },
+          { key: 'group', value: group, onChange: setGroup, placeholder: 'All axles', ariaLabel: 'Filter by axle group', options: groupOptions.map((s) => ({ value: s, label: s })) },
+          { key: 'brand', value: brand, onChange: setBrand, placeholder: 'All brands', ariaLabel: 'Filter by brand', options: brands.map((s) => ({ value: s, label: s })) },
+        ]}
+      >
+        <div role="group" aria-label="Tyre record date window" className="flex flex-wrap gap-1">
+          {DATE_PRESETS.map((p) => (
+            <button key={p.key} type="button" aria-pressed={preset === p.key} onClick={() => setPreset(p.key)}
+              className={`px-3 min-h-[40px] rounded-xl text-xs font-medium border transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] ${preset === p.key ? 'bg-[var(--accent)] text-white border-transparent' : 'border-[var(--border-dim)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}>
               {p.label}
             </button>
           ))}
         </div>
+      </FilterBar>
 
-        {/* Manual date range */}
-        <div className="flex items-center gap-2">
-          <input
-            type="date"
-            className="input text-xs py-1 px-2"
-            value={dateFrom}
-            onChange={e => { setDateFrom(e.target.value); setActivePreset('') }}
-          />
-          <span className="text-gray-500 text-xs">-</span>
-          <input
-            type="date"
-            className="input text-xs py-1 px-2"
-            value={dateTo}
-            onChange={e => { setDateTo(e.target.value); setActivePreset('') }}
-          />
+      {loading && !hasData ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3" aria-busy="true" aria-label="Loading position data">
+          {Array.from({ length: 6 }, (_, i) => <div key={i} className="card h-[108px] animate-pulse" />)}
         </div>
-
-        <button className="btn-secondary text-xs" onClick={load}>
-          <RefreshCw size={13} /> Refresh
-        </button>
-
-        <span className="ml-auto text-xs text-gray-500">{totalRecords.toLocaleString()} records</span>
-      </Card>
-
-      {/* ── Capped-view note (millions-row safety cap) ── */}
-      {capped && (
-        /* The old `py-2.5 border-yellow-700/40 bg-yellow-950/15` was dead here:
-           Card sets padding, border and background inline and inline wins. The
-           amber signal is carried by `tone="warn"` (border tint) instead. */
-        <Card
-          tone="warn"
-          pad="tight"
-          className="items-center gap-2"
-          style={{ flexDirection: 'row', paddingBlock: 'var(--space-3)' }}
-        >
-          <AlertTriangle size={14} className="text-yellow-400 flex-shrink-0" />
-          <p className="text-xs text-yellow-200/80">
-            Capped view: showing the most recent 50,000 tyre records for this scope. Narrow the country or date range for the full dataset.
-          </p>
+      ) : error ? (
+        <Card>
+          <div role="alert" className="flex flex-col items-center gap-3 py-10 text-center">
+            <AlertTriangle size={28} className="text-red-400" aria-hidden="true" />
+            <p className="text-sm text-[var(--text-primary)] font-medium">Position data could not be loaded</p>
+            <p className="text-xs text-[var(--text-muted)] max-w-md">{error}</p>
+            <button type="button" onClick={load} className="btn-primary text-sm min-h-[44px] px-4 inline-flex items-center gap-2"><RefreshCw size={14} aria-hidden="true" /> Retry</button>
+          </div>
         </Card>
-      )}
+      ) : !hasData ? (
+        <Card>
+          <div className="flex flex-col items-center gap-3 py-12 text-center">
+            <MapPin size={32} className="text-[var(--text-muted)]" aria-hidden="true" />
+            <p className="text-sm text-[var(--text-primary)] font-medium">No tyre records in this window</p>
+            <p className="text-xs text-[var(--text-muted)] max-w-md">Widen the date window or choose another country. Records appear here once tyre changes are imported or entered.</p>
+          </div>
+        </Card>
+      ) : (
+        <>
+          <div className="flex items-start gap-2 rounded-xl border border-[var(--border-dim)] bg-[var(--surface-2)] px-4 py-3 text-xs text-[var(--text-secondary)]">
+            <Info size={14} className="shrink-0 mt-0.5 text-[var(--text-muted)]" aria-hidden="true" />
+            <p>
+              Failure rate is the share of removals whose recorded reason names a failure (damage, puncture, burst, separation, flat) among removals that carry a usable reason.
+              Brands typed into the reason column and import markers are not counted as reasons. Life and CPK use only tyres with both a fitment and a removal odometer reading.
+              {!currency && ' Recorded tyre prices are shown per country only, because countries report in different currencies.'}
+              {capped && ` Capped view: the newest ${ROW_CAP.toLocaleString()} records are loaded.`}
+            </p>
+          </div>
 
-      {/* ── Section 1: Position Summary Cards ──────────────────────────────── */}
-      <div>
-        <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
-          <Layers size={15} className="text-green-400" /> Position Summary
-        </h2>
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-          {positionMetrics.map(p => {
-            const badge = statusBadge(p.failureRate)
-            const isWorst = worstPos && p.position === worstPos.position && p.count > 0
-            const isBest = bestPos && p.position === bestPos.position && p.count > 0 && !isWorst
-            // `border-red-500/60` would be dead on a Card (Card sets borderColor
-            // inline). The worst/best signal is the border TINT, which is what
-            // `tone` is for.
-            const tone = isWorst ? 'crit' : isBest ? 'good' : 'default'
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <StatTile index={0} icon={Wrench} label="Failure removals" value={fmtPct(kpis.failureRatePct)} sub={`${fmtN(kpis.failures)} of ${fmtN(kpis.withReason)} reasoned`} tone={kpis.failureRatePct == null ? 'neutral' : kpis.failureRatePct >= 30 ? 'crit' : kpis.failureRatePct >= 15 ? 'warn' : 'accent'} />
+            <StatTile index={1} icon={AlertTriangle} label="Worst axle" value={kpis.worstGroup?.group || 'N/A'} sub={kpis.worstGroup ? `${fmtPct(kpis.worstGroup.failureRatePct)} of ${kpis.worstGroup.sample}` : 'Too few reasoned removals'} tone={kpis.worstGroup ? 'crit' : 'neutral'} />
+            <StatTile index={2} icon={Gauge} label="Avg tyre life" value={kpis.avgLifeKm == null ? 'N/A' : Math.round(kpis.avgLifeKm).toLocaleString()} unit={kpis.avgLifeKm == null ? undefined : 'km'} sub={`${fmtN(kpis.lifeSample)} tyres measured`} tone="info" />
+            <StatTile index={3} icon={Activity} label="Shortest-lived axle" value={kpis.shortestLifeGroup?.group || 'N/A'} sub={kpis.shortestLifeGroup ? fmtKm(kpis.shortestLifeGroup.avgLifeKm) : 'Too few measured tyres'} tone="warn" />
+            <StatTile index={4} icon={BarChart2} label="Avg CPK" value={fmtCpk(kpis.avgCpk)} sub={`${fmtN(kpis.cpkSample)} priced and measured`} tone="neutral" />
+            <StatTile index={5} icon={MapPin} label="Position known" value={fmtPct(kpis.positionCoveragePct, 0)} sub={`${fmtN(kpis.unplaced)} records without a readable position`} tone="neutral" />
+          </div>
 
-            return (
-              /* Kept as a div, not `as="button"`: these tiles are block content
-                 (invalid inside a button) and they duplicate the real tab row
-                 below, which already gives keyboard users the same action.
-                 `interactive` supplies the cursor and hover the old
-                 `cursor-pointer transition-colors` provided. */
-              <Card
-                interactive
-                key={p.position}
-                tone={tone}
-                onClick={() => setActiveTab(p.position)}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-base">{POSITION_ICONS[p.position]}</span>
-                  {isWorst && <span className="text-[10px] bg-red-900/50 text-red-400 px-1.5 py-0.5 rounded font-medium">Worst</span>}
-                  {isBest && <span className="text-[10px] bg-green-900/50 text-green-400 px-1.5 py-0.5 rounded font-medium">Best</span>}
-                </div>
-                <p className="text-xs font-semibold text-white mb-2">{p.position}</p>
-
-                {p.count === 0 ? (
-                  <p className="text-xs text-gray-600 italic">No data</p>
-                ) : (
-                  <>
-                    <div className="space-y-1.5 text-xs">
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Records</span>
-                        <span className="text-gray-200 font-medium">{p.count}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Failure Rate</span>
-                        <span className={`font-semibold ${p.failureRate >= 30 ? 'text-red-400' : p.failureRate >= 20 ? 'text-yellow-400' : 'text-green-400'}`}>
-                          {fmtNum(p.failureRate)}%
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Avg CPK</span>
-                        <span className="text-gray-200">
-                          {p.avgCpk != null ? fmtNum(p.avgCpk, 3) : 'N/A'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Avg Life</span>
-                        <span className="text-gray-200">
-                          {p.avgKmLife != null ? `${Math.round(p.avgKmLife / 1000).toLocaleString()}k km` : 'N/A'}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="mt-2 flex items-center justify-between">
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${badge.cls}`}>{badge.label}</span>
-                      <span className="text-[10px] text-gray-500">
-                        {p.avgCpk != null
-                          ? p.avgCpk < 1.0 ? <span className="text-green-400">▲ efficient</span>
-                            : p.avgCpk < 2.0 ? <span className="text-yellow-400">- moderate</span>
-                            : <span className="text-red-400">▼ costly</span>
-                          : ''}
-                      </span>
-                    </div>
-                  </>
-                )}
-              </Card>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* ── Section 2: Charts 2×2 ──────────────────────────────────────────── */}
-      <div>
-        <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
-          <BarChart3 size={15} className="text-green-400" /> Position Analytics
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
-          {/* Chart 1: CPK by Position (horizontal bar) */}
-          <Card>
-            <CardHeader title={`CPK by Position (${activeCurrency}/km)`} />
-            <div style={{ height: 260 }}>
-              <Bar
-                data={cpkChartData}
-                options={{
-                  ...BAR_OPTS(true),
-                  plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                      callbacks: {
-                        label: ctx => ctx.raw != null
-                          ? `${activeCurrency} ${Number(ctx.raw).toFixed(4)}/km`
-                          : 'N/A',
-                      },
-                    },
-                  },
-                  scales: {
-                    x: {
-                      grid: { color:'var(--text-muted)' },
-                      ticks: { color: '#9ca3af', font: { size: 10 } },
-                    },
-                    y: {
-                      grid: { color:'var(--text-muted)' },
-                      ticks: { color: '#9ca3af', font: { size: 10 } },
-                    },
-                  },
-                }}
-              />
-            </div>
-            <p className="text-[10px] text-gray-600 mt-1">Green &lt;1.0 | Yellow 1.0-2.0 | Red ≥2.0</p>
-          </Card>
-
-          {/* Chart 2: Failure Rate by Position */}
-          <Card>
-            <CardHeader title="Failure Rate by Position (%)" />
-            <div style={{ height: 260 }}>
-              <Bar
-                data={failureChartData}
-                options={{
-                  ...BAR_OPTS(false),
-                  plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                      callbacks: {
-                        label: ctx => `${Number(ctx.raw).toFixed(1)}%`,
-                      },
-                    },
-                  },
-                  scales: {
-                    x: { grid: { color:'var(--text-muted)' }, ticks: { color: '#9ca3af', font: { size: 10 } } },
-                    y: {
-                      grid: { color:'var(--text-muted)' },
-                      ticks: { color: '#9ca3af', font: { size: 10 }, callback: v => `${v}%` },
-                    },
-                  },
-                }}
-              />
-            </div>
-            <p className="text-[10px] text-gray-600 mt-1">Red &gt;25% | Yellow &gt;15% | Green ≤15%</p>
-          </Card>
-
-          {/* Chart 3: Avg KM Life by Position */}
-          <Card>
-            <CardHeader title="Average Tyre Life by Position (km)" />
-            {kmLifeChartData.labels.length === 0 ? (
-              <div className="flex items-center justify-center h-[260px] text-gray-600 text-xs">No km data available</div>
-            ) : (
-              <div style={{ height: 260 }}>
-                <Bar
-                  data={kmLifeChartData}
-                  options={{
-                    ...BAR_OPTS(false),
-                    plugins: {
-                      legend: { display: false },
-                      tooltip: {
-                        callbacks: {
-                          label: ctx => `${Math.round(ctx.raw).toLocaleString()} km`,
-                        },
-                      },
-                    },
-                    scales: {
-                      x: { grid: { color:'var(--text-muted)' }, ticks: { color: '#9ca3af', font: { size: 10 } } },
-                      y: {
-                        grid: { color:'var(--text-muted)' },
-                        ticks: { color: '#9ca3af', font: { size: 10 }, callback: v => `${(v / 1000).toFixed(0)}k` },
-                      },
-                    },
-                  }}
-                />
-              </div>
-            )}
-          </Card>
-
-          {/* Chart 4: Cost Distribution (doughnut) */}
-          <Card>
-            {/* The sub-line is an honesty note about where this cost comes
-                from, not decoration - it moves into CardHeader's description
-                slot so it stays directly under the title. */}
-            <CardHeader
-              title="Cost Distribution by Position"
-              description="Cost by position is from tyre records; the authoritative fleet total is from the expense grid."
-            />
-            {costDoughnutData.labels.length === 0 ? (
-              <div className="flex items-center justify-center h-[260px] text-gray-600 text-xs">No cost data available</div>
-            ) : (
-              <div style={{ height: 260 }}>
-                <Doughnut
-                  data={costDoughnutData}
-                  options={{
-                    ...DOUGHNUT_OPTS,
-                    plugins: {
-                      ...DOUGHNUT_OPTS.plugins,
-                      tooltip: {
-                        callbacks: {
-                          label: ctx => {
-                            const total = ctx.dataset.data.reduce((a, b) => a + b, 0)
-                            const pct = total ? ((ctx.raw / total) * 100).toFixed(1) : 0
-                            return `${ctx.label}: ${activeCurrency} ${Math.round(ctx.raw).toLocaleString()} (${pct}%)`
-                          },
-                        },
-                      },
-                    },
-                  }}
-                />
-              </div>
-            )}
-          </Card>
-
-        </div>
-      </div>
-
-      {/* ── Section 3: Site × Position Heat Map ────────────────────────────── */}
-      {heatMapData.sites.length >= 2 && (
-        <div>
-          <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
-            <Activity size={15} className="text-green-400" /> Site × Position Failure Rate Heat Map
-          </h2>
-          {/* `overflow-x-auto` is a plain class Card never sets inline, so it
-              still applies; the card scrolls the wide matrix exactly as before. */}
-          <Card className="overflow-x-auto">
-            <table className="min-w-full text-xs">
-              <thead>
-                <tr>
-                  <th className="table-header text-left pr-4 py-2 sticky left-0 bg-[var(--surface-1)] z-10">Site</th>
-                  {POSITIONS.map(pos => (
-                    <th key={pos} className="table-header text-center px-3 py-2 whitespace-nowrap">
-                      {POSITION_ICONS[pos]} {pos}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {heatMapData.matrix.map((row, i) => (
-                  <tr key={row.site} className={i % 2 === 0 ? 'bg-transparent' : 'bg-white/[0.02]'}>
-                    <td className="table-cell pr-4 py-2 font-medium text-gray-300 sticky left-0 bg-[var(--surface-1)] z-10 whitespace-nowrap">
-                      {row.site}
-                    </td>
-                    {POSITIONS.map(pos => {
-                      const val = row[pos]
-                      return (
-                        <td
-                          key={pos}
-                          className="table-cell text-center px-3 py-2"
-                          style={{ backgroundColor: heatColor(val) }}
-                        >
-                          {val != null ? (
-                            <span className={`font-semibold ${val >= 30 ? 'text-red-200' : val >= 15 ? 'text-yellow-200' : 'text-gray-300'}`}>
-                              {fmtNum(val)}%
-                            </span>
-                          ) : (
-                            <span className="text-gray-700">-</span>
-                          )}
-                        </td>
-                      )
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <p className="text-[10px] text-gray-600 mt-2">Red = high failure rate. Blank cells = no data.</p>
-          </Card>
-        </div>
-      )}
-
-      {/* ── Section 4: Per-Position Deep Dive ──────────────────────────────── */}
-      <div>
-        <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
-          <Target size={15} className="text-green-400" /> Position Deep Dive
-        </h2>
-
-        {/* Tab Row */}
-        <div className="flex flex-wrap gap-1 mb-4">
-          {POSITIONS.map(pos => {
-            const m = positionMetrics.find(p => p.position === pos)
-            const hasData = m && m.count > 0
-            return (
-              <button
-                key={pos}
-                onClick={() => setActiveTab(pos)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                  activeTab === pos
-                    ? 'bg-green-700 text-white'
-                    : hasData
-                    ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                    : 'bg-gray-900 text-gray-600 cursor-default'
-                }`}
-              >
-                {POSITION_ICONS[pos]} {pos}
-                {hasData && <span className="ml-1.5 text-[10px] opacity-70">({m.count})</span>}
+          <div role="tablist" aria-label="Position intelligence sections" className="flex flex-wrap gap-2 border-b border-[var(--border-dim)] pb-3">
+            {TABS.map(({ key, label, icon: Icon }) => (
+              <button key={key} type="button" role="tab" aria-selected={tab === key} onClick={() => setTab(key)}
+                className={`inline-flex items-center gap-2 px-3.5 min-h-[40px] rounded-lg text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] ${tab === key ? 'bg-[var(--accent)] text-white' : 'bg-[var(--surface-2)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}>
+                <Icon size={15} aria-hidden="true" /> {label}
               </button>
-            )
-          })}
-        </div>
+            ))}
+          </div>
 
-        {activeMetrics && activeMetrics.count === 0 ? (
-          /* `py-8` and `text-gray-600` would BOTH be dead on a Card - it sets
-             padding and color inline. The roominess moves to `style`, the muted
-             colour onto the inner <p>. */
-          <Card className="text-center" style={{ paddingBlock: 'var(--space-8)' }}>
-            <p className="text-sm text-gray-600">No data for {activeTab} position</p>
-          </Card>
-        ) : activeMetrics && (
-          <div className="space-y-4">
-
-            {/* 1. Key stats strip */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-              {[
-                { label: 'Records', value: activeMetrics.count.toLocaleString(), color: 'text-white' },
-                {
-                  label: 'Failure Rate',
-                  value: `${fmtNum(activeMetrics.failureRate)}%`,
-                  color: activeMetrics.failureRate >= 30 ? 'text-red-400' : activeMetrics.failureRate >= 20 ? 'text-yellow-400' : 'text-green-400',
-                },
-                {
-                  label: 'Avg CPK',
-                  value: activeMetrics.avgCpk != null ? `${activeCurrency} ${fmtNum(activeMetrics.avgCpk, 4)}` : 'N/A',
-                  color: activeMetrics.avgCpk != null
-                    ? activeMetrics.avgCpk >= 2 ? 'text-red-400' : activeMetrics.avgCpk >= 1 ? 'text-yellow-400' : 'text-green-400'
-                    : 'text-gray-500',
-                },
-                {
-                  label: 'Avg KM Life',
-                  value: activeMetrics.avgKmLife != null ? `${Math.round(activeMetrics.avgKmLife).toLocaleString()} km` : 'N/A',
-                  color: 'text-blue-300',
-                },
-                {
-                  label: 'Total Cost',
-                  value: fmtCurrency(activeMetrics.totalCost, activeCurrency),
-                  color: 'text-white',
-                },
-                {
-                  label: 'High Risk',
-                  value: activeMetrics.highRiskCount.toLocaleString(),
-                  color: activeMetrics.highRiskCount > 0 ? 'text-red-400' : 'text-gray-400',
-                },
-              ].map(stat => (
-                /* `py-3 px-4` is dead on a Card; `pad="tight"` is the
-                   density-aware step that replaces it. */
-                <Card key={stat.label} pad="tight">
-                  <p className="text-[10px] text-gray-500 mb-1">{stat.label}</p>
-                  <p className={`text-sm font-bold ${stat.color}`}>{stat.value}</p>
-                </Card>
-              ))}
-            </div>
-
-            {/* 2+3: Brands table + Recommendation side by side */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-
-              {/* Brands table */}
-              <Card className="lg:col-span-2 overflow-x-auto">
-                <CardHeader title={`Brand Performance - ${activeTab}`} />
-                {activeMetrics.brands.length === 0 ? (
-                  <p className="text-xs text-gray-600 italic">No brand data</p>
-                ) : (
-                  <table className="min-w-full text-xs">
-                    <thead>
-                      <tr>
-                        <th className="table-header text-left py-2 pr-4">Brand</th>
-                        <th className="table-header text-right py-2 px-3">Records</th>
-                        <th className="table-header text-right py-2 px-3">Avg CPK</th>
-                        <th className="table-header text-right py-2 px-3">Failure %</th>
-                        <th className="table-header text-right py-2 px-3">Avg KM Life</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {activeMetrics.brands.map((b, i) => (
-                        <tr key={b.brand} className={i % 2 === 0 ? '' : 'bg-white/[0.02]'}>
-                          <td className="table-cell py-2 pr-4 font-medium text-gray-200">{b.brand}</td>
-                          <td className="table-cell py-2 px-3 text-right text-gray-300">{b.count}</td>
-                          <td className={`table-cell py-2 px-3 text-right font-semibold ${
-                            b.avgCpk == null ? 'text-gray-600' : b.avgCpk >= 2 ? 'text-red-400' : b.avgCpk >= 1 ? 'text-yellow-400' : 'text-green-400'
-                          }`}>
-                            {b.avgCpk != null ? fmtNum(b.avgCpk, 4) : 'N/A'}
-                          </td>
-                          <td className={`table-cell py-2 px-3 text-right font-semibold ${
-                            b.failureRate >= 25 ? 'text-red-400' : b.failureRate >= 15 ? 'text-yellow-400' : 'text-green-400'
-                          }`}>
-                            {fmtNum(b.failureRate)}%
-                          </td>
-                          <td className="table-cell py-2 px-3 text-right text-gray-300">
-                            {b.avgKmLife != null ? `${Math.round(b.avgKmLife).toLocaleString()} km` : 'N/A'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </Card>
-
-              {/* Recommendation box */}
-              {/* `border-amber-700/40 bg-amber-950/20` cannot win against Card's
-                  inline border/background; `tone="warn"` carries the signal. */}
-              <Card tone="warn">
-                <div className="flex items-start gap-2 mb-3">
-                  <AlertTriangle size={15} className="text-amber-400 mt-0.5 flex-shrink-0" />
-                  <p className="text-xs font-semibold text-amber-300">Engineering Recommendation</p>
-                </div>
-                <p className="text-xs text-amber-200/80 leading-relaxed">{activeMetrics.recommendation}</p>
-
-                {activeMetrics.topFailureCauses.length > 0 && (
-                  <div className="mt-4">
-                    <p className="text-[10px] font-semibold text-gray-500 mb-2">Top Failure Categories</p>
-                    <div className="space-y-1">
-                      {activeMetrics.topFailureCauses.map(cat => {
-                        const catCount = activeMetrics.catMap[cat] || 0
-                        const pct = activeMetrics.count ? (catCount / activeMetrics.count) * 100 : 0
-                        return (
-                          <div key={cat}>
-                            <div className="flex justify-between text-[10px] mb-0.5">
-                              <span className="text-gray-400 truncate max-w-[140px]">{cat}</span>
-                              <span className="text-gray-300 ml-2">{catCount} ({fmtNum(pct)}%)</span>
-                            </div>
-                            <div className="h-1 bg-gray-800 rounded-full overflow-hidden">
-                              <div
-                                className="h-full bg-amber-500 rounded-full"
-                                style={{ width: `${Math.min(pct, 100)}%` }}
-                              />
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-              </Card>
-            </div>
-
-            {/* 4. Worst assets at this position */}
-            {activeMetrics.worstAssets.length > 0 && (
-              <Card className="overflow-x-auto">
-                <CardHeader title={`Worst Assets - ${activeTab} (Top 5 by CPK)`} />
-                <table className="min-w-full text-xs">
-                  <thead>
-                    <tr>
-                      <th className="table-header text-left py-2 pr-4">Asset</th>
-                      <th className="table-header text-right py-2 px-3">Records</th>
-                      <th className="table-header text-right py-2 px-3">Avg CPK</th>
-                      <th className="table-header text-right py-2 px-3">Failure Rate</th>
-                      <th className="table-header text-right py-2 px-3">Total Cost</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {activeMetrics.worstAssets.map((a, i) => (
-                      <tr key={a.asset_no} className={i % 2 === 0 ? '' : 'bg-white/[0.02]'}>
-                        <td className="table-cell py-2 pr-4 font-medium text-gray-200">{a.asset_no}</td>
-                        <td className="table-cell py-2 px-3 text-right text-gray-300">{a.count}</td>
-                        <td className={`table-cell py-2 px-3 text-right font-semibold ${
-                          a.avgCpk == null ? 'text-gray-600' : a.avgCpk >= 2 ? 'text-red-400' : a.avgCpk >= 1 ? 'text-yellow-400' : 'text-green-400'
-                        }`}>
-                          {a.avgCpk != null ? fmtNum(a.avgCpk, 4) : 'N/A'}
-                        </td>
-                        <td className={`table-cell py-2 px-3 text-right font-semibold ${
-                          a.failureRate >= 25 ? 'text-red-400' : a.failureRate >= 15 ? 'text-yellow-400' : 'text-green-400'
-                        }`}>
-                          {fmtNum(a.failureRate)}%
-                        </td>
-                        <td className="table-cell py-2 px-3 text-right text-gray-300">
-                          {fmtCurrency(a.totalCost, activeCurrency)}
-                        </td>
-                      </tr>
+          {tab === 'overview' && (
+            <div className="space-y-5">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                <Section title="Why tyres came off, by axle" icon={Wrench} subtitle="Share of reasoned removals that were failures versus wear-out">
+                  <ChartBox empty={rateData.labels.length ? null : 'No removals carry a usable reason in this scope.'} label="Failure and wear-out removal share by axle group">
+                    <Bar data={rateData} options={chartOptions({ yTitle: '% of reasoned removals', pctAxis: true, max: 100, legend: true })} />
+                  </ChartBox>
+                </Section>
+                <Section title="Average tyre life by axle" icon={Gauge} subtitle="Removal odometer minus fitment odometer">
+                  <ChartBox empty={lifeRows.length ? null : 'No tyre carries both odometer readings in this scope.'} label="Average tyre life in km by axle group">
+                    <Bar data={lifeData} options={chartOptions({ yTitle: 'km' })} />
+                  </ChartBox>
+                </Section>
+              </div>
+              <Section title="Removals per month by axle" icon={Activity} subtitle="Last 12 months, by removal date">
+                <ChartBox empty={trend.series.some((s) => s.data.some((v) => v > 0)) ? null : 'No removals dated in the last 12 months.'} label="Monthly tyre removals by axle group">
+                  <Line data={trendData} options={chartOptions({ yTitle: 'Removals', legend: true })} />
+                </ChartBox>
+              </Section>
+              <Section title="Axle group scorecard" icon={Layers} subtitle={currency ? `Recorded tyre price in ${currency} is on the per-group export` : 'Select a country to see recorded tyre prices'}>
+                <EnterpriseTable columns={groupColumns} data={groups} getRowId={(r) => r.group} enableGlobalFilter={false} enableColumnFilters={false} exportFileName="Position axle groups" emptyMessage="No axle groups in scope." />
+                {currency && (
+                  <div className="mt-3 flex flex-wrap gap-3 text-xs text-[var(--text-secondary)]">
+                    {groups.map((g) => (
+                      <span key={g.group} className="rounded-lg border border-[var(--border-dim)] px-2.5 py-1">
+                        {g.group}: {fmtMoney(g.recordedPrice)} recorded over {fmtN(g.pricedCount)} priced tyres
+                      </span>
                     ))}
-                  </tbody>
-                </table>
-              </Card>
-            )}
-
-          </div>
-        )}
-      </div>
-
-      {/* ── Section 5: Corrective Action Recommendations ─────────────────── */}
-      <div>
-        <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
-          <Settings2 size={15} className="text-green-400" /> Corrective Action Recommendations
-        </h2>
-
-        {correctiveRecs.length === 0 ? (
-          /* Row direction has to come from `style` (Card is flex-col and
-             .flex-col is emitted after .flex-row); the green tint is `tone`. */
-          <Card
-            tone="good"
-            className="items-center gap-3"
-            style={{ flexDirection: 'row', paddingBlock: 'var(--space-4)' }}
-          >
-            <CheckCircle size={18} className="text-green-400 flex-shrink-0" />
-            <div>
-              <p className="text-sm font-semibold text-green-300">All Positions Within Acceptable Parameters</p>
-              <p className="text-xs text-green-400/70 mt-0.5">No positions currently exceed the 20% failure rate threshold.</p>
-            </div>
-          </Card>
-        ) : (
-          <div className="space-y-3">
-            {correctiveRecs.map(p => {
-              const severity = p.failureRate >= 30 ? 'Critical' : 'Elevated'
-              const severityCls = severity === 'Critical'
-                ? 'bg-red-900/50 text-red-300 border-red-700/40'
-                : 'bg-yellow-900/50 text-yellow-300 border-yellow-700/40'
-              const potentialSavings = p.totalCost * (p.failureRate / 100) * 0.3
-              const fleetAvgFailure = positionMetrics
-                .filter(pm => pm.count > 0)
-                .reduce((s, pm) => s + pm.failureRate, 0) /
-                Math.max(positionMetrics.filter(pm => pm.count > 0).length, 1)
-              const multiplier = fleetAvgFailure > 0 ? (p.failureRate / fleetAvgFailure).toFixed(1) : '-'
-
-              return (
-                <Card key={p.position} tone={severity === 'Critical' ? 'crit' : 'warn'}>
-                  <div className="flex flex-col md:flex-row md:items-start gap-4">
-                    <div className="flex items-center gap-3 min-w-[180px]">
-                      <span className="text-2xl">{POSITION_ICONS[p.position]}</span>
-                      <div>
-                        <p className="text-sm font-bold text-white">{p.position} Axle</p>
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold border ${severityCls}`}>
-                          {severity}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex-1 space-y-2">
-                      <p className="text-xs text-gray-300">
-                        <span className="font-semibold text-white">{fmtNum(p.failureRate)}% failure rate</span>
-                        {' '}- {multiplier}× fleet average.{' '}
-                        {p.highRiskCount} high/critical risk records from {p.count} total.
-                      </p>
-                      <p className="text-xs text-gray-400 leading-relaxed">{p.recommendation}</p>
-                    </div>
-                    {/* A nested callout. `bg-black/20 border-0 py-2 px-3` was
-                        all dead against Card's inline background/border/padding,
-                        so this now uses the primitive's own tight step and
-                        standard surface. `min-w-[160px]` still applies - Card
-                        never sets min-width. */}
-                    <Card pad="tight" className="min-w-[160px] text-center">
-                      <p className="text-[10px] text-gray-500 mb-0.5">Est. Potential Savings</p>
-                      <p className="text-sm font-bold text-green-300">{fmtCurrency(potentialSavings, activeCurrency)}</p>
-                      <p className="text-[9px] text-gray-600 mt-0.5">30% failure reduction</p>
-                    </Card>
                   </div>
-                </Card>
-              )
-            })}
-          </div>
-        )}
-      </div>
+                )}
+              </Section>
+            </div>
+          )}
 
+          {tab === 'positions' && (
+            <Section title="Every wheel position" icon={MapPin} subtitle="Sorted by failure share. Positions are read from the canonical codes and the field app slot ids.">
+              <EnterpriseTable columns={codeColumns} data={codes} getRowId={(r) => r.code} viewKey="position-intelligence-codes" initialPageSize={25} exportFileName="Position wheel positions" emptyMessage="No tyre records carry a position." />
+            </Section>
+          )}
+
+          {tab === 'sites' && (
+            <Section title="Failure share by site and axle" icon={LayoutGrid} subtitle="N/A means records exist but none carries a usable removal reason. None means no records for that axle at the site.">
+              <EnterpriseTable columns={matrixColumns} data={matrix.rows} getRowId={(r) => r.site} initialPageSize={25} exportFileName="Position site matrix" emptyMessage="No sites in scope." />
+            </Section>
+          )}
+
+          {tab === 'brands' && (
+            <Section
+              title="Brands on one axle"
+              icon={Tag}
+              subtitle="Compare brands where they actually run"
+              actions={(
+                <label className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
+                  Axle
+                  <select value={brandGroup} onChange={(e) => setBrandGroup(e.target.value)} className="input text-sm min-h-[40px]" aria-label="Axle group for brand comparison">
+                    {(groupOptions.length ? groupOptions : ['Steer']).map((g) => <option key={g} value={g}>{g}</option>)}
+                  </select>
+                </label>
+              )}
+            >
+              <EnterpriseTable columns={brandColumns} data={brandRows} getRowId={(r) => r.brand} initialPageSize={25} exportFileName={`Position brands ${brandGroup}`} emptyMessage="No tyres on this axle in scope." />
+            </Section>
+          )}
+
+          {tab === 'assets' && (
+            <Section title={group ? `Assets on the ${group} axle` : 'Assets'} icon={Truck} subtitle="Ranked by failure removals, top 50">
+              <EnterpriseTable columns={assetColumns} data={assetRows} getRowId={(r) => r.asset_no} initialPageSize={25} exportFileName="Position assets" emptyMessage="No assets in scope." />
+            </Section>
+          )}
+
+          {tab === 'findings' && (
+            <Section title="Findings" icon={ListChecks} subtitle="Only figures resting on at least 10 removals become a finding">
+              {insights.length === 0 ? (
+                <p className="text-sm text-[var(--text-muted)] py-6 text-center">No axle or wheel stands out against the fleet in this scope.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {insights.map((i, n) => (
+                    <li key={n} className="flex items-start gap-3 rounded-lg border border-[var(--border-dim)] px-3 py-2">
+                      <span className={`text-[11px] font-semibold uppercase tracking-wide shrink-0 mt-0.5 ${i.priority === 'Critical' ? 'text-red-400' : i.priority === 'High' ? 'text-orange-400' : 'text-amber-300'}`}>{i.priority}</span>
+                      <span className="text-sm text-[var(--text-secondary)]">{i.message}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Section>
+          )}
+        </>
+      )}
     </div>
   )
 }

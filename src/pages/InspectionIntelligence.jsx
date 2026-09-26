@@ -1,1337 +1,591 @@
-import { useState, useEffect, useMemo } from 'react'
-import { motion } from 'framer-motion'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { Bar, Line, Doughnut } from 'react-chartjs-2'
+import {
+  Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement,
+  PointElement, ArcElement, Title, Tooltip, Legend, Filler,
+} from 'chart.js'
+import {
+  ClipboardCheck, Download, FileText, AlertTriangle, CheckCircle, RefreshCw, Info,
+  ShieldCheck, Users, BarChart2, TrendingUp, Truck, Copy, ListChecks, Gauge, MapPin,
+} from 'lucide-react'
 import * as inspIntelApi from '../lib/api/inspectionIntelligence'
 import PageHeader from '../components/ui/PageHeader'
 import Card from '../components/ui/Card'
-import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
+import StatTile from '../components/ui/StatTile'
+import FilterBar from '../components/ui/FilterBar'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import EmailPdfButton from '../components/EmailPdfButton'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { colorAt, withAlpha } from '../lib/reportColors'
+import { coverageRows, filterCoverage, coverageTotals, COVERAGE_STALE_DAYS } from '../lib/inspectorActivity'
 import {
-  inspectorActivity, activityTotals, coverageRows, filterCoverage, coverageTotals,
-  COVERAGE_STALE_DAYS,
-} from '../lib/inspectorActivity'
-import {
-  Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement,
-  PointElement, ArcElement, Title, Tooltip, Legend,
-} from 'chart.js'
-import { Bar, Line, Doughnut } from 'react-chartjs-2'
-import {
-  ClipboardCheck, Download, FileText, AlertTriangle, CheckCircle,
-  XCircle, Eye, ChevronDown, ChevronUp, AlertCircle, Search,
-  ShieldCheck, Users, BarChart2, TrendingUp,
-} from 'lucide-react'
+  filterInspections, windowFrom, dataQuality, inspectionKpis, siteSummary, monthlyTrend,
+  conditionMix, duplicateInspections, inspectorBoard, inspectionRecommendations,
+  inspectionExportRows, INSPECTION_EXPORT_COLS, INSPECTION_EXPORT_HEADERS,
+} from '../lib/inspectionIntelligenceAnalytics'
 
-ChartJS.register(
-  CategoryScale, LinearScale, BarElement, LineElement,
-  PointElement, ArcElement, Title, Tooltip, Legend,
-)
+ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, ArcElement, Title, Tooltip, Legend, Filler)
 
-// ── helpers ────────────────────────────────────────────────────────────────────
-const fmt = n => (typeof n === 'number' ? n.toFixed(1) : '-')
-const pct = (a, b) => (b > 0 ? ((a / b) * 100).toFixed(1) : '0.0')
-const MONTHS_BACK = 12
-const COVERAGE_PAGE = 50
+const loadExportUtils = () => import('../lib/exportUtils')
 
-function lastNMonths(n) {
-  const months = []
-  for (let i = n - 1; i >= 0; i--) {
-    const d = new Date()
-    d.setDate(1)
-    d.setMonth(d.getMonth() - i)
-    months.push(d.toISOString().slice(0, 7)) // YYYY-MM
-  }
-  return months
-}
-
-function daysSince(dateStr) {
-  if (!dateStr) return Infinity
-  const diff = Date.now() - new Date(dateStr).getTime()
-  return Math.floor(diff / 86400000)
-}
-
-function containsNumeric(text) {
-  if (!text) return false
-  return /\d+/.test(text)
-}
-
-function scoreSeverity(days) {
-  if (days > 30) return 'critical'
-  if (days > 14) return 'high'
-  return 'medium'
-}
+const fmtN = (v) => (v == null || !Number.isFinite(v) ? 'N/A' : Number(v).toLocaleString())
+const fmtPct = (v, d = 1) => (v == null || !Number.isFinite(v) ? 'N/A' : `${v.toFixed(d)}%`)
 
 const DATE_PRESETS = [
-  { label: '30d', days: 30 },
-  { label: '90d', days: 90 },
-  { label: '6mo', days: 180 },
+  { key: 30, label: '30 days' },
+  { key: 90, label: '90 days' },
+  { key: 180, label: '6 months' },
+  { key: 365, label: '12 months' },
+  { key: 0, label: 'All time' },
 ]
 
-const CHART_OPTS_BAR = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: { legend: { display: false } },
-  scales: {
-    x: { grid: { color: 'var(--panel-2)' }, ticks: { color: '#9ca3af', font: { size: 11 } } },
-    y: { grid: { color: 'var(--panel-2)' }, ticks: { color: '#9ca3af' }, min: 0, max: 100 },
-  },
-}
-
-const CHART_OPTS_LINE = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: { labels: { color: '#9ca3af', font: { size: 11 } } },
-  },
-  scales: {
-    x: { grid: { color: 'var(--panel-2)' }, ticks: { color: '#9ca3af', font: { size: 11 } } },
-    y: { grid: { color: 'var(--panel-2)' }, ticks: { color: '#9ca3af' }, min: 0, max: 100 },
-  },
-}
-
-const DONUT_OPTS = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: { position: 'right', labels: { color: '#9ca3af', font: { size: 11 }, boxWidth: 12 } },
-  },
-}
-
-// Colour helpers
-function complianceColor(val) {
-  const v = parseFloat(val)
-  if (v >= 85) return 'text-green-400'
-  if (v >= 60) return 'text-yellow-400'
-  return 'text-red-400'
-}
-function coverageColor(val) {
-  const v = parseFloat(val)
-  if (v >= 75) return 'text-green-400'
-  if (v >= 50) return 'text-yellow-400'
-  return 'text-red-400'
-}
-function missingColor(count) {
-  if (count === 0) return 'text-green-400'
-  if (count <= 5) return 'text-yellow-400'
-  return 'text-red-400'
-}
-function dqColor(val) {
-  const v = parseFloat(val)
-  if (v >= 80) return 'text-green-400'
-  if (v >= 60) return 'text-yellow-400'
-  return 'text-red-400'
-}
-
-/**
- * The stat tiles used to carry a background and border wash per threshold. Card sets
- * background and borderColor as INLINE styles, so those classes are dead on it;
- * the kit tints the BORDER instead, through `tone`.
- *
- * Deriving the tone from the tile's own colour function rather than repeating
- * the thresholds means the border tint can never drift from the number it is
- * describing. The four old background ternaries used exactly these cutoffs, so
- * every tile keeps the band it had.
- */
-const TONE_BY_COLOR = {
-  'text-green-400': 'good',
-  'text-yellow-400': 'warn',
-  'text-red-400': 'crit',
-}
-const toneFor = cls => TONE_BY_COLOR[cls] || 'default'
-
-const DONUT_COLORS = [
-  '#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
-  '#14b8a6', '#f97316', '#ec4899', '#3b82f6', '#84cc16',
+const TABS = [
+  { key: 'overview', label: 'Overview', icon: BarChart2 },
+  { key: 'coverage', label: 'Fleet coverage', icon: Truck },
+  { key: 'inspectors', label: 'Inspectors', icon: Users },
+  { key: 'register', label: 'Inspections', icon: ClipboardCheck },
+  { key: 'quality', label: 'Data quality', icon: ShieldCheck },
+  { key: 'actions', label: 'Recommendations', icon: ListChecks },
 ]
 
-// ── ExpandableIssueList ────────────────────────────────────────────────────────
-function ExpandableIssueList({ items, labelFn }) {
-  const [open, setOpen] = useState(false)
-  const visible = open ? items : items.slice(0, 3)
-  return (
-    <div className="mt-2">
-      {visible.map((it, i) => (
-        <div key={i} className="text-xs text-[var(--panel-ink-3)] py-0.5 border-b border-white/5 last:border-0">
-          {labelFn(it)}
-        </div>
-      ))}
-      {items.length > 3 && (
-        <button
-          onClick={() => setOpen(o => !o)}
-          className="text-xs text-blue-400 hover:text-blue-300 mt-1 flex items-center gap-1"
-        >
-          {open ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-          {open ? 'Show less' : `Show ${items.length - 3} more`}
-        </button>
-      )}
-    </div>
-  )
+const COVERAGE_STATUS = [
+  { key: 'not_done', label: 'Not done' },
+  { key: 'done', label: 'Completed' },
+  { key: 'all', label: 'All' },
+]
+
+const SEVERITY_PILL = {
+  ok: ['Completed', 'bg-green-500/15 text-green-300 border-green-500/40'],
+  never: ['Never inspected', 'bg-red-500/15 text-red-300 border-red-500/40'],
+  critical: ['Over 30 days', 'bg-red-500/15 text-red-300 border-red-500/40'],
+  high: ['15 to 30 days', 'bg-orange-500/15 text-orange-400 border-orange-500/40'],
+  medium: [`${COVERAGE_STALE_DAYS + 1} to 14 days`, 'bg-amber-500/15 text-amber-300 border-amber-500/40'],
 }
 
-// ── QualityBar ─────────────────────────────────────────────────────────────────
-function QualityBar({ score }) {
-  const pctVal = Math.min(100, Math.max(0, score * 100))
-  const color = pctVal >= 90 ? 'bg-green-500' : pctVal >= 70 ? 'bg-yellow-500' : 'bg-red-500'
-  return (
-    <div className="flex items-center gap-2">
-      <div className="flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-        <div className={`h-full rounded-full ${color}`} style={{ width: `${pctVal}%` }} />
-      </div>
-      <span className={`text-xs font-semibold w-10 text-right ${pctVal >= 90 ? 'text-green-400' : pctVal >= 70 ? 'text-yellow-400' : 'text-red-400'}`}>
-        {pctVal.toFixed(0)}%
-      </span>
-    </div>
-  )
-}
-
-// ── RecommendationCard ─────────────────────────────────────────────────────────
-function RecommendationCard({ priority, message }) {
-  const styles = {
-    Critical: { bg: 'bg-red-900/20 border-red-700/40', dot: 'bg-red-500', label: 'text-red-400' },
-    High:     { bg: 'bg-orange-900/20 border-orange-700/40', dot: 'bg-orange-500', label: 'text-orange-400' },
-    Medium:   { bg: 'bg-yellow-900/20 border-yellow-700/40', dot: 'bg-yellow-500', label: 'text-yellow-400' },
+function chartOptions({ horizontal = false, yTitle = '', xTitle = '', legend = false, pctAxis = false, max } = {}) {
+  const axis = (title) => ({
+    grid: { color: 'var(--panel-2)' },
+    ticks: { color: 'var(--text-muted)', font: { size: 11 } },
+    title: title ? { display: true, text: title, color: 'var(--text-muted)', font: { size: 11 } } : { display: false },
+  })
+  const value = { ...axis(horizontal ? xTitle : yTitle), min: 0, ...(max != null ? { max } : {}) }
+  if (pctAxis) value.ticks = { ...value.ticks, callback: (v) => `${v}%` }
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    indexAxis: horizontal ? 'y' : 'x',
+    plugins: { legend: { display: legend, labels: { color: 'var(--text-secondary)', font: { size: 11 }, boxWidth: 12 } } },
+    scales: horizontal ? { x: value, y: axis(yTitle) } : { x: axis(xTitle), y: value },
   }
-  const s = styles[priority] || styles.Medium
+}
+
+function Section({ title, subtitle, icon: Icon, actions, children }) {
   return (
-    <div className={`rounded-lg border p-3 flex items-start gap-3 ${s.bg}`}>
-      <div className={`w-2 h-2 rounded-full mt-1 flex-shrink-0 ${s.dot}`} />
-      <div>
-        <span className={`text-xs font-semibold uppercase tracking-wide ${s.label}`}>{priority}</span>
-        <p className="text-sm text-[var(--panel-ink-2)] mt-0.5">{message}</p>
+    <Card>
+      <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
+            {Icon && <Icon size={15} className="text-[var(--text-muted)]" aria-hidden="true" />}{title}
+          </h2>
+          {subtitle && <p className="text-xs text-[var(--text-muted)] mt-0.5">{subtitle}</p>}
+        </div>
+        {actions}
       </div>
-    </div>
+      {children}
+    </Card>
   )
 }
 
-// ── Main Component ─────────────────────────────────────────────────────────────
+function ChartBox({ empty, label, height = 260, children }) {
+  if (empty) return <div className="flex items-center justify-center text-sm text-[var(--text-muted)] text-center px-4" style={{ height }}>{empty}</div>
+  return <div role="img" aria-label={label} style={{ height }}>{children}</div>
+}
+
+function PriorityList({ items, empty }) {
+  if (!items.length) return <p className="text-sm text-[var(--text-muted)] py-6 text-center">{empty}</p>
+  return (
+    <ul className="space-y-2">
+      {items.map((i, n) => (
+        <li key={n} className="flex items-start gap-3 rounded-lg border border-[var(--border-dim)] px-3 py-2">
+          <span className={`text-[11px] font-semibold uppercase tracking-wide shrink-0 mt-0.5 ${i.priority === 'Critical' ? 'text-red-400' : i.priority === 'High' ? 'text-orange-400' : 'text-amber-300'}`}>{i.priority}</span>
+          <span className="text-sm text-[var(--text-secondary)]">{i.message}</span>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 export default function InspectionIntelligence() {
-  const { activeCountry, setActiveCountry } = useSettings()
+  const { activeCountry, setActiveCountry, appSettings } = useSettings()
+  const company = appSettings?.company_name || ''
 
-  const [inspections, setInspections]   = useState([])
-  const [fleet, setFleet]               = useState([])
-  const [loading, setLoading]           = useState(true)
-  const [error, setError]               = useState(null)
+  const [inspections, setInspections] = useState([])
+  const [fleet, setFleet] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [truncated, setTruncated] = useState(false)
+  const reqId = useRef(0)
 
-  const [siteFilter, setSiteFilter]     = useState('')
-  const [datePreset, setDatePreset]     = useState(90)
+  const [tab, setTab] = useState('overview')
+  const [search, setSearch] = useState('')
+  const [site, setSite] = useState('')
+  const [inspector, setInspector] = useState('')
+  const [status, setStatus] = useState('')
+  const [days, setDays] = useState(90)
 
-  const [raisingAlert, setRaisingAlert] = useState(null)
-  const [alertRaised, setAlertRaised]   = useState({})
-  const [expandedDQ, setExpandedDQ]     = useState(null)
-  const [search, setSearch]             = useState('')
+  const [covSite, setCovSite] = useState('')
+  const [covStatus, setCovStatus] = useState('not_done')
+  const [covSearch, setCovSearch] = useState('')
 
-  // Coverage table has its own filters: it answers "has this vehicle been
-  // inspected", which is a different question from the page's date window.
-  const [covSite, setCovSite]           = useState('')
-  const [covStatus, setCovStatus]       = useState('not_done')
-  const [covSearch, setCovSearch]       = useState('')
-  const [covLimit, setCovLimit]         = useState(COVERAGE_PAGE)
+  const [raising, setRaising] = useState(null)
+  const [raised, setRaised] = useState({})
+  const [actionError, setActionError] = useState(null)
+  const [exportError, setExportError] = useState(null)
 
-  // ── data load ────────────────────────────────────────────────────────────────
-  useEffect(() => {
-    async function load() {
-      setLoading(true)
-      setError(null)
-      try {
-        const [{ data: inspData, error: e1 }, { data: fleetData, error: e2 }] = await Promise.all([
-          inspIntelApi.listInspectionIntelInspections({ country: activeCountry }),
-          inspIntelApi.listInspectionIntelFleet({ country: activeCountry }),
-        ])
-
-        if (e1) throw e1
-        if (e2) throw e2
-
-        setInspections(inspData || [])
-        setFleet(fleetData || [])
-      } catch (err) {
-        setError(toUserMessage(err, 'Failed to load inspection data'))
-      } finally {
-        setLoading(false)
-      }
+  const load = useCallback(async () => {
+    const my = ++reqId.current
+    setLoading(true)
+    setError(null)
+    try {
+      const [ins, fl] = await Promise.all([
+        inspIntelApi.listInspectionIntelInspections({ country: activeCountry }),
+        inspIntelApi.listInspectionIntelFleet({ country: activeCountry }),
+      ])
+      if (my !== reqId.current) return
+      if (ins.error) throw ins.error
+      if (fl.error) throw fl.error
+      setInspections(ins.data || [])
+      setFleet(fl.data || [])
+      setTruncated(Boolean(ins.truncated || fl.truncated))
+    } catch (e) {
+      if (my === reqId.current) setError(toUserMessage(e, 'Failed to load inspection data.'))
+    } finally {
+      if (my === reqId.current) setLoading(false)
     }
-    load()
   }, [activeCountry])
 
-  // ── date window ──────────────────────────────────────────────────────────────
-  const cutoffDate = useMemo(() => {
-    const d = new Date()
-    d.setDate(d.getDate() - datePreset)
-    return d.toISOString().split('T')[0]
-  }, [datePreset])
+  useEffect(() => { load() }, [load])
 
-  // ── filtered inspections ──────────────────────────────────────────────────────
-  const filtered = useMemo(() => {
-    return inspections.filter(r => {
-      if (siteFilter && r.site !== siteFilter) return false
-      const refDate = r.scheduled_date || r.created_at?.slice(0, 10)
-      if (refDate && refDate < cutoffDate) return false
-      if (search) {
-        const q = search.toLowerCase()
-        if (
-          !r.asset_no?.toLowerCase().includes(q) &&
-          !r.site?.toLowerCase().includes(q) &&
-          !r.inspector?.toLowerCase().includes(q) &&
-          !r.inspection_type?.toLowerCase().includes(q)
-        ) return false
-      }
-      return true
-    })
-  }, [inspections, siteFilter, cutoffDate, search])
+  // One clock reading per load, so every figure on screen shares the same 'now'.
+  const now = useMemo(() => Date.now(), [inspections]) // eslint-disable-line react-hooks/exhaustive-deps
+  const from = useMemo(() => windowFrom(days), [days])
+  const sites = useMemo(() => [...new Set(inspections.map((r) => r.site).filter(Boolean))].sort(), [inspections])
+  const inspectors = useMemo(() => [...new Set(inspections.map((r) => r.inspector).filter(Boolean))].sort(), [inspections])
+  const fleetSet = useMemo(() => new Set(fleet.map((v) => String(v.asset_no || '').trim().toUpperCase()).filter(Boolean)), [fleet])
 
-  // ── unique sites ──────────────────────────────────────────────────────────────
-  const allSites = useMemo(() => {
-    const s = new Set(inspections.map(r => r.site).filter(Boolean))
-    return [...s].sort()
-  }, [inspections])
-
-  // ── compliance metrics ────────────────────────────────────────────────────────
-  const complianceMetrics = useMemo(() => {
-    const scheduled = filtered.filter(r => r.status && r.status !== 'Cancelled')
-    const completedOnTime = scheduled.filter(r => {
-      if (r.status !== 'Done') return false
-      if (!r.completed_date || !r.scheduled_date) return r.status === 'Done'
-      return r.completed_date <= r.scheduled_date ||
-        daysSince(r.scheduled_date) - daysSince(r.completed_date) <= 1
-    })
-    const compliancePct = pct(completedOnTime.length, scheduled.length)
-
-    const pressureRecorded = filtered.filter(r => containsNumeric(r.findings))
-    const pressureCovPct = pct(pressureRecorded.length, filtered.length)
-
-    const missingFindings = filtered.filter(r => !r.findings || r.findings.trim() === '')
-    const noInspector     = filtered.filter(r => !r.inspector || r.inspector.trim() === '')
-    const suspiciousDate  = filtered.filter(r =>
-      r.completed_date && r.scheduled_date && r.completed_date < r.scheduled_date && r.status === 'Done'
-    )
-
-    const totalFields = filtered.length * 2
-    const missingFields = missingFindings.length + noInspector.length
-    const dqScore = totalFields > 0 ? (((totalFields - missingFields) / totalFields) * 100).toFixed(1) : '100.0'
-
-    return {
-      compliancePct,
-      pressureCovPct,
-      dqScore,
-      missingFindings,
-      noInspector,
-      suspiciousDate,
-      totalScheduled: scheduled.length,
-      completedOnTime: completedOnTime.length,
-    }
-  }, [filtered])
-
-  // ── compliance by site ────────────────────────────────────────────────────────
-  const complianceBySite = useMemo(() => {
-    const map = {}
-    filtered.forEach(r => {
-      const site = r.site || 'Unknown'
-      if (!map[site]) map[site] = { scheduled: 0, onTime: 0 }
-      if (r.status && r.status !== 'Cancelled') {
-        map[site].scheduled++
-        if (r.status === 'Done') {
-          const onTime = !r.completed_date || !r.scheduled_date ||
-            r.completed_date <= r.scheduled_date ||
-            daysSince(r.scheduled_date) - daysSince(r.completed_date) <= 1
-          if (onTime) map[site].onTime++
-        }
-      }
-    })
-    return Object.entries(map)
-      .map(([site, { scheduled, onTime }]) => ({
-        site,
-        scheduled,
-        onTime,
-        pct: scheduled > 0 ? (onTime / scheduled) * 100 : 0,
-      }))
-      .sort((a, b) => b.pct - a.pct)
-  }, [filtered])
-
-  // ── monthly compliance trend ──────────────────────────────────────────────────
-  const monthlyTrend = useMemo(() => {
-    const months = lastNMonths(MONTHS_BACK)
-    return months.map(mo => {
-      const monthRecs = inspections.filter(r => {
-        const ref = r.scheduled_date || r.created_at?.slice(0, 10) || ''
-        return ref.startsWith(mo) && r.status !== 'Cancelled'
-      })
-      const done = monthRecs.filter(r => r.status === 'Done')
-      return {
-        month: mo.slice(5) + '/' + mo.slice(2, 4),
-        pct: monthRecs.length > 0 ? (done.length / monthRecs.length) * 100 : null,
-      }
-    })
-  }, [inspections])
-
-  // ── inspection type distribution ──────────────────────────────────────────────
-  const typeDistribution = useMemo(() => {
-    const map = {}
-    filtered.forEach(r => {
-      const t = r.inspection_type || 'Unknown'
-      map[t] = (map[t] || 0) + 1
-    })
-    return Object.entries(map).sort((a, b) => b[1] - a[1])
-  }, [filtered])
-
-  // ── missing inspections ───────────────────────────────────────────────────────
-  const missingInspections = useMemo(() => {
-    // Latest inspection date per asset_no from ALL inspections (not just filtered window)
-    const latestByAsset = {}
-    inspections.forEach(r => {
-      if (!r.asset_no) return
-      const d = r.scheduled_date || r.created_at?.slice(0, 10) || ''
-      if (!latestByAsset[r.asset_no] || d > latestByAsset[r.asset_no].date) {
-        latestByAsset[r.asset_no] = { date: d, site: r.site }
-      }
-    })
-
-    const result = []
-    fleet.forEach(v => {
-      const last = latestByAsset[v.asset_no]
-      const days = last ? daysSince(last.date) : Infinity
-      const lastDate = last?.date || null
-      const site = v.site || last?.site || 'Unknown'
-      if (days > 7) {
-        result.push({
-          asset_no: v.asset_no,
-          site,
-          lastInspectionDate: lastDate,
-          daysSince: days === Infinity ? '-' : days,
-          daysNum: days === Infinity ? 9999 : days,
-          severity: days > 30 ? 'critical' : days > 14 ? 'high' : 'medium',
-        })
-      }
-    })
-
-    return result.sort((a, b) => b.daysNum - a.daysNum)
-  }, [fleet, inspections])
-
-  // ── tyre man activity + fleet coverage ───────────────────────────────────────
-  // Activity follows the page filters (it is "what did they do in this window").
-  // Coverage reads EVERY inspection - a vehicle last seen 200 days ago must show
-  // that date, not read as never inspected because the window is 90 days.
-  const activity      = useMemo(() => inspectorActivity(filtered), [filtered])
-  const activitySum   = useMemo(() => activityTotals(activity), [activity])
-  const coverageAll   = useMemo(() => coverageRows(fleet, inspections), [fleet, inspections])
-  const coverage      = useMemo(
-    () => filterCoverage(coverageAll, { site: covSite, status: covStatus, search: covSearch }),
-    [coverageAll, covSite, covStatus, covSearch],
+  const filtered = useMemo(
+    () => filterInspections(inspections, { site, inspector, status, from, search }),
+    [inspections, site, inspector, status, from, search],
   )
-  const coverageSum   = useMemo(() => coverageTotals(coverageAll), [coverageAll])
+  const kpis = useMemo(() => inspectionKpis(filtered), [filtered])
+  const sitesRows = useMemo(() => siteSummary(filtered), [filtered])
+  const trend = useMemo(() => monthlyTrend(inspections, { now }), [inspections, now])
+  const mix = useMemo(() => conditionMix(filtered), [filtered])
+  const dupes = useMemo(() => duplicateInspections(filtered), [filtered])
+  const dq = useMemo(() => dataQuality(filtered, fleetSet), [filtered, fleetSet])
+  const board = useMemo(() => inspectorBoard(filtered, { now }), [filtered, now])
 
-  // Reset paging whenever the filters change, or "Show more" would be pointing
-  // at rows the user can no longer see.
-  useEffect(() => { setCovLimit(COVERAGE_PAGE) }, [covSite, covStatus, covSearch])
+  // Coverage reads EVERY inspection: a vehicle last seen 200 days ago must show
+  // that date, not "never", because the page window is 90 days.
+  const coverageAll = useMemo(() => coverageRows(fleet, inspections), [fleet, inspections])
+  const coverageSum = useMemo(() => coverageTotals(coverageAll), [coverageAll])
+  const coverage = useMemo(() => filterCoverage(coverageAll, { site: covSite, status: covStatus, search: covSearch }), [coverageAll, covSite, covStatus, covSearch])
+  const coverageSites = useMemo(() => [...new Set(coverageAll.map((r) => r.site).filter(Boolean))].sort(), [coverageAll])
 
-  const coverageSites = useMemo(() => {
-    const s = new Set(coverageAll.map(r => r.site).filter(Boolean))
-    return [...s].sort()
-  }, [coverageAll])
+  const recs = useMemo(
+    () => inspectionRecommendations({ kpis, coverage: coverageSum, dq, duplicates: dupes, board }),
+    [kpis, coverageSum, dq, dupes, board],
+  )
 
-  // ── duplicate detections ──────────────────────────────────────────────────────
-  const duplicates = useMemo(() => {
-    const map = {}
-    filtered.forEach(r => {
-      const key = `${r.asset_no}|${r.scheduled_date}|${r.inspection_type}`
-      if (!map[key]) map[key] = { asset_no: r.asset_no, date: r.scheduled_date, type: r.inspection_type, count: 0, inspectors: new Set() }
-      map[key].count++
-      if (r.inspector) map[key].inspectors.add(r.inspector)
-    })
-    return Object.values(map)
-      .filter(d => d.count > 1)
-      .map(d => ({ ...d, inspectorNames: [...d.inspectors].join(', ') }))
-      .sort((a, b) => b.count - a.count)
-  }, [filtered])
-  const activityPager = usePagedRows(activity)
-  const duplicatePager = usePagedRows(duplicates)
+  const filtersActive = Boolean(search || site || inspector || status || days !== 90)
+  const clearAll = () => { setSearch(''); setSite(''); setInspector(''); setStatus(''); setDays(90) }
 
-  // ── inconsistent inspections ──────────────────────────────────────────────────
-  const inconsistentInspections = useMemo(() => {
-    const byAsset = {}
-    filtered.forEach(r => {
-      if (!r.asset_no) return
-      if (!byAsset[r.asset_no]) byAsset[r.asset_no] = []
-      byAsset[r.asset_no].push(r)
-    })
-
-    const result = []
-    Object.entries(byAsset).forEach(([asset, recs]) => {
-      if (recs.length < 2) return
-      const sorted = [...recs].sort((a, b) =>
-        (a.scheduled_date || '').localeCompare(b.scheduled_date || '')
-      )
-
-      // High overdue ratio
-      const overdue = recs.filter(r => r.status === 'Overdue').length
-      const overdueRatio = overdue / recs.length
-      if (overdueRatio > 0.5) {
-        result.push({
-          asset_no: asset,
-          site: recs[0].site || 'Unknown',
-          inconsistencyType: 'High Overdue Rate',
-          description: `${overdue}/${recs.length} inspections are overdue (${(overdueRatio * 100).toFixed(0)}%)`,
-          records: recs,
-        })
-        return
-      }
-
-      // Drastic findings change
-      for (let i = 1; i < sorted.length; i++) {
-        const prev = sorted[i - 1].findings || ''
-        const curr = sorted[i].findings || ''
-        if (Math.abs(prev.length - curr.length) > 300) {
-          result.push({
-            asset_no: asset,
-            site: sorted[i].site || 'Unknown',
-            inconsistencyType: 'Findings Discrepancy',
-            description: `Findings length changed by ${Math.abs(prev.length - curr.length)} chars between ${sorted[i - 1].scheduled_date} and ${sorted[i].scheduled_date}`,
-            records: [sorted[i - 1], sorted[i]],
-          })
-          break
-        }
-      }
-    })
-
-    return result.slice(0, 20)
-  }, [filtered])
-
-  // ── inspector quality scores ──────────────────────────────────────────────────
-  const inspectorScores = useMemo(() => {
-    const map = {}
-    filtered.forEach(r => {
-      const name = r.inspector?.trim() || '__unknown__'
-      if (!map[name]) map[name] = { total: 0, hasFindings: 0, hasCompleted: 0 }
-      map[name].total++
-      if (r.findings && r.findings.trim() !== '') map[name].hasFindings++
-      if (r.completed_date) map[name].hasCompleted++
-    })
-
-    return Object.entries(map)
-      .filter(([name]) => name !== '__unknown__')
-      .map(([inspector, m]) => {
-        const qualityScore = (m.hasFindings / m.total) * 0.5 + (m.hasCompleted / m.total) * 0.5
-        return {
-          inspector,
-          totalInspections: m.total,
-          qualityScore,
-          missingFindings: m.total - m.hasFindings,
-          incompleteCount: m.total - m.hasCompleted,
-        }
-      })
-      .sort((a, b) => b.qualityScore - a.qualityScore)
-  }, [filtered])
-
-  // ── recommendations ───────────────────────────────────────────────────────────
-  const recommendations = useMemo(() => {
-    const recs = []
-
-    complianceBySite
-      .filter(s => s.pct < 60 && s.scheduled > 0)
-      .forEach(s => recs.push({ priority: 'Critical', message: `Site "${s.site}" inspection compliance at ${s.pct.toFixed(0)}% - schedule immediate inspection round` }))
-
-    if (missingInspections.filter(v => v.severity === 'critical').length > 0) {
-      recs.push({ priority: 'Critical', message: `${missingInspections.filter(v => v.severity === 'critical').length} vehicles are overdue by >30 days - critical downtime risk` })
-    }
-
-    if (duplicates.length > 0) {
-      recs.push({ priority: 'High', message: `${duplicates.length} duplicate inspection entries detected - review data entry procedures immediately` })
-    }
-
-    if (missingInspections.length > 5) {
-      recs.push({ priority: 'High', message: `${missingInspections.length} vehicles missing recent inspections - high fleet availability risk` })
-    }
-
-    inspectorScores
-      .filter(i => i.qualityScore < 0.70)
-      .forEach(i => recs.push({ priority: 'Medium', message: `Inspector "${i.inspector}" quality score ${(i.qualityScore * 100).toFixed(0)}% - remediation training recommended` }))
-
-    if (parseFloat(complianceMetrics.pressureCovPct) < 50) {
-      recs.push({ priority: 'Medium', message: `Pressure data coverage at ${complianceMetrics.pressureCovPct}%, mandate pressure readings in all inspections` })
-    }
-
-    complianceBySite
-      .filter(s => s.pct >= 60 && s.pct < 85 && s.scheduled > 0)
-      .forEach(s => recs.push({ priority: 'Medium', message: `Site "${s.site}" compliance at ${s.pct.toFixed(0)}% - below 85% target, review scheduling` }))
-
-    // Sort Critical → High → Medium
-    const order = { Critical: 0, High: 1, Medium: 2 }
-    return recs.sort((a, b) => order[a.priority] - order[b.priority])
-  }, [complianceBySite, missingInspections, duplicates, inspectorScores, complianceMetrics])
-
-  // ── chart data ────────────────────────────────────────────────────────────────
-  const siteChartData = useMemo(() => ({
-    labels: complianceBySite.map(s => s.site),
-    datasets: [{
-      data: complianceBySite.map(s => parseFloat(s.pct.toFixed(1))),
-      backgroundColor: complianceBySite.map(s =>
-        s.pct >= 85 ? 'rgba(16,185,129,0.7)' : s.pct >= 60 ? 'rgba(245,158,11,0.7)' : 'rgba(239,68,68,0.7)'
-      ),
-      borderColor: complianceBySite.map(s =>
-        s.pct >= 85 ? '#10b981' : s.pct >= 60 ? '#f59e0b' : '#ef4444'
-      ),
-      borderWidth: 1,
-      borderRadius: 4,
-    }],
-  }), [complianceBySite])
-
-  const trendChartData = useMemo(() => ({
-    labels: monthlyTrend.map(m => m.month),
-    datasets: [
-      {
-        label: 'Compliance %',
-        data: monthlyTrend.map(m => m.pct),
-        borderColor: '#6366f1',
-        backgroundColor: 'rgba(99,102,241,0.15)',
-        tension: 0.3,
-        pointRadius: 3,
-        spanGaps: true,
-      },
-      {
-        label: 'Target (85%)',
-        data: monthlyTrend.map(() => 85),
-        borderColor: '#ef4444',
-        borderDash: [5, 5],
-        borderWidth: 1.5,
-        pointRadius: 0,
-        fill: false,
-      },
-    ],
-  }), [monthlyTrend])
-
-  const donutChartData = useMemo(() => ({
-    labels: typeDistribution.map(([t]) => t),
-    datasets: [{
-      data: typeDistribution.map(([, c]) => c),
-      backgroundColor: typeDistribution.map((_, i) => DONUT_COLORS[i % DONUT_COLORS.length]),
-      borderColor: 'var(--panel)',
-      borderWidth: 2,
-    }],
-  }), [typeDistribution])
-
-  // ── raise alert handler ───────────────────────────────────────────────────────
-  async function handleRaiseAlert(vehicle) {
-    if (alertRaised[vehicle.asset_no]) return
-    setRaisingAlert(vehicle.asset_no)
+  // ── write: raise an overdue-inspection corrective action (unchanged payload) ─
+  const raiseAlert = useCallback(async (v) => {
+    if (raised[v.asset_no]) return
+    setRaising(v.asset_no)
+    setActionError(null)
     try {
       await inspIntelApi.insertCorrectiveAction({
-        title: `Inspection overdue: ${vehicle.asset_no}`,
-        asset_no: vehicle.asset_no,
-        site: vehicle.site,
+        title: `Inspection overdue: ${v.asset_no}`,
+        asset_no: v.asset_no,
+        site: v.site,
         country: activeCountry !== 'All' ? activeCountry : undefined,
-        description: `Inspection overdue: Vehicle ${vehicle.asset_no} at site "${vehicle.site}" has not been inspected in ${vehicle.daysSince} days.`,
-        priority: vehicle.severity === 'critical' ? 'Critical' : 'High',
+        description: v.daysSince == null
+          ? `Inspection overdue: Vehicle ${v.asset_no} at site "${v.site}" has never been inspected.`
+          : `Inspection overdue: Vehicle ${v.asset_no} at site "${v.site}" has not been inspected in ${v.daysSince} days.`,
+        priority: v.severity === 'critical' || v.severity === 'never' ? 'Critical' : 'High',
         status: 'Open',
         due_date: new Date(Date.now() + 2 * 86400000).toISOString().split('T')[0],
       })
-      setAlertRaised(prev => ({ ...prev, [vehicle.asset_no]: true }))
-    } catch (_) {
-      // silent
+      setRaised((p) => ({ ...p, [v.asset_no]: true }))
+    } catch (e) {
+      setActionError(toUserMessage(e, `Could not raise a corrective action for ${v.asset_no}.`))
     } finally {
-      setRaisingAlert(null)
+      setRaising(null)
+    }
+  }, [raised, activeCountry])
+
+  // ── charts ────────────────────────────────────────────────────────────────
+  const siteChartRows = useMemo(() => sitesRows.slice(0, 15), [sitesRows])
+  const siteData = useMemo(() => ({
+    labels: siteChartRows.map((s) => s.site),
+    datasets: [
+      { label: 'Approved', data: siteChartRows.map((s) => s.approved), backgroundColor: withAlpha(colorAt(1), 0.8), borderRadius: 3 },
+      { label: 'Awaiting sign-off', data: siteChartRows.map((s) => s.inspections - s.approved), backgroundColor: withAlpha(colorAt(2), 0.8), borderRadius: 3 },
+    ],
+  }), [siteChartRows])
+  const siteOpts = useMemo(() => {
+    const o = chartOptions({ horizontal: true, xTitle: 'Inspections', legend: true })
+    o.scales.x.stacked = true
+    o.scales.y.stacked = true
+    return o
+  }, [])
+
+  const trendData = useMemo(() => ({
+    labels: trend.map((m) => m.label),
+    datasets: [
+      { type: 'bar', label: 'Inspections', data: trend.map((m) => m.inspections), backgroundColor: withAlpha(colorAt(0), 0.6), borderRadius: 3, yAxisID: 'y' },
+      { type: 'line', label: 'Approved %', data: trend.map((m) => (m.approvalPct == null ? null : Number(m.approvalPct.toFixed(1)))), borderColor: colorAt(1), backgroundColor: withAlpha(colorAt(1), 0.15), tension: 0.3, spanGaps: true, pointRadius: 3, yAxisID: 'y1' },
+    ],
+  }), [trend])
+  const trendOpts = useMemo(() => {
+    const o = chartOptions({ yTitle: 'Inspections', legend: true })
+    o.scales.y1 = { position: 'right', min: 0, max: 100, grid: { drawOnChartArea: false }, ticks: { color: 'var(--text-muted)', callback: (v) => `${v}%` } }
+    return o
+  }, [])
+
+  const mixTotal = mix.good + mix.warning + mix.critical + mix.none
+  const mixData = useMemo(() => ({
+    labels: ['Good', 'Wear', 'Fault', 'Not recorded'],
+    datasets: [{ data: [mix.good, mix.warning, mix.critical, mix.none], backgroundColor: ['#22c55e', '#f59e0b', '#ef4444', 'rgba(148,163,184,0.5)'], borderColor: 'var(--panel)', borderWidth: 2 }],
+  }), [mix])
+
+  // ── tables ────────────────────────────────────────────────────────────────
+  const coverageColumns = useMemo(() => [
+    { id: 'asset', header: 'Asset', accessorFn: (r) => r.asset_no, size: 110 },
+    { id: 'site', header: 'Site', accessorFn: (r) => r.site, size: 130, meta: { filterVariant: 'select' } },
+    { id: 'last', header: 'Last inspection', accessorFn: (r) => r.lastInspectionDate || '', size: 130, cell: ({ row }) => row.original.lastInspectionDate || 'Never' },
+    { id: 'by', header: 'By', accessorFn: (r) => r.inspector || 'N/A', size: 160 },
+    { id: 'days', header: 'Days since', accessorFn: (r) => (r.daysSince == null ? 99999 : r.daysSince), size: 100, meta: { align: 'right', exportValue: (r) => r.daysSince ?? 'Never' }, cell: ({ row }) => (row.original.daysSince == null ? 'Never' : `${row.original.daysSince}d`) },
+    {
+      id: 'status', header: 'Status', accessorFn: (r) => (SEVERITY_PILL[r.severity] || SEVERITY_PILL.medium)[0], size: 140,
+      cell: ({ row }) => {
+        const [label, cls] = SEVERITY_PILL[row.original.severity] || SEVERITY_PILL.medium
+        return <span className={`text-xs px-2 py-0.5 rounded-full border font-medium whitespace-nowrap ${cls}`}>{label}</span>
+      },
+    },
+    {
+      id: 'action', header: 'Action', enableSorting: false, size: 170, meta: { export: false, align: 'right' },
+      cell: ({ row }) => {
+        const v = row.original
+        if (v.done) return <span className="text-xs text-[var(--text-muted)]">None needed</span>
+        if (raised[v.asset_no]) return <span className="text-xs text-green-300 inline-flex items-center gap-1"><CheckCircle size={12} aria-hidden="true" /> Action raised</span>
+        return (
+          <button type="button" onClick={() => raiseAlert(v)} disabled={raising === v.asset_no}
+            className="btn-primary text-xs min-h-[36px] px-3 disabled:opacity-50">
+            {raising === v.asset_no ? 'Raising...' : 'Raise action'}
+          </button>
+        )
+      },
+    },
+  ], [raised, raising, raiseAlert])
+
+  const boardColumns = useMemo(() => [
+    { id: 'inspector', header: 'Inspector', accessorFn: (r) => r.inspector, size: 180 },
+    { id: 'total', header: 'Inspections', accessorFn: (r) => r.total, size: 100, meta: { align: 'right' } },
+    { id: 'vehicles', header: 'Vehicles', accessorFn: (r) => r.vehicles, size: 90, meta: { align: 'right' } },
+    { id: 'approved', header: 'Approved', accessorFn: (r) => r.completionPct ?? -1, size: 100, meta: { align: 'right' }, cell: ({ row }) => fmtPct(row.original.completionPct, 0) },
+    { id: 'pressure', header: 'Pressures judgeable', accessorFn: (r) => r.pressureMeasurablePct ?? -1, size: 140, meta: { align: 'right' }, cell: ({ row }) => fmtPct(row.original.pressureMeasurablePct, 0) },
+    { id: 'uniform', header: 'All wheels same PSI', accessorFn: (r) => r.uniformPct ?? -1, size: 140, meta: { align: 'right' }, cell: ({ row }) => fmtPct(row.original.uniformPct, 0) },
+    { id: 'faults', header: 'Faults reported', accessorFn: (r) => r.faultsReported, size: 120, meta: { align: 'right' } },
+    { id: 'last', header: 'Last active', accessorFn: (r) => r.lastActive || '', size: 120, cell: ({ row }) => row.original.lastActive || 'N/A' },
+    { id: 'sites', header: 'Sites', accessorFn: (r) => r.sites.join(', ') || 'N/A', size: 220 },
+  ], [])
+
+  const siteColumns = useMemo(() => [
+    { id: 'site', header: 'Site', accessorFn: (r) => r.site, size: 150 },
+    { id: 'inspections', header: 'Inspections', accessorFn: (r) => r.inspections, size: 100, meta: { align: 'right' } },
+    { id: 'vehicles', header: 'Vehicles', accessorFn: (r) => r.vehicles, size: 90, meta: { align: 'right' } },
+    { id: 'approved', header: 'Approved', accessorFn: (r) => r.approvalPct ?? -1, size: 100, meta: { align: 'right' }, cell: ({ row }) => fmtPct(row.original.approvalPct, 0) },
+    { id: 'faults', header: 'Faults found', accessorFn: (r) => r.faults, size: 110, meta: { align: 'right' } },
+    { id: 'pressure', header: 'Pressures judgeable', accessorFn: (r) => r.pressureMeasurablePct ?? -1, size: 140, meta: { align: 'right' }, cell: ({ row }) => fmtPct(row.original.pressureMeasurablePct, 0) },
+  ], [])
+
+  const registerRows = useMemo(() => inspectionExportRows(filtered), [filtered])
+  const registerColumns = useMemo(() => INSPECTION_EXPORT_COLS.map((key, i) => ({
+    id: key, header: INSPECTION_EXPORT_HEADERS[i], accessorFn: (r) => r[key], size: key === 'inspector' ? 170 : 110,
+    meta: ['positions', 'faults', 'pressures'].includes(key) ? { align: 'right' } : (key === 'statusLabel' || key === 'site') ? { filterVariant: 'select' } : undefined,
+  })), [])
+
+  const dupColumns = useMemo(() => [
+    { id: 'date', header: 'Date', accessorFn: (r) => r.date, size: 110 },
+    { id: 'asset', header: 'Asset', accessorFn: (r) => r.asset_no, size: 110 },
+    { id: 'site', header: 'Site', accessorFn: (r) => r.site || 'N/A', size: 120 },
+    { id: 'count', header: 'Inspections that day', accessorFn: (r) => r.count, size: 150, meta: { align: 'right' } },
+    { id: 'by', header: 'Inspectors', accessorFn: (r) => r.inspectors || 'N/A', size: 220 },
+  ], [])
+
+  const dqColumns = useMemo(() => [
+    { id: 'label', header: 'Check', accessorFn: (r) => r.label, size: 220 },
+    { id: 'pass', header: 'Pass rate', accessorFn: (r) => r.passPct ?? -1, size: 110, meta: { align: 'right' }, cell: ({ row }) => fmtPct(row.original.passPct, 0) },
+    { id: 'failing', header: 'Inspections failing', accessorFn: (r) => r.failing, size: 150, meta: { align: 'right' } },
+    { id: 'examples', header: 'Examples', accessorFn: (r) => r.rows.slice(0, 5).map((x) => x.asset_no || 'N/A').join(', ') || 'None', size: 260, meta: { export: false } },
+  ], [])
+
+  // ── exports ───────────────────────────────────────────────────────────────
+  const scopeLabel = [activeCountry !== 'All' ? activeCountry : 'All countries', DATE_PRESETS.find((p) => p.key === days)?.label, site, inspector].filter(Boolean).join(' | ')
+
+  async function exportExcel() {
+    setExportError(null)
+    try {
+      const { exportSheetsToExcel, reportFileName, reportDateLabel } = await loadExportUtils()
+      await exportSheetsToExcel([
+        { name: 'Inspections', rows: registerRows, columns: INSPECTION_EXPORT_COLS, headers: INSPECTION_EXPORT_HEADERS },
+        { name: 'Coverage', rows: coverageAll.map((v) => ({ ...v, lastInspectionDate: v.lastInspectionDate || 'Never', daysSince: v.daysSince ?? 'Never', status: (SEVERITY_PILL[v.severity] || SEVERITY_PILL.medium)[0] })), columns: ['asset_no', 'site', 'lastInspectionDate', 'inspector', 'daysSince', 'status'], headers: ['Asset', 'Site', 'Last inspection', 'By', 'Days since', 'Status'] },
+        { name: 'Inspectors', rows: board.map((a) => ({ ...a, sites: a.sites.join(', '), completionPct: fmtPct(a.completionPct, 0), pressureMeasurablePct: fmtPct(a.pressureMeasurablePct, 0) })), columns: ['inspector', 'total', 'vehicles', 'completionPct', 'pressureMeasurablePct', 'faultsReported', 'lastActive', 'sites'], headers: ['Inspector', 'Inspections', 'Vehicles', 'Approved', 'Pressures judgeable', 'Faults reported', 'Last active', 'Sites'] },
+        { name: 'Recommendations', rows: recs, columns: ['priority', 'message'], headers: ['Priority', 'Recommendation'] },
+      ], reportFileName('Inspection Intelligence', reportDateLabel()), { title: 'Inspection Intelligence', company, notes: [scopeLabel] })
+    } catch (e) {
+      setExportError(toUserMessage(e, 'The Excel file could not be created.'))
     }
   }
 
-  // ── export ────────────────────────────────────────────────────────────────────
-  function handleExcelExport() {
-    exportToExcel(
-      filtered,
-      ['asset_no', 'site', 'inspection_type', 'scheduled_date', 'status', 'inspector', 'findings'],
-      ['Asset No', 'Site', 'Type', 'Scheduled', 'Status', 'Inspector', 'Findings'],
-      'inspection_intelligence',
-      'Inspections',
-    )
-  }
-
-  function handlePdfExport(opts = {}) {
-    return exportToPdf(
-      filtered,
-      ['asset_no', 'site', 'inspection_type', 'scheduled_date', 'status', 'inspector'],
-      ['Asset No', 'Site', 'Type', 'Scheduled', 'Status', 'Inspector'],
-      'Inspection Intelligence Report',
-      'inspection_intelligence',
-      '',
-      opts,
-    )
-  }
-
-  // ── severity badge ────────────────────────────────────────────────────────────
-  function SeverityBadge({ sev }) {
-    const styles = {
-      critical: 'bg-red-900/30 text-red-400 border-red-700/50',
-      high: 'bg-orange-900/30 text-orange-400 border-orange-700/50',
-      medium: 'bg-yellow-900/30 text-yellow-400 border-yellow-700/50',
+  async function exportPdf(opts = {}) {
+    setExportError(null)
+    try {
+      const { exportToPdf, reportFileName, reportDateLabel } = await loadExportUtils()
+      return await exportToPdf(
+        registerRows,
+        INSPECTION_EXPORT_COLS.map((key, i) => ({ key, header: INSPECTION_EXPORT_HEADERS[i] })),
+        'Inspection Intelligence',
+        reportFileName('Inspection Intelligence', reportDateLabel()),
+        'landscape',
+        company,
+        { subtitleNote: `${scopeLabel} | ${fmtPct(kpis.approvalPct, 0)} approved | fleet coverage ${fmtPct(coverageSum.coveragePct, 0)}`, ...opts },
+      )
+    } catch (e) {
+      setExportError(toUserMessage(e, 'The PDF could not be created.'))
+      return null
     }
-    return (
-      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border capitalize ${styles[sev] || styles.medium}`}>
-        {sev}
-      </span>
-    )
   }
 
-  // ── render ────────────────────────────────────────────────────────────────────
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-80">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-[var(--panel-ink-3)] text-sm">Loading inspection data...</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center h-80">
-        {/* `p-8` would be dead on a Card, which sets padding inline - the extra
-            room for an error state has to come through `style`. */}
-        <Card className="text-center max-w-sm" style={{ padding: 'var(--space-8)' }}>
-          <XCircle className="mx-auto mb-3 text-red-400" size={32} />
-          <p className="text-red-400 font-semibold">Failed to load data</p>
-          <p className="text-[var(--panel-ink-4)] text-sm mt-1">{error}</p>
-        </Card>
-      </div>
-    )
-  }
-
-  if (inspections.length === 0 && fleet.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-80">
-        {/* Same trap as the error state: `p-10` cannot beat Card's inline padding. */}
-        <Card className="text-center max-w-md" style={{ padding: 'var(--space-10)' }}>
-          <ClipboardCheck className="mx-auto mb-4 text-gray-600" size={40} />
-          <p className="text-[var(--panel-ink-2)] font-semibold text-lg">No inspection records found</p>
-          <p className="text-[var(--panel-ink-4)] text-sm mt-2">
-            Schedule inspections to enable intelligence monitoring.
-          </p>
-        </Card>
-      </div>
-    )
-  }
+  const hasData = inspections.length > 0 || fleet.length > 0
 
   return (
-    <div className="space-y-6 pb-10">
-
-      {/* ── Header ── */}
+    <div className="space-y-5 pb-10">
       <PageHeader
         title="Inspection Intelligence"
-        subtitle="Compliance monitoring, quality scoring, and anomaly detection across all inspections"
+        subtitle="Inspection coverage, sign-off, recording quality and faults found across the fleet"
         icon={ClipboardCheck}
-        actions={<>
-          <button onClick={handleExcelExport} className="btn-secondary flex items-center gap-1.5 text-sm">
-            <Download size={14} /> Excel
-          </button>
-          <button onClick={() => handlePdfExport()} className="btn-secondary flex items-center gap-1.5 text-sm">
-            <FileText size={14} /> PDF
-          </button>
-          <EmailPdfButton
-            className="btn-secondary flex items-center gap-1.5 text-sm"
-            getPdf={async () => ({
-              base64: await handlePdfExport({ returnBase64: true }),
-              filename: 'Inspection Intelligence Report.pdf',
-              subject: 'Inspection Intelligence',
-              bodyHtml: '<p>Attached is the Inspection Intelligence report.</p>',
-            })}
-          />
-        </>}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={load} disabled={loading} className="btn-secondary text-xs min-h-[40px] px-3 inline-flex items-center gap-1.5 disabled:opacity-50">
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} aria-hidden="true" /> Refresh
+            </button>
+            <button type="button" onClick={exportExcel} disabled={!hasData} className="btn-secondary text-xs min-h-[40px] px-3 inline-flex items-center gap-1.5 disabled:opacity-50">
+              <Download size={14} aria-hidden="true" /> Excel
+            </button>
+            <button type="button" onClick={() => exportPdf()} disabled={!hasData} className="btn-secondary text-xs min-h-[40px] px-3 inline-flex items-center gap-1.5 disabled:opacity-50">
+              <FileText size={14} aria-hidden="true" /> PDF
+            </button>
+            <EmailPdfButton
+              className="btn-secondary text-xs min-h-[40px] px-3 inline-flex items-center gap-1.5"
+              disabled={!hasData}
+              getPdf={async () => ({
+                base64: await exportPdf({ returnBase64: true }),
+                filename: 'Inspection Intelligence Report.pdf',
+                subject: 'Inspection Intelligence',
+                bodyHtml: '<p>Attached is the Inspection Intelligence report.</p>',
+              })}
+            />
+          </div>
+        }
       />
 
-      {/* ── Filters ── */}
-      {/* `p-4` is dead on a Card; `pad="tight"` is that step, density-aware. */}
-      <Card pad="tight">
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Country chips */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {['All', ...COUNTRIES].map(c => (
-              <button
-                key={c}
-                onClick={() => setActiveCountry(c)}
-                className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${
-                  activeCountry === c
-                    ? 'bg-indigo-600 border-indigo-500 text-white'
-                    : 'border-gray-700 text-[var(--panel-ink-3)] hover:border-indigo-500 hover:text-gray-200'
-                }`}
-              >
-                {c}
-              </button>
-            ))}
-          </div>
-
-          <div className="h-4 w-px bg-gray-700 hidden sm:block" />
-
-          {/* Site select */}
-          <select
-            className="input text-sm py-1.5 min-w-36"
-            value={siteFilter}
-            onChange={e => setSiteFilter(e.target.value)}
-          >
-            <option value="">All Sites</option>
-            {allSites.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-
-          {/* Date presets */}
-          <div className="flex gap-1">
-            {DATE_PRESETS.map(({ label, days }) => (
-              <button
-                key={label}
-                onClick={() => setDatePreset(days)}
-                className={`px-3 py-1 rounded text-xs font-semibold border transition-colors ${
-                  datePreset === days
-                    ? 'bg-indigo-600 border-indigo-500 text-white'
-                    : 'border-gray-700 text-[var(--panel-ink-3)] hover:border-indigo-500'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          {/* Search */}
-          <div className="flex items-center gap-2 flex-1 min-w-48 max-w-xs">
-            <Search size={14} className="text-[var(--panel-ink-4)] flex-shrink-0" />
-            <input
-              className="input text-sm py-1.5 flex-1"
-              placeholder="Search asset, site, inspector..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
-          </div>
-
-          <span className="text-xs text-[var(--panel-ink-4)] ml-auto">
-            {filtered.length} inspection{filtered.length !== 1 ? 's' : ''} in view
-          </span>
-        </div>
-      </Card>
-
-      {/* ── Section 1: Compliance Overview stat cards ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        {/* Inspection Compliance */}
-        <Card tone={toneFor(complianceColor(complianceMetrics.compliancePct))}>
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs text-[var(--panel-ink-3)] uppercase tracking-wider font-medium">Inspection Compliance</span>
-            <CheckCircle size={16} className={complianceColor(complianceMetrics.compliancePct)} />
-          </div>
-          <p className={`text-3xl font-bold ${complianceColor(complianceMetrics.compliancePct)}`}>
-            {complianceMetrics.compliancePct}%
-          </p>
-          <p className="text-xs text-[var(--panel-ink-4)] mt-1">
-            {complianceMetrics.completedOnTime} of {complianceMetrics.totalScheduled} on-time
-          </p>
-          <div className="mt-2 h-1 bg-gray-700 rounded-full overflow-hidden">
-            <div
-              className={`h-full rounded-full ${parseFloat(complianceMetrics.compliancePct) >= 85 ? 'bg-green-500' : parseFloat(complianceMetrics.compliancePct) >= 60 ? 'bg-yellow-500' : 'bg-red-500'}`}
-              style={{ width: `${Math.min(100, parseFloat(complianceMetrics.compliancePct))}%` }}
-            />
-          </div>
-        </Card>
-
-        {/* Pressure Data Coverage */}
-        <Card tone={toneFor(coverageColor(complianceMetrics.pressureCovPct))}>
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs text-[var(--panel-ink-3)] uppercase tracking-wider font-medium">Pressure Coverage</span>
-            <BarChart2 size={16} className={coverageColor(complianceMetrics.pressureCovPct)} />
-          </div>
-          <p className={`text-3xl font-bold ${coverageColor(complianceMetrics.pressureCovPct)}`}>
-            {complianceMetrics.pressureCovPct}%
-          </p>
-          <p className="text-xs text-[var(--panel-ink-4)] mt-1">Inspections with pressure readings</p>
-          <div className="mt-2 h-1 bg-gray-700 rounded-full overflow-hidden">
-            <div
-              className={`h-full rounded-full ${parseFloat(complianceMetrics.pressureCovPct) >= 75 ? 'bg-green-500' : parseFloat(complianceMetrics.pressureCovPct) >= 50 ? 'bg-yellow-500' : 'bg-red-500'}`}
-              style={{ width: `${Math.min(100, parseFloat(complianceMetrics.pressureCovPct))}%` }}
-            />
-          </div>
-        </Card>
-
-        {/* Missing Inspections */}
-        <Card tone={toneFor(missingColor(missingInspections.length))}>
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs text-[var(--panel-ink-3)] uppercase tracking-wider font-medium">Missing Inspections</span>
-            <AlertTriangle size={16} className={missingColor(missingInspections.length)} />
-          </div>
-          <p className={`text-3xl font-bold ${missingColor(missingInspections.length)}`}>
-            {missingInspections.length}
-          </p>
-          <p className="text-xs text-[var(--panel-ink-4)] mt-1">Vehicles with no recent inspection</p>
-          <p className="text-xs mt-2">
-            <span className="text-red-400">{missingInspections.filter(v => v.severity === 'critical').length} critical</span>
-            {' · '}
-            <span className="text-orange-400">{missingInspections.filter(v => v.severity === 'high').length} high</span>
-          </p>
-        </Card>
-
-        {/* Data Quality Score */}
-        <Card tone={toneFor(dqColor(complianceMetrics.dqScore))}>
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs text-[var(--panel-ink-3)] uppercase tracking-wider font-medium">Data Quality Score</span>
-            <ShieldCheck size={16} className={dqColor(complianceMetrics.dqScore)} />
-          </div>
-          <p className={`text-3xl font-bold ${dqColor(complianceMetrics.dqScore)}`}>
-            {complianceMetrics.dqScore}%
-          </p>
-          <p className="text-xs text-[var(--panel-ink-4)] mt-1">Based on findings + date completeness</p>
-          <div className="mt-2 h-1 bg-gray-700 rounded-full overflow-hidden">
-            <div
-              className={`h-full rounded-full ${parseFloat(complianceMetrics.dqScore) >= 80 ? 'bg-green-500' : parseFloat(complianceMetrics.dqScore) >= 60 ? 'bg-yellow-500' : 'bg-red-500'}`}
-              style={{ width: `${Math.min(100, parseFloat(complianceMetrics.dqScore))}%` }}
-            />
-          </div>
-        </Card>
-      </div>
-
-      {/* ── Section 1b: Tyre man activity ── */}
-      {/* A full-bleed panel: `pad="none"` keeps the table edge to edge under its
-          own header rule, and `clip` crops those edges to the card radius. The
-          only out-of-flow DOM in here is none - native selects paint outside the
-          page's overflow context, so clipping is safe. */}
-      <Card pad="none" clip>
-        <div className="px-5 py-4 border-b border-white/5 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <Users size={16} className="text-blue-400" />
-            <p className="font-semibold text-gray-200">Tyre man activity</p>
-            <span className="text-xs text-[var(--panel-ink-4)]">
-              {datePreset}d window{siteFilter ? ` - ${siteFilter}` : ''}
-            </span>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span className="px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-[var(--panel-ink-2)]">
-              {activitySum.inspectors} inspecting
-            </span>
-            <span className="px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-[var(--panel-ink-2)]">
-              {activitySum.inspections} inspections
-            </span>
-            <span className="px-2.5 py-1 rounded-full bg-green-900/25 border border-green-700/40 text-green-400">
-              {activitySum.completed} completed
-            </span>
-            {activitySum.open > 0 && (
-              <span className="px-2.5 py-1 rounded-full bg-yellow-900/25 border border-yellow-700/40 text-yellow-400">
-                {activitySum.open} still open
-              </span>
-            )}
-            <span className="px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-[var(--panel-ink-3)]">
-              {activitySum.activeThisWeek} active this week
-            </span>
-          </div>
-        </div>
-
-        {activity.length === 0 ? (
-          <div className="py-10 text-center text-sm text-[var(--panel-ink-3)]">
-            No inspection in this window carries an inspector name, so there is nothing to attribute.
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr>
-                  <th className="table-header">Tyre man</th>
-                  <th className="table-header text-right">Inspections</th>
-                  <th className="table-header text-right">Completed</th>
-                  <th className="table-header text-right">Open</th>
-                  <th className="table-header text-right">Vehicles</th>
-                  <th className="table-header text-right">No findings</th>
-                  <th className="table-header">Sites</th>
-                  <th className="table-header">Last active</th>
-                  <th className="table-header w-40">Completion</th>
-                </tr>
-              </thead>
-              <tbody>
-                {activityPager.pageRows.map(a => (
-                  <tr key={a.inspector} className="border-t border-white/5">
-                    <td className="table-cell font-medium text-gray-200">{a.inspector}</td>
-                    <td className="table-cell text-right font-semibold">{a.total}</td>
-                    <td className="table-cell text-right text-green-400">{a.completed}</td>
-                    <td className="table-cell text-right text-[var(--panel-ink-2)]">{a.open || '-'}</td>
-                    <td className="table-cell text-right text-[var(--panel-ink-2)]">{a.vehicles}</td>
-                    <td className={`table-cell text-right ${a.total - a.withFindings > 0 ? 'text-red-400 font-semibold' : 'text-[var(--panel-ink-4)]'}`}>
-                      {a.total - a.withFindings}
-                    </td>
-                    <td className="table-cell text-[var(--panel-ink-3)] text-xs">
-                      {a.sites.length ? a.sites.join(', ') : '-'}
-                    </td>
-                    <td className="table-cell text-[var(--panel-ink-3)] text-xs">
-                      {a.lastActive
-                        ? `${a.lastActive}${a.daysSinceActive != null ? ` (${a.daysSinceActive}d)` : ''}`
-                        : 'Not recorded'}
-                    </td>
-                    <td className="table-cell">
-                      {a.completionPct == null
-                        ? <span className="text-xs text-[var(--panel-ink-4)]">N/A</span>
-                        : <QualityBar score={a.completionPct / 100} />}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-        <TablePagination {...activityPager} />
-      </Card>
-
-      {/* ── Section 2: Charts ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Compliance by Site */}
-        <Card pad="tight">
-          <p className="text-sm font-semibold text-[var(--panel-ink-2)] mb-3">Compliance % by Site</p>
-          {complianceBySite.length === 0 ? (
-            <div className="flex items-center justify-center h-[260px] text-gray-600 text-sm">No site data</div>
-          ) : (
-            <div style={{ height: 260 }}>
-              <Bar data={siteChartData} options={CHART_OPTS_BAR} />
-            </div>
-          )}
-        </Card>
-
-        {/* Monthly Trend */}
-        <Card pad="tight">
-          <p className="text-sm font-semibold text-[var(--panel-ink-2)] mb-3">Monthly Compliance Trend</p>
-          <div style={{ height: 260 }}>
-            <Line data={trendChartData} options={CHART_OPTS_LINE} />
-          </div>
-        </Card>
-
-        {/* Inspection Type Distribution */}
-        <Card pad="tight">
-          <p className="text-sm font-semibold text-[var(--panel-ink-2)] mb-3">Inspection Type Distribution</p>
-          {typeDistribution.length === 0 ? (
-            <div className="flex items-center justify-center h-[240px] text-gray-600 text-sm">No data</div>
-          ) : (
-            <div style={{ height: 240 }}>
-              <Doughnut data={donutChartData} options={DONUT_OPTS} />
-            </div>
-          )}
-        </Card>
-      </div>
-
-      {/* ── Section 3: Duplicate Detection ── */}
-      <Card pad="none" clip>
-        <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <AlertCircle size={16} className="text-yellow-400" />
-            <p className="font-semibold text-gray-200">Duplicate Inspection Entries</p>
-          </div>
-          <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${duplicates.length === 0 ? 'bg-green-900/30 text-green-400 border-green-700/50' : 'bg-yellow-900/30 text-yellow-400 border-yellow-700/50'}`}>
-            {duplicates.length} found
-          </span>
-        </div>
-
-        {duplicates.length === 0 ? (
-          <div className="flex items-center justify-center gap-2 py-10 text-green-400">
-            <CheckCircle size={18} />
-            <span className="text-sm font-medium">No duplicate entries detected</span>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr>
-                  <th className="table-header">Asset No</th>
-                  <th className="table-header">Date</th>
-                  <th className="table-header">Type</th>
-                  <th className="table-header text-center">Count</th>
-                  <th className="table-header">Inspectors</th>
-                  <th className="table-header text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {duplicatePager.pageRows.map((d, i) => (
-                  <tr key={i} className="border-t border-white/5 bg-yellow-900/5">
-                    <td className="table-cell font-mono text-xs">{d.asset_no || '-'}</td>
-                    <td className="table-cell text-[var(--panel-ink-3)]">{d.date || '-'}</td>
-                    <td className="table-cell text-[var(--panel-ink-2)]">{d.type || '-'}</td>
-                    <td className="table-cell text-center">
-                      <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-900/40 text-yellow-400 border border-yellow-700/50">
-                        ×{d.count}
-                      </span>
-                    </td>
-                    <td className="table-cell text-[var(--panel-ink-3)] text-xs">{d.inspectorNames || '-'}</td>
-                    <td className="table-cell text-right">
-                      <a
-                        href="/inspections"
-                        className="text-xs text-blue-400 hover:text-blue-300 flex items-center justify-end gap-1"
-                      >
-                        <Eye size={12} /> Review
-                      </a>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-        <TablePagination {...duplicatePager} />
-      </Card>
-
-      {/* ── Section 4: Data Quality Issues ── */}
-      {/* `p-5` is exactly --pad-card (20px), so the default pad reproduces it. */}
-      <Card>
-        <div className="flex items-center gap-2 mb-4">
-          <ShieldCheck size={16} className="text-indigo-400" />
-          <p className="font-semibold text-gray-200">Data Quality Issues</p>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {/* No Findings */}
-          <div className="bg-gray-800/50 rounded-lg p-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-[var(--panel-ink-3)] font-medium uppercase tracking-wide">No Findings Text</span>
-              <span className={`text-lg font-bold ${complianceMetrics.missingFindings.length > 0 ? 'text-red-400' : 'text-green-400'}`}>
-                {complianceMetrics.missingFindings.length}
-              </span>
-            </div>
-            {complianceMetrics.missingFindings.length > 0 && (
-              <>
-                <button
-                  onClick={() => setExpandedDQ(expandedDQ === 'findings' ? null : 'findings')}
-                  className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
-                >
-                  {expandedDQ === 'findings' ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                  View affected
-                </button>
-                {expandedDQ === 'findings' && (
-                  <ExpandableIssueList
-                    items={complianceMetrics.missingFindings}
-                    labelFn={r => `${r.asset_no || '-'} · ${r.scheduled_date || '-'} · ${r.site || '-'}`}
-                  />
-                )}
-              </>
-            )}
-          </div>
-
-          {/* No Inspector */}
-          <div className="bg-gray-800/50 rounded-lg p-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-[var(--panel-ink-3)] font-medium uppercase tracking-wide">No Inspector Name</span>
-              <span className={`text-lg font-bold ${complianceMetrics.noInspector.length > 0 ? 'text-yellow-400' : 'text-green-400'}`}>
-                {complianceMetrics.noInspector.length}
-              </span>
-            </div>
-            {complianceMetrics.noInspector.length > 0 && (
-              <>
-                <button
-                  onClick={() => setExpandedDQ(expandedDQ === 'inspector' ? null : 'inspector')}
-                  className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
-                >
-                  {expandedDQ === 'inspector' ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                  View affected
-                </button>
-                {expandedDQ === 'inspector' && (
-                  <ExpandableIssueList
-                    items={complianceMetrics.noInspector}
-                    labelFn={r => `${r.asset_no || '-'} · ${r.scheduled_date || '-'} · ${r.site || '-'}`}
-                  />
-                )}
-              </>
-            )}
-          </div>
-
-          {/* Suspicious Date */}
-          <div className="bg-gray-800/50 rounded-lg p-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-[var(--panel-ink-3)] font-medium uppercase tracking-wide">Suspicious Date</span>
-              <span className={`text-lg font-bold ${complianceMetrics.suspiciousDate.length > 0 ? 'text-orange-400' : 'text-green-400'}`}>
-                {complianceMetrics.suspiciousDate.length}
-              </span>
-            </div>
-            <p className="text-xs text-gray-600 mb-2">Done before scheduled date</p>
-            {complianceMetrics.suspiciousDate.length > 0 && (
-              <>
-                <button
-                  onClick={() => setExpandedDQ(expandedDQ === 'suspicious' ? null : 'suspicious')}
-                  className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
-                >
-                  {expandedDQ === 'suspicious' ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                  View affected
-                </button>
-                {expandedDQ === 'suspicious' && (
-                  <ExpandableIssueList
-                    items={complianceMetrics.suspiciousDate}
-                    labelFn={r => `${r.asset_no || '-'} · completed ${r.completed_date} / scheduled ${r.scheduled_date}`}
-                  />
-                )}
-              </>
-            )}
-          </div>
-        </div>
-      </Card>
-
-      {/* ── Section 4b: Inconsistent Inspections ── */}
-      {inconsistentInspections.length > 0 && (
-        <Card pad="none" clip>
-          <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <TrendingUp size={16} className="text-purple-400" />
-              <p className="font-semibold text-gray-200">Inconsistent Inspection Patterns</p>
-            </div>
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-900/30 text-purple-400 border border-purple-700/50">
-              {inconsistentInspections.length} flagged
-            </span>
-          </div>
-          <div className="divide-y divide-white/5">
-            {inconsistentInspections.map((item, i) => (
-              <div key={i} className="px-5 py-3 flex items-start gap-3">
-                <div className="w-2 h-2 rounded-full bg-purple-500 mt-1.5 flex-shrink-0" />
-                <div>
-                  <span className="text-sm font-semibold text-gray-200">{item.asset_no}</span>
-                  <span className="text-xs text-[var(--panel-ink-4)] ml-2">{item.site}</span>
-                  <span className="ml-2 px-2 py-0.5 rounded text-xs bg-purple-900/30 text-purple-400 border border-purple-700/40">
-                    {item.inconsistencyType}
-                  </span>
-                  <p className="text-xs text-[var(--panel-ink-3)] mt-0.5">{item.description}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
+      {(exportError || actionError) && (
+        <div role="alert" className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm text-red-300">{actionError || exportError}</div>
       )}
 
-      {/* ── Section 5: Recommendations ── */}
-      <Card>
-        <div className="flex items-center gap-2 mb-4">
-          <AlertCircle size={16} className="text-yellow-400" />
-          <p className="font-semibold text-gray-200">Automated Recommendations</p>
-          <span className="text-xs text-[var(--panel-ink-4)]">({recommendations.length} action{recommendations.length !== 1 ? 's' : ''})</span>
+      <FilterBar
+        search={search}
+        onSearch={setSearch}
+        placeholder="Search asset, site, inspector, vehicle type or document"
+        searchLabel="Search inspections"
+        resultCount={hasData ? filtered.length : null}
+        onClearAll={filtersActive ? clearAll : undefined}
+        selects={[
+          { key: 'country', value: activeCountry === 'All' ? '' : activeCountry, onChange: (v) => setActiveCountry(v || 'All'), placeholder: 'All countries', ariaLabel: 'Filter by country', options: COUNTRIES.map((c) => ({ value: c, label: c })) },
+          { key: 'site', value: site, onChange: setSite, placeholder: 'All sites', ariaLabel: 'Filter by site', options: sites.map((s) => ({ value: s, label: s })) },
+          { key: 'inspector', value: inspector, onChange: setInspector, placeholder: 'All inspectors', ariaLabel: 'Filter by inspector', options: inspectors.map((s) => ({ value: s, label: s })) },
+          { key: 'status', value: status, onChange: setStatus, placeholder: 'Any sign-off', ariaLabel: 'Filter by sign-off status', options: [{ value: 'approved', label: 'Approved' }, { value: 'pending', label: 'Awaiting sign-off' }] },
+        ]}
+      >
+        <div role="group" aria-label="Inspection date window" className="flex flex-wrap gap-1">
+          {DATE_PRESETS.map((p) => (
+            <button key={p.key} type="button" aria-pressed={days === p.key} onClick={() => setDays(p.key)}
+              className={`px-3 min-h-[40px] rounded-xl text-xs font-medium border transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] ${days === p.key ? 'bg-[var(--accent)] text-white border-transparent' : 'border-[var(--border-dim)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}>
+              {p.label}
+            </button>
+          ))}
         </div>
+      </FilterBar>
 
-        {recommendations.length === 0 ? (
-          <div className="flex items-center gap-2 text-green-400 py-4">
-            <CheckCircle size={18} />
-            <span className="text-sm font-medium">All metrics within acceptable thresholds, no immediate action required</span>
+      {loading && !hasData ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3" aria-busy="true" aria-label="Loading inspection data">
+          {Array.from({ length: 6 }, (_, i) => <div key={i} className="card h-[108px] animate-pulse" />)}
+        </div>
+      ) : error ? (
+        <Card>
+          <div role="alert" className="flex flex-col items-center gap-3 py-10 text-center">
+            <AlertTriangle size={28} className="text-red-400" aria-hidden="true" />
+            <p className="text-sm text-[var(--text-primary)] font-medium">Inspection data could not be loaded</p>
+            <p className="text-xs text-[var(--text-muted)] max-w-md">{error}</p>
+            <button type="button" onClick={load} className="btn-primary text-sm min-h-[44px] px-4 inline-flex items-center gap-2"><RefreshCw size={14} aria-hidden="true" /> Retry</button>
           </div>
-        ) : (
-          <div className="space-y-2">
-            {recommendations.map((r, i) => (
-              <RecommendationCard key={i} priority={r.priority} message={r.message} />
+        </Card>
+      ) : !hasData ? (
+        <Card>
+          <div className="flex flex-col items-center gap-3 py-12 text-center">
+            <ClipboardCheck size={32} className="text-[var(--text-muted)]" aria-hidden="true" />
+            <p className="text-sm text-[var(--text-primary)] font-medium">No inspections or fleet vehicles for this country yet</p>
+            <p className="text-xs text-[var(--text-muted)] max-w-md">Inspections appear here once they are recorded from the web or the field app. Coverage needs vehicles in the fleet register.</p>
+          </div>
+        </Card>
+      ) : (
+        <>
+          <div className="flex items-start gap-2 rounded-xl border border-[var(--border-dim)] bg-[var(--surface-2)] px-4 py-3 text-xs text-[var(--text-secondary)]">
+            <Info size={14} className="shrink-0 mt-0.5 text-[var(--text-muted)]" aria-hidden="true" />
+            <p>
+              Approved means the inspection has been signed off (status Done). Pressures are judgeable when at least 4 wheels carry a reading, the same rule the pressure report uses.
+              Fleet coverage reads every inspection, not only this window: a vehicle is covered when inspected in the last {COVERAGE_STALE_DAYS} days.
+              {truncated && ' Capped view: the loaded rows hit the 50,000 row ceiling.'}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <StatTile index={0} icon={ClipboardCheck} label="Inspections" value={fmtN(kpis.inspections)} sub={`${fmtN(kpis.vehicles)} vehicles, ${fmtN(kpis.inspectors)} inspectors`} tone="info" spark={trend.map((m) => m.inspections)} />
+            <StatTile index={1} icon={CheckCircle} label="Approved" value={fmtPct(kpis.approvalPct, 0)} sub={`${fmtN(kpis.pending)} awaiting sign-off`} tone={kpis.approvalPct == null ? 'neutral' : kpis.approvalPct >= 80 ? 'accent' : 'warn'} />
+            <StatTile index={2} icon={Truck} label="Fleet covered" value={fmtPct(coverageSum.coveragePct, 0)} sub={`${fmtN(coverageSum.notDone)} due, ${fmtN(coverageSum.never)} never`} tone={coverageSum.coveragePct == null ? 'neutral' : coverageSum.coveragePct >= 75 ? 'accent' : 'crit'} />
+            <StatTile index={3} icon={Gauge} label="Pressures judgeable" value={fmtPct(kpis.pressureMeasurablePct, 0)} sub={`Consistency ${fmtPct(kpis.pressureCompliancePct)}`} tone="neutral" />
+            <StatTile index={4} icon={AlertTriangle} label="Faults found" value={fmtN(kpis.faults)} sub={`${fmtN(kpis.severe)} severe, on ${fmtPct(kpis.withFaultPct, 0)} of inspections`} tone={kpis.severe > 0 ? 'crit' : 'neutral'} />
+            <StatTile index={5} icon={ShieldCheck} label="Data quality" value={fmtPct(dq.score, 0)} sub={`${dupes.length} possible duplicates`} tone={dq.score == null ? 'neutral' : dq.score >= 80 ? 'accent' : 'warn'} />
+          </div>
+
+          <div role="tablist" aria-label="Inspection intelligence sections" className="flex flex-wrap gap-2 border-b border-[var(--border-dim)] pb-3">
+            {TABS.map(({ key, label, icon: Icon }) => (
+              <button key={key} type="button" role="tab" aria-selected={tab === key} onClick={() => setTab(key)}
+                className={`inline-flex items-center gap-2 px-3.5 min-h-[40px] rounded-lg text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] ${tab === key ? 'bg-[var(--accent)] text-white' : 'bg-[var(--surface-2)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}>
+                <Icon size={15} aria-hidden="true" /> {label}
+                {key === 'actions' && recs.length > 0 && <span className="text-[11px] px-1.5 rounded-full bg-[var(--panel-2)]">{recs.length}</span>}
+              </button>
             ))}
           </div>
-        )}
-      </Card>
 
-      {/* ── Section 6: Inspection coverage by vehicle (every asset, done or not) ── */}
-      {/* Clipping is safe even though this header carries a <select>: a browser
-          paints an option list as an OS-level popup, outside any page overflow
-          context. Nothing here renders an out-of-flow popover as real DOM. */}
-      <Card pad="none" clip>
-        <div className="px-5 py-4 border-b border-white/5 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <ClipboardCheck size={16} className="text-orange-400" />
-            <p className="font-semibold text-gray-200">Inspection coverage by vehicle</p>
-            <span className="text-xs text-[var(--panel-ink-4)]">
-              {coverageSum.done} of {coverageSum.vehicles} inspected in the last {COVERAGE_STALE_DAYS} days
-              {coverageSum.never > 0 ? `, ${coverageSum.never} never inspected` : ''}
-            </span>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <select
-              value={covSite}
-              onChange={e => setCovSite(e.target.value)}
-              className="input-field text-xs py-1.5"
-            >
-              <option value="">All locations</option>
-              {coverageSites.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-            <div className="flex rounded-lg overflow-hidden border border-white/10">
-              {[
-                { key: 'not_done', label: 'Not done' },
-                { key: 'done', label: 'Completed' },
-                { key: 'all', label: 'All' },
-              ].map(o => (
-                <button
-                  key={o.key}
-                  onClick={() => setCovStatus(o.key)}
-                  className={`px-3 py-1.5 text-xs font-medium ${covStatus === o.key ? 'bg-white/10 text-gray-100' : 'text-[var(--panel-ink-3)] hover:bg-white/5'}`}
-                >
-                  {o.label}
-                </button>
-              ))}
-            </div>
-            <div className="relative">
-              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--panel-ink-4)]" />
-              <input
-                value={covSearch}
-                onChange={e => setCovSearch(e.target.value)}
-                placeholder="Asset, site, tyre man"
-                className="input-field text-xs py-1.5 pl-7 w-48"
-              />
-            </div>
-          </div>
-        </div>
-
-        {coverage.length === 0 ? (
-          <div className="py-10 text-center text-sm text-[var(--panel-ink-3)]">
-            {coverageAll.length === 0
-              ? 'No vehicle is registered for this country, so coverage cannot be measured.'
-              : 'No vehicle matches these filters.'}
-          </div>
-        ) : (
-          <>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr>
-                    <th className="table-header">Asset No</th>
-                    <th className="table-header">Location</th>
-                    <th className="table-header">Last inspection</th>
-                    <th className="table-header">By</th>
-                    <th className="table-header">Days since</th>
-                    <th className="table-header">Status</th>
-                    <th className="table-header text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {coverage.slice(0, covLimit).map(v => (
-                    <tr
-                      key={v.asset_no}
-                      className={`border-t border-white/5 ${v.done ? '' : v.severity === 'critical' || v.severity === 'never' ? 'bg-red-900/10' : v.severity === 'high' ? 'bg-orange-900/10' : 'bg-yellow-900/5'}`}
-                    >
-                      <td className="table-cell font-mono text-xs">{v.asset_no}</td>
-                      <td className="table-cell text-[var(--panel-ink-2)]">{v.site}</td>
-                      <td className="table-cell text-[var(--panel-ink-3)]">{v.lastInspectionDate || 'Never'}</td>
-                      <td className="table-cell text-[var(--panel-ink-3)] text-xs">{v.inspector || '-'}</td>
-                      <td className="table-cell font-semibold">{v.daysSince == null ? '-' : `${v.daysSince}d`}</td>
-                      <td className="table-cell">
-                        {v.done
-                          ? <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-green-900/30 text-green-400 border border-green-700/50">Completed</span>
-                          : v.severity === 'never'
-                            ? <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-red-900/30 text-red-400 border border-red-700/50">Never inspected</span>
-                            : <SeverityBadge sev={v.severity} />}
-                      </td>
-                      <td className="table-cell text-right">
-                        {v.done ? (
-                          <span className="text-xs text-[var(--panel-ink-4)]">-</span>
-                        ) : alertRaised[v.asset_no] ? (
-                          <span className="text-xs text-green-400 flex items-center justify-end gap-1">
-                            <CheckCircle size={12} /> Alert raised
-                          </span>
-                        ) : (
-                          <button
-                            onClick={() => handleRaiseAlert(v)}
-                            disabled={raisingAlert === v.asset_no}
-                            className="btn-primary text-xs px-3 py-1 disabled:opacity-50"
-                          >
-                            {raisingAlert === v.asset_no ? 'Raising...' : 'Raise Alert'}
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="px-5 py-3 border-t border-white/5 flex items-center justify-between text-xs text-[var(--panel-ink-3)]">
-              <span>Showing {Math.min(covLimit, coverage.length)} of {coverage.length} vehicles</span>
-              {coverage.length > covLimit && (
-                <button
-                  onClick={() => setCovLimit(n => n + COVERAGE_PAGE)}
-                  className="px-3 py-1 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 text-[var(--panel-ink-2)]"
-                >
-                  Show {Math.min(COVERAGE_PAGE, coverage.length - covLimit)} more
-                </button>
+          {tab === 'overview' && (
+            <div className="space-y-5">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                <Section title="Inspections per month" icon={TrendingUp} subtitle="Last 12 months, all inspections, with the share approved">
+                  <ChartBox empty={trend.some((m) => m.inspections > 0) ? null : 'No inspections in the last 12 months.'} label="Monthly inspections and approval share">
+                    <Bar data={trendData} options={trendOpts} />
+                  </ChartBox>
+                </Section>
+                <Section title="Recorded tyre condition" icon={Gauge} subtitle={`${fmtN(mixTotal)} wheel records in this window`}>
+                  <ChartBox empty={mixTotal ? null : 'No wheel condition recorded in this window.'} label="Share of wheels recorded good, worn, faulty or not recorded">
+                    <Doughnut data={mixData} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: 'var(--text-secondary)', font: { size: 11 }, boxWidth: 12 } } } }} />
+                  </ChartBox>
+                </Section>
+              </div>
+              <Section title="Inspections by site" icon={MapPin} subtitle="Approved versus awaiting sign-off, busiest sites first">
+                <ChartBox empty={siteChartRows.length ? null : 'No sites in this window.'} label="Approved and pending inspections by site" height={Math.max(220, siteChartRows.length * 28)}>
+                  <Bar data={siteData} options={siteOpts} />
+                </ChartBox>
+              </Section>
+              <Section title="Site summary" icon={MapPin}>
+                <EnterpriseTable columns={siteColumns} data={sitesRows} getRowId={(r) => r.site} initialPageSize={25} exportFileName="Inspection sites" emptyMessage="No sites in this window." />
+              </Section>
+              {recs.length > 0 && (
+                <Section title="Top priorities" icon={ListChecks}>
+                  <PriorityList items={recs.slice(0, 4)} empty="" />
+                </Section>
               )}
             </div>
-          </>
-        )}
-      </Card>
+          )}
 
+          {tab === 'coverage' && (
+            <Section
+              title="Inspection coverage by vehicle"
+              icon={Truck}
+              subtitle={`${fmtN(coverageSum.done)} of ${fmtN(coverageSum.vehicles)} inspected in the last ${COVERAGE_STALE_DAYS} days${coverageSum.never ? `, ${coverageSum.never} never inspected` : ''}. Raising an action creates an open corrective action due in 2 days.`}
+              actions={(
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="sr-only" htmlFor="cov-site">Coverage site</label>
+                  <select id="cov-site" value={covSite} onChange={(e) => setCovSite(e.target.value)} className="input text-sm min-h-[40px]">
+                    <option value="">All sites</option>
+                    {coverageSites.map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                  <div role="group" aria-label="Coverage status" className="flex rounded-lg overflow-hidden border border-[var(--border-dim)]">
+                    {COVERAGE_STATUS.map((o) => (
+                      <button key={o.key} type="button" aria-pressed={covStatus === o.key} onClick={() => setCovStatus(o.key)}
+                        className={`px-3 min-h-[40px] text-xs font-medium ${covStatus === o.key ? 'bg-[var(--accent)] text-white' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}>
+                        {o.label}
+                      </button>
+                    ))}
+                  </div>
+                  <label className="sr-only" htmlFor="cov-search">Search coverage</label>
+                  <input id="cov-search" value={covSearch} onChange={(e) => setCovSearch(e.target.value)} placeholder="Asset, site, inspector" className="input text-sm min-h-[40px] w-48" />
+                </div>
+              )}
+            >
+              <EnterpriseTable
+                columns={coverageColumns}
+                data={coverage}
+                getRowId={(r) => r.asset_no}
+                enableGlobalFilter={false}
+                viewKey="inspection-intelligence-coverage"
+                initialPageSize={50}
+                exportFileName="Inspection coverage"
+                emptyMessage={coverageAll.length === 0 ? 'No vehicle is registered for this country, so coverage cannot be measured.' : 'No vehicle matches these filters.'}
+              />
+            </Section>
+          )}
+
+          {tab === 'inspectors' && (
+            <Section title="Inspector board" icon={Users} subtitle="Activity in this window plus how completely each inspector records the tyres. A high identical-pressure share can mean a gauge was not used.">
+              <EnterpriseTable columns={boardColumns} data={board} getRowId={(r) => r.inspector} viewKey="inspection-intelligence-inspectors" initialPageSize={25} exportFileName="Inspection inspectors" emptyMessage="No named inspector in this window." />
+            </Section>
+          )}
+
+          {tab === 'register' && (
+            <Section title="Inspections in scope" icon={ClipboardCheck} subtitle="Wheels recorded, faults found and pressures captured per inspection">
+              <EnterpriseTable columns={registerColumns} data={registerRows} getRowId={(r, i) => `${r.document_no}|${r.asset_no}|${r.date}|${i}`} viewKey="inspection-intelligence-register" initialPageSize={50} exportFileName="Inspection register" emptyMessage={filtersActive ? 'No inspections match these filters.' : 'No inspections recorded yet.'} />
+            </Section>
+          )}
+
+          {tab === 'quality' && (
+            <div className="space-y-5">
+              <Section title="Data quality checks" icon={ShieldCheck} subtitle={`Score ${fmtPct(dq.score, 0)} is the average pass rate of these checks`}>
+                <EnterpriseTable columns={dqColumns} data={dq.checks} getRowId={(r) => r.key} enableGlobalFilter={false} enableColumnFilters={false} exportFileName="Inspection data quality" emptyMessage="No inspections to check." />
+                {dq.uniform.length > 0 && (
+                  <p className="mt-3 text-xs text-[var(--text-muted)]">
+                    {dq.uniform.length.toLocaleString()} inspections record the identical pressure on every wheel. That is possible, but it is also what a copied or defaulted form looks like.
+                  </p>
+                )}
+              </Section>
+              <Section title="Possible duplicates" icon={Copy} subtitle="The same vehicle inspected more than once on the same day">
+                <EnterpriseTable columns={dupColumns} data={dupes} getRowId={(r) => r.key} initialPageSize={25} exportFileName="Inspection duplicates" emptyMessage="No vehicle was inspected twice on the same day in this window." />
+              </Section>
+            </div>
+          )}
+
+          {tab === 'actions' && (
+            <Section title="Recommendations" icon={ListChecks} subtitle="Derived only from the measured figures above">
+              <PriorityList items={recs} empty="No issues found. Inspection coverage and recording look healthy in this scope." />
+            </Section>
+          )}
+        </>
+      )}
     </div>
   )
 }

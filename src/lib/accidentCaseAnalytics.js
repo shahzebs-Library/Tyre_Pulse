@@ -431,3 +431,167 @@ export function buildCaseAnalytics(records, wsRows = [], { now = Date.now() } = 
     reopen: reopenRate(list),
   }
 }
+
+// ═════════════════════════════════════════════════════════════════════════════
+// CASE REGISTER - PRESENTATION ONLY
+// ═════════════════════════════════════════════════════════════════════════════
+//
+// Everything below shapes, filters and exports the per-case rows the page lists.
+// It introduces NO new KPI formula and changes none above, so it has no
+// counterpart in docs/accident-module/17_REPORTING_RPCS.sql (the SQL mirror covers
+// only the aggregate figures). Headline KPIs stay the responsibility of the
+// functions above or the server fast path.
+
+/** Open-case age bands, in order. Labels carry no dash punctuation. */
+export const AGE_BANDS = Object.freeze([
+  { key: 'd0_7', label: '0 to 7 days', max: 7 },
+  { key: 'd8_30', label: '8 to 30 days', max: 30 },
+  { key: 'd31_90', label: '31 to 90 days', max: 90 },
+  { key: 'd90p', label: 'Over 90 days', max: Infinity },
+])
+
+/** Per-case SLA state tokens + labels (case-level sla_due_at only). */
+export const CASE_SLA_LABELS = Object.freeze({
+  overdue: 'Overdue',
+  on_track: 'On track',
+  closed: 'Closed',
+  none: 'No SLA',
+})
+
+/**
+ * One display row per case. Age is measured open -> now for an open case and
+ * open -> close for a genuinely closed case; null when the dates needed are
+ * missing (never 0). SLA state reads the case-level sla_due_at: a case with no
+ * due date is 'none', not compliant.
+ *
+ * @param {object[]} records case rows
+ * @param {{ now?: Date|string|number }} [opts]
+ */
+export function caseRegisterRows(records, { now = Date.now() } = {}) {
+  const ref = epoch(now) ?? Date.now()
+  return arr(records).filter(Boolean).map((r, i) => {
+    const token = lower(r.case_status)
+    const closed = isGenuinelyClosed(r)
+    const open = isOpenCase(r)
+    const start = caseStart(r)
+    const end = closed ? caseEnd(r) : ref
+    let ageDays = null
+    if (start != null && end != null && end >= start) ageDays = Math.floor((end - start) / DAY_MS)
+    const due = epoch(r.sla_due_at)
+    let sla = 'none'
+    if (!open) sla = due == null ? 'none' : 'closed'
+    else if (due != null) sla = due < ref ? 'overdue' : 'on_track'
+    let level = lower(r.closure_level)
+    if (level === 'legacy_closed') level = 'fully_closed'
+    if (!level && closed) level = 'fully_closed'
+    return {
+      id: s(r.id) || `row-${i}`,
+      ref: s(r.case_no) || s(r.reference_no) || null,
+      asset: s(r.asset_no) || null,
+      site: s(r.site) || null,
+      country: s(r.country) || null,
+      severity: s(r.severity) || null,
+      incidentDate: s(r.incident_date).slice(0, 10) || null,
+      statusToken: token || null,
+      statusLabel: token ? caseStatusLabel(token) : 'Not recorded',
+      team: open ? ((token && CASE_STATUS_META[token]?.team) || 'Unassigned') : null,
+      state: closed ? 'closed' : open ? 'open' : 'terminal',
+      closureLabel: CLOSURE_LEVEL_LABELS[level] || (open ? 'Open' : 'Not recorded'),
+      ageDays,
+      sla,
+      slaDue: due == null ? null : new Date(due).toISOString().slice(0, 10),
+      reopened: wasReopened(r),
+    }
+  })
+}
+
+/** Distinct option lists for the register filters, taken from the rows. */
+export function caseRegisterOptions(rows) {
+  const uniq = (fn) => [...new Set(arr(rows).map(fn).filter(Boolean))].sort((a, b) => a.localeCompare(b))
+  return {
+    statuses: uniq((r) => r.statusLabel),
+    teams: uniq((r) => r.team),
+    sites: uniq((r) => r.site),
+    severities: uniq((r) => r.severity),
+  }
+}
+
+/**
+ * Filter the register. Every filter defaults to 'all' / empty. Search matches
+ * reference, asset, site, country, status and team, case-insensitive.
+ */
+export function filterCaseRegister(rows, {
+  search = '', state = 'all', status = 'all', team = 'all', site = 'all', sla = 'all', severity = 'all',
+} = {}) {
+  const q = lower(search)
+  return arr(rows).filter((r) => {
+    if (state !== 'all' && r.state !== state) return false
+    if (status !== 'all' && r.statusLabel !== status) return false
+    if (team !== 'all' && r.team !== team) return false
+    if (site !== 'all' && r.site !== site) return false
+    if (sla !== 'all' && r.sla !== sla) return false
+    if (severity !== 'all' && r.severity !== severity) return false
+    if (q) {
+      const hay = [r.ref, r.asset, r.site, r.country, r.statusLabel, r.team, r.severity]
+        .filter(Boolean).join(' ').toLowerCase()
+      if (!hay.includes(q)) return false
+    }
+    return true
+  })
+}
+
+/**
+ * Summary of a (filtered) register so the page can state what the rows it shows
+ * add up to. Averages are null when nothing measurable is in scope.
+ */
+export function caseRegisterSummary(rows) {
+  const list = arr(rows)
+  const openRows = list.filter((r) => r.state === 'open')
+  const ages = openRows.map((r) => r.ageDays).filter((d) => d != null)
+  return {
+    shown: list.length,
+    open: openRows.length,
+    overdue: list.filter((r) => r.sla === 'overdue').length,
+    noSla: openRows.filter((r) => r.sla === 'none').length,
+    reopened: list.filter((r) => r.reopened).length,
+    avgOpenAge: ages.length ? round1(ages.reduce((a, b) => a + b, 0) / ages.length) : null,
+    oldestOpenAge: ages.length ? Math.max(...ages) : null,
+    ageUnknown: openRows.length - ages.length,
+  }
+}
+
+/** Open cases by age band. Cases with no usable start date are counted as unknown. */
+export function openAgeBands(rows) {
+  const counts = Object.fromEntries(AGE_BANDS.map((b) => [b.key, 0]))
+  let unknown = 0
+  for (const r of arr(rows)) {
+    if (r.state !== 'open') continue
+    if (r.ageDays == null) { unknown += 1; continue }
+    const band = AGE_BANDS.find((b) => r.ageDays <= b.max)
+    counts[band.key] += 1
+  }
+  return {
+    rows: AGE_BANDS.map((b) => ({ key: b.key, label: b.label, value: counts[b.key] })),
+    unknown,
+  }
+}
+
+/** Register export contract. */
+export const CASE_REGISTER_COLS = Object.freeze([
+  'ref', 'asset', 'site', 'country', 'severity', 'incidentDate', 'statusLabel', 'team',
+  'closureLabel', 'ageDays', 'slaLabel', 'slaDue', 'reopenedLabel',
+])
+export const CASE_REGISTER_HEADERS = Object.freeze([
+  'Case', 'Asset', 'Site', 'Country', 'Severity', 'Incident date', 'Status', 'Team',
+  'Closure level', 'Age (days)', 'SLA', 'SLA due', 'Reopened',
+])
+
+/** Export matrix: nulls print as N/A, never as 0. */
+export function caseRegisterExportRows(rows) {
+  return arr(rows).map((r) => {
+    const base = { ...r, slaLabel: CASE_SLA_LABELS[r.sla] || 'No SLA', reopenedLabel: r.reopened ? 'Yes' : 'No' }
+    const out = {}
+    for (const c of CASE_REGISTER_COLS) out[c] = base[c] == null || base[c] === '' ? 'N/A' : base[c]
+    return out
+  })
+}

@@ -23,12 +23,18 @@ import { Bar, Doughnut } from 'react-chartjs-2'
 import {
   FolderKanban, RefreshCw, AlertTriangle, CheckCircle2, ShieldAlert,
   Timer, RotateCcw, Layers, GitBranch, Users, Gauge, ClipboardList,
+  Search, FileSpreadsheet, FileText, Hourglass, X,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { useSettings } from '../contexts/SettingsContext'
 import { loadAccidentCaseBoard, loadAccidentCaseAnalytics } from '../lib/api/accidentCaseBoard'
 import {
   buildCaseAnalytics, slaBreachRate,
+  caseRegisterRows, caseRegisterOptions, filterCaseRegister, caseRegisterSummary,
+  openAgeBands, caseRegisterExportRows, CASE_REGISTER_COLS, CASE_REGISTER_HEADERS,
+  CASE_SLA_LABELS,
 } from '../lib/accidentCaseAnalytics'
 import CaseTeamInbox from '../components/accidents/CaseTeamInbox'
 import { colorAt, categorical, withAlpha } from '../lib/reportColors'
@@ -63,6 +69,55 @@ const DOUGHNUT = {
 // ── formatting helpers ────────────────────────────────────────────────────────
 const pct = (rate) => (rate == null ? 'N/A' : `${Math.round(rate * 100)}%`)
 const days = (n) => (n == null ? 'N/A' : `${n} ${n === 1 ? 'day' : 'days'}`)
+
+const EMPTY_FILTERS = { search: '', state: 'all', status: 'all', team: 'all', site: 'all', sla: 'all', severity: 'all' }
+
+const SLA_PILL = {
+  overdue: 'border-red-700/50 bg-red-950/25 text-red-200',
+  on_track: 'border-emerald-700/50 bg-emerald-950/25 text-emerald-200',
+  closed: 'border-slate-600/50 bg-slate-800/30 text-slate-300',
+  none: 'border-slate-600/50 bg-slate-800/30 text-slate-400',
+}
+
+const REGISTER_COLUMNS = [
+  { accessorKey: 'ref', header: 'Case', cell: ({ getValue }) => getValue() || 'N/A' },
+  { accessorKey: 'asset', header: 'Asset', cell: ({ getValue }) => getValue() || 'N/A' },
+  { accessorKey: 'site', header: 'Site', cell: ({ getValue }) => getValue() || 'N/A' },
+  { accessorKey: 'statusLabel', header: 'Status' },
+  { accessorKey: 'team', header: 'Team', cell: ({ getValue }) => getValue() || 'N/A' },
+  { accessorKey: 'closureLabel', header: 'Closure level' },
+  {
+    accessorKey: 'ageDays',
+    header: 'Age',
+    meta: { align: 'right' },
+    sortUndefined: 'last',
+    cell: ({ getValue }) => days(getValue()),
+  },
+  {
+    accessorKey: 'sla',
+    header: 'SLA',
+    cell: ({ row }) => (
+      <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] ${SLA_PILL[row.original.sla] || SLA_PILL.none}`}>
+        {CASE_SLA_LABELS[row.original.sla] || 'No SLA'}
+        {row.original.slaDue ? `, due ${row.original.slaDue}` : ''}
+      </span>
+    ),
+  },
+  { accessorKey: 'reopened', header: 'Reopened', cell: ({ getValue }) => (getValue() ? 'Yes' : 'No') },
+]
+
+function FilterSelect({ label, value, onChange, options }) {
+  return (
+    <label className="flex flex-col gap-1 text-[11px] text-[var(--text-muted)]">
+      {label}
+      <select value={value} onChange={(e) => onChange(e.target.value)} className="input text-sm py-1.5">
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
+    </label>
+  )
+}
 
 function KpiTile({ icon: Icon, label, value, sub, tone = 'neutral' }) {
   const TONE = {
@@ -108,6 +163,9 @@ export default function AccidentCases() {
   const [server, setServer] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [filters, setFilters] = useState(EMPTY_FILTERS)
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -199,7 +257,48 @@ export default function AccidentCases() {
     }
   }, [analytics])
 
+  const registerRows = useMemo(
+    () => (board?.ok ? caseRegisterRows(board.cases, { now: Date.now() }) : []),
+    [board],
+  )
+  const registerOptions = useMemo(() => caseRegisterOptions(registerRows), [registerRows])
+  const shownRows = useMemo(() => filterCaseRegister(registerRows, filters), [registerRows, filters])
+  const shownSummary = useMemo(() => caseRegisterSummary(shownRows), [shownRows])
+  const ageBands = useMemo(() => openAgeBands(registerRows), [registerRows])
+  const filtersActive = Object.keys(EMPTY_FILTERS).some((k) => filters[k] !== EMPTY_FILTERS[k])
+  const setFilter = (key) => (value) => setFilters((f) => ({ ...f, [key]: value }))
+
+  const ageChart = useMemo(() => ({
+    labels: ageBands.rows.map((b) => b.label),
+    datasets: [{ label: 'Open cases', data: ageBands.rows.map((b) => b.value), backgroundColor: withAlpha(colorAt(5), 0.85), borderWidth: 0 }],
+  }), [ageBands])
+
   const scope = activeCountry && activeCountry !== 'All' ? activeCountry : 'All countries'
+
+  const runExport = async (kind) => {
+    if (shownRows.length === 0) return
+    setExporting(true)
+    setExportError('')
+    try {
+      const rows = caseRegisterExportRows(shownRows)
+      const name = reportFileName('Accident Cases', scope, new Date().toISOString().slice(0, 10))
+      if (kind === 'excel') {
+        await exportToExcel(rows, [...CASE_REGISTER_COLS], [...CASE_REGISTER_HEADERS], name, 'Cases')
+      } else {
+        await exportToPdf(
+          rows,
+          CASE_REGISTER_COLS.map((k, i) => ({ key: k, header: CASE_REGISTER_HEADERS[i] })),
+          `Accident Cases: ${scope}`,
+          name,
+          'landscape',
+        )
+      }
+    } catch (err) {
+      setExportError(toUserMessage(err, 'The export could not be created.'))
+    } finally {
+      setExporting(false)
+    }
+  }
 
   // ── tri-state chrome ────────────────────────────────────────────────────────
   const header = (
@@ -369,6 +468,111 @@ export default function AccidentCases() {
         >
           <Doughnut data={closureChart} options={DOUGHNUT} />
         </ChartCard>
+      </div>
+
+      <ChartCard
+        icon={Hourglass}
+        title="Open cases by age"
+        note={ageBands.unknown ? `${ageBands.unknown} with no start date` : undefined}
+        empty={basis.open === 0 || ageBands.rows.every((b) => b.value === 0)}
+        emptyReason={basis.open === 0 ? 'No open cases to age.' : 'No open case carries a usable start date.'}
+      >
+        <Bar data={ageChart} options={BASE} />
+      </ChartCard>
+
+      {/* case register */}
+      <div className="card p-4 space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <ClipboardList size={15} className="text-orange-400 shrink-0" />
+          <p className="text-sm font-semibold text-[var(--text-primary)]">Case register</p>
+          <div className="ml-auto flex gap-2">
+            <button
+              type="button"
+              onClick={() => runExport('excel')}
+              disabled={exporting || shownRows.length === 0}
+              className="btn-secondary inline-flex items-center gap-1.5 text-sm px-3 py-1.5"
+            >
+              <FileSpreadsheet size={14} /> Excel
+            </button>
+            <button
+              type="button"
+              onClick={() => runExport('pdf')}
+              disabled={exporting || shownRows.length === 0}
+              className="btn-secondary inline-flex items-center gap-1.5 text-sm px-3 py-1.5"
+            >
+              <FileText size={14} /> PDF
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-2 items-end">
+          <label className="col-span-2 flex flex-col gap-1 text-[11px] text-[var(--text-muted)]">
+            Search
+            <span className="relative">
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-dim)]" />
+              <input
+                type="search"
+                value={filters.search}
+                onChange={(e) => setFilter('search')(e.target.value)}
+                placeholder="Case, asset, site, status or team"
+                className="input w-full pl-8 text-sm py-1.5"
+              />
+            </span>
+          </label>
+          <FilterSelect label="State" value={filters.state} onChange={setFilter('state')} options={[
+            { value: 'all', label: 'All' }, { value: 'open', label: 'Open' }, { value: 'closed', label: 'Closed' }, { value: 'terminal', label: 'Withdrawn' },
+          ]} />
+          <FilterSelect label="Status" value={filters.status} onChange={setFilter('status')} options={[
+            { value: 'all', label: 'All statuses' }, ...registerOptions.statuses.map((v) => ({ value: v, label: v })),
+          ]} />
+          <FilterSelect label="Team" value={filters.team} onChange={setFilter('team')} options={[
+            { value: 'all', label: 'All teams' }, ...registerOptions.teams.map((v) => ({ value: v, label: v })),
+          ]} />
+          <FilterSelect label="Site" value={filters.site} onChange={setFilter('site')} options={[
+            { value: 'all', label: 'All sites' }, ...registerOptions.sites.map((v) => ({ value: v, label: v })),
+          ]} />
+          <FilterSelect label="Severity" value={filters.severity} onChange={setFilter('severity')} options={[
+            { value: 'all', label: 'All severities' }, ...registerOptions.severities.map((v) => ({ value: v, label: v })),
+          ]} />
+          <FilterSelect label="SLA" value={filters.sla} onChange={setFilter('sla')} options={[
+            { value: 'all', label: 'All' }, ...Object.entries(CASE_SLA_LABELS).map(([value, label]) => ({ value, label })),
+          ]} />
+        </div>
+
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[var(--text-muted)]">
+          <span>{shownSummary.shown} of {registerRows.length} cases shown</span>
+          <span>{shownSummary.open} open</span>
+          <span>{shownSummary.overdue} overdue on SLA</span>
+          <span>{shownSummary.noSla} open with no SLA</span>
+          <span>Average open age {days(shownSummary.avgOpenAge)}</span>
+          <span>Oldest open {days(shownSummary.oldestOpenAge)}</span>
+          {filtersActive && (
+            <button
+              type="button"
+              onClick={() => setFilters(EMPTY_FILTERS)}
+              className="inline-flex items-center gap-1 text-orange-400"
+            >
+              <X size={12} /> Clear filters
+            </button>
+          )}
+        </div>
+        {filtersActive && (
+          <p className="text-[11px] text-[var(--text-dim)]">
+            The KPI tiles and charts above cover every case in scope. These register figures cover the filtered rows only.
+          </p>
+        )}
+        {exportError && <p className="text-xs text-red-300" role="alert">{exportError}</p>}
+
+        <EnterpriseTable
+          columns={REGISTER_COLUMNS}
+          data={shownRows}
+          getRowId={(r) => r.id}
+          loading={loading}
+          enableGlobalFilter={false}
+          enableExport={false}
+          initialPageSize={25}
+          emptyMessage={filtersActive ? 'No cases match these filters' : 'No cases in scope'}
+        />
       </div>
 
       {/* team inbox — overdue-first handled inside the component */}

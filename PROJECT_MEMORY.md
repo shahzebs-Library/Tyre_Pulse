@@ -55,6 +55,18 @@ batching stops them being started at all.
 
 ---
 
+# ⚑ SESSION 2026-09-26 (part 7) — 6 MORE PAGES DEEPENED. No migration. Design ratchet rawTable 191 -> 189.
+- TenantHealth (`tenantHealthAnalytics.js`, formatUSD(null) now N/A), AccidentCases (case register; accidentCaseAnalytics
+  extended PRESENTATION-ONLY, SQL mirror 17 untouched), EventStream (`eventStreamAnalytics.js`; charts over newest-500
+  sample, flagged partial), AutomationRules (`automationRulesAnalytics.js`), Alerts (`alertsAnalytics.js` on top of
+  alertEngine; age from real source dates, N/A where none; dismissals are browser-local so rate says "on this device"),
+  DataIntakeHistory (`dataIntakeHistoryAnalytics.js`, repeat files by sha256, 6 raw tables -> EnterpriseTable).
+- imports.js: id tiebreaks on list reads + `listImportFileFingerprints`; `file_id` added to BATCH_COLS.
+- alertEngine vehicle-inactivity alert now keeps `site` in data.
+- Suite 766 files / 10,603 tests green, build clean.
+
+---
+
 # ⚑ SESSION 2026-09-26 (part 6) — 3 MORE PAGES DEEPENED + 2 HONEST-READ PAGING FIXES. No migration.
 - Deepened: ReportSharing (link health: `src/lib/reportSharingAnalytics.js`; revoked = N/A because list returns
   active rows only), RequestAccess (`src/lib/requestAccessAnalytics.js`, decision time null when unmeasurable),

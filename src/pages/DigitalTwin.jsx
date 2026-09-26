@@ -11,13 +11,34 @@ import { useParams, useNavigate } from 'react-router-dom'
 import {
   Cpu, Search, Truck, Gauge, Activity, AlertTriangle, ArrowLeft, CircleDot,
   Loader2, Package, MapPin, Wind, Clock, DollarSign, ShieldCheck,
+  FileSpreadsheet, FileText, ArrowUpDown, Hourglass,
 } from 'lucide-react'
+import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js'
+import { Doughnut } from 'react-chartjs-2'
+import VehicleTyreDiagram from '../components/VehicleTyreDiagram'
+import { TablePagination, usePagedRows } from '../components/ui/TablePagination'
+import { getTyreRunningLife } from '../lib/api/tyreRunningLife'
+import { getVehicle } from '../lib/api/vehicle360'
+import { shapeRunningLife, BAND_META } from '../lib/tyreRunningLife'
+import { enrichTwin, filterPositions, sortPositions } from '../lib/digitalTwinAnalytics'
+import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
 import { getAssetTwinRecords, searchAssets } from '../lib/api/digitalTwin'
 import { buildTwin, healthBand } from '../lib/digitalTwin'
 import { toUserMessage } from '../lib/safeError'
 import { AGE_BAND_META } from '../lib/tyreAge'
+
+ChartJS.register(ArcElement, Tooltip, Legend)
+
+const BAND_HEX = { overdue: '#ef4444', 'due-soon': '#f59e0b', 'mid-life': '#3b82f6', healthy: '#22c55e', unknown: '#94a3b8' }
+const BAND_KEYS = ['overdue', 'due-soon', 'mid-life', 'healthy', 'unknown']
+const fmtInt = (v) => (v == null || !Number.isFinite(Number(v)) ? 'N/A' : Math.round(Number(v)).toLocaleString())
+const unitLabel = (u) => (u === 'hours' ? 'h' : u === 'km' ? 'km' : '')
+const TABLE_COLS = [
+  ['position', 'Position'], ['band', 'Life state'], ['remaining', 'Remaining'], ['usedPct', 'Life used'],
+  ['remainingDays', 'Days left'], ['health', 'Health'],
+]
 
 const AGE_BADGE = {
   non_compliant: 'bg-red-900/40 text-red-300 border border-red-700/50',
@@ -158,15 +179,28 @@ export default function DigitalTwin() {
   const [records, setRecords] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [life, setLife] = useState({ rows: [], error: '' })
+  const [vehicleType, setVehicleType] = useState('')
+  const [search, setSearch] = useState('')
+  const [bandFilter, setBandFilter] = useState('all')
+  const [sort, setSort] = useState({ key: 'band', dir: 'asc' })
 
   const load = useCallback(async (an) => {
     if (!an) { setRecords(null); return }
     setLoading(true); setError('')
-    try {
-      setRecords(await getAssetTwinRecords(an, { country: activeCountry }))
-    } catch (err) {
-      setError(toUserMessage(err, 'Could not load this vehicle.')); setRecords([])
-    } finally { setLoading(false) }
+    const [recs, lifeRes, veh] = await Promise.allSettled([
+      getAssetTwinRecords(an, { country: activeCountry }),
+      getTyreRunningLife({ country: activeCountry, asset: an }),
+      getVehicle(an),
+    ])
+    if (recs.status === 'fulfilled') setRecords(recs.value)
+    else { setError(toUserMessage(recs.reason, 'Could not load this vehicle.')); setRecords([]) }
+    const shaped = lifeRes.status === 'fulfilled' ? shapeRunningLife(lifeRes.value) : { ok: false, rows: [] }
+    setLife(shaped.ok
+      ? { rows: shaped.rows, error: '' }
+      : { rows: [], error: (lifeRes.status === 'fulfilled' && lifeRes.value?.reason) || 'Remaining life could not be read.' })
+    setVehicleType(veh.status === 'fulfilled' ? (veh.value?.vehicle_type || '') : '')
+    setLoading(false)
   }, [activeCountry])
 
   useEffect(() => { if (assetNo) load(assetNo) }, [assetNo, load])
@@ -185,6 +219,35 @@ export default function DigitalTwin() {
   }, [twin])
 
   const gotoPick = (an) => navigate(`/digital-twin/${encodeURIComponent(an)}`)
+
+  const deep = useMemo(
+    () => (twin ? enrichTwin({ twin, lifeRows: life.rows, assetNo, vehicleType }) : null),
+    [twin, life.rows, assetNo, vehicleType],
+  )
+  const tableRows = useMemo(
+    () => (deep ? sortPositions(filterPositions(deep.positions, { search, band: bandFilter }), sort.key, sort.dir) : []),
+    [deep, search, bandFilter, sort],
+  )
+  const pager = usePagedRows(tableRows, { pageSize: 25 })
+  const toggleSort = (key) => setSort((o) => ({ key, dir: o.key === key && o.dir === 'asc' ? 'desc' : 'asc' }))
+  const bandChart = deep ? {
+    labels: BAND_KEYS.map((k) => (BAND_META[k] || BAND_META.unknown).label),
+    datasets: [{ data: BAND_KEYS.map((k) => deep.bandCounts[k] || 0), backgroundColor: BAND_KEYS.map((k) => BAND_HEX[k]), borderWidth: 0 }],
+  } : null
+  const EXPORT_COLS = ['position', 'serial', 'brand', 'size', 'state', 'remaining', 'unit', 'used', 'days', 'health', 'age', 'fitted']
+  const EXPORT_HEAD = ['Position', 'Serial', 'Brand', 'Size', 'Life state', 'Remaining', 'Unit', 'Life used %', 'Days left', 'Health', 'Age (yr)', 'Fitted on']
+  function exportTable(kind) {
+    const rows = tableRows.map((p) => ({
+      position: p.displayPosition || 'N/A', serial: p.serial || 'N/A', brand: p.brand || 'N/A', size: p.size || 'N/A',
+      state: p.bandLabel, remaining: p.remaining ?? 'N/A', unit: p.remainingUnit || 'N/A',
+      used: p.usedPct == null ? 'N/A' : Math.round(p.usedPct), days: p.remainingDays ?? 'N/A',
+      health: p.health ?? 'N/A', age: p.ageYears ?? 'N/A', fitted: p.fittedOn || 'N/A',
+    }))
+    if (!rows.length) return
+    const name = `Digital Twin ${twin?.asset_no || assetNo}`
+    if (kind === 'excel') exportToExcel(rows, EXPORT_COLS, EXPORT_HEAD, name)
+    else exportToPdf(rows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEAD[i] })), name, name, 'landscape')
+  }
 
   return (
     <div className="space-y-6">
@@ -253,6 +316,98 @@ export default function DigitalTwin() {
                     })}
                   </div>
                 </div>
+              </div>
+
+
+              {/* Remaining life + layout */}
+              {life.error && (
+                <div role="status" className="card text-sm flex items-center justify-between gap-3">
+                  <span className="text-[var(--text-secondary)]">Remaining life could not be read: {life.error} Life figures show N/A.</span>
+                  <button type="button" className="btn-secondary text-xs" onClick={() => load(assetNo)}>Retry</button>
+                </div>
+              )}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                  { label: 'Past life or due soon', value: fmtInt(deep.dueCount), icon: AlertTriangle },
+                  { label: 'Life measured', value: deep.lifeCoveragePct == null ? 'N/A' : `${deep.lifeCoveragePct}%`, icon: Gauge },
+                  { label: 'Next due', value: deep.nextDue ? `${deep.nextDue.position}: ${fmtInt(deep.nextDue.days)} d` : 'N/A', icon: Hourglass },
+                  { label: 'Not on layout', value: fmtInt(deep.unplaced), icon: MapPin },
+                ].map((k) => {
+                  const Icon = k.icon
+                  return (
+                    <div key={k.label} className="card !p-3">
+                      <div className="flex items-center justify-between"><span className="text-xs text-[var(--text-muted)]">{k.label}</span><Icon size={14} className="text-[var(--text-muted)]" /></div>
+                      <p className="text-lg font-bold text-[var(--text-primary)] mt-0.5 truncate">{k.value}</p>
+                    </div>
+                  )
+                })}
+              </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="card">
+                  <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Wheel layout</h3>
+                  {deep.layoutKnown ? (
+                    <div className="flex justify-center"><VehicleTyreDiagram vehicleType={deep.hint} positions={deep.diagram} width={240} /></div>
+                  ) : (
+                    <p className="text-sm text-[var(--text-muted)]">The vehicle type is not recorded or not recognised, so the wheel layout cannot be drawn. The table below lists every fitted tyre.</p>
+                  )}
+                  {deep.layoutKnown && deep.unplaced > 0 && (
+                    <p className="text-xs text-[var(--text-muted)] mt-3">{deep.unplaced} fitted tyre(s) carry a position that does not match this layout and are listed in the table only.</p>
+                  )}
+                </div>
+                <div className="card">
+                  <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-1">Remaining life state</h3>
+                  <p className="text-[11px] text-[var(--text-muted)] mb-3">Judged on whichever budget (km or engine hours) runs out first, against the fleet life targets.</p>
+                  <div className="h-56"><Doughnut data={bandChart} options={{ maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: 'var(--text-secondary)' } } } }} /></div>
+                </div>
+              </div>
+
+              <div className="card !p-0 overflow-hidden">
+                <div className="px-4 py-3 border-b border-[var(--input-border)] flex flex-wrap items-center gap-2">
+                  <h3 className="text-sm font-semibold text-[var(--text-primary)] mr-auto">Position life table</h3>
+                  <div className="relative">
+                    <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+                    <input aria-label="Search positions" className="input pl-8 text-xs w-44" placeholder="Position, serial, brand..." value={search} onChange={(e) => setSearch(e.target.value)} />
+                  </div>
+                  <select aria-label="Life state filter" className="input text-xs w-auto" value={bandFilter} onChange={(e) => setBandFilter(e.target.value)}>
+                    <option value="all">All states</option>
+                    {BAND_KEYS.map((k) => <option key={k} value={k}>{(BAND_META[k] || BAND_META.unknown).label}</option>)}
+                  </select>
+                  <button type="button" className="btn-secondary text-xs" disabled={!tableRows.length} onClick={() => exportTable('excel')}><FileSpreadsheet size={13} /> Excel</button>
+                  <button type="button" className="btn-secondary text-xs" disabled={!tableRows.length} onClick={() => exportTable('pdf')}><FileText size={13} /> PDF</button>
+                </div>
+                {!tableRows.length ? (
+                  <p className="px-4 py-8 text-center text-sm text-[var(--text-muted)]">No positions match these filters.</p>
+                ) : (
+                  <>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead className="bg-[var(--table-head-bg)] text-[var(--table-head-text)]">
+                          <tr>
+                            {TABLE_COLS.map(([k, label]) => (
+                              <th key={k} className="text-left px-3 py-2"><button type="button" className="inline-flex items-center gap-1" onClick={() => toggleSort(k)}>{label} <ArrowUpDown size={11} className="opacity-50" /></button></th>
+                            ))}
+                            <th className="text-left px-3 py-2">Serial</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {pager.pageRows.map((p) => (
+                            <tr key={p.id ?? `${p.position}-${p.serial}`} className="border-t border-[var(--table-cell-border)]">
+                              <td className="px-3 py-2 font-medium text-[var(--text-primary)]">{p.displayPosition || 'N/A'}</td>
+                              <td className="px-3 py-2"><span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ background: BAND_HEX[p.band] }} />{p.bandLabel}</span></td>
+                              <td className="px-3 py-2 tabular-nums">{p.remaining == null ? 'N/A' : `${fmtInt(p.remaining)} ${unitLabel(p.remainingUnit)}`}{p.onFallback ? ' *' : ''}</td>
+                              <td className="px-3 py-2 tabular-nums">{p.usedPct == null ? 'N/A' : `${Math.round(p.usedPct)}%`}</td>
+                              <td className="px-3 py-2 tabular-nums">{fmtInt(p.remainingDays)}</td>
+                              <td className="px-3 py-2 tabular-nums">{p.health == null ? 'N/A' : p.health}</td>
+                              <td className="px-3 py-2 font-mono text-[var(--text-muted)]">{p.serial || 'N/A'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <TablePagination {...pager} />
+                    {tableRows.some((p) => p.onFallback) && <p className="px-4 pb-3 text-[11px] text-[var(--text-muted)]">* Measured on the other meter because this machine's own meter has never been read.</p>}
+                  </>
+                )}
               </div>
 
               {/* Position grid */}

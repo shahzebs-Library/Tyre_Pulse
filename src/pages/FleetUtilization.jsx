@@ -28,7 +28,11 @@ import {
 } from '../lib/fleetUtilization'
 import { toUserMessage } from '../lib/safeError'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
-import { colorAt, categorical, withAlpha } from '../lib/reportColors'
+import { colorAt, withAlpha } from '../lib/reportColors'
+import { listAssetOptions } from '../lib/api/assetHistory'
+import {
+  attachRegister, siteComparison, telematicsCoverage, captureTimeline, filterByRegister, NO_SITE, NO_TYPE,
+} from '../lib/fleetUtilizationAnalytics'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
 
@@ -40,6 +44,14 @@ function fmtDate(v) {
   if (!v) return 'N/A'
   const d = new Date(v)
   return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString()
+}
+
+function trendChartData(timeline) {
+  if (!timeline?.trendable) return null
+  return {
+    labels: timeline.points.map((p) => p.date),
+    datasets: [{ label: 'Avg utilization %', data: timeline.points.map((p) => (p.avgUtilization == null ? null : Math.round(p.avgUtilization * 10) / 10)), backgroundColor: withAlpha(colorAt(0), 0.85) }],
+  }
 }
 
 const BAND_TONE = { High: '#16a34a', Medium: '#f59e0b', Low: '#ef4444', Unknown: '#94a3b8' }
@@ -77,27 +89,38 @@ export default function FleetUtilization() {
   const [idleHeavy, setIdleHeavy] = useState(false)
   const [sortKey, setSortKey] = useState('utilization_pct')
   const [sortDir, setSortDir] = useState('desc')
+  const [fleet, setFleet] = useState([])
+  const [fleetError, setFleetError] = useState('')
+  const [site, setSite] = useState('')
+  const [vehicleType, setVehicleType] = useState('')
 
   const load = useCallback(async () => {
-    setLoading(true); setError('')
-    try {
-      const data = await listAssetUtilization({ country: activeCountry })
-      setRows(data)
-    } catch (err) {
-      setError(toUserMessage(err))
-    } finally {
-      setLoading(false)
-    }
+    setLoading(true); setError(''); setFleetError('')
+    const [util, reg] = await Promise.allSettled([
+      listAssetUtilization({ country: activeCountry }),
+      listAssetOptions({ country: activeCountry }),
+    ])
+    if (util.status === 'fulfilled') setRows(util.value)
+    else setError(toUserMessage(util.reason))
+    if (reg.status === 'fulfilled' && reg.value?.ok) setFleet(reg.value.rows || [])
+    else { setFleet([]); setFleetError('The fleet register could not be read, so site, vehicle type and the coverage gap are unavailable.') }
+    setLoading(false)
   }, [activeCountry])
 
   useEffect(() => { load() }, [load])
 
+  const enriched = useMemo(() => attachRegister(rows, fleet), [rows, fleet])
   const filtered = useMemo(
-    () => filterUtilization(rows, {
+    () => filterByRegister(filterUtilization(enriched, {
       search, band, linkedOnly, minIdle: idleHeavy ? 50 : null,
-    }),
-    [rows, search, band, linkedOnly, idleHeavy],
+    }), { site, vehicleType }),
+    [enriched, search, band, linkedOnly, idleHeavy, site, vehicleType],
   )
+  const siteOptions = useMemo(() => [...new Set(enriched.map((r) => r.site || NO_SITE))].sort(), [enriched])
+  const typeOptions = useMemo(() => [...new Set(enriched.map((r) => r.vehicle_type || NO_TYPE))].sort(), [enriched])
+  const sites = useMemo(() => siteComparison(filtered), [filtered])
+  const coverage = useMemo(() => (fleet.length ? telematicsCoverage(rows, fleet) : null), [rows, fleet])
+  const timeline = useMemo(() => captureTimeline(rows), [rows])
 
   const sorted = useMemo(() => {
     const fn = SORTS[sortKey] || SORTS.utilization_pct
@@ -123,11 +146,24 @@ export default function FleetUtilization() {
     else { setSortKey(key); setSortDir('desc') }
   }
 
-  const exportCols = ['asset_no', 'country', 'make', 'model', 'utilization_pct', 'distance_km', 'idle', 'working', 'max_speed', 'current_km', 'captured_at']
-  const exportHeaders = ['Asset', 'Country', 'Make', 'Model', 'Utilization %', 'Distance km', 'Idle %', 'Working h', 'Max speed', 'Current km', 'Captured']
+  const exportCols = ['asset_no', 'country', 'site', 'vehicle_type', 'make', 'model', 'utilization_pct', 'distance_km', 'idle', 'working', 'max_speed', 'current_km', 'captured_at']
+  const exportHeaders = ['Asset', 'Country', 'Site', 'Vehicle type', 'Make', 'Model', 'Utilization %', 'Distance km', 'Idle %', 'Working h', 'Max speed', 'Current km', 'Captured']
+  function exportGap(kind) {
+    if (!coverage?.uncovered.length) return
+    const cols = ['asset_no', 'country', 'site', 'vehicle_type']
+    const heads = ['Asset', 'Country', 'Site', 'Vehicle type']
+    const out = coverage.uncovered.map((u) => ({ ...u, site: u.site || NO_SITE, vehicle_type: u.vehicle_type || NO_TYPE }))
+    if (kind === 'excel') exportToExcel(out, cols, heads, 'Telematics Coverage Gap')
+    else exportToPdf(out, cols.map((k, i) => ({ key: k, header: heads[i] })), 'Telematics coverage gap', 'Telematics Coverage Gap', 'portrait')
+  }
+  const siteChart = {
+    labels: sites.slice(0, 15).map((x) => x.site),
+    datasets: [{ label: 'Avg utilization %', data: sites.slice(0, 15).map((x) => (x.avgUtilization == null ? null : Math.round(x.avgUtilization * 10) / 10)), backgroundColor: withAlpha(colorAt(1), 0.85) }],
+  }
+
   function exportRows() {
     return sorted.map((r) => ({
-      asset_no: r.asset_no, country: r.country, make: r.make, model: r.model,
+      asset_no: r.asset_no, country: r.country, site: r.site || NO_SITE, vehicle_type: r.vehicle_type || NO_TYPE, make: r.make, model: r.model,
       utilization_pct: num(r.utilization_pct), distance_km: num(r.distance_km),
       idle: idlePct(r), working: secondsToHours(r.working_seconds),
       max_speed: num(r.max_speed), current_km: num(r.current_km), captured_at: r.captured_at,
@@ -170,6 +206,15 @@ export default function FleetUtilization() {
         </div>
       )}
 
+      {fleetError && <div className="card p-3 text-sm text-amber-300 flex items-center justify-between gap-2"><span>{fleetError}</span><button onClick={load} className="btn-ghost">Retry</button></div>}
+      {!loading && timeline.points.length > 0 && (
+        <p className="text-xs text-slate-400">
+          {timeline.trendable
+            ? `${timeline.points.length} telematics captures loaded, from ${timeline.points[0].date} to ${timeline.points[timeline.points.length - 1].date}.`
+            : `One telematics capture is loaded (${timeline.points[0].date}). Figures are a snapshot; a utilization trend appears once further captures are loaded.`}
+        </p>
+      )}
+
       {/* KPI strip */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <Stat icon={Truck} label="Assets tracked" value={fmtNum(kpis.assets)} sub={`${fmtNum(kpis.linked)} linked to fleet`} />
@@ -204,6 +249,62 @@ export default function FleetUtilization() {
         </div>
       )}
 
+      {!loading && trendChartData(timeline) && (
+        <div className="card p-4">
+          <div className="text-sm font-medium text-slate-200 mb-3">Utilization by capture</div>
+          <div className="h-56"><Bar data={trendChartData(timeline)} options={{ maintainAspectRatio: false, plugins: { legend: { labels: { color: '#cbd5e1' } } }, scales: { x: { ticks: { color: '#94a3b8' }, grid: { color: 'var(--panel-2)' } }, y: { min: 0, max: 100, ticks: { color: '#94a3b8' }, grid: { color: 'var(--panel-2)' } } } }} /></div>
+        </div>
+      )}
+
+      {!loading && fleet.length > 0 && sites.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="card p-4">
+            <div className="text-sm font-medium text-slate-200 mb-3">Site comparison</div>
+            <div className="h-56"><Bar data={siteChart} options={{ maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { min: 0, max: 100, ticks: { color: '#94a3b8' }, grid: { color: 'var(--panel-2)' } }, y: { ticks: { color: '#94a3b8' }, grid: { color: 'var(--panel-2)' } } } }} /></div>
+            <div className="overflow-x-auto max-h-56 overflow-y-auto mt-3">
+              <table className="w-full text-xs">
+                <thead className="text-slate-400"><tr>{['Site', 'Assets', 'Avg util', 'Avg idle', 'Distance', 'Idle h', 'High idle'].map((h) => <th key={h} className="text-left px-2 py-1">{h}</th>)}</tr></thead>
+                <tbody>{sites.map((x) => (
+                  <tr key={x.site} className="border-t border-white/5">
+                    <td className="px-2 py-1 text-slate-200">{x.site}</td><td className="px-2 py-1">{x.assets}</td>
+                    <td className="px-2 py-1">{fmtPct(x.avgUtilization)}</td><td className="px-2 py-1">{fmtPct(x.avgIdlePct)}</td>
+                    <td className="px-2 py-1">{fmtKm(x.distanceKm)}</td><td className="px-2 py-1">{fmtHrs(x.idleHours)}</td><td className="px-2 py-1">{x.highIdle}</td>
+                  </tr>))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          {coverage && (
+            <div className="card p-4">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="text-sm font-medium text-slate-200">Telematics coverage gap</div>
+                <div className="flex gap-1">
+                  <button onClick={() => exportGap('excel')} disabled={!coverage.uncovered.length} className="btn-ghost gap-1 text-xs"><FileSpreadsheet className="w-3.5 h-3.5" /> Excel</button>
+                  <button onClick={() => exportGap('pdf')} disabled={!coverage.uncovered.length} className="btn-ghost gap-1 text-xs"><FileText className="w-3.5 h-3.5" /> PDF</button>
+                </div>
+              </div>
+              <p className="text-xs text-slate-500 mb-3">Active fleet-register assets with no telematics row in this scope. {coverage.unregistered > 0 ? `${coverage.unregistered} telematics row(s) name an asset the register does not hold.` : ''}</p>
+              <div className="grid grid-cols-3 gap-2 mb-3">
+                <div><div className="text-xs text-slate-400">Active assets</div><div className="text-lg font-semibold text-slate-100">{fmtNum(coverage.activeAssets)}</div></div>
+                <div><div className="text-xs text-slate-400">With telematics</div><div className="text-lg font-semibold text-slate-100">{fmtNum(coverage.covered)}</div></div>
+                <div><div className="text-xs text-slate-400">Coverage</div><div className="text-lg font-semibold text-slate-100">{fmtPct(coverage.coveragePct)}</div></div>
+              </div>
+              <div className="overflow-x-auto max-h-56 overflow-y-auto">
+                <table className="w-full text-xs">
+                  <thead className="text-slate-400"><tr>{['Site', 'Active', 'Tracked', 'Gap', 'Coverage'].map((h) => <th key={h} className="text-left px-2 py-1">{h}</th>)}</tr></thead>
+                  <tbody>{coverage.bySite.map((x) => (
+                    <tr key={x.site} className="border-t border-white/5">
+                      <td className="px-2 py-1 text-slate-200">{x.site}</td><td className="px-2 py-1">{x.active}</td><td className="px-2 py-1">{x.covered}</td>
+                      <td className="px-2 py-1 text-amber-300">{x.gap}</td><td className="px-2 py-1">{fmtPct(x.coveragePct)}</td>
+                    </tr>))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Filters */}
       <div className="card p-3 flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-[200px]">
@@ -219,6 +320,18 @@ export default function FleetUtilization() {
           <option value="Low">Low (&lt;40%)</option>
           <option value="Unknown">Unknown</option>
         </select>
+        {fleet.length > 0 && (
+          <>
+            <select aria-label="Site" value={site} onChange={(e) => setSite(e.target.value)} className="input">
+              <option value="">All sites</option>
+              {siteOptions.map((o) => <option key={o} value={o}>{o}</option>)}
+            </select>
+            <select aria-label="Vehicle type" value={vehicleType} onChange={(e) => setVehicleType(e.target.value)} className="input">
+              <option value="">All vehicle types</option>
+              {typeOptions.map((o) => <option key={o} value={o}>{o}</option>)}
+            </select>
+          </>
+        )}
         <label className="flex items-center gap-1.5 text-sm text-slate-300 px-2">
           <input type="checkbox" checked={linkedOnly} onChange={(e) => setLinkedOnly(e.target.checked)} /> <Link2 className="w-3.5 h-3.5" /> Linked only
         </label>
@@ -263,6 +376,7 @@ export default function FleetUtilization() {
                       <div className="text-xs text-slate-500">
                         {[r.make, r.model].filter(Boolean).join(' ') || 'N/A'}
                         {r.country ? ` · ${r.country}` : ''}
+                        {r.site ? ` · ${r.site}` : ''}
                         {!r.linked_to_fleet && <span className="text-amber-400"> · unregistered</span>}
                       </div>
                     </td>

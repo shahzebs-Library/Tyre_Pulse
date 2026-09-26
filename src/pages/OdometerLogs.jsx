@@ -13,6 +13,7 @@ import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import '../components/meters/meters.css'
 
 const MeterAnalytics = lazy(() => import('../components/meters/MeterAnalytics'))
+const MeterCoverage = lazy(() => import('../components/meters/MeterCoverage'))
 const EMPTY = { fleet: [], odometer: [], hours: [] }
 const EMPTY_FILTERS = { search: '', region: '', site: '', source: '', from: '', to: '', flagged: false, assetId: '', vehicleType: '', meterType: '', readingKind: '' }
 const matchesMeterType = (row, type) => !type || ({ km: row.supportsKm, hours: row.supportsHours, both: row.supportsKm && row.supportsHours, km_only: row.supportsKm && !row.supportsHours, hours_only: row.supportsHours && !row.supportsKm, unknown: !row.supportsKm && !row.supportsHours })[type]
@@ -188,7 +189,7 @@ function MeterWorkspace({ country }) {
       </div>}
       {filters.assetId && <p className="text-sm">History for <strong>{vehicles.find(v => v.id === filters.assetId)?.asset_no}</strong> <button className="underline ms-2" onClick={() => changeFilter('assetId', '')}>Show all vehicles</button></p>}
     </div>
-    <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex gap-1 rounded-lg bg-[var(--input-bg)] p-1" role="group" aria-label="Meter views">{[['vehicles', 'Latest per vehicle'], ['history', 'All readings'], ['analytics', 'Analytics']].map(([key, label]) => <button key={key} aria-pressed={tab === key} onClick={() => setTab(key)} className={tab === key ? 'btn-primary' : 'btn-secondary'}>{label}</button>)}</div><span className="text-sm text-[var(--text-muted)]">{filteredVehicles.length} vehicles · {filteredHistory.length} readings</span></div>
+    <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex gap-1 rounded-lg bg-[var(--input-bg)] p-1" role="group" aria-label="Meter views">{[['vehicles', 'Latest per vehicle'], ['history', 'All readings'], ['analytics', 'Analytics'], ['coverage', 'Coverage and quality']].map(([key, label]) => <button key={key} aria-pressed={tab === key} onClick={() => setTab(key)} className={tab === key ? 'btn-primary' : 'btn-secondary'}>{label}</button>)}</div><span className="text-sm text-[var(--text-muted)]">{filteredVehicles.length} vehicles · {filteredHistory.length} readings</span></div>
     {!loading && !error && !canSave && <p role="status" className="card text-sm">Meter Logs access is required to add or correct readings for vehicles in your assigned scope.</p>}
     {hasDrafts && <p className="text-xs text-[var(--text-muted)]">Unsaved entries stay while searching or changing views. Save them before leaving this page or switching country.</p>}
     {canReview && <button className="btn-secondary" onClick={() => { setFilters({ ...EMPTY_FILTERS, flagged: true }); setTab('history') }}>Admin review</button>}
@@ -200,6 +201,7 @@ function MeterWorkspace({ country }) {
       <tbody>{pager.pageRows.map(vehicle => <MeterRow key={vehicle.id} vehicle={vehicle} canSave={canSave} draft={drafts[vehicle.id]} status={statuses[vehicle.id]} onChange={changeDraft} onSave={save} onHistory={showHistory} />)}{!filteredVehicles.length && <tr><td colSpan={6} className="p-10 text-center text-[var(--text-muted)]">No vehicles match these filters.</td></tr>}</tbody>
     </table></div><TablePagination {...pager} /></div>}
     {!loading && !error && tab === 'history' && <MeterHistory canReview={canReview} canCorrect={canCorrect} rows={filteredHistory} onSaved={corrected} resetKey={filters} />}
+    {!loading && !error && tab === 'coverage' && <Suspense fallback={<p role="status">Loading coverage…</p>}><MeterCoverage vehicles={filteredVehicles} history={filteredHistory} today={meterToday(country)} /></Suspense>}
     {!loading && !error && tab === 'analytics' && <Suspense fallback={<p role="status">Loading analytics…</p>}><MeterAnalytics rows={analyticsRows} /></Suspense>}
   </div>
 }

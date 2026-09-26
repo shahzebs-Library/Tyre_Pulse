@@ -1,7 +1,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // RotationSchedule.jsx - Tyre Rotation Compliance Tracker · /rotation
+// All figures come from src/lib/rotationScheduleAnalytics.js.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Chart as ChartJS,
@@ -10,373 +11,141 @@ import {
 } from 'chart.js'
 import { Bar, Line } from 'react-chartjs-2'
 import {
-  RotateCcw, AlertTriangle, CheckCircle, Clock, TrendingUp,
-  Download, FileText, RefreshCw, ChevronDown, ChevronUp,
-  X, Filter, Search, Building2, Truck, Layers,
+  RotateCcw, AlertTriangle, CheckCircle, TrendingUp,
+  FileText, RefreshCw, X, Search, Building2, Truck, Layers,
   DollarSign, Settings2, Calendar, ArrowRight, Info,
-  AlertOctagon, Gauge, Activity, ChevronRight, Wrench,
-  FileSpreadsheet, BarChart3, Target, MapPin, Lock, ShieldCheck,
+  AlertOctagon, Gauge, Activity, Wrench,
+  FileSpreadsheet, BarChart3, Target, Lock, ShieldCheck, HelpCircle,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import * as rotations from '../lib/api/rotations'
-import { normalizePosition } from '../lib/tyrePositions'
 import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
-import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
+import {
+  resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme,
+  exportSheetsToExcel, reportFileName, reportDateLabel,
+} from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
 import Card, { CardHeader } from '../components/ui/Card'
 import Modal from '../components/ui/Modal'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import EmptyState from '../components/EmptyState'
 import { formatDate } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
 import { loadAutoTable } from '../lib/pdfEngine'
+import { colorAt, withAlpha } from '../lib/reportColors'
+import {
+  buildRotationAnalytics, filterVehicles, autoScheduleEntries, scheduleSummary, normPos,
+  DEFAULT_INTERVAL, MIN_INTERVAL, MAX_INTERVAL, DUE_SOON_BUFFER, WEAR_IMBALANCE_MM, LOW_TREAD_MM,
+  STATUSES, URGENCY_ORDER, PRIORITIES,
+} from '../lib/rotationScheduleAnalytics'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement, PointElement,
   ArcElement, Title, Tooltip, Legend, Filler,
 )
 
-// ── Constants ──────────────────────────────────────────────────────────────────
-const DEFAULT_INTERVAL     = 20_000
-const MIN_INTERVAL         = 10_000
-const MAX_INTERVAL         = 40_000
-const DUE_SOON_BUFFER      = 2_000
-const WEAR_IMBALANCE_MM    = 3
-
 const CHART_DEFAULTS = {
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
-    legend: { labels: { color: '#9ca3af', boxWidth: 12, font: { size: 11 } } },
+    legend: { labels: { color: 'var(--text-muted)', boxWidth: 12, font: { size: 11 } } },
     tooltip: {
       backgroundColor: 'var(--panel)',
       borderColor: 'var(--hairline)',
       borderWidth: 1,
-      titleColor: '#f9fafb',
-      bodyColor: '#d1d5db',
+      titleColor: 'var(--text-primary)',
+      bodyColor: 'var(--text-secondary)',
     },
   },
   scales: {
-    x: { ticks: { color: '#9ca3af', font: { size: 11 } }, grid: { color: 'var(--panel-2)' } },
-    y: { ticks: { color: '#9ca3af', font: { size: 11 } }, grid: { color: 'var(--panel-2)' } },
+    x: { ticks: { color: 'var(--text-muted)', font: { size: 11 } }, grid: { color: 'var(--panel-2)' } },
+    y: { ticks: { color: 'var(--text-muted)', font: { size: 11 } }, grid: { color: 'var(--panel-2)' } },
   },
 }
 
+// Semantic status colours (the colour carries meaning; each badge also carries
+// the status word and a distinct icon, so colour is never the only signal).
 const STATUS_CFG = {
-  'On Schedule': { color: 'text-green-400',  bg: 'bg-green-900/30',  border: 'border-green-700',  dot: 'bg-green-500'  },
-  'Due Soon':    { color: 'text-yellow-400', bg: 'bg-yellow-900/30', border: 'border-yellow-700', dot: 'bg-yellow-500' },
-  'Overdue':     { color: 'text-red-400',    bg: 'bg-red-900/30',    border: 'border-red-700',    dot: 'bg-red-500'    },
-  'No History':  { color: 'text-gray-400',   bg: 'bg-gray-800',      border: 'border-gray-600',   dot: 'bg-gray-500'   },
+  'On Schedule': { color: 'text-green-400', bg: 'bg-green-900/30', border: 'border-green-700', bar: 'bg-green-500', Icon: CheckCircle },
+  'Due Soon': { color: 'text-yellow-400', bg: 'bg-yellow-900/30', border: 'border-yellow-700', bar: 'bg-yellow-500', Icon: AlertTriangle },
+  Overdue: { color: 'text-red-400', bg: 'bg-red-900/30', border: 'border-red-700', bar: 'bg-red-500', Icon: AlertOctagon },
+  Unmeasured: { color: 'text-sky-300', bg: 'bg-sky-900/30', border: 'border-sky-700', bar: 'bg-sky-500', Icon: HelpCircle },
+  'No History': { color: 'text-[var(--text-muted)]', bg: 'bg-[var(--input-bg)]', border: 'border-[var(--input-border)]', bar: 'bg-[var(--text-dim)]', Icon: Info },
+}
+const PRIORITY_TONE = {
+  Critical: 'text-red-400', High: 'text-orange-400', Medium: 'text-yellow-400', Low: 'text-[var(--text-secondary)]',
 }
 
-const URGENCY_ORDER = { Overdue: 0, 'Due Soon': 1, 'No History': 2, 'On Schedule': 3 }
+const BTN = 'inline-flex items-center justify-center gap-2 min-h-[44px] px-3 py-2 bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] border border-[var(--input-border)] rounded-lg text-[var(--text-secondary)] text-sm transition-colors disabled:opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]'
+const ICON_BTN = 'inline-flex items-center justify-center w-11 h-11 bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] border border-[var(--input-border)] rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]'
+const FIELD = 'min-h-[44px] w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-primary)] text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]'
 
-const MONTH_LABELS = Array.from({ length: 12 }, (_, i) => {
-  const d = new Date()
-  d.setMonth(d.getMonth() - 11 + i)
-  return d.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' })
-})
-
-// ── Helpers ────────────────────────────────────────────────────────────────────
+// ── Helpers (honest: null renders N/A) ────────────────────────────────────────
 function fmt(n, dec = 0) {
-  if (n == null || isNaN(n)) return '-'
+  if (n == null || !Number.isFinite(Number(n))) return 'N/A'
   return Number(n).toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec })
 }
 function fmtDate(d) {
-  if (!d) return '-'
+  if (!d) return 'N/A'
   return formatDate(d, 'All', { day: '2-digit', month: 'short', year: 'numeric' })
 }
-function safeKm(v) {
-  const n = parseFloat(v)
-  return isNaN(n) ? null : n
-}
-function normPos(pos) {
-  // Delegate to the shared canonical mapper (recognises coded positions like
-  // LHF1 / LHRI) then collapse to this page's short axle-group labels.
-  const g = normalizePosition(pos)
-  if (g === 'Lift Axle') return 'Lift'
-  if (g === 'Tag Axle')  return 'Tag'
-  return g
-}
+const fmtKm = (n) => (n == null ? 'N/A' : `${fmt(n)} km`)
 
-// ── Core rotation analytics engine ────────────────────────────────────────────
-function buildRotationAnalytics(records, interval) {
-  if (!records || records.length === 0) return null
-
-  // Index all records by serial_number to detect position changes
-  const bySerial = {}
-  records.forEach(r => {
-    const sn = (r.serial_number || r.serial_no || '').trim()
-    if (!sn) return
-    if (!bySerial[sn]) bySerial[sn] = []
-    bySerial[sn].push(r)
-  })
-
-  // Sort each serial's records by issue_date
-  Object.values(bySerial).forEach(arr => arr.sort((a, b) => new Date(a.issue_date) - new Date(b.issue_date)))
-
-  // Detect rotations per serial (position change between consecutive records)
-  const rotationsDetected = {} // serial → [{ from, to, date, km }]
-  Object.entries(bySerial).forEach(([sn, arr]) => {
-    const events = []
-    for (let i = 1; i < arr.length; i++) {
-      const prev = arr[i - 1]
-      const curr = arr[i]
-      const fromPos = normPos(prev.position)
-      const toPos   = normPos(curr.position)
-      if (fromPos !== toPos) {
-        events.push({
-          from: fromPos,
-          to: toPos,
-          date: curr.issue_date,
-          km: safeKm(curr.km_at_fitment),
-          asset: curr.asset_no,
-        })
-      }
-    }
-    if (events.length) rotationsDetected[sn] = events
-  })
-
-  // Group records by asset_no
-  const byAsset = {}
-  records.forEach(r => {
-    const asset = (r.asset_no || '').trim()
-    if (!asset) return
-    if (!byAsset[asset]) byAsset[asset] = []
-    byAsset[asset].push(r)
-  })
-
-  // Per-vehicle stats
-  const vehicles = []
-  Object.entries(byAsset).forEach(([asset, recs]) => {
-    const site    = recs[0]?.site || '-'
-    const country = recs[0]?.country || '-'
-
-    // Active tyres: latest record per serial on this asset
-    const latestBySn = {}
-    recs.forEach(r => {
-      const sn = (r.serial_number || r.serial_no || '').trim()
-      if (!sn) return
-      if (!latestBySn[sn] || new Date(r.issue_date) > new Date(latestBySn[sn].issue_date)) {
-        latestBySn[sn] = r
-      }
-    })
-    const activeTyres = Object.values(latestBySn)
-
-    // Detect last rotation across all serials on this vehicle
-    let lastRotationDate = null
-    let lastRotationKm   = null
-    let totalRotations   = 0
-    const rotationEvents = []
-
-    Object.entries(latestBySn).forEach(([sn, _]) => {
-      const events = rotationsDetected[sn] || []
-      const vehicleEvents = events.filter(e => e.asset === asset)
-      vehicleEvents.forEach(ev => {
-        totalRotations++
-        rotationEvents.push({ serial: sn, ...ev })
-        if (!lastRotationDate || new Date(ev.date) > new Date(lastRotationDate)) {
-          lastRotationDate = ev.date
-          lastRotationKm   = ev.km
-        }
-      })
-    })
-
-    // Current max km on vehicle (highest km_at_fitment or km_at_removal among active)
-    const currentKm = activeTyres.reduce((mx, r) => {
-      const k = safeKm(r.km_at_fitment) || 0
-      return k > mx ? k : mx
-    }, 0)
-
-    const sinceLastKm = lastRotationKm != null ? currentKm - lastRotationKm : null
-    const dueInKm     = lastRotationKm != null ? interval - sinceLastKm : null
-
-    let status
-    if (totalRotations === 0) {
-      status = 'No History'
-    } else if (sinceLastKm >= interval) {
-      status = 'Overdue'
-    } else if (dueInKm != null && dueInKm <= DUE_SOON_BUFFER) {
-      status = 'Due Soon'
-    } else {
-      status = 'On Schedule'
-    }
-
-    // Tread balance (steer vs drive)
-    const treadByPos = {}
-    activeTyres.forEach(r => {
-      const pos = normPos(r.position)
-      const td  = parseFloat(r.tread_depth)
-      if (!isNaN(td)) {
-        if (!treadByPos[pos]) treadByPos[pos] = []
-        treadByPos[pos].push(td)
-      }
-    })
-    const avgTread = pos => treadByPos[pos] ? treadByPos[pos].reduce((s, v) => s + v, 0) / treadByPos[pos].length : null
-    const steerTread = avgTread('Steer')
-    const driveTread = avgTread('Drive')
-    const wearImbalance = steerTread != null && driveTread != null ? Math.abs(steerTread - driveTread) : null
-
-    vehicles.push({
-      asset, site, country,
-      activeTyreCount: activeTyres.length,
-      activeTyres,
-      lastRotationDate,
-      lastRotationKm,
-      currentKm,
-      sinceLastKm,
-      dueInKm,
-      status,
-      totalRotations,
-      rotationEvents: rotationEvents.sort((a, b) => new Date(b.date) - new Date(a.date)),
-      wearImbalance,
-      steerTread,
-      driveTread,
-      treadByPos,
-    })
-  })
-
-  // Sort by urgency
-  vehicles.sort((a, b) => {
-    const uo = (URGENCY_ORDER[a.status] ?? 4) - (URGENCY_ORDER[b.status] ?? 4)
-    if (uo !== 0) return uo
-    if (a.sinceLastKm != null && b.sinceLastKm != null) return b.sinceLastKm - a.sinceLastKm
-    return 0
-  })
-
-  // Fleet KPIs
-  const total         = vehicles.length
-  const compliant     = vehicles.filter(v => v.status === 'On Schedule').length
-  const overdue       = vehicles.filter(v => v.status === 'Overdue').length
-  const compliancePct = total > 0 ? Math.round((compliant / total) * 100) : 0
-
-  // Average interval between rotations
-  const allIntervals = []
-  Object.values(rotationsDetected).forEach(evts => {
-    for (let i = 1; i < evts.length; i++) {
-      const k1 = evts[i - 1].km
-      const k2 = evts[i].km
-      if (k1 != null && k2 != null && k2 > k1) allIntervals.push(k2 - k1)
-    }
-  })
-  const avgInterval = allIntervals.length > 0
-    ? Math.round(allIntervals.reduce((s, v) => s + v, 0) / allIntervals.length)
-    : null
-
-  // Cost savings estimate
-  const avgCost     = records.reduce((s, r) => s + (parseFloat(r.cost_per_tyre) || 0) * (Number(r.qty) || 1), 0) / Math.max(records.reduce((s, r) => s + (Number(r.qty) || 1), 0), 1)
-  const effCost     = avgCost // actual data only - no fabricated fallback rate
-  const lifeBenefit = interval * 0.15
-  const costSavings = Math.round((lifeBenefit / 100_000) * effCost * total * 4 * 0.3)
-
-  // Tyre life comparison (rotated vs not rotated)
-  const withRotation    = []
-  const withoutRotation = []
-  records.forEach(r => {
-    const sn = (r.serial_number || r.serial_no || '').trim()
-    const km_start = safeKm(r.km_at_fitment)
-    const km_end   = safeKm(r.km_at_removal)
-    if (km_start == null || km_end == null || km_end <= km_start) return
-    const life = km_end - km_start
-    if (rotationsDetected[sn]) withRotation.push(life)
-    else withoutRotation.push(life)
-  })
-  const avgLifeWith    = withRotation.length    ? Math.round(withRotation.reduce((s, v) => s + v, 0) / withRotation.length) : null
-  const avgLifeWithout = withoutRotation.length ? Math.round(withoutRotation.reduce((s, v) => s + v, 0) / withoutRotation.length) : null
-
-  // Site compliance
-  const bySite = {}
-  vehicles.forEach(v => {
-    if (!bySite[v.site]) bySite[v.site] = { total: 0, compliant: 0 }
-    bySite[v.site].total++
-    if (v.status === 'On Schedule') bySite[v.site].compliant++
-  })
-  const siteCompliance = Object.entries(bySite)
-    .map(([site, d]) => ({ site, pct: Math.round((d.compliant / d.total) * 100), total: d.total, compliant: d.compliant }))
-    .sort((a, b) => b.pct - a.pct)
-
-  // Monthly rotation activity - derived from actual detected rotation events
-  // (position changes in tyre_records) over the trailing 12 months. No synthetic
-  // variance: each bucket is a real count of rotations performed that month.
-  const now = new Date()
-  const monthlyRotations = Array.from({ length: 12 }, (_, i) => {
-    const refDate  = new Date(now.getFullYear(), now.getMonth() - 11 + i, 1)
-    const nextDate = new Date(refDate.getFullYear(), refDate.getMonth() + 1, 1)
-    let count = 0
-    Object.values(rotationsDetected).forEach(evts => {
-      evts.forEach(ev => {
-        if (!ev.date) return
-        const rd = new Date(ev.date)
-        if (rd >= refDate && rd < nextDate) count++
-      })
-    })
-    return count
-  })
-  const hasMonthlyRotations = monthlyRotations.some(c => c > 0)
-
-  return {
-    vehicles,
-    total, compliant, overdue, compliancePct,
-    avgInterval, costSavings,
-    avgLifeWith, avgLifeWithout,
-    siteCompliance, monthlyRotations, hasMonthlyRotations,
-    effCost,
-  }
-}
-
-// ── KPI Card ───────────────────────────────────────────────────────────────────
-function KpiCard({ icon: Icon, label, value, sub, color = 'blue', delay = 0 }) {
-  const colors = {
-    blue:   { icon: 'text-blue-400',   bg: 'bg-blue-900/20',   border: 'border-blue-800'   },
-    green:  { icon: 'text-green-400',  bg: 'bg-green-900/20',  border: 'border-green-800'  },
-    red:    { icon: 'text-red-400',    bg: 'bg-red-900/20',    border: 'border-red-800'    },
-    yellow: { icon: 'text-yellow-400', bg: 'bg-yellow-900/20', border: 'border-yellow-800' },
-  }
-  const c = colors[color] || colors.blue
+function KpiCard({ icon: Icon, label, value, sub, tone = 'text-[var(--text-primary)]' }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay }}
-      className={`rounded-xl border ${c.border} ${c.bg} p-5 flex flex-col gap-3`}
-    >
-      <div className="flex items-center justify-between">
+    <div className="rounded-xl border border-[var(--input-border)] bg-[var(--surface-1)] p-4 flex flex-col gap-2 min-w-0">
+      <div className="flex items-center justify-between gap-2">
         <span className="text-xs text-[var(--text-muted)] uppercase tracking-wider">{label}</span>
-        <div className={`p-2 rounded-lg bg-[var(--surface-1)]`}>
-          <Icon size={16} className={c.icon} />
-        </div>
+        <Icon size={16} className="text-[var(--text-muted)] shrink-0" aria-hidden="true" />
       </div>
-      <div className="text-2xl font-bold text-[var(--text-primary)]">{value}</div>
+      <div className={`text-2xl font-bold tabular-nums truncate ${tone}`}>{value}</div>
       {sub && <div className="text-xs text-[var(--text-muted)]">{sub}</div>}
-    </motion.div>
+    </div>
   )
 }
 
-// ── Status Badge ───────────────────────────────────────────────────────────────
 function StatusBadge({ status }) {
   const cfg = STATUS_CFG[status] || STATUS_CFG['No History']
+  const { Icon } = cfg
   return (
     <span className={`inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-full border ${cfg.bg} ${cfg.border} ${cfg.color}`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
+      <Icon size={11} aria-hidden="true" />
       {status}
     </span>
   )
 }
 
 // ── Rotation History Drawer ────────────────────────────────────────────────────
-// DELIBERATELY NOT `Modal`. This is a full-height right-hand RAIL on the
-// `tp-drawer-panel` contract, and that contract is keyed on the DOM shape:
-// index.css widens it with `.fixed.inset-0 > .tp-drawer-panel`, which
-// `dialogFit.test.jsx` pins. Modal portals its own centred panel capped at
-// 92dvh, so converting would break that selector AND turn a rail into a box -
-// a layout change, not a migration. Same call as the drawers WorkOrders and
-// RepairRequests kept for the same reason.
+// DELIBERATELY NOT `Modal`: a full-height right-hand rail on the
+// `tp-drawer-panel` contract (`.fixed.inset-0 > .tp-drawer-panel`), which
+// `dialogFit.test.jsx` pins. Same call WorkOrders and RepairRequests made.
 function RotationDrawer({ vehicle, onClose }) {
-  if (!vehicle) return null
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
 
+  const tyreColumns = useMemo(() => [
+    { id: 'serial', header: 'Serial', accessorFn: (t) => t.serial_number || t.serial_no || '', cell: ({ getValue }) => <span className="font-mono">{getValue() || 'N/A'}</span> },
+    { id: 'position', header: 'Position', accessorFn: (t) => normPos(t.position) },
+    { id: 'brand', header: 'Brand', accessorFn: (t) => t.brand || '', cell: ({ getValue }) => getValue() || 'N/A' },
+    {
+      id: 'tread', header: 'Tread (mm)', accessorFn: (t) => { const n = Number(t.tread_depth); return Number.isFinite(n) && t.tread_depth !== null && t.tread_depth !== '' ? n : -1 },
+      meta: { align: 'right' },
+      cell: ({ getValue }) => {
+        const v = getValue()
+        if (v < 0) return <span className="text-[var(--text-dim)]">N/A</span>
+        return <span className={`tabular-nums font-medium ${v < LOW_TREAD_MM ? 'text-red-400' : ''}`}>{v.toFixed(1)}{v < LOW_TREAD_MM ? ' low' : ''}</span>
+      },
+    },
+    { id: 'km', header: 'Fitted km', accessorFn: (t) => Number(t.km_at_fitment) || -1, meta: { align: 'right' }, cell: ({ getValue }) => <span className="tabular-nums">{getValue() < 0 ? 'N/A' : fmt(getValue())}</span> },
+  ], [])
+
+  if (!vehicle) return null
   const treadPositions = ['Steer', 'Drive', 'Trailer', 'Lift', 'Tag']
-  const posColors = { Steer: '#3b82f6', Drive: '#ef4444', Trailer: '#f59e0b', Lift: '#10b981', Tag: '#8b5cf6', Other: '#6b7280' }
 
   return (
     <AnimatePresence>
@@ -388,6 +157,9 @@ function RotationDrawer({ vehicle, onClose }) {
         onClick={onClose}
       >
         <motion.div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="rotation-drawer-title"
           initial={{ x: '100%' }}
           animate={{ x: 0 }}
           exit={{ x: '100%' }}
@@ -395,134 +167,113 @@ function RotationDrawer({ vehicle, onClose }) {
           className="tp-drawer-panel w-full max-w-2xl h-full bg-[var(--surface-1)] border-l border-[var(--input-border)] overflow-y-auto"
           onClick={e => e.stopPropagation()}
         >
-          <div className="flex items-center justify-between p-6 border-b border-[var(--input-border)] sticky top-0 bg-[var(--surface-1)] z-10">
-            <div>
-              <div className="flex items-center gap-2 text-[var(--text-primary)] font-semibold text-lg">
-                <Truck size={18} className="text-blue-400" />
+          <div className="flex items-center justify-between gap-3 p-4 sm:p-6 border-b border-[var(--input-border)] sticky top-0 bg-[var(--surface-1)] z-10">
+            <div className="min-w-0">
+              <h2 id="rotation-drawer-title" className="flex items-center gap-2 text-[var(--text-primary)] font-semibold text-lg">
+                <Truck size={18} className="text-[var(--text-muted)]" aria-hidden="true" />
                 {vehicle.asset}
+              </h2>
+              <div className="text-sm text-[var(--text-muted)] mt-0.5 flex flex-wrap items-center gap-2">
+                {vehicle.site}, rotation history <StatusBadge status={vehicle.status} />
               </div>
-              <div className="text-sm text-[var(--text-muted)] mt-0.5">{vehicle.site} · Rotation History</div>
             </div>
-            <button onClick={onClose} className="p-2 hover:bg-[var(--input-bg)] rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
-              <X size={18} />
+            <button type="button" onClick={onClose} aria-label="Close rotation history" className={ICON_BTN}>
+              <X size={18} aria-hidden="true" />
             </button>
           </div>
 
-          <div className="p-6 space-y-6">
-            {/* Position tread depth visual. The section icons in this drawer are
-                decorative - they differ by SHAPE, not by status - so they take
-                CardHeader's muted default rather than a semantic tone. */}
+          <div className="p-4 sm:p-6 space-y-6">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+              {[
+                ['Latest odometer', fmtKm(vehicle.currentKm)],
+                ['Last rotation', fmtDate(vehicle.lastRotationDate)],
+                ['Since rotation', fmtKm(vehicle.sinceLastKm)],
+                ['Rotations', fmt(vehicle.totalRotations)],
+              ].map(([k, v]) => (
+                <div key={k} className="bg-[var(--input-bg)] rounded-lg p-3">
+                  <div className="text-xs text-[var(--text-muted)]">{k}</div>
+                  <div className="font-semibold tabular-nums text-[var(--text-primary)]">{v}</div>
+                </div>
+              ))}
+            </div>
+
             <Card>
-              <CardHeader title="Tread Depth by Position" icon={Gauge} />
+              <CardHeader title="Tread depth by position" icon={Gauge} />
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {treadPositions.map(pos => {
                   const depths = vehicle.treadByPos?.[pos]
-                  const avg    = depths ? depths.reduce((s, v) => s + v, 0) / depths.length : null
-                  const isLow  = avg != null && avg < 4
+                  const avg = depths ? depths.reduce((s, v) => s + v, 0) / depths.length : null
+                  const isLow = avg != null && avg < LOW_TREAD_MM
                   return (
                     <div key={pos} className="bg-[var(--input-bg)] rounded-lg p-3">
                       <div className="text-xs text-[var(--text-muted)] mb-1">{pos}</div>
                       {avg != null ? (
                         <>
-                          <div className={`text-lg font-bold ${isLow ? 'text-red-400' : 'text-green-400'}`}>
-                            {avg.toFixed(1)} mm
+                          <div className={`text-lg font-bold tabular-nums ${isLow ? 'text-red-400' : 'text-[var(--text-primary)]'}`}>
+                            {avg.toFixed(1)} mm{isLow ? ' low' : ''}
                           </div>
-                          <div className="mt-2 h-1.5 rounded-full bg-[var(--input-border)]">
-                            <div
-                              className={`h-full rounded-full ${isLow ? 'bg-red-500' : 'bg-green-500'}`}
-                              style={{ width: `${Math.min(100, (avg / 12) * 100)}%` }}
-                            />
+                          <div className="mt-2 h-1.5 rounded-full bg-[var(--input-border)]" aria-hidden="true">
+                            <div className={`h-full rounded-full ${isLow ? 'bg-red-500' : 'bg-green-500'}`} style={{ width: `${Math.min(100, (avg / 12) * 100)}%` }} />
                           </div>
                         </>
                       ) : (
-                        <div className="text-sm text-[var(--text-muted)]">-</div>
+                        <div className="text-sm text-[var(--text-muted)]">Not measured</div>
                       )}
                     </div>
                   )
                 })}
               </div>
               {vehicle.wearImbalance != null && vehicle.wearImbalance > WEAR_IMBALANCE_MM && (
-                <div className="mt-3 flex items-center gap-2 text-xs text-orange-400 bg-orange-900/20 border border-orange-800 rounded-lg px-3 py-2">
-                  <AlertTriangle size={13} />
-                  Steer-Drive tread imbalance of {vehicle.wearImbalance.toFixed(1)} mm, rotation recommended
+                <div role="status" className="mt-3 flex items-center gap-2 text-xs text-orange-400 bg-orange-900/20 border border-orange-800 rounded-lg px-3 py-2">
+                  <AlertTriangle size={13} aria-hidden="true" />
+                  Steer to drive tread imbalance of {vehicle.wearImbalance.toFixed(1)} mm. Rotation recommended.
                 </div>
               )}
             </Card>
 
-            {/* Rotation events timeline */}
             <Card>
-              <CardHeader title="Detected Rotation Events" icon={RotateCcw} />
+              <CardHeader title="Detected rotation events" icon={RotateCcw} />
               {vehicle.rotationEvents.length === 0 ? (
-                <div className="text-center py-6 text-[var(--text-muted)] text-sm">No rotation history detected for this vehicle</div>
+                <div className="text-center py-6 text-[var(--text-muted)] text-sm">No rotation detected for this vehicle. A rotation shows up when the same serial is recorded at a different axle group.</div>
               ) : (
-                <div className="space-y-3">
+                <ol className="space-y-3">
                   {vehicle.rotationEvents.map((ev, i) => (
-                    <div key={i} className="flex items-start gap-3">
-                      <div className="mt-1 flex-shrink-0 w-6 h-6 rounded-full bg-green-900/40 border border-green-700 flex items-center justify-center">
-                        <RotateCcw size={11} className="text-green-400" />
+                    <li key={i} className="flex items-start gap-3">
+                      <div className="mt-1 flex-shrink-0 w-6 h-6 rounded-full bg-[var(--input-bg)] border border-[var(--input-border)] flex items-center justify-center">
+                        <RotateCcw size={11} className="text-[var(--text-muted)]" aria-hidden="true" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm text-[var(--text-primary)] font-medium">{ev.serial}</span>
+                          <span className="text-sm text-[var(--text-primary)] font-medium font-mono">{ev.serial}</span>
                           <span className="text-xs text-[var(--text-muted)]">{fmtDate(ev.date)}</span>
                         </div>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span
-                            className="text-xs px-2 py-0.5 rounded"
-                            style={{ backgroundColor: `${posColors[ev.from] || '#6b7280'}30`, color: posColors[ev.from] || '#9ca3af', border: `1px solid ${posColors[ev.from] || '#6b7280'}50` }}
-                          >
-                            {ev.from}
-                          </span>
-                          <ArrowRight size={12} className="text-[var(--text-muted)]" />
-                          <span
-                            className="text-xs px-2 py-0.5 rounded"
-                            style={{ backgroundColor: `${posColors[ev.to] || '#6b7280'}30`, color: posColors[ev.to] || '#9ca3af', border: `1px solid ${posColors[ev.to] || '#6b7280'}50` }}
-                          >
-                            {ev.to}
-                          </span>
-                          {ev.km != null && (
-                            <span className="text-xs text-[var(--text-muted)]">@ {fmt(ev.km)} km</span>
-                          )}
+                        <div className="flex items-center gap-2 mt-1 text-xs">
+                          <span className="px-2 py-0.5 rounded border border-[var(--input-border)] bg-[var(--input-bg)]">{ev.from}</span>
+                          <ArrowRight size={12} className="text-[var(--text-muted)]" aria-label="moved to" />
+                          <span className="px-2 py-0.5 rounded border border-[var(--input-border)] bg-[var(--input-bg)]">{ev.to}</span>
+                          <span className="text-[var(--text-muted)]">{ev.km != null ? `at ${fmt(ev.km)} km` : 'odometer not recorded'}</span>
                         </div>
                       </div>
-                    </div>
+                    </li>
                   ))}
-                </div>
+                </ol>
               )}
             </Card>
 
-            {/* Active tyres. The table is REFUSED for EnterpriseTable: five
-                columns of read-only detail inside a drawer, no search, no
-                export, no pagination - the kit table would add all three. */}
             <Card>
-              <CardHeader title={`Active Tyres (${vehicle.activeTyreCount})`} icon={Layers} />
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="border-b border-[var(--input-border)]">
-                      {['Serial', 'Position', 'Brand', 'Tread (mm)', 'Fitted km'].map(h => (
-                        <th key={h} className="text-left text-[var(--text-muted)] pb-2 pr-4 font-medium">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[var(--input-border)]">
-                    {vehicle.activeTyres.map((t, i) => {
-                      const td = parseFloat(t.tread_depth)
-                      return (
-                        <tr key={i} className="hover:bg-gray-800/50">
-                          <td className="py-2 pr-4 text-[var(--text-primary)] font-mono">{t.serial_number || t.serial_no || '-'}</td>
-                          <td className="py-2 pr-4 text-[var(--text-secondary)]">{normPos(t.position)}</td>
-                          <td className="py-2 pr-4 text-[var(--text-secondary)]">{t.brand || '-'}</td>
-                          <td className={`py-2 pr-4 font-medium ${!isNaN(td) && td < 4 ? 'text-red-400' : 'text-green-400'}`}>
-                            {isNaN(td) ? '-' : `${td.toFixed(1)}`}
-                          </td>
-                          <td className="py-2 pr-4 text-[var(--text-secondary)]">{fmt(safeKm(t.km_at_fitment))}</td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <CardHeader title={`Active tyres (${vehicle.activeTyreCount})`} icon={Layers} />
+              <EnterpriseTable
+                columns={tyreColumns}
+                data={vehicle.activeTyres}
+                getRowId={(t) => String(t.id)}
+                enableGlobalFilter={false}
+                enableColumnFilters={false}
+                enableColumnVisibility={false}
+                enableExport={false}
+                initialPageSize={25}
+                pageSizeOptions={[25, 50]}
+                emptyMessage="No active tyres with a serial on this vehicle"
+              />
             </Card>
           </div>
         </motion.div>
@@ -533,15 +284,14 @@ function RotationDrawer({ vehicle, onClose }) {
 
 // ── Schedule Rotation Modal ────────────────────────────────────────────────────
 function ScheduleModal({ vehicle, onClose, onSave }) {
-  const [notes, setNotes]     = useState('')
-  const [date, setDate]       = useState(() => {
+  const [notes, setNotes] = useState('')
+  const [date, setDate] = useState(() => {
     const d = new Date(); d.setDate(d.getDate() + 7)
     return d.toISOString().slice(0, 10)
   })
   const [priority, setPriority] = useState(
     vehicle?.status === 'Overdue' ? 'Critical' : vehicle?.status === 'Due Soon' ? 'High' : 'Medium'
   )
-
   const [saving, setSaving] = useState(false)
 
   async function handleSave() {
@@ -549,7 +299,7 @@ function ScheduleModal({ vehicle, onClose, onSave }) {
     setSaving(true)
     const entry = {
       asset: vehicle.asset,
-      site:  vehicle.site,
+      site: vehicle.site,
       scheduledDate: date,
       priority,
       notes,
@@ -564,93 +314,70 @@ function ScheduleModal({ vehicle, onClose, onSave }) {
     }
   }
 
-  // ONE guarded close for every path. The hand-rolled version had no in-flight
-  // guard at all, so the backdrop and the X could both drop a save in progress
-  // while the Save button sat correctly disabled. Escape, backdrop, X and
-  // Cancel now agree, which is the divergence Modal exists to remove.
+  // One guarded close for every path (Escape, backdrop, X, Cancel).
   const close = () => { if (!saving) onClose() }
 
   return (
-    // There is no <form> element here - the buttons are onClick handlers - so
-    // the actions belong in Modal's footer slot rather than in the body.
     <Modal
       open
       onClose={close}
       size="md"
       title={
         <span className="flex items-center gap-2">
-          <RotateCcw size={16} className="text-green-400" />
-          Schedule Rotation - {vehicle?.asset}
+          <RotateCcw size={16} className="text-[var(--text-muted)]" aria-hidden="true" />
+          Schedule rotation for {vehicle?.asset}
         </span>
       }
       footer={
         <>
-          <button onClick={close} disabled={saving} className="btn-secondary flex-1">
+          <button type="button" onClick={close} disabled={saving} className="btn-secondary flex-1">
             Cancel
           </button>
-          <button onClick={handleSave} disabled={saving} className="btn-primary flex-1">
-            {saving ? 'Saving...' : 'Save to Schedule'}
+          <button type="button" onClick={handleSave} disabled={saving || !date} className="btn-primary flex-1">
+            {saving ? 'Saving' : 'Save to schedule'}
           </button>
         </>
       }
     >
       <div className="space-y-4">
         <div>
-          <label className="block text-xs text-[var(--text-muted)] mb-1.5">Scheduled Date</label>
-          <input
-            type="date"
-            value={date}
-            onChange={e => setDate(e.target.value)}
-            className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500"
-          />
+          <label htmlFor="rot-date" className="block text-xs text-[var(--text-muted)] mb-1.5">Scheduled date</label>
+          <input id="rot-date" type="date" value={date} onChange={e => setDate(e.target.value)} className={FIELD} />
         </div>
-
         <div>
-          <label className="block text-xs text-[var(--text-muted)] mb-1.5">Priority</label>
-          <select
-            value={priority}
-            onChange={e => setPriority(e.target.value)}
-            className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500"
-          >
-            {['Critical', 'High', 'Medium', 'Low'].map(p => (
-              <option key={p} value={p}>{p}</option>
-            ))}
+          <label htmlFor="rot-priority" className="block text-xs text-[var(--text-muted)] mb-1.5">Priority</label>
+          <select id="rot-priority" value={priority} onChange={e => setPriority(e.target.value)} className={FIELD}>
+            {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
           </select>
         </div>
-
         <div>
-          <label className="block text-xs text-[var(--text-muted)] mb-1.5">Notes</label>
+          <label htmlFor="rot-notes" className="block text-xs text-[var(--text-muted)] mb-1.5">Notes</label>
           <textarea
+            id="rot-notes"
             value={notes}
             onChange={e => setNotes(e.target.value)}
             rows={3}
-            placeholder="Optional workshop notes..."
-            className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-primary)] text-sm resize-none focus:outline-none focus:border-blue-500 placeholder-gray-600"
+            placeholder="Optional workshop notes"
+            className={`${FIELD} resize-none`}
           />
         </div>
-
-        <div className="bg-[var(--input-bg)] rounded-lg p-3 grid grid-cols-2 gap-3 text-xs">
-          <div>
-            <div className="text-[var(--text-muted)]">Current km</div>
-            <div className="text-[var(--text-primary)] font-medium">{fmt(vehicle?.currentKm)}</div>
-          </div>
-          <div>
-            <div className="text-[var(--text-muted)]">Site</div>
-            <div className="text-[var(--text-primary)] font-medium">{vehicle?.site}</div>
-          </div>
-          <div>
-            <div className="text-[var(--text-muted)]">Status</div>
-            <StatusBadge status={vehicle?.status} />
-          </div>
-          <div>
-            <div className="text-[var(--text-muted)]">Since Last Rotation</div>
-            <div className="text-[var(--text-primary)] font-medium">{vehicle?.sinceLastKm != null ? `${fmt(vehicle.sinceLastKm)} km` : '-'}</div>
-          </div>
-        </div>
+        <dl className="bg-[var(--input-bg)] rounded-lg p-3 grid grid-cols-2 gap-3 text-xs">
+          <div><dt className="text-[var(--text-muted)]">Latest odometer</dt><dd className="text-[var(--text-primary)] font-medium">{fmtKm(vehicle?.currentKm)}</dd></div>
+          <div><dt className="text-[var(--text-muted)]">Site</dt><dd className="text-[var(--text-primary)] font-medium">{vehicle?.site}</dd></div>
+          <div><dt className="text-[var(--text-muted)]">Status</dt><dd><StatusBadge status={vehicle?.status} /></dd></div>
+          <div><dt className="text-[var(--text-muted)]">Since last rotation</dt><dd className="text-[var(--text-primary)] font-medium">{fmtKm(vehicle?.sinceLastKm)}</dd></div>
+        </dl>
       </div>
     </Modal>
   )
 }
+
+const TABS = [
+  { id: 'status', label: 'Rotation status', icon: Truck },
+  { id: 'charts', label: 'Compliance charts', icon: BarChart3 },
+  { id: 'impact', label: 'Tyre life impact', icon: TrendingUp },
+  { id: 'schedule', label: 'Upcoming schedule', icon: Calendar },
+]
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function RotationSchedule() {
@@ -658,32 +385,32 @@ export default function RotationSchedule() {
   const { branding } = useTenant()
   const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
 
-  const [records,  setRecords]  = useState([])
-  const [loading,  setLoading]  = useState(true)
-  const [error,    setError]    = useState(null)
+  const [records, setRecords] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [interval, setInterval] = useState(DEFAULT_INTERVAL)
-  const [search,   setSearch]   = useState('')
+  const [search, setSearch] = useState('')
   const [siteFilter, setSiteFilter] = useState('All')
   const [statusFilter, setStatusFilter] = useState('All')
   const [drawerVehicle, setDrawerVehicle] = useState(null)
-  const [modalVehicle,  setModalVehicle]  = useState(null)
+  const [modalVehicle, setModalVehicle] = useState(null)
   const [schedules, setSchedules] = useState([])
   const [schedLoading, setSchedLoading] = useState(true)
-  const [schedError,   setSchedError]   = useState(null)
-  const [schedBusy,    setSchedBusy]    = useState(false)
-  // Approval-engine gate: the open scheduled rotation is the document under
-  // review. While its workflow is active (pending/in_review/returned) or locked
-  // (approved), the record's strongest mutation — completing/removing it — is
-  // blocked so an in-approval schedule can't be edited out from under the flow.
+  const [schedError, setSchedError] = useState(null)
+  const [schedBusy, setSchedBusy] = useState(false)
+  const [schedStatusFilter, setSchedStatusFilter] = useState('Open')
+  // Approval-engine gate: while the open schedule's workflow is active or
+  // locked, completing it is blocked.
   const [detailSchedule, setDetailSchedule] = useState(null)
   const [wfLocked, setWfLocked] = useState(false)
-  // EntityApprovalPanel re-reports the true state via onStateChange on open.
   useEffect(() => { setWfLocked(false) }, [detailSchedule?.id])
-  const [activeTab, setActiveTab] = useState('status') // 'status' | 'schedule' | 'impact'
-  const [sortCol,   setSortCol]   = useState('status')
-  const [sortAsc,   setSortAsc]   = useState(true)
-  const [page, setPage]           = useState(1)
-  const PAGE_SIZE = 25
+  useEffect(() => {
+    if (!detailSchedule) return undefined
+    const onKey = (e) => { if (e.key === 'Escape') setDetailSchedule(null) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [detailSchedule])
+  const [activeTab, setActiveTab] = useState('status')
 
   // ── Data fetch ─────────────────────────────────────────────────────────────
   const fetchData = useCallback(async () => {
@@ -693,7 +420,7 @@ export default function RotationSchedule() {
       const data = await rotations.listRotationRecords({ country: activeCountry })
       setRecords(data || [])
     } catch (e) {
-      setError(toUserMessage(e, 'Failed to load data'))
+      setError(toUserMessage(e, 'Failed to load rotation data'))
     } finally {
       setLoading(false)
     }
@@ -701,9 +428,7 @@ export default function RotationSchedule() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  // ── Schedule persistence (Supabase: tyre_rotations) ─────────────────────────
-  // DB rows are snake_case; the UI/exports below consume a camelCase shape, so we
-  // normalise on read and whitelist columns on write.
+  // DB rows are snake_case; the UI and exports consume a camelCase shape.
   const mapRow = useCallback((r) => ({
     id: r.id,
     asset: r.asset_no,
@@ -731,7 +456,6 @@ export default function RotationSchedule() {
 
   useEffect(() => { fetchSchedules() }, [fetchSchedules])
 
-  // Insert one or more schedule entries, then refresh from DB.
   const createSchedules = useCallback(async (entries) => {
     if (!entries.length) return
     setSchedBusy(true)
@@ -760,8 +484,6 @@ export default function RotationSchedule() {
   }, [activeCountry, fetchSchedules])
 
   const updateScheduleStatus = useCallback(async (id, status) => {
-    // Completing/transitioning a schedule is an edit — blocked while the open
-    // record's approval workflow is active/locked (server RLS also enforces).
     if (detailSchedule?.id === id && wfLocked) {
       setSchedError('This rotation is locked. An approval is in progress for it.')
       return
@@ -779,6 +501,7 @@ export default function RotationSchedule() {
   }, [fetchSchedules, detailSchedule?.id, wfLocked])
 
   const removeSchedule = useCallback(async (id) => {
+    if (!window.confirm('Remove this scheduled rotation?')) return
     setSchedBusy(true)
     setSchedError(null)
     try {
@@ -791,140 +514,244 @@ export default function RotationSchedule() {
     }
   }, [fetchSchedules])
 
-  // ── Analytics ──────────────────────────────────────────────────────────────
+  // ── Analytics (single engine) ──────────────────────────────────────────────
   const analytics = useMemo(() => buildRotationAnalytics(records, interval), [records, interval])
-
-  // ── Filters ────────────────────────────────────────────────────────────────
-  const sites = useMemo(() => {
-    if (!analytics) return []
-    const s = new Set(analytics.vehicles.map(v => v.site).filter(Boolean))
-    return ['All', ...Array.from(s).sort()]
-  }, [analytics])
-
-  const filteredVehicles = useMemo(() => {
-    if (!analytics) return []
-    let vv = analytics.vehicles
-    if (siteFilter !== 'All') vv = vv.filter(v => v.site === siteFilter)
-    if (statusFilter !== 'All') vv = vv.filter(v => v.status === statusFilter)
-    if (search.trim()) {
-      const q = search.trim().toLowerCase()
-      vv = vv.filter(v => v.asset.toLowerCase().includes(q) || v.site.toLowerCase().includes(q))
-    }
-    // Sort
-    const dir = sortAsc ? 1 : -1
-    vv = [...vv].sort((a, b) => {
-      if (sortCol === 'status') return dir * ((URGENCY_ORDER[a.status] ?? 4) - (URGENCY_ORDER[b.status] ?? 4))
-      if (sortCol === 'asset')  return dir * a.asset.localeCompare(b.asset)
-      if (sortCol === 'since')  return dir * ((a.sinceLastKm ?? -1) - (b.sinceLastKm ?? -1))
-      if (sortCol === 'dueIn')  return dir * ((a.dueInKm ?? Infinity) - (b.dueInKm ?? Infinity))
-      return 0
-    })
-    return vv
-  }, [analytics, siteFilter, statusFilter, search, sortCol, sortAsc])
-
-  const paginatedVehicles = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE
-    return filteredVehicles.slice(start, start + PAGE_SIZE)
-  }, [filteredVehicles, page])
-
-  const totalPages = Math.ceil(filteredVehicles.length / PAGE_SIZE)
-
-  function toggleSort(col) {
-    if (sortCol === col) setSortAsc(s => !s)
-    else { setSortCol(col); setSortAsc(true) }
-  }
+  const sites = useMemo(() => ['All', ...[...new Set(analytics.vehicles.map(v => v.site))].sort()], [analytics])
+  const filteredVehicles = useMemo(
+    () => filterVehicles(analytics.vehicles, { site: siteFilter, status: statusFilter, search }),
+    [analytics, siteFilter, statusFilter, search],
+  )
+  const filtersActive = siteFilter !== 'All' || statusFilter !== 'All' || !!search.trim()
+  const schedSummary = useMemo(() => scheduleSummary(schedules), [schedules])
+  const visibleSchedules = useMemo(
+    () => (schedStatusFilter === 'All' ? schedules : schedules.filter(s => s.status === schedStatusFilter)),
+    [schedules, schedStatusFilter],
+  )
 
   // ── Charts ─────────────────────────────────────────────────────────────────
-  const trendChartData = useMemo(() => {
-    if (!analytics || !analytics.hasMonthlyRotations) return null
-    return {
-      labels: MONTH_LABELS,
-      datasets: [
-        {
-          label: 'Rotations Performed',
-          data: analytics.monthlyRotations,
-          borderColor: '#10b981',
-          backgroundColor: 'rgba(16,185,129,0.1)',
-          fill: true,
-          tension: 0.4,
-          pointRadius: 4,
-          pointBackgroundColor: '#10b981',
-        },
-      ],
-    }
-  }, [analytics])
+  const trendChartData = useMemo(() => (analytics.hasMonthlyRotations ? {
+    labels: analytics.monthly.map(m => m.label),
+    datasets: [{
+      label: 'Rotations performed',
+      data: analytics.monthly.map(m => m.count),
+      borderColor: colorAt(0),
+      backgroundColor: withAlpha(colorAt(0), 0.15),
+      fill: true,
+      tension: 0.35,
+      pointRadius: 4,
+      pointBackgroundColor: colorAt(0),
+    }],
+  } : null), [analytics])
 
   const siteChartData = useMemo(() => {
-    if (!analytics) return null
-    const sc = analytics.siteCompliance
+    const sc = analytics.siteCompliance.filter(s => s.pct != null)
+    if (!sc.length) return null
     return {
       labels: sc.map(s => s.site),
       datasets: [{
         label: 'Compliance %',
         data: sc.map(s => s.pct),
-        backgroundColor: sc.map(s =>
-          s.pct >= 90 ? '#10b981' : s.pct >= 70 ? '#f59e0b' : '#ef4444'
-        ),
+        backgroundColor: sc.map(s => (s.pct >= 90 ? '#10b981' : s.pct >= 70 ? '#f59e0b' : '#ef4444')),
         borderRadius: 4,
       }],
     }
   }, [analytics])
 
-  const impactChartData = useMemo(() => {
-    if (!analytics || !analytics.avgLifeWith || !analytics.avgLifeWithout) return null
-    return {
-      labels: ['With Regular Rotation', 'No Rotation Detected'],
-      datasets: [{
-        label: 'Avg Tyre Life (km)',
-        data: [analytics.avgLifeWith, analytics.avgLifeWithout],
-        backgroundColor: ['#10b981', '#ef4444'],
-        borderRadius: 6,
-      }],
-    }
-  }, [analytics])
+  const impactChartData = useMemo(() => (analytics.avgLifeWith && analytics.avgLifeWithout ? {
+    labels: ['Rotated tyres', 'Never rotated'],
+    datasets: [{
+      label: 'Average tyre life (km)',
+      data: [analytics.avgLifeWith, analytics.avgLifeWithout],
+      backgroundColor: [withAlpha(colorAt(0), 0.85), withAlpha(colorAt(1), 0.85)],
+      borderRadius: 6,
+    }],
+  } : null), [analytics])
 
-  // ── Export ─────────────────────────────────────────────────────────────────
+  // ── Table columns ──────────────────────────────────────────────────────────
+  const statusColumns = useMemo(() => [
+    {
+      id: 'asset', header: 'Asset', accessorFn: (v) => v.asset,
+      cell: ({ row }) => (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setDrawerVehicle(row.original) }}
+          className="inline-flex items-center gap-2 min-h-[36px] font-medium text-[var(--accent)] hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] rounded"
+        >
+          <Truck size={13} aria-hidden="true" /> {row.original.asset}
+        </button>
+      ),
+    },
+    { id: 'site', header: 'Site', accessorFn: (v) => v.site, meta: { filterVariant: 'select' } },
+    { id: 'tyres', header: 'Active tyres', accessorFn: (v) => v.activeTyreCount, meta: { align: 'right' }, cell: ({ getValue }) => <span className="tabular-nums">{fmt(getValue())}</span> },
+    { id: 'last', header: 'Last rotation', accessorFn: (v) => v.lastRotationDate || '', meta: { exportValue: (v) => fmtDate(v.lastRotationDate) }, cell: ({ row }) => <span className="text-xs">{fmtDate(row.original.lastRotationDate)}</span> },
+    {
+      id: 'since', header: 'Since last (km)', accessorFn: (v) => v.sinceLastKm ?? -1, meta: { align: 'right', exportValue: (v) => v.sinceLastKm ?? 'N/A' },
+      cell: ({ row }) => {
+        const v = row.original.sinceLastKm
+        if (v == null) return <span className="text-[var(--text-dim)]">N/A</span>
+        return <span className={`tabular-nums ${v >= interval ? 'text-red-400 font-medium' : ''}`}>{fmt(v)}</span>
+      },
+    },
+    {
+      id: 'dueIn', header: 'Due in (km)', accessorFn: (v) => v.dueInKm ?? Number.MAX_SAFE_INTEGER, meta: { align: 'right', exportValue: (v) => v.dueInKm ?? 'N/A' },
+      cell: ({ row }) => {
+        const v = row.original.dueInKm
+        if (v == null) return <span className="text-[var(--text-dim)]">N/A</span>
+        return (
+          <span className={`tabular-nums ${v <= 0 ? 'text-red-400 font-medium' : v <= DUE_SOON_BUFFER ? 'text-yellow-400' : ''}`}>
+            {v <= 0 ? `${fmt(Math.abs(v))} overdue` : fmt(v)}
+          </span>
+        )
+      },
+    },
+    { id: 'status', header: 'Status', accessorFn: (v) => URGENCY_ORDER[v.status] ?? 9, meta: { exportValue: (v) => v.status }, cell: ({ row }) => <StatusBadge status={row.original.status} /> },
+    {
+      id: 'imbalance', header: 'Wear imbalance', accessorFn: (v) => v.wearImbalance ?? -1, meta: { align: 'right', exportValue: (v) => (v.wearImbalance != null ? v.wearImbalance.toFixed(1) : 'N/A') },
+      cell: ({ row }) => {
+        const v = row.original.wearImbalance
+        if (v == null) return <span className="text-[var(--text-dim)]">N/A</span>
+        return <span className={`tabular-nums ${v > WEAR_IMBALANCE_MM ? 'text-orange-400 font-semibold' : ''}`}>{v.toFixed(1)} mm</span>
+      },
+    },
+    {
+      id: 'action', header: '', enableSorting: false, meta: { export: false },
+      cell: ({ row }) => (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setModalVehicle(row.original) }}
+          className="inline-flex items-center gap-1.5 min-h-[36px] px-3 py-1.5 border border-[var(--input-border)] rounded-lg text-xs font-medium text-[var(--text-secondary)] hover:bg-[var(--input-bg-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+        >
+          <Wrench size={11} aria-hidden="true" /> Schedule
+        </button>
+      ),
+    },
+  ], [interval])
+
+  const imbalanceColumns = useMemo(() => [
+    { id: 'asset', header: 'Asset', accessorFn: (v) => v.asset },
+    { id: 'site', header: 'Site', accessorFn: (v) => v.site },
+    { id: 'steer', header: 'Steer tread', accessorFn: (v) => v.steerTread ?? -1, meta: { align: 'right' }, cell: ({ row }) => <span className="tabular-nums">{row.original.steerTread != null ? `${row.original.steerTread.toFixed(1)} mm` : 'N/A'}</span> },
+    { id: 'drive', header: 'Drive tread', accessorFn: (v) => v.driveTread ?? -1, meta: { align: 'right' }, cell: ({ row }) => <span className="tabular-nums">{row.original.driveTread != null ? `${row.original.driveTread.toFixed(1)} mm` : 'N/A'}</span> },
+    {
+      id: 'imbalance', header: 'Imbalance', accessorFn: (v) => v.wearImbalance, meta: { align: 'right' },
+      cell: ({ row }) => <span className={`tabular-nums font-semibold ${row.original.wearImbalance > 6 ? 'text-red-400' : 'text-orange-400'}`}>{row.original.wearImbalance.toFixed(1)} mm{row.original.wearImbalance > 6 ? ' severe' : ''}</span>,
+    },
+    { id: 'status', header: 'Status', accessorFn: (v) => v.status, cell: ({ row }) => <StatusBadge status={row.original.status} /> },
+    {
+      id: 'action', header: '', enableSorting: false, meta: { export: false },
+      cell: ({ row }) => (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setModalVehicle(row.original) }}
+          className="inline-flex items-center gap-1.5 min-h-[36px] px-3 py-1.5 border border-[var(--input-border)] rounded-lg text-xs text-[var(--text-secondary)] hover:bg-[var(--input-bg-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+        >
+          <Wrench size={11} aria-hidden="true" /> Schedule rotation
+        </button>
+      ),
+    },
+  ], [])
+
+  const scheduleColumns = useMemo(() => [
+    { id: 'asset', header: 'Asset', accessorFn: (s) => s.asset || '' },
+    { id: 'site', header: 'Site', accessorFn: (s) => s.site || '', cell: ({ getValue }) => getValue() || 'N/A' },
+    { id: 'date', header: 'Scheduled date', accessorFn: (s) => s.scheduledDate || '', meta: { exportValue: (s) => fmtDate(s.scheduledDate) }, cell: ({ row }) => fmtDate(row.original.scheduledDate) },
+    {
+      id: 'priority', header: 'Priority', accessorFn: (s) => PRIORITIES.indexOf(s.priority), meta: { exportValue: (s) => s.priority },
+      cell: ({ row }) => <span className={`font-semibold ${PRIORITY_TONE[row.original.priority] ?? ''}`}>{row.original.priority || 'N/A'}</span>,
+    },
+    { id: 'status', header: 'Status', accessorFn: (s) => s.status || '' },
+    { id: 'km', header: 'Odometer', accessorFn: (s) => Number(s.currentKm) || -1, meta: { align: 'right', exportValue: (s) => s.currentKm ?? 'N/A' }, cell: ({ row }) => <span className="tabular-nums">{fmtKm(row.original.currentKm != null ? Number(row.original.currentKm) : null)}</span> },
+    { id: 'notes', header: 'Notes', accessorFn: (s) => s.notes || '', cell: ({ getValue }) => <span className="text-xs text-[var(--text-muted)] line-clamp-2">{getValue() || 'None'}</span> },
+    {
+      id: 'actions', header: '', enableSorting: false, meta: { export: false },
+      cell: ({ row }) => {
+        const s = row.original
+        const rowLocked = wfLocked && detailSchedule?.id === s.id
+        return (
+          <div className="flex items-center justify-end gap-2">
+            <button type="button" onClick={(e) => { e.stopPropagation(); setDetailSchedule(s) }} aria-label={`Open approval for ${s.asset}`} title="Approval" className={ICON_BTN}>
+              <ShieldCheck size={14} aria-hidden="true" />
+            </button>
+            {s.status !== 'Completed' && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); updateScheduleStatus(s.id, 'Completed') }}
+                disabled={schedBusy || rowLocked}
+                aria-label={rowLocked ? `${s.asset} is locked in approval` : `Mark rotation for ${s.asset} completed`}
+                title={rowLocked ? 'Locked, in approval' : 'Mark completed'}
+                className={ICON_BTN}
+              >
+                {rowLocked ? <Lock size={14} aria-hidden="true" /> : <CheckCircle size={14} aria-hidden="true" />}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); removeSchedule(s.id) }}
+              disabled={schedBusy}
+              aria-label={`Remove scheduled rotation for ${s.asset}`}
+              title="Remove"
+              className={ICON_BTN}
+            >
+              <X size={14} aria-hidden="true" />
+            </button>
+          </div>
+        )
+      },
+    },
+  ], [wfLocked, detailSchedule?.id, schedBusy, updateScheduleStatus, removeSchedule])
+
+  // ── Export (filtered vehicles + the schedule) ──────────────────────────────
+  const fileBase = reportFileName('TyrePulse Rotation Compliance', activeCountry !== 'All' ? activeCountry : null, reportDateLabel())
+
   async function exportExcel() {
-    const XLSX = await import('xlsx')
-    if (!analytics) return
-    const rows = filteredVehicles.map(v => ({
-      Asset:               v.asset,
-      Site:                v.site,
-      'Active Tyres':      v.activeTyreCount,
-      'Last Rotation Date': fmtDate(v.lastRotationDate),
-      'Last Rotation (km)': v.lastRotationKm ?? '',
-      'Since Last (km)':   v.sinceLastKm ?? '',
-      'Due In (km)':       v.dueInKm ?? '',
-      Status:              v.status,
-      'Total Rotations':   v.totalRotations,
-      'Wear Imbalance (mm)': v.wearImbalance != null ? v.wearImbalance.toFixed(1) : '',
-    }))
-    const ws = XLSX.utils.json_to_sheet(rows)
-    ws['!cols'] = Object.keys(rows[0] || {}).map(k => ({ wch: Math.min(Math.max(k.length + 4, 14), 30) }))
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Rotation Status')
-
-    // Schedule sheet
-    if (schedules.length) {
-      const ws2 = XLSX.utils.json_to_sheet(schedules.map(s => ({
-        Asset: s.asset, Site: s.site, 'Scheduled Date': s.scheduledDate,
-        Priority: s.priority, Status: s.status, Notes: s.notes,
-      })))
-      XLSX.utils.book_append_sheet(wb, ws2, 'Rotation Schedule')
-    }
-
-    XLSX.writeFile(wb, `Rotation_Compliance_${new Date().toISOString().slice(0, 10)}.xlsx`)
+    await exportSheetsToExcel([
+      {
+        name: 'Rotation Status',
+        note: `${filteredVehicles.length} of ${analytics.total} vehicles, current filters, interval ${fmt(interval)} km`,
+        columns: ['asset', 'site', 'tyres', 'last', 'lastKm', 'since', 'due', 'status', 'rotations', 'imbalance'],
+        headers: ['Asset', 'Site', 'Active Tyres', 'Last Rotation Date', 'Last Rotation (km)', 'Since Last (km)', 'Due In (km)', 'Status', 'Total Rotations', 'Wear Imbalance (mm)'],
+        rows: filteredVehicles.map(v => ({
+          asset: v.asset,
+          site: v.site,
+          tyres: v.activeTyreCount,
+          last: fmtDate(v.lastRotationDate),
+          lastKm: v.lastRotationKm ?? 'N/A',
+          since: v.sinceLastKm ?? 'N/A',
+          due: v.dueInKm ?? 'N/A',
+          status: v.status,
+          rotations: v.totalRotations,
+          imbalance: v.wearImbalance != null ? v.wearImbalance.toFixed(1) : 'N/A',
+        })),
+      },
+      {
+        name: 'Rotation Schedule',
+        note: `${schedules.length} scheduled rotations`,
+        columns: ['asset', 'site', 'date', 'priority', 'status', 'notes'],
+        headers: ['Asset', 'Site', 'Scheduled Date', 'Priority', 'Status', 'Notes'],
+        rows: schedules.map(s => ({ asset: s.asset, site: s.site, date: s.scheduledDate, priority: s.priority, status: s.status, notes: s.notes || '' })),
+      },
+    ], fileBase, {
+      title: 'Tyre Rotation Compliance',
+      company,
+      meta: {
+        'Rotation interval (km)': fmt(interval),
+        'Fleet compliance': analytics.compliancePct != null ? `${analytics.compliancePct}%` : 'N/A',
+      },
+      notes: [
+        'A rotation is detected when the same serial is recorded at a different axle group.',
+        'Unmeasured = rotations found but no odometer reading to measure distance since.',
+      ],
+    })
   }
 
   async function exportPdf() {
     const { default: jsPDF } = await import('jspdf')
     const autoTable = await loadAutoTable()
-    if (!analytics) return
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
     const brand = await resolvePdfBrand(branding)
-    const filename = `Rotation_Schedule_${new Date().toISOString().slice(0, 10)}.pdf`
+    const filename = `${fileBase}.pdf`
     const title = 'Tyre Rotation Compliance Report'
-    const subtitle = `Interval: ${fmt(interval)} km · Fleet: ${analytics.total} vehicles`
+    const subtitle = `Interval: ${fmt(interval)} km, fleet: ${analytics.total} vehicles${filtersActive ? `, ${filteredVehicles.length} shown after filters` : ''}`
 
     if (filteredVehicles.length === 0) {
       pdfHeader(doc, title, subtitle, company, brand)
@@ -934,14 +761,13 @@ export default function RotationSchedule() {
       return
     }
 
-    // KPI summary (page 1)
     doc.setTextColor(55, 65, 81)
     doc.setFontSize(8)
     const kpis = [
-      ['Compliance', `${analytics.compliancePct}%`],
+      ['Compliance', analytics.compliancePct != null ? `${analytics.compliancePct}%` : 'N/A'],
       ['Overdue', String(analytics.overdue)],
-      ['Avg Interval', analytics.avgInterval ? `${fmt(analytics.avgInterval)} km` : '-'],
-      ['Est. Savings', `${activeCurrency} ${fmt(analytics.costSavings)}`],
+      ['Avg Interval', analytics.avgInterval ? `${fmt(analytics.avgInterval)} km` : 'N/A'],
+      ['Life value at risk', analytics.lifeValueTotal != null ? `${activeCurrency} ${fmt(analytics.lifeValueTotal)}` : 'N/A'],
     ]
     kpis.forEach(([k, v], i) => {
       doc.setFont('helvetica', 'bold'); doc.text(v, 14 + i * 65, 30)
@@ -956,22 +782,21 @@ export default function RotationSchedule() {
       body: filteredVehicles.map(v => [
         v.asset, v.site, v.activeTyreCount,
         fmtDate(v.lastRotationDate),
-        v.sinceLastKm != null ? fmt(v.sinceLastKm) : '-',
-        v.dueInKm != null ? fmt(v.dueInKm) : '-',
+        fmt(v.sinceLastKm),
+        fmt(v.dueInKm),
         v.status, v.totalRotations,
       ]),
       didParseCell: data => {
         if (data.section === 'body' && data.column.index === 6) {
           const s = data.cell.raw
-          if (s === 'Overdue')     { data.cell.styles.textColor = [239, 68, 68]  }
-          if (s === 'Due Soon')    { data.cell.styles.textColor = [245, 158, 11] }
+          if (s === 'Overdue') { data.cell.styles.textColor = [239, 68, 68] }
+          if (s === 'Due Soon') { data.cell.styles.textColor = [245, 158, 11] }
           if (s === 'On Schedule') { data.cell.styles.textColor = [16, 185, 129] }
         }
       },
       didDrawPage: () => pdfHeader(doc, title, subtitle, company, brand),
     })
 
-    // Schedule page
     if (schedules.length) {
       doc.addPage()
       autoTable(doc, {
@@ -986,778 +811,427 @@ export default function RotationSchedule() {
 
     const totalPages = doc.internal.getNumberOfPages()
     for (let p = 1; p <= totalPages; p++) { doc.setPage(p); pdfFooter(doc, p, totalPages, company, brand) }
-
     doc.save(filename)
   }
 
   // ── Render ─────────────────────────────────────────────────────────────────
-  if (loading) return (
-    <div className="min-h-screen bg-[var(--surface-1)] flex items-center justify-center">
-      <div className="text-center space-y-3">
-        <RotateCcw size={36} className="text-green-400 animate-spin mx-auto" />
-        <p className="text-[var(--text-muted)] text-sm">Loading rotation data...</p>
-      </div>
-    </div>
-  )
-
-  if (error) return (
-    <div className="min-h-screen bg-[var(--surface-1)] flex items-center justify-center p-8">
-      <div className="bg-red-900/20 border border-red-800 rounded-2xl p-6 max-w-md text-center space-y-3">
-        <AlertOctagon size={32} className="text-red-400 mx-auto" />
-        <p className="text-red-300 font-medium">Failed to load rotation data</p>
-        <p className="text-red-400/70 text-sm">{error}</p>
-        <button onClick={fetchData} className="px-4 py-2 bg-red-700 hover:bg-red-600 text-white rounded-lg text-sm transition-colors">
-          Retry
-        </button>
-      </div>
-    </div>
-  )
-
-  const noData = !analytics || analytics.total === 0
+  const noData = !loading && !error && analytics.total === 0
+  const exportDisabled = loading || !!error || noData
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-w-0">
       <PageHeader
         title="Rotation Compliance Tracker"
-        subtitle="Schedule and monitor tyre rotation compliance across fleet"
+        subtitle="Which vehicles are due a tyre rotation, what rotation is worth, and the workshop schedule"
         icon={RotateCcw}
         actions={
           <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={fetchData}
-              className="p-2 bg-[var(--input-bg)] hover:bg-gray-700 border border-[var(--input-border)] rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
-              title="Refresh"
-            >
-              <RefreshCw size={15} />
+            <button type="button" onClick={() => { fetchData(); fetchSchedules() }} disabled={loading} className={BTN}>
+              <RefreshCw size={15} className={loading ? 'animate-spin' : ''} aria-hidden="true" /> Refresh
             </button>
-            <button
-              onClick={exportExcel}
-              disabled={noData}
-              className="flex items-center gap-2 px-3 py-2 bg-[var(--input-bg)] hover:bg-gray-700 border border-[var(--input-border)] rounded-lg text-[var(--text-secondary)] text-sm transition-colors disabled:opacity-40"
-            >
-              <FileSpreadsheet size={14} /> Excel
+            <button type="button" onClick={exportExcel} disabled={exportDisabled} className={BTN}>
+              <FileSpreadsheet size={14} aria-hidden="true" /> Excel
             </button>
-            <button
-              onClick={exportPdf}
-              disabled={noData}
-              className="flex items-center gap-2 px-3 py-2 bg-green-700 hover:bg-green-600 rounded-lg text-white text-sm font-medium transition-colors disabled:opacity-40"
-            >
-              <Download size={14} /> PDF Report
+            <button type="button" onClick={exportPdf} disabled={exportDisabled} className={BTN}>
+              <FileText size={14} aria-hidden="true" /> PDF report
             </button>
           </div>
         }
       />
 
-        {/* ── Interval Config ──────────────────────────────────────────────── */}
-        {/* The responsive flex-col/sm:flex-row lives on an INNER div, so Card's
-            own flex-col never competes with it. */}
+      <Card>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+          <label htmlFor="rot-interval-range" className="flex items-center gap-2 text-sm font-medium text-[var(--text-primary)] min-w-max">
+            <Settings2 size={15} className="text-[var(--text-muted)]" aria-hidden="true" />
+            Rotation interval
+          </label>
+          <div className="flex-1 flex items-center gap-4">
+            <input
+              id="rot-interval-range"
+              type="range"
+              min={MIN_INTERVAL}
+              max={MAX_INTERVAL}
+              step={1000}
+              value={interval}
+              onChange={e => setInterval(Number(e.target.value))}
+              className="flex-1 accent-[var(--accent)] h-2 rounded-full cursor-pointer"
+            />
+            <input
+              type="number"
+              aria-label="Rotation interval in km"
+              min={MIN_INTERVAL}
+              max={MAX_INTERVAL}
+              step={1000}
+              value={interval}
+              onChange={e => {
+                const v = Math.max(MIN_INTERVAL, Math.min(MAX_INTERVAL, Number(e.target.value) || MIN_INTERVAL))
+                setInterval(v)
+              }}
+              className={`${FIELD} w-28 text-right`}
+            />
+            <span className="text-sm text-[var(--text-muted)] min-w-max">km</span>
+          </div>
+          <div className="flex items-center gap-1 text-xs text-[var(--text-muted)]">
+            <Info size={11} aria-hidden="true" />
+            <span>Every figure below recalculates for this interval</span>
+          </div>
+        </div>
+      </Card>
+
+      {loading ? (
         <Card>
-          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-            <div className="flex items-center gap-2 text-sm font-medium text-[var(--text-primary)] min-w-max">
-              <Settings2 size={15} className="text-blue-400" />
-              Rotation Interval
-            </div>
-            <div className="flex-1 flex items-center gap-4">
-              <input
-                type="range"
-                min={MIN_INTERVAL}
-                max={MAX_INTERVAL}
-                step={1000}
-                value={interval}
-                onChange={e => { setInterval(Number(e.target.value)); setPage(1) }}
-                className="flex-1 accent-green-500 h-2 rounded-full cursor-pointer"
-              />
-              <input
-                type="number"
-                min={MIN_INTERVAL}
-                max={MAX_INTERVAL}
-                step={1000}
-                value={interval}
-                onChange={e => {
-                  const v = Math.max(MIN_INTERVAL, Math.min(MAX_INTERVAL, Number(e.target.value)))
-                  setInterval(v); setPage(1)
-                }}
-                className="w-28 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-1.5 text-[var(--text-primary)] text-sm text-right focus:outline-none focus:border-blue-500"
-              />
-              <span className="text-sm text-[var(--text-muted)] min-w-max">km</span>
-            </div>
-            <div className="flex items-center gap-1 text-xs text-[var(--text-muted)]">
-              <Info size={11} />
-              <span>Recalculates all metrics in real-time</span>
-            </div>
+          <div className="flex flex-col items-center justify-center py-16 gap-3" role="status">
+            <RotateCcw size={32} className="text-[var(--text-muted)] animate-spin" aria-hidden="true" />
+            <p className="text-[var(--text-muted)] text-sm">Loading rotation data</p>
           </div>
         </Card>
-
-        {/* ── KPI Cards ───────────────────────────────────────────────────── */}
-        {noData ? (
-          <Card>
-            <EmptyState
-              illustration="module/tyres"
-              icon={RotateCcw}
-              title="No tyre records found"
-              description="Upload tyre data to begin tracking rotation compliance."
+      ) : error ? (
+        <div role="alert" className="bg-red-900/20 border border-red-800 rounded-2xl p-6 text-center space-y-3">
+          <AlertOctagon size={32} className="text-red-400 mx-auto" aria-hidden="true" />
+          <p className="text-red-300 font-medium">Failed to load rotation data</p>
+          <p className="text-red-300/80 text-sm">{error}</p>
+          <button type="button" onClick={fetchData} className={BTN}><RefreshCw size={14} aria-hidden="true" /> Retry</button>
+        </div>
+      ) : noData ? (
+        <Card>
+          <EmptyState
+            illustration="module/tyres"
+            icon={RotateCcw}
+            title="No tyre records found"
+            description="Rotation compliance is built from tyre records with an asset and a serial. None exist for this country yet."
+          />
+        </Card>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
+            <KpiCard
+              icon={Target}
+              label="Fleet compliance"
+              value={analytics.compliancePct != null ? `${analytics.compliancePct}%` : 'N/A'}
+              sub={`${analytics.compliant} of ${analytics.total} vehicles on schedule`}
+              tone={analytics.compliancePct == null ? '' : analytics.compliancePct >= 90 ? 'text-green-400' : analytics.compliancePct >= 70 ? 'text-yellow-400' : 'text-red-400'}
             />
-          </Card>
-        ) : (
-          <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-              <KpiCard
-                icon={Target}
-                label="Fleet Rotation Compliance"
-                value={`${analytics.compliancePct}%`}
-                sub={`${analytics.compliant} of ${analytics.total} vehicles on schedule`}
-                color={analytics.compliancePct >= 90 ? 'green' : analytics.compliancePct >= 70 ? 'yellow' : 'red'}
-                delay={0}
-              />
-              <KpiCard
-                icon={AlertTriangle}
-                label="Overdue for Rotation"
-                value={fmt(analytics.overdue)}
-                sub={`Vehicles exceeding ${fmt(interval)} km interval`}
-                color={analytics.overdue === 0 ? 'green' : analytics.overdue <= 3 ? 'yellow' : 'red'}
-                delay={0.05}
-              />
-              <KpiCard
-                icon={Activity}
-                label="Avg Interval Between Rotations"
-                value={analytics.avgInterval ? `${fmt(analytics.avgInterval)} km` : '-'}
-                sub={`Target: ${fmt(interval)} km`}
-                color="blue"
-                delay={0.1}
-              />
-              <KpiCard
-                icon={DollarSign}
-                label="Est. Savings from Compliance"
-                value={`${activeCurrency} ${fmt(analytics.costSavings)}`}
-                sub="Annual cost benefit from regular rotation"
-                color="green"
-                delay={0.15}
-              />
-            </div>
+            <KpiCard
+              icon={AlertTriangle}
+              label="Overdue"
+              value={fmt(analytics.overdue)}
+              sub={`${fmt(analytics.dueSoon)} more due within ${fmt(DUE_SOON_BUFFER)} km`}
+              tone={analytics.overdue === 0 ? 'text-green-400' : 'text-red-400'}
+            />
+            <KpiCard
+              icon={HelpCircle}
+              label="Cannot measure"
+              value={fmt(analytics.unmeasured + analytics.noHistory)}
+              sub={`${fmt(analytics.noHistory)} never rotated, ${fmt(analytics.unmeasured)} without odometer`}
+            />
+            <KpiCard
+              icon={Activity}
+              label="Avg rotation interval"
+              value={analytics.avgInterval ? `${fmt(analytics.avgInterval)} km` : 'N/A'}
+              sub={analytics.intervalSamples ? `from ${fmt(analytics.intervalSamples)} measured gaps, target ${fmt(interval)} km` : `target ${fmt(interval)} km`}
+            />
+            <KpiCard
+              icon={DollarSign}
+              label="Tyre life value at risk"
+              value={analytics.lifeValueTotal != null ? `${activeCurrency} ${fmt(analytics.lifeValueTotal)}` : 'N/A'}
+              sub={analytics.lifeValueTotal != null ? `${fmt(analytics.tyresAtRisk)} tyres on vehicles not on schedule` : 'needs measured life with and without rotation, plus prices'}
+            />
+          </div>
 
-            {/* ── Tab Navigation ───────────────────────────────────────────── */}
-            <div className="flex gap-1 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-1.5 w-fit">
-              {[
-                { id: 'status',   label: 'Rotation Status',    icon: Truck      },
-                { id: 'charts',   label: 'Compliance Charts',  icon: BarChart3  },
-                { id: 'impact',   label: 'Tyre Life Impact',   icon: TrendingUp },
-                { id: 'schedule', label: 'Upcoming Schedule',  icon: Calendar   },
-              ].map(t => (
-                <button
-                  key={t.id}
-                  onClick={() => setActiveTab(t.id)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    activeTab === t.id
-                      ? 'bg-green-700 text-white'
-                      : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg)]'
-                  }`}
-                >
-                  <t.icon size={14} />
-                  {t.label}
-                </button>
-              ))}
-            </div>
+          <div role="tablist" aria-label="Rotation views" className="flex gap-1 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-1.5 overflow-x-auto">
+            {TABS.map(t => (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === t.id}
+                onClick={() => setActiveTab(t.id)}
+                className={`flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${
+                  activeTab === t.id ? 'bg-[var(--accent)] text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg)]'
+                }`}
+              >
+                <t.icon size={14} aria-hidden="true" />
+                {t.label}
+                {t.id === 'schedule' && schedSummary.open > 0 && <span className="text-xs tabular-nums">({schedSummary.open})</span>}
+              </button>
+            ))}
+          </div>
 
-            {/* ═══════════════════════════════════════════════════════════════ */}
-            {/* TAB: Status Table                                               */}
-            {/* ═══════════════════════════════════════════════════════════════ */}
-            <AnimatePresence mode="wait">
-            {activeTab === 'status' && (
-              <motion.div key="status" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
+          {activeTab === 'status' && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <label className="relative">
+                  <span className="sr-only">Search asset or site</span>
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+                  <input type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search asset or site" className={`${FIELD} pl-9`} />
+                </label>
+                <select aria-label="Filter by site" value={siteFilter} onChange={e => setSiteFilter(e.target.value)} className={FIELD}>
+                  {sites.map(s => <option key={s} value={s}>{s === 'All' ? 'All sites' : s}</option>)}
+                </select>
+                <select aria-label="Filter by status" value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className={FIELD}>
+                  <option value="All">All statuses</option>
+                  {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <p className="text-xs text-[var(--text-muted)]" aria-live="polite">
+                {filteredVehicles.length.toLocaleString()} of {analytics.total.toLocaleString()} vehicles shown. The Excel and PDF exports cover exactly these.
+              </p>
 
-                {/* Filters */}
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <div className="relative flex-1 max-w-xs">
-                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-                    <input
-                      value={search}
-                      onChange={e => { setSearch(e.target.value); setPage(1) }}
-                      placeholder="Search asset or site..."
-                      className="w-full bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg pl-9 pr-3 py-2 text-sm text-[var(--text-primary)] placeholder-gray-600 focus:outline-none focus:border-blue-500"
-                    />
+              <EnterpriseTable
+                columns={statusColumns}
+                data={filteredVehicles}
+                getRowId={(v) => v.asset}
+                enableGlobalFilter={false}
+                enableExport={false}
+                viewKey="rotation-status"
+                onRowClick={(v) => setDrawerVehicle(v)}
+                emptyMessage={filtersActive ? 'No vehicles match the current filters' : 'No vehicles found'}
+              />
+
+              {(() => {
+                const imbalanced = filteredVehicles.filter(v => v.wearImbalance != null && v.wearImbalance > WEAR_IMBALANCE_MM)
+                if (!imbalanced.length) return null
+                return (
+                  <div className="bg-orange-900/20 border border-orange-800 rounded-xl p-4">
+                    <div className="flex items-center gap-2 text-orange-400 font-semibold text-sm mb-3">
+                      <AlertTriangle size={15} aria-hidden="true" />
+                      {imbalanced.length} vehicle{imbalanced.length !== 1 ? 's' : ''} with unbalanced tyre wear (more than {WEAR_IMBALANCE_MM} mm steer to drive)
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {imbalanced.map(v => (
+                        <button
+                          key={v.asset}
+                          type="button"
+                          onClick={() => setDrawerVehicle(v)}
+                          className="inline-flex items-center gap-2 min-h-[44px] px-3 py-1.5 bg-[var(--surface-1)] border border-orange-700 rounded-lg text-xs text-[var(--text-secondary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+                        >
+                          <Truck size={11} aria-hidden="true" />
+                          {v.asset}
+                          <span className="text-orange-400 tabular-nums">{v.wearImbalance.toFixed(1)} mm</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  <select
-                    value={siteFilter}
-                    onChange={e => { setSiteFilter(e.target.value); setPage(1) }}
-                    className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-sm text-[var(--text-secondary)] focus:outline-none focus:border-blue-500"
-                  >
-                    {sites.map(s => <option key={s}>{s}</option>)}
-                  </select>
-                  <select
-                    value={statusFilter}
-                    onChange={e => { setStatusFilter(e.target.value); setPage(1) }}
-                    className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-sm text-[var(--text-secondary)] focus:outline-none focus:border-blue-500"
-                  >
-                    {['All', 'Overdue', 'Due Soon', 'On Schedule', 'No History'].map(s => <option key={s}>{s}</option>)}
-                  </select>
-                  <div className="text-sm text-[var(--text-muted)] flex items-center">
-                    {filteredVehicles.length} vehicles
-                  </div>
+                )
+              })()}
+            </div>
+          )}
+
+          {activeTab === 'charts' && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <Card>
+                  <CardHeader title="Monthly rotation activity" icon={TrendingUp} level={2} actions={<span className="text-xs text-[var(--text-muted)]">Last 12 months, detected rotations</span>} />
+                  {trendChartData ? (
+                    <div className="h-64" role="img" aria-label={`Rotations detected per month, ${analytics.monthly.reduce((s, m) => s + m.count, 0)} in the last 12 months`}>
+                      <Line
+                        data={trendChartData}
+                        options={{
+                          ...CHART_DEFAULTS,
+                          scales: { ...CHART_DEFAULTS.scales, y: { ...CHART_DEFAULTS.scales.y, min: 0, ticks: { ...CHART_DEFAULTS.scales.y.ticks, precision: 0 } } },
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <div className="h-64 flex items-center justify-center text-[var(--text-muted)] text-sm text-center">No rotation detected in the last 12 months</div>
+                  )}
+                </Card>
+
+                <Card>
+                  <CardHeader title="Site compliance comparison" icon={Building2} level={2} />
+                  {siteChartData ? (
+                    <div className="h-64" role="img" aria-label="Share of vehicles on schedule, by site">
+                      <Bar
+                        data={siteChartData}
+                        options={{
+                          ...CHART_DEFAULTS,
+                          indexAxis: 'y',
+                          scales: {
+                            x: { ...CHART_DEFAULTS.scales.x, min: 0, max: 100, ticks: { ...CHART_DEFAULTS.scales.x.ticks, callback: v => `${v}%` } },
+                            y: { ...CHART_DEFAULTS.scales.y },
+                          },
+                          plugins: { ...CHART_DEFAULTS.plugins, legend: { display: false } },
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <div className="h-64 flex items-center justify-center text-[var(--text-muted)] text-sm">No site data available</div>
+                  )}
+                </Card>
+              </div>
+
+              <Card>
+                <CardHeader title="Fleet status distribution" icon={Layers} level={2} />
+                <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-4">
+                  {analytics.statusDistribution.map(({ status, count, pct }) => {
+                    const cfg = STATUS_CFG[status]
+                    return (
+                      <button
+                        key={status}
+                        type="button"
+                        onClick={() => { setStatusFilter(status); setActiveTab('status') }}
+                        className={`text-left rounded-xl border ${cfg.border} ${cfg.bg} p-4 min-h-[44px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]`}
+                        aria-label={`${status}: ${count} vehicles. Show them.`}
+                      >
+                        <div className={`text-2xl font-bold tabular-nums ${cfg.color}`}>{count}</div>
+                        <div className="text-xs text-[var(--text-muted)] mt-1">{status}</div>
+                        <div className="mt-2 h-1.5 rounded-full bg-[var(--input-border)]" aria-hidden="true">
+                          <div className={`h-full rounded-full ${cfg.bar}`} style={{ width: `${pct ?? 0}%` }} />
+                        </div>
+                        <div className="text-xs text-[var(--text-muted)] mt-1">{pct != null ? `${pct}%` : 'N/A'}</div>
+                      </button>
+                    )
+                  })}
                 </div>
+              </Card>
+            </div>
+          )}
 
-                {/* Table */}
-                <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-[var(--input-border)] bg-[var(--input-bg)]">
-                          {[
-                            { key: 'asset', label: 'Asset' },
-                            { key: 'site',  label: 'Site' },
-                            { key: null,    label: 'Active Tyres' },
-                            { key: null,    label: 'Last Rotation' },
-                            { key: 'since', label: 'Since Last (km)' },
-                            { key: 'dueIn', label: 'Due In (km)' },
-                            { key: 'status', label: 'Status' },
-                            { key: null,     label: 'Action' },
-                          ].map(col => (
-                            <th
-                              key={col.label}
-                              onClick={col.key ? () => toggleSort(col.key) : undefined}
-                              className={`text-left text-xs text-[var(--text-muted)] font-medium px-4 py-3 select-none ${col.key ? 'cursor-pointer hover:text-[var(--text-secondary)]' : ''}`}
-                            >
-                              <span className="flex items-center gap-1">
-                                {col.label}
-                                {col.key && sortCol === col.key && (
-                                  sortAsc ? <ChevronUp size={11} /> : <ChevronDown size={11} />
-                                )}
-                              </span>
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-800/60">
-                        {paginatedVehicles.length === 0 ? (
-                          <tr>
-                            <td colSpan={8} className="text-center py-12 text-[var(--text-muted)]">No vehicles match the current filters</td>
-                          </tr>
-                        ) : paginatedVehicles.map((v, i) => (
-                          <motion.tr
-                            key={v.asset}
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            transition={{ delay: i * 0.015 }}
-                            className="hover:bg-gray-800/40 transition-colors group"
-                          >
-                            <td className="px-4 py-3">
-                              <button
-                                onClick={() => setDrawerVehicle(v)}
-                                className="flex items-center gap-2 text-blue-400 hover:text-blue-300 font-medium transition-colors"
-                              >
-                                <Truck size={13} />
-                                {v.asset}
-                                <ChevronRight size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />
-                              </button>
-                            </td>
-                            <td className="px-4 py-3">
-                              <span className="flex items-center gap-1.5 text-[var(--text-secondary)]">
-                                <MapPin size={12} className="text-[var(--text-muted)]" />
-                                {v.site}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-[var(--text-secondary)] text-center">{v.activeTyreCount}</td>
-                            <td className="px-4 py-3 text-[var(--text-secondary)] text-xs">{fmtDate(v.lastRotationDate)}</td>
-                            <td className="px-4 py-3">
-                              {v.sinceLastKm != null ? (
-                                <span className={v.sinceLastKm >= interval ? 'text-red-400 font-medium' : 'text-[var(--text-secondary)]'}>
-                                  {fmt(v.sinceLastKm)}
-                                </span>
-                              ) : <span className="text-[var(--text-dim)]">-</span>}
-                            </td>
-                            <td className="px-4 py-3">
-                              {v.dueInKm != null ? (
-                                <span className={v.dueInKm <= 0 ? 'text-red-400 font-medium' : v.dueInKm <= DUE_SOON_BUFFER ? 'text-yellow-400' : 'text-[var(--text-secondary)]'}>
-                                  {v.dueInKm <= 0 ? `${fmt(Math.abs(v.dueInKm))} overdue` : fmt(v.dueInKm)}
-                                </span>
-                              ) : <span className="text-[var(--text-dim)]">-</span>}
-                            </td>
-                            <td className="px-4 py-3"><StatusBadge status={v.status} /></td>
-                            <td className="px-4 py-3">
-                              <button
-                                onClick={() => setModalVehicle(v)}
-                                className="flex items-center gap-1.5 px-3 py-1.5 bg-green-900/30 hover:bg-green-800/50 border border-green-800 text-green-400 hover:text-green-300 rounded-lg text-xs font-medium transition-colors"
-                              >
-                                <Wrench size={11} />
-                                Schedule
-                              </button>
-                            </td>
-                          </motion.tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+          {activeTab === 'impact' && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <Card>
+                  <CardHeader title="Tyre life, rotated against never rotated" icon={BarChart3} level={2} />
+                  {impactChartData ? (
+                    <div className="h-64" role="img" aria-label={`Rotated tyres average ${fmt(analytics.avgLifeWith)} km, never rotated ${fmt(analytics.avgLifeWithout)} km`}>
+                      <Bar
+                        data={impactChartData}
+                        options={{
+                          ...CHART_DEFAULTS,
+                          plugins: { ...CHART_DEFAULTS.plugins, legend: { display: false } },
+                          scales: { ...CHART_DEFAULTS.scales, y: { ...CHART_DEFAULTS.scales.y, ticks: { ...CHART_DEFAULTS.scales.y.ticks, callback: v => `${(v / 1000).toFixed(0)}k` } } },
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <div className="h-64 flex items-center justify-center text-[var(--text-muted)] text-sm text-center px-4">Not enough removed tyres with a fitment and removal odometer to compare tyre life</div>
+                  )}
+                </Card>
 
-                  {/* Pagination */}
-                  {totalPages > 1 && (
-                    <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--input-border)] bg-[var(--input-bg)]">
-                      <span className="text-xs text-[var(--text-muted)]">
-                        {(page - 1) * PAGE_SIZE + 1}-{Math.min(page * PAGE_SIZE, filteredVehicles.length)} of {filteredVehicles.length}
-                      </span>
-                      <div className="flex gap-2">
-                        <button disabled={page === 1} onClick={() => setPage(p => p - 1)} className="p-1.5 rounded bg-[var(--input-bg)] hover:bg-gray-700 disabled:opacity-30 transition-colors">
-                          <ChevronDown size={13} className="rotate-90" />
-                        </button>
-                        <button disabled={page === totalPages} onClick={() => setPage(p => p + 1)} className="p-1.5 rounded bg-[var(--input-bg)] hover:bg-gray-700 disabled:opacity-30 transition-colors">
-                          <ChevronDown size={13} className="-rotate-90" />
-                        </button>
-                      </div>
+                <Card className="space-y-4">
+                  <CardHeader title="Rotation impact analysis" icon={DollarSign} iconTone="warn" level={2} className="!mb-0" />
+                  {analytics.avgLifeWith && analytics.avgLifeWithout ? (
+                    <>
+                      <dl className="grid grid-cols-2 gap-4">
+                        <div className="bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg p-4">
+                          <dt className="text-xs text-[var(--text-muted)] mb-1">Rotated tyres ({fmt(analytics.withSamples)})</dt>
+                          <dd className="text-xl font-bold tabular-nums">{fmtKm(analytics.avgLifeWith)}</dd>
+                        </div>
+                        <div className="bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg p-4">
+                          <dt className="text-xs text-[var(--text-muted)] mb-1">Never rotated ({fmt(analytics.withoutSamples)})</dt>
+                          <dd className="text-xl font-bold tabular-nums">{fmtKm(analytics.avgLifeWithout)}</dd>
+                        </div>
+                      </dl>
+                      <p className="text-sm text-[var(--text-secondary)]">
+                        {analytics.avgLifeWith > analytics.avgLifeWithout
+                          ? `Rotated tyres last ${fmt(analytics.avgLifeWith - analytics.avgLifeWithout)} km (${Math.round(((analytics.avgLifeWith - analytics.avgLifeWithout) / analytics.avgLifeWithout) * 100)}%) longer on this fleet.`
+                          : 'On this fleet, rotated tyres do not yet last longer than never-rotated ones, so no saving is claimed.'}
+                      </p>
+                    </>
+                  ) : (
+                    <div className="flex items-center gap-2 text-[var(--text-muted)] text-sm py-6 justify-center text-center">
+                      <Info size={14} aria-hidden="true" />
+                      Removal odometer data is needed for a life comparison
                     </div>
                   )}
-                </div>
 
-                {/* Wear Balance Alert Panel */}
-                {(() => {
-                  const imbalanced = filteredVehicles.filter(v => v.wearImbalance != null && v.wearImbalance > WEAR_IMBALANCE_MM)
-                  if (!imbalanced.length) return null
-                  return (
-                    <div className="bg-orange-900/20 border border-orange-800 rounded-xl p-5">
-                      <div className="flex items-center gap-2 text-orange-400 font-semibold text-sm mb-3">
-                        <AlertTriangle size={15} />
-                        {imbalanced.length} Vehicle{imbalanced.length !== 1 ? 's' : ''} with Unbalanced Tyre Wear (&gt; {WEAR_IMBALANCE_MM}mm steer-drive difference)
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {imbalanced.map(v => (
-                          <button
-                            key={v.asset}
-                            onClick={() => setDrawerVehicle(v)}
-                            className="flex items-center gap-2 px-3 py-1.5 bg-orange-900/30 border border-orange-700 rounded-lg text-xs text-orange-300 hover:text-orange-200 transition-colors"
-                          >
-                            <Truck size={11} />
-                            {v.asset}
-                            <span className="text-orange-500">Δ{v.wearImbalance.toFixed(1)}mm</span>
-                          </button>
-                        ))}
-                      </div>
+                  <dl className="border-t border-[var(--input-border)] pt-4 space-y-2 text-sm">
+                    <div className="text-xs text-[var(--text-muted)] font-medium">Tyre life value at risk</div>
+                    <div className="flex items-center justify-between"><dt className="text-[var(--text-muted)]">Average tyre price (priced rows)</dt><dd className="tabular-nums">{analytics.avgCost != null ? `${activeCurrency} ${fmt(analytics.avgCost)}` : 'N/A'}</dd></div>
+                    <div className="flex items-center justify-between"><dt className="text-[var(--text-muted)]">Value lost per unrotated tyre</dt><dd className="tabular-nums">{analytics.lifeValuePerTyre != null ? `${activeCurrency} ${fmt(analytics.lifeValuePerTyre)}` : 'N/A'}</dd></div>
+                    <div className="flex items-center justify-between"><dt className="text-[var(--text-muted)]">Tyres on vehicles not on schedule</dt><dd className="tabular-nums">{fmt(analytics.tyresAtRisk)}</dd></div>
+                    <div className="flex items-center justify-between font-semibold border-t border-[var(--input-border)] pt-2">
+                      <dt className="text-[var(--text-secondary)]">Total value at risk</dt>
+                      <dd className="tabular-nums text-green-400">{analytics.lifeValueTotal != null ? `${activeCurrency} ${fmt(analytics.lifeValueTotal)}` : 'N/A'}</dd>
                     </div>
-                  )
-                })()}
-              </motion.div>
-            )}
-
-            {/* ═══════════════════════════════════════════════════════════════ */}
-            {/* TAB: Charts                                                     */}
-            {/* ═══════════════════════════════════════════════════════════════ */}
-            {activeTab === 'charts' && (
-              <motion.div key="charts" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                  {/* Rotation Activity Trend. `level={2}` keeps the h2 the old
-                      markup had, so the page's heading outline is unchanged. */}
-                  <Card>
-                    <CardHeader
-                      title="Monthly Rotation Activity"
-                      icon={TrendingUp}
-                      level={2}
-                      actions={<span className="text-xs text-[var(--text-muted)]">Last 12 months · Detected rotations</span>}
-                    />
-                    {trendChartData ? (
-                      <div className="h-64">
-                        <Line
-                          data={trendChartData}
-                          options={{
-                            ...CHART_DEFAULTS,
-                            scales: {
-                              ...CHART_DEFAULTS.scales,
-                              y: { ...CHART_DEFAULTS.scales.y, min: 0, ticks: { ...CHART_DEFAULTS.scales.y.ticks, precision: 0 } },
-                            },
-                          }}
-                        />
-                      </div>
-                    ) : (
-                      <div className="h-64 flex items-center justify-center text-[var(--text-muted)] text-sm">No rotation events detected in the last 12 months</div>
-                    )}
-                  </Card>
-
-                  {/* Site Compliance */}
-                  <Card>
-                    <CardHeader title="Site Compliance Comparison" icon={Building2} level={2} />
-                    {siteChartData ? (
-                      <div className="h-64">
-                        <Bar
-                          data={siteChartData}
-                          options={{
-                            ...CHART_DEFAULTS,
-                            indexAxis: 'y',
-                            scales: {
-                              x: { ...CHART_DEFAULTS.scales.x, min: 0, max: 100, ticks: { ...CHART_DEFAULTS.scales.x.ticks, callback: v => `${v}%` } },
-                              y: { ...CHART_DEFAULTS.scales.y },
-                            },
-                            plugins: { ...CHART_DEFAULTS.plugins, legend: { display: false } },
-                          }}
-                        />
-                      </div>
-                    ) : (
-                      <div className="h-64 flex items-center justify-center text-[var(--text-muted)] text-sm">No site data available</div>
-                    )}
-                  </Card>
-                </div>
-
-                {/* Status Distribution */}
-                <Card>
-                  <CardHeader title="Fleet Status Distribution" icon={Layers} level={2} />
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                    {Object.entries(STATUS_CFG).map(([status, cfg]) => {
-                      const count = analytics.vehicles.filter(v => v.status === status).length
-                      const pct   = analytics.total > 0 ? Math.round((count / analytics.total) * 100) : 0
-                      return (
-                        <div key={status} className={`rounded-xl border ${cfg.border} ${cfg.bg} p-4`}>
-                          <div className={`text-2xl font-bold ${cfg.color}`}>{count}</div>
-                          <div className="text-xs text-[var(--text-muted)] mt-1">{status}</div>
-                          <div className="mt-2 h-1.5 rounded-full bg-[var(--input-border)]">
-                            <div className={`h-full rounded-full ${cfg.dot}`} style={{ width: `${pct}%` }} />
-                          </div>
-                          <div className="text-xs text-[var(--text-muted)] mt-1">{pct}%</div>
-                        </div>
-                      )
-                    })}
-                  </div>
+                    <p className="text-xs text-[var(--text-dim)]">Per tyre: (1 minus never-rotated life divided by rotated life) times the average price. Measured from this fleet, not an assumed factor.</p>
+                  </dl>
                 </Card>
-              </motion.div>
-            )}
+              </div>
 
-            {/* ═══════════════════════════════════════════════════════════════ */}
-            {/* TAB: Tyre Life Impact                                           */}
-            {/* ═══════════════════════════════════════════════════════════════ */}
-            {activeTab === 'impact' && (
-              <motion.div key="impact" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                  {/* Life comparison chart */}
-                  <Card>
-                    <CardHeader title="Tyre Life: Rotated vs Non-Rotated" icon={BarChart3} level={2} />
-                    {impactChartData ? (
-                      <div className="h-64">
-                        <Bar
-                          data={impactChartData}
-                          options={{
-                            ...CHART_DEFAULTS,
-                            plugins: { ...CHART_DEFAULTS.plugins, legend: { display: false } },
-                            scales: {
-                              ...CHART_DEFAULTS.scales,
-                              y: { ...CHART_DEFAULTS.scales.y, ticks: { ...CHART_DEFAULTS.scales.y.ticks, callback: v => `${(v / 1000).toFixed(0)}k` } },
-                            },
-                          }}
-                        />
-                      </div>
-                    ) : (
-                      <div className="h-64 flex items-center justify-center text-[var(--text-muted)] text-sm">Insufficient removal records to compare tyre life</div>
-                    )}
-                  </Card>
-
-                  {/* Impact metrics. `!mb-0` on the header is the documented
-                      idiom: CardHeader writes marginBottom inline, and without
-                      the override it would stack on top of this card's own
-                      space-y-4 and double the gap. `!important` in a stylesheet
-                      does beat a normal inline declaration, which is why this
-                      one case is allowed to use it. */}
-                  <Card className="space-y-4">
-                    <CardHeader title="Rotation Impact Analysis" icon={DollarSign} iconTone="warn" level={2} className="!mb-0" />
-                    {analytics.avgLifeWith && analytics.avgLifeWithout ? (
-                      <>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="bg-green-900/20 border border-green-800 rounded-lg p-4">
-                            <div className="text-xs text-green-400 mb-1">With Regular Rotation</div>
-                            <div className="text-xl font-bold text-green-300">{fmt(analytics.avgLifeWith)} km</div>
-                            <div className="text-xs text-[var(--text-muted)] mt-1">avg tyre life</div>
-                          </div>
-                          <div className="bg-red-900/20 border border-red-800 rounded-lg p-4">
-                            <div className="text-xs text-red-400 mb-1">No Rotation Detected</div>
-                            <div className="text-xl font-bold text-red-300">{fmt(analytics.avgLifeWithout)} km</div>
-                            <div className="text-xs text-[var(--text-muted)] mt-1">avg tyre life</div>
-                          </div>
-                        </div>
-                        {analytics.avgLifeWith > analytics.avgLifeWithout && (
-                          <div className="bg-blue-900/20 border border-blue-800 rounded-lg p-4">
-                            <div className="text-sm font-medium text-blue-300 mb-1 flex items-center gap-2">
-                              <TrendingUp size={14} />
-                              {fmt(analytics.avgLifeWith - analytics.avgLifeWithout)} km longer life with rotation
-                            </div>
-                            <div className="text-xs text-[var(--text-muted)]">
-                              +{Math.round(((analytics.avgLifeWith - analytics.avgLifeWithout) / analytics.avgLifeWithout) * 100)}% improvement ·
-                              Saves approx {activeCurrency} {fmt(Math.round(((analytics.avgLifeWith - analytics.avgLifeWithout) / analytics.avgLifeWith) * analytics.effCost))} per tyre
-                            </div>
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      <div className="flex items-center gap-2 text-[var(--text-muted)] text-sm py-6 justify-center">
-                        <Info size={14} />
-                        Tyre removal (km_at_removal) data required for life comparison
-                      </div>
-                    )}
-
-                    {/* Cost savings breakdown */}
-                    <div className="border-t border-[var(--input-border)] pt-4 space-y-2">
-                      <div className="text-xs text-[var(--text-muted)] font-medium">Estimated Annual Savings</div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-[var(--text-muted)]">Fleet size</span>
-                        <span className="text-[var(--text-primary)]">{analytics.total} vehicles</span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-[var(--text-muted)]">Avg tyre cost</span>
-                        <span className="text-[var(--text-primary)]">{activeCurrency} {fmt(analytics.effCost)}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-[var(--text-muted)]">Rotation benefit factor</span>
-                        <span className="text-[var(--text-primary)]">30%</span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm font-semibold border-t border-[var(--input-border)] pt-2">
-                        <span className="text-[var(--text-secondary)]">Total est. savings</span>
-                        <span className="text-green-400">{activeCurrency} {fmt(analytics.costSavings)}</span>
-                      </div>
-                    </div>
-                  </Card>
-                </div>
-
-                {/* Position Wear Balance Analysis. The qualifier moves out of
-                    the <h2> and into CardHeader's `description`, so the heading
-                    a screen reader announces is the heading, not the heading
-                    plus a footnote. The table below is REFUSED for
-                    EnterpriseTable: it is a top-20 slice with composite cells
-                    (two buttons that open the drawer and the schedule dialog)
-                    and no search or export of its own to preserve. */}
-                <Card>
-                  <CardHeader
-                    title="Position Wear Balance Analysis"
-                    description={`Vehicles with > ${WEAR_IMBALANCE_MM}mm steer-drive imbalance`}
-                    icon={Gauge}
-                    iconTone="warn"
-                    level={2}
-                  />
-                  {(() => {
-                    const imbalanced = analytics.vehicles.filter(v => v.wearImbalance != null && v.wearImbalance > WEAR_IMBALANCE_MM)
-                      .sort((a, b) => b.wearImbalance - a.wearImbalance)
-                      .slice(0, 20)
-                    if (!imbalanced.length) return (
-                      <div className="text-center py-8 text-green-400 text-sm flex items-center justify-center gap-2">
-                        <CheckCircle size={16} />
-                        All vehicles within acceptable wear balance range
-                      </div>
-                    )
-                    return (
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="border-b border-[var(--input-border)]">
-                              {['Asset', 'Site', 'Steer Tread', 'Drive Tread', 'Imbalance', 'Priority'].map(h => (
-                                <th key={h} className="text-left text-xs text-[var(--text-muted)] font-medium pb-2 pr-4">{h}</th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-[var(--input-border)]">
-                            {imbalanced.map(v => (
-                              <tr key={v.asset} className="hover:bg-gray-800/30 transition-colors">
-                                <td className="py-2.5 pr-4">
-                                  <button onClick={() => setDrawerVehicle(v)} className="text-blue-400 hover:text-blue-300 font-medium flex items-center gap-1.5">
-                                    <Truck size={12} /> {v.asset}
-                                  </button>
-                                </td>
-                                <td className="py-2.5 pr-4 text-[var(--text-secondary)]">{v.site}</td>
-                                <td className="py-2.5 pr-4 text-blue-400">{v.steerTread?.toFixed(1) ?? '-'} mm</td>
-                                <td className="py-2.5 pr-4 text-red-400">{v.driveTread?.toFixed(1) ?? '-'} mm</td>
-                                <td className="py-2.5 pr-4">
-                                  <span className={`font-semibold ${v.wearImbalance > 6 ? 'text-red-400' : 'text-orange-400'}`}>
-                                    Δ{v.wearImbalance.toFixed(1)} mm
-                                  </span>
-                                </td>
-                                <td className="py-2.5 pr-4">
-                                  <button
-                                    onClick={() => setModalVehicle(v)}
-                                    className="text-xs px-2 py-1 rounded bg-orange-900/30 border border-orange-700 text-orange-400 hover:text-orange-300 transition-colors"
-                                  >
-                                    Schedule Rotation
-                                  </button>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )
-                  })()}
-                </Card>
-              </motion.div>
-            )}
-
-            {/* ═══════════════════════════════════════════════════════════════ */}
-            {/* TAB: Upcoming Schedule                                          */}
-            {/* ═══════════════════════════════════════════════════════════════ */}
-            {activeTab === 'schedule' && (
-              <motion.div key="schedule" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-5">
-
-                <div className="flex items-center justify-between">
-                  <h2 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
-                    <Calendar size={15} className="text-blue-400" />
-                    Scheduled Rotations ({schedules.length})
-                  </h2>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => {
-                        const upcomingVehicles = analytics.vehicles.filter(v => v.status === 'Overdue' || v.status === 'Due Soon')
-                        const today = new Date()
-                        const newEntries = upcomingVehicles
-                          .filter(v => !schedules.find(s => s.asset === v.asset && s.status === 'Open'))
-                          .map((v, i) => ({
-                            asset: v.asset,
-                            site: v.site,
-                            scheduledDate: (() => { const d = new Date(today); d.setDate(d.getDate() + 3 + i * 2); return d.toISOString().slice(0, 10) })(),
-                            priority: v.status === 'Overdue' ? 'Critical' : 'High',
-                            notes: `Auto-scheduled. ${v.status === 'Overdue' ? `Overdue by ${fmt(v.sinceLastKm - interval)} km.` : `Due in ${fmt(v.dueInKm)} km.`}`,
-                            currentKm: v.currentKm,
-                            status: 'Open',
-                          }))
-                        createSchedules(newEntries)
-                      }}
-                      disabled={schedBusy}
-                      className="btn-primary gap-2"
-                    >
-                      <RotateCcw size={13} />
-                      Auto-Schedule Overdue & Due Soon
-                    </button>
+              <Card>
+                <CardHeader
+                  title="Position wear balance"
+                  description={`Vehicles with more than ${WEAR_IMBALANCE_MM} mm steer to drive imbalance`}
+                  icon={Gauge}
+                  iconTone="warn"
+                  level={2}
+                />
+                {analytics.imbalanced.length === 0 ? (
+                  <div className="text-center py-8 text-[var(--text-muted)] text-sm flex items-center justify-center gap-2">
+                    <CheckCircle size={16} className="text-green-400" aria-hidden="true" />
+                    Every vehicle with steer and drive tread readings is within the balance range
                   </div>
-                </div>
-
-                {schedError ? (
-                  <div className="bg-red-900/20 border border-red-800 rounded-xl p-8 text-center space-y-3">
-                    <AlertOctagon size={28} className="text-red-400 mx-auto" />
-                    <p className="text-red-300 font-medium">Failed to load schedule</p>
-                    <p className="text-red-400/70 text-sm">{schedError}</p>
-                    <button onClick={fetchSchedules} className="px-4 py-2 bg-red-700 hover:bg-red-600 text-white rounded-lg text-sm transition-colors">
-                      Retry
-                    </button>
-                  </div>
-                ) : schedLoading ? (
-                  // `p-12` WOULD BE DEAD on a Card - padding is written inline
-                  // and a plain class loses to it, silently collapsing these two
-                  // states back to --pad-card. The roominess is the whole point
-                  // of an empty state, so it moves to an inner element. Same in
-                  // the sibling branch below. "Loading" and "nothing scheduled"
-                  // stay separate states: an unfinished read must never read as
-                  // an empty schedule.
-                  <Card>
-                    <div className="text-center" style={{ padding: 'var(--space-12)' }}>
-                      <RotateCcw size={32} className="text-blue-400 animate-spin mx-auto mb-3" />
-                      <p className="text-[var(--text-muted)] text-sm">Loading scheduled rotations...</p>
-                    </div>
-                  </Card>
-                ) : schedules.length === 0 ? (
-                  <Card>
-                    <div className="text-center" style={{ padding: 'var(--space-12)' }}>
-                      <Calendar size={40} className="text-[var(--text-dim)] mx-auto mb-3" />
-                      <p className="text-[var(--text-muted)] font-medium">No rotations scheduled yet</p>
-                      <p className="text-[var(--text-muted)] text-sm mt-1">Click "Schedule" on overdue vehicles or use auto-schedule above.</p>
-                    </div>
-                  </Card>
                 ) : (
-                  <>
-                    {/* Group by priority */}
-                    {['Critical', 'High', 'Medium', 'Low'].map(priority => {
-                      const group = schedules.filter(s => s.priority === priority && s.status === 'Open')
-                      if (!group.length) return null
-                      const prioColors = {
-                        Critical: 'text-red-400 border-red-800 bg-red-900/20',
-                        High:     'text-orange-400 border-orange-800 bg-orange-900/20',
-                        Medium:   'text-yellow-400 border-yellow-800 bg-yellow-900/20',
-                        Low:      'text-blue-400 border-blue-800 bg-blue-900/20',
-                      }
-                      return (
-                        <div key={priority} className={`border rounded-xl overflow-hidden ${prioColors[priority]}`}>
-                          <div className={`px-5 py-3 flex items-center gap-2 text-sm font-semibold border-b ${prioColors[priority]}`}>
-                            <AlertOctagon size={13} />
-                            {priority} Priority ({group.length})
-                          </div>
-                          <div className="divide-y divide-gray-800/50">
-                            {group.sort((a, b) => new Date(a.scheduledDate) - new Date(b.scheduledDate)).map(s => (
-                              <div key={s.id} className="flex items-center gap-4 px-5 py-3 bg-[var(--surface-1)] hover:bg-gray-800/50 transition-colors">
-                                <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-                                  <div>
-                                    <div className="text-xs text-[var(--text-muted)]">Asset</div>
-                                    <div className="text-[var(--text-primary)] font-medium flex items-center gap-1.5">
-                                      <Truck size={12} className="text-blue-400" /> {s.asset}
-                                    </div>
-                                  </div>
-                                  <div>
-                                    <div className="text-xs text-[var(--text-muted)]">Site</div>
-                                    <div className="text-[var(--text-secondary)]">{s.site}</div>
-                                  </div>
-                                  <div>
-                                    <div className="text-xs text-[var(--text-muted)]">Scheduled Date</div>
-                                    <div className="text-[var(--text-secondary)]">{fmtDate(s.scheduledDate)}</div>
-                                  </div>
-                                  <div>
-                                    <div className="text-xs text-[var(--text-muted)]">Notes</div>
-                                    <div className="text-[var(--text-muted)] text-xs truncate max-w-xs">{s.notes || '-'}</div>
-                                  </div>
-                                </div>
-                                {(() => {
-                                  const rowLocked = wfLocked && detailSchedule?.id === s.id
-                                  return (
-                                    <div className="flex items-center gap-2 flex-shrink-0">
-                                      <button
-                                        onClick={() => setDetailSchedule(s)}
-                                        className="p-1.5 bg-[var(--input-bg)] hover:bg-gray-700 border border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded-lg transition-colors"
-                                        title="Approval"
-                                      >
-                                        <ShieldCheck size={13} />
-                                      </button>
-                                      <button
-                                        onClick={() => updateScheduleStatus(s.id, 'Completed')}
-                                        disabled={schedBusy || rowLocked}
-                                        className="p-1.5 bg-green-900/30 hover:bg-green-800/50 border border-green-800 text-green-400 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                        title={rowLocked ? 'Locked, in approval' : 'Mark completed'}
-                                      >
-                                        {rowLocked ? <Lock size={13} /> : <CheckCircle size={13} />}
-                                      </button>
-                                      <button
-                                        onClick={() => removeSchedule(s.id)}
-                                        disabled={schedBusy}
-                                        className="p-1.5 bg-[var(--input-bg)] hover:bg-red-900/30 border border-[var(--input-border)] hover:border-red-700 text-[var(--text-muted)] hover:text-red-400 rounded-lg transition-colors disabled:opacity-50"
-                                        title="Remove"
-                                      >
-                                        <X size={13} />
-                                      </button>
-                                    </div>
-                                  )
-                                })()}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )
-                    })}
-
-                    {/* Completed */}
-                    {schedules.filter(s => s.status === 'Completed').length > 0 && (
-                      <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
-                        <div className="px-5 py-3 text-sm font-semibold text-[var(--text-muted)] border-b border-[var(--input-border)] flex items-center gap-2">
-                          <CheckCircle size={13} className="text-green-400" />
-                          Completed ({schedules.filter(s => s.status === 'Completed').length})
-                        </div>
-                        <div className="divide-y divide-gray-800/50">
-                          {schedules.filter(s => s.status === 'Completed').map(s => (
-                            <div key={s.id} className="flex items-center gap-4 px-5 py-3 opacity-60">
-                              <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
-                                <div className="flex items-center gap-1.5 text-[var(--text-muted)]">
-                                  <Truck size={12} /> {s.asset}
-                                </div>
-                                <div className="text-[var(--text-muted)]">{s.site}</div>
-                                <div className="text-[var(--text-muted)]">{fmtDate(s.scheduledDate)}</div>
-                              </div>
-                              <button onClick={() => removeSchedule(s.id)} disabled={schedBusy} className="p-1.5 text-[var(--text-dim)] hover:text-[var(--text-muted)] transition-colors disabled:opacity-50">
-                                <X size={12} />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </>
+                  <EnterpriseTable
+                    columns={imbalanceColumns}
+                    data={analytics.imbalanced}
+                    getRowId={(v) => v.asset}
+                    enableColumnFilters={false}
+                    searchPlaceholder="Search asset or site"
+                    exportFileName={reportFileName('TyrePulse Rotation Wear Imbalance', reportDateLabel())}
+                    reportMeta={{ title: 'Position wear balance', company }}
+                    onRowClick={(v) => setDrawerVehicle(v)}
+                    emptyMessage="No imbalanced vehicles"
+                  />
                 )}
-              </motion.div>
-            )}
-            </AnimatePresence>
-          </>
-        )}
+              </Card>
+            </div>
+          )}
 
-      {/* ── Drawers / Modals ─────────────────────────────────────────────────── */}
+          {activeTab === 'schedule' && (
+            <div className="space-y-5">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <KpiCard icon={Calendar} label="Open" value={fmt(schedSummary.open)} sub={`${fmt(schedSummary.byPriority.Critical)} critical, ${fmt(schedSummary.byPriority.High)} high`} />
+                <KpiCard icon={AlertTriangle} label="Past date" value={fmt(schedSummary.late)} sub="open with a date already passed" tone={schedSummary.late ? 'text-red-400' : ''} />
+                <KpiCard icon={CheckCircle} label="Completed" value={fmt(schedSummary.completed)} />
+                <KpiCard icon={AlertOctagon} label="Needs scheduling" value={fmt(autoScheduleEntries(analytics.vehicles, schedules, interval).length)} sub="overdue or due soon, nothing open" />
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <select aria-label="Filter schedule by status" value={schedStatusFilter} onChange={e => setSchedStatusFilter(e.target.value)} className={`${FIELD} w-auto`}>
+                  <option value="Open">Open</option>
+                  <option value="Completed">Completed</option>
+                  <option value="All">All</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={() => createSchedules(autoScheduleEntries(analytics.vehicles, schedules, interval))}
+                  disabled={schedBusy || autoScheduleEntries(analytics.vehicles, schedules, interval).length === 0}
+                  className="btn-primary gap-2 min-h-[44px]"
+                >
+                  <RotateCcw size={13} aria-hidden="true" />
+                  Auto-schedule overdue and due soon
+                </button>
+              </div>
+
+              {schedError ? (
+                <div role="alert" className="bg-red-900/20 border border-red-800 rounded-xl p-6 text-center space-y-3">
+                  <AlertOctagon size={28} className="text-red-400 mx-auto" aria-hidden="true" />
+                  <p className="text-red-300 font-medium">Schedule action failed</p>
+                  <p className="text-red-300/80 text-sm">{schedError}</p>
+                  <button type="button" onClick={fetchSchedules} className={BTN}><RefreshCw size={14} aria-hidden="true" /> Retry</button>
+                </div>
+              ) : (
+                <EnterpriseTable
+                  columns={scheduleColumns}
+                  data={visibleSchedules}
+                  getRowId={(s) => String(s.id)}
+                  loading={schedLoading}
+                  enableColumnFilters={false}
+                  searchPlaceholder="Search scheduled rotations"
+                  exportFileName={reportFileName('TyrePulse Rotation Schedule', reportDateLabel())}
+                  reportMeta={{ title: 'Rotation schedule', company }}
+                  emptyMessage={schedStatusFilter === 'Open'
+                    ? 'No open rotations scheduled. Use Schedule on a vehicle, or auto-schedule above.'
+                    : 'No scheduled rotations in this view'}
+                />
+              )}
+            </div>
+          )}
+        </>
+      )}
+
       {drawerVehicle && (
         <RotationDrawer vehicle={drawerVehicle} onClose={() => setDrawerVehicle(null)} />
       )}
@@ -1769,17 +1243,8 @@ export default function RotationSchedule() {
         />
       )}
 
-      {/* ── Scheduled Rotation Approval Drawer ─────────────────────────────────
-          Wires the shared Approval & Workflow Engine onto a single scheduled
-          rotation (tyre_rotation entity). Smart rule support: cost / due_date /
-          positions / site travel in the context payload.
-
-          DELIBERATELY NOT `Modal`, for the same reason as RotationDrawer above:
-          this is a `tp-drawer-panel` rail whose wide-screen sizing rule in
-          index.css is `.fixed.inset-0 > .tp-drawer-panel`, a direct-child
-          selector that only holds while the panel stays inside this overlay.
-          Modal portals a centred 92dvh box instead, so converting would both
-          break that selector and change the layout. */}
+      {/* Scheduled Rotation Approval rail (tyre_rotation entity). NOT `Modal`
+          for the same tp-drawer-panel reason as RotationDrawer above. */}
       <AnimatePresence>
         {detailSchedule && (
           <motion.div
@@ -1790,6 +1255,9 @@ export default function RotationSchedule() {
             onClick={() => setDetailSchedule(null)}
           >
             <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="rotation-approval-title"
               initial={{ x: '100%' }}
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
@@ -1797,25 +1265,22 @@ export default function RotationSchedule() {
               className="tp-drawer-panel w-full max-w-lg h-full bg-[var(--surface-1)] border-l border-[var(--input-border)] overflow-y-auto"
               onClick={e => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between p-6 border-b border-[var(--input-border)] sticky top-0 bg-[var(--surface-1)] z-10">
-                <div>
-                  <div className="flex items-center gap-2 text-[var(--text-primary)] font-semibold text-lg">
-                    <RotateCcw size={18} className="text-green-400" />
+              <div className="flex items-center justify-between gap-3 p-4 sm:p-6 border-b border-[var(--input-border)] sticky top-0 bg-[var(--surface-1)] z-10">
+                <div className="min-w-0">
+                  <h2 id="rotation-approval-title" className="flex items-center gap-2 text-[var(--text-primary)] font-semibold text-lg">
+                    <RotateCcw size={18} className="text-[var(--text-muted)]" aria-hidden="true" />
                     {detailSchedule.asset}
-                  </div>
+                  </h2>
                   <div className="text-sm text-[var(--text-muted)] mt-0.5">
-                    {detailSchedule.site} · {fmtDate(detailSchedule.scheduledDate)} · {detailSchedule.priority}
+                    {[detailSchedule.site, fmtDate(detailSchedule.scheduledDate), detailSchedule.priority].filter(Boolean).join(', ')}
                   </div>
                 </div>
-                <button
-                  onClick={() => setDetailSchedule(null)}
-                  className="p-2 hover:bg-[var(--input-bg)] rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
-                >
-                  <X size={18} />
+                <button type="button" onClick={() => setDetailSchedule(null)} aria-label="Close rotation approval" className={ICON_BTN}>
+                  <X size={18} aria-hidden="true" />
                 </button>
               </div>
 
-              <div className="p-6 space-y-4">
+              <div className="p-4 sm:p-6 space-y-4">
                 <EntityApprovalPanel
                   entityType="tyre_rotation"
                   entityId={detailSchedule.id}
@@ -1833,26 +1298,22 @@ export default function RotationSchedule() {
                 />
 
                 {wfLocked && (
-                  <div className="flex items-center gap-1.5 text-xs text-[var(--accent)] bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2">
-                    <Lock size={12} />
+                  <div role="status" className="flex items-center gap-1.5 text-xs text-[var(--accent)] bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2">
+                    <Lock size={12} aria-hidden="true" />
                     Locked, in approval. Completing this rotation is disabled until the workflow finishes.
                   </div>
                 )}
 
-                {(() => {
-                  const rowLocked = wfLocked
-                  return (
-                    <button
-                      onClick={() => updateScheduleStatus(detailSchedule.id, 'Completed')}
-                      disabled={schedBusy || rowLocked || detailSchedule.status === 'Completed'}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-green-700 hover:bg-green-600 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                      title={rowLocked ? 'Locked, in approval' : 'Mark rotation completed'}
-                    >
-                      {rowLocked ? <Lock size={14} /> : <CheckCircle size={14} />}
-                      {detailSchedule.status === 'Completed' ? 'Completed' : 'Mark Completed'}
-                    </button>
-                  )
-                })()}
+                <button
+                  type="button"
+                  onClick={() => updateScheduleStatus(detailSchedule.id, 'Completed')}
+                  disabled={schedBusy || wfLocked || detailSchedule.status === 'Completed'}
+                  className="btn-primary w-full min-h-[44px] gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                  title={wfLocked ? 'Locked, in approval' : 'Mark rotation completed'}
+                >
+                  {wfLocked ? <Lock size={14} aria-hidden="true" /> : <CheckCircle size={14} aria-hidden="true" />}
+                  {detailSchedule.status === 'Completed' ? 'Completed' : 'Mark Completed'}
+                </button>
               </div>
             </motion.div>
           </motion.div>

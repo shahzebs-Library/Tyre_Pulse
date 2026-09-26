@@ -1,5 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import PageHeader from '../components/ui/PageHeader'
 import {
   Chart as ChartJS,
@@ -9,143 +8,97 @@ import {
 import { Bar, Line, Doughnut } from 'react-chartjs-2'
 import {
   ShieldCheck, AlertTriangle, CheckCircle, XCircle, TrendingDown, TrendingUp,
-  Download, FileText, Filter, X, ChevronLeft, ChevronRight, Search,
-  RefreshCw, BarChart3, ClipboardList, Gauge, Building2, Info, Calendar,
-  Mail, Award, Clock, AlertCircle, Users, Eye, ExternalLink,
+  FileText, FileSpreadsheet, Filter, X, RefreshCw, BarChart3, ClipboardList, Gauge,
+  Building2, Info, Calendar, Award, AlertCircle, ExternalLink, HelpCircle,
 } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
-import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
-import { resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme } from '../lib/exportUtils'
+import {
+  resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme,
+  exportSheetsToExcel, reportFileName, reportDateLabel,
+} from '../lib/exportUtils'
 import { formatDate } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
 import { loadAutoTable } from '../lib/pdfEngine'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import EmailPdfButton from '../components/EmailPdfButton'
+import {
+  LEGAL_MIN_TREAD, FLEET_MIN_TREAD, PRESSURE_MIN_PSI, PRESSURE_MAX_PSI,
+  INSPECTION_MAX_DAYS, INSPECTION_DUE_DAYS, AREA_WEIGHTS, INSPECTION_LABEL, BAND_LABEL,
+  treadStats as buildTreadStats, pressureStats as buildPressureStats, inspectionCompliance,
+  overallScore as buildOverallScore, scoreBand, criticalCount as countCritical,
+  fullyCompliantVehicles as countFullyCompliant, monthlyTreadTrend, treadDistribution,
+  treadBySite as buildTreadBySite, pressureBySite as buildPressureBySite, inspectionBySite,
+  nonCompliantTyres as buildNonCompliant, pressureExceptions,
+} from '../lib/complianceDashboardAnalytics'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement, PointElement,
   ArcElement, Title, Tooltip, Legend, Filler,
 )
 
-// ── Compliance constants ───────────────────────────────────────────────────────
-const LEGAL_MIN_TREAD   = 1.6  // mm - general legal minimum
-const FLEET_MIN_TREAD   = 3.0  // mm - heavy commercial / fleet standard
-const PRESSURE_TOLERANCE = 0.10 // ±10%
-const INSPECTION_MAX_DAYS = 30  // days
-const INSPECTION_DUE_DAYS = 45  // warn before overdue
+const TYRE_CAP = 50000
 
-// ── Chart options factory ─────────────────────────────────────────────────────
+// Theme tokens resolve per light/dark via the global chartVarPlugin.
+const TOOLTIP = {
+  backgroundColor: 'var(--panel)',
+  titleColor: 'var(--text-primary)',
+  bodyColor: 'var(--text-secondary)',
+  borderColor: 'var(--hairline)',
+  borderWidth: 1,
+}
+const axis = (title) => ({
+  grid: { color: 'var(--panel-2)' },
+  ticks: { color: 'var(--text-muted)', font: { size: 10 } },
+  title: title ? { display: true, text: title, color: 'var(--text-muted)', font: { size: 10 } } : { display: false },
+})
 const chartOpts = (horizontal = false, xLabel = '', yLabel = '') => ({
   responsive: true,
   maintainAspectRatio: false,
   indexAxis: horizontal ? 'y' : 'x',
-  plugins: {
-    legend: { labels: { color: '#9ca3af', font: { size: 10 } } },
-    tooltip: {
-      backgroundColor: 'var(--panel)',
-      titleColor: '#f9fafb',
-      bodyColor: '#d1d5db',
-      borderColor: 'var(--hairline)',
-      borderWidth: 1,
-    },
-  },
-  scales: {
-    x: {
-      grid: { color: 'rgba(31,41,55,0.8)' },
-      ticks: { color: '#9ca3af', font: { size: 10 } },
-      title: xLabel ? { display: true, text: xLabel, color: '#6b7280', font: { size: 10 } } : { display: false },
-    },
-    y: {
-      grid: { color: 'rgba(31,41,55,0.8)' },
-      ticks: { color: '#9ca3af', font: { size: 10 } },
-      title: yLabel ? { display: true, text: yLabel, color: '#6b7280', font: { size: 10 } } : { display: false },
-    },
-  },
+  plugins: { legend: { labels: { color: 'var(--text-muted)', font: { size: 10 } } }, tooltip: TOOLTIP },
+  scales: { x: axis(xLabel), y: axis(yLabel) },
 })
-
+const pctAxisOpts = (horizontal) => ({
+  ...chartOpts(horizontal, horizontal ? 'Compliance %' : '', horizontal ? '' : 'Compliance %'),
+  plugins: { legend: { display: false }, tooltip: { ...TOOLTIP, callbacks: { label: ctx => ` ${Number(horizontal ? ctx.parsed.x : ctx.parsed.y).toFixed(1)}%` } } },
+  scales: horizontal
+    ? { x: { ...axis('Compliance %'), min: 0, max: 100, ticks: { ...axis().ticks, callback: v => `${v}%` } }, y: axis() }
+    : { x: axis(), y: { ...axis('Compliance %'), min: 0, max: 100, ticks: { ...axis().ticks, callback: v => `${v}%` } } },
+})
 const doughnutOpts = {
   responsive: true,
   maintainAspectRatio: false,
   cutout: '68%',
-  plugins: {
-    legend: { position: 'bottom', labels: { color: '#9ca3af', font: { size: 10 }, padding: 12 } },
-    tooltip: {
-      backgroundColor: 'var(--panel)',
-      titleColor: '#f9fafb',
-      bodyColor: '#d1d5db',
-      borderColor: 'var(--hairline)',
-      borderWidth: 1,
-    },
-  },
+  plugins: { legend: { position: 'bottom', labels: { color: 'var(--text-muted)', font: { size: 10 }, padding: 12 } }, tooltip: TOOLTIP },
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function daysSince(dateStr) {
-  if (!dateStr) return null
-  return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000)
+// Semantic compliance colours (meaning-bearing; every use also carries a word).
+const BAND = {
+  good: { text: 'text-green-400', hex: '#22c55e' },
+  marginal: { text: 'text-orange-400', hex: '#f97316' },
+  poor: { text: 'text-red-400', hex: '#ef4444' },
+  unknown: { text: 'text-[var(--text-muted)]', hex: '#6b7280' },
 }
+const pctColor = (pct) => (pct >= 90 ? '#22c55e' : pct >= 75 ? '#eab308' : pct >= 60 ? '#f97316' : '#ef4444')
+const fmtPct = (v, d = 1) => (v == null || !Number.isFinite(v) ? 'N/A' : `${v.toFixed(d)}%`)
+const fmtDay = (d) => (d ? formatDate(d, 'All', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A')
 
-function daysInService(issueDateStr) {
-  if (!issueDateStr) return null
-  return Math.floor((Date.now() - new Date(issueDateStr).getTime()) / 86400000)
-}
-
-function scoreColor(pct) {
-  if (pct >= 80) return { text: 'text-green-400', bg: 'bg-green-900/20', border: 'border-green-700/40', hex: '#22c55e', ring: 'ring-green-500/30' }
-  if (pct >= 60) return { text: 'text-orange-400', bg: 'bg-orange-900/20', border: 'border-orange-700/40', hex: '#f97316', ring: 'ring-orange-500/30' }
-  return { text: 'text-red-400', bg: 'bg-red-900/20', border: 'border-red-700/40', hex: '#ef4444', ring: 'ring-red-500/30' }
-}
-
-function inspectionStatus(daysSinceInspection) {
-  if (daysSinceInspection === null) return 'no_data'
-  if (daysSinceInspection <= INSPECTION_MAX_DAYS) return 'compliant'
-  if (daysSinceInspection <= INSPECTION_DUE_DAYS) return 'due_soon'
-  return 'overdue'
-}
+const BTN = 'inline-flex items-center justify-center gap-1.5 min-h-[44px] px-3 py-2 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] text-sm hover:bg-[var(--input-bg-hover)] transition-colors disabled:opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]'
+const SELECT = 'min-h-[44px] w-full bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] text-sm rounded-lg px-3 py-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]'
 
 // ── Sub-components ────────────────────────────────────────────────────────────
-function Select({ value, onChange, options, placeholder, className = '' }) {
+function KpiCard({ title, value, sub, icon: Icon, tone }) {
   return (
-    <select
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      className={`bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] text-xs rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-green-500 ${className}`}
-    >
-      <option value="">{placeholder}</option>
-      {options.map(o => (
-        <option key={o.value ?? o} value={o.value ?? o}>
-          {o.label ?? o}
-        </option>
-      ))}
-    </select>
-  )
-}
-
-function KpiCard({ title, value, sub, icon: Icon, color, alert }) {
-  const styles = {
-    green:  { border: 'border-green-700/40 bg-green-950/20', icon: 'text-green-400', val: 'text-green-400' },
-    red:    { border: 'border-red-700/40 bg-red-950/20',     icon: 'text-red-400',   val: 'text-red-400'   },
-    orange: { border: 'border-orange-700/40 bg-orange-950/20', icon: 'text-orange-400', val: 'text-orange-400' },
-    amber:  { border: 'border-amber-700/40 bg-amber-950/20', icon: 'text-amber-400', val: 'text-amber-400' },
-    blue:   { border: 'border-blue-700/40 bg-blue-950/20',   icon: 'text-blue-400',  val: 'text-blue-300'  },
-    purple: { border: 'border-purple-700/40 bg-purple-950/20', icon: 'text-purple-400', val: 'text-purple-300' },
-  }
-  const s = styles[color] ?? { border: 'border-[var(--input-border)] bg-[var(--surface-1)]', icon: 'text-[var(--text-muted)]', val: 'text-[var(--text-primary)]' }
-  return (
-    <div className={`rounded-xl border p-4 flex flex-col gap-2 ${s.border}`}>
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-2">
-          <Icon size={14} className={s.icon} />
-          <span className="text-xs text-[var(--text-muted)] font-medium">{title}</span>
-        </div>
-        {alert && (
-          <span className="text-xs px-1.5 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/40 font-bold animate-pulse">
-            ALERT
-          </span>
-        )}
+    <div className="rounded-xl border border-[var(--input-border)] bg-[var(--surface-1)] p-4 flex flex-col gap-2 min-w-0">
+      <div className="flex items-center gap-2">
+        <Icon size={14} className="text-[var(--text-muted)]" aria-hidden="true" />
+        <span className="text-xs text-[var(--text-muted)] font-medium">{title}</span>
       </div>
-      <p className={`text-2xl font-bold leading-tight ${s.val}`}>{value}</p>
+      <p className={`text-2xl font-bold leading-tight tabular-nums ${tone || 'text-[var(--text-primary)]'}`}>{value}</p>
       {sub && <p className="text-xs text-[var(--text-muted)]">{sub}</p>}
     </div>
   )
@@ -154,58 +107,50 @@ function KpiCard({ title, value, sub, icon: Icon, color, alert }) {
 function InspectionBadge({ status }) {
   const map = {
     compliant: 'bg-green-500/20 text-green-300 border border-green-500/40',
-    due_soon:  'bg-yellow-500/20 text-yellow-300 border border-yellow-500/40',
-    overdue:   'bg-red-500/20 text-red-300 border border-red-500/40',
-    no_data:   'bg-[var(--input-bg)] text-[var(--text-muted)]',
+    due_soon: 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/40',
+    overdue: 'bg-red-500/20 text-red-300 border border-red-500/40',
+    no_data: 'bg-[var(--input-bg)] text-[var(--text-muted)] border border-[var(--input-border)]',
   }
-  const label = { compliant: 'Compliant', due_soon: 'Due Soon', overdue: 'Overdue', no_data: 'No Data' }
-  return (
-    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${map[status] ?? map.no_data}`}>
-      {label[status] ?? status}
-    </span>
-  )
+  return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${map[status] ?? map.no_data}`}>{INSPECTION_LABEL[status] ?? status}</span>
 }
 
 function RiskBadge({ risk }) {
   const map = {
     Critical: 'bg-red-500/20 text-red-300 border border-red-500/40',
-    High:     'bg-orange-500/20 text-orange-300 border border-orange-500/40',
-    Medium:   'bg-yellow-500/20 text-yellow-300 border border-yellow-500/40',
-    Low:      'bg-green-500/20 text-green-300 border border-green-500/40',
+    High: 'bg-orange-500/20 text-orange-300 border border-orange-500/40',
+    Medium: 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/40',
+    Low: 'bg-green-500/20 text-green-300 border border-green-500/40',
   }
-  return (
-    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${map[risk] ?? 'bg-[var(--input-bg)] text-[var(--text-muted)]'}`}>
-      {risk || 'Unknown'}
-    </span>
-  )
+  return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${map[risk] ?? 'bg-[var(--input-bg)] text-[var(--text-muted)]'}`}>{risk || 'Not rated'}</span>
 }
 
-// ── Compliance Score Gauge ─────────────────────────────────────────────────────
+function TreadBadge({ cls }) {
+  if (cls === 'legal_fail') return <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-red-500/20 text-red-300 border border-red-500/40">Legal failure</span>
+  if (cls === 'below_min') return <span className="text-xs px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-300 border border-orange-500/40">Below fleet minimum</span>
+  return <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--input-bg)] text-[var(--text-muted)] border border-[var(--input-border)]">Not measured</span>
+}
+
 function ComplianceGauge({ score, trend }) {
-  const c = scoreColor(score)
+  const band = BAND[scoreBand(score)]
   const circumference = 2 * Math.PI * 52
-  const dash = (score / 100) * circumference
+  const dash = score != null ? (score / 100) * circumference : 0
   return (
-    <div className="relative flex items-center justify-center" style={{ width: 140, height: 140 }}>
-      <svg width={140} height={140} viewBox="0 0 140 140">
-        <circle cx={70} cy={70} r={52} fill="none" stroke="#1f2937" strokeWidth={10} />
-        <circle
-          cx={70} cy={70} r={52}
-          fill="none"
-          stroke={c.hex}
-          strokeWidth={10}
-          strokeLinecap="round"
-          strokeDasharray={`${dash} ${circumference}`}
-          strokeDashoffset={circumference * 0.25}
-          style={{ transition: 'stroke-dasharray 0.8s ease' }}
-        />
+    <div className="relative flex items-center justify-center" style={{ width: 140, height: 140 }} role="img"
+      aria-label={score != null ? `Overall compliance ${score} percent` : 'Overall compliance not measured'}>
+      <svg width={140} height={140} viewBox="0 0 140 140" aria-hidden="true">
+        <circle cx={70} cy={70} r={52} fill="none" stroke="var(--input-border)" strokeWidth={10} />
+        {score != null && (
+          <circle cx={70} cy={70} r={52} fill="none" stroke={band.hex} strokeWidth={10} strokeLinecap="round"
+            strokeDasharray={`${dash} ${circumference}`} strokeDashoffset={circumference * 0.25}
+            style={{ transition: 'stroke-dasharray 0.8s ease' }} />
+        )}
       </svg>
       <div className="absolute flex flex-col items-center">
-        <span className={`text-3xl font-black ${c.text}`}>{score}%</span>
-        {trend !== null && (
+        <span className={`text-3xl font-black tabular-nums ${band.text}`}>{score != null ? `${score}%` : 'N/A'}</span>
+        {trend != null && (
           <span className={`text-xs flex items-center gap-0.5 mt-0.5 ${trend >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-            {trend >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
-            {Math.abs(trend).toFixed(1)}%
+            {trend >= 0 ? <TrendingUp size={11} aria-hidden="true" /> : <TrendingDown size={11} aria-hidden="true" />}
+            {trend >= 0 ? 'up' : 'down'} {Math.abs(trend).toFixed(1)} pts
           </span>
         )}
       </div>
@@ -213,140 +158,121 @@ function ComplianceGauge({ score, trend }) {
   )
 }
 
-// ── Tab button ────────────────────────────────────────────────────────────────
-function TabBtn({ active, onClick, icon: Icon, label, count, countColor }) {
+function Section({ icon: Icon, title, right, children }) {
   return (
-    <button
-      onClick={onClick}
-      className={`flex items-center gap-2 px-4 py-2.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${
-        active
-          ? 'bg-green-900/40 text-green-300 border border-green-700/50'
-          : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--input-bg)]'
-      }`}
-    >
-      <Icon size={13} />
-      {label}
-      {count !== undefined && (
-        <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${
-          countColor ?? 'bg-[var(--input-bg)] text-[var(--text-secondary)]'
-        }`}>
-          {count}
-        </span>
-      )}
-    </button>
+    <section className="bg-[var(--surface-2)] rounded-xl p-4 border border-[var(--input-border)] min-w-0">
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        <Icon size={13} className="text-[var(--text-muted)]" aria-hidden="true" />
+        <h3 className="text-sm font-medium text-[var(--text-primary)]">{title}</h3>
+        {right && <span className="ml-auto text-xs text-[var(--text-muted)]">{right}</span>}
+      </div>
+      {children}
+    </section>
   )
 }
 
+function StatStrip({ items }) {
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {items.map(({ label, val, tone }) => (
+        <div key={label} className="bg-[var(--surface-2)] rounded-xl p-3 border border-[var(--input-border)]">
+          <p className="text-xs text-[var(--text-muted)]">{label}</p>
+          <p className={`text-xl font-bold tabular-nums ${tone || 'text-[var(--text-primary)]'}`}>{val}</p>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+const TABS = [
+  { id: 'tread', label: 'Tread depth', icon: Gauge },
+  { id: 'pressure', label: 'Pressure', icon: AlertCircle },
+  { id: 'inspection', label: 'Inspection schedule', icon: ClipboardList },
+]
+
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function ComplianceDashboard() {
-  const { profile } = useAuth()
-  const { activeCurrency, activeCountry, appSettings } = useSettings()
+  const { activeCountry, appSettings } = useSettings()
   const { branding } = useTenant()
   const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
 
-  // Data
-  const [tyreRecords, setTyreRecords]   = useState([])
-  const [inspections, setInspections]   = useState([])
-  const [fleetMaster, setFleetMaster]   = useState([])
-  const [loading, setLoading]           = useState(true)
-  const [error, setError]               = useState(null)
-  const [lastRefresh, setLastRefresh]   = useState(null)
+  const [tyreRecords, setTyreRecords] = useState([])
+  const [inspections, setInspections] = useState([])
+  const [fleetMaster, setFleetMaster] = useState([])
+  const [truncated, setTruncated] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [lastRefresh, setLastRefresh] = useState(null)
 
-  // Filters
-  const [siteFilter, setSiteFilter]       = useState('')
+  const [siteFilter, setSiteFilter] = useState('')
   const [countryFilter, setCountryFilter] = useState('')
-  const [activeTab, setActiveTab]         = useState('tread')
-
-  // Table pagination/search
-  const [treadPage, setTreadPage]         = useState(1)
-  const [pressurePage, setPressurePage]   = useState(1)
-  const [inspPage, setInspPage]           = useState(1)
-  const [treadSearch, setTreadSearch]     = useState('')
-  const [pressureSearch, setPressureSearch] = useState('')
-  const [inspSearch, setInspSearch]       = useState('')
-  const PAGE_SIZE = 25
-
-  // Modals
-  const [showEmailModal, setShowEmailModal] = useState(false)
-  const [emailTo, setEmailTo]             = useState('')
-  const [emailSent, setEmailSent]         = useState(false)
+  const [activeTab, setActiveTab] = useState('tread')
+  const [inspStatusFilter, setInspStatusFilter] = useState('')
 
   // ── Fetch ───────────────────────────────────────────────────────────────────
   const fetchData = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const [{ data: tr }, { data: ins }, { data: fm }] = await Promise.all([
-        fetchAllPages((from, to) => supabase
-          .from('tyre_records')
-          .select('id,asset_no,serial_number:serial_no,brand,size,position,site,country,tread_depth,pressure_reading,risk_level,issue_date,removal_date,category')
-          .order('issue_date', { ascending: false })
-          .range(from, to)),
+      const [tr, ins, fm] = await Promise.all([
+        // Country-scoped server side (the page applies the same strict rule
+        // client-side) and bounded, with an id tiebreak for stable paging.
+        fetchAllPages((from, to) => {
+          let q = supabase
+            .from('tyre_records')
+            .select('id,asset_no,serial_number:serial_no,brand,size,position,site,country,tread_depth,pressure_reading,risk_level,issue_date,removal_date,category')
+          if (activeCountry && activeCountry !== 'All') q = q.eq('country', activeCountry)
+          return q.order('issue_date', { ascending: false }).order('id').range(from, to)
+        }, { max: TYRE_CAP }),
         fetchAllPages((from, to) => supabase
           .from('inspections')
-          // `country` is selected because the page filters on it. Without it an
-          // inspection could not be country-scoped at all, so the compliance
-          // percentage counted every country's work under one site's name.
+          // `country` is selected because the page filters on it.
           .select('id,asset_no,site,country,scheduled_date,status,inspection_type,findings,inspector')
           .order('scheduled_date', { ascending: false })
-          .range(from, to)),
-        // PAGED, and it matters more here than anywhere else on the page: this
-        // register is the DENOMINATOR of the inspection compliance percentage, so
-        // a silent 1,000-row cap does not merely shorten a list, it inflates the
-        // score. (It was already a bare select; the row-cap guard had been letting
-        // it through because its backward window reached the fetchAllPages wrapper
-        // of the read directly above.) `country` is selected for the same reason
-        // as the inspections read - the page filters on it.
+          .order('id')
+          .range(from, to), { max: TYRE_CAP }),
+        // PAGED: this register is the DENOMINATOR of inspection compliance, so a
+        // silent 1,000-row cap would inflate the score.
         fetchAllPages((from, to) => supabase
           .from('fleet_master')
           .select('asset_no,site,country,vehicle_type,status')
           .order('asset_no').order('id')
           .range(from, to), { max: 20000 }),
       ])
-      setTyreRecords(tr || [])
-      setInspections(ins || [])
-      setFleetMaster(fm || [])
+      const firstError = tr.error || ins.error || fm.error
+      if (firstError) throw firstError
+      setTyreRecords(tr.data || [])
+      setInspections(ins.data || [])
+      setFleetMaster(fm.data || [])
+      setTruncated(!!(tr.truncated || ins.truncated || fm.truncated))
       setLastRefresh(new Date())
     } catch (e) {
-      setError(toUserMessage(e, 'Something went wrong. Please try again.'))
+      setError(toUserMessage(e, 'Could not load compliance data. Please try again.'))
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [activeCountry])
 
   useEffect(() => { fetchData() }, [fetchData])
 
   // ── Filter options ──────────────────────────────────────────────────────────
-  const sites = useMemo(() => {
-    const s = new Set([
-      ...tyreRecords.map(r => r.site),
-      ...inspections.map(r => r.site),
-    ].filter(Boolean))
-    return [...s].sort()
-  }, [tyreRecords, inspections])
+  const sites = useMemo(() => [...new Set([...tyreRecords.map(r => r.site), ...inspections.map(r => r.site)].filter(Boolean))].sort(), [tyreRecords, inspections])
+  const countries = useMemo(() => [...new Set(tyreRecords.map(r => r.country).filter(Boolean))].sort(), [tyreRecords])
 
-  const countries = useMemo(() =>
-    [...new Set(tyreRecords.map(r => r.country).filter(Boolean))].sort()
-  , [tyreRecords])
-
-  // ── Apply global filters ────────────────────────────────────────────────────
+  // ── Scoped populations ──────────────────────────────────────────────────────
   const filteredTyres = useMemo(() => {
     let d = [...tyreRecords]
     if (activeCountry !== 'All') d = d.filter(r => r.country === activeCountry)
     if (countryFilter) d = d.filter(r => r.country === countryFilter)
-    if (siteFilter)    d = d.filter(r => r.site === siteFilter)
+    if (siteFilter) d = d.filter(r => r.site === siteFilter)
     return d
   }, [tyreRecords, activeCountry, countryFilter, siteFilter])
 
   /**
-   * THE country rule for the two reads that had none.
-   *
-   * NULL-SAFE, matching `applyCountry` in src/lib/api/_client.js and the country
-   * RLS policies: a row whose country was never recorded is unattributed, not
-   * another country's, so hiding it would delete real work from the numerator AND
-   * the denominator of a compliance percentage. `filteredTyres` above uses a
-   * STRICT equality and is deliberately left as it is - loosening it would move
-   * the published tread and pressure percentages, which is a different change.
+   * THE country rule for inspections and the fleet register. NULL-SAFE, like
+   * `applyCountry` and the country RLS policies: an unattributed row is not
+   * another country's, so hiding it would delete real work from both halves
+   * of the percentage.
    */
   const matchesCountry = useCallback((row) => {
     if (activeCountry !== 'All' && row.country && row.country !== activeCountry) return false
@@ -354,436 +280,153 @@ export default function ComplianceDashboard() {
     return true
   }, [activeCountry, countryFilter])
 
-  // Before this, inspections applied the SITE filter only, so picking a country
-  // narrowed the tyre half of the compliance score and left the inspection half
-  // counting every country - two halves of one percentage answering different
-  // questions.
   const filteredInspections = useMemo(() => {
     let d = inspections.filter(matchesCountry)
     if (siteFilter) d = d.filter(r => r.site === siteFilter)
     return d
   }, [inspections, siteFilter, matchesCountry])
 
-  // The inspection-compliance DENOMINATOR. It used to be every asset in the
-  // register filtered by site alone, so a country-scoped score was measured
-  // against other countries' vehicles.
+  // The inspection-compliance DENOMINATOR, scoped exactly like the numerator.
   const scopedFleet = useMemo(() => {
     let d = fleetMaster.filter(matchesCountry)
     if (siteFilter) d = d.filter(v => v.site === siteFilter)
     return d
   }, [fleetMaster, siteFilter, matchesCountry])
 
-  // ── Tread compliance ────────────────────────────────────────────────────────
-  const treadStats = useMemo(() => {
-    const total     = filteredTyres.length
-    const withData  = filteredTyres.filter(r => r.tread_depth != null)
-    const compliant = withData.filter(r => Number(r.tread_depth) >= FLEET_MIN_TREAD)
-    const legal     = withData.filter(r => Number(r.tread_depth) >= LEGAL_MIN_TREAD)
-    const legalFail = withData.filter(r => Number(r.tread_depth) < LEGAL_MIN_TREAD)
-    const fleetFail = withData.filter(r => Number(r.tread_depth) < FLEET_MIN_TREAD)
-    const noData    = filteredTyres.filter(r => r.tread_depth == null)
-    const pct = withData.length > 0 ? (compliant.length / withData.length) * 100 : 0
-    return { total, withData: withData.length, compliant: compliant.length, pct, legalFail, fleetFail, noData: noData.length }
-  }, [filteredTyres])
+  // ── Engine ──────────────────────────────────────────────────────────────────
+  const treadStats = useMemo(() => buildTreadStats(filteredTyres), [filteredTyres])
+  const pressureStats = useMemo(() => buildPressureStats(filteredTyres), [filteredTyres])
+  const inspectionStats = useMemo(() => inspectionCompliance(filteredInspections, scopedFleet), [filteredInspections, scopedFleet])
+  const overall = useMemo(() => buildOverallScore({ tread: treadStats.pct, pressure: pressureStats.pct, inspection: inspectionStats.pct }), [treadStats, pressureStats, inspectionStats])
+  const overallScore = overall.score
+  const band = scoreBand(overallScore)
+  const criticalCount = useMemo(() => countCritical(filteredTyres), [filteredTyres])
+  const fullyCompliantVehicles = useMemo(() => countFullyCompliant(filteredTyres), [filteredTyres])
+  const complianceTrend = useMemo(() => monthlyTreadTrend(filteredTyres), [filteredTyres])
+  const treadBySite = useMemo(() => buildTreadBySite(filteredTyres), [filteredTyres])
+  const pressureBySite = useMemo(() => buildPressureBySite(filteredTyres), [filteredTyres])
+  const inspBySite = useMemo(() => inspectionBySite(inspectionStats.rows), [inspectionStats])
+  const nonCompliantTyres = useMemo(() => buildNonCompliant(filteredTyres), [filteredTyres])
+  const pressureAnomalies = useMemo(() => pressureExceptions(filteredTyres), [filteredTyres])
+  const inspectionRows = useMemo(
+    () => (inspStatusFilter ? inspectionStats.rows.filter(r => r.status === inspStatusFilter) : inspectionStats.rows),
+    [inspectionStats, inspStatusFilter],
+  )
+  const overdueCount = inspectionStats.overdue
+  const legalFailures = useMemo(() => nonCompliantTyres.filter(r => r.tread_class === 'legal_fail'), [nonCompliantTyres])
 
-  // ── Pressure compliance ─────────────────────────────────────────────────────
-  const pressureStats = useMemo(() => {
-    const total       = filteredTyres.length
-    const withReading = filteredTyres.filter(r => r.pressure_reading != null && Number(r.pressure_reading) > 0)
-    const noReading   = filteredTyres.filter(r => !r.pressure_reading || Number(r.pressure_reading) === 0)
-    // Without a nominal value per tyre, flag any reading outside a general band 85-130 PSI as anomaly
-    const compliant   = withReading.filter(r => {
-      const v = Number(r.pressure_reading)
-      return v >= 85 && v <= 130
-    })
-    const anomalies   = withReading.filter(r => {
-      const v = Number(r.pressure_reading)
-      return v < 85 || v > 130
-    })
-    const pct = withReading.length > 0 ? (compliant.length / withReading.length) * 100 : 0
-    return { total, withReading: withReading.length, noReading: noReading.length, compliant: compliant.length, anomalies: anomalies.length, pct }
-  }, [filteredTyres])
-
-  // ── Inspection compliance ───────────────────────────────────────────────────
-  const inspectionStats = useMemo(() => {
-    // Build per-asset latest inspection map
-    const latestByAsset = {}
-    filteredInspections.forEach(ins => {
-      if (!ins.asset_no) return
-      const existing = latestByAsset[ins.asset_no]
-      if (!existing || (ins.scheduled_date || '') > (existing.scheduled_date || '')) {
-        latestByAsset[ins.asset_no] = ins
-      }
-    })
-
-    // Cross-reference fleet
-    const allAssets = [...new Set([
-      ...scopedFleet.map(v => v.asset_no),
-      ...Object.keys(latestByAsset),
-    ])]
-
-    const rows = allAssets.map(asset_no => {
-      const ins   = latestByAsset[asset_no]
-      const fm    = fleetMaster.find(v => v.asset_no === asset_no) || {}
-      const days  = ins ? daysSince(ins.scheduled_date) : null
-      const status = inspectionStatus(days)
-      return {
-        asset_no,
-        vehicle_type:   fm.vehicle_type || '-',
-        site:           ins?.site || fm.site || '-',
-        last_inspection: ins?.scheduled_date || null,
-        days_since:     days,
-        next_due:       ins?.scheduled_date
-          ? new Date(new Date(ins.scheduled_date).getTime() + INSPECTION_MAX_DAYS * 86400000).toISOString().slice(0, 10)
-          : null,
-        status,
-        inspector:      ins?.inspector || '-',
-        inspection_type: ins?.inspection_type || '-',
-      }
-    })
-
-    const compliant = rows.filter(r => r.status === 'compliant').length
-    const dueSoon   = rows.filter(r => r.status === 'due_soon').length
-    const overdue   = rows.filter(r => r.status === 'overdue').length
-    const noData    = rows.filter(r => r.status === 'no_data').length
-    const pct       = rows.length > 0 ? (compliant / rows.length) * 100 : 0
-
-    return { rows, compliant, dueSoon, overdue, noData, pct, total: rows.length }
-  }, [filteredInspections, fleetMaster, scopedFleet])
-
-  // ── Critical count ──────────────────────────────────────────────────────────
-  const criticalCount = useMemo(() =>
-    filteredTyres.filter(r => (r.risk_level || '').toLowerCase() === 'critical').length
-  , [filteredTyres])
-
-  const fullyCompliantVehicles = useMemo(() => {
-    const compliantAssets = new Set(
-      filteredTyres
-        .filter(r => r.tread_depth != null && Number(r.tread_depth) >= FLEET_MIN_TREAD && r.risk_level?.toLowerCase() !== 'critical')
-        .map(r => r.asset_no)
-    )
-    const nonCompliantAssets = new Set(
-      filteredTyres
-        .filter(r => (r.tread_depth != null && Number(r.tread_depth) < FLEET_MIN_TREAD) || r.risk_level?.toLowerCase() === 'critical')
-        .map(r => r.asset_no)
-    )
-    return [...compliantAssets].filter(a => !nonCompliantAssets.has(a)).length
-  }, [filteredTyres])
-
-  // ── Overall compliance score (weighted) ─────────────────────────────────────
-  const overallScore = useMemo(() => {
-    const treadW   = 0.40
-    const pressureW = 0.30
-    const inspW    = 0.30
-    const score =
-      treadStats.pct    * treadW +
-      pressureStats.pct * pressureW +
-      inspectionStats.pct * inspW
-    return Math.round(score)
-  }, [treadStats, pressureStats, inspectionStats])
-
-  // ── Trend (compare current vs hypothetical last-month by slicing older records) ──
-  const complianceTrend = useMemo(() => {
-    // Use last 6 months monthly compliance percentages from tread data as proxy
-    const now    = new Date()
-    const months = []
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-      months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
-    }
-    const byMonth = months.map(m => {
-      const monthTyres = tyreRecords.filter(r => (r.issue_date || '').startsWith(m))
-      if (monthTyres.length === 0) return null
-      const withData   = monthTyres.filter(r => r.tread_depth != null)
-      if (withData.length === 0) return null
-      const compliant  = withData.filter(r => Number(r.tread_depth) >= FLEET_MIN_TREAD)
-      return (compliant.length / withData.length) * 100
-    })
-    const current  = byMonth[byMonth.length - 1]
-    const previous = byMonth[byMonth.length - 2]
-    const trend    = (current != null && previous != null) ? current - previous : null
-    return { months, values: byMonth, trend }
-  }, [tyreRecords])
-
-  // ── Tread distribution chart ────────────────────────────────────────────────
+  // ── Charts ──────────────────────────────────────────────────────────────────
   const treadDistChart = useMemo(() => {
-    const bands = [
-      { label: '0-2mm',  min: 0,  max: 2,  color: 'rgba(239,68,68,0.85)' },
-      { label: '2-4mm',  min: 2,  max: 4,  color: 'rgba(249,115,22,0.8)' },
-      { label: '4-6mm',  min: 4,  max: 6,  color: 'rgba(234,179,8,0.8)' },
-      { label: '6-8mm',  min: 6,  max: 8,  color: 'rgba(34,197,94,0.8)' },
-      { label: '8mm+',   min: 8,  max: Infinity, color: 'rgba(34,197,94,0.95)' },
-    ]
-    const counts = bands.map(b =>
-      filteredTyres.filter(r => {
-        const v = Number(r.tread_depth)
-        return r.tread_depth != null && v >= b.min && v < b.max
-      }).length
-    )
+    const dist = treadDistribution(filteredTyres)
+    const colors = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#16a34a']
     return {
-      labels: bands.map(b => b.label),
-      datasets: [{
-        label: 'Tyres',
-        data: counts,
-        backgroundColor: bands.map(b => b.color),
-        borderColor: bands.map(b => b.color.replace(/[\d.]+\)$/, '1)')),
-        borderWidth: 1,
-        borderRadius: 4,
-      }],
+      labels: dist.map(b => b.label),
+      datasets: [{ label: 'Tyres', data: dist.map(b => b.count), backgroundColor: colors, borderRadius: 4 }],
     }
   }, [filteredTyres])
-
-  // ── Tread compliance by site chart ──────────────────────────────────────────
-  const treadBySite = useMemo(() => {
-    const map = {}
-    filteredTyres.forEach(r => {
-      if (!r.site || r.tread_depth == null) return
-      if (!map[r.site]) map[r.site] = { ok: 0, total: 0 }
-      map[r.site].total++
-      if (Number(r.tread_depth) >= FLEET_MIN_TREAD) map[r.site].ok++
-    })
-    return Object.entries(map)
-      .map(([site, v]) => ({ site, pct: v.total > 0 ? (v.ok / v.total * 100) : 0 }))
-      .sort((a, b) => b.pct - a.pct)
-  }, [filteredTyres])
-
-  const treadBySiteChart = useMemo(() => {
-    const colors = treadBySite.map(s =>
-      s.pct >= 90 ? 'rgba(34,197,94,0.75)' :
-      s.pct >= 75 ? 'rgba(234,179,8,0.75)' :
-      s.pct >= 60 ? 'rgba(249,115,22,0.75)' :
-      'rgba(239,68,68,0.75)'
-    )
-    return {
-      labels: treadBySite.map(s => s.site),
-      datasets: [{
-        label: 'Tread Compliance %',
-        data: treadBySite.map(s => s.pct.toFixed(1)),
-        backgroundColor: colors,
-        borderColor: colors.map(c => c.replace(/0\.75/, '1')),
-        borderWidth: 1,
-        borderRadius: 3,
-      }],
-    }
-  }, [treadBySite])
-
-  // ── Pressure doughnut ────────────────────────────────────────────────────────
+  const treadBySiteChart = useMemo(() => ({
+    labels: treadBySite.map(s => s.site),
+    datasets: [{ label: 'Tread compliance %', data: treadBySite.map(s => Number(s.pct.toFixed(1))), backgroundColor: treadBySite.map(s => pctColor(s.pct)), borderRadius: 3 }],
+  }), [treadBySite])
   const pressureDoughnutData = useMemo(() => ({
-    labels: ['Compliant', 'Non-Compliant', 'No Reading'],
-    datasets: [{
-      data: [pressureStats.compliant, pressureStats.anomalies, pressureStats.noReading],
-      backgroundColor: ['rgba(34,197,94,0.75)', 'rgba(239,68,68,0.75)', 'rgba(107,114,128,0.6)'],
-      borderColor: ['rgba(34,197,94,1)', 'rgba(239,68,68,1)', 'rgba(107,114,128,1)'],
-      borderWidth: 1,
-    }],
+    labels: ['In band', 'Out of band', 'No reading'],
+    datasets: [{ data: [pressureStats.compliant, pressureStats.anomalies, pressureStats.noReading], backgroundColor: ['#22c55e', '#ef4444', '#6b7280'], borderWidth: 1 }],
   }), [pressureStats])
-
-  // ── Pressure by site chart ───────────────────────────────────────────────────
-  const pressureBySite = useMemo(() => {
-    const map = {}
-    filteredTyres.forEach(r => {
-      if (!r.site) return
-      if (!map[r.site]) map[r.site] = { ok: 0, total: 0 }
-      map[r.site].total++
-      const v = Number(r.pressure_reading)
-      if (v >= 85 && v <= 130) map[r.site].ok++
-    })
-    return Object.entries(map)
-      .filter(([, v]) => v.total > 0)
-      .map(([site, v]) => ({ site, pct: (v.ok / v.total * 100) }))
-      .sort((a, b) => b.pct - a.pct)
-  }, [filteredTyres])
-
-  const pressureBySiteChart = useMemo(() => {
-    const colors = pressureBySite.map(s =>
-      s.pct >= 90 ? 'rgba(34,197,94,0.75)' :
-      s.pct >= 75 ? 'rgba(234,179,8,0.75)' :
-      'rgba(239,68,68,0.75)'
-    )
-    return {
-      labels: pressureBySite.map(s => s.site),
-      datasets: [{
-        label: 'Pressure Compliance %',
-        data: pressureBySite.map(s => s.pct.toFixed(1)),
-        backgroundColor: colors,
-        borderColor: colors.map(c => c.replace(/0\.75/, '1')),
-        borderWidth: 1,
-        borderRadius: 3,
-      }],
-    }
-  }, [pressureBySite])
-
-  // ── Inspection by site chart ─────────────────────────────────────────────────
-  const inspBySite = useMemo(() => {
-    const map = {}
-    inspectionStats.rows.forEach(r => {
-      if (!r.site || r.site === '-') return
-      if (!map[r.site]) map[r.site] = { compliant: 0, overdue: 0, due_soon: 0, no_data: 0 }
-      map[r.site][r.status] = (map[r.site][r.status] || 0) + 1
-    })
-    return Object.entries(map).map(([site, v]) => ({ site, ...v }))
-  }, [inspectionStats])
-
+  const pressureBySiteChart = useMemo(() => ({
+    labels: pressureBySite.map(s => s.site),
+    datasets: [{ label: 'Pressure compliance %', data: pressureBySite.map(s => Number(s.pct.toFixed(1))), backgroundColor: pressureBySite.map(s => pctColor(s.pct)), borderRadius: 3 }],
+  }), [pressureBySite])
   const inspBySiteChart = useMemo(() => ({
     labels: inspBySite.map(s => s.site),
     datasets: [
-      {
-        label: 'Compliant',
-        data: inspBySite.map(s => s.compliant || 0),
-        backgroundColor: 'rgba(34,197,94,0.75)',
-        borderColor: 'rgba(34,197,94,1)',
-        borderWidth: 1,
-        borderRadius: 3,
-      },
-      {
-        label: 'Due Soon',
-        data: inspBySite.map(s => s.due_soon || 0),
-        backgroundColor: 'rgba(234,179,8,0.75)',
-        borderColor: 'rgba(234,179,8,1)',
-        borderWidth: 1,
-        borderRadius: 3,
-      },
-      {
-        label: 'Overdue',
-        data: inspBySite.map(s => s.overdue || 0),
-        backgroundColor: 'rgba(239,68,68,0.75)',
-        borderColor: 'rgba(239,68,68,1)',
-        borderWidth: 1,
-        borderRadius: 3,
-      },
+      { label: 'Compliant', data: inspBySite.map(s => s.compliant), backgroundColor: '#22c55e', borderRadius: 3 },
+      { label: 'Due soon', data: inspBySite.map(s => s.due_soon), backgroundColor: '#eab308', borderRadius: 3 },
+      { label: 'Overdue', data: inspBySite.map(s => s.overdue), backgroundColor: '#ef4444', borderRadius: 3 },
+      { label: 'Never inspected', data: inspBySite.map(s => s.no_data), backgroundColor: '#6b7280', borderRadius: 3 },
     ],
   }), [inspBySite])
+  const trendLineChart = useMemo(() => ({
+    labels: complianceTrend.months.map(m => { const [y, mo] = m.split('-'); return new Date(y, Number(mo) - 1).toLocaleString('en', { month: 'short', year: '2-digit' }) }),
+    datasets: [{
+      label: 'Tread compliance %', data: complianceTrend.values,
+      borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.12)', borderWidth: 2, pointRadius: 4,
+      pointBackgroundColor: '#22c55e', tension: 0.3, fill: true, spanGaps: true,
+    }],
+  }), [complianceTrend])
 
-  // ── Trend line chart ─────────────────────────────────────────────────────────
-  const trendLineChart = useMemo(() => {
-    const { months, values } = complianceTrend
-    const labels = months.map(m => {
-      const [y, mo] = m.split('-')
-      return new Date(y, Number(mo) - 1).toLocaleString('en', { month: 'short', year: '2-digit' })
-    })
-    return {
-      labels,
-      datasets: [{
-        label: 'Tread Compliance %',
-        data: values,
-        borderColor: '#22c55e',
-        backgroundColor: 'rgba(34,197,94,0.1)',
-        borderWidth: 2,
-        pointRadius: 4,
-        pointBackgroundColor: '#22c55e',
-        tension: 0.3,
-        fill: true,
-        spanGaps: true,
-      }],
-    }
-  }, [complianceTrend])
+  // ── Table columns ───────────────────────────────────────────────────────────
+  const treadColumns = useMemo(() => [
+    { id: 'asset', header: 'Asset', accessorFn: r => r.asset_no || '' },
+    { id: 'serial', header: 'Serial', accessorFn: r => r.serial_number || '', cell: ({ getValue }) => <span className="font-mono text-[11px]">{getValue() || 'N/A'}</span> },
+    { id: 'position', header: 'Position', accessorFn: r => r.position || '' },
+    { id: 'brand', header: 'Brand', accessorFn: r => r.brand || '' },
+    {
+      id: 'tread', header: 'Tread (mm)', accessorFn: r => (r.tread_depth != null ? Number(r.tread_depth) : -1), meta: { align: 'right', exportValue: r => (r.tread_depth != null ? Number(r.tread_depth).toFixed(1) : 'N/A') },
+      cell: ({ row }) => row.original.tread_depth != null
+        ? <span className={`tabular-nums font-bold ${row.original.tread_class === 'legal_fail' ? 'text-red-400' : 'text-orange-400'}`}>{Number(row.original.tread_depth).toFixed(1)}</span>
+        : <span className="text-[var(--text-dim)]">N/A</span>,
+    },
+    { id: 'site', header: 'Site', accessorFn: r => r.site || '', meta: { filterVariant: 'select' } },
+    { id: 'days', header: 'Days in service', accessorFn: r => r.days_in_service ?? -1, meta: { align: 'right', exportValue: r => r.days_in_service ?? 'N/A' }, cell: ({ row }) => <span className="tabular-nums">{row.original.days_in_service ?? 'N/A'}</span> },
+    { id: 'risk', header: 'Risk', accessorFn: r => r.risk_level || '', cell: ({ row }) => <RiskBadge risk={row.original.risk_level} /> },
+    {
+      id: 'status', header: 'Status', accessorFn: r => ({ legal_fail: 0, below_min: 1, no_data: 2 }[r.tread_class] ?? 3), meta: { exportValue: r => ({ legal_fail: 'Legal failure', below_min: 'Below fleet minimum', no_data: 'Not measured' }[r.tread_class]) },
+      cell: ({ row }) => <TreadBadge cls={row.original.tread_class} />,
+    },
+  ], [])
 
-  const trendLineOpts = useMemo(() => ({
-    ...chartOpts(false, '', 'Compliance %'),
-    plugins: {
-      legend: { labels: { color: '#9ca3af', font: { size: 10 } } },
-      tooltip: {
-        backgroundColor: 'var(--panel)',
-        titleColor: '#f9fafb',
-        bodyColor: '#d1d5db',
-        borderColor: 'var(--hairline)',
-        borderWidth: 1,
-        callbacks: { label: ctx => ` ${ctx.parsed.y !== null ? ctx.parsed.y.toFixed(1) : 'N/A'}%` },
+  const pressureColumns = useMemo(() => [
+    { id: 'asset', header: 'Asset', accessorFn: r => r.asset_no || '' },
+    { id: 'serial', header: 'Serial', accessorFn: r => r.serial_number || '', cell: ({ getValue }) => <span className="font-mono text-[11px]">{getValue() || 'N/A'}</span> },
+    { id: 'brand', header: 'Brand', accessorFn: r => r.brand || '' },
+    { id: 'position', header: 'Position', accessorFn: r => r.position || '' },
+    {
+      id: 'psi', header: 'Pressure', accessorFn: r => Number(r.pressure_reading) || -1, meta: { align: 'right', exportValue: r => (Number(r.pressure_reading) > 0 ? `${Number(r.pressure_reading).toFixed(0)} PSI` : 'N/A') },
+      cell: ({ row }) => Number(row.original.pressure_reading) > 0
+        ? <span className="tabular-nums font-bold text-orange-400">{Number(row.original.pressure_reading).toFixed(0)} PSI</span>
+        : <span className="text-[var(--text-dim)]">N/A</span>,
+    },
+    { id: 'site', header: 'Site', accessorFn: r => r.site || '', meta: { filterVariant: 'select' } },
+    { id: 'risk', header: 'Risk', accessorFn: r => r.risk_level || '', cell: ({ row }) => <RiskBadge risk={row.original.risk_level} /> },
+    {
+      id: 'flag', header: 'Flag', accessorFn: r => r.pressureFlag, meta: { filterVariant: 'select' },
+      cell: ({ row }) => (
+        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${row.original.pressureFlag === 'Anomaly' ? 'bg-orange-500/20 text-orange-300 border border-orange-500/40' : 'bg-[var(--input-bg)] text-[var(--text-muted)] border border-[var(--input-border)]'}`}>
+          {row.original.pressureFlag === 'Anomaly' ? 'Out of band' : 'No reading'}
+        </span>
+      ),
+    },
+  ], [])
+
+  const inspectionColumns = useMemo(() => [
+    { id: 'asset', header: 'Asset no', accessorFn: r => r.asset_no || '' },
+    { id: 'type', header: 'Vehicle type', accessorFn: r => r.vehicle_type || '', cell: ({ getValue }) => getValue() || 'N/A' },
+    { id: 'site', header: 'Site', accessorFn: r => r.site || '', meta: { filterVariant: 'select' }, cell: ({ getValue }) => getValue() || 'N/A' },
+    { id: 'last', header: 'Last inspection', accessorFn: r => r.last_inspection || '', meta: { exportValue: r => (r.last_inspection ? fmtDay(r.last_inspection) : 'Never') }, cell: ({ row }) => row.original.last_inspection ? fmtDay(row.original.last_inspection) : <span className="text-[var(--text-dim)]">Never</span> },
+    {
+      id: 'days', header: 'Days since', accessorFn: r => r.days_since ?? Number.MAX_SAFE_INTEGER, meta: { align: 'right', exportValue: r => r.days_since ?? 'N/A' },
+      cell: ({ row }) => {
+        const d = row.original.days_since
+        if (d == null) return <span className="text-[var(--text-dim)]">N/A</span>
+        return <span className={`tabular-nums font-medium ${d > INSPECTION_DUE_DAYS ? 'text-red-400' : d > INSPECTION_MAX_DAYS ? 'text-yellow-400' : ''}`}>{d}d</span>
       },
     },
-    scales: {
-      ...chartOpts().scales,
-      y: {
-        min: 0, max: 100,
-        grid: { color: 'rgba(31,41,55,0.8)' },
-        ticks: { color: '#9ca3af', font: { size: 10 }, callback: v => `${v}%` },
-      },
-    },
-  }), [])
+    { id: 'next', header: 'Next due', accessorFn: r => r.next_due || '', meta: { exportValue: r => fmtDay(r.next_due) }, cell: ({ row }) => fmtDay(row.original.next_due) },
+    { id: 'status', header: 'Status', accessorFn: r => ({ overdue: 0, due_soon: 1, no_data: 2, compliant: 3 }[r.status]), meta: { exportValue: r => INSPECTION_LABEL[r.status] }, cell: ({ row }) => <InspectionBadge status={row.original.status} /> },
+    { id: 'inspector', header: 'Inspector', accessorFn: r => r.inspector || '', cell: ({ getValue }) => getValue() || 'N/A' },
+  ], [])
 
-  // ── Non-compliant tread table ────────────────────────────────────────────────
-  const nonCompliantTyres = useMemo(() => {
-    let rows = filteredTyres.filter(r => r.tread_depth == null || Number(r.tread_depth) < FLEET_MIN_TREAD)
-    if (treadSearch) {
-      const q = treadSearch.toLowerCase()
-      rows = rows.filter(r =>
-        (r.asset_no || '').toLowerCase().includes(q) ||
-        (r.serial_number || '').toLowerCase().includes(q) ||
-        (r.site || '').toLowerCase().includes(q) ||
-        (r.brand || '').toLowerCase().includes(q)
-      )
-    }
-    return rows.sort((a, b) => {
-      const av = a.tread_depth != null ? Number(a.tread_depth) : -1
-      const bv = b.tread_depth != null ? Number(b.tread_depth) : -1
-      return av - bv
-    })
-  }, [filteredTyres, treadSearch])
+  // ── Exports ─────────────────────────────────────────────────────────────────
+  const scopeLabel = [activeCountry !== 'All' ? activeCountry : null, countryFilter || null, siteFilter || null].filter(Boolean).join(', ') || 'All data'
+  const fileBase = (what) => reportFileName('TyrePulse', what, scopeLabel !== 'All data' ? scopeLabel : null, reportDateLabel())
 
-  const treadPageCount = Math.max(1, Math.ceil(nonCompliantTyres.length / PAGE_SIZE))
-  const treadPageRows  = nonCompliantTyres.slice((treadPage - 1) * PAGE_SIZE, treadPage * PAGE_SIZE)
-
-  // ── Pressure anomaly table ───────────────────────────────────────────────────
-  const pressureAnomalies = useMemo(() => {
-    let rows = filteredTyres.map(r => {
-      const v = Number(r.pressure_reading)
-      let flag = 'No Data'
-      if (r.pressure_reading != null && v > 0) {
-        flag = (v < 85 || v > 130) ? 'Anomaly' : 'OK'
-      }
-      return { ...r, pressureFlag: flag }
-    }).filter(r => r.pressureFlag !== 'OK')
-
-    if (pressureSearch) {
-      const q = pressureSearch.toLowerCase()
-      rows = rows.filter(r =>
-        (r.asset_no || '').toLowerCase().includes(q) ||
-        (r.serial_number || '').toLowerCase().includes(q) ||
-        (r.site || '').toLowerCase().includes(q)
-      )
-    }
-    return rows.sort((a, b) => {
-      if (a.pressureFlag === 'Anomaly' && b.pressureFlag !== 'Anomaly') return -1
-      if (b.pressureFlag === 'Anomaly' && a.pressureFlag !== 'Anomaly') return 1
-      return 0
-    })
-  }, [filteredTyres, pressureSearch])
-
-  const pressurePageCount = Math.max(1, Math.ceil(pressureAnomalies.length / PAGE_SIZE))
-  const pressurePageRows  = pressureAnomalies.slice((pressurePage - 1) * PAGE_SIZE, pressurePage * PAGE_SIZE)
-
-  // ── Inspection table ─────────────────────────────────────────────────────────
-  const inspectionRows = useMemo(() => {
-    let rows = [...inspectionStats.rows]
-    if (inspSearch) {
-      const q = inspSearch.toLowerCase()
-      rows = rows.filter(r =>
-        (r.asset_no || '').toLowerCase().includes(q) ||
-        (r.site || '').toLowerCase().includes(q) ||
-        (r.vehicle_type || '').toLowerCase().includes(q) ||
-        (r.inspector || '').toLowerCase().includes(q)
-      )
-    }
-    return rows.sort((a, b) => {
-      const rank = { overdue: 0, due_soon: 1, no_data: 2, compliant: 3 }
-      return (rank[a.status] ?? 9) - (rank[b.status] ?? 9)
-    })
-  }, [inspectionStats, inspSearch])
-
-  const inspPageCount = Math.max(1, Math.ceil(inspectionRows.length / PAGE_SIZE))
-  const inspPageRows  = inspectionRows.slice((inspPage - 1) * PAGE_SIZE, inspPage * PAGE_SIZE)
-
-  const overdueCount = inspectionStats.rows.filter(r => r.status === 'overdue').length
-
-  // ── PDF: Tread Compliance Report ─────────────────────────────────────────────
   async function exportTreadPdf() {
     const { default: jsPDF } = await import('jspdf')
     const autoTable = await loadAutoTable()
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
     const brand = await resolvePdfBrand(branding)
-
-    pdfHeader(doc, 'Tread Depth Compliance Report', `Fleet Min: ${FLEET_MIN_TREAD}mm · Legal Min: ${LEGAL_MIN_TREAD}mm`, company, brand)
-
+    const sub = `Fleet min ${FLEET_MIN_TREAD} mm, legal min ${LEGAL_MIN_TREAD} mm, scope: ${scopeLabel}`
+    pdfHeader(doc, 'Tread Depth Compliance Report', sub, company, brand)
     doc.setFontSize(11)
     doc.setTextColor(40, 40, 40)
     doc.text('Compliance Summary', 14, 30)
@@ -792,51 +435,41 @@ export default function ComplianceDashboard() {
       startY: 33,
       head: [['Metric', 'Value']],
       body: [
-        ['Overall Compliance %', `${treadStats.pct.toFixed(1)}%`],
-        ['Total Tyres', String(treadStats.total)],
-        ['Tyres With Data', String(treadStats.withData)],
-        ['Fleet-Compliant (≥3mm)', String(treadStats.compliant)],
-        ['Below Fleet Min (<3mm)', String(treadStats.fleetFail.length)],
-        ['Below Legal Min (<1.6mm)', String(treadStats.legalFail.length)],
-        ['No Tread Data', String(treadStats.noData)],
+        ['Tread compliance', fmtPct(treadStats.pct)],
+        ['Total tyres', String(treadStats.total)],
+        ['Tyres with a tread reading', String(treadStats.withData)],
+        [`At or above fleet minimum (${FLEET_MIN_TREAD} mm)`, String(treadStats.compliant)],
+        [`Below fleet minimum (${FLEET_MIN_TREAD} mm)`, String(treadStats.fleetFail)],
+        [`Below legal minimum (${LEGAL_MIN_TREAD} mm)`, String(treadStats.legalFail)],
+        ['No tread reading', String(treadStats.noData)],
       ],
-      columnStyles: { 0: { cellWidth: 70 }, 1: { cellWidth: 50 } },
+      columnStyles: { 0: { cellWidth: 90 }, 1: { cellWidth: 50 } },
     })
-
     doc.addPage()
-    pdfHeader(doc, 'Non-Compliant Tyre List', `Fleet Min: ${FLEET_MIN_TREAD}mm · Legal Min: ${LEGAL_MIN_TREAD}mm`, company, brand)
+    pdfHeader(doc, 'Non-Compliant Tyre List', sub, company, brand)
     autoTable(doc, {
       ...pdfTableTheme(brand.accent),
       startY: 28,
       head: [['Asset', 'Serial', 'Brand', 'Position', 'Tread (mm)', 'Site', 'Days In Service', 'Risk', 'Status']],
-      body: nonCompliantTyres.slice(0, 200).map(r => [
-        r.asset_no || '-',
-        r.serial_number || '-',
-        r.brand || '-',
-        r.position || '-',
-        r.tread_depth != null ? `${Number(r.tread_depth).toFixed(1)}` : 'No Data',
-        r.site || '-',
-        r.issue_date ? String(daysInService(r.issue_date)) : '-',
-        r.risk_level || '-',
-        r.tread_depth != null && Number(r.tread_depth) < LEGAL_MIN_TREAD ? 'LEGAL FAILURE' : 'Below Fleet Min',
+      body: nonCompliantTyres.map(r => [
+        r.asset_no || 'N/A', r.serial_number || 'N/A', r.brand || 'N/A', r.position || 'N/A',
+        r.tread_depth != null ? Number(r.tread_depth).toFixed(1) : 'N/A',
+        r.site || 'N/A', r.days_in_service ?? 'N/A', r.risk_level || 'N/A',
+        { legal_fail: 'LEGAL FAILURE', below_min: 'Below fleet min', no_data: 'Not measured' }[r.tread_class],
       ]),
       didParseCell: data => {
-        if (data.section === 'body' && data.column.index === 8) {
-          if ((data.cell.raw || '').includes('LEGAL')) {
-            data.cell.styles.textColor = [220, 38, 38]
-            data.cell.styles.fontStyle = 'bold'
-          }
+        if (data.section === 'body' && data.column.index === 8 && String(data.cell.raw || '').includes('LEGAL')) {
+          data.cell.styles.textColor = [220, 38, 38]
+          data.cell.styles.fontStyle = 'bold'
         }
       },
     })
-
     const pgCount = doc.internal.getNumberOfPages()
     for (let i = 1; i <= pgCount; i++) { doc.setPage(i); pdfFooter(doc, i, pgCount, company, brand) }
-    doc.save(`tread_compliance_${new Date().toISOString().slice(0, 10)}.pdf`)
+    doc.save(`${fileBase('Tread Compliance')}.pdf`)
   }
 
-  // ── PDF: Full Compliance Certificate ────────────────────────────────────────
-  async function exportCertificatePdf() {
+  const buildCertificatePdf = useCallback(async ({ returnBase64 = false } = {}) => {
     const { default: jsPDF } = await import('jspdf')
     const autoTable = await loadAutoTable()
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
@@ -845,59 +478,42 @@ export default function ComplianceDashboard() {
     const H = doc.internal.pageSize.height
     const now = new Date()
     const dateStr = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })
+    const ref = `TPC-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 
-    // Cover header
-    pdfHeader(doc, 'Fleet Tyre Compliance Certificate', `Issued: ${dateStr} · Reference: TPC-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`, company, brand)
-
-    // Score block
-    const scoreCol = scoreColor(overallScore)
-    doc.setFillColor(17, 24, 39)
+    pdfHeader(doc, 'Fleet Tyre Compliance Assessment', `Issued ${dateStr}, reference ${ref}, scope: ${scopeLabel}`, company, brand)
+    doc.setFillColor(243, 244, 246)
     doc.roundedRect(14, 42, 80, 30, 3, 3, 'F')
     doc.setFontSize(28)
     doc.setFont('helvetica', 'bold')
-    doc.setTextColor(34, 197, 94)
-    doc.text(`${overallScore}%`, 54, 60, { align: 'center' })
+    doc.setTextColor(17, 24, 39)
+    doc.text(overallScore != null ? `${overallScore}%` : 'N/A', 54, 60, { align: 'center' })
     doc.setFontSize(9)
-    doc.setTextColor(156, 163, 175)
-    doc.text('Overall Compliance Score', 54, 68, { align: 'center' })
+    doc.setTextColor(75, 85, 99)
+    doc.text(`Overall score (${overall.covered.length ? overall.covered.join(', ') : 'nothing measured'})`, 54, 68, { align: 'center' })
 
-    // Compliance areas summary
     doc.setFontSize(11)
     doc.setTextColor(40, 40, 40)
     doc.text('Compliance Area Summary', 14, 82)
+    const verdict = (pct) => (pct == null ? 'NOT MEASURED' : pct >= 80 ? 'COMPLIANT' : 'NON-COMPLIANT')
     autoTable(doc, {
       ...pdfTableTheme(brand.accent),
       startY: 85,
       head: [['Area', 'Score', 'Status', 'Details']],
       body: [
-        ['Tread Depth', `${treadStats.pct.toFixed(1)}%`,
-          treadStats.pct >= 80 ? 'COMPLIANT' : 'NON-COMPLIANT',
-          `${treadStats.compliant}/${treadStats.withData} tyres ≥ ${FLEET_MIN_TREAD}mm fleet minimum`],
-        ['Pressure', `${pressureStats.pct.toFixed(1)}%`,
-          pressureStats.pct >= 80 ? 'COMPLIANT' : 'NON-COMPLIANT',
-          `${pressureStats.compliant} compliant, ${pressureStats.anomalies} anomalies, ${pressureStats.noReading} no data`],
-        ['Inspection Schedule', `${inspectionStats.pct.toFixed(1)}%`,
-          inspectionStats.pct >= 80 ? 'COMPLIANT' : 'NON-COMPLIANT',
-          `${inspectionStats.compliant} vehicles ≤ ${INSPECTION_MAX_DAYS} days since inspection`],
-        ['Critical Risk Tyres', criticalCount === 0 ? '100%' : '0%',
-          criticalCount === 0 ? 'PASS' : 'FAIL',
-          criticalCount === 0 ? 'No critical risk tyres on fleet' : `${criticalCount} critical risk tyres require immediate action`],
+        ['Tread depth', fmtPct(treadStats.pct), verdict(treadStats.pct), `${treadStats.compliant}/${treadStats.withData} measured tyres at or above ${FLEET_MIN_TREAD} mm; ${treadStats.noData} not measured`],
+        ['Pressure', fmtPct(pressureStats.pct), verdict(pressureStats.pct), `${pressureStats.compliant} in band (${PRESSURE_MIN_PSI} to ${PRESSURE_MAX_PSI} PSI), ${pressureStats.anomalies} out of band, ${pressureStats.noReading} no reading`],
+        ['Inspection schedule', fmtPct(inspectionStats.pct), verdict(inspectionStats.pct), `${inspectionStats.compliant}/${inspectionStats.total} vehicles inspected within ${INSPECTION_MAX_DAYS} days`],
+        ['Critical risk tyres', criticalCount === 0 ? 'Pass' : 'Fail', criticalCount === 0 ? 'PASS' : 'FAIL', criticalCount === 0 ? 'No critical-risk tyres in scope' : `${criticalCount} critical-risk tyres need immediate action`],
       ],
       didParseCell: data => {
         if (data.section === 'body' && data.column.index === 2) {
-          if ((data.cell.raw || '').includes('NON-COMPLIANT') || (data.cell.raw || '').includes('FAIL')) {
-            data.cell.styles.textColor = [220, 38, 38]
-            data.cell.styles.fontStyle = 'bold'
-          } else {
-            data.cell.styles.textColor = [22, 163, 74]
-            data.cell.styles.fontStyle = 'bold'
-          }
+          const raw = String(data.cell.raw || '')
+          data.cell.styles.fontStyle = 'bold'
+          data.cell.styles.textColor = raw.includes('NON-COMPLIANT') || raw.includes('FAIL') ? [220, 38, 38] : raw.includes('NOT MEASURED') ? [107, 114, 128] : [22, 163, 74]
         }
       },
     })
 
-    // Legal minimum violations
-    const legalFailures = nonCompliantTyres.filter(r => r.tread_depth != null && Number(r.tread_depth) < LEGAL_MIN_TREAD)
     if (legalFailures.length > 0) {
       doc.addPage()
       doc.setFillColor(220, 38, 38)
@@ -905,50 +521,35 @@ export default function ComplianceDashboard() {
       doc.setTextColor(255, 255, 255)
       doc.setFontSize(12)
       doc.setFont('helvetica', 'bold')
-      doc.text(`LEGAL COMPLIANCE FAILURES - ${legalFailures.length} Tyre(s) Below ${LEGAL_MIN_TREAD}mm`, 14, 10)
+      doc.text(`LEGAL COMPLIANCE FAILURES: ${legalFailures.length} tyre(s) below ${LEGAL_MIN_TREAD} mm`, 14, 10)
       autoTable(doc, {
         ...pdfTableTheme(brand.accent),
         startY: 20,
         head: [['Asset', 'Serial', 'Brand', 'Position', 'Tread (mm)', 'Site', 'Risk Level']],
-        body: legalFailures.slice(0, 100).map(r => [
-          r.asset_no || '-',
-          r.serial_number || '-',
-          r.brand || '-',
-          r.position || '-',
-          Number(r.tread_depth).toFixed(1),
-          r.site || '-',
-          r.risk_level || '-',
-        ]),
+        body: legalFailures.map(r => [r.asset_no || 'N/A', r.serial_number || 'N/A', r.brand || 'N/A', r.position || 'N/A', Number(r.tread_depth).toFixed(1), r.site || 'N/A', r.risk_level || 'N/A']),
         headStyles: { fillColor: [220, 38, 38], textColor: 255, fontStyle: 'bold', fontSize: 9 },
         bodyStyles: { fontSize: 8, textColor: [220, 38, 38] },
       })
     }
 
-    // Signature page
     doc.addPage()
     doc.setFillColor(22, 101, 52)
     doc.rect(0, 0, W, 16, 'F')
     doc.setTextColor(255, 255, 255)
     doc.setFontSize(12)
     doc.setFont('helvetica', 'bold')
-    doc.text('Certificate Declaration', 14, 10)
-
+    doc.text('Assessment Declaration', 14, 10)
     doc.setTextColor(40, 40, 40)
     doc.setFontSize(10)
     doc.setFont('helvetica', 'normal')
-    const declaration = [
-      `This compliance certificate confirms that the fleet tyre compliance assessment was performed on ${dateStr}.`,
-      `The assessment covers tread depth compliance against the ${FLEET_MIN_TREAD}mm fleet minimum standard and the`,
-      `${LEGAL_MIN_TREAD}mm legal minimum, tyre pressure verification, and inspection schedule adherence.`,
+    ;[
+      `This assessment of fleet tyre compliance was generated on ${dateStr} for: ${scopeLabel}.`,
+      `It covers tread depth against the ${FLEET_MIN_TREAD} mm fleet minimum and the ${LEGAL_MIN_TREAD} mm legal minimum,`,
+      `tyre pressure against a ${PRESSURE_MIN_PSI} to ${PRESSURE_MAX_PSI} PSI band, and inspection intervals of ${INSPECTION_MAX_DAYS} days.`,
       '',
-      `Overall Fleet Compliance Score: ${overallScore}% | Total Tyres Assessed: ${treadStats.total}`,
-      `Tread Compliance: ${treadStats.pct.toFixed(1)}% | Pressure Compliance: ${pressureStats.pct.toFixed(1)}% | Inspection Compliance: ${inspectionStats.pct.toFixed(1)}%`,
-    ]
-    declaration.forEach((line, i) => {
-      doc.text(line, 14, 28 + i * 7)
-    })
-
-    // Signature line
+      `Overall score: ${overallScore != null ? `${overallScore}%` : 'N/A'}. Areas measured: ${overall.covered.join(', ') || 'none'}. Not measured: ${overall.missing.join(', ') || 'none'}.`,
+      `Tread ${fmtPct(treadStats.pct)} | Pressure ${fmtPct(pressureStats.pct)} | Inspection ${fmtPct(inspectionStats.pct)} | Tyres assessed ${treadStats.total}`,
+    ].forEach((line, i) => doc.text(line, 14, 28 + i * 7))
     doc.setDrawColor(100, 100, 100)
     doc.line(14, H - 30, 100, H - 30)
     doc.line(W - 100, H - 30, W - 14, H - 30)
@@ -958,920 +559,389 @@ export default function ComplianceDashboard() {
     doc.text('Authorised Signature', W - 100, H - 24)
     doc.setFontSize(7)
     doc.text(`Generated: ${now.toLocaleString('en-GB')}`, 14, H - 18)
-    doc.text(`Report ID: TPC-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${Math.floor(Math.random() * 9000 + 1000)}`, W - 14, H - 18, { align: 'right' })
+    doc.text(`Reference: ${ref}`, W - 14, H - 18, { align: 'right' })
 
     const pgCount = doc.internal.getNumberOfPages()
     for (let i = 1; i <= pgCount; i++) { doc.setPage(i); pdfFooter(doc, i, pgCount, company, brand) }
-    doc.save(`compliance_certificate_${now.toISOString().slice(0, 10)}.pdf`)
-  }
+    if (returnBase64) return doc.output('datauristring').split(',')[1]
+    doc.save(`${reportFileName('TyrePulse Compliance Assessment', scopeLabel !== 'All data' ? scopeLabel : null, reportDateLabel())}.pdf`)
+    return null
+  }, [branding, company, scopeLabel, overallScore, overall, treadStats, pressureStats, inspectionStats, criticalCount, legalFailures])
 
-  // ── Excel export ─────────────────────────────────────────────────────────────
   async function exportExcel() {
-    const XLSX = await import('xlsx')
-    const wb = XLSX.utils.book_new()
-
-    // Summary sheet
-    const summaryRows = [
-      { 'Metric': 'Overall Compliance Score', 'Value': `${overallScore}%` },
-      { 'Metric': 'Tread Compliance', 'Value': `${treadStats.pct.toFixed(1)}%` },
-      { 'Metric': 'Pressure Compliance', 'Value': `${pressureStats.pct.toFixed(1)}%` },
-      { 'Metric': 'Inspection Compliance', 'Value': `${inspectionStats.pct.toFixed(1)}%` },
-      { 'Metric': 'Critical Tyres', 'Value': String(criticalCount) },
-      { 'Metric': 'Fully Compliant Vehicles', 'Value': String(fullyCompliantVehicles) },
-      { 'Metric': 'Legal Failures (<1.6mm)', 'Value': String(treadStats.legalFail.length) },
-    ]
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summaryRows), 'Summary')
-
-    // Non-compliant tyres
-    const treadRows = nonCompliantTyres.map(r => ({
-      'Asset No':       r.asset_no || '',
-      'Serial':         r.serial_number || '',
-      'Brand':          r.brand || '',
-      'Size':           r.size || '',
-      'Position':       r.position || '',
-      'Tread Depth mm': r.tread_depth != null ? Number(r.tread_depth).toFixed(1) : 'No Data',
-      'Site':           r.site || '',
-      'Country':        r.country || '',
-      'Days in Service': r.issue_date ? daysInService(r.issue_date) : '',
-      'Risk Level':     r.risk_level || '',
-      'Status':         r.tread_depth != null && Number(r.tread_depth) < LEGAL_MIN_TREAD ? 'LEGAL FAILURE' : 'Below Fleet Min',
-    }))
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(treadRows), 'Tread Non-Compliant')
-
-    // Inspection schedule
-    const inspRows = inspectionStats.rows.map(r => ({
-      'Asset No':       r.asset_no,
-      'Vehicle Type':   r.vehicle_type,
-      'Site':           r.site,
-      'Last Inspection': r.last_inspection || 'Never',
-      'Days Since':     r.days_since ?? 'N/A',
-      'Next Due':       r.next_due || 'N/A',
-      'Status':         r.status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
-      'Inspector':      r.inspector,
-    }))
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(inspRows), 'Inspection Schedule')
-
-    XLSX.writeFile(wb, `compliance_dashboard_${new Date().toISOString().slice(0, 10)}.xlsx`)
+    await exportSheetsToExcel([
+      {
+        name: 'Summary',
+        columns: ['metric', 'value'],
+        headers: ['Metric', 'Value'],
+        rows: [
+          { metric: 'Overall compliance score', value: overallScore != null ? `${overallScore}%` : 'N/A' },
+          { metric: 'Areas in the overall score', value: overall.covered.join(', ') || 'none' },
+          { metric: 'Tread compliance', value: fmtPct(treadStats.pct) },
+          { metric: 'Pressure compliance', value: fmtPct(pressureStats.pct) },
+          { metric: 'Inspection compliance', value: fmtPct(inspectionStats.pct) },
+          { metric: 'Critical tyres', value: criticalCount },
+          { metric: 'Fully compliant vehicles', value: fullyCompliantVehicles },
+          { metric: `Legal failures (below ${LEGAL_MIN_TREAD} mm)`, value: treadStats.legalFail },
+        ],
+      },
+      {
+        name: 'Tread Non-Compliant',
+        note: 'Tyres below the fleet minimum, or with no tread reading',
+        columns: ['asset', 'serial', 'brand', 'size', 'position', 'tread', 'site', 'country', 'days', 'risk', 'status'],
+        headers: ['Asset No', 'Serial', 'Brand', 'Size', 'Position', 'Tread Depth mm', 'Site', 'Country', 'Days in Service', 'Risk Level', 'Status'],
+        rows: nonCompliantTyres.map(r => ({
+          asset: r.asset_no || '', serial: r.serial_number || '', brand: r.brand || '', size: r.size || '', position: r.position || '',
+          tread: r.tread_depth != null ? Number(r.tread_depth).toFixed(1) : 'N/A', site: r.site || '', country: r.country || '',
+          days: r.days_in_service ?? 'N/A', risk: r.risk_level || 'N/A',
+          status: { legal_fail: 'Legal failure', below_min: 'Below fleet minimum', no_data: 'Not measured' }[r.tread_class],
+        })),
+      },
+      {
+        name: 'Pressure Exceptions',
+        note: `Tyres outside ${PRESSURE_MIN_PSI} to ${PRESSURE_MAX_PSI} PSI, or with no reading`,
+        columns: ['asset', 'serial', 'position', 'psi', 'site', 'flag'],
+        headers: ['Asset No', 'Serial', 'Position', 'Pressure PSI', 'Site', 'Flag'],
+        rows: pressureAnomalies.map(r => ({
+          asset: r.asset_no || '', serial: r.serial_number || '', position: r.position || '',
+          psi: Number(r.pressure_reading) > 0 ? Number(r.pressure_reading) : 'N/A', site: r.site || '',
+          flag: r.pressureFlag === 'Anomaly' ? 'Out of band' : 'No reading',
+        })),
+      },
+      {
+        name: 'Inspection Schedule',
+        columns: ['asset', 'type', 'site', 'last', 'days', 'next', 'status', 'inspector'],
+        headers: ['Asset No', 'Vehicle Type', 'Site', 'Last Inspection', 'Days Since', 'Next Due', 'Status', 'Inspector'],
+        rows: inspectionStats.rows.map(r => ({
+          asset: r.asset_no, type: r.vehicle_type || 'N/A', site: r.site || 'N/A', last: r.last_inspection || 'Never',
+          days: r.days_since ?? 'N/A', next: r.next_due || 'N/A', status: INSPECTION_LABEL[r.status], inspector: r.inspector || 'N/A',
+        })),
+      },
+    ], fileBase('Compliance Dashboard'), { title: 'Compliance Dashboard', company, meta: { Scope: scopeLabel } })
   }
 
-  const hasFilter = siteFilter || countryFilter
-  const c = scoreColor(overallScore)
+  const hasFilter = !!(siteFilter || countryFilter)
+  const noData = tyreRecords.length === 0 && inspections.length === 0 && fleetMaster.length === 0
+  const exportDisabled = loading || !!error || noData
 
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-5">
-
+    <div className="space-y-5 min-w-0">
       <PageHeader
         title="Compliance Dashboard"
-        subtitle={`Legal & safety compliance - tread depth, pressure, inspection schedules & audit certificates${lastRefresh ? ` · Last refresh: ${lastRefresh.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}` : ''}`}
+        subtitle={`Tread depth, pressure and inspection schedule compliance${lastRefresh ? `. Last refresh ${lastRefresh.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}` : ''}`}
         icon={ShieldCheck}
         actions={
           <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={fetchData}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] text-xs hover:bg-[var(--input-bg-hover)] transition-colors"
-            >
-              <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Refresh
+            <button type="button" onClick={fetchData} disabled={loading} className={BTN}>
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} aria-hidden="true" /> Refresh
             </button>
-            <button
-              onClick={() => setShowEmailModal(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-900/40 border border-blue-700/50 text-blue-300 text-xs hover:bg-blue-900/60 transition-colors"
-            >
-              <Mail size={12} /> Share Report
+            <EmailPdfButton
+              className={BTN}
+              disabled={exportDisabled}
+              label="Email assessment"
+              getPdf={async () => ({
+                base64: await buildCertificatePdf({ returnBase64: true }),
+                filename: `${reportFileName('TyrePulse Compliance Assessment', reportDateLabel())}.pdf`,
+                subject: 'Fleet tyre compliance assessment',
+                bodyHtml: `<p>Attached is the fleet tyre compliance assessment (${scopeLabel}). Overall score: ${overallScore != null ? `${overallScore}%` : 'N/A'}.</p>`,
+              })}
+            />
+            <button type="button" onClick={exportExcel} disabled={exportDisabled} className={BTN}>
+              <FileSpreadsheet size={14} aria-hidden="true" /> Excel
             </button>
-            <button
-              onClick={exportExcel}
-              disabled={loading || !tyreRecords.length}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-900/40 border border-green-700/50 text-green-300 text-xs hover:bg-green-900/60 transition-colors disabled:opacity-40"
-            >
-              <Download size={12} /> Excel
-            </button>
-            <button
-              onClick={exportCertificatePdf}
-              disabled={loading || !tyreRecords.length}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-900/40 border border-amber-700/50 text-amber-300 text-xs hover:bg-amber-900/60 transition-colors disabled:opacity-40"
-            >
-              <Award size={12} /> Export Certificate
+            <button type="button" onClick={() => buildCertificatePdf()} disabled={exportDisabled} className={BTN}>
+              <Award size={14} aria-hidden="true" /> Assessment PDF
             </button>
           </div>
         }
       />
 
-      {/* ── Filters ── */}
       <div className="card">
         <div className="flex items-center gap-2 mb-3">
-          <Filter size={13} className="text-[var(--text-muted)]" />
-          <span className="text-xs font-medium text-[var(--text-muted)]">Filters</span>
+          <Filter size={13} className="text-[var(--text-muted)]" aria-hidden="true" />
+          <h2 className="text-xs font-medium text-[var(--text-muted)]">Filters</h2>
           {hasFilter && (
-            <button
-              onClick={() => { setSiteFilter(''); setCountryFilter('') }}
-              className="ml-auto flex items-center gap-1 text-xs text-red-400 hover:text-red-300"
-            >
-              <X size={12} /> Clear
+            <button type="button" onClick={() => { setSiteFilter(''); setCountryFilter('') }} className={`${BTN} ml-auto text-xs`}>
+              <X size={12} aria-hidden="true" /> Clear filters
             </button>
           )}
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          <Select value={siteFilter} onChange={setSiteFilter} options={sites} placeholder="All Sites" />
-          <Select value={countryFilter} onChange={setCountryFilter} options={countries} placeholder="All Countries" />
-          <div className="flex items-center gap-2 col-span-2 bg-[var(--surface-2)] rounded-lg px-3 py-2">
-            <Info size={12} className="text-[var(--text-muted)] shrink-0" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+          <select aria-label="Filter by site" value={siteFilter} onChange={e => setSiteFilter(e.target.value)} className={SELECT}>
+            <option value="">All sites</option>
+            {sites.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <select aria-label="Filter by country" value={countryFilter} onChange={e => setCountryFilter(e.target.value)} className={SELECT}>
+            <option value="">All countries</option>
+            {countries.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <div className="flex items-center gap-2 sm:col-span-2 bg-[var(--surface-2)] rounded-lg px-3 py-2">
+            <Info size={12} className="text-[var(--text-muted)] shrink-0" aria-hidden="true" />
             <span className="text-xs text-[var(--text-muted)]">
-              Fleet standard: ≥{FLEET_MIN_TREAD}mm tread | Legal min: {LEGAL_MIN_TREAD}mm | Inspection: every {INSPECTION_MAX_DAYS} days
+              Standards: tread at least {FLEET_MIN_TREAD} mm (legal minimum {LEGAL_MIN_TREAD} mm), pressure {PRESSURE_MIN_PSI} to {PRESSURE_MAX_PSI} PSI, inspection every {INSPECTION_MAX_DAYS} days
             </span>
           </div>
         </div>
       </div>
 
-      {/* ── Loading / Error ── */}
+      {truncated && (
+        <p role="status" className="text-xs text-[var(--text-muted)] flex items-center gap-1.5">
+          <Info size={12} aria-hidden="true" /> Capped view: the newest {TYRE_CAP.toLocaleString()} records per source were read. Narrow the country for the full set.
+        </p>
+      )}
+
       {loading && (
-        <div className="flex items-center justify-center py-24">
-          <RefreshCw size={22} className="text-green-400 animate-spin mr-2" />
-          <span className="text-[var(--text-muted)] text-sm">Loading compliance data...</span>
+        <div className="flex items-center justify-center py-24" role="status">
+          <RefreshCw size={22} className="text-[var(--text-muted)] animate-spin mr-2" aria-hidden="true" />
+          <span className="text-[var(--text-muted)] text-sm">Loading compliance data</span>
         </div>
       )}
       {error && (
-        <div className="bg-red-950/30 border border-red-700/40 rounded-xl p-4 flex items-center gap-3">
-          <XCircle size={16} className="text-red-400" />
+        <div role="alert" className="bg-red-950/30 border border-red-700/40 rounded-xl p-4 flex flex-wrap items-center gap-3">
+          <XCircle size={16} className="text-red-400" aria-hidden="true" />
           <p className="text-sm text-red-300">{error}</p>
-          <button onClick={fetchData} className="ml-auto text-xs text-red-400 hover:text-red-300">Retry</button>
+          <button type="button" onClick={fetchData} className={`${BTN} ml-auto`}><RefreshCw size={14} aria-hidden="true" /> Retry</button>
         </div>
       )}
 
-      {!loading && !error && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-5">
+      {!loading && !error && noData && (
+        <div className="card flex flex-col items-center justify-center py-20 gap-3 text-center">
+          <ShieldCheck size={44} className="text-[var(--text-dim)]" aria-hidden="true" />
+          <p className="text-[var(--text-secondary)] font-medium">No compliance data yet</p>
+          <p className="text-[var(--text-muted)] text-sm max-w-md">Compliance is measured from tyre records, inspections and the fleet register. None exist for this country yet.</p>
+        </div>
+      )}
 
-          {/* Every percentage below is computed over the same scoped population -
-              tyres, inspections and the fleet register the inspection score is
-              measured against. Said in words, because a scoped score sitting next
-              to an unscoped one is unreadable either way round. */}
+      {!loading && !error && !noData && (
+        <div className="space-y-5">
+          {/* Every percentage below is computed over the same scoped population. */}
           {(hasFilter || activeCountry !== 'All') && (
             <p className="text-xs text-[var(--text-muted)]">
               These figures cover the {treadStats.total.toLocaleString()} tyre{treadStats.total === 1 ? '' : 's'} and {inspectionStats.total.toLocaleString()} asset{inspectionStats.total === 1 ? '' : 's'} matching your filters, of {tyreRecords.length.toLocaleString()} tyres and {fleetMaster.length.toLocaleString()} assets loaded.
             </p>
           )}
 
-          {/* ── Compliance Score + Trend Header Card ── */}
-          <div className={`rounded-xl border p-5 ${c.border} ${c.bg}`}>
+          <section className="rounded-xl border border-[var(--input-border)] bg-[var(--surface-1)] p-5" aria-label="Overall compliance">
             <div className="flex flex-col lg:flex-row gap-6 items-center lg:items-start">
-
-              {/* Gauge */}
               <div className="flex flex-col items-center gap-2 shrink-0">
                 <ComplianceGauge score={overallScore} trend={complianceTrend.trend} />
-                <div className={`text-xs font-bold px-3 py-1 rounded-full ${c.bg} ${c.border} border ${c.text}`}>
-                  {overallScore >= 80 ? 'COMPLIANT' : overallScore >= 60 ? 'MARGINAL' : 'NON-COMPLIANT'}
+                <div className={`text-xs font-bold px-3 py-1 rounded-full border border-[var(--input-border)] ${BAND[band].text}`}>
+                  {BAND_LABEL[band]}
                 </div>
+                {overall.missing.length > 0 && overallScore != null && (
+                  <p className="text-[11px] text-[var(--text-muted)] text-center max-w-[180px]">Score covers {overall.covered.join(' and ')} only. {overall.missing.join(' and ')} not measured.</p>
+                )}
               </div>
 
-              {/* Score breakdown */}
               <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-4 w-full">
                 {[
-                  { label: 'Tread Depth', pct: treadStats.pct, weight: '40%', icon: Gauge },
-                  { label: 'Pressure',    pct: pressureStats.pct, weight: '30%', icon: AlertCircle },
-                  { label: 'Inspection',  pct: inspectionStats.pct, weight: '30%', icon: ClipboardList },
-                ].map(({ label, pct, weight, icon: Icon }) => {
-                  const col = scoreColor(pct)
+                  { key: 'tread', label: 'Tread depth', pct: treadStats.pct, basis: `${treadStats.withData} of ${treadStats.total} tyres measured`, icon: Gauge },
+                  { key: 'pressure', label: 'Pressure', pct: pressureStats.pct, basis: `${pressureStats.withReading} of ${pressureStats.total} tyres with a reading`, icon: AlertCircle },
+                  { key: 'inspection', label: 'Inspection', pct: inspectionStats.pct, basis: `${inspectionStats.total} vehicles in scope`, icon: ClipboardList },
+                ].map(({ key, label, pct, basis, icon: Icon }) => {
+                  const b = BAND[scoreBand(pct)]
                   return (
-                    <div key={label} className="bg-[var(--surface-1)] rounded-xl p-4 border border-[var(--input-border)]">
+                    <div key={key} className="bg-[var(--surface-2)] rounded-xl p-4 border border-[var(--input-border)]">
                       <div className="flex items-center gap-2 mb-2">
-                        <Icon size={13} className={col.text} />
+                        <Icon size={13} className="text-[var(--text-muted)]" aria-hidden="true" />
                         <span className="text-xs text-[var(--text-muted)]">{label}</span>
-                        <span className="ml-auto text-xs text-[var(--text-dim)]">Weight: {weight}</span>
+                        <span className="ml-auto text-xs text-[var(--text-dim)]">Weight {Math.round(AREA_WEIGHTS[key] * 100)}%</span>
                       </div>
-                      <p className={`text-2xl font-black ${col.text}`}>{pct.toFixed(1)}%</p>
-                      <div className="mt-2 h-1.5 bg-[var(--input-bg)] rounded-full overflow-hidden">
-                        <div
-                          className="h-full rounded-full transition-all duration-700"
-                          style={{ width: `${pct}%`, backgroundColor: col.hex }}
-                        />
+                      <p className={`text-2xl font-black tabular-nums ${b.text}`}>{fmtPct(pct)}</p>
+                      <div className="mt-2 h-1.5 bg-[var(--input-bg)] rounded-full overflow-hidden" aria-hidden="true">
+                        <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct ?? 0}%`, backgroundColor: b.hex }} />
                       </div>
+                      <p className="text-[11px] text-[var(--text-muted)] mt-1.5">{basis}</p>
                     </div>
                   )
                 })}
               </div>
 
-              {/* Last audit info + trend */}
-              <div className="shrink-0 flex flex-col gap-3 min-w-[180px]">
-                <div className="bg-[var(--surface-1)] rounded-xl p-3 border border-[var(--input-border)]">
-                  <p className="text-xs text-[var(--text-muted)] mb-1">Last Audit</p>
-                  <p className="text-sm font-semibold text-[var(--text-primary)]">
-                    {lastRefresh ? lastRefresh.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}
-                  </p>
+              <dl className="shrink-0 flex flex-col gap-3 min-w-[180px] w-full lg:w-auto">
+                <div className="bg-[var(--surface-2)] rounded-xl p-3 border border-[var(--input-border)]">
+                  <dt className="text-xs text-[var(--text-muted)] mb-1">Assessed</dt>
+                  <dd className="text-sm font-semibold text-[var(--text-primary)]">{lastRefresh ? fmtDay(lastRefresh.toISOString()) : 'N/A'}</dd>
                 </div>
-                <div className="bg-[var(--surface-1)] rounded-xl p-3 border border-[var(--input-border)]">
-                  <p className="text-xs text-[var(--text-muted)] mb-1">Critical Alerts</p>
-                  <p className={`text-sm font-semibold ${criticalCount > 0 ? 'text-red-400' : 'text-green-400'}`}>
-                    {criticalCount > 0 ? `${criticalCount} Critical` : 'None Active'}
-                  </p>
+                <div className="bg-[var(--surface-2)] rounded-xl p-3 border border-[var(--input-border)]">
+                  <dt className="text-xs text-[var(--text-muted)] mb-1">Critical-risk tyres</dt>
+                  <dd className={`text-sm font-semibold ${criticalCount > 0 ? 'text-red-400' : 'text-green-400'}`}>{criticalCount > 0 ? `${criticalCount} critical` : 'None'}</dd>
                 </div>
-                <div className="bg-[var(--surface-1)] rounded-xl p-3 border border-[var(--input-border)]">
-                  <p className="text-xs text-[var(--text-muted)] mb-1">Overdue Inspections</p>
-                  <p className={`text-sm font-semibold ${overdueCount > 0 ? 'text-red-400' : 'text-green-400'}`}>
-                    {overdueCount > 0 ? `${overdueCount} Overdue` : 'All Current'}
-                  </p>
+                <div className="bg-[var(--surface-2)] rounded-xl p-3 border border-[var(--input-border)]">
+                  <dt className="text-xs text-[var(--text-muted)] mb-1">Overdue inspections</dt>
+                  <dd className={`text-sm font-semibold ${overdueCount > 0 ? 'text-red-400' : 'text-green-400'}`}>{overdueCount > 0 ? `${overdueCount} overdue` : 'None overdue'}</dd>
                 </div>
-              </div>
+              </dl>
             </div>
+          </section>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+            <KpiCard title="Tread compliance" value={fmtPct(treadStats.pct)} sub={`${treadStats.compliant} of ${treadStats.withData} measured tyres`} icon={Gauge} tone={BAND[scoreBand(treadStats.pct)].text} />
+            <KpiCard title="Legal failures" value={treadStats.legalFail.toLocaleString()} sub={`below ${LEGAL_MIN_TREAD} mm`} icon={AlertTriangle} tone={treadStats.legalFail > 0 ? 'text-red-400' : 'text-green-400'} />
+            <KpiCard title="Pressure compliance" value={fmtPct(pressureStats.pct)} sub={`${pressureStats.noReading} tyres with no reading`} icon={AlertCircle} tone={BAND[scoreBand(pressureStats.pct)].text} />
+            <KpiCard title="Inspection compliance" value={fmtPct(inspectionStats.pct)} sub={`${inspectionStats.compliant} of ${inspectionStats.total} vehicles current`} icon={ClipboardList} tone={BAND[scoreBand(inspectionStats.pct)].text} />
+            <KpiCard title="Critical-risk tyres" value={criticalCount.toLocaleString()} sub="risk level Critical" icon={HelpCircle} tone={criticalCount > 0 ? 'text-red-400' : 'text-green-400'} />
+            <KpiCard title="Fully compliant vehicles" value={fullyCompliantVehicles.toLocaleString()} sub="every measured tyre passes" icon={CheckCircle} />
           </div>
 
-          {/* ── KPI Cards ── */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-            <KpiCard
-              title="Tread Compliance"
-              value={`${treadStats.pct.toFixed(1)}%`}
-              sub={`${treadStats.compliant}/${treadStats.withData} tyres ≥ ${FLEET_MIN_TREAD}mm`}
-              icon={Gauge}
-              color={treadStats.pct >= 80 ? 'green' : treadStats.pct >= 60 ? 'amber' : 'red'}
-            />
-            <KpiCard
-              title="Pressure Compliance"
-              value={`${pressureStats.pct.toFixed(1)}%`}
-              sub={`${pressureStats.noReading} tyres with no data`}
-              icon={AlertCircle}
-              color={pressureStats.pct >= 80 ? 'green' : pressureStats.pct >= 60 ? 'amber' : 'red'}
-            />
-            <KpiCard
-              title="Inspection Compliance"
-              value={`${inspectionStats.pct.toFixed(1)}%`}
-              sub={`${inspectionStats.compliant}/${inspectionStats.total} vehicles current`}
-              icon={ClipboardList}
-              color={inspectionStats.pct >= 80 ? 'green' : inspectionStats.pct >= 60 ? 'amber' : 'red'}
-            />
-            <KpiCard
-              title="Critical Non-Compliance"
-              value={criticalCount}
-              sub="Risk level = Critical"
-              icon={AlertTriangle}
-              color={criticalCount > 0 ? 'red' : 'green'}
-              alert={criticalCount > 0}
-            />
-            <KpiCard
-              title="Fully Compliant Vehicles"
-              value={fullyCompliantVehicles}
-              sub="All tyre checks passed"
-              icon={CheckCircle}
-              color={fullyCompliantVehicles > 0 ? 'green' : 'orange'}
-            />
-          </div>
-
-          {/* ── Compliance Trend Line ── */}
-          <div className="card">
-            <div className="flex items-center gap-2 mb-3">
-              <TrendingUp size={14} className="text-green-400" />
-              <h3 className="text-sm font-semibold text-[var(--text-primary)]">Compliance Trend</h3>
-              <span className="ml-auto text-xs text-[var(--text-muted)]">Tread compliance % - last 6 months</span>
+          <Section icon={TrendingUp} title="Tread compliance trend" right="last 6 months by fitment month; gaps mean no reading that month">
+            <div className="h-48" role="img" aria-label="Monthly tread compliance percentage over the last 6 months">
+              <Line data={trendLineChart} options={{ ...pctAxisOpts(false), plugins: { legend: { display: false }, tooltip: { ...TOOLTIP, callbacks: { label: ctx => ` ${ctx.parsed.y != null ? ctx.parsed.y.toFixed(1) : 'N/A'}%` } } } }} />
             </div>
-            <div className="h-48">
-              <Line data={trendLineChart} options={trendLineOpts} />
-            </div>
-          </div>
+          </Section>
 
-          {/* ── Tabs ── */}
           <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
-            <div className="flex items-center gap-1 p-3 border-b border-[var(--input-border)] overflow-x-auto">
-              <TabBtn
-                active={activeTab === 'tread'}
-                onClick={() => setActiveTab('tread')}
-                icon={Gauge}
-                label="Tread Depth"
-                count={treadStats.fleetFail.length}
-                countColor={treadStats.fleetFail.length > 0 ? 'bg-red-900/40 text-red-300 border border-red-700/40' : 'bg-[var(--input-bg)] text-[var(--text-secondary)]'}
-              />
-              <TabBtn
-                active={activeTab === 'pressure'}
-                onClick={() => setActiveTab('pressure')}
-                icon={AlertCircle}
-                label="Pressure"
-                count={pressureStats.anomalies}
-                countColor={pressureStats.anomalies > 0 ? 'bg-orange-900/40 text-orange-300 border border-orange-700/40' : 'bg-[var(--input-bg)] text-[var(--text-secondary)]'}
-              />
-              <TabBtn
-                active={activeTab === 'inspection'}
-                onClick={() => setActiveTab('inspection')}
-                icon={ClipboardList}
-                label="Inspection Schedule"
-                count={overdueCount}
-                countColor={overdueCount > 0 ? 'bg-red-900/40 text-red-300 border border-red-700/40' : 'bg-[var(--input-bg)] text-[var(--text-secondary)]'}
-              />
-            </div>
-
-            <div className="p-4">
-              <AnimatePresence mode="wait">
-
-                {/* ─── TAB: Tread Depth ─── */}
-                {activeTab === 'tread' && (
-                  <motion.div
-                    key="tread"
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0 }}
-                    className="space-y-5"
+            <div role="tablist" aria-label="Compliance areas" className="flex items-center gap-1 p-3 border-b border-[var(--input-border)] overflow-x-auto">
+              {TABS.map(t => {
+                const count = t.id === 'tread' ? treadStats.fleetFail : t.id === 'pressure' ? pressureStats.anomalies : overdueCount
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={activeTab === t.id}
+                    onClick={() => setActiveTab(t.id)}
+                    className={`flex items-center gap-2 min-h-[44px] px-4 py-2 text-sm font-medium rounded-lg transition-colors whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${
+                      activeTab === t.id ? 'bg-[var(--accent)] text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--input-bg)]'
+                    }`}
                   >
-                    {/* Summary row */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      {[
-                        { label: 'Total Tyres', val: treadStats.total, col: 'text-blue-300' },
-                        { label: 'Compliant (≥3mm)', val: treadStats.compliant, col: 'text-green-400' },
-                        { label: 'Below Fleet Min', val: treadStats.fleetFail.length, col: 'text-orange-400' },
-                        { label: 'Legal Failures (<1.6mm)', val: treadStats.legalFail.length, col: 'text-red-400' },
-                      ].map(({ label, val, col }) => (
-                        <div key={label} className="bg-[var(--surface-2)] rounded-xl p-3 border border-[var(--input-border)]">
-                          <p className="text-xs text-[var(--text-muted)]">{label}</p>
-                          <p className={`text-xl font-bold ${col}`}>{val}</p>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Charts */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                      <div className="bg-[var(--surface-2)] rounded-xl p-4 border border-[var(--input-border)]">
-                        <div className="flex items-center gap-2 mb-3">
-                          <BarChart3 size={13} className="text-blue-400" />
-                          <span className="text-sm font-medium text-[var(--text-primary)]">Tread Depth Distribution</span>
-                        </div>
-                        <div className="h-52">
-                          <Bar data={treadDistChart} options={{
-                            ...chartOpts(false, 'Tread Depth Band', 'Tyres'),
-                            plugins: { legend: { display: false }, tooltip: { backgroundColor: 'var(--panel)', titleColor: '#f9fafb', bodyColor: '#d1d5db', borderColor: 'var(--hairline)', borderWidth: 1 } },
-                          }} />
-                        </div>
-                        <div className="flex flex-wrap gap-3 mt-2">
-                          {[
-                            { color: 'bg-red-500',    label: '0-2mm (Legal failure)' },
-                            { color: 'bg-orange-500', label: '2-4mm (Below fleet min)' },
-                            { color: 'bg-yellow-500', label: '4-6mm (Monitor)' },
-                            { color: 'bg-green-500',  label: '6mm+ (Good)' },
-                          ].map(l => (
-                            <div key={l.label} className="flex items-center gap-1.5">
-                              <span className={`w-2.5 h-2.5 rounded-sm ${l.color}`} />
-                              <span className="text-xs text-[var(--text-muted)]">{l.label}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="bg-[var(--surface-2)] rounded-xl p-4 border border-[var(--input-border)]">
-                        <div className="flex items-center gap-2 mb-3">
-                          <Building2 size={13} className="text-purple-400" />
-                          <span className="text-sm font-medium text-[var(--text-primary)]">Tread Compliance by Site</span>
-                        </div>
-                        {treadBySite.length === 0 ? (
-                          <div className="flex items-center justify-center h-52 text-[var(--text-dim)] text-sm">No site data</div>
-                        ) : (
-                          <div className="h-52">
-                            <Bar data={treadBySiteChart} options={{
-                              ...chartOpts(true, 'Compliance %', ''),
-                              plugins: {
-                                legend: { display: false },
-                                tooltip: { backgroundColor: 'var(--panel)', titleColor: '#f9fafb', bodyColor: '#d1d5db', borderColor: 'var(--hairline)', borderWidth: 1, callbacks: { label: ctx => ` ${Number(ctx.parsed.x).toFixed(1)}%` } },
-                              },
-                              scales: {
-                                x: { min: 0, max: 100, grid: { color: 'rgba(31,41,55,0.8)' }, ticks: { color: '#9ca3af', font: { size: 10 }, callback: v => `${v}%` } },
-                                y: { grid: { color: 'rgba(31,41,55,0.8)' }, ticks: { color: '#9ca3af', font: { size: 9 } } },
-                              },
-                            }} />
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Non-compliant table */}
-                    <div>
-                      <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-3">
-                        <div className="flex items-center gap-2">
-                          <AlertTriangle size={13} className="text-red-400" />
-                          <span className="text-sm font-semibold text-[var(--text-primary)]">Non-Compliant Tyres</span>
-                          <span className="text-xs px-2 py-0.5 bg-red-900/30 text-red-300 border border-red-700/40 rounded-full">
-                            {nonCompliantTyres.length}
-                          </span>
-                        </div>
-                        <div className="sm:ml-auto flex items-center gap-2">
-                          <div className="relative">
-                            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-                            <input
-                              value={treadSearch}
-                              onChange={e => { setTreadSearch(e.target.value); setTreadPage(1) }}
-                              placeholder="Search asset, serial, site..."
-                              className="bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] text-xs rounded-lg pl-7 pr-3 py-2 w-48 focus:outline-none focus:ring-1 focus:ring-green-500"
-                            />
-                          </div>
-                          <button
-                            onClick={exportTreadPdf}
-                            disabled={nonCompliantTyres.length === 0}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-900/40 border border-red-700/50 text-red-300 text-xs hover:bg-red-900/60 transition-colors disabled:opacity-40"
-                          >
-                            <FileText size={12} /> Tread Report
-                          </button>
-                        </div>
-                      </div>
-
-                      {nonCompliantTyres.length === 0 ? (
-                        <div className="flex flex-col items-center py-12 gap-2">
-                          <CheckCircle size={28} className="text-green-500" />
-                          <p className="text-[var(--text-muted)] text-sm">All tyres meet the fleet minimum tread depth, fully compliant!</p>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-xs">
-                              <thead>
-                                <tr className="border-b border-[var(--input-border)]">
-                                  {['Asset', 'Position', 'Brand', 'Tread (mm)', 'Site', 'Days in Service', 'Risk', 'Status'].map(h => (
-                                    <th key={h} className="text-left text-[var(--text-muted)] pb-2 pr-3 font-medium whitespace-nowrap">{h}</th>
-                                  ))}
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {treadPageRows.map((r, i) => {
-                                  const td = r.tread_depth != null ? Number(r.tread_depth) : null
-                                  const isLegalFail = td !== null && td < LEGAL_MIN_TREAD
-                                  return (
-                                    <tr
-                                      key={r.id ?? i}
-                                      className={`border-b border-[var(--input-border)] hover:bg-[var(--input-bg-hover)] transition-colors ${isLegalFail ? 'bg-red-950/20' : ''}`}
-                                    >
-                                      <td className="py-2 pr-3 text-[var(--text-primary)] font-medium">{r.asset_no || '-'}</td>
-                                      <td className="py-2 pr-3 text-[var(--text-secondary)]">{r.position || '-'}</td>
-                                      <td className="py-2 pr-3 text-[var(--text-secondary)]">{r.brand || '-'}</td>
-                                      <td className={`py-2 pr-3 font-bold ${isLegalFail ? 'text-red-400' : 'text-orange-400'}`}>
-                                        {td !== null ? `${td.toFixed(1)} mm` : <span className="text-[var(--text-dim)]">No Data</span>}
-                                      </td>
-                                      <td className="py-2 pr-3 text-[var(--text-muted)]">{r.site || '-'}</td>
-                                      <td className="py-2 pr-3 text-[var(--text-muted)]">
-                                        {r.issue_date ? `${daysInService(r.issue_date)} days` : '-'}
-                                      </td>
-                                      <td className="py-2 pr-3"><RiskBadge risk={r.risk_level} /></td>
-                                      <td className="py-2 pr-3">
-                                        {isLegalFail ? (
-                                          <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-red-500/20 text-red-300 border border-red-500/40">
-                                            LEGAL FAILURE
-                                          </span>
-                                        ) : td === null ? (
-                                          <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--input-bg)] text-[var(--text-muted)]">
-                                            Unknown
-                                          </span>
-                                        ) : (
-                                          <span className="text-xs px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-300 border border-orange-500/40">
-                                            Below Min
-                                          </span>
-                                        )}
-                                      </td>
-                                    </tr>
-                                  )
-                                })}
-                              </tbody>
-                            </table>
-                          </div>
-                          <div className="flex items-center justify-between mt-3">
-                            <p className="text-xs text-[var(--text-muted)]">
-                              {(treadPage - 1) * PAGE_SIZE + 1}-{Math.min(treadPage * PAGE_SIZE, nonCompliantTyres.length)} of {nonCompliantTyres.length}
-                            </p>
-                            <div className="flex items-center gap-1">
-                              <button disabled={treadPage === 1} onClick={() => setTreadPage(p => p - 1)}
-                                className="p-1.5 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-40">
-                                <ChevronLeft size={13} />
-                              </button>
-                              <span className="text-xs text-[var(--text-muted)] px-2">{treadPage} / {treadPageCount}</span>
-                              <button disabled={treadPage === treadPageCount} onClick={() => setTreadPage(p => p + 1)}
-                                className="p-1.5 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-40">
-                                <ChevronRight size={13} />
-                              </button>
-                            </div>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </motion.div>
-                )}
-
-                {/* ─── TAB: Pressure ─── */}
-                {activeTab === 'pressure' && (
-                  <motion.div
-                    key="pressure"
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0 }}
-                    className="space-y-5"
-                  >
-                    {/* Summary */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      {[
-                        { label: 'Total Tyres', val: pressureStats.total, col: 'text-blue-300' },
-                        { label: 'With Reading', val: pressureStats.withReading, col: 'text-green-400' },
-                        { label: 'Compliant (85-130 PSI)', val: pressureStats.compliant, col: 'text-green-400' },
-                        { label: 'Anomalies / No Data', val: `${pressureStats.anomalies} / ${pressureStats.noReading}`, col: 'text-red-400' },
-                      ].map(({ label, val, col }) => (
-                        <div key={label} className="bg-[var(--surface-2)] rounded-xl p-3 border border-[var(--input-border)]">
-                          <p className="text-xs text-[var(--text-muted)]">{label}</p>
-                          <p className={`text-xl font-bold ${col}`}>{val}</p>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                      {/* Doughnut */}
-                      <div className="bg-[var(--surface-2)] rounded-xl p-4 border border-[var(--input-border)]">
-                        <div className="flex items-center gap-2 mb-3">
-                          <AlertCircle size={13} className="text-orange-400" />
-                          <span className="text-sm font-medium text-[var(--text-primary)]">Pressure Compliance Breakdown</span>
-                        </div>
-                        <div className="h-56">
-                          <Doughnut data={pressureDoughnutData} options={doughnutOpts} />
-                        </div>
-                        <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2 text-center">
-                          {[
-                            { label: 'Compliant', val: pressureStats.compliant, color: 'text-green-400' },
-                            { label: 'Anomaly',   val: pressureStats.anomalies, color: 'text-red-400' },
-                            { label: 'No Data',   val: pressureStats.noReading, color: 'text-[var(--text-muted)]' },
-                          ].map(({ label, val, color }) => (
-                            <div key={label} className="bg-[var(--surface-1)] rounded-lg p-2">
-                              <p className="text-xs text-[var(--text-muted)]">{label}</p>
-                              <p className={`text-lg font-bold ${color}`}>{val}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* By site */}
-                      <div className="bg-[var(--surface-2)] rounded-xl p-4 border border-[var(--input-border)]">
-                        <div className="flex items-center gap-2 mb-3">
-                          <Building2 size={13} className="text-purple-400" />
-                          <span className="text-sm font-medium text-[var(--text-primary)]">Pressure Compliance by Site</span>
-                        </div>
-                        {pressureBySite.length === 0 ? (
-                          <div className="flex items-center justify-center h-56 text-[var(--text-dim)] text-sm">No site data</div>
-                        ) : (
-                          <div className="h-56">
-                            <Bar data={pressureBySiteChart} options={{
-                              ...chartOpts(true, 'Compliance %', ''),
-                              plugins: {
-                                legend: { display: false },
-                                tooltip: { backgroundColor: 'var(--panel)', titleColor: '#f9fafb', bodyColor: '#d1d5db', borderColor: 'var(--hairline)', borderWidth: 1, callbacks: { label: ctx => ` ${Number(ctx.parsed.x).toFixed(1)}%` } },
-                              },
-                              scales: {
-                                x: { min: 0, max: 100, grid: { color: 'rgba(31,41,55,0.8)' }, ticks: { color: '#9ca3af', font: { size: 10 }, callback: v => `${v}%` } },
-                                y: { grid: { color: 'rgba(31,41,55,0.8)' }, ticks: { color: '#9ca3af', font: { size: 9 } } },
-                              },
-                            }} />
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Anomaly table */}
-                    <div>
-                      <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-3">
-                        <div className="flex items-center gap-2">
-                          <AlertTriangle size={13} className="text-orange-400" />
-                          <span className="text-sm font-semibold text-[var(--text-primary)]">Pressure Anomalies & Missing Data</span>
-                          <span className="text-xs px-2 py-0.5 bg-orange-900/30 text-orange-300 border border-orange-700/40 rounded-full">
-                            {pressureAnomalies.length}
-                          </span>
-                        </div>
-                        <div className="sm:ml-auto">
-                          <div className="relative">
-                            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-                            <input
-                              value={pressureSearch}
-                              onChange={e => { setPressureSearch(e.target.value); setPressurePage(1) }}
-                              placeholder="Search asset, serial, site..."
-                              className="bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] text-xs rounded-lg pl-7 pr-3 py-2 w-48 focus:outline-none focus:ring-1 focus:ring-green-500"
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                      {pressureAnomalies.length === 0 ? (
-                        <div className="flex flex-col items-center py-12 gap-2">
-                          <CheckCircle size={28} className="text-green-500" />
-                          <p className="text-[var(--text-muted)] text-sm">No pressure anomalies, all tyres have valid readings!</p>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-xs">
-                              <thead>
-                                <tr className="border-b border-[var(--input-border)]">
-                                  {['Asset', 'Serial', 'Brand', 'Position', 'Pressure Reading', 'Site', 'Risk', 'Flag'].map(h => (
-                                    <th key={h} className="text-left text-[var(--text-muted)] pb-2 pr-3 font-medium whitespace-nowrap">{h}</th>
-                                  ))}
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {pressurePageRows.map((r, i) => (
-                                  <tr
-                                    key={r.id ?? i}
-                                    className={`border-b border-[var(--input-border)] hover:bg-[var(--input-bg-hover)] transition-colors ${r.pressureFlag === 'Anomaly' ? 'bg-orange-950/10' : ''}`}
-                                  >
-                                    <td className="py-2 pr-3 text-[var(--text-primary)] font-medium">{r.asset_no || '-'}</td>
-                                    <td className="py-2 pr-3 text-[var(--text-muted)] font-mono text-[11px]">{r.serial_number || '-'}</td>
-                                    <td className="py-2 pr-3 text-[var(--text-secondary)]">{r.brand || '-'}</td>
-                                    <td className="py-2 pr-3 text-[var(--text-secondary)]">{r.position || '-'}</td>
-                                    <td className={`py-2 pr-3 font-bold ${r.pressureFlag === 'Anomaly' ? 'text-orange-400' : 'text-[var(--text-dim)]'}`}>
-                                      {r.pressure_reading ? `${Number(r.pressure_reading).toFixed(0)} PSI` : '-'}
-                                    </td>
-                                    <td className="py-2 pr-3 text-[var(--text-muted)]">{r.site || '-'}</td>
-                                    <td className="py-2 pr-3"><RiskBadge risk={r.risk_level} /></td>
-                                    <td className="py-2 pr-3">
-                                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                                        r.pressureFlag === 'Anomaly'
-                                          ? 'bg-orange-500/20 text-orange-300 border border-orange-500/40'
-                                          : 'bg-[var(--input-bg)] text-[var(--text-muted)]'
-                                      }`}>
-                                        {r.pressureFlag}
-                                      </span>
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                          <div className="flex items-center justify-between mt-3">
-                            <p className="text-xs text-[var(--text-muted)]">
-                              {(pressurePage - 1) * PAGE_SIZE + 1}-{Math.min(pressurePage * PAGE_SIZE, pressureAnomalies.length)} of {pressureAnomalies.length}
-                            </p>
-                            <div className="flex items-center gap-1">
-                              <button disabled={pressurePage === 1} onClick={() => setPressurePage(p => p - 1)}
-                                className="p-1.5 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-40">
-                                <ChevronLeft size={13} />
-                              </button>
-                              <span className="text-xs text-[var(--text-muted)] px-2">{pressurePage} / {pressurePageCount}</span>
-                              <button disabled={pressurePage === pressurePageCount} onClick={() => setPressurePage(p => p + 1)}
-                                className="p-1.5 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-40">
-                                <ChevronRight size={13} />
-                              </button>
-                            </div>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </motion.div>
-                )}
-
-                {/* ─── TAB: Inspection Schedule ─── */}
-                {activeTab === 'inspection' && (
-                  <motion.div
-                    key="inspection"
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0 }}
-                    className="space-y-5"
-                  >
-                    {/* Summary */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      {[
-                        { label: 'Total Vehicles', val: inspectionStats.total, col: 'text-blue-300' },
-                        { label: `Compliant (≤${INSPECTION_MAX_DAYS}d)`, val: inspectionStats.compliant, col: 'text-green-400' },
-                        { label: `Due Soon (${INSPECTION_MAX_DAYS + 1}-${INSPECTION_DUE_DAYS}d)`, val: inspectionStats.dueSoon, col: 'text-yellow-400' },
-                        { label: `Overdue (>${INSPECTION_DUE_DAYS}d)`, val: inspectionStats.overdue, col: 'text-red-400' },
-                      ].map(({ label, val, col }) => (
-                        <div key={label} className="bg-[var(--surface-2)] rounded-xl p-3 border border-[var(--input-border)]">
-                          <p className="text-xs text-[var(--text-muted)]">{label}</p>
-                          <p className={`text-xl font-bold ${col}`}>{val}</p>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Bar chart by site */}
-                    {inspBySite.length > 0 && (
-                      <div className="bg-[var(--surface-2)] rounded-xl p-4 border border-[var(--input-border)]">
-                        <div className="flex items-center gap-2 mb-3">
-                          <BarChart3 size={13} className="text-blue-400" />
-                          <span className="text-sm font-medium text-[var(--text-primary)]">Inspection Status by Site</span>
-                        </div>
-                        <div className="h-52">
-                          <Bar data={inspBySiteChart} options={{
-                            ...chartOpts(false, 'Site', 'Vehicles'),
-                            plugins: {
-                              legend: { labels: { color: '#9ca3af', font: { size: 10 } } },
-                              tooltip: { backgroundColor: 'var(--panel)', titleColor: '#f9fafb', bodyColor: '#d1d5db', borderColor: 'var(--hairline)', borderWidth: 1 },
-                            },
-                            scales: {
-                              x: { stacked: true, grid: { color: 'rgba(31,41,55,0.8)' }, ticks: { color: '#9ca3af', font: { size: 10 } } },
-                              y: { stacked: true, grid: { color: 'rgba(31,41,55,0.8)' }, ticks: { color: '#9ca3af', font: { size: 10 } } },
-                            },
-                          }} />
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Inspection table */}
-                    <div>
-                      <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-3">
-                        <div className="flex items-center gap-2">
-                          <Calendar size={13} className="text-blue-400" />
-                          <span className="text-sm font-semibold text-[var(--text-primary)]">Vehicle Inspection Schedule</span>
-                          {overdueCount > 0 && (
-                            <span className="text-xs px-2 py-0.5 bg-red-900/30 text-red-300 border border-red-700/40 rounded-full">
-                              {overdueCount} Overdue
-                            </span>
-                          )}
-                        </div>
-                        <div className="sm:ml-auto flex items-center gap-2">
-                          <div className="relative">
-                            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-                            <input
-                              value={inspSearch}
-                              onChange={e => { setInspSearch(e.target.value); setInspPage(1) }}
-                              placeholder="Search asset, site, inspector..."
-                              className="bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] text-xs rounded-lg pl-7 pr-3 py-2 w-48 focus:outline-none focus:ring-1 focus:ring-green-500"
-                            />
-                          </div>
-                          {overdueCount > 0 && (
-                            <a
-                              href="/inspection-planner"
-                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-900/40 border border-red-700/50 text-red-300 text-xs hover:bg-red-900/60 transition-colors"
-                            >
-                              <ExternalLink size={12} />
-                              Schedule {overdueCount} Overdue
-                            </a>
-                          )}
-                        </div>
-                      </div>
-
-                      {inspectionRows.length === 0 ? (
-                        <div className="flex flex-col items-center py-12 gap-2">
-                          <ClipboardList size={28} className="text-gray-700" />
-                          <p className="text-[var(--text-muted)] text-sm">No inspection data found for the selected filters.</p>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-xs">
-                              <thead>
-                                <tr className="border-b border-[var(--input-border)]">
-                                  {['Asset No', 'Vehicle Type', 'Site', 'Last Inspection', 'Days Since', 'Next Due', 'Status', 'Inspector'].map(h => (
-                                    <th key={h} className="text-left text-[var(--text-muted)] pb-2 pr-3 font-medium whitespace-nowrap">{h}</th>
-                                  ))}
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {inspPageRows.map((r, i) => (
-                                  <tr
-                                    key={r.asset_no ?? i}
-                                    className={`border-b border-[var(--input-border)] hover:bg-[var(--input-bg-hover)] transition-colors ${
-                                      r.status === 'overdue' ? 'bg-red-950/10' :
-                                      r.status === 'due_soon' ? 'bg-yellow-950/10' : ''
-                                    }`}
-                                  >
-                                    <td className="py-2 pr-3 text-[var(--text-primary)] font-medium">{r.asset_no || '-'}</td>
-                                    <td className="py-2 pr-3 text-[var(--text-secondary)]">{r.vehicle_type}</td>
-                                    <td className="py-2 pr-3 text-[var(--text-muted)]">{r.site}</td>
-                                    <td className="py-2 pr-3 text-[var(--text-muted)] whitespace-nowrap">
-                                      {r.last_inspection
-                                        ? formatDate(r.last_inspection, 'All', { day: '2-digit', month: 'short', year: 'numeric' })
-                                        : <span className="text-[var(--text-dim)]">Never</span>}
-                                    </td>
-                                    <td className={`py-2 pr-3 font-medium ${
-                                      r.days_since === null ? 'text-[var(--text-dim)]' :
-                                      r.days_since > INSPECTION_DUE_DAYS ? 'text-red-400' :
-                                      r.days_since > INSPECTION_MAX_DAYS ? 'text-yellow-400' :
-                                      'text-green-400'
-                                    }`}>
-                                      {r.days_since !== null ? `${r.days_since}d` : '-'}
-                                    </td>
-                                    <td className="py-2 pr-3 text-[var(--text-muted)] whitespace-nowrap">
-                                      {r.next_due
-                                        ? formatDate(r.next_due, 'All', { day: '2-digit', month: 'short', year: 'numeric' })
-                                        : '-'}
-                                    </td>
-                                    <td className="py-2 pr-3">
-                                      <InspectionBadge status={r.status} />
-                                    </td>
-                                    <td className="py-2 pr-3 text-[var(--text-muted)]">{r.inspector}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                          <div className="flex items-center justify-between mt-3">
-                            <p className="text-xs text-[var(--text-muted)]">
-                              {(inspPage - 1) * PAGE_SIZE + 1}-{Math.min(inspPage * PAGE_SIZE, inspectionRows.length)} of {inspectionRows.length}
-                            </p>
-                            <div className="flex items-center gap-1">
-                              <button disabled={inspPage === 1} onClick={() => setInspPage(p => p - 1)}
-                                className="p-1.5 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-40">
-                                <ChevronLeft size={13} />
-                              </button>
-                              <span className="text-xs text-[var(--text-muted)] px-2">{inspPage} / {inspPageCount}</span>
-                              <button disabled={inspPage === inspPageCount} onClick={() => setInspPage(p => p + 1)}
-                                className="p-1.5 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-40">
-                                <ChevronRight size={13} />
-                              </button>
-                            </div>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </motion.div>
-                )}
-
-              </AnimatePresence>
-            </div>
-          </div>
-
-          {/* ── Empty state ── */}
-          {tyreRecords.length === 0 && inspections.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-20 gap-3">
-              <ShieldCheck size={44} className="text-gray-700" />
-              <p className="text-[var(--text-muted)] text-sm">No fleet data found. Upload tyre records or inspection data to begin compliance tracking.</p>
-            </div>
-          )}
-
-        </motion.div>
-      )}
-
-      {/* ── Email Modal ── */}
-      <AnimatePresence>
-        {showEmailModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
-            onClick={e => { if (e.target === e.currentTarget) { setShowEmailModal(false); setEmailSent(false) } }}
-          >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-2xl p-6 w-full max-w-md"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <Mail size={16} className="text-blue-400" />
-                  <h3 className="text-sm font-semibold text-[var(--text-primary)]">Share Compliance Report</h3>
-                </div>
-                <button onClick={() => { setShowEmailModal(false); setEmailSent(false) }} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">
-                  <X size={16} />
-                </button>
-              </div>
-
-              {emailSent ? (
-                <div className="flex flex-col items-center py-8 gap-3">
-                  <CheckCircle size={32} className="text-green-400" />
-                  <p className="text-green-300 text-sm font-medium">Report shared successfully!</p>
-                  <p className="text-[var(--text-muted)] text-xs">Sent to: {emailTo}</p>
-                  <button onClick={() => { setShowEmailModal(false); setEmailSent(false) }}
-                    className="mt-2 px-4 py-2 rounded-lg bg-green-900/40 border border-green-700/50 text-green-300 text-xs">
-                    Close
+                    <t.icon size={13} aria-hidden="true" />
+                    {t.label}
+                    <span className="text-xs tabular-nums">({count})</span>
                   </button>
-                </div>
-              ) : (
+                )
+              })}
+            </div>
+
+            <div className="p-4 space-y-5">
+              {activeTab === 'tread' && (
                 <>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="text-xs text-[var(--text-muted)] mb-1.5 block">Recipient Email</label>
-                      <input
-                        type="email"
-                        value={emailTo}
-                        onChange={e => setEmailTo(e.target.value)}
-                        placeholder="email@company.com"
-                        className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      />
-                    </div>
-                    <div className="bg-[var(--surface-2)] rounded-xl p-3 border border-[var(--input-border)]">
-                      <p className="text-xs text-[var(--text-muted)] font-medium mb-2">Report includes:</p>
-                      <ul className="space-y-1">
-                        {[
-                          `Overall compliance score: ${overallScore}%`,
-                          `Tread compliance: ${treadStats.pct.toFixed(1)}%`,
-                          `Pressure compliance: ${pressureStats.pct.toFixed(1)}%`,
-                          `Inspection compliance: ${inspectionStats.pct.toFixed(1)}%`,
-                          `${criticalCount} critical alerts`,
-                        ].map(item => (
-                          <li key={item} className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
-                            <CheckCircle size={10} className="text-green-500 shrink-0" />
-                            {item}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                    <p className="text-xs text-[var(--text-dim)] flex items-center gap-1">
-                      <Info size={11} />
-                      Email delivery requires a configured SMTP service. This generates a shareable compliance summary.
-                    </p>
+                  <StatStrip items={[
+                    { label: 'Tyres in scope', val: treadStats.total.toLocaleString() },
+                    { label: `At or above ${FLEET_MIN_TREAD} mm`, val: treadStats.compliant.toLocaleString(), tone: 'text-green-400' },
+                    { label: 'Below fleet minimum', val: treadStats.fleetFail.toLocaleString(), tone: 'text-orange-400' },
+                    { label: `Legal failures (below ${LEGAL_MIN_TREAD} mm)`, val: treadStats.legalFail.toLocaleString(), tone: 'text-red-400' },
+                  ]} />
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <Section icon={BarChart3} title="Tread depth distribution" right={`${treadStats.noData} tyres not measured`}>
+                      <div className="h-52" role="img" aria-label="Number of tyres in each tread depth band">
+                        <Bar data={treadDistChart} options={{ ...chartOpts(false, 'Tread depth band', 'Tyres'), plugins: { legend: { display: false }, tooltip: TOOLTIP } }} />
+                      </div>
+                      <p className="text-xs text-[var(--text-muted)] mt-2">0 to 2 mm includes legal failures; 2 to 4 mm is below or near the fleet minimum; 4 mm and above passes.</p>
+                    </Section>
+                    <Section icon={Building2} title="Tread compliance by site">
+                      {treadBySite.length === 0 ? (
+                        <div className="flex items-center justify-center h-52 text-[var(--text-muted)] text-sm">No site has a tread reading</div>
+                      ) : (
+                        <div className="h-52" role="img" aria-label="Tread compliance percentage by site">
+                          <Bar data={treadBySiteChart} options={pctAxisOpts(true)} />
+                        </div>
+                      )}
+                    </Section>
                   </div>
-                  <div className="flex items-center justify-end gap-2 mt-5">
-                    <button onClick={() => setShowEmailModal(false)}
-                      className="px-4 py-2 rounded-lg text-[var(--text-muted)] text-xs hover:text-[var(--text-primary)] transition-colors">
-                      Cancel
-                    </button>
-                    <button
-                      onClick={() => { if (emailTo) setEmailSent(true) }}
-                      disabled={!emailTo}
-                      className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-700 text-[var(--text-primary)] text-xs hover:bg-blue-600 transition-colors disabled:opacity-40"
-                    >
-                      <Mail size={12} /> Send Report
-                    </button>
-                  </div>
+                  <Section icon={AlertTriangle} title="Non-compliant tyres" right={`${nonCompliantTyres.length.toLocaleString()} tyres`}>
+                    <div className="flex justify-end mb-2">
+                      <button type="button" onClick={exportTreadPdf} disabled={nonCompliantTyres.length === 0} className={BTN}>
+                        <FileText size={14} aria-hidden="true" /> Tread report PDF
+                      </button>
+                    </div>
+                    <EnterpriseTable
+                      columns={treadColumns}
+                      data={nonCompliantTyres}
+                      getRowId={r => String(r.id)}
+                      searchPlaceholder="Search asset, serial, site, brand"
+                      exportFileName={fileBase('Tread Non-Compliant')}
+                      reportMeta={{ title: 'Non-compliant tyres', company }}
+                      viewKey="compliance-tread"
+                      emptyMessage={treadStats.withData === 0 ? 'No tyre has a tread reading yet, so compliance cannot be judged' : 'Every measured tyre meets the fleet minimum tread depth'}
+                    />
+                  </Section>
                 </>
               )}
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
+              {activeTab === 'pressure' && (
+                <>
+                  <StatStrip items={[
+                    { label: 'Tyres in scope', val: pressureStats.total.toLocaleString() },
+                    { label: 'With a reading', val: pressureStats.withReading.toLocaleString() },
+                    { label: `In band (${PRESSURE_MIN_PSI} to ${PRESSURE_MAX_PSI} PSI)`, val: pressureStats.compliant.toLocaleString(), tone: 'text-green-400' },
+                    { label: 'Out of band / no reading', val: `${pressureStats.anomalies} / ${pressureStats.noReading}`, tone: 'text-red-400' },
+                  ]} />
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <Section icon={AlertCircle} title="Pressure compliance breakdown">
+                      <div className="h-56" role="img" aria-label={`${pressureStats.compliant} in band, ${pressureStats.anomalies} out of band, ${pressureStats.noReading} with no reading`}>
+                        <Doughnut data={pressureDoughnutData} options={doughnutOpts} />
+                      </div>
+                    </Section>
+                    <Section icon={Building2} title="Pressure compliance by site" right="tyres with a reading only">
+                      {pressureBySite.length === 0 ? (
+                        <div className="flex items-center justify-center h-56 text-[var(--text-muted)] text-sm">No site has a pressure reading</div>
+                      ) : (
+                        <div className="h-56" role="img" aria-label="Pressure compliance percentage by site">
+                          <Bar data={pressureBySiteChart} options={pctAxisOpts(true)} />
+                        </div>
+                      )}
+                    </Section>
+                  </div>
+                  <Section icon={AlertTriangle} title="Pressure exceptions and missing readings" right={`${pressureAnomalies.length.toLocaleString()} tyres`}>
+                    <EnterpriseTable
+                      columns={pressureColumns}
+                      data={pressureAnomalies}
+                      getRowId={r => String(r.id)}
+                      searchPlaceholder="Search asset, serial, site"
+                      exportFileName={fileBase('Pressure Exceptions')}
+                      reportMeta={{ title: 'Pressure exceptions', company }}
+                      viewKey="compliance-pressure"
+                      emptyMessage="Every tyre in scope has an in-band pressure reading"
+                    />
+                  </Section>
+                </>
+              )}
+
+              {activeTab === 'inspection' && (
+                <>
+                  <StatStrip items={[
+                    { label: 'Vehicles in scope', val: inspectionStats.total.toLocaleString() },
+                    { label: `Compliant (within ${INSPECTION_MAX_DAYS} days)`, val: inspectionStats.compliant.toLocaleString(), tone: 'text-green-400' },
+                    { label: `Due soon (${INSPECTION_MAX_DAYS + 1} to ${INSPECTION_DUE_DAYS} days)`, val: inspectionStats.dueSoon.toLocaleString(), tone: 'text-yellow-400' },
+                    { label: `Overdue / never inspected`, val: `${inspectionStats.overdue} / ${inspectionStats.noData}`, tone: 'text-red-400' },
+                  ]} />
+                  {inspBySite.length > 0 && (
+                    <Section icon={BarChart3} title="Inspection status by site">
+                      <div className="h-52" role="img" aria-label="Vehicles by inspection status for each site">
+                        <Bar data={inspBySiteChart} options={{ ...chartOpts(false, 'Site', 'Vehicles'), scales: { x: { ...axis('Site'), stacked: true }, y: { ...axis('Vehicles'), stacked: true } } }} />
+                      </div>
+                    </Section>
+                  )}
+                  <Section icon={Calendar} title="Vehicle inspection schedule" right={`${inspectionRows.length.toLocaleString()} vehicles`}>
+                    <div className="flex flex-wrap items-center gap-2 mb-2">
+                      <select aria-label="Filter by inspection status" value={inspStatusFilter} onChange={e => setInspStatusFilter(e.target.value)} className={`${SELECT} w-auto`}>
+                        <option value="">All statuses</option>
+                        {['overdue', 'due_soon', 'no_data', 'compliant'].map(s => <option key={s} value={s}>{INSPECTION_LABEL[s]}</option>)}
+                      </select>
+                      {overdueCount > 0 && (
+                        <Link to="/inspection-planner" className={`${BTN} ml-auto`}>
+                          <ExternalLink size={12} aria-hidden="true" /> Plan {overdueCount} overdue inspections
+                        </Link>
+                      )}
+                    </div>
+                    <EnterpriseTable
+                      columns={inspectionColumns}
+                      data={inspectionRows}
+                      getRowId={r => String(r.asset_no)}
+                      searchPlaceholder="Search asset, site, inspector"
+                      exportFileName={fileBase('Inspection Schedule')}
+                      reportMeta={{ title: 'Vehicle inspection schedule', company }}
+                      viewKey="compliance-inspection"
+                      emptyMessage={inspStatusFilter ? 'No vehicles have this inspection status' : 'No vehicles or inspections for the selected filters'}
+                    />
+                  </Section>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

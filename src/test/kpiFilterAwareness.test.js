@@ -206,7 +206,9 @@ describe('KPI tiles are computed over the filtered rows, not the raw ones', () =
     // Both halves of the compliance score now answer the same question.
     must(s, 'const filteredInspections = useMemo(() => { let d = inspections.filter(matchesCountry)', 'Both halves of the compliance score now answer the same question')
     must(s, 'const scopedFleet = useMemo(() => { let d = fleetMaster.filter(matchesCountry)', 'Both halves of the compliance score now answer the same question')
-    must(s, '...scopedFleet.map(v => v.asset_no)', 'Both halves of the compliance score now answer the same question')
+    // The scoped register is handed to the engine (complianceDashboardAnalytics
+    // inspectionCompliance), which builds the asset set from it.
+    must(s, 'inspectionCompliance(filteredInspections, scopedFleet)', 'Both halves of the compliance score now answer the same question')
 
     // RULE 2.
     must(s, 'These figures cover the {treadStats.total.toLocaleString()} tyre', 'RULE 2')

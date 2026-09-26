@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import {
   Chart as ChartJS,
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -7,25 +7,33 @@ import {
 } from 'chart.js'
 import { Bar, Line, Doughnut } from 'react-chartjs-2'
 import {
-  RefreshCw, Download, FileText, FileSpreadsheet, Search, Filter,
-  Loader2, AlertTriangle, CheckCircle, TrendingDown, TrendingUp,
-  DollarSign, BarChart3, Package, Award, X, ChevronRight,
-  Activity, Building2, Tag, Calendar, Layers, Info, Star,
-  ArrowRight, Recycle, CircleDollarSign, Target, Zap, Lock,
+  RefreshCw, FileText, FileSpreadsheet, Search, Filter,
+  Loader2, AlertTriangle, CheckCircle, TrendingDown,
+  BarChart3, X, ChevronRight, Activity, Building2, Tag, Layers, Info, Star,
+  Recycle, CircleDollarSign, Target, Zap, Lock, Award, RotateCcw,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import { fetchAllPages } from '../lib/fetchAll'
-import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
-import { exportToExcel, exportToPdf, resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme } from '../lib/exportUtils'
+import {
+  exportToExcel, exportToPdf, resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme,
+  reportFileName, reportDateLabel,
+} from '../lib/exportUtils'
 import { formatMonthYear } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
+import { colorAt, withAlpha } from '../lib/reportColors'
 import PageHeader from '../components/ui/PageHeader'
 import NotInUseNotice from '../components/ui/NotInUseNotice'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import EmailPdfButton from '../components/EmailPdfButton'
 import { loadAutoTable } from '../lib/pdfEngine'
+import {
+  splitRecords, retreadKpis, filterRetreads, optionsFor, brandSummary as buildBrandSummary,
+  vendorScorecard, monthlyFitments, vendorCpkTrend, bestSize, cycleDistribution,
+  retreadInsights, roiProjection, RISK_OPTIONS, DEFAULT_ANNUAL_KM,
+} from '../lib/retreadManagementAnalytics'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -36,50 +44,34 @@ ChartJS.register(
 
 const TABS = ['Overview', 'Vendor Analysis', 'Lifecycle', 'ROI Calculator']
 
+// Theme tokens resolve per light/dark via the global chartVarPlugin.
+const TOOLTIP = {
+  backgroundColor: 'var(--panel)',
+  borderColor: 'var(--hairline)',
+  borderWidth: 1,
+  titleColor: 'var(--text-primary)',
+  bodyColor: 'var(--text-secondary)',
+}
 const CHART_OPTS = {
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
-    legend: { labels: { color: '#9ca3af', boxWidth: 12, font: { size: 11 } } },
-    tooltip: {
-      backgroundColor: 'var(--panel)',
-      borderColor: 'var(--hairline)',
-      borderWidth: 1,
-      titleColor: '#f9fafb',
-      bodyColor: '#d1d5db',
-    },
+    legend: { labels: { color: 'var(--text-muted)', boxWidth: 12, font: { size: 11 } } },
+    tooltip: TOOLTIP,
   },
   scales: {
-    x: { ticks: { color: '#9ca3af', font: { size: 11 } }, grid: { color: 'var(--panel-2)' } },
-    y: { ticks: { color: '#9ca3af', font: { size: 11 } }, grid: { color: 'var(--panel-2)' } },
+    x: { ticks: { color: 'var(--text-muted)', font: { size: 11 } }, grid: { color: 'var(--panel-2)' } },
+    y: { ticks: { color: 'var(--text-muted)', font: { size: 11 } }, grid: { color: 'var(--panel-2)' } },
   },
 }
-
 const DOUGHNUT_OPTS = {
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
-    legend: { position: 'bottom', labels: { color: '#9ca3af', boxWidth: 12, font: { size: 11 }, padding: 12 } },
-    tooltip: {
-      backgroundColor: 'var(--panel)',
-      borderColor: 'var(--hairline)',
-      borderWidth: 1,
-      titleColor: '#f9fafb',
-      bodyColor: '#d1d5db',
-    },
+    legend: { position: 'bottom', labels: { color: 'var(--text-muted)', boxWidth: 12, font: { size: 11 }, padding: 12 } },
+    tooltip: TOOLTIP,
   },
 }
-
-const RISK_HIGH = new Set(['High', 'Critical'])
-
-// Retread / scrap classification — kept identical to the rest of the app
-// (kpiEngine.computeRetreadPerformance, Dashboard, TyreExchange, ContinuousImprovement)
-// so a casing tagged "Retread", "Retreaded", or "Retread x2" is treated the same
-// everywhere. A strict === 'retread' match silently dropped multi-cycle casings.
-const RETREAD_RE = /retread/i
-const SCRAP_RE = /scrap/i
-const isRetread = (r) => RETREAD_RE.test(String(r?.category ?? ''))
-const isScrap = (r) => SCRAP_RE.test(String(r?.category ?? ''))
 
 const EXPORT_COLS = [
   'serial_number', 'brand', 'size', 'position', 'asset_no', 'site',
@@ -92,194 +84,132 @@ const EXPORT_HEADERS = [
   'CPK', 'Retread Cycle', 'Category', 'Risk Level', 'Status',
 ]
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
+const BTN = 'inline-flex items-center justify-center gap-1.5 min-h-[44px] px-3 py-2 bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] transition disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]'
+const SELECT = 'min-h-[44px] px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]'
 
-function kmLife(t) {
-  const km = (t.km_at_removal ?? 0) - (t.km_at_fitment ?? 0)
-  return km > 0 ? km : null
-}
-
-function cpk(t) {
-  const life = kmLife(t)
-  const cost = parseFloat(t.cost_per_tyre) || 0
-  if (!life || !cost) return null
-  return cost / life
-}
+// ── Formatting (honest: null is N/A, never 0) ─────────────────────────────────
 
 function fmtCpk(val, currency) {
-  if (val == null || !isFinite(val)) return 'N/A'
+  if (val == null || !Number.isFinite(val)) return 'N/A'
   return `${currency} ${val.toFixed(4)}`
 }
-
 function fmtCurrency(val, currency) {
-  if (val == null || !isFinite(val)) return `${currency} 0`
-  return `${currency} ${Number(val).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+  if (val == null || !Number.isFinite(val)) return 'N/A'
+  return `${currency} ${Number(val).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
 }
-
-// Retread cycle count: a casing can be retreaded multiple times, and each cycle
-// removes rubber/heat-cures the casing further, so cycle depth is a real
-// reliability signal. We read an explicit numeric cycle when the category or a
-// dedicated field encodes one ("Retread x2", "Retread 3", "2nd Retread"); a
-// bare "Retread"/"Retreaded" is cycle 1. Returns null for non-retreads.
-function retreadCycle(t) {
-  const cat = String(t?.category ?? '')
-  if (!/retread/i.test(cat)) return null
-  // Prefer an explicit structured field if the schema carries one.
-  const explicit = Number(t?.retread_count ?? t?.retread_cycle ?? t?.retread_number)
-  if (Number.isFinite(explicit) && explicit > 0) return Math.round(explicit)
-  // Otherwise parse a number out of the category label.
-  const m = cat.match(/(\d+)/)
-  if (m) {
-    const n = Number(m[1])
-    if (Number.isFinite(n) && n > 0) return n
-  }
-  return 1
-}
-
-function daysInService(t) {
-  const start = t.issue_date
-  const end = t.removal_date ?? null
-  if (!start) return null
-  const d1 = new Date(start)
-  const d2 = end ? new Date(end) : new Date()
-  return Math.max(0, Math.round((d2 - d1) / 86400000))
-}
-
-function last12Months() {
-  const months = []
-  const now = new Date()
-  for (let i = 11; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-    months.push(d.toISOString().slice(0, 7))
-  }
-  return months
-}
-
-// 0-100 composite vendor score: CPK efficiency 40%, success rate 40%, life 20%.
-// CPK and life are normalised *relative to the fleet's own min/max* (min-max
-// scaling) rather than with a fixed magic multiplier — the previous
-// `100 - avgCpk*10000` collapsed to 0 for any currency/unit where CPK isn't a
-// tiny fraction, making the 40% CPK weight dead. `range` carries the fleet
-// bounds; a missing metric scores a neutral 50 so it neither helps nor hurts.
-function scoreVendor(v, range) {
-  const norm = (val, lo, hi, invert) => {
-    if (val == null || !Number.isFinite(val)) return 50
-    if (hi <= lo) return 50 // no spread in the fleet → neutral
-    const t = (val - lo) / (hi - lo)
-    return Math.round((invert ? 1 - t : t) * 100)
-  }
-  // Lower CPK is better → invert. Higher life/success is better.
-  const cpkScore = norm(v.avgCpk, range.cpkMin, range.cpkMax, true)
-  const lifeScore = norm(v.avgLife, range.lifeMin, range.lifeMax, false)
-  const successScore = v.successRate ?? 50
-  return Math.round(cpkScore * 0.4 + successScore * 0.4 + lifeScore * 0.2)
+const fmtNum = (v) => (v == null || !Number.isFinite(Number(v)) ? 'N/A' : Number(v).toLocaleString())
+const fmtPct = (v, d = 0) => (v == null || !Number.isFinite(v) ? 'N/A' : `${v.toFixed(d)}%`)
+const monthLabel = (m) => {
+  const [yr, mo] = m.split('-')
+  return formatMonthYear(new Date(Number(yr), Number(mo) - 1, 1))
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
-function KpiCard({ icon: Icon, label, value, sub, color = 'text-blue-400', trend }) {
+function KpiCard({ icon: Icon, label, value, sub, tone = 'text-[var(--text-primary)]' }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4 flex items-start gap-3"
-    >
-      <div className={`p-2 rounded-lg bg-[var(--input-bg)] shrink-0 ${color}`}>
+    <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4 flex items-start gap-3 min-w-0">
+      <div className="p-2 rounded-lg bg-[var(--input-bg)] shrink-0 text-[var(--text-muted)]" aria-hidden="true">
         <Icon size={18} />
       </div>
       <div className="min-w-0">
         <p className="text-[var(--text-muted)] text-xs leading-tight">{label}</p>
-        <p className={`text-xl font-bold mt-0.5 truncate ${color}`}>{value}</p>
+        <p className={`text-xl font-bold mt-0.5 truncate tabular-nums ${tone}`}>{value}</p>
         {sub && <p className="text-[var(--text-muted)] text-xs mt-0.5 leading-tight">{sub}</p>}
       </div>
-      {trend != null && (
-        <div className={`ml-auto shrink-0 flex items-center gap-0.5 text-xs font-semibold ${trend >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-          {trend >= 0 ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
-          {Math.abs(trend).toFixed(1)}%
-        </div>
-      )}
-    </motion.div>
+    </div>
   )
 }
 
-function Badge({ label, color }) {
-  const map = {
-    success:  'bg-green-900/40 text-green-400 border-green-700/50',
-    warning:  'bg-yellow-900/40 text-yellow-400 border-yellow-700/50',
-    danger:   'bg-red-900/40 text-red-400 border-red-700/50',
-    info:     'bg-blue-900/40 text-blue-400 border-blue-700/50',
-    neutral:  'bg-gray-800 text-gray-400 border-gray-600',
-    purple:   'bg-purple-900/40 text-purple-400 border-purple-700/50',
-  }
+const BADGE = {
+  success: 'bg-green-900/40 text-green-400 border-green-700/50',
+  warning: 'bg-yellow-900/40 text-yellow-400 border-yellow-700/50',
+  danger: 'bg-red-900/40 text-red-400 border-red-700/50',
+  info: 'bg-blue-900/40 text-blue-400 border-blue-700/50',
+  neutral: 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)]',
+}
+function Badge({ label, tone }) {
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full border text-[10px] font-semibold ${map[color] ?? map.neutral}`}>
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full border text-[11px] font-semibold ${BADGE[tone] ?? BADGE.neutral}`}>
       {label}
     </span>
   )
 }
-
+const riskBadge = (level) => (
+  <Badge label={level ?? 'N/A'} tone={{ Critical: 'danger', High: 'warning', Medium: 'info', Low: 'success' }[level] ?? 'neutral'} />
+)
+const statusBadge = (status) => <Badge label={status} tone={status === 'Active' ? 'success' : 'neutral'} />
 function ScoreBadge({ score }) {
-  const color = score >= 75 ? 'text-green-400 bg-green-900/30 border-green-700/50'
-    : score >= 50 ? 'text-yellow-400 bg-yellow-900/30 border-yellow-700/50'
-    : 'text-red-400 bg-red-900/30 border-red-700/50'
+  const tone = score >= 75 ? 'success' : score >= 50 ? 'warning' : 'danger'
+  const word = score >= 75 ? 'Good' : score >= 50 ? 'Fair' : 'Poor'
+  return <Badge label={`${score} ${word}`} tone={tone} />
+}
+const rateTone = (v, good = 80, fair = 60) => (v == null ? 'text-[var(--text-dim)]' : v >= good ? 'text-green-400' : v >= fair ? 'text-yellow-400' : 'text-red-400')
+
+function EmptyBlock({ icon: Icon = Recycle, title, sub }) {
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full border text-xs font-bold ${color}`}>
-      {score}
-    </span>
+    <div className="flex flex-col items-center justify-center py-16 text-center gap-3 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl">
+      <Icon className="text-[var(--text-dim)]" size={40} aria-hidden="true" />
+      <p className="text-[var(--text-secondary)] font-medium">{title}</p>
+      {sub && <p className="text-[var(--text-muted)] text-sm max-w-md">{sub}</p>}
+    </div>
   )
 }
 
-function EmptyState({ icon: Icon = Package, title, sub }) {
+function Panel({ icon: Icon, title, right, children, footer }) {
   return (
-    <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
-      <Icon className="text-[var(--text-dim)]" size={48} />
-      <p className="text-[var(--text-muted)] font-medium">{title}</p>
-      {sub && <p className="text-[var(--text-dim)] text-sm">{sub}</p>}
-    </div>
+    <section className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
+      <div className="px-4 py-3 border-b border-[var(--input-border)] flex flex-wrap items-center gap-2">
+        {Icon && <Icon className="text-[var(--text-muted)]" size={16} aria-hidden="true" />}
+        <h2 className="font-semibold text-[var(--text-secondary)] text-sm">{title}</h2>
+        {right && <div className="ml-auto text-[var(--text-dim)] text-xs">{right}</div>}
+      </div>
+      <div className="p-3">{children}</div>
+      {footer && <div className="px-4 py-2 border-t border-[var(--input-border)] text-xs text-[var(--text-muted)]">{footer}</div>}
+    </section>
   )
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 
 export default function RetreadManagement() {
-  const { profile } = useAuth()
   const { appSettings, activeCurrency, activeCountry } = useSettings()
   const { branding } = useTenant()
   const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
-  const isAdmin = profile?.role === 'Admin'
 
-  // ── State ──────────────────────────────────────────────────────────────────
-  const [records, setRecords]     = useState([])
-  const [loading, setLoading]     = useState(true)
-  const [error, setError]         = useState(null)
+  const [records, setRecords] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [truncated, setTruncated] = useState(false)
   const [activeTab, setActiveTab] = useState('Overview')
 
-  // Filters
-  const [filterSite, setFilterSite]   = useState('All')
+  const [filterSite, setFilterSite] = useState('All')
   const [filterBrand, setFilterBrand] = useState('All')
-  const [filterRisk, setFilterRisk]   = useState('All')
-  const [search, setSearch]           = useState('')
+  const [filterRisk, setFilterRisk] = useState('All')
+  const [filterStatus, setFilterStatus] = useState('All')
+  const [search, setSearch] = useState('')
 
-  // Lifecycle drawer
-  const [drawer, setDrawer]       = useState(null)
+  const [drawer, setDrawer] = useState(null)
 
-  // Approval & Workflow Engine gate. The open retread casing (in the detail
-  // drawer) is the document under approval — retread send-outs / vendor decisions
-  // warrant sign-off. While its workflow is active (pending/in_review/returned) or
-  // locked (approved), the record's strongest mutation — its per-record export
-  // (the artifact a vendor acts on) — is disabled so an in-approval casing can't be
-  // exported out from under the workflow. State resets whenever the record changes.
+  // Approval & Workflow Engine gate: while the open casing's workflow is active
+  // or locked, its per-record export is disabled. Resets per record.
   const [wfLocked, setWfLocked] = useState(false)
   useEffect(() => { setWfLocked(false) }, [drawer?.id])
 
-  // ROI Calculator
+  useEffect(() => {
+    if (!drawer) return undefined
+    const onKey = (e) => { if (e.key === 'Escape') setDrawer(null) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [drawer])
+
   const [roi, setRoi] = useState({
     newCost: 1200,
     retreadCost: 480,
     retreadLifeKm: 80000,
     newLifeKm: 100000,
     fleetSize: 50,
+    annualKm: DEFAULT_ANNUAL_KM,
   })
 
   // ── Data loading ───────────────────────────────────────────────────────────
@@ -287,12 +217,13 @@ export default function RetreadManagement() {
     setLoading(true)
     setError(null)
     try {
-      // Bounded read: cap at 50,000 rows, country-scoped server-side, with a
-      // stable id tiebreak so paging never drops/repeats a row at a boundary.
+      // Bounded, country-scoped, id-tiebroken read. `serial_number` is the dead
+      // legacy column (empty on every row); the real serial is `serial_no`,
+      // served under the name this page reads.
       const { data, error: err, truncated: tr } = await fetchAllPages((from, to) => {
         let query = supabase
           .from('tyre_records')
-          .select('id, asset_no, serial_number, brand, size, position, site, country, risk_level, tread_depth, cost_per_tyre, km_at_fitment, km_at_removal, issue_date, removal_date, qty, category')
+          .select('id, asset_no, serial_number:serial_no, brand, size, position, site, country, risk_level, tread_depth, cost_per_tyre, km_at_fitment, km_at_removal, issue_date, removal_date, qty, category')
         if (activeCountry && activeCountry !== 'All') {
           query = query.eq('country', activeCountry)
         }
@@ -302,7 +233,7 @@ export default function RetreadManagement() {
       setRecords(data ?? [])
       setTruncated(!!tr)
     } catch (e) {
-      setError(toUserMessage(e, 'Failed to load data'))
+      setError(toUserMessage(e, 'Failed to load retread data'))
     } finally {
       setLoading(false)
     }
@@ -310,377 +241,95 @@ export default function RetreadManagement() {
 
   useEffect(() => { loadData() }, [loadData])
 
-  // ── Derived datasets ───────────────────────────────────────────────────────
-  const retreadRecords = useMemo(() =>
-    records.filter(isRetread),
-  [records])
+  // ── Derived datasets (single engine) ───────────────────────────────────────
+  const { retreads: enriched, newTyres: newRecords } = useMemo(() => splitRecords(records), [records])
+  const kpis = useMemo(() => retreadKpis(enriched, newRecords), [enriched, newRecords])
 
-  // "New tyre" baseline for the CPK comparison must exclude scrap casings — a
-  // prematurely-scrapped tyre is not a healthy new-tyre reference and would
-  // distort the baseline (mirrors kpiEngine.computeRetreadPerformance).
-  const newRecords = useMemo(() =>
-    records.filter(r => !isRetread(r) && !isScrap(r)),
-  [records])
+  const siteOptions = useMemo(() => ['All', ...optionsFor(enriched, 'site')], [enriched])
+  const brandOptions = useMemo(() => ['All', ...optionsFor(enriched, 'brand')], [enriched])
+  const riskOptions = ['All', ...RISK_OPTIONS]
 
-  // Enrich each retread record with computed fields
-  const enriched = useMemo(() =>
-    retreadRecords.map(t => ({
-      ...t,
-      km_life: kmLife(t),
-      cpk: cpk(t),
-      status: t.km_at_removal ? 'Removed' : 'Active',
-      days_in_service: daysInService(t),
-      retread_cycle: retreadCycle(t),
-    })),
-  [retreadRecords])
+  const filtered = useMemo(
+    () => filterRetreads(enriched, { site: filterSite, brand: filterBrand, risk: filterRisk, status: filterStatus, search }),
+    [enriched, filterSite, filterBrand, filterRisk, filterStatus, search],
+  )
+  const filtersActive = filterSite !== 'All' || filterBrand !== 'All' || filterRisk !== 'All' || filterStatus !== 'All' || !!search.trim()
+  const clearFilters = () => { setFilterSite('All'); setFilterBrand('All'); setFilterRisk('All'); setFilterStatus('All'); setSearch('') }
 
-  // ── KPIs ───────────────────────────────────────────────────────────────────
-  const kpis = useMemo(() => {
-    const totalRetreads = enriched.length
+  const brandSummary = useMemo(() => buildBrandSummary(enriched), [enriched])
+  const vendors = useMemo(() => vendorScorecard(brandSummary, kpis.newCpk), [brandSummary, kpis.newCpk])
+  const topSize = useMemo(() => bestSize(enriched), [enriched])
+  const topBrand = useMemo(
+    () => [...brandSummary].filter((b) => b.successRate != null).sort((a, b) => b.successRate - a.successRate)[0] ?? null,
+    [brandSummary],
+  )
 
-    // Retread CPK (avg over retreads with valid cpk)
-    const retreadCpkVals = enriched.map(t => t.cpk).filter(v => v != null && isFinite(v))
-    const retreadCpk = retreadCpkVals.length
-      ? retreadCpkVals.reduce((s, v) => s + v, 0) / retreadCpkVals.length
-      : null
+  const insights = useMemo(() => retreadInsights({ retreads: enriched, kpis, brands: brandSummary }, {
+    cpk: (v) => fmtCpk(v, activeCurrency),
+    money: (v) => fmtCurrency(v, activeCurrency),
+  }), [enriched, kpis, brandSummary, activeCurrency])
 
-    // New tyre CPK
-    const newCpkVals = newRecords.map(t => cpk(t)).filter(v => v != null && isFinite(v))
-    const newCpk = newCpkVals.length
-      ? newCpkVals.reduce((s, v) => s + v, 0) / newCpkVals.length
-      : null
-
-    // Savings vs new — summed per tyre, not (delta × avg-life × count) which
-    // triple-counts (it multiplied an averaged per-km delta by average life AND
-    // by the total retread count, including still-fitted tyres with no life).
-    // For each retread with a real km-life, its realised saving is the km it ran
-    // at the new-tyre cost rate minus what the retread actually cost:
-    //   saving = newCpk × km_life − cost_per_tyre
-    // Summing over retreads that have both a life and a cost gives the true
-    // fleet saving delivered by retreading vs buying new for the same distance.
-    let savings = null
-    if (newCpk != null) {
-      const measurable = enriched.filter(t => t.km_life && (parseFloat(t.cost_per_tyre) || 0) > 0)
-      if (measurable.length) {
-        savings = measurable.reduce(
-          (s, t) => s + (newCpk * t.km_life - (parseFloat(t.cost_per_tyre) || 0)),
-          0,
-        )
-      }
-    }
-
-    // Retread success rate: % not High/Critical at removal
-    const removed = enriched.filter(t => t.km_at_removal)
-    const successCount = removed.filter(t => !RISK_HIGH.has(t.risk_level)).length
-    const successRate = removed.length > 0 ? (successCount / removed.length) * 100 : null
-
-    // Avg retread cycle depth across the fleet — reliability signal.
-    const cycleVals = enriched.map(t => t.retread_cycle).filter(v => v != null)
-    const avgCycle = cycleVals.length ? cycleVals.reduce((s, v) => s + v, 0) / cycleVals.length : null
-    const maxCycle = cycleVals.length ? Math.max(...cycleVals) : null
-
-    return { totalRetreads, retreadCpk, newCpk, savings, successRate, avgCycle, maxCycle }
-  }, [enriched, newRecords])
-
-  // ── Filter options ─────────────────────────────────────────────────────────
-  const siteOptions = useMemo(() => {
-    const sites = [...new Set(enriched.map(t => t.site).filter(Boolean))].sort()
-    return ['All', ...sites]
-  }, [enriched])
-
-  const brandOptions = useMemo(() => {
-    const brands = [...new Set(enriched.map(t => t.brand).filter(Boolean))].sort()
-    return ['All', ...brands]
-  }, [enriched])
-
-  const riskOptions = ['All', 'Low', 'Medium', 'High', 'Critical']
-
-  // ── Filtered lifecycle list ────────────────────────────────────────────────
-  const filtered = useMemo(() => {
-    return enriched.filter(t => {
-      if (filterSite !== 'All' && t.site !== filterSite) return false
-      if (filterBrand !== 'All' && t.brand !== filterBrand) return false
-      if (filterRisk !== 'All' && t.risk_level !== filterRisk) return false
-      if (search) {
-        const s = search.toLowerCase()
-        return (
-          t.serial_number?.toLowerCase().includes(s) ||
-          t.brand?.toLowerCase().includes(s) ||
-          t.asset_no?.toLowerCase().includes(s) ||
-          t.size?.toLowerCase().includes(s) ||
-          t.site?.toLowerCase().includes(s)
-        )
-      }
-      return true
-    })
-  }, [enriched, filterSite, filterBrand, filterRisk, search])
-
-  // ── Overview charts ────────────────────────────────────────────────────────
-  const overviewCharts = useMemo(() => {
-    const months = last12Months()
-    const monthCounts = Object.fromEntries(months.map(m => [m, 0]))
-    enriched.forEach(t => {
-      const m = t.issue_date?.slice(0, 7)
-      if (m && monthCounts[m] != null) monthCounts[m]++
-    })
-
-    const retreadVsNew = {
-      labels: ['Retread', 'New'],
-      datasets: [{
-        data: [retreadRecords.length, newRecords.length],
-        backgroundColor: ['#8b5cf6', '#3b82f6'],
-        borderColor: ['#7c3aed', '#2563eb'],
-        borderWidth: 1,
-      }],
-    }
-
-    const monthlyBar = {
-      labels: months.map(m => {
-        const [yr, mo] = m.split('-')
-        return formatMonthYear(new Date(Number(yr), Number(mo) - 1, 1))
-      }),
-      datasets: [{
-        label: 'Retreads Fitted',
-        data: months.map(m => monthCounts[m]),
-        backgroundColor: 'rgba(139,92,246,0.7)',
-        borderColor: '#8b5cf6',
-        borderWidth: 1,
-        borderRadius: 4,
-      }],
-    }
-
-    return { retreadVsNew, monthlyBar }
-  }, [enriched, retreadRecords.length, newRecords.length])
-
-  // ── Brand summary table ────────────────────────────────────────────────────
-  const brandSummary = useMemo(() => {
-    const map = {}
-    enriched.forEach(t => {
-      const b = t.brand?.trim() || 'Unknown'
-      if (!map[b]) map[b] = { brand: b, tyres: [] }
-      map[b].tyres.push(t)
-    })
-    return Object.values(map).map(({ brand, tyres }) => {
-      const cpkVals = tyres.map(t => t.cpk).filter(v => v != null && isFinite(v))
-      const lifeVals = tyres.map(t => t.km_life).filter(v => v != null)
-      const removed = tyres.filter(t => t.km_at_removal)
-      const successCount = removed.filter(t => !RISK_HIGH.has(t.risk_level)).length
-      return {
-        brand,
-        count: tyres.length,
-        avgCpk: cpkVals.length ? cpkVals.reduce((s, v) => s + v, 0) / cpkVals.length : null,
-        avgLife: lifeVals.length ? Math.round(lifeVals.reduce((s, v) => s + v, 0) / lifeVals.length) : null,
-        successRate: removed.length > 0 ? Math.round((successCount / removed.length) * 100) : null,
-        _tyres: tyres,
-      }
-    }).sort((a, b) => b.count - a.count)
-  }, [enriched])
-
-  // ── Engineering intelligence: derive actionable insights from the real
-  //    computed data (no hardcoded/mock values). Each insight follows the
-  //    OS output format: observation → root cause → risk → action. Only
-  //    insights whose triggering condition is met are surfaced.
-  const insights = useMemo(() => {
-    const out = []
-    const removed = enriched.filter(t => t.km_at_removal)
-
-    // 1. CPK verdict — is retreading actually cheaper than new?
-    if (kpis.retreadCpk != null && kpis.newCpk != null) {
-      const deltaPct = kpis.newCpk > 0 ? ((kpis.newCpk - kpis.retreadCpk) / kpis.newCpk) * 100 : 0
-      if (kpis.retreadCpk <= kpis.newCpk) {
-        out.push({
-          tone: 'success',
-          title: `Retreading is cutting cost-per-km by ${deltaPct.toFixed(0)}%`,
-          body: `Fleet retread CPK (${fmtCpk(kpis.retreadCpk, activeCurrency)}) is below new-tyre CPK (${fmtCpk(kpis.newCpk, activeCurrency)}). Retreading is the correct economic choice for eligible casings. Protect casing quality to keep this advantage.`,
-        })
-      } else {
-        out.push({
-          tone: 'danger',
-          title: `Retreads cost ${Math.abs(deltaPct).toFixed(0)}% MORE per km than new`,
-          body: `Retread CPK (${fmtCpk(kpis.retreadCpk, activeCurrency)}) exceeds new-tyre CPK (${fmtCpk(kpis.newCpk, activeCurrency)}). Root cause is usually short retread life (poor casing selection or vendor cure quality) or over-priced retreads. Action: audit the low-scoring vendors below and tighten casing acceptance criteria before further send-outs.`,
-        })
-      }
-    }
-
-    // 2. Success rate — casing/vendor reliability
-    if (kpis.successRate != null && removed.length >= 3) {
-      const failPct = 100 - kpis.successRate
-      if (kpis.successRate < 70) {
-        out.push({
-          tone: 'danger',
-          title: `${failPct.toFixed(0)}% of retreads reached high/critical risk at removal`,
-          body: `A high failure share points to casings retreaded past their safe limit, under-inflation in service, or a weak retread vendor. Action: cross-check the worst positions/vendors, enforce pressure compliance, and cap retread cycles on failure-prone sizes.`,
-        })
-      } else if (kpis.successRate >= 90) {
-        out.push({
-          tone: 'success',
-          title: `Strong retread reliability: ${kpis.successRate.toFixed(0)}% success at removal`,
-          body: `Casing selection and vendor quality are sound. Opportunity: extend the retread programme to more eligible casings to grow the CPK saving.`,
-        })
-      }
-    }
-
-    // 3. Worst vendor/brand outlier — root-cause the CPK/failure drag
-    const rankable = brandSummary.filter(b => b.avgCpk != null && b.count >= 2)
-    if (rankable.length >= 2) {
-      const worst = [...rankable].sort((a, b) => (b.avgCpk ?? 0) - (a.avgCpk ?? 0))[0]
-      const best = [...rankable].sort((a, b) => (a.avgCpk ?? 0) - (b.avgCpk ?? 0))[0]
-      if (worst && best && worst.brand !== best.brand && best.avgCpk > 0) {
-        const gap = ((worst.avgCpk - best.avgCpk) / best.avgCpk) * 100
-        if (gap >= 25) {
-          out.push({
-            tone: 'warning',
-            title: `${worst.brand} retreads cost ${gap.toFixed(0)}% more per km than ${best.brand}`,
-            body: `${worst.brand} averages ${fmtCpk(worst.avgCpk, activeCurrency)} vs ${best.brand} at ${fmtCpk(best.avgCpk, activeCurrency)}. Action: shift send-out volume toward ${best.brand} and put ${worst.brand} on review. A ${gap.toFixed(0)}% CPK gap across ${worst.count} casings is a direct, recoverable cost.`,
-          })
-        }
-      }
-    }
-
-    // 4. Cycle-depth risk — casings retreaded too many times
-    if (kpis.maxCycle != null && kpis.maxCycle >= 3) {
-      const deep = enriched.filter(t => (t.retread_cycle ?? 0) >= 3)
-      const deepFail = deep.filter(t => t.km_at_removal && RISK_HIGH.has(t.risk_level)).length
-      out.push({
-        tone: deepFail > 0 ? 'danger' : 'warning',
-        title: `${deep.length} casing(s) retreaded ${kpis.maxCycle}×${deepFail > 0 ? ` · ${deepFail} failed` : ''}`,
-        body: `Each retread cycle removes rubber and heat-cures the casing further, raising blow-out risk. ${deepFail > 0 ? 'Failures are already appearing at deep cycles. ' : ''}Action: set a maximum retread-cycle policy (commonly 2 to 3) and scrap casings that exceed it rather than re-sending.`,
-      })
-    }
-
-    // 5. Savings headline — quantified business impact
-    if (kpis.savings != null && kpis.savings > 0) {
-      out.push({
-        tone: 'success',
-        title: `Retreading has saved ${fmtCurrency(kpis.savings, activeCurrency)} vs buying new`,
-        body: `Measured across retreads with a completed life and a recorded cost, versus running new tyres the same distance at fleet new-tyre CPK. Reinvest the saving into casing management to compound it.`,
-      })
-    }
-
-    return out
-  }, [enriched, kpis, brandSummary, activeCurrency])
-
-  // ── Vendor analysis ────────────────────────────────────────────────────────
-  const vendorData = useMemo(() => {
-    const newCpkVals = newRecords.map(t => cpk(t)).filter(v => v != null && isFinite(v))
-    const newCpkAvg = newCpkVals.length ? newCpkVals.reduce((s, v) => s + v, 0) / newCpkVals.length : null
-
-    // Fleet-relative normalisation bounds for the vendor score (min-max scaling).
-    const cpkAll = brandSummary.map(b => b.avgCpk).filter(v => v != null && isFinite(v))
-    const lifeAll = brandSummary.map(b => b.avgLife).filter(v => v != null)
-    const range = {
-      cpkMin: cpkAll.length ? Math.min(...cpkAll) : 0,
-      cpkMax: cpkAll.length ? Math.max(...cpkAll) : 0,
-      lifeMin: lifeAll.length ? Math.min(...lifeAll) : 0,
-      lifeMax: lifeAll.length ? Math.max(...lifeAll) : 0,
-    }
-
-    const vendors = brandSummary.map(b => {
-      const cpkDiff = (newCpkAvg != null && b.avgCpk != null && b.avgLife != null)
-        ? (newCpkAvg - b.avgCpk) * b.avgLife * b.count
-        : null
-      // Unknown success rate = unknown failure rate. Report null (N/A), never a
-      // flattering 0% failure.
-      const failureRate = b.successRate != null ? 100 - b.successRate : null
-      const score = scoreVendor(b, range)
-      return {
-        ...b,
-        failureRate,
-        savingsVsNew: cpkDiff,
-        score,
-      }
-    }).sort((a, b) => b.score - a.score)
-
-    // CPK trend for top 3 vendors (last 12 months)
-    const top3 = vendors.slice(0, 3).map(v => v.brand)
-    const months = last12Months()
-    const trendDatasets = top3.map((brand, i) => {
-      const colors = ['#8b5cf6', '#3b82f6', '#10b981']
-      const data = months.map(m => {
-        const monthTyres = enriched.filter(t =>
-          t.brand === brand && t.issue_date?.startsWith(m)
-        )
-        const vals = monthTyres.map(t => t.cpk).filter(v => v != null && isFinite(v))
-        return vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : null
-      })
-      return {
-        label: brand,
-        data,
-        borderColor: colors[i],
-        backgroundColor: colors[i] + '20',
-        fill: false,
-        tension: 0.4,
-        spanGaps: true,
-      }
-    })
-
-    const trendChart = {
-      labels: months.map(m => {
-        const [yr, mo] = m.split('-')
-        return formatMonthYear(new Date(Number(yr), Number(mo) - 1, 1))
-      }),
-      datasets: trendDatasets,
-    }
-
-    return { vendors, trendChart }
-  }, [brandSummary, newRecords, enriched])
-
-  // ── ROI Calculations ───────────────────────────────────────────────────────
-  const roiCalc = useMemo(() => {
-    const { newCost, retreadCost, retreadLifeKm, newLifeKm, fleetSize } = roi
-    const nC = parseFloat(newCost) || 0
-    const rC = parseFloat(retreadCost) || 0
-    const rL = parseFloat(retreadLifeKm) || 1
-    const nL = parseFloat(newLifeKm) || 1
-    const fS = parseFloat(fleetSize) || 0
-
-    const newCpkVal  = nC / nL
-    const rCpkVal    = rC / rL
-    // Saving delivered over the retread's life: running a NEW tyre for the same
-    // rL km would cost newCpk×rL; the retread cost rC. (= rL·nC/nL − rC.)
-    const savingsPerTyre = (newCpkVal - rCpkVal) * rL
-    // Break-even distance: the km a retread must survive for its cost to be
-    // recovered at the new-tyre cost-per-km rate (rC = newCpk × km). Below this
-    // the retread was dearer than the equivalent new-tyre distance cost; above
-    // it, it saves money. The old formula divided a cost delta by a CPK delta,
-    // which is dimensionally km but not a real break-even point.
-    const breakEvenKm = newCpkVal > 0 ? rC / newCpkVal : 0
-    const annualReplacements = fS * (100000 / Math.max(1, rL))
-    const annualSavings = savingsPerTyre * annualReplacements
-
-    const tcoChartData = {
-      labels: ['New Tyre', 'Retread Tyre'],
-      datasets: [
-        {
-          label: 'Initial Cost',
-          data: [nC, rC],
-          backgroundColor: ['rgba(59,130,246,0.8)', 'rgba(139,92,246,0.8)'],
-          borderRadius: 4,
-        },
-        {
-          label: 'Cost per 100,000 km',
-          data: [newCpkVal * 100000, rCpkVal * 100000],
-          backgroundColor: ['rgba(59,130,246,0.4)', 'rgba(139,92,246,0.4)'],
-          borderRadius: 4,
-        },
-      ],
-    }
-
+  // ── Charts ─────────────────────────────────────────────────────────────────
+  const charts = useMemo(() => {
+    const monthly = monthlyFitments(enriched)
+    const cycles = cycleDistribution(enriched)
+    const trend = vendorCpkTrend(enriched, vendors.slice(0, 3).map((v) => v.brand))
     return {
-      newCpkVal,
-      rCpkVal,
-      savingsPerTyre,
-      breakEvenKm,
-      annualSavings,
-      tcoChartData,
-      cpkImprovement: newCpkVal > 0 ? ((newCpkVal - rCpkVal) / newCpkVal) * 100 : 0,
+      monthlyBar: {
+        labels: monthly.map((m) => monthLabel(m.month)),
+        datasets: [{
+          label: 'Retreads fitted',
+          data: monthly.map((m) => m.count),
+          backgroundColor: withAlpha(colorAt(0), 0.75),
+          borderColor: colorAt(0),
+          borderWidth: 1,
+          borderRadius: 4,
+        }],
+      },
+      retreadVsNew: {
+        labels: ['Retread', 'New'],
+        datasets: [{
+          data: [enriched.length, newRecords.length],
+          backgroundColor: [colorAt(0), colorAt(1)],
+          borderWidth: 1,
+        }],
+      },
+      cycleBar: {
+        labels: cycles.map((c) => `Cycle ${c.cycle}`),
+        datasets: [{
+          label: 'Casings',
+          data: cycles.map((c) => c.count),
+          backgroundColor: cycles.map((_, i) => withAlpha(colorAt(i + 2), 0.8)),
+          borderRadius: 4,
+        }],
+      },
+      trendChart: {
+        labels: trend.months.map(monthLabel),
+        datasets: trend.series.map((s, i) => ({
+          label: s.brand,
+          data: s.data,
+          borderColor: colorAt(i),
+          backgroundColor: withAlpha(colorAt(i), 0.15),
+          fill: false,
+          tension: 0.35,
+          spanGaps: true,
+        })),
+      },
     }
-  }, [roi])
+  }, [enriched, newRecords.length, vendors])
 
-  // ── Export handlers ────────────────────────────────────────────────────────
-  // Both exports cover `filtered`, the same set the lifecycle table renders.
-  // They used to map the whole `enriched` array, so a user narrowed to one site
-  // or one brand received a workbook and a PDF holding every retread record.
+  const roiCalc = useMemo(() => roiProjection(roi), [roi])
+  const roiChart = useMemo(() => ({
+    labels: ['New tyre', 'Retread'],
+    datasets: [
+      { label: 'Initial cost', data: [Number(roi.newCost) || null, Number(roi.retreadCost) || null], backgroundColor: [withAlpha(colorAt(1), 0.85), withAlpha(colorAt(0), 0.85)], borderRadius: 4 },
+      { label: 'Cost per 100,000 km', data: [roiCalc.per100k.newTyre, roiCalc.per100k.retread], backgroundColor: [withAlpha(colorAt(1), 0.4), withAlpha(colorAt(0), 0.4)], borderRadius: 4 },
+    ],
+  }), [roi, roiCalc])
+
+  // ── Export handlers (always the FILTERED set the lifecycle table shows) ──────
+  const fileBase = reportFileName('TyrePulse Retread Management', activeCountry !== 'All' ? activeCountry : null, reportDateLabel())
+
   const handleExportExcel = useCallback(() => {
     const rows = filtered.map(t => ({
       serial_number: t.serial_number,
@@ -692,16 +341,16 @@ export default function RetreadManagement() {
       issue_date: t.issue_date,
       km_at_fitment: t.km_at_fitment,
       km_at_removal: t.km_at_removal,
-      km_life: t.km_life,
-      cost_per_tyre: t.cost_per_tyre,
-      cpk: t.cpk != null ? t.cpk.toFixed(6) : '',
-      retread_cycle: t.retread_cycle ?? '',
+      km_life: t.km_life ?? 'N/A',
+      cost_per_tyre: t.cost_per_tyre ?? 'N/A',
+      cpk: t.cpk != null ? t.cpk.toFixed(6) : 'N/A',
+      retread_cycle: t.retread_cycle ?? 'N/A',
       category: t.category,
-      risk_level: t.risk_level,
+      risk_level: t.risk_level ?? 'N/A',
       status: t.status,
     }))
-    exportToExcel(rows, EXPORT_COLS, EXPORT_HEADERS, `TyrePulse_Retread_${new Date().toISOString().slice(0, 10)}`, 'Retread Records')
-  }, [filtered])
+    return exportToExcel(rows, EXPORT_COLS, EXPORT_HEADERS, fileBase, 'Retread Records', { currency: activeCurrency })
+  }, [filtered, fileBase, activeCurrency])
 
   const handleExportPdf = useCallback((opts = {}) => (
     exportToPdf(
@@ -713,11 +362,11 @@ export default function RetreadManagement() {
         asset_no: t.asset_no,
         site: t.site,
         issue_date: t.issue_date,
-        km_life: t.km_life ?? '',
-        cost_per_tyre: t.cost_per_tyre,
-        cpk: t.cpk != null ? t.cpk.toFixed(6) : '',
+        km_life: t.km_life ?? 'N/A',
+        cost_per_tyre: t.cost_per_tyre ?? 'N/A',
+        cpk: t.cpk != null ? t.cpk.toFixed(6) : 'N/A',
         category: t.category,
-        risk_level: t.risk_level,
+        risk_level: t.risk_level ?? 'N/A',
         status: t.status,
       })),
       [
@@ -735,17 +384,17 @@ export default function RetreadManagement() {
         { key: 'status', header: 'Status' },
       ],
       'Retread Management Report',
-      `TyrePulse_Retread_${new Date().toISOString().slice(0, 10)}`,
+      fileBase,
       'landscape',
-      '',
+      company,
       {
         ...opts,
         subtitleNote: filtered.length < enriched.length
-          ? `of ${enriched.length.toLocaleString()} retread records, filtered`
+          ? `${filtered.length.toLocaleString()} of ${enriched.length.toLocaleString()} retread records, filtered`
           : opts.subtitleNote,
       },
     )
-  ), [filtered, enriched])
+  ), [filtered, enriched, fileBase, company])
 
   const handleExportRoiPdf = useCallback(async () => {
     const { default: jsPDF } = await import('jspdf')
@@ -758,17 +407,17 @@ export default function RetreadManagement() {
     doc.setFont('helvetica', 'bold')
     doc.setTextColor(30, 41, 59)
     doc.text('Input Parameters', 14, 32)
-
     autoTable(doc, {
       ...pdfTableTheme(brand.accent),
       startY: 36,
       head: [['Parameter', 'Value']],
       body: [
-        ['New Tyre Cost', `${activeCurrency} ${roi.newCost}`],
-        ['Retread Cost', `${activeCurrency} ${roi.retreadCost}`],
-        ['Expected New Tyre Life', `${Number(roi.newLifeKm).toLocaleString()} km`],
-        ['Expected Retread Life', `${Number(roi.retreadLifeKm).toLocaleString()} km`],
-        ['Fleet Size', `${roi.fleetSize} tyres`],
+        ['New Tyre Cost', fmtCurrency(Number(roi.newCost), activeCurrency)],
+        ['Retread Cost', fmtCurrency(Number(roi.retreadCost), activeCurrency)],
+        ['Expected New Tyre Life', `${fmtNum(roi.newLifeKm)} km`],
+        ['Expected Retread Life', `${fmtNum(roi.retreadLifeKm)} km`],
+        ['Fleet Size', `${fmtNum(roi.fleetSize)} tyres`],
+        ['Annual distance per tyre', `${fmtNum(roi.annualKm)} km`],
       ],
       margin: { left: 14, right: 14 },
     })
@@ -778,17 +427,16 @@ export default function RetreadManagement() {
     doc.setFont('helvetica', 'bold')
     doc.setTextColor(30, 41, 59)
     doc.text('ROI Results', 14, y1)
-
     autoTable(doc, {
       ...pdfTableTheme(brand.accent),
       startY: y1 + 4,
       head: [['Metric', 'Value']],
       body: [
-        ['New Tyre CPK', `${activeCurrency} ${roiCalc.newCpkVal.toFixed(6)}`],
-        ['Retread CPK', `${activeCurrency} ${roiCalc.rCpkVal.toFixed(6)}`],
-        ['CPK Improvement', `${roiCalc.cpkImprovement.toFixed(1)}%`],
+        ['New Tyre CPK', roiCalc.newCpkVal != null ? `${activeCurrency} ${roiCalc.newCpkVal.toFixed(6)}` : 'N/A'],
+        ['Retread CPK', roiCalc.rCpkVal != null ? `${activeCurrency} ${roiCalc.rCpkVal.toFixed(6)}` : 'N/A'],
+        ['CPK Improvement', fmtPct(roiCalc.cpkImprovement, 1)],
         ['Savings per Tyre', fmtCurrency(roiCalc.savingsPerTyre, activeCurrency)],
-        ['Break-even at', `${Math.round(roiCalc.breakEvenKm).toLocaleString()} km`],
+        ['Break-even at', roiCalc.breakEvenKm != null ? `${Math.round(roiCalc.breakEvenKm).toLocaleString()} km` : 'N/A'],
         ['Projected Annual Fleet Savings', fmtCurrency(roiCalc.annualSavings, activeCurrency)],
       ],
       margin: { left: 14, right: 14 },
@@ -796,14 +444,10 @@ export default function RetreadManagement() {
 
     const totalPages = doc.internal.getNumberOfPages()
     for (let p = 1; p <= totalPages; p++) { doc.setPage(p); pdfFooter(doc, p, totalPages, company, brand) }
-
-    doc.save(`TyrePulse_ROI_Analysis_${new Date().toISOString().slice(0, 10)}.pdf`)
+    doc.save(`${reportFileName('TyrePulse Retread ROI Analysis', reportDateLabel())}.pdf`)
   }, [roi, roiCalc, activeCurrency, branding, company])
 
-  // ── Per-record casing export (the retread send-out artifact) ────────────────
-  // Gated by the approval workflow: an in-approval / approved casing can't be
-  // exported out from under its workflow. The server remains the real boundary;
-  // this early-return is the client-side convenience guard.
+  // Per-record casing export, gated by the approval workflow.
   const handleExportCasing = useCallback(async (rec) => {
     if (!rec || wfLocked) return
     exportToPdf(
@@ -815,10 +459,10 @@ export default function RetreadManagement() {
         asset_no: rec.asset_no,
         site: rec.site,
         issue_date: rec.issue_date,
-        km_life: rec.km_life ?? '',
-        cost_per_tyre: rec.cost_per_tyre,
-        cpk: rec.cpk != null ? rec.cpk.toFixed(6) : '',
-        risk_level: rec.risk_level,
+        km_life: rec.km_life ?? 'N/A',
+        cost_per_tyre: rec.cost_per_tyre ?? 'N/A',
+        cpk: rec.cpk != null ? rec.cpk.toFixed(6) : 'N/A',
+        risk_level: rec.risk_level ?? 'N/A',
         status: rec.status,
       }],
       [
@@ -835,181 +479,229 @@ export default function RetreadManagement() {
         { key: 'risk_level', header: 'Risk Level' },
         { key: 'status', header: 'Status' },
       ],
-      `Retread Casing - ${rec.serial_number ?? rec.asset_no ?? rec.id}`,
-      `TyrePulse_Retread_Casing_${rec.serial_number ?? rec.id}`,
+      `Retread Casing ${rec.serial_number ?? rec.asset_no ?? rec.id}`,
+      reportFileName('TyrePulse Retread Casing', rec.serial_number ?? rec.id),
       'landscape',
+      company,
     )
-  }, [wfLocked])
+  }, [wfLocked, company])
 
-  // ── Risk badge helper ──────────────────────────────────────────────────────
-  function riskBadge(level) {
-    const map = { Critical: 'danger', High: 'warning', Medium: 'info', Low: 'success' }
-    return <Badge label={level ?? 'N/A'} color={map[level] ?? 'neutral'} />
-  }
+  // ── Table columns ──────────────────────────────────────────────────────────
+  const brandColumns = useMemo(() => [
+    { id: 'brand', header: 'Brand', accessorFn: (r) => r.brand, size: 180 },
+    { id: 'count', header: 'Casings', accessorFn: (r) => r.count, meta: { align: 'right' }, cell: ({ getValue }) => <span className="tabular-nums">{fmtNum(getValue())}</span> },
+    {
+      id: 'avgCpk', header: 'Avg CPK', accessorFn: (r) => r.avgCpk ?? Infinity, meta: { align: 'right', exportValue: (r) => fmtCpk(r.avgCpk, activeCurrency) },
+      cell: ({ row }) => <span className="tabular-nums font-mono text-xs">{fmtCpk(row.original.avgCpk, activeCurrency)}</span>,
+    },
+    { id: 'avgLife', header: 'Avg life (km)', accessorFn: (r) => r.avgLife ?? -1, meta: { align: 'right', exportValue: (r) => fmtNum(r.avgLife) }, cell: ({ row }) => <span className="tabular-nums">{fmtNum(row.original.avgLife)}</span> },
+    {
+      id: 'successRate', header: 'Success rate', accessorFn: (r) => r.successRate ?? -1, meta: { align: 'right', exportValue: (r) => fmtPct(r.successRate) },
+      cell: ({ row }) => <span className={`tabular-nums font-semibold ${rateTone(row.original.successRate)}`}>{fmtPct(row.original.successRate)}</span>,
+    },
+    {
+      id: 'view', header: '', enableSorting: false, size: 110, meta: { export: false },
+      cell: ({ row }) => (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setFilterBrand(row.original.brand === 'Unknown' ? 'All' : row.original.brand); setActiveTab('Lifecycle') }}
+          className="inline-flex items-center gap-1 min-h-[36px] px-2 py-1 rounded-lg border border-[var(--input-border)] text-xs text-[var(--text-secondary)] hover:bg-[var(--input-bg-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+        >
+          View casings <ChevronRight size={12} aria-hidden="true" />
+        </button>
+      ),
+    },
+  ], [activeCurrency])
 
-  // ── Status badge helper ────────────────────────────────────────────────────
-  function statusBadge(status) {
-    return <Badge label={status} color={status === 'Active' ? 'success' : 'neutral'} />
-  }
+  const vendorColumns = useMemo(() => [
+    {
+      id: 'brand', header: 'Vendor / brand', accessorFn: (r) => r.brand, size: 180,
+      cell: ({ row }) => (
+        <span className="inline-flex items-center gap-1.5 font-medium text-[var(--text-secondary)]">
+          {row.original.score < 40 && <AlertTriangle className="text-red-400" size={12} aria-label="Flagged: score below 40" />}
+          {row.original.brand}
+        </span>
+      ),
+    },
+    { id: 'count', header: 'Retreads', accessorFn: (r) => r.count, meta: { align: 'right' }, cell: ({ getValue }) => <span className="tabular-nums">{fmtNum(getValue())}</span> },
+    { id: 'avgCpk', header: 'Avg CPK', accessorFn: (r) => r.avgCpk ?? Infinity, meta: { align: 'right', exportValue: (r) => fmtCpk(r.avgCpk, activeCurrency) }, cell: ({ row }) => <span className="tabular-nums font-mono text-xs">{fmtCpk(row.original.avgCpk, activeCurrency)}</span> },
+    { id: 'avgLife', header: 'Avg life (km)', accessorFn: (r) => r.avgLife ?? -1, meta: { align: 'right', exportValue: (r) => fmtNum(r.avgLife) }, cell: ({ row }) => <span className="tabular-nums">{fmtNum(row.original.avgLife)}</span> },
+    { id: 'successRate', header: 'Success', accessorFn: (r) => r.successRate ?? -1, meta: { align: 'right', exportValue: (r) => fmtPct(r.successRate) }, cell: ({ row }) => <span className={`tabular-nums font-semibold ${rateTone(row.original.successRate)}`}>{fmtPct(row.original.successRate)}</span> },
+    {
+      id: 'failureRate', header: 'Failure', accessorFn: (r) => r.failureRate ?? -1, meta: { align: 'right', exportValue: (r) => fmtPct(r.failureRate) },
+      cell: ({ row }) => {
+        const v = row.original.failureRate
+        const tone = v == null ? 'text-[var(--text-dim)]' : v > 30 ? 'text-red-400' : v > 15 ? 'text-yellow-400' : 'text-green-400'
+        return <span className={`tabular-nums font-semibold ${tone}`}>{fmtPct(v)}</span>
+      },
+    },
+    {
+      id: 'savingsVsNew', header: 'Savings vs new', accessorFn: (r) => r.savingsVsNew ?? -Infinity, meta: { align: 'right', exportValue: (r) => fmtCurrency(r.savingsVsNew, activeCurrency) },
+      cell: ({ row }) => {
+        const v = row.original.savingsVsNew
+        return <span className={`tabular-nums text-xs font-semibold ${v == null ? 'text-[var(--text-dim)]' : v > 0 ? 'text-green-400' : 'text-red-400'}`}>{v != null && v > 0 ? '+' : ''}{fmtCurrency(v, activeCurrency)}</span>
+      },
+    },
+    { id: 'score', header: 'Score', accessorFn: (r) => r.score, meta: { align: 'right' }, cell: ({ row }) => <ScoreBadge score={row.original.score} /> },
+  ], [activeCurrency])
+
+  const lifecycleColumns = useMemo(() => [
+    { id: 'serial', header: 'Serial', accessorFn: (r) => r.serial_number ?? '', cell: ({ row }) => <span className="font-mono text-xs">{row.original.serial_number || 'N/A'}</span> },
+    { id: 'brand', header: 'Brand', accessorFn: (r) => r.brand ?? '' },
+    { id: 'size', header: 'Size', accessorFn: (r) => r.size ?? '', cell: ({ getValue }) => <span className="font-mono text-xs">{getValue() || 'N/A'}</span> },
+    { id: 'position', header: 'Position', accessorFn: (r) => r.position ?? '' },
+    { id: 'asset', header: 'Asset', accessorFn: (r) => r.asset_no ?? '' },
+    { id: 'site', header: 'Site', accessorFn: (r) => r.site ?? '' },
+    {
+      id: 'cycle', header: 'Cycle', accessorFn: (r) => r.retread_cycle ?? -1, meta: { align: 'right', exportValue: (r) => r.retread_cycle ?? 'N/A' },
+      cell: ({ row }) => {
+        const c = row.original.retread_cycle
+        if (c == null) return <span className="text-[var(--text-dim)]">N/A</span>
+        return <span className={`tabular-nums font-semibold ${c >= 3 ? 'text-red-400' : c === 2 ? 'text-yellow-400' : ''}`}>{c}x{c >= 3 ? ' deep' : ''}</span>
+      },
+    },
+    { id: 'km_life', header: 'km life', accessorFn: (r) => r.km_life ?? -1, meta: { align: 'right', exportValue: (r) => fmtNum(r.km_life) }, cell: ({ row }) => <span className="tabular-nums">{fmtNum(row.original.km_life)}</span> },
+    { id: 'cpk', header: 'CPK', accessorFn: (r) => r.cpk ?? Infinity, meta: { align: 'right', exportValue: (r) => fmtCpk(r.cpk, activeCurrency) }, cell: ({ row }) => <span className="tabular-nums font-mono text-xs">{fmtCpk(row.original.cpk, activeCurrency)}</span> },
+    { id: 'risk', header: 'Risk', accessorFn: (r) => r.risk_level ?? '', cell: ({ row }) => riskBadge(row.original.risk_level) },
+    { id: 'status', header: 'Status', accessorFn: (r) => r.status, cell: ({ row }) => statusBadge(row.original.status) },
+    { id: 'days', header: 'Days', accessorFn: (r) => r.days_in_service ?? -1, meta: { align: 'right', exportValue: (r) => r.days_in_service ?? 'N/A' }, cell: ({ row }) => <span className="tabular-nums">{row.original.days_in_service != null ? `${row.original.days_in_service}d` : 'N/A'}</span> },
+  ], [activeCurrency])
+
+  const reportMeta = useMemo(() => ({ company, currency: activeCurrency, branding }), [company, activeCurrency, branding])
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6">
-
+    <div className="space-y-6 min-w-0">
       <PageHeader
         title="Retread Management"
-        subtitle="Manage retread casings, suppliers, and performance metrics"
+        subtitle="Retread casings, vendor performance and the economics of retreading against buying new"
         icon={Recycle}
         actions={
           <div className="flex items-center gap-2 flex-wrap">
-          <button
-            onClick={loadData}
-            disabled={loading}
-            className="flex items-center gap-1.5 px-3 py-2 bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] transition disabled:opacity-50"
-          >
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh
-          </button>
-          <button
-            onClick={() => handleExportPdf()}
-            className="flex items-center gap-1.5 px-3 py-2 bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] transition"
-          >
-            <FileText size={14} /> PDF
-          </button>
-          <EmailPdfButton
-            className="flex items-center gap-1.5 px-3 py-2 bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] transition disabled:opacity-50"
-            getPdf={async () => ({
-              base64: await handleExportPdf({ returnBase64: true }),
-              filename: `TyrePulse_Retread_${new Date().toISOString().slice(0, 10)}.pdf`,
-              subject: 'Retread Management',
-              bodyHtml: '<p>Attached is the Retread Management report.</p>',
-            })}
-          />
-          <button
-            onClick={handleExportExcel}
-            className="flex items-center gap-1.5 px-3 py-2 bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] transition"
-          >
-            <FileSpreadsheet size={14} /> Excel
-          </button>
+            <button type="button" onClick={loadData} disabled={loading} className={BTN}>
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} aria-hidden="true" /> Refresh
+            </button>
+            <button type="button" onClick={() => handleExportPdf()} disabled={loading || !!error || filtered.length === 0} className={BTN}>
+              <FileText size={14} aria-hidden="true" /> PDF
+            </button>
+            <EmailPdfButton
+              className={BTN}
+              getPdf={async () => ({
+                base64: await handleExportPdf({ returnBase64: true }),
+                filename: `${fileBase}.pdf`,
+                subject: 'Retread Management',
+                bodyHtml: '<p>Attached is the Retread Management report.</p>',
+              })}
+            />
+            <button type="button" onClick={handleExportExcel} disabled={loading || !!error || filtered.length === 0} className={BTN}>
+              <FileSpreadsheet size={14} aria-hidden="true" /> Excel
+            </button>
           </div>
         }
       />
-      <NotInUseNotice count={records.length} label="retread records"
-        hint="Records appear once a casing is sent for retreading." />
+      <NotInUseNotice count={loading || error ? null : enriched.length} label="retread records"
+        hint="Records appear once a tyre record is categorised as a retread." />
 
-      {/* Country/Site filter bar */}
-      <div className="flex flex-wrap items-center gap-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl px-4 py-3">
-        <Filter size={14} className="text-[var(--text-muted)] shrink-0" />
-        <span className="text-[var(--text-muted)] text-xs shrink-0">Filter:</span>
-        <select
-          value={filterSite}
-          onChange={e => setFilterSite(e.target.value)}
-          className="px-2 py-1 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-xs text-[var(--text-secondary)] focus:outline-none focus:border-purple-600"
-        >
-          {siteOptions.map(o => <option key={o}>{o}</option>)}
-        </select>
-        <select
-          value={filterBrand}
-          onChange={e => setFilterBrand(e.target.value)}
-          className="px-2 py-1 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-xs text-[var(--text-secondary)] focus:outline-none focus:border-purple-600"
-        >
-          {brandOptions.map(o => <option key={o}>{o}</option>)}
-        </select>
-        <select
-          value={filterRisk}
-          onChange={e => setFilterRisk(e.target.value)}
-          className="px-2 py-1 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-xs text-[var(--text-secondary)] focus:outline-none focus:border-purple-600"
-        >
-          {riskOptions.map(o => <option key={o}>{o}</option>)}
-        </select>
-        <span className="ml-auto text-[var(--text-dim)] text-xs">
-          {enriched.length.toLocaleString()} retread records · {records.length.toLocaleString()} total
-        </span>
+      {/* Filters: drive the KPI-adjacent lifecycle table and every export */}
+      <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl px-4 py-3 space-y-3">
+        <div className="flex items-center gap-2 text-[var(--text-muted)] text-xs">
+          <Filter size={14} aria-hidden="true" /> Filters
+          <span className="ml-auto text-[var(--text-dim)]" aria-live="polite">
+            {filtered.length.toLocaleString()} of {enriched.length.toLocaleString()} retread casings shown
+          </span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2">
+          <label className="relative lg:col-span-2">
+            <span className="sr-only">Search retread casings</span>
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" size={14} aria-hidden="true" />
+            <input
+              type="search"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search serial, brand, asset, size, site"
+              className={`${SELECT} w-full pl-8`}
+            />
+          </label>
+          <label className="flex flex-col"><span className="sr-only">Site</span>
+            <select aria-label="Filter by site" value={filterSite} onChange={e => setFilterSite(e.target.value)} className={SELECT}>
+              {siteOptions.map(o => <option key={o} value={o}>{o === 'All' ? 'All sites' : o}</option>)}
+            </select>
+          </label>
+          <label className="flex flex-col"><span className="sr-only">Brand</span>
+            <select aria-label="Filter by brand" value={filterBrand} onChange={e => setFilterBrand(e.target.value)} className={SELECT}>
+              {brandOptions.map(o => <option key={o} value={o}>{o === 'All' ? 'All brands' : o}</option>)}
+            </select>
+          </label>
+          <label className="flex flex-col"><span className="sr-only">Risk</span>
+            <select aria-label="Filter by risk level" value={filterRisk} onChange={e => setFilterRisk(e.target.value)} className={SELECT}>
+              {riskOptions.map(o => <option key={o} value={o}>{o === 'All' ? 'All risk levels' : o}</option>)}
+            </select>
+          </label>
+          <label className="flex flex-col"><span className="sr-only">Status</span>
+            <select aria-label="Filter by status" value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className={SELECT}>
+              <option value="All">Active and removed</option>
+              <option value="Active">Active only</option>
+              <option value="Removed">Removed only</option>
+            </select>
+          </label>
+        </div>
+        {filtersActive && (
+          <button type="button" onClick={clearFilters} className={`${BTN} text-xs`}>
+            <RotateCcw size={12} aria-hidden="true" /> Clear filters
+          </button>
+        )}
       </div>
 
-      {/* Capped view note */}
       {truncated && (
-        <div className="flex items-center gap-2 text-xs text-[var(--text-dim)]">
-          <Info size={12} className="shrink-0" />
-          <span>Capped view: showing the first 50,000 tyre records. Narrow the country or filters for the full set.</span>
+        <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]" role="status">
+          <Info size={12} className="shrink-0" aria-hidden="true" />
+          <span>Capped view: showing the first 50,000 tyre records. Narrow the country for the full set.</span>
         </div>
       )}
 
-      {/* Error state */}
       {error && (
-        <motion.div
-          initial={{ opacity: 0, y: -8 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-red-900/30 border border-red-700 rounded-xl px-4 py-3 flex items-center gap-3"
-        >
-          <AlertTriangle className="text-red-400 shrink-0" size={18} />
+        <div role="alert" className="bg-red-900/30 border border-red-700 rounded-xl px-4 py-3 flex flex-wrap items-center gap-3">
+          <AlertTriangle className="text-red-400 shrink-0" size={18} aria-hidden="true" />
           <p className="text-red-300 text-sm">{error}</p>
-          <button onClick={loadData} className="ml-auto text-red-400 hover:text-red-200 text-xs underline">
-            Retry
+          <button type="button" onClick={loadData} className={`${BTN} ml-auto`}>
+            <RefreshCw size={14} aria-hidden="true" /> Retry
           </button>
-        </motion.div>
+        </div>
       )}
 
-      {/* Loading state */}
       {loading && (
-        <div className="flex items-center justify-center py-24">
-          <Loader2 className="animate-spin text-purple-400 mr-3" size={28} />
-          <span className="text-[var(--text-muted)]">Loading retread data...</span>
+        <div className="flex items-center justify-center py-24" role="status">
+          <Loader2 className="animate-spin text-[var(--text-muted)] mr-3" size={28} aria-hidden="true" />
+          <span className="text-[var(--text-muted)]">Loading retread data</span>
         </div>
       )}
 
       {!loading && !error && (
         <>
-          {/* KPI Cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-            <KpiCard
-              icon={Recycle}
-              label="Total Retread Tyres"
-              value={kpis.totalRetreads.toLocaleString()}
-              sub={kpis.avgCycle != null
-                ? `avg cycle ${kpis.avgCycle.toFixed(1)}× · max ${kpis.maxCycle}× · of ${records.length.toLocaleString()} total`
-                : `of ${records.length.toLocaleString()} total`}
-              color="text-purple-400"
-            />
-            <KpiCard
-              icon={TrendingDown}
-              label="Retread CPK"
-              value={fmtCpk(kpis.retreadCpk, activeCurrency)}
-              sub="cost per kilometer"
-              color="text-blue-400"
-            />
-            <KpiCard
-              icon={Tag}
-              label="New Tyre CPK"
-              value={fmtCpk(kpis.newCpk, activeCurrency)}
-              sub="cost per kilometer"
-              color="text-[var(--text-secondary)]"
-            />
-            <KpiCard
-              icon={CircleDollarSign}
-              label="Retread Savings vs New"
-              value={kpis.savings != null ? fmtCurrency(kpis.savings, activeCurrency) : 'N/A'}
-              sub="total fleet savings"
-              color={kpis.savings != null && kpis.savings > 0 ? 'text-green-400' : 'text-yellow-400'}
-            />
-            <KpiCard
-              icon={CheckCircle}
-              label="Retread Success Rate"
-              value={kpis.successRate != null ? `${kpis.successRate.toFixed(1)}%` : 'N/A'}
-              sub="non-high-risk at removal"
-              color={kpis.successRate != null && kpis.successRate >= 80 ? 'text-green-400' : kpis.successRate != null && kpis.successRate >= 60 ? 'text-yellow-400' : 'text-red-400'}
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+            <KpiCard icon={Recycle} label="Retread casings" value={fmtNum(kpis.totalRetreads)}
+              sub={`${fmtNum(kpis.activeCount)} active, ${fmtNum(kpis.removedCount)} removed, ${fmtPct(kpis.retreadShare, 1)} of fleet`} />
+            <KpiCard icon={TrendingDown} label="Retread CPK" value={fmtCpk(kpis.retreadCpk, activeCurrency)} sub="cost per km, removed casings" />
+            <KpiCard icon={Tag} label="New tyre CPK" value={fmtCpk(kpis.newCpk, activeCurrency)}
+              sub={kpis.cpkDeltaPct != null ? `retread is ${Math.abs(kpis.cpkDeltaPct).toFixed(1)}% ${kpis.cpkDeltaPct >= 0 ? 'cheaper' : 'dearer'}` : 'baseline excludes scrap'} />
+            <KpiCard icon={CircleDollarSign} label="Savings vs new" value={fmtCurrency(kpis.savings, activeCurrency)}
+              sub="realised, measurable casings" tone={kpis.savings == null ? 'text-[var(--text-dim)]' : kpis.savings > 0 ? 'text-green-400' : 'text-red-400'} />
+            <KpiCard icon={CheckCircle} label="Success rate" value={fmtPct(kpis.successRate, 1)}
+              sub="not high risk at removal" tone={rateTone(kpis.successRate)} />
+            <KpiCard icon={Layers} label="Cycle depth" value={kpis.avgCycle != null ? `${kpis.avgCycle.toFixed(1)}x avg` : 'N/A'}
+              sub={kpis.maxCycle != null ? `deepest casing ${kpis.maxCycle}x` : 'no retread cycles recorded'} />
           </div>
 
-          {/* Tabs */}
-          <div className="flex gap-1 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-1 overflow-x-auto">
+          <div role="tablist" aria-label="Retread views" className="flex gap-1 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-1 overflow-x-auto">
             {TABS.map(t => (
               <button
                 key={t}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === t}
                 onClick={() => setActiveTab(t)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition ${
-                  activeTab === t
-                    ? 'bg-purple-700 text-white'
-                    : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+                className={`min-h-[44px] px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${
+                  activeTab === t ? 'bg-[var(--accent)] text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
                 }`}
               >
                 {t}
@@ -1017,513 +709,226 @@ export default function RetreadManagement() {
             ))}
           </div>
 
-          {/* ── Tab: Overview ── */}
           {activeTab === 'Overview' && (
             <div className="space-y-5">
               {enriched.length === 0 ? (
-                <EmptyState
-                  icon={Recycle}
-                  title="No retread tyres found"
-                  sub="Retread tyres are identified by category = 'Retread' in tyre records"
-                />
+                <EmptyBlock title="No retread tyres recorded" sub="Retread casings are tyre records whose category mentions a retread. None exist for this country yet." />
               ) : (
                 <>
-                  {/* Engineering Intelligence — data-driven insights & recommendations */}
                   {insights.length > 0 && (
-                    <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
-                      <div className="px-4 py-3 border-b border-[var(--input-border)] flex items-center gap-2">
-                        <Zap className="text-yellow-400" size={16} />
-                        <h2 className="font-semibold text-[var(--text-secondary)] text-sm">Retread Engineering Intelligence</h2>
-                        <span className="ml-auto text-[var(--text-dim)] text-xs">{insights.length} finding{insights.length === 1 ? '' : 's'}</span>
-                      </div>
-                      <div className="divide-y divide-[var(--input-border)]">
+                    <Panel icon={Zap} title="Retread engineering findings" right={`${insights.length} finding${insights.length === 1 ? '' : 's'}`}>
+                      <ul className="divide-y divide-[var(--input-border)]">
                         {insights.map((ins, i) => {
                           const tone = {
-                            success: { bar: 'bg-green-500', Icon: CheckCircle, ic: 'text-green-400' },
-                            warning: { bar: 'bg-yellow-500', Icon: AlertTriangle, ic: 'text-yellow-400' },
-                            danger:  { bar: 'bg-red-500',    Icon: AlertTriangle, ic: 'text-red-400' },
-                          }[ins.tone] ?? { bar: 'bg-blue-500', Icon: Info, ic: 'text-blue-400' }
+                            success: { Icon: CheckCircle, ic: 'text-green-400', word: 'Good' },
+                            warning: { Icon: AlertTriangle, ic: 'text-yellow-400', word: 'Watch' },
+                            danger: { Icon: AlertTriangle, ic: 'text-red-400', word: 'Act' },
+                          }[ins.tone] ?? { Icon: Info, ic: 'text-blue-400', word: 'Note' }
                           const { Icon } = tone
                           return (
-                            <div key={i} className="flex gap-3 px-4 py-3">
-                              <div className={`w-0.5 rounded-full shrink-0 ${tone.bar}`} />
-                              <Icon className={`${tone.ic} shrink-0 mt-0.5`} size={16} />
+                            <li key={i} className="flex gap-3 px-1 py-3">
+                              <Icon className={`${tone.ic} shrink-0 mt-0.5`} size={16} aria-hidden="true" />
                               <div className="min-w-0">
-                                <p className="text-[var(--text-secondary)] text-sm font-semibold">{ins.title}</p>
+                                <p className="text-[var(--text-secondary)] text-sm font-semibold"><span className="sr-only">{tone.word}: </span>{ins.title}</p>
                                 <p className="text-[var(--text-muted)] text-xs mt-0.5 leading-relaxed">{ins.body}</p>
                               </div>
-                            </div>
+                            </li>
                           )
                         })}
-                      </div>
-                    </div>
+                      </ul>
+                    </Panel>
                   )}
 
-                  {/* Charts row */}
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                    <div className="lg:col-span-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
-                      <p className="text-xs text-[var(--text-muted)] mb-3 font-medium flex items-center gap-1.5">
-                        <BarChart3 size={13} className="text-purple-400" /> Retread Fitments: Last 12 Months
-                      </p>
-                      <div className="h-52">
-                        <Bar
-                          data={overviewCharts.monthlyBar}
-                          options={{
-                            ...CHART_OPTS,
-                            plugins: { ...CHART_OPTS.plugins, legend: { display: false } },
-                          }}
-                        />
-                      </div>
+                    <div className="lg:col-span-2">
+                      <Panel icon={BarChart3} title="Retread fitments, last 12 months">
+                        <div className="h-56" role="img" aria-label={`Retread fitments per month. ${charts.monthlyBar.datasets[0].data.reduce((s, v) => s + v, 0)} in the last 12 months.`}>
+                          <Bar data={charts.monthlyBar} options={{ ...CHART_OPTS, plugins: { ...CHART_OPTS.plugins, legend: { display: false } } }} />
+                        </div>
+                      </Panel>
                     </div>
-                    <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
-                      <p className="text-xs text-[var(--text-muted)] mb-3 font-medium flex items-center gap-1.5">
-                        <Layers size={13} className="text-blue-400" /> Retread vs New Distribution
-                      </p>
-                      <div className="h-52">
-                        <Doughnut data={overviewCharts.retreadVsNew} options={DOUGHNUT_OPTS} />
+                    <Panel icon={Layers} title="Retread and new tyres">
+                      <div className="h-56" role="img" aria-label={`${enriched.length} retread and ${newRecords.length} new tyres`}>
+                        <Doughnut data={charts.retreadVsNew} options={DOUGHNUT_OPTS} />
                       </div>
-                    </div>
+                    </Panel>
                   </div>
 
-                  {/* Brand table */}
-                  <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
-                    <div className="px-4 py-3 border-b border-[var(--input-border)] flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Award className="text-yellow-400" size={16} />
-                        <h2 className="font-semibold text-[var(--text-secondary)] text-sm">Retread Performance by Brand</h2>
+                  {charts.cycleBar.labels.length > 0 && (
+                    <Panel icon={Layers} title="Casings by retread cycle depth" right="cycle 3 or deeper carries more blow-out risk">
+                      <div className="h-48" role="img" aria-label="Casings by retread cycle depth">
+                        <Bar data={charts.cycleBar} options={{ ...CHART_OPTS, plugins: { ...CHART_OPTS.plugins, legend: { display: false } } }} />
                       </div>
-                      <span className="text-[var(--text-dim)] text-xs">{brandSummary.length} brands</span>
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b border-[var(--input-border)] text-[var(--text-muted)] text-xs">
-                            <th className="px-4 py-3 text-left">Brand</th>
-                            <th className="px-4 py-3 text-center">Count</th>
-                            <th className="px-4 py-3 text-center">Avg CPK</th>
-                            <th className="px-4 py-3 text-center">Avg Life (km)</th>
-                            <th className="px-4 py-3 text-center">Success Rate</th>
-                            <th className="px-4 py-3 text-center">Action</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {brandSummary.map((b, i) => (
-                            <motion.tr
-                              key={b.brand}
-                              initial={{ opacity: 0 }}
-                              animate={{ opacity: 1 }}
-                              transition={{ delay: i * 0.03 }}
-                              className="border-b border-gray-800/60 hover:bg-gray-800/40 transition"
-                            >
-                              <td className="px-4 py-3 font-medium text-[var(--text-secondary)]">{b.brand}</td>
-                              <td className="px-4 py-3 text-center text-[var(--text-secondary)]">{b.count}</td>
-                              <td className="px-4 py-3 text-center text-purple-400 font-mono text-xs">
-                                {fmtCpk(b.avgCpk, activeCurrency)}
-                              </td>
-                              <td className="px-4 py-3 text-center text-[var(--text-secondary)]">
-                                {b.avgLife != null ? b.avgLife.toLocaleString() : 'N/A'}
-                              </td>
-                              <td className="px-4 py-3 text-center">
-                                {b.successRate != null ? (
-                                  <span className={`font-semibold text-sm ${b.successRate >= 80 ? 'text-green-400' : b.successRate >= 60 ? 'text-yellow-400' : 'text-red-400'}`}>
-                                    {b.successRate}%
-                                  </span>
-                                ) : <span className="text-[var(--text-dim)]">N/A</span>}
-                              </td>
-                              <td className="px-4 py-3 text-center">
-                                <button
-                                  onClick={() => { setFilterBrand(b.brand); setActiveTab('Lifecycle') }}
-                                  className="flex items-center gap-1 px-2 py-1 bg-purple-900/30 hover:bg-purple-900/60 border border-purple-700/50 rounded text-purple-400 text-xs transition mx-auto"
-                                >
-                                  View <ChevronRight size={11} />
-                                </button>
-                              </td>
-                            </motion.tr>
-                          ))}
-                          {brandSummary.length === 0 && (
-                            <tr>
-                              <td colSpan={6} className="px-4 py-10 text-center text-[var(--text-muted)]">No brand data available</td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                    {/* Summary stats */}
-                    {brandSummary.length > 0 && (
-                      <div className="px-4 py-3 border-t border-[var(--input-border)] flex flex-wrap gap-4 text-xs text-[var(--text-muted)]">
-                        {(() => {
-                          const topBrand = [...brandSummary].filter(b => b.successRate != null).sort((a, b) => (b.successRate ?? 0) - (a.successRate ?? 0))[0]
-                          const bestSize = (() => {
-                            const sizeMap = {}
-                            enriched.filter(t => t.km_life && t.size).forEach(t => {
-                              if (!sizeMap[t.size]) sizeMap[t.size] = []
-                              sizeMap[t.size].push(t.km_life)
-                            })
-                            let best = null, bestAvg = 0
-                            Object.entries(sizeMap).forEach(([sz, vals]) => {
-                              const avg = vals.reduce((s, v) => s + v, 0) / vals.length
-                              if (avg > bestAvg) { bestAvg = avg; best = sz }
-                            })
-                            return best
-                          })()
-                          return (
-                            <>
-                              {topBrand && <span>Top retread brand: <span className="text-[var(--text-secondary)] font-semibold">{topBrand.brand}</span> ({topBrand.successRate}% success)</span>}
-                              {bestSize && <span>Best performing size: <span className="text-[var(--text-secondary)] font-mono font-semibold">{bestSize}</span></span>}
-                            </>
-                          )
-                        })()}
-                      </div>
+                    </Panel>
+                  )}
+
+                  <Panel
+                    icon={Award}
+                    title="Retread performance by brand"
+                    right={`${brandSummary.length} brands`}
+                    footer={(topBrand || topSize) && (
+                      <span className="flex flex-wrap gap-4">
+                        {topBrand && <span>Top retread brand: <strong className="text-[var(--text-secondary)]">{topBrand.brand}</strong> ({topBrand.successRate}% success)</span>}
+                        {topSize && <span>Longest-lived size: <strong className="text-[var(--text-secondary)] font-mono">{topSize}</strong></span>}
+                      </span>
                     )}
-                  </div>
+                  >
+                    <EnterpriseTable
+                      columns={brandColumns}
+                      data={brandSummary}
+                      getRowId={(r) => r.brand}
+                      enableColumnFilters={false}
+                      searchPlaceholder="Search brands"
+                      exportFileName={reportFileName('TyrePulse Retread Brands', reportDateLabel())}
+                      reportMeta={{ ...reportMeta, title: 'Retread performance by brand' }}
+                      initialPageSize={25}
+                      emptyMessage="No brand data available"
+                    />
+                  </Panel>
                 </>
               )}
             </div>
           )}
 
-          {/* ── Tab: Vendor Analysis ── */}
           {activeTab === 'Vendor Analysis' && (
             <div className="space-y-5">
-              {vendorData.vendors.length === 0 ? (
-                <EmptyState icon={Building2} title="No vendor data available" sub="Vendor analysis requires retread tyre records with brand information" />
+              {vendors.length === 0 ? (
+                <EmptyBlock icon={Building2} title="No vendor data available" sub="Vendor analysis needs retread records that carry a brand." />
               ) : (
                 <>
-                  {/* Vendor table */}
-                  <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
-                    <div className="px-4 py-3 border-b border-[var(--input-border)] flex items-center gap-2">
-                      <Star className="text-yellow-400" size={16} />
-                      <h2 className="font-semibold text-[var(--text-secondary)] text-sm">Retread Vendor / Brand Scorecard</h2>
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b border-[var(--input-border)] text-[var(--text-muted)] text-xs">
-                            <th className="px-4 py-3 text-left">Vendor / Brand</th>
-                            <th className="px-4 py-3 text-center">Total Retreads</th>
-                            <th className="px-4 py-3 text-center">Avg CPK</th>
-                            <th className="px-4 py-3 text-center">Avg Life (km)</th>
-                            <th className="px-4 py-3 text-center">Success Rate</th>
-                            <th className="px-4 py-3 text-center">Failure Rate</th>
-                            <th className="px-4 py-3 text-center">Savings vs New</th>
-                            <th className="px-4 py-3 text-center">Score</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {vendorData.vendors.map((v, i) => (
-                            <motion.tr
-                              key={v.brand}
-                              initial={{ opacity: 0 }}
-                              animate={{ opacity: 1 }}
-                              transition={{ delay: i * 0.03 }}
-                              className={`border-b border-gray-800/60 hover:bg-gray-800/40 transition ${v.score < 40 ? 'bg-red-900/10' : ''}`}
-                            >
-                              <td className="px-4 py-3 font-medium text-[var(--text-secondary)]">
-                                <div className="flex items-center gap-2">
-                                  {v.score < 40 && <AlertTriangle className="text-red-400" size={12} />}
-                                  {v.brand}
-                                </div>
-                              </td>
-                              <td className="px-4 py-3 text-center text-[var(--text-secondary)]">{v.count}</td>
-                              <td className="px-4 py-3 text-center text-purple-400 font-mono text-xs">
-                                {fmtCpk(v.avgCpk, activeCurrency)}
-                              </td>
-                              <td className="px-4 py-3 text-center text-[var(--text-secondary)]">
-                                {v.avgLife != null ? v.avgLife.toLocaleString() : 'N/A'}
-                              </td>
-                              <td className="px-4 py-3 text-center">
-                                {v.successRate != null
-                                  ? <span className={`font-semibold ${v.successRate >= 80 ? 'text-green-400' : v.successRate >= 60 ? 'text-yellow-400' : 'text-red-400'}`}>{v.successRate}%</span>
-                                  : <span className="text-[var(--text-dim)]">N/A</span>}
-                              </td>
-                              <td className="px-4 py-3 text-center">
-                                {v.failureRate != null
-                                  ? <span className={`font-semibold ${v.failureRate > 30 ? 'text-red-400' : v.failureRate > 15 ? 'text-yellow-400' : 'text-green-400'}`}>
-                                      {v.failureRate.toFixed(0)}%
-                                    </span>
-                                  : <span className="text-[var(--text-dim)]">N/A</span>}
-                              </td>
-                              <td className="px-4 py-3 text-center">
-                                {v.savingsVsNew != null ? (
-                                  <span className={`text-xs font-semibold ${v.savingsVsNew > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                    {v.savingsVsNew > 0 ? '+' : ''}{fmtCurrency(v.savingsVsNew, activeCurrency)}
-                                  </span>
-                                ) : <span className="text-[var(--text-dim)] text-xs">N/A</span>}
-                              </td>
-                              <td className="px-4 py-3 text-center">
-                                <ScoreBadge score={v.score} />
-                              </td>
-                            </motion.tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                    <div className="px-4 py-2 border-t border-[var(--input-border)] text-xs text-[var(--text-muted)]">
-                      Score = CPK efficiency (40%) + success rate (40%) + avg life (20%) · below 40 flagged
-                    </div>
-                  </div>
+                  <Panel
+                    icon={Star}
+                    title="Retread vendor and brand scorecard"
+                    footer="Score = CPK efficiency (40%) + success rate (40%) + average life (20%), scaled against this fleet. Below 40 is flagged. A missing metric scores a neutral 50."
+                  >
+                    <EnterpriseTable
+                      columns={vendorColumns}
+                      data={vendors}
+                      getRowId={(r) => r.brand}
+                      enableColumnFilters={false}
+                      searchPlaceholder="Search vendors"
+                      exportFileName={reportFileName('TyrePulse Retread Vendor Scorecard', reportDateLabel())}
+                      reportMeta={{ ...reportMeta, title: 'Retread vendor scorecard' }}
+                      emptyMessage="No vendor data available"
+                    />
+                  </Panel>
 
-                  {/* CPK Trend chart */}
-                  {vendorData.trendChart.datasets.length > 0 && (
-                    <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
-                      <p className="text-xs text-[var(--text-muted)] mb-3 font-medium flex items-center gap-1.5">
-                        <Activity size={13} className="text-purple-400" /> CPK Trend: Top 3 Vendors (Last 12 Months)
-                      </p>
-                      <div className="h-64">
-                        <Line data={vendorData.trendChart} options={CHART_OPTS} />
+                  {charts.trendChart.datasets.length > 0 && (
+                    <Panel icon={Activity} title="CPK trend, top 3 vendors, last 12 months" right="months with no measurable casing are gaps, not zero">
+                      <div className="h-64" role="img" aria-label="Monthly average CPK for the top three retread vendors">
+                        <Line data={charts.trendChart} options={CHART_OPTS} />
                       </div>
-                    </div>
+                    </Panel>
                   )}
                 </>
               )}
             </div>
           )}
 
-          {/* ── Tab: Lifecycle ── */}
           {activeTab === 'Lifecycle' && (
-            <div className="space-y-4">
-              {/* Search + filters */}
-              <div className="flex flex-col sm:flex-row gap-2">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" size={14} />
-                  <input
-                    value={search}
-                    onChange={e => setSearch(e.target.value)}
-                    placeholder="Search serial, brand, asset, size, site..."
-                    className="w-full pl-8 pr-3 py-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] placeholder-gray-500 focus:outline-none focus:border-purple-600"
-                  />
-                </div>
-                <select
-                  value={filterSite}
-                  onChange={e => setFilterSite(e.target.value)}
-                  className="px-3 py-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-purple-600"
-                >
-                  {siteOptions.map(o => <option key={o}>{o}</option>)}
-                </select>
-                <select
-                  value={filterBrand}
-                  onChange={e => setFilterBrand(e.target.value)}
-                  className="px-3 py-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-purple-600"
-                >
-                  {brandOptions.map(o => <option key={o}>{o}</option>)}
-                </select>
-                <select
-                  value={filterRisk}
-                  onChange={e => setFilterRisk(e.target.value)}
-                  className="px-3 py-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-purple-600"
-                >
-                  {riskOptions.map(o => <option key={o}>{o}</option>)}
-                </select>
-              </div>
-
-              {/* Table */}
-              <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-[var(--input-border)] text-[var(--text-muted)] text-xs">
-                        <th className="px-4 py-3 text-left">Serial</th>
-                        <th className="px-4 py-3 text-left">Brand</th>
-                        <th className="px-4 py-3 text-left">Size</th>
-                        <th className="px-4 py-3 text-left">Position</th>
-                        <th className="px-4 py-3 text-left">Asset</th>
-                        <th className="px-4 py-3 text-left">Site</th>
-                        <th className="px-4 py-3 text-center">Cycle</th>
-                        <th className="px-4 py-3 text-center">km Life</th>
-                        <th className="px-4 py-3 text-center">CPK</th>
-                        <th className="px-4 py-3 text-center">Risk</th>
-                        <th className="px-4 py-3 text-center">Status</th>
-                        <th className="px-4 py-3 text-center">Days</th>
-                        <th className="px-4 py-3 text-center">Detail</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filtered.length === 0 && (
-                        <tr>
-                          <td colSpan={13} className="px-4 py-14 text-center text-[var(--text-muted)]">
-                            <Recycle className="inline mb-2 text-[var(--text-dim)]" size={36} />
-                            <p className="mt-1">No retread tyres match current filters</p>
-                          </td>
-                        </tr>
-                      )}
-                      {filtered.map((t, i) => (
-                        <motion.tr
-                          key={t.id}
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          transition={{ delay: Math.min(i, 30) * 0.02 }}
-                          className="border-b border-gray-800/60 hover:bg-gray-800/40 transition cursor-pointer"
-                          onClick={() => setDrawer(t)}
-                        >
-                          <td className="px-4 py-3 font-mono text-purple-300 text-xs">{t.serial_number ?? '-'}</td>
-                          <td className="px-4 py-3 font-medium text-[var(--text-secondary)]">{t.brand ?? '-'}</td>
-                          <td className="px-4 py-3 text-[var(--text-muted)] font-mono text-xs">{t.size ?? '-'}</td>
-                          <td className="px-4 py-3 text-[var(--text-muted)] text-xs">{t.position ?? '-'}</td>
-                          <td className="px-4 py-3 text-[var(--text-muted)] text-xs">{t.asset_no ?? '-'}</td>
-                          <td className="px-4 py-3 text-[var(--text-muted)] text-xs">{t.site ?? '-'}</td>
-                          <td className="px-4 py-3 text-center text-xs">
-                            {t.retread_cycle != null ? (
-                              <span className={`font-semibold ${t.retread_cycle >= 3 ? 'text-red-400' : t.retread_cycle === 2 ? 'text-yellow-400' : 'text-[var(--text-secondary)]'}`}>
-                                {t.retread_cycle}×
-                              </span>
-                            ) : '-'}
-                          </td>
-                          <td className="px-4 py-3 text-center text-[var(--text-secondary)] text-xs">
-                            {t.km_life != null ? t.km_life.toLocaleString() : '-'}
-                          </td>
-                          <td className="px-4 py-3 text-center font-mono text-purple-400 text-xs">
-                            {fmtCpk(t.cpk, activeCurrency)}
-                          </td>
-                          <td className="px-4 py-3 text-center">{riskBadge(t.risk_level)}</td>
-                          <td className="px-4 py-3 text-center">{statusBadge(t.status)}</td>
-                          <td className="px-4 py-3 text-center text-[var(--text-muted)] text-xs">
-                            {t.days_in_service != null ? `${t.days_in_service}d` : '-'}
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <button
-                              onClick={e => { e.stopPropagation(); setDrawer(t) }}
-                              className="p-1 text-[var(--text-muted)] hover:text-purple-400 transition"
-                            >
-                              <ChevronRight size={14} />
-                            </button>
-                          </td>
-                        </motion.tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="px-4 py-2 border-t border-[var(--input-border)] text-xs text-[var(--text-muted)]">
-                  {filtered.length} of {enriched.length} retread tyres
-                </div>
-              </div>
-            </div>
+            <Panel icon={Recycle} title="Retread casing lifecycle" right={`${filtered.length.toLocaleString()} of ${enriched.length.toLocaleString()} casings`}>
+              {enriched.length === 0 ? (
+                <EmptyBlock title="No retread casings recorded" />
+              ) : (
+                <EnterpriseTable
+                  columns={lifecycleColumns}
+                  data={filtered}
+                  getRowId={(r) => String(r.id)}
+                  enableGlobalFilter={false}
+                  enableColumnFilters={false}
+                  enableExport={false}
+                  viewKey="retread-lifecycle"
+                  onRowClick={(r) => setDrawer(r)}
+                  emptyMessage={filtersActive ? 'No retread casings match the current filters' : 'No retread casings recorded'}
+                />
+              )}
+              <p className="text-xs text-[var(--text-dim)] mt-2">Select a row to open the casing detail and its approval. The PDF and Excel buttons export exactly these filtered casings.</p>
+            </Panel>
           )}
 
-          {/* ── Tab: ROI Calculator ── */}
           {activeTab === 'ROI Calculator' && (
             <div className="space-y-5">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                {/* Input form */}
-                <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
-                  <div className="flex items-center gap-2 mb-5">
-                    <Target className="text-purple-400" size={18} />
-                    <h2 className="font-semibold text-[var(--text-secondary)]">ROI Calculator Inputs</h2>
-                  </div>
-                  <div className="space-y-4">
+                <Panel icon={Target} title="ROI inputs">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-1">
                     {[
-                      { label: `Cost of New Tyre (${activeCurrency})`, key: 'newCost', help: 'Average purchase price per new tyre' },
-                      { label: `Cost of Retread (${activeCurrency})`, key: 'retreadCost', help: 'Average retread cost per tyre' },
-                      { label: 'Expected Retread Life (km)', key: 'retreadLifeKm', help: 'Typical km lifespan of a retread tyre' },
-                      { label: 'Expected New Tyre Life (km)', key: 'newLifeKm', help: 'Typical km lifespan of a new tyre' },
-                      { label: 'Fleet Size (retread tyres)', key: 'fleetSize', help: 'Number of retread tyres in fleet for annual projection' },
+                      { label: `Cost of new tyre (${activeCurrency})`, key: 'newCost', help: 'Average purchase price per new tyre' },
+                      { label: `Cost of retread (${activeCurrency})`, key: 'retreadCost', help: 'Average retread cost per casing' },
+                      { label: 'Expected retread life (km)', key: 'retreadLifeKm', help: 'Typical km a retread runs' },
+                      { label: 'Expected new tyre life (km)', key: 'newLifeKm', help: 'Typical km a new tyre runs' },
+                      { label: 'Fleet size (tyre positions)', key: 'fleetSize', help: 'Positions running retreads' },
+                      { label: 'Annual km per position', key: 'annualKm', help: 'Distance each position runs per year' },
                     ].map(({ label, key, help }) => (
                       <div key={key}>
-                        <label className="block text-xs text-[var(--text-muted)] mb-1">{label}</label>
+                        <label htmlFor={`roi-${key}`} className="block text-xs text-[var(--text-muted)] mb-1">{label}</label>
                         <input
+                          id={`roi-${key}`}
                           type="number"
+                          inputMode="decimal"
                           min={0}
                           value={roi[key]}
                           onChange={e => setRoi(r => ({ ...r, [key]: e.target.value }))}
-                          className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-purple-600"
+                          aria-describedby={`roi-${key}-help`}
+                          className={`${SELECT} w-full`}
                         />
-                        <p className="text-[var(--text-dim)] text-xs mt-0.5">{help}</p>
+                        <p id={`roi-${key}-help`} className="text-[var(--text-dim)] text-xs mt-0.5">{help}</p>
                       </div>
                     ))}
                   </div>
-                </div>
+                  {kpis.retreadCpk != null && (
+                    <p className="text-xs text-[var(--text-muted)] mt-3 px-1">
+                      For reference, this fleet measures retread CPK {fmtCpk(kpis.retreadCpk, activeCurrency)} and new-tyre CPK {fmtCpk(kpis.newCpk, activeCurrency)}.
+                    </p>
+                  )}
+                </Panel>
 
-                {/* Results */}
                 <div className="space-y-4">
-                  <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
-                    <div className="flex items-center gap-2 mb-4">
-                      <Zap className="text-yellow-400" size={18} />
-                      <h2 className="font-semibold text-[var(--text-secondary)]">Analysis Results</h2>
-                    </div>
-                    <div className="space-y-3">
+                  <Panel icon={Zap} title="Results">
+                    <dl className="space-y-1 p-1">
                       {[
-                        {
-                          label: 'New Tyre CPK',
-                          value: fmtCpk(roiCalc.newCpkVal, activeCurrency),
-                          color: 'text-blue-400',
-                        },
-                        {
-                          label: 'Retread CPK',
-                          value: fmtCpk(roiCalc.rCpkVal, activeCurrency),
-                          color: 'text-purple-400',
-                        },
-                        {
-                          label: 'CPK Improvement',
-                          value: `${roiCalc.cpkImprovement.toFixed(1)}%`,
-                          color: roiCalc.cpkImprovement > 0 ? 'text-green-400' : 'text-red-400',
-                        },
-                        {
-                          label: 'Savings per Retread Tyre',
-                          value: fmtCurrency(roiCalc.savingsPerTyre, activeCurrency),
-                          color: roiCalc.savingsPerTyre > 0 ? 'text-green-400' : 'text-red-400',
-                        },
-                        {
-                          label: 'Break-even Point',
-                          value: roiCalc.breakEvenKm > 0 ? `${Math.round(roiCalc.breakEvenKm).toLocaleString()} km` : 'N/A',
-                          color: 'text-yellow-400',
-                        },
-                        {
-                          label: 'Projected Annual Fleet Savings',
-                          value: fmtCurrency(roiCalc.annualSavings, activeCurrency),
-                          color: roiCalc.annualSavings > 0 ? 'text-green-400' : 'text-red-400',
-                          large: true,
-                        },
-                      ].map(({ label, value, color, large }) => (
-                        <div key={label} className={`flex items-center justify-between py-2 border-b border-gray-800/60 last:border-0 ${large ? 'bg-gray-800/50 px-3 rounded-lg -mx-3' : ''}`}>
-                          <span className="text-[var(--text-muted)] text-sm">{label}</span>
-                          <span className={`font-bold ${large ? 'text-lg' : 'text-sm'} ${color}`}>{value}</span>
+                        { label: 'New tyre CPK', value: fmtCpk(roiCalc.newCpkVal, activeCurrency) },
+                        { label: 'Retread CPK', value: fmtCpk(roiCalc.rCpkVal, activeCurrency) },
+                        { label: 'CPK improvement', value: fmtPct(roiCalc.cpkImprovement, 1), tone: roiCalc.cpkImprovement == null ? '' : roiCalc.cpkImprovement > 0 ? 'text-green-400' : 'text-red-400' },
+                        { label: 'Savings per retread', value: fmtCurrency(roiCalc.savingsPerTyre, activeCurrency), tone: roiCalc.savingsPerTyre == null ? '' : roiCalc.savingsPerTyre > 0 ? 'text-green-400' : 'text-red-400' },
+                        { label: 'Break-even distance', value: roiCalc.breakEvenKm != null ? `${Math.round(roiCalc.breakEvenKm).toLocaleString()} km` : 'N/A' },
+                        { label: 'Projected annual fleet savings', value: fmtCurrency(roiCalc.annualSavings, activeCurrency), tone: roiCalc.annualSavings == null ? '' : roiCalc.annualSavings > 0 ? 'text-green-400' : 'text-red-400', large: true },
+                      ].map(({ label, value, tone, large }) => (
+                        <div key={label} className={`flex items-center justify-between gap-3 py-2 border-b border-[var(--input-border)] last:border-0 ${large ? 'bg-[var(--input-bg)] px-3 rounded-lg' : ''}`}>
+                          <dt className="text-[var(--text-muted)] text-sm">{label}</dt>
+                          <dd className={`font-bold tabular-nums ${large ? 'text-lg' : 'text-sm'} ${tone || 'text-[var(--text-secondary)]'}`}>{value}</dd>
                         </div>
                       ))}
-                    </div>
-                  </div>
+                    </dl>
+                  </Panel>
 
-                  {/* Notes */}
-                  <div className="bg-blue-900/20 border border-blue-700/40 rounded-xl p-4 flex gap-3">
-                    <Info className="text-blue-400 shrink-0 mt-0.5" size={16} />
-                    <p className="text-blue-300 text-xs leading-relaxed">
-                      Annual projection assumes fleet tyres complete 100,000 km per year.
-                      Savings improve when retread CPK is lower than new tyre CPK.
-                      Break-even is the km at which retread total cost equals new tyre total cost.
+                  <div className="bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl p-4 flex gap-3">
+                    <Info className="text-[var(--text-muted)] shrink-0 mt-0.5" size={16} aria-hidden="true" />
+                    <p className="text-[var(--text-muted)] text-xs leading-relaxed">
+                      The annual projection uses the annual km per position you enter. Break-even is the distance a retread must run for its cost to be recovered at the new-tyre cost per km. A missing or zero input shows N/A rather than a guessed figure.
                     </p>
                   </div>
 
-                  {/* Export PDF */}
                   <button
+                    type="button"
                     onClick={handleExportRoiPdf}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 bg-purple-700 hover:bg-purple-600 rounded-lg text-sm font-semibold text-white transition"
+                    className="w-full inline-flex items-center justify-center gap-2 min-h-[44px] py-2.5 bg-[var(--accent)] hover:opacity-90 rounded-lg text-sm font-semibold text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2"
                   >
-                    <FileText size={15} /> Export ROI Analysis PDF
+                    <FileText size={15} aria-hidden="true" /> Export ROI analysis PDF
                   </button>
                 </div>
               </div>
 
-              {/* TCO Bar Chart */}
-              <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
-                <p className="text-xs text-[var(--text-muted)] mb-4 font-medium flex items-center gap-1.5">
-                  <BarChart3 size={13} className="text-purple-400" /> Total Cost of Ownership Comparison
-                </p>
-                <div className="h-64">
-                  <Bar
-                    data={roiCalc.tcoChartData}
-                    options={{
-                      ...CHART_OPTS,
-                      plugins: {
-                        ...CHART_OPTS.plugins,
-                        legend: { ...CHART_OPTS.plugins.legend, display: true },
-                      },
-                    }}
-                  />
+              <Panel icon={BarChart3} title="Cost of ownership comparison">
+                <div className="h-64" role="img" aria-label="Initial cost and cost per 100,000 km for new and retread tyres">
+                  <Bar data={roiChart} options={CHART_OPTS} />
                 </div>
-              </div>
+              </Panel>
             </div>
           )}
         </>
       )}
 
-      {/* ── Detail Drawer ── */}
+      {/* ── Detail drawer ── */}
       <AnimatePresence>
         {drawer && (
           <>
@@ -1533,105 +938,96 @@ export default function RetreadManagement() {
               exit={{ opacity: 0 }}
               className="fixed inset-0 bg-black z-40"
               onClick={() => setDrawer(null)}
+              aria-hidden="true"
             />
             <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="retread-drawer-title"
               initial={{ x: '100%' }}
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'tween', duration: 0.25 }}
               className="fixed right-0 top-0 h-full w-full max-w-lg bg-[var(--surface-1)] border-l border-[var(--input-border)] z-50 flex flex-col overflow-hidden"
             >
-              {/* Drawer header */}
               <div className="p-4 border-b border-[var(--input-border)] flex items-start justify-between gap-3">
-                <div>
+                <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <Recycle className="text-purple-400" size={16} />
-                    <span className="font-bold text-[var(--text-secondary)] font-mono text-sm">{drawer.serial_number ?? 'No Serial'}</span>
+                    <Recycle className="text-[var(--text-muted)]" size={16} aria-hidden="true" />
+                    <h2 id="retread-drawer-title" className="font-bold text-[var(--text-secondary)] font-mono text-sm">{drawer.serial_number || 'No serial recorded'}</h2>
                     {riskBadge(drawer.risk_level)}
                     {statusBadge(drawer.status)}
                   </div>
-                  <p className="text-[var(--text-muted)] text-sm">{drawer.brand} - {drawer.size}</p>
+                  <p className="text-[var(--text-muted)] text-sm">{[drawer.brand, drawer.size].filter(Boolean).join(', ') || 'N/A'}</p>
                 </div>
-                <button onClick={() => setDrawer(null)} className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] shrink-0">
-                  <X size={20} />
+                <button
+                  type="button"
+                  onClick={() => setDrawer(null)}
+                  aria-label="Close casing detail"
+                  className="inline-flex items-center justify-center w-11 h-11 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--input-bg)] shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+                >
+                  <X size={20} aria-hidden="true" />
                 </button>
               </div>
 
-              {/* Drawer body */}
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                {/* Core info */}
                 <div className="bg-[var(--input-bg)] rounded-xl p-4">
-                  <p className="text-xs text-[var(--text-muted)] mb-3 font-semibold uppercase tracking-wider">Tyre Information</p>
-                  <div className="grid grid-cols-2 gap-3 text-sm">
+                  <p className="text-xs text-[var(--text-muted)] mb-3 font-semibold uppercase tracking-wider">Tyre information</p>
+                  <dl className="grid grid-cols-2 gap-3 text-sm">
                     {[
-                      { label: 'Brand', value: drawer.brand },
-                      { label: 'Size', value: drawer.size },
-                      { label: 'Position', value: drawer.position },
-                      { label: 'Asset No', value: drawer.asset_no },
-                      { label: 'Site', value: drawer.site },
-                      { label: 'Country', value: drawer.country },
-                      { label: 'Category', value: drawer.category },
-                      { label: 'Retread Cycle', value: drawer.retread_cycle != null ? `${drawer.retread_cycle}×` : null },
-                      { label: 'Tread Depth', value: drawer.tread_depth != null ? `${drawer.tread_depth} mm` : null },
-                    ].map(({ label, value }) => (
+                      ['Brand', drawer.brand], ['Size', drawer.size], ['Position', drawer.position],
+                      ['Asset no', drawer.asset_no], ['Site', drawer.site], ['Country', drawer.country],
+                      ['Category', drawer.category],
+                      ['Retread cycle', drawer.retread_cycle != null ? `${drawer.retread_cycle}x` : null],
+                      ['Tread depth', drawer.tread_depth != null ? `${drawer.tread_depth} mm` : null],
+                    ].map(([label, value]) => (
                       <div key={label}>
-                        <p className="text-[var(--text-muted)] text-xs">{label}</p>
-                        <p className="text-[var(--text-secondary)] font-medium text-sm mt-0.5">{value ?? '-'}</p>
+                        <dt className="text-[var(--text-muted)] text-xs">{label}</dt>
+                        <dd className="text-[var(--text-secondary)] font-medium text-sm mt-0.5">{value ?? 'N/A'}</dd>
                       </div>
                     ))}
-                  </div>
+                  </dl>
                 </div>
 
-                {/* Lifecycle */}
                 <div className="bg-[var(--input-bg)] rounded-xl p-4">
-                  <p className="text-xs text-[var(--text-muted)] mb-3 font-semibold uppercase tracking-wider">Lifecycle &amp; Cost</p>
-                  <div className="grid grid-cols-2 gap-3 text-sm">
+                  <p className="text-xs text-[var(--text-muted)] mb-3 font-semibold uppercase tracking-wider">Lifecycle and cost</p>
+                  <dl className="grid grid-cols-2 gap-3 text-sm">
                     {[
-                      { label: 'Issue Date', value: drawer.issue_date },
-                      { label: 'Removal Date', value: drawer.removal_date ?? (drawer.km_at_removal ? '-' : 'Still Fitted') },
-                      { label: 'km at Fitment', value: drawer.km_at_fitment?.toLocaleString() },
-                      { label: 'km at Removal', value: drawer.km_at_removal?.toLocaleString() },
-                      { label: 'km Life', value: drawer.km_life != null ? `${drawer.km_life.toLocaleString()} km` : null },
-                      { label: 'Days in Service', value: drawer.days_in_service != null ? `${drawer.days_in_service} days` : null },
-                      { label: 'Cost per Tyre', value: drawer.cost_per_tyre != null ? fmtCurrency(drawer.cost_per_tyre, activeCurrency) : null },
-                      { label: 'CPK', value: fmtCpk(drawer.cpk, activeCurrency) },
-                    ].map(({ label, value }) => (
+                      ['Issue date', drawer.issue_date],
+                      ['Removal date', drawer.removal_date ?? (drawer.status === 'Removed' ? 'Not recorded' : 'Still fitted')],
+                      ['km at fitment', drawer.km_at_fitment != null ? Number(drawer.km_at_fitment).toLocaleString() : null],
+                      ['km at removal', drawer.km_at_removal != null ? Number(drawer.km_at_removal).toLocaleString() : null],
+                      ['km life', drawer.km_life != null ? `${drawer.km_life.toLocaleString()} km` : null],
+                      ['Days in service', drawer.days_in_service != null ? `${drawer.days_in_service} days` : null],
+                      ['Cost per tyre', drawer.cost_per_tyre != null ? fmtCurrency(Number(drawer.cost_per_tyre), activeCurrency) : null],
+                      ['CPK', fmtCpk(drawer.cpk, activeCurrency)],
+                    ].map(([label, value]) => (
                       <div key={label}>
-                        <p className="text-[var(--text-muted)] text-xs">{label}</p>
-                        <p className="text-[var(--text-secondary)] font-medium text-sm mt-0.5">{value ?? '-'}</p>
+                        <dt className="text-[var(--text-muted)] text-xs">{label}</dt>
+                        <dd className="text-[var(--text-secondary)] font-medium text-sm mt-0.5 tabular-nums">{value ?? 'N/A'}</dd>
                       </div>
                     ))}
-                  </div>
+                  </dl>
                 </div>
 
-                {/* Cost comparison vs new */}
                 {kpis.newCpk != null && drawer.cpk != null && (
-                  <div className="bg-purple-900/20 border border-purple-700/40 rounded-xl p-4">
-                    <p className="text-xs text-[var(--text-muted)] mb-3 font-semibold uppercase tracking-wider">Cost Comparison vs New Tyre Avg</p>
-                    <div className="space-y-2">
-                      {[
-                        { label: 'This Retread CPK', value: fmtCpk(drawer.cpk, activeCurrency), color: 'text-purple-400' },
-                        { label: 'Fleet New Tyre Avg CPK', value: fmtCpk(kpis.newCpk, activeCurrency), color: 'text-blue-400' },
-                        {
-                          label: 'CPK Difference',
-                          value: drawer.cpk < kpis.newCpk
+                  <div className="bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl p-4">
+                    <p className="text-xs text-[var(--text-muted)] mb-3 font-semibold uppercase tracking-wider">Against the fleet new-tyre average</p>
+                    <dl className="space-y-2 text-sm">
+                      <div className="flex justify-between"><dt className="text-[var(--text-muted)]">This retread CPK</dt><dd className="font-bold tabular-nums">{fmtCpk(drawer.cpk, activeCurrency)}</dd></div>
+                      <div className="flex justify-between"><dt className="text-[var(--text-muted)]">Fleet new-tyre CPK</dt><dd className="font-bold tabular-nums">{fmtCpk(kpis.newCpk, activeCurrency)}</dd></div>
+                      <div className="flex justify-between">
+                        <dt className="text-[var(--text-muted)]">Difference</dt>
+                        <dd className={`font-bold tabular-nums ${drawer.cpk < kpis.newCpk ? 'text-green-400' : 'text-red-400'}`}>
+                          {drawer.cpk < kpis.newCpk
                             ? `${fmtCpk(kpis.newCpk - drawer.cpk, activeCurrency)} cheaper`
-                            : `${fmtCpk(drawer.cpk - kpis.newCpk, activeCurrency)} more expensive`,
-                          color: drawer.cpk < kpis.newCpk ? 'text-green-400' : 'text-red-400',
-                        },
-                      ].map(({ label, value, color }) => (
-                        <div key={label} className="flex justify-between items-center text-sm">
-                          <span className="text-[var(--text-muted)]">{label}</span>
-                          <span className={`font-bold ${color}`}>{value}</span>
-                        </div>
-                      ))}
-                    </div>
+                            : `${fmtCpk(drawer.cpk - kpis.newCpk, activeCurrency)} dearer`}
+                        </dd>
+                      </div>
+                    </dl>
                   </div>
                 )}
 
-                {/* Retread Approval — Approval & Workflow Engine.
-                    Retread send-outs / vendor decisions warrant sign-off.
-                    Smart rule: retread_cost > threshold routes to Fleet Manager. */}
                 <EntityApprovalPanel
                   entityType="retread"
                   entityId={drawer.id}
@@ -1648,29 +1044,24 @@ export default function RetreadManagement() {
                 />
 
                 {wfLocked && (
-                  <div className="flex items-center gap-1.5 text-xs text-[var(--accent)] bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2">
-                    <Lock size={12} />
+                  <div role="status" className="flex items-center gap-1.5 text-xs text-[var(--accent)] bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2">
+                    <Lock size={12} aria-hidden="true" />
                     Locked, in approval. This casing's export is disabled until the workflow completes.
                   </div>
                 )}
               </div>
 
-              {/* Drawer footer */}
               <div className="p-3 border-t border-[var(--input-border)] flex justify-end gap-2">
                 <button
+                  type="button"
                   onClick={() => handleExportCasing(drawer)}
                   disabled={wfLocked}
                   title={wfLocked ? 'Locked, in approval' : 'Export casing record'}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-purple-700 hover:bg-purple-600 rounded-lg text-sm font-semibold text-white transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-purple-700"
+                  className="inline-flex items-center gap-1.5 min-h-[44px] px-4 py-2 bg-[var(--accent)] hover:opacity-90 rounded-lg text-sm font-semibold text-white transition disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2"
                 >
-                  {wfLocked ? <Lock size={14} /> : <FileText size={14} />} Export Casing
+                  {wfLocked ? <Lock size={14} aria-hidden="true" /> : <FileText size={14} aria-hidden="true" />} Export Casing
                 </button>
-                <button
-                  onClick={() => setDrawer(null)}
-                  className="px-4 py-2 bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] rounded-lg text-sm text-[var(--text-secondary)] transition"
-                >
-                  Close
-                </button>
+                <button type="button" onClick={() => setDrawer(null)} className={BTN}>Close</button>
               </div>
             </motion.div>
           </>

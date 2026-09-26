@@ -139,8 +139,47 @@ describe('systemLogs.logSystemEvent', () => {
     expect(h.state.inserted).toBeNull()
   })
 
-  it('never throws and returns {ok:false} on an insert error', async () => {
+  it('does not call the RPC when the direct insert succeeds', async () => {
+    h.state.tableResult = { data: null, error: null }
+    await svc.logSystemEvent({ message: 'boom' })
+    expect(h.state.lastRpc).toBeNull()
+  })
+
+  it('falls back to log_client_error when the direct insert is refused (signed out)', async () => {
+    h.state.tableResult = { data: null, error: { message: 'permission denied', code: '42501' } }
+    h.state.rpc = { data: true, error: null }
+    const res = await svc.logSystemEvent({
+      module_id: 'auth', severity: 'warning', source: 'login', message: 'boom',
+      detail: { step: 1 }, reference_id: 'ERR-1', url: 'https://x/login', user_email: 'spoof@x',
+    })
+    expect(res).toEqual({ ok: true })
+    expect(h.state.lastRpc.name).toBe('log_client_error')
+    expect(h.state.lastRpc.args).toEqual({
+      p_severity: 'warning', p_source: 'login', p_message: 'boom', p_module_id: 'auth',
+      p_detail: { step: 1 }, p_reference_id: 'ERR-1', p_url: 'https://x/login',
+    })
+    // the server derives identity; a caller-supplied email is never forwarded
+    expect(JSON.stringify(h.state.lastRpc.args)).not.toContain('spoof@x')
+  })
+
+  it('sends a non-object detail to the RPC as null and caps the message', async () => {
     h.state.tableResult = { data: null, error: { message: 'denied', code: '42501' } }
+    h.state.rpc = { data: true, error: null }
+    await svc.logSystemEvent({ message: 'x'.repeat(5000), detail: [1, 2] })
+    expect(h.state.lastRpc.args.p_detail).toBeNull()
+    expect(h.state.lastRpc.args.p_message).toHaveLength(2000)
+  })
+
+  it('never throws and returns {ok:false} when both the insert and the RPC fail', async () => {
+    h.state.tableResult = { data: null, error: { message: 'denied', code: '42501' } }
+    h.state.rpc = { data: null, error: { message: 'boom' } }
+    const res = await svc.logSystemEvent({ message: 'boom' })
+    expect(res).toEqual({ ok: false })
+  })
+
+  it('returns {ok:false} when the RPC rate-limits (returns false)', async () => {
+    h.state.tableResult = { data: null, error: { message: 'denied', code: '42501' } }
+    h.state.rpc = { data: false, error: null }
     const res = await svc.logSystemEvent({ message: 'boom' })
     expect(res).toEqual({ ok: false })
   })

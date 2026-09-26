@@ -117,6 +117,8 @@ export async function resolveAllSystemLogs({ module, severity } = {}) {
  * Fire-and-forget error/event reporter. Best-effort INSERT into system_logs so
  * the app can self-report failures from anywhere without ever throwing. The
  * organisation_id / user_id come from DB defaults (do NOT pass them here).
+ * When the direct insert is refused (signed out: anon has no table grant) it
+ * falls back to the `log_client_error` RPC so pre-login errors are captured.
  *
  * @param {object}  [event]
  * @param {string}  [event.module_id]
@@ -153,7 +155,31 @@ export async function logSystemEvent({
       user_email: user_email || null,
     }
     const { error } = await supabase.from('system_logs').insert(payload)
-    if (error) return { ok: false }
+    if (!error) return { ok: true }
+    // The direct insert is refused before sign-in (anon holds no table grant,
+    // V281) and on any RLS denial. Fall back to the narrowly-scoped
+    // log_client_error RPC, which caps lengths, whitelists severity, rate
+    // limits and derives org/user server-side (user_email is not accepted).
+    return await logViaRpc(payload)
+  } catch {
+    return { ok: false }
+  }
+}
+
+/** Fallback path through the log_client_error RPC. Never throws. */
+async function logViaRpc(payload) {
+  try {
+    const detail = payload.detail
+    const { data, error } = await supabase.rpc('log_client_error', {
+      p_severity: payload.severity,
+      p_source: payload.source,
+      p_message: String(payload.message).slice(0, 2000),
+      p_module_id: payload.module_id,
+      p_detail: detail && typeof detail === 'object' && !Array.isArray(detail) ? detail : null,
+      p_reference_id: payload.reference_id,
+      p_url: payload.url,
+    })
+    if (error || data !== true) return { ok: false }
     return { ok: true }
   } catch {
     return { ok: false }

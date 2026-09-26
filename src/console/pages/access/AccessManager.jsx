@@ -43,6 +43,7 @@ import { listGlobalPermissions, saveModulePermissions, saveAccessControlMatrix }
 import { listProfiles } from '../../../lib/api/users'
 import { listCustomRoles } from '../../../lib/api/customRoles'
 import MobileAccessPanel from './MobileAccessPanel'
+import { Collapsible } from '../accessKit'
 import {
   listUserGrants, revokeUserAccessGrant,
   setUserAccessGrantScoped, mobileGrantKey, parseGrantScope,
@@ -1254,7 +1255,8 @@ export default function AccessManager() {
           is how a mobile module is actually closed for a role or a user: writes land
           on `mobile:<mobileKey>` rows the phone app enforces. Self-contained load/save. */}
       {!loading && !loadError && (mode === 'role' || selectedUser) && (
-        <div className="pt-2">
+        <Collapsible icon={Smartphone} title="Mobile app access" keepMounted
+          subtitle={`Open or close the phone app's own modules for this ${mode === 'role' ? 'role' : 'user'}. Saved separately from the web modules above.`}>
           <MobileAccessPanel
             mode={mode}
             role={selectedRole}
@@ -1262,7 +1264,7 @@ export default function AccessManager() {
             canWriteRole={canWriteRole}
             canWriteUser={canWriteUser}
           />
-        </div>
+        </Collapsible>
       )}
 
       {/* Save bar */}

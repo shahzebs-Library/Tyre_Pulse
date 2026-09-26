@@ -14,18 +14,19 @@
  *   was clipped on the last rows. It now opens as a fixed-position menu.
  */
 import { useEffect, useMemo, useState, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Users, Lock, Unlock, CheckCircle, RefreshCw, Edit2, Key, AlertTriangle,
   Shield, MoreVertical, UserCheck, UserX, Globe, CheckSquare, Square, UserCog,
   ShieldCheck, MapPin, Plus, Smartphone, Monitor, UserPlus, PieChart, LogOut,
-  FileSpreadsheet, FileText,
+  FileSpreadsheet, FileText, BarChart3,
 } from 'lucide-react'
 import {
-  Panel, PanelHeader, Note, StatTile, ProportionBar, Badge, Code, Btn, SearchInput, Select, Toolbar,
+  Panel, PanelHeader, Note, StatTile, ProportionBar, Badge, Code, Btn, SearchInput, Select, Toolbar, Segmented,
   Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, Modal,
 } from '../components/ui'
-import { TrendChart, ShareChart } from '../components/ui/charts'
+import { TrendChart, ShareChart, BarsChart } from '../components/ui/charts'
+import { PageHeader, useUrlTab, useRefreshStamp, Pager, Drawer, DetailList, AttentionList } from './accessKit'
 import { dailySeries, topShare } from '../../lib/consoleCharts'
 import { supabase } from '../../lib/supabase'
 import { fetchAllPages } from '../../lib/fetchAll'
@@ -67,6 +68,20 @@ const CAPABILITIES = [
 
 const TREND_DAYS = 30
 const STATS_MAX = 20000
+const TABS = ['register', 'insights']
+const DORMANT_DAYS = 90
+
+/**
+ * True when a non-admin user has no country or no site scope at all (V309):
+ * they are approved but every scoped read returns nothing, which reads to them
+ * like an empty app. Admins and super admins see everything, so never count.
+ */
+export function hasNoScope(u) {
+  if (!u || u.is_super_admin || u.role === 'Admin') return false
+  const countries = (Array.isArray(u.country) ? u.country : [u.country]).map((c) => String(c ?? '').trim()).filter(Boolean)
+  const sites = Array.isArray(u.sites) ? u.sites.filter(Boolean) : []
+  return countries.length === 0 || sites.length === 0
+}
 
 /** approved | pending | locked, the same buckets the status filter uses. */
 export function userStatus(u) {
@@ -108,13 +123,18 @@ export function userCountryLabel(u) {
 export default function ConsoleUsers() {
   const { logAction, activeOrg } = useConsoleAuth()
   const navigate = useNavigate()
+  const [params] = useSearchParams()
+  const [tab, setTab] = useUrlTab(TABS, 'register')
+  const { refreshedAt, stamp } = useRefreshStamp()
+  const [detailUser, setDetailUser] = useState(null)
   const [users, setUsers]     = useState([])
   const [total, setTotal]     = useState(0)
   const [loading, setLoading] = useState(true)
   const [search, setSearch]   = useState('')
   const [filterRole, setFilterRole]     = useState('')
   const [filterStatus, setFilterStatus] = useState('')
-  const [filterOrg, setFilterOrg]       = useState('')
+  // ?org=<id> (from Organisations) opens the register scoped to that tenant.
+  const [filterOrg, setFilterOrg]       = useState(() => params.get('org') || '')
   const [orgs, setOrgs]       = useState([])
   const [roles, setRoles]     = useState(ACCESS_ROLES)
   const [page, setPage]       = useState(0)
@@ -204,10 +224,11 @@ export default function ConsoleUsers() {
       setLoadError(null)
       setUsers(data ?? [])
       setTotal(count ?? 0)
+      stamp()
     }
     setSelected(new Set())
     setLoading(false)
-  }, [buildQuery, page])
+  }, [buildQuery, page, stamp])
 
   useEffect(() => { load() }, [load])
 
@@ -261,7 +282,7 @@ export default function ConsoleUsers() {
       (from, to) => {
         let q = supabase
           .from('profiles')
-          .select('id, role, approved, locked, web_access, is_super_admin, created_at')
+          .select('id, role, approved, locked, web_access, is_super_admin, created_at, country, sites, last_login_at')
           .order('id')
           .range(from, to)
         if (scopeOrgId) q = q.eq('organisation_id', scopeOrgId)
@@ -661,83 +682,133 @@ export default function ConsoleUsers() {
   const closeMenu = () => { setActionMenu(null); setMenuPos(null) }
   const scopeLabel = activeOrg ? activeOrg.name : (filterOrg ? (orgs.find(o => o.id === filterOrg)?.name ?? 'Selected organisation') : 'All organisations')
 
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const statsReady = !statsLoading && !statsError
+  const noScope = useMemo(() => statRows.filter(hasNoScope).length, [statRows])
+  const dormant = useMemo(() => statRows.filter((u) => {
+    if (u.locked || !u.approved) return false
+    const t = u.last_login_at ? Date.parse(u.last_login_at) : NaN
+    return Number.isFinite(t) && Date.now() - t > DORMANT_DAYS * 86400000
+  }).length, [statRows])
+  const scopeBars = useMemo(() => {
+    const nonAdmin = statRows.filter((u) => !u.is_super_admin && u.role !== 'Admin')
+    const orgWide = nonAdmin.filter((u) => isOrgWideSites(Array.isArray(u.sites) ? u.sites : [])).length
+    const none = nonAdmin.filter(hasNoScope).length
+    return [
+      { label: 'Admins (see everything)', value: statRows.length - nonAdmin.length },
+      { label: 'All sites', value: orgWide },
+      { label: 'Specific sites', value: Math.max(0, nonAdmin.length - orgWide - none) },
+      { label: 'No country or site', value: none },
+    ]
+  }, [statRows])
+
+  const attention = []
+  if (statsReady) {
+    if (stats.pending) attention.push({ key: 'pending', tone: 'warning', title: `${stats.pending} account${stats.pending === 1 ? ' is' : 's are'} waiting for approval`,
+      detail: 'They cannot use the app until someone approves them.', action: { label: 'Show pending', onClick: () => { setFilterStatus('pending'); setPage(0); setTab('register') } } })
+    if (noScope) attention.push({ key: 'scope', tone: 'warning', title: `${noScope} user${noScope === 1 ? ' has' : 's have'} no country or no site access`,
+      detail: 'They can sign in but every scoped screen is empty. Edit each one to give a country and site scope.' })
+    if (dormant) attention.push({ key: 'dormant', tone: 'info', title: `${dormant} approved user${dormant === 1 ? ' has' : 's have'} not signed in for ${DORMANT_DAYS} days`,
+      detail: 'Dormant accounts are the usual candidates to lock in an access review.', action: { label: 'Access reviews', onClick: () => navigate('/console/access-reviews') } })
+    if (stats.locked) attention.push({ key: 'locked', tone: 'info', title: `${stats.locked} account${stats.locked === 1 ? ' is' : 's are'} locked`,
+      detail: 'Confirm each lock is still intended.', action: { label: 'Show locked', onClick: () => { setFilterStatus('locked'); setPage(0); setTab('register') } } })
+  }
+
+  const detail = detailUser ? (users.find((u) => u.id === detailUser.id) || detailUser) : null
+  const fromDrawer = (fn) => () => { setDetailUser(null); fn() }
+
   return (
     <div className="space-y-5 max-w-7xl" onClick={closeMenu}>
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2"><Users size={18} className="text-orange-400" /> Users</h1>
-          <p className="text-xs text-gray-400 mt-1">
-            Approve, lock and scope every account in {scopeLabel}. Figures cover the whole user base, not just the page shown.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Btn icon={FileSpreadsheet} onClick={() => runExport('excel')} busy={exporting === 'excel'} disabled={loading || !!loadError || total === 0}>Excel</Btn>
-          <Btn icon={FileText} onClick={() => runExport('pdf')} busy={exporting === 'pdf'} disabled={loading || !!loadError || total === 0}>PDF</Btn>
-          <Btn icon={RefreshCw} onClick={refreshAll} busy={loading || statsLoading}>Refresh</Btn>
-        </div>
-      </header>
+      <PageHeader icon={Users} title="Users"
+        purpose={`Approve, lock and scope every account in ${scopeLabel}. Figures cover the whole user base, not just the page shown.`}
+        actions={(
+          <>
+            <Btn icon={FileSpreadsheet} onClick={() => runExport('excel')} busy={exporting === 'excel'} disabled={loading || !!loadError || total === 0}>Excel</Btn>
+            <Btn icon={FileText} onClick={() => runExport('pdf')} busy={exporting === 'pdf'} disabled={loading || !!loadError || total === 0}>PDF</Btn>
+          </>
+        )}
+        refreshedAt={refreshedAt} onRefresh={refreshAll} refreshing={loading || statsLoading} />
 
       <ErrorState message={loadError} onRetry={refreshAll} />
       <ErrorState message={exportError} />
       {statsError && !loadError && <ErrorState message={statsError} onRetry={loadStats} />}
       {statsTruncated && (
         <Note icon={AlertTriangle} tone="warning">
-          The statistics cover the first {STATS_MAX.toLocaleString()} users only. The table below still pages through everyone.
+          The statistics cover the first {STATS_MAX.toLocaleString()} users only. The table still pages through everyone.
         </Note>
       )}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <StatTile label="Users" value={tileVal(stats.total)} icon={Users}
-          sub={statsLoading || statsError ? undefined : `${stats.superAdmins} super admin${stats.superAdmins === 1 ? '' : 's'}`} />
+          sub={statsLoading || statsError ? undefined : `${stats.superAdmins} super admin${stats.superAdmins === 1 ? '' : 's'}`}
+          onClick={() => { clearFilters(); setTab('register') }} />
         <StatTile label="Approved" value={tileVal(stats.approved)} tone="good" icon={UserCheck}
-          onClick={() => pickStatus('approved')} active={filterStatus === 'approved'} />
+          onClick={() => { pickStatus('approved'); setTab('register') }} active={filterStatus === 'approved'} />
         <StatTile label="Pending approval" value={tileVal(stats.pending)} tone={stats.pending ? 'warning' : 'default'} icon={AlertTriangle}
-          onClick={() => pickStatus('pending')} active={filterStatus === 'pending'} sub="Cannot use the app yet" />
+          onClick={() => { pickStatus('pending'); setTab('register') }} active={filterStatus === 'pending'} sub="Cannot use the app yet" />
         <StatTile label="Locked" value={tileVal(stats.locked)} tone={stats.locked ? 'danger' : 'default'} icon={Lock}
-          onClick={() => pickStatus('locked')} active={filterStatus === 'locked'} />
+          onClick={() => { pickStatus('locked'); setTab('register') }} active={filterStatus === 'locked'} />
         <StatTile label="Mobile only" value={tileVal(stats.mobileOnly)} icon={Smartphone} sub="Web login blocked" />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-5">
-        <Panel className="lg:col-span-2">
-          <PanelHeader icon={PieChart} title="Users by role" subtitle="Top five roles, the rest grouped as Other" />
-          {statsLoading ? <LoadingState rows={3} /> : statsError ? (
-            <EmptyState title="Not available" reason="The user base could not be read, so no breakdown is shown." />
-          ) : (
-            <>
-              <ShareChart parts={roleShare} height={150} center={{ value: stats.total, label: 'Users' }}
-                summary={roleShare.map((p) => `${p.label} ${p.value}`).join(', ')}
-                emptyText="No users in this scope." />
-              {stats.total > 0 && (
-                <div className="mt-4 space-y-1.5">
-                  <p className="text-[11px] text-gray-400">Account status</p>
-                  <ProportionBar total={stats.total} segments={[
-                    { label: 'Approved', value: stats.approved, tone: 'good' },
-                    { label: 'Pending', value: stats.pending, tone: 'warning' },
-                    { label: 'Locked', value: stats.locked, tone: 'danger' },
-                  ]} />
-                </div>
-              )}
-            </>
-          )}
-        </Panel>
-        <Panel className="lg:col-span-3">
-          <PanelHeader icon={UserPlus} title="New accounts per day"
-            subtitle={`Last ${TREND_DAYS} days, ${statsLoading || statsError ? 'N/A' : joins.total} new account${joins.total === 1 ? '' : 's'}`} />
-          {statsLoading ? <LoadingState rows={3} /> : statsError ? (
-            <EmptyState title="Not available" reason="The user base could not be read, so no trend is shown." />
-          ) : (
-            <TrendChart labels={joins.labels} series={[{ label: 'New accounts', values: joins.values }]} height={200}
-              summary={`${joins.total} accounts created in the last ${TREND_DAYS} days`}
-              emptyText="No accounts were created in the last 30 days." />
-          )}
-        </Panel>
-      </div>
+      <Segmented ariaLabel="User views" value={tab} onChange={setTab} options={[
+        { key: 'register', label: 'Register', count: loading || loadError ? null : total },
+        { key: 'insights', label: 'Insights' },
+      ]} />
 
+      {tab === 'insights' && (
+        <div role="tabpanel" aria-label="Insights" className="grid gap-4 lg:grid-cols-5">
+          <Panel className="lg:col-span-2">
+            <PanelHeader icon={PieChart} title="Users by role" subtitle="Top five roles, the rest grouped as Other" />
+            {statsLoading ? <LoadingState rows={3} /> : statsError ? (
+              <EmptyState title="Not available" reason="The user base could not be read, so no breakdown is shown." />
+            ) : (
+              <>
+                <ShareChart parts={roleShare} height={150} center={{ value: stats.total, label: 'Users' }}
+                  summary={roleShare.map((p) => `${p.label} ${p.value}`).join(', ')}
+                  emptyText="No users in this scope." />
+                {stats.total > 0 && (
+                  <div className="mt-4 space-y-1.5">
+                    <p className="text-[11px] text-gray-400">Account status</p>
+                    <ProportionBar total={stats.total} segments={[
+                      { label: 'Approved', value: stats.approved, tone: 'good' },
+                      { label: 'Pending', value: stats.pending, tone: 'warning' },
+                      { label: 'Locked', value: stats.locked, tone: 'danger' },
+                    ]} />
+                  </div>
+                )}
+              </>
+            )}
+          </Panel>
+          <Panel className="lg:col-span-3">
+            <PanelHeader icon={UserPlus} title="New accounts per day"
+              subtitle={`Last ${TREND_DAYS} days, ${statsLoading || statsError ? 'N/A' : joins.total} new account${joins.total === 1 ? '' : 's'}`} />
+            {statsLoading ? <LoadingState rows={3} /> : statsError ? (
+              <EmptyState title="Not available" reason="The user base could not be read, so no trend is shown." />
+            ) : (
+              <TrendChart labels={joins.labels} series={[{ label: 'New accounts', values: joins.values }]} height={200}
+                summary={`${joins.total} accounts created in the last ${TREND_DAYS} days`}
+                emptyText="No accounts were created in the last 30 days." />
+            )}
+          </Panel>
+          <Panel className="lg:col-span-5">
+            <PanelHeader icon={BarChart3} title="Data scope" subtitle="How much of the data each account can see, as the database enforces it" />
+            {statsLoading ? <LoadingState rows={3} /> : statsError ? (
+              <EmptyState title="Not available" reason="The user base could not be read." />
+            ) : (
+              <BarsChart bars={scopeBars} summary={scopeBars.map((b) => `${b.label} ${b.value}`).join(', ')} emptyText="No users in this scope." />
+            )}
+          </Panel>
+        </div>
+      )}
+
+      {tab === 'register' && (
+      <div role="tabpanel" aria-label="Register" className="space-y-4">
+      <AttentionList ready={statsReady} items={attention} clearText="No account is waiting, unscoped, dormant or locked." />
       <Panel flush>
         <div className="p-4 pb-3 space-y-3">
           <PanelHeader icon={Users} title="User register"
-            subtitle={loading ? 'Loading' : loadError ? 'Could not be read' : `${total.toLocaleString()} user${total === 1 ? '' : 's'} match the current filters`} />
+            subtitle={loading ? 'Loading' : loadError ? 'Could not be read' : `${total.toLocaleString()} user${total === 1 ? '' : 's'} match the current filters. Select a row for detail and actions.`} />
           <Toolbar>
             <SearchInput value={search} onChange={(v) => { setSearch(v); setPage(0) }}
               placeholder="Search name, email, site" className="flex-1 min-w-48" />
@@ -788,7 +859,7 @@ export default function ConsoleUsers() {
                 <Th sortKey="role" sort={sort} onSort={onSort}>Role</Th>
                 <Th>Countries</Th>
                 <Th>Sites</Th>
-                <Th sortKey="site" sort={sort} onSort={onSort}>Site</Th>
+                <Th sortKey="site" sort={sort} onSort={onSort}>Home site</Th>
                 <Th>Status</Th>
                 <Th sortKey="created_at" sort={sort} onSort={onSort}>Joined</Th>
                 <Th align="right">Actions</Th>
@@ -801,9 +872,10 @@ export default function ConsoleUsers() {
                   const st = userStatus(user)
                   return (
                     <Tr key={user.id} tone={!isSel && st === 'pending' ? 'warning' : undefined}
-                      className={isSel ? 'bg-orange-950/20' : ''}>
+                      className={isSel ? 'bg-orange-950/20' : ''}
+                      onClick={() => setDetailUser(user)} ariaLabel={`Open ${user.full_name || user.email || 'user'}`}>
                       <Td>
-                        <button type="button" onClick={() => toggleSelect(user.id)} aria-label={`${isSel ? 'Deselect' : 'Select'} ${user.full_name || user.email || 'user'}`}
+                        <button type="button" onClick={(e) => { e.stopPropagation(); toggleSelect(user.id) }} aria-label={`${isSel ? 'Deselect' : 'Select'} ${user.full_name || user.email || 'user'}`}
                           aria-pressed={isSel}
                           className="rounded text-gray-400 hover:text-orange-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
                           {isSel ? <CheckSquare size={15} className="text-orange-400" /> : <Square size={15} />}
@@ -811,7 +883,7 @@ export default function ConsoleUsers() {
                       </Td>
                       <Td>
                         <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center text-xs font-semibold text-gray-300 shrink-0">
+                          <div className="w-8 h-8 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center text-xs font-semibold text-gray-300 shrink-0" aria-hidden="true">
                             {(user.full_name ?? user.email ?? '?')[0].toUpperCase()}
                           </div>
                           <div className="min-w-0">
@@ -878,20 +950,52 @@ export default function ConsoleUsers() {
                 })}
               </tbody>
             </Table>
-            {total > PAGE_SIZE && (
-              <div className="flex items-center justify-between px-4 py-3 border-t border-gray-800">
-                <p className="text-xs text-gray-400">
-                  Showing {page * PAGE_SIZE + 1} to {Math.min((page + 1) * PAGE_SIZE, total)} of {total}
-                </p>
-                <div className="flex gap-2">
-                  <Btn size="xs" onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}>Prev</Btn>
-                  <Btn size="xs" onClick={() => setPage(p => p + 1)} disabled={(page + 1) * PAGE_SIZE >= total}>Next</Btn>
-                </div>
-              </div>
-            )}
+            <Pager page={page} pageCount={pageCount} total={total} pageSize={PAGE_SIZE} onPage={setPage} />
           </>
         )}
       </Panel>
+      </div>
+      )}
+
+      <Drawer open={!!detail} title={detail ? (detail.full_name || detail.email || 'User') : ''} subtitle={detail?.email}
+        onClose={() => setDetailUser(null)}
+        footer={detail && (
+          <>
+            <Btn icon={Edit2} onClick={fromDrawer(() => openEdit(detail))}>Edit user</Btn>
+            <Btn icon={detail.approved ? UserX : UserCheck} onClick={fromDrawer(() => toggleApprove(detail))}>{detail.approved ? 'Revoke approval' : 'Approve'}</Btn>
+            <Btn icon={detail.locked ? Unlock : Lock} variant={detail.locked ? 'ghost' : 'danger'} onClick={fromDrawer(() => toggleLock(detail))}>{detail.locked ? 'Unlock' : 'Lock'}</Btn>
+          </>
+        )}>
+        {detail && (
+          <>
+            <DetailList items={[
+              ['Role', detail.role],
+              ['Status', { locked: 'Locked', approved: 'Approved', pending: 'Pending approval' }[userStatus(detail)]],
+              ['Countries', userCountryLabel(detail)],
+              ['Site access', (() => {
+                const ss = Array.isArray(detail.sites) ? detail.sites.filter(Boolean) : []
+                return ss.length === 0 ? 'No access' : isOrgWideSites(ss) ? 'All sites' : ss.join(', ')
+              })()],
+              ['Home site', detail.site],
+              ['Web login', detail.web_access === false ? 'Blocked (mobile app only)' : 'Allowed'],
+              ['Super admin', detail.is_super_admin ? 'Yes' : 'No'],
+              ['Joined', detail.created_at ? new Date(detail.created_at).toLocaleString() : null],
+              ['Organisation', orgs.find((o) => o.id === detail.organisation_id)?.name || null],
+            ]} />
+            {hasNoScope(detail) && (
+              <Note icon={AlertTriangle} tone="warning">This user has no country or no site access, so every scoped screen is empty for them. Edit the user to add a scope.</Note>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <Btn size="xs" icon={detail.web_access === false ? Monitor : Smartphone} onClick={fromDrawer(() => toggleWeb(detail))}>
+                {detail.web_access === false ? 'Allow web login' : 'Block web login'}
+              </Btn>
+              <Btn size="xs" icon={Key} onClick={fromDrawer(() => { setResetModal(detail); setResetSent(false) })}>Reset password</Btn>
+              <Btn size="xs" icon={LogOut} variant="danger" onClick={fromDrawer(() => setRevokeModal(detail))}>Sign out everywhere</Btn>
+              <Btn size="xs" icon={ShieldCheck} onClick={() => navigate('/console/access?tab=grants')}>Manage grants</Btn>
+            </div>
+          </>
+        )}
+      </Drawer>
 
       {/* Row action menu: fixed so the scrolling table cannot clip it. */}
       {menuUser && menuPos && (

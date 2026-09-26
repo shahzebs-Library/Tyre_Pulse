@@ -19,8 +19,8 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  ShieldCheck, Globe, KeyRound, Plus, Trash2, RefreshCw, Power, AlertTriangle,
-  CheckCircle2, Lock, Unlock, Info, Network, Building2,
+  ShieldCheck, Globe, KeyRound, Plus, Trash2, Power, AlertTriangle,
+  CheckCircle2, Lock, Unlock, Info, Network, BookOpen, Building2,
 } from 'lucide-react'
 import {
   Panel, PanelHeader, Note, StatTile, Badge, Btn, Code,
@@ -34,6 +34,7 @@ import {
   validateAllowlistEntry, enableLockoutRisk, isCovered, rangeSize, ssoOrgStatus, ssoEnableBlocker,
 } from '../../lib/accessPolicies'
 import { toUserMessage } from '../../lib/safeError'
+import { PageHeader, useRefreshStamp, Collapsible, AttentionList } from './accessKit'
 
 const inputCls = 'w-full px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 placeholder-gray-500 focus:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500'
 
@@ -124,20 +125,10 @@ function IpAllowlistPanel({ ip, onChanged }) {
   return (
     <Panel tone={ip.enabled ? 'accent' : undefined}>
       <PanelHeader icon={Network} title="Console IP allowlist"
-        subtitle="When on, the console only opens from the network ranges listed below."
+        subtitle={`When on, the console only opens from the ranges below. ${activeCount} active of ${ip.entries.length} listed.`}
         actions={ip.enabled
           ? <Btn variant="danger" icon={Power} onClick={() => setToggle('off')}>Turn off</Btn>
           : <Btn variant="primary" icon={Power} disabled={!!lockoutRisk} title={lockoutRisk || undefined} onClick={() => setToggle('on')}>Turn on</Btn>} />
-
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-        <StatTile label="Status" value={ip.enabled ? 'On' : 'Off'} tone={ip.enabled ? 'warning' : 'default'}
-          icon={ip.enabled ? Lock : Unlock} sub={ip.enabled ? 'Enforced on console sign-in' : 'Console open from anywhere'} />
-        <StatTile label="Your address" value={ip.callerIp || 'Unknown'} icon={Globe}
-          sub={ip.callerIp ? (ip.callerCovered ? 'Covered by an active range' : 'Not covered') : 'Could not be read from this request'} />
-        <StatTile label="Active ranges" value={activeCount} icon={CheckCircle2} sub={`${ip.entries.length} listed in total`} />
-        <StatTile label="Lockout check" value={lockoutRisk ? 'Not safe' : 'Safe'} tone={lockoutRisk ? 'warning' : 'good'}
-          icon={lockoutRisk ? AlertTriangle : ShieldCheck} sub={lockoutRisk ? 'Add your own range first' : 'You would stay in'} />
-      </div>
 
       {!ip.enabled && lockoutRisk && (
         <div className="mb-3"><Note icon={Info} tone="warning">{lockoutRisk} Turning it on is refused by the server until then.</Note></div>
@@ -204,13 +195,6 @@ function IpAllowlistPanel({ ip, onChanged }) {
         )}
       </div>
 
-      <div className="mt-3">
-        <Note icon={Info}>
-          Locked out? From the Supabase SQL editor run, in one execution:
-          {' '}<Code>{"select set_config('app.access_policy_rpc','on',true); update public.system_config set value='false' where key='console_ip_allowlist_enabled';"}</Code>
-        </Note>
-      </div>
-
       <Modal open={!!confirmDel} width="max-w-md"
         title="Delete this allowlist entry?"
         subtitle={confirmDel ? (confirmDel.label ? `${confirmDel.label} (${confirmDel.cidr})` : confirmDel.cidr) : undefined}
@@ -241,17 +225,7 @@ function SsoPanel({ sso, onChanged }) {
   return (
     <Panel>
       <PanelHeader icon={KeyRound} title="Require single sign-on"
-        subtitle="Per organisation. When on, password sign-in is refused for users whose email domain is enforced. Super admins are always exempt." />
-
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
-        <StatTile label="IdPs registered in Supabase Auth" value={sso.registeredProviders} icon={ShieldCheck}
-          tone={sso.registeredProviders ? 'default' : 'warning'}
-          sub={sso.registeredProviders ? `${sso.registeredDomains.length} domain(s)` : 'None yet: SSO cannot be required'} />
-        <StatTile label="Organisations requiring SSO" value={sso.orgs.filter((o) => o.required).length} icon={Lock}
-          sub={`of ${sso.orgs.length}`} />
-        <StatTile label="Users affected" value={sso.orgs.reduce((n, o) => n + (Number(o.affected_users) || 0), 0)} icon={Building2}
-          sub="Non-super-admins on an enforced domain" />
-      </div>
+        subtitle={`Per organisation. Password sign-in is refused for users on an enforced domain; super admins are exempt. ${sso.orgs.reduce((n, o) => n + (Number(o.affected_users) || 0), 0)} user(s) affected today.`} />
 
       {sso.orgs.length === 0 ? (
         <EmptyState icon={Building2} title="No organisations" reason="There are no organisations to configure." />
@@ -292,18 +266,6 @@ function SsoPanel({ sso, onChanged }) {
         </Table>
       )}
 
-      <div className="mt-3 space-y-2">
-        <Note icon={AlertTriangle} tone="warning">
-          This is enforced by the app and a database check, not by Supabase Auth itself. Known gaps: a client that
-          calls Supabase sign-in directly still gets a session; the mobile apps do not run the check yet; and
-          nothing here registers an identity provider (that is done in Supabase Auth, via the Management API).
-        </Note>
-        <Note icon={Info}>
-          Connections and their domains are managed in Console, Security (SSO configuration). A domain must also be
-          registered with Supabase Auth before SSO can be required for it, otherwise nobody on it could sign in.
-        </Note>
-      </div>
-
       <ReasonModal open={!!target} onClose={() => setTarget(null)}
         title={target?.required ? `Require SSO for ${target?.org?.name}` : `Allow password sign-in for ${target?.org?.name}`}
         subtitle={target?.required
@@ -320,41 +282,87 @@ export default function ConsoleAccessPolicies() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const { refreshedAt, stamp } = useRefreshStamp()
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
-    try { setData(await getAccessPolicies()) }
+    try { setData(await getAccessPolicies()); stamp() }
     catch (e) { setError(toUserMessage(e, 'Access policies could not be loaded.')) }
     finally { setLoading(false) }
-  }, [])
+  }, [stamp])
 
   useEffect(() => { load() }, [load])
 
+  const ip = data?.ip
+  const sso = data?.sso
+  const lockoutRisk = ip ? enableLockoutRisk(ip.callerIp, ip.entries) : null
+  const activeRanges = ip ? ip.entries.filter((e) => e.active).length : 0
+  const requiredOrgs = sso ? sso.orgs.filter((o) => o.required).length : 0
+
+  const attention = []
+  if (ip && !ip.enabled) {
+    attention.push({ key: 'ip-off', tone: 'info', title: 'The console opens from any network',
+      detail: lockoutRisk ? 'Add a range that covers your own address first; turning the allowlist on is refused until then.' : 'Your address is covered, so the allowlist can be turned on safely.' })
+  }
+  if (sso && !sso.registeredProviders) {
+    attention.push({ key: 'no-idp', tone: 'warning', title: 'No identity provider is registered in Supabase Auth',
+      detail: 'SSO cannot be required for any organisation until an IdP and its domains are registered.' })
+  }
+
   return (
     <div className="space-y-5 max-w-7xl">
-      <header className="flex flex-wrap items-start gap-3">
-        <div className="flex-1 min-w-0">
-          <h1 className="text-xl font-semibold text-gray-100 flex items-center gap-2">
-            <ShieldCheck size={20} className="text-orange-400" /> Access Policies
-          </h1>
-          <p className="text-xs text-gray-400 mt-1">
-            Limit where the console can be opened from, and require single sign-on for an organisation. Every change is audited with your address.
-          </p>
-        </div>
-        <Btn icon={RefreshCw} busy={loading} onClick={load}>Refresh</Btn>
-      </header>
+      <PageHeader icon={ShieldCheck} title="Access Policies"
+        purpose="Limit where the console can be opened from, and require single sign-on for an organisation. Every change is audited with your address."
+        refreshedAt={refreshedAt} onRefresh={load} refreshing={loading} />
 
       <ErrorState message={error} onRetry={load} />
       {loading && !data ? <LoadingState label="Loading access policies" /> : null}
       {data && (
         <>
-          <IpAllowlistPanel ip={data.ip} onChanged={load} />
-          <Note icon={Info}>
-            The IP allowlist guards the console screens. It does not change database permissions: a super admin's
-            sign-in token still works against the API from any address. If the check itself fails, the console lets
-            you in rather than lock you out.
-          </Note>
-          <SsoPanel sso={data.sso} onChanged={load} />
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+            <StatTile label="IP allowlist" value={ip.enabled ? 'On' : 'Off'} tone={ip.enabled ? 'warning' : 'default'}
+              icon={ip.enabled ? Lock : Unlock} sub={ip.enabled ? 'Enforced on console sign-in' : 'Console open from anywhere'} />
+            <StatTile label="Your address" value={ip.callerIp || 'Unknown'} icon={Globe}
+              sub={ip.callerIp ? (ip.callerCovered ? 'Covered by an active range' : 'Not covered') : 'Could not be read from this request'} />
+            <StatTile label="Active ranges" value={activeRanges} icon={CheckCircle2} sub={`${ip.entries.length} listed in total`} />
+            <StatTile label="Lockout check" value={lockoutRisk ? 'Not safe' : 'Safe'} tone={lockoutRisk ? 'warning' : 'good'}
+              icon={lockoutRisk ? AlertTriangle : ShieldCheck} sub={lockoutRisk ? 'Add your own range first' : 'You would stay in'} />
+            <StatTile label="SSO required" value={requiredOrgs} icon={KeyRound} sub={`of ${sso.orgs.length} organisation${sso.orgs.length === 1 ? '' : 's'}`} />
+            <StatTile label="IdPs registered" value={sso.registeredProviders} icon={ShieldCheck}
+              tone={sso.registeredProviders ? 'default' : 'warning'}
+              sub={sso.registeredProviders ? `${sso.registeredDomains.length} domain(s)` : 'SSO cannot be required yet'} />
+          </div>
+
+          <AttentionList items={attention} clearText="The allowlist is on and at least one identity provider is registered." />
+
+          <div className="grid gap-4 xl:grid-cols-2 items-start">
+            <IpAllowlistPanel ip={ip} onChanged={load} />
+            <SsoPanel sso={sso} onChanged={load} />
+          </div>
+
+          <Collapsible icon={BookOpen} title="How enforcement works, known gaps and lock-out recovery"
+            subtitle="Read before turning a policy on">
+            <div className="space-y-2">
+              <Note icon={Info}>
+                The IP allowlist guards the console screens. It does not change database permissions: a super admin&apos;s
+                sign-in token still works against the API from any address. If the check itself fails, the console lets
+                you in rather than lock you out.
+              </Note>
+              <Note icon={AlertTriangle} tone="warning">
+                SSO is enforced by the app and a database check, not by Supabase Auth itself. Known gaps: a client that
+                calls Supabase sign-in directly still gets a session; the mobile apps do not run the check yet; and
+                nothing here registers an identity provider (that is done in Supabase Auth, via the Management API).
+              </Note>
+              <Note icon={Info}>
+                Connections and their domains are managed in Console, Security (SSO configuration). A domain must also be
+                registered with Supabase Auth before SSO can be required for it, otherwise nobody on it could sign in.
+              </Note>
+              <Note icon={Info}>
+                Locked out? From the Supabase SQL editor run, in one execution:
+                {' '}<Code>{"select set_config('app.access_policy_rpc','on',true); update public.system_config set value='false' where key='console_ip_allowlist_enabled';"}</Code>
+              </Note>
+            </div>
+          </Collapsible>
         </>
       )}
     </div>

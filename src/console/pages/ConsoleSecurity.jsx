@@ -10,8 +10,8 @@
  *
  * No logic is re-implemented here; each tab renders the canonical page verbatim.
  */
-import { useSearchParams } from 'react-router-dom'
-import { ShieldAlert } from 'lucide-react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { ShieldAlert, ShieldCheck, MonitorSmartphone, Globe2, KeyRound, ArrowUpRight } from 'lucide-react'
 import SecurityCenter from '../../pages/SecurityCenter'
 import SsoConfiguration from '../../pages/SsoConfiguration'
 import { Segmented } from '../components/ui'
@@ -19,6 +19,15 @@ import { Segmented } from '../components/ui'
 const TABS = [
   { key: 'security', label: 'Security Center',   desc: 'Sessions, login history and security events', Component: SecurityCenter },
   { key: 'sso',      label: 'SSO Configuration', desc: 'SAML and OIDC identity providers',            Component: SsoConfiguration },
+]
+
+// The rest of the security controls live on their own console pages. They are
+// linked here so this hub is the one place to start, without re-hosting them.
+const RELATED = [
+  { to: '/console/security-audit', label: 'Security audit', icon: ShieldCheck, desc: 'Posture score and open findings' },
+  { to: '/console/sessions', label: 'Sessions and devices', icon: MonitorSmartphone, desc: 'Who is signed in, from where' },
+  { to: '/console/access-policies', label: 'Access policies', icon: Globe2, desc: 'IP allowlist and SSO enforcement' },
+  { to: '/console/api-keys', label: 'API keys', icon: KeyRound, desc: 'Machine credentials across tenants' },
 ]
 
 export default function ConsoleSecurity() {
@@ -44,6 +53,22 @@ export default function ConsoleSecurity() {
           <p className="text-xs text-gray-400 mt-1">Account security, session control and single sign-on.</p>
         </div>
       </header>
+
+      <nav aria-label="Related security pages" className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        {RELATED.map((r) => {
+          const Icon = r.icon
+          return (
+            <Link key={r.to} to={r.to}
+              className="flex items-start gap-2 px-3 py-2.5 rounded-xl border border-gray-800 bg-gray-900/50 hover:bg-gray-900 hover:border-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
+              <Icon size={15} className="text-orange-400 mt-0.5 shrink-0" aria-hidden="true" />
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-1 text-xs font-medium text-gray-200">{r.label} <ArrowUpRight size={11} aria-hidden="true" /></span>
+                <span className="block text-[11px] text-gray-500 mt-0.5">{r.desc}</span>
+              </span>
+            </Link>
+          )
+        })}
+      </nav>
 
       <div className="space-y-2">
         <Segmented

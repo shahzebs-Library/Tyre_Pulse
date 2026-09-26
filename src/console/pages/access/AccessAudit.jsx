@@ -24,6 +24,7 @@ import { toUserMessage } from '../../../lib/safeError'
 import { actionKind, diffFields, KIND_TONE, summarizeAudit } from '../../../lib/accessAuditView'
 import { dailySeries } from '../../../lib/consoleCharts'
 import { exportConsoleRows, sortRows, useTableSort } from '../../../lib/consoleTable'
+import { usePaged, Pager, Collapsible } from '../accessKit'
 import {
   Badge, Btn, EmptyState, ErrorState, LoadingState, Note, Panel, PanelHeader, SearchInput, Select,
   StatTile, Table, THead, Th, Tr, Td, Toolbar,
@@ -167,6 +168,7 @@ export default function AccessAudit() {
   const loading = rows === null
   const na = loading || !!error
   const kindTile = (k) => setKindFilter((cur) => (cur === k ? 'all' : k))
+  const paged = usePaged(sorted, 25, `${search}|${kindFilter}|${entityFilter}|${targetFilter}|${limit}|${sort?.key}|${sort?.dir}`)
 
   return (
     <div className="space-y-4">
@@ -187,8 +189,8 @@ export default function AccessAudit() {
           sub="Access taken away" onClick={() => kindTile('removal')} active={kindFilter === 'removal'} />
       </div>
 
-      <Panel>
-        <PanelHeader icon={Activity} title="Access changes per day" subtitle="Last 30 days, from the entries loaded" />
+      <Collapsible icon={Activity} title="Access changes per day" subtitle="Last 30 days, from the entries loaded"
+        count={na ? null : trend.total}>
         {loading ? <LoadingState label="Loading activity" rows={2} /> : error ? (
           <p className="text-xs text-gray-400">Activity is unavailable because the trail could not be read.</p>
         ) : (
@@ -196,7 +198,7 @@ export default function AccessAudit() {
             summary={`${trend.total} access changes in the last 30 days of the loaded window.`}
             emptyText="No access changes in the last 30 days." />
         )}
-      </Panel>
+      </Collapsible>
 
       <Panel>
         <PanelHeader icon={ScrollText} title="Audit trail"
@@ -244,6 +246,7 @@ export default function AccessAudit() {
               ? 'The trail has no entries for the selected target user.'
               : 'Nothing in the loaded entries matches this search and these filters.'} />
         ) : (
+          <>
           <Table>
             <THead>
               <Th><span className="sr-only">Expand</span></Th>
@@ -255,7 +258,7 @@ export default function AccessAudit() {
               <Th sortKey="changes" sort={sort} onSort={onSort}>Change</Th>
             </THead>
             <tbody>
-              {sorted.map((r) => {
+              {paged.pageRows.map((r) => {
                 const fields = diffFields(r.before, r.after)
                 const open = expanded.has(r.id)
                 const target = userById.get(r.target_user)
@@ -308,6 +311,8 @@ export default function AccessAudit() {
               })}
             </tbody>
           </Table>
+          <Pager {...paged} onPage={paged.setPage} className="border-t-0" />
+          </>
         )}
       </Panel>
     </div>

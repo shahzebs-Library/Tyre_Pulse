@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ClipboardCheck, Play, RefreshCw, FileSpreadsheet, FileText, CheckCircle2, XCircle, PenLine, Clock,
-  ArrowLeft, ShieldCheck, Lock, CalendarClock, ListChecks, AlertTriangle, Users, UserX,
+  ArrowLeft, ShieldCheck, Lock, CalendarClock, ListChecks, AlertTriangle, Users, UserX, KeyRound,
 } from 'lucide-react'
 import {
   Panel, PanelHeader, Note, StatTile, Badge, Btn, Segmented, SearchInput, Select, Toolbar,
@@ -27,8 +27,12 @@ import {
 import { toUserMessage } from '../../lib/safeError'
 import { exportToExcel, exportToPdf, reportFileName } from '../../lib/exportUtils'
 import { sortRows, useTableSort } from '../../lib/consoleTable'
+import {
+  PageHeader, useUrlTab, useUrlParam, useRefreshStamp, usePaged, Pager, Drawer, DetailList, AttentionList,
+} from './accessKit'
 
-const PAGE = 100
+const PAGE = 25
+const VIEW_TABS = ['decisions', 'overview']
 const DECISION_TONE = { pending: 'quiet', keep: 'good', revoke: 'danger', modify: 'warning' }
 const DECISION_ICON = { pending: Clock, keep: CheckCircle2, revoke: XCircle, modify: PenLine }
 
@@ -65,6 +69,7 @@ const CAMPAIGN_SORT = {
 function CampaignList({ campaigns, onOpen }) {
   const { sort, onSort } = useTableSort({ key: 'created_at', dir: 'desc' })
   const sorted = useMemo(() => sortRows(campaigns, sort, CAMPAIGN_SORT), [campaigns, sort])
+  const paged = usePaged(sorted, 15, `${sort?.key}|${sort?.dir}`)
   if (!campaigns.length) {
     return (
       <EmptyState icon={ClipboardCheck} title="No access reviews yet"
@@ -72,6 +77,7 @@ function CampaignList({ campaigns, onOpen }) {
     )
   }
   return (
+    <>
     <Table>
       <THead>
         <Th sortKey="name" sort={sort} onSort={onSort}>Campaign</Th>
@@ -83,7 +89,7 @@ function CampaignList({ campaigns, onOpen }) {
         <Th align="right" sortKey="total" sort={sort} onSort={onSort}>Users</Th>
       </THead>
       <tbody>
-        {sorted.map((c) => {
+        {paged.pageRows.map((c) => {
           const total = Number(c.total) || 0
           const decided = total - (Number(c.pending) || 0)
           const pct = total ? Math.round((decided / total) * 100) : 0
@@ -117,6 +123,8 @@ function CampaignList({ campaigns, onOpen }) {
         })}
       </tbody>
     </Table>
+    <Pager {...paged} onPage={paged.setPage} />
+    </>
   )
 }
 
@@ -131,7 +139,8 @@ function CampaignView({ campaignId, onBack, onChanged }) {
   const [decision, setDecision] = useState('all')
   const [role, setRole] = useState('')
   const [flag, setFlag] = useState('all')
-  const [limit, setLimit] = useState(PAGE)
+  const [detail, setDetail] = useState(null)
+  const [view, setView] = useUrlTab(VIEW_TABS, 'decisions', 'view')
   const [busyId, setBusyId] = useState(null)
   const [actionError, setActionError] = useState(null)
   const [noteFor, setNoteFor] = useState(null) // { item, decision }
@@ -173,7 +182,8 @@ function CampaignView({ campaignId, onBack, onChanged }) {
   const superCount = useMemo(() => filterItems(items, { flag: 'super' }).length, [items])
   const grantsCount = useMemo(() => filterItems(items, { flag: 'grants' }).length, [items])
 
-  useEffect(() => { setLimit(PAGE) }, [search, decision, role, flag])
+  const paged = usePaged(filtered, PAGE, `${search}|${decision}|${role}|${flag}|${sort?.key}|${sort?.dir}`)
+  const detailItem = detail ? items.find((i) => i.id === detail) : null
 
   const byRole = useMemo(() => {
     const m = new Map()
@@ -209,6 +219,7 @@ function CampaignView({ campaignId, onBack, onChanged }) {
   }
 
   function askNote(item, dec) {
+    setDetail(null)
     setNote(item.decision === dec ? (item.decision_note || '') : '')
     setNoteFor({ item, decision: dec })
   }
@@ -278,8 +289,33 @@ function CampaignView({ campaignId, onBack, onChanged }) {
     { label: 'Revoke', value: progress.revoke, color: STATUS[theme].critical },
     { label: 'Modify', value: progress.modify, color: STATUS[theme].medium },
   ]
-  const shown = filtered.slice(0, limit)
   const overdue = isOverdue(campaign)
+  const pickDecision = (d) => { setDecision(decision === d ? 'all' : d); setView('decisions') }
+
+  const attention = []
+  if (!closed) {
+    if (progress.pending && overdue) attention.push({ key: 'overdue', tone: 'danger', title: `Past due with ${progress.pending} decision${progress.pending === 1 ? '' : 's'} pending`, detail: 'Finish the remaining decisions, then apply them.', action: { label: 'Show pending', onClick: () => { setDecision('pending'); setView('decisions') } } })
+    const dormantPending = items.filter((i) => i.decision === 'pending' && dormancy(i).dormant).length
+    if (dormantPending) attention.push({ key: 'dormant', tone: 'warning', title: `${dormantPending} dormant user${dormantPending === 1 ? ' is' : 's are'} still pending`, detail: `No sign-in for ${DORMANT_DAYS}+ days. These are the usual revoke candidates.`, action: { label: 'Show dormant', onClick: () => { setFlag('dormant'); setDecision('pending'); setView('decisions') } } })
+    const superPending = items.filter((i) => i.decision === 'pending' && i.is_super_admin).length
+    if (superPending) attention.push({ key: 'super', tone: 'warning', title: `${superPending} super admin${superPending === 1 ? '' : 's'} not yet reviewed`, detail: 'Privileged access is what auditors check first.', action: { label: 'Show', onClick: () => { setFlag('super'); setDecision('pending'); setView('decisions') } } })
+    if (!progress.pending && progress.total) attention.push({ key: 'apply', tone: 'info', title: 'Every user has a decision', detail: `Apply the decisions to lock the ${progress.revoke} user${progress.revoke === 1 ? '' : 's'} decided revoke and close the review.`, action: { label: 'Apply decisions', onClick: () => setApplyOpen(true) } })
+  }
+
+  function itemActions(it) {
+    const busy = busyId === it.id
+    if (closed) return <span className="text-[11px] text-gray-400">{it.decided_by_email || ''}</span>
+    return (
+      <div className="inline-flex gap-1" onClick={(e) => e.stopPropagation()}>
+        <Btn size="xs" variant={it.decision === 'keep' ? 'good' : 'ghost'} busy={busy}
+          onClick={() => decide(it, it.decision === 'keep' ? 'pending' : 'keep')}>Keep</Btn>
+        <Btn size="xs" variant={it.decision === 'modify' ? 'primary' : 'ghost'} disabled={busy}
+          onClick={() => askNote(it, 'modify')}>Modify</Btn>
+        <Btn size="xs" variant={it.decision === 'revoke' ? 'danger' : 'ghost'} disabled={busy}
+          onClick={() => askNote(it, 'revoke')}>Revoke</Btn>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-5">
@@ -304,7 +340,6 @@ function CampaignView({ campaignId, onBack, onChanged }) {
       </div>
 
       {closed && <Note icon={Lock}>This review is closed. Decisions are frozen and the export is the recorded evidence.</Note>}
-      {!closed && overdue && <Note icon={AlertTriangle} tone="warning">This review is past its due date and still has {progress.pending} pending decisions.</Note>}
       {actionError && <Note icon={AlertTriangle} tone="danger">{actionError}</Note>}
       {applyResult && (
         <Note icon={ShieldCheck} tone="accent">
@@ -314,147 +349,164 @@ function CampaignView({ campaignId, onBack, onChanged }) {
       )}
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-        <StatTile label="Users reviewed" value={progress.total} icon={Users} onClick={() => setDecision('all')} active={decision === 'all'} />
+        <StatTile label="Users reviewed" value={progress.total} icon={Users} onClick={() => pickDecision('all')} active={decision === 'all'}
+          sub={progress.pct == null ? undefined : `${progress.pct}% decided`} />
         <StatTile label="Pending" value={progress.pending} tone={progress.pending ? 'warning' : 'good'} icon={Clock}
-          onClick={() => setDecision('pending')} active={decision === 'pending'} />
+          onClick={() => pickDecision('pending')} active={decision === 'pending'} />
         <StatTile label="Keep" value={progress.keep} tone="good" icon={CheckCircle2}
-          onClick={() => setDecision('keep')} active={decision === 'keep'} />
+          onClick={() => pickDecision('keep')} active={decision === 'keep'} />
         <StatTile label="Revoke" value={progress.revoke} tone={progress.revoke ? 'danger' : 'default'} icon={XCircle}
-          onClick={() => setDecision('revoke')} active={decision === 'revoke'} />
+          onClick={() => pickDecision('revoke')} active={decision === 'revoke'} />
         <StatTile label="Modify" value={progress.modify} tone={progress.modify ? 'warning' : 'default'} icon={PenLine}
-          onClick={() => setDecision('modify')} active={decision === 'modify'} />
+          onClick={() => pickDecision('modify')} active={decision === 'modify'} />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Panel>
-          <PanelHeader icon={ListChecks} title="Decision progress" subtitle={`${progress.decided} of ${progress.total} decided`} />
-          <div>
+      <Segmented ariaLabel="Review views" value={view} onChange={setView} options={[
+        { key: 'decisions', label: 'Decisions', count: progress.pending },
+        { key: 'overview', label: 'Overview' },
+      ]} />
+
+      {view === 'overview' && (
+        <div role="tabpanel" aria-label="Overview" className="grid gap-4 lg:grid-cols-3">
+          <Panel>
+            <PanelHeader icon={ListChecks} title="Decision progress" subtitle={`${progress.decided} of ${progress.total} decided`} />
             <ShareChart parts={parts} center={{ value: progress.pct == null ? 'N/A' : `${progress.pct}%`, label: 'Decided' }}
               summary={`${progress.decided} of ${progress.total} users have a decision`} />
-          </div>
-        </Panel>
-        <Panel>
-          <PanelHeader icon={Users} title="Users by role" subtitle="Largest eight roles in this snapshot" />
-          <div>
+          </Panel>
+          <Panel>
+            <PanelHeader icon={Users} title="Users by role" subtitle="Largest eight roles in this snapshot" />
             <BarsChart bars={byRole} summary="Number of users per role" />
-          </div>
-        </Panel>
-        <Panel>
-          <PanelHeader icon={UserX} title="Reviewer attention" subtitle="Accounts that deserve a closer look" />
-          <div className="space-y-3">
-            <ScoreRing score={progress.pct ?? 0} label="Completion" size={96} />
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <StatTile label="Dormant" value={dormantCount} sub={`${DORMANT_DAYS}+ days`} tone={dormantCount ? 'warning' : 'default'}
-                onClick={() => setFlag(flag === 'dormant' ? 'all' : 'dormant')} active={flag === 'dormant'} />
-              <StatTile label="Super admins" value={superCount}
-                onClick={() => setFlag(flag === 'super' ? 'all' : 'super')} active={flag === 'super'} />
-              <StatTile label="With grants" value={grantsCount}
-                onClick={() => setFlag(flag === 'grants' ? 'all' : 'grants')} active={flag === 'grants'} />
+          </Panel>
+          <Panel>
+            <PanelHeader icon={UserX} title="Reviewer attention" subtitle="Accounts that deserve a closer look" />
+            <div className="space-y-3">
+              <ScoreRing score={progress.pct ?? 0} label="Completion" size={96} />
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <StatTile label="Dormant" value={dormantCount} sub={`${DORMANT_DAYS}+ days`} tone={dormantCount ? 'warning' : 'default'}
+                  onClick={() => { setFlag(flag === 'dormant' ? 'all' : 'dormant'); setView('decisions') }} active={flag === 'dormant'} />
+                <StatTile label="Super admins" value={superCount}
+                  onClick={() => { setFlag(flag === 'super' ? 'all' : 'super'); setView('decisions') }} active={flag === 'super'} />
+                <StatTile label="With grants" value={grantsCount}
+                  onClick={() => { setFlag(flag === 'grants' ? 'all' : 'grants'); setView('decisions') }} active={flag === 'grants'} />
+              </div>
             </div>
-          </div>
-        </Panel>
-      </div>
-
-      <Panel>
-        <PanelHeader icon={ClipboardCheck} title="Users" subtitle={`${filtered.length} of ${items.length} shown by the current filters`}
-          actions={!closed && (
-            <Btn variant="good" icon={CheckCircle2} disabled={!bulkTargets.length} onClick={() => setBulkOpen(true)}>
-              Keep all pending in view ({bulkTargets.length})
-            </Btn>
-          )} />
-        <div className="space-y-3">
-          <Toolbar>
-            <SearchInput value={search} onChange={setSearch} placeholder="Search name, email, role, country or site" className="w-72" />
-            <Select value={role} onChange={setRole} placeholder="All roles" ariaLabel="Filter by role" options={roles.map((r) => ({ value: r, label: r }))} className="w-44" />
-            <Segmented role="group" ariaLabel="Filter by account type" value={flag} onChange={setFlag} options={[
-              { key: 'all', label: 'Everyone' },
-              { key: 'dormant', label: 'Dormant', count: dormantCount },
-              { key: 'super', label: 'Super admins', count: superCount },
-              { key: 'grants', label: 'Has grants', count: grantsCount },
-            ]} />
-            <Segmented role="group" ariaLabel="Filter by decision" value={decision} onChange={setDecision} options={[
-              { key: 'all', label: 'Any decision' },
-              { key: 'pending', label: 'Pending', count: progress.pending },
-              { key: 'keep', label: 'Keep', count: progress.keep },
-              { key: 'revoke', label: 'Revoke', count: progress.revoke },
-              { key: 'modify', label: 'Modify', count: progress.modify },
-            ]} />
-          </Toolbar>
-
-          {!filtered.length ? (
-            <EmptyState title="No users match" reason="No user in this snapshot matches the current filters." />
-          ) : (
-            <Table>
-              <THead>
-                <Th sortKey="full_name" sort={sort} onSort={onSort}>User</Th>
-                <Th sortKey="role" sort={sort} onSort={onSort}>Role</Th>
-                <Th sortKey="countries" sort={sort} onSort={onSort}>Countries</Th>
-                <Th sortKey="sites" sort={sort} onSort={onSort}>Sites</Th>
-                <Th align="right" sortKey="grants" sort={sort} onSort={onSort}>Grants</Th>
-                <Th sortKey="last_sign_in_at" sort={sort} onSort={onSort}>Last sign in</Th>
-                <Th sortKey="decision" sort={sort} onSort={onSort}>Decision</Th>
-                <Th align="right">Action</Th>
-              </THead>
-              <tbody>
-                {shown.map((it) => {
-                  const dm = dormancy(it)
-                  const DIcon = DECISION_ICON[it.decision] || Clock
-                  const busy = busyId === it.id
-                  return (
-                    <Tr key={it.id}>
-                      <Td>
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-gray-200">{it.full_name || 'N/A'}</span>
-                          {it.is_super_admin && <Badge tone="accent" icon={ShieldCheck}>Super admin</Badge>}
-                          {it.locked && <Badge tone="quiet" icon={Lock}>Locked</Badge>}
-                        </div>
-                        <p className="text-[11px] text-gray-400">{it.user_email || 'N/A'}</p>
-                      </Td>
-                      <Td nowrap>{it.role || 'N/A'}</Td>
-                      <Td><span className="text-gray-400">{(it.country || []).join(', ') || 'None'}</span></Td>
-                      <Td><span className="text-gray-400">{(it.sites || []).join(', ') || 'None'}</span></Td>
-                      <Td align="right">
-                        <span className="tabular-nums text-gray-300"
-                          title={grantCount(it) ? it.grants.map((g) => `${g.effect} ${g.module_key}`).join(', ') : 'No per user grants'}>
-                          {grantCount(it)}
-                        </span>
-                      </Td>
-                      <Td nowrap>
-                        <span className="text-gray-400">{it.last_sign_in_at ? fmtDate(it.last_sign_in_at) : 'Never'}</span>
-                        {dm.dormant && <span className="ml-1.5"><Badge tone="warning" icon={Clock}>Dormant</Badge></span>}
-                      </Td>
-                      <Td>
-                        <Badge tone={DECISION_TONE[it.decision] || 'quiet'} icon={DIcon}>{DECISION_LABEL[it.decision] || 'Pending'}</Badge>
-                        {it.decision_note && <p className="text-[11px] text-gray-400 mt-0.5 max-w-[220px] truncate" title={it.decision_note}>{it.decision_note}</p>}
-                        {it.apply_result && <p className="text-[11px] text-gray-400 mt-0.5">Applied: {it.apply_result}</p>}
-                      </Td>
-                      <Td align="right" nowrap>
-                        {closed ? (
-                          <span className="text-[11px] text-gray-400">{it.decided_by_email || ''}</span>
-                        ) : (
-                          <div className="inline-flex gap-1">
-                            <Btn size="xs" variant={it.decision === 'keep' ? 'good' : 'ghost'} busy={busy}
-                              onClick={() => decide(it, it.decision === 'keep' ? 'pending' : 'keep')}>Keep</Btn>
-                            <Btn size="xs" variant={it.decision === 'modify' ? 'primary' : 'ghost'} disabled={busy}
-                              onClick={() => askNote(it, 'modify')}>Modify</Btn>
-                            <Btn size="xs" variant={it.decision === 'revoke' ? 'danger' : 'ghost'} disabled={busy}
-                              onClick={() => askNote(it, 'revoke')}>Revoke</Btn>
-                          </div>
-                        )}
-                      </Td>
-                    </Tr>
-                  )
-                })}
-              </tbody>
-            </Table>
-          )}
-          {filtered.length > limit && (
-            <div className="flex justify-center">
-              <Btn onClick={() => setLimit((l) => l + PAGE)}>Show {Math.min(PAGE, filtered.length - limit)} more of {filtered.length - limit}</Btn>
-            </div>
-          )}
+          </Panel>
         </div>
-      </Panel>
+      )}
+
+      {view === 'decisions' && (
+        <div role="tabpanel" aria-label="Decisions" className="space-y-4">
+          <AttentionList items={attention} clearText={closed ? 'This review is closed.' : 'Nothing in this review needs attention yet.'} />
+          <Panel flush>
+            <div className="p-4 pb-3 space-y-3">
+              <PanelHeader icon={ClipboardCheck} title="Users" subtitle={`${filtered.length} of ${items.length} shown by the current filters. Select a row for grants and notes.`}
+                actions={!closed && (
+                  <Btn variant="good" icon={CheckCircle2} disabled={!bulkTargets.length} onClick={() => setBulkOpen(true)}>
+                    Keep all pending in view ({bulkTargets.length})
+                  </Btn>
+                )} />
+              <Toolbar>
+                <SearchInput value={search} onChange={setSearch} placeholder="Search name, email, role, country or site" className="w-72" />
+                <Select value={role} onChange={setRole} placeholder="All roles" ariaLabel="Filter by role" options={roles.map((r) => ({ value: r, label: r }))} className="w-44" />
+                <Segmented role="group" ariaLabel="Filter by account type" value={flag} onChange={setFlag} options={[
+                  { key: 'all', label: 'Everyone' },
+                  { key: 'dormant', label: 'Dormant', count: dormantCount },
+                  { key: 'super', label: 'Super admins', count: superCount },
+                  { key: 'grants', label: 'Has grants', count: grantsCount },
+                ]} />
+                <Segmented role="group" ariaLabel="Filter by decision" value={decision} onChange={setDecision} options={[
+                  { key: 'all', label: 'Any decision' },
+                  { key: 'pending', label: 'Pending', count: progress.pending },
+                  { key: 'keep', label: 'Keep', count: progress.keep },
+                  { key: 'revoke', label: 'Revoke', count: progress.revoke },
+                  { key: 'modify', label: 'Modify', count: progress.modify },
+                ]} />
+              </Toolbar>
+            </div>
+
+            {!filtered.length ? (
+              <EmptyState title="No users match" reason="No user in this snapshot matches the current filters." />
+            ) : (
+              <>
+                <Table className="border-0 rounded-none">
+                  <THead>
+                    <Th sortKey="full_name" sort={sort} onSort={onSort}>User</Th>
+                    <Th sortKey="role" sort={sort} onSort={onSort}>Role</Th>
+                    <Th sortKey="countries" sort={sort} onSort={onSort}>Countries</Th>
+                    <Th align="right" sortKey="grants" sort={sort} onSort={onSort}>Grants</Th>
+                    <Th sortKey="last_sign_in_at" sort={sort} onSort={onSort}>Last sign in</Th>
+                    <Th sortKey="decision" sort={sort} onSort={onSort}>Decision</Th>
+                    <Th align="right">Action</Th>
+                  </THead>
+                  <tbody>
+                    {paged.pageRows.map((it) => {
+                      const dm = dormancy(it)
+                      const DIcon = DECISION_ICON[it.decision] || Clock
+                      return (
+                        <Tr key={it.id} onClick={() => setDetail(it.id)} ariaLabel={`Open ${it.full_name || it.user_email || 'user'}`}>
+                          <Td>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-gray-200">{it.full_name || 'N/A'}</span>
+                              {it.is_super_admin && <Badge tone="accent" icon={ShieldCheck}>Super admin</Badge>}
+                              {it.locked && <Badge tone="quiet" icon={Lock}>Locked</Badge>}
+                            </div>
+                            <p className="text-[11px] text-gray-400">{it.user_email || 'N/A'}</p>
+                          </Td>
+                          <Td nowrap>{it.role || 'N/A'}</Td>
+                          <Td><span className="text-gray-400">{(it.country || []).join(', ') || 'None'}</span></Td>
+                          <Td align="right"><span className="tabular-nums text-gray-300">{grantCount(it)}</span></Td>
+                          <Td nowrap>
+                            <span className="text-gray-400">{it.last_sign_in_at ? fmtDate(it.last_sign_in_at) : 'Never'}</span>
+                            {dm.dormant && <span className="ml-1.5"><Badge tone="warning" icon={Clock}>Dormant</Badge></span>}
+                          </Td>
+                          <Td>
+                            <Badge tone={DECISION_TONE[it.decision] || 'quiet'} icon={DIcon}>{DECISION_LABEL[it.decision] || 'Pending'}</Badge>
+                            {it.decision_note && <p className="text-[11px] text-gray-400 mt-0.5 max-w-[220px] truncate" title={it.decision_note}>{it.decision_note}</p>}
+                            {it.apply_result && <p className="text-[11px] text-gray-400 mt-0.5">Applied: {it.apply_result}</p>}
+                          </Td>
+                          <Td align="right" nowrap>{itemActions(it)}</Td>
+                        </Tr>
+                      )
+                    })}
+                  </tbody>
+                </Table>
+                <Pager {...paged} onPage={paged.setPage} />
+              </>
+            )}
+          </Panel>
+        </div>
+      )}
+
+      <Drawer open={!!detailItem} title={detailItem ? (detailItem.full_name || detailItem.user_email || 'User') : ''}
+        subtitle={detailItem?.user_email} onClose={() => setDetail(null)} footer={detailItem ? itemActions(detailItem) : null}>
+        {detailItem && (
+          <>
+            <DetailList items={[
+              ['Role', detailItem.role],
+              ['Countries', (detailItem.country || []).join(', ') || 'None'],
+              ['Sites', (detailItem.sites || []).join(', ') || 'None'],
+              ['Last sign in', detailItem.last_sign_in_at ? fmtDate(detailItem.last_sign_in_at, true) : 'Never'],
+              ['Status at snapshot', `${detailItem.locked ? 'Locked' : 'Active'}${detailItem.is_super_admin ? ', super admin' : ''}`],
+              ['Decision', DECISION_LABEL[detailItem.decision] || 'Pending'],
+              ['Decided', detailItem.decided_at ? `${fmtDate(detailItem.decided_at, true)}${detailItem.decided_by_email ? ` by ${detailItem.decided_by_email}` : ''}` : 'Not yet'],
+              ['Note', detailItem.decision_note],
+              detailItem.apply_result && ['Apply result', detailItem.apply_result],
+            ]} />
+            <div>
+              <p className="flex items-center gap-1 text-[11px] uppercase tracking-wide text-gray-500 mb-1"><KeyRound size={11} aria-hidden="true" /> Per user grants ({grantCount(detailItem)})</p>
+              {grantCount(detailItem) === 0 ? <p className="text-xs text-gray-400">None. Access comes from the role only.</p> : (
+                <ul className="space-y-1">
+                  {detailItem.grants.map((g, i) => (
+                    <li key={`${g.module_key}-${i}`} className="text-xs text-gray-300">
+                      <Badge tone={g.effect === 'revoke' ? 'danger' : 'good'}>{g.effect}</Badge> {g.module_key}{g.capability ? ` (${g.capability})` : ''}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </>
+        )}
+      </Drawer>
 
       <Modal open={!!noteFor} onClose={() => setNoteFor(null)}
         title={noteFor?.decision === 'revoke' ? 'Revoke access' : 'Access needs changes'}
@@ -523,7 +575,8 @@ export default function ConsoleAccessReviews() {
   const [campaigns, setCampaigns] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [openId, setOpenId] = useState(null)
+  const [openId, setOpenId] = useUrlParam('review')
+  const { refreshedAt, stamp } = useRefreshStamp()
   const [startOpen, setStartOpen] = useState(false)
   const [name, setName] = useState(defaultName)
   const [due, setDue] = useState(defaultDue)
@@ -534,12 +587,13 @@ export default function ConsoleAccessReviews() {
     setLoading(true); setError(null)
     try {
       setCampaigns(await listAccessReviews())
+      stamp()
     } catch (e) {
       setError(toUserMessage(e, 'Could not load access reviews.'))
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [stamp])
 
   useEffect(() => { load() }, [load])
 
@@ -564,22 +618,10 @@ export default function ConsoleAccessReviews() {
 
   return (
     <div className="space-y-5 max-w-7xl">
-      <div className="flex flex-wrap items-start gap-3">
-        <div className="flex-1 min-w-0">
-          <h1 className="text-xl font-semibold text-gray-100 flex items-center gap-2">
-            <ClipboardCheck size={20} className="text-orange-400" /> Access Reviews
-          </h1>
-          <p className="text-xs text-gray-400 mt-0.5">
-            Periodic recertification of every user's access, kept as audit evidence (ISO 27001 A.5.18 and A.8.2, SOC 2 CC6).
-          </p>
-        </div>
-        {!openId && (
-          <Toolbar>
-            <Btn icon={RefreshCw} onClick={load} busy={loading}>Refresh</Btn>
-            <Btn variant="primary" icon={Play} onClick={() => { setStartError(null); setStartOpen(true) }}>Start a review</Btn>
-          </Toolbar>
-        )}
-      </div>
+      <PageHeader icon={ClipboardCheck} title="Access Reviews"
+        purpose="Periodic recertification of every user's access, kept as audit evidence (ISO 27001 A.5.18 and A.8.2, SOC 2 CC6)."
+        primary={!openId && <Btn variant="primary" icon={Play} onClick={() => { setStartError(null); setStartOpen(true) }}>Start a review</Btn>}
+        refreshedAt={refreshedAt} onRefresh={openId ? undefined : load} refreshing={loading} />
 
       {openId ? (
         <CampaignView campaignId={openId} onBack={() => { setOpenId(null); load() }} onChanged={() => {}} />
@@ -592,11 +634,14 @@ export default function ConsoleAccessReviews() {
             <StatTile label="Last completed" value={na ? 'N/A' : lastClosed ? fmtDate(lastClosed.closed_at) : 'Never'} icon={CalendarClock}
               sub={na ? undefined : lastClosed ? lastClosed.name : 'No review has been closed yet'} />
           </div>
-          {!na && !lastClosed && (
-            <Note icon={AlertTriangle} tone="warning">
-              No access review has been completed. Auditors expect one at least every quarter for privileged users and every year for everyone.
-            </Note>
-          )}
+          <AttentionList ready={!na} clearText="Every open review is on time and a review has been completed." items={[
+            ...(!lastClosed ? [{ key: 'none', tone: 'warning', title: 'No access review has been completed',
+              detail: 'Auditors expect one at least every quarter for privileged users and every year for everyone.',
+              action: { label: 'Start a review', onClick: () => { setStartError(null); setStartOpen(true) } } }] : []),
+            ...campaigns.filter((c) => isOverdue(c)).slice(0, 3).map((c) => ({ key: c.id, tone: 'danger',
+              title: `${c.name} is overdue`, detail: `${Number(c.pending) || 0} decision${Number(c.pending) === 1 ? '' : 's'} still pending, due ${fmtDate(c.due_at)}.`,
+              action: { label: 'Open', onClick: () => setOpenId(c.id) } })),
+          ]} />
           <Panel>
             <PanelHeader icon={ListChecks} title="Review campaigns" subtitle="Open one to record decisions or export the evidence" />
             <div>

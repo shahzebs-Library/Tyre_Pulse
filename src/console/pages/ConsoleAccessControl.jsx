@@ -16,10 +16,11 @@
  * on the matching panel.
  */
 import { Suspense, lazy, useMemo } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import {
   ShieldCheck, KeyRound, UserCog, UserCheck, Eye, Globe,
   Layers, ScrollText, Fingerprint, Wand2, SlidersHorizontal, Repeat2,
+  Users, ClipboardCheck, Timer, ArrowUpRight,
 } from 'lucide-react'
 import { Segmented, LoadingState } from '../components/ui'
 
@@ -53,6 +54,22 @@ const TABS = [
 
 const DEFAULT_TAB = 'manager'
 
+// Eleven flat tabs were a wall of buttons. They are grouped by the job the
+// admin came to do; the ?tab= value is still the individual section, so every
+// existing deep link (/permission-matrix -> ?tab=roles and so on) still lands.
+const GROUPS = [
+  { key: 'configure', label: 'Configure', desc: 'Set who can do what', tabs: ['manager', 'roles', 'custom', 'grants', 'delegation'] },
+  { key: 'inspect', label: 'Inspect', desc: 'See the access a person actually has', tabs: ['effective', 'preview', 'country'] },
+  { key: 'change', label: 'Change many', desc: 'Apply one change to many users', tabs: ['bulk'] },
+  { key: 'review', label: 'Review', desc: 'The trail of access changes and account security', tabs: ['audit', 'security'] },
+]
+
+const RELATED = [
+  { to: '/console/users', label: 'Users', icon: Users },
+  { to: '/console/access-reviews', label: 'Access reviews', icon: ClipboardCheck },
+  { to: '/console/jit-elevation', label: 'JIT elevation', icon: Timer },
+]
+
 function TabFallback() {
   return <LoadingState label="Loading section" rows={4} />
 }
@@ -75,8 +92,15 @@ export default function ConsoleAccessControl() {
     setParams(next, { replace: true })
   }
 
+  const activeGroup = GROUPS.find((g) => g.tabs.includes(active)) || GROUPS[0]
+
+  const groupOptions = useMemo(
+    () => GROUPS.map((g) => ({ key: g.key, label: g.label, hint: g.desc, count: g.tabs.length })),
+    [],
+  )
+
   const tabOptions = useMemo(
-    () => TABS.map((t) => {
+    () => TABS.filter((t) => activeGroup.tabs.includes(t.key)).map((t) => {
       const Icon = t.icon
       return {
         key: t.key,
@@ -84,7 +108,7 @@ export default function ConsoleAccessControl() {
         label: <><Icon size={13} aria-hidden="true" />{t.label}</>,
       }
     }),
-    [],
+    [activeGroup],
   )
 
   return (
@@ -99,10 +123,28 @@ export default function ConsoleAccessControl() {
             changes, the access audit trail and account security. Super Admin controls apply platform wide.
           </p>
         </div>
+        <nav aria-label="Related pages" className="flex flex-wrap items-center gap-2">
+          {RELATED.map((r) => {
+            const Icon = r.icon
+            return (
+              <Link key={r.to} to={r.to}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-gray-800 text-xs text-gray-400 hover:text-gray-200 hover:bg-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
+                <Icon size={13} aria-hidden="true" /> {r.label} <ArrowUpRight size={11} aria-hidden="true" />
+              </Link>
+            )
+          })}
+        </nav>
       </header>
 
       <nav aria-label="Access Control sections" className="space-y-2">
-        <Segmented options={tabOptions} value={active} onChange={selectTab} ariaLabel="Access Control sections" />
+        <div className="flex flex-wrap items-center gap-3">
+          <Segmented options={groupOptions} value={activeGroup.key} ariaLabel="Access Control groups"
+            onChange={(g) => { const grp = GROUPS.find((x) => x.key === g); if (grp) selectTab(grp.tabs[0]) }} />
+          <span className="text-xs text-gray-500">{activeGroup.desc}</span>
+        </div>
+        {tabOptions.length > 1 && (
+          <Segmented options={tabOptions} value={active} onChange={selectTab} ariaLabel="Access Control sections" />
+        )}
         <p className="text-xs text-gray-400">{activeTab.desc}</p>
       </nav>
 

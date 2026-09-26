@@ -26,6 +26,7 @@ import { getEffectiveAccess } from '../../../lib/api/adminAccess'
 import { toUserMessage } from '../../../lib/safeError'
 import UserDirectory, { displayName } from './UserDirectory'
 import { exportConsoleRows, searchRows, sortRows, useTableSort } from '../../../lib/consoleTable'
+import { usePaged, Pager } from '../accessKit'
 import {
   Badge, Btn, EmptyState, ErrorState, LoadingState, Note, Panel, PanelHeader, SearchInput, Segmented,
   StatTile, Table, THead, Th, Tr, Td, Toolbar,
@@ -139,6 +140,8 @@ export default function EffectivePermissions() {
       role_allows: (m) => (m.role_allows ? 1 : 0),
     })
   }, [modules, moduleFilter, moduleSearch, sort])
+
+  const paged = usePaged(visibleModules, 25, `${selectedId}|${moduleFilter}|${moduleSearch}|${sort?.key}|${sort?.dir}`)
 
   async function runExport(format) {
     if (!selectedUser) return
@@ -265,7 +268,7 @@ export default function EffectivePermissions() {
                       <Th sortKey="reason" sort={sort} onSort={onSort}>Why</Th>
                     </THead>
                     <tbody>
-                      {visibleModules.map((m) => (
+                      {paged.pageRows.map((m) => (
                         <Tr key={m.key}>
                           <Td><span className="text-gray-100 font-medium">{m.label}</span></Td>
                           <Td align="center">
@@ -299,6 +302,7 @@ export default function EffectivePermissions() {
                     </tbody>
                   </Table>
                 )}
+                {!accessLoading && !accessError && <Pager {...paged} onPage={paged.setPage} className="border-t-0 px-0" />}
                 <p className="text-[11px] text-gray-400 mt-3">
                   A tick or cross in a capability column is an explicit per-user grant or revoke. Role means the
                   capability is inherited from the role.

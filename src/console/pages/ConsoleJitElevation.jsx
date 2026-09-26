@@ -12,7 +12,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  Timer, ShieldCheck, ShieldOff, Clock, RefreshCw, FileSpreadsheet, FileText, Plus, Ban, Info, History, Hourglass, BarChart3,
+  Timer, ShieldCheck, ShieldOff, Clock, FileSpreadsheet, FileText, Plus, Ban, Info, History, Hourglass, BarChart3,
 } from 'lucide-react'
 import {
   Panel, PanelHeader, Note, StatTile, Badge, Code, Btn, Segmented, SearchInput, Select, Toolbar,
@@ -31,6 +31,10 @@ import {
 import { ALL_MODULES, MODULE_LABEL } from '../../lib/moduleCatalog'
 import { toUserMessage } from '../../lib/safeError'
 import { exportConsoleRows, sortRows, useTableSort } from '../../lib/consoleTable'
+import { PageHeader, useUrlTab, useRefreshStamp, usePaged, Pager, AttentionList } from './accessKit'
+
+const TABS = ['now', 'history', 'insights']
+const SLOW_DECISION_MIN = 60
 
 function fmtWhen(v) {
   if (!v) return 'N/A'
@@ -250,12 +254,14 @@ export default function ConsoleJitElevation() {
   const [search, setSearch] = useState('')
   const [histStatus, setHistStatus] = useState('')
   const now = useNow(1000)
+  const [tab, setTab] = useUrlTab(TABS, 'now')
+  const { refreshedAt, stamp } = useRefreshStamp()
 
   const load = useCallback(async () => {
     setLoading(true); setError(null)
-    try { setData(await listElevations()) } catch (e) { setError(toUserMessage(e, 'Could not load elevation requests.')) }
+    try { setData(await listElevations()); stamp() } catch (e) { setError(toUserMessage(e, 'Could not load elevation requests.')) }
     finally { setLoading(false) }
-  }, [])
+  }, [stamp])
   useEffect(() => { load() }, [load])
 
   const rows = useMemo(() => data?.rows || [], [data])
@@ -271,6 +277,23 @@ export default function ConsoleJitElevation() {
   ), [parts, search, histStatus, minuteNow, sort])
   const trend = useMemo(() => dailySeries(rows, (r) => r.created_at, 14), [rows])
   const topModules = useMemo(() => topShare(rows, (r) => moduleName(r.module_key), 6), [rows])
+  const topUsers = useMemo(() => topShare(rows, (r) => r.target_name || 'Unknown user', 6), [rows])
+  const pagedHistory = usePaged(history, 20, `${search}|${histStatus}|${sort?.key}|${sort?.dir}`)
+
+  const attention = useMemo(() => {
+    const out = []
+    const slow = parts.pending.filter((r) => (minuteNow - Date.parse(r.created_at)) / 60000 > SLOW_DECISION_MIN)
+    if (slow.length) {
+      out.push({ key: 'slow', tone: 'warning', title: `${slow.length} request${slow.length === 1 ? ' has' : 's have'} waited more than an hour`,
+        detail: 'Undecided requests lapse after 24 hours and the user has to ask again.' })
+    }
+    const ending = parts.active.filter((r) => { const left = remainingMs(r, minuteNow); return left != null && left < 15 * 60000 })
+    if (ending.length) {
+      out.push({ key: 'ending', tone: 'info', title: `${ending.length} elevation${ending.length === 1 ? ' ends' : 's end'} within 15 minutes`,
+        detail: 'Access stops automatically at expiry. Grant again only if the task genuinely needs more time.' })
+    }
+    return out
+  }, [parts, minuteNow])
 
   const done = (msg) => { setDecide(null); setRevokeTarget(null); setGranting(false); setFlash(msg); load() }
 
@@ -319,20 +342,16 @@ export default function ConsoleJitElevation() {
 
   return (
     <div className="space-y-5 max-w-7xl">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1><Timer size={18} className="text-orange-400" /> Just-in-time Elevation</h1>
-          <p className="text-xs text-gray-400 mt-1">
-            Time-limited access to one module capability, with a reason, a decision and an automatic end. Last read {fmtWhen(data?.generatedAt)}.
-          </p>
-        </div>
-        <Toolbar>
-          <Btn icon={Plus} variant="primary" onClick={() => setGranting(true)}>Grant temporary access</Btn>
-          <Btn icon={RefreshCw} onClick={load} busy={loading}>Refresh</Btn>
-          <Btn icon={FileSpreadsheet} onClick={() => doExport('excel')} busy={exporting === 'excel'} disabled={!!error || !rows.length}>Excel</Btn>
-          <Btn icon={FileText} onClick={() => doExport('pdf')} busy={exporting === 'pdf'} disabled={!!error || !rows.length}>PDF</Btn>
-        </Toolbar>
-      </header>
+      <PageHeader icon={Timer} title="Just-in-time Elevation"
+        purpose={`Time-limited access to one module capability, with a reason, a decision and an automatic end. Last read ${fmtWhen(data?.generatedAt)}.`}
+        primary={<Btn icon={Plus} variant="primary" onClick={() => setGranting(true)}>Grant temporary access</Btn>}
+        actions={(
+          <>
+            <Btn icon={FileSpreadsheet} onClick={() => doExport('excel')} busy={exporting === 'excel'} disabled={!!error || !rows.length}>Excel</Btn>
+            <Btn icon={FileText} onClick={() => doExport('pdf')} busy={exporting === 'pdf'} disabled={!!error || !rows.length}>PDF</Btn>
+          </>
+        )}
+        refreshedAt={refreshedAt} onRefresh={load} refreshing={loading} />
 
       {flash && <Note icon={Info} tone="accent">{flash}</Note>}
       {exportError && <ErrorState message={exportError} />}
@@ -343,147 +362,176 @@ export default function ConsoleJitElevation() {
             <Note icon={Info} tone="warning">Showing the newest {rows.length} of {data.total} requests. Export and counts cover the rows shown.</Note>
           )}
           <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
-            <StatTile label="Waiting" value={summary.pending} icon={Hourglass} tone={summary.pending ? 'warning' : 'muted'} />
-            <StatTile label="Active now" value={summary.active} icon={ShieldCheck} tone={summary.active ? 'good' : 'muted'} />
-            <StatTile label="Ended early" value={summary.revoked} tone={summary.revoked ? 'danger' : 'muted'} />
+            <StatTile label="Waiting" value={summary.pending} icon={Hourglass} tone={summary.pending ? 'warning' : 'muted'}
+              onClick={() => setTab('now')} active={tab === 'now'} />
+            <StatTile label="Active now" value={summary.active} icon={ShieldCheck} tone={summary.active ? 'good' : 'muted'}
+              onClick={() => setTab('now')} />
+            <StatTile label="Ended early" value={summary.revoked} tone={summary.revoked ? 'danger' : 'muted'}
+              onClick={() => { setHistStatus('revoked'); setTab('history') }} active={tab === 'history' && histStatus === 'revoked'} />
             <StatTile label="Approval rate" value={summary.approvalRate === null ? 'N/A' : `${summary.approvalRate}%`}
-              sub={summary.approvalRate === null ? 'Nothing decided yet' : 'Of decided requests'} />
+              sub={summary.approvalRate === null ? 'Nothing decided yet' : 'Of decided requests'} onClick={() => setTab('insights')} />
             <StatTile label="Median wait" value={summary.medianDecisionMinutes === null ? 'N/A' : formatMinutes(summary.medianDecisionMinutes)}
-              sub="Request to decision" icon={Clock} />
+              sub="Request to decision" icon={Clock} onClick={() => setTab('insights')} />
           </div>
 
-          <Note icon={Info}>
-            Access ends exactly at expiry even between sweeps: every permission check already ignores an expired grant. Admins and super admins cannot be elevated because they already hold every capability. Requests are filed with the <Code>request_elevation</Code> RPC; users get a notification when you decide.
-          </Note>
+          <Segmented ariaLabel="Elevation views" value={tab} onChange={setTab} options={[
+            { key: 'now', label: 'Waiting and active', count: parts.pending.length + parts.active.length },
+            { key: 'history', label: 'History', count: parts.history.length },
+            { key: 'insights', label: 'Insights' },
+          ]} />
 
-          <Panel>
-            <PanelHeader icon={Hourglass} title="Waiting for a decision" subtitle={`${parts.pending.length} request${parts.pending.length === 1 ? '' : 's'}. Undecided requests lapse after 24 hours.`} tone={parts.pending.length ? 'warning' : 'default'} />
-            {!parts.pending.length ? (
-              <EmptyState icon={Hourglass} title="Nothing waiting" reason="No elevation request is waiting for a decision." />
-            ) : (
-              <Table>
-                <THead><Th>User</Th><Th>Access asked for</Th><Th>Duration</Th><Th>Reason</Th><Th>Requested</Th><Th align="right">Decision</Th></THead>
-                <tbody>
-                  {parts.pending.map((r) => (
-                    <Tr key={r.id}>
-                      <Td><Who row={r} /></Td>
-                      <Td><What row={r} /></Td>
-                      <Td nowrap>{formatMinutes(r.requested_minutes)}</Td>
-                      <Td><span className="text-gray-300 block max-w-[18rem]" title={r.reason}>{r.reason}</span></Td>
-                      <Td nowrap>{fmtWhen(r.created_at)}</Td>
-                      <Td align="right" nowrap>
-                        <div className="inline-flex gap-1.5">
-                          <Btn size="xs" variant="good" icon={ShieldCheck} onClick={() => setDecide({ row: r, approve: true })}>Approve</Btn>
-                          <Btn size="xs" variant="danger" icon={ShieldOff} onClick={() => setDecide({ row: r, approve: false })}>Deny</Btn>
-                        </div>
-                      </Td>
-                    </Tr>
-                  ))}
-                </tbody>
-              </Table>
-            )}
-          </Panel>
-
-          <Panel>
-            <PanelHeader icon={ShieldCheck} title="Active elevations" subtitle="Soonest to expire first. Time left updates every second." />
-            {!parts.active.length ? (
-              <EmptyState icon={ShieldCheck} title="No active elevations" reason="Nobody holds temporary access right now." />
-            ) : (
-              <Table>
-                <THead><Th>User</Th><Th>Access</Th><Th>Approved by</Th><Th>Time left</Th><Th>Ends</Th><Th align="right">Actions</Th></THead>
-                <tbody>
-                  {parts.active.map((r) => {
-                    const left = remainingMs(r, now)
-                    const pct = elapsedPct(r, now)
-                    return (
-                      <Tr key={r.id}>
-                        <Td><Who row={r} /></Td>
-                        <Td><What row={r} /></Td>
-                        <Td nowrap>
-                          <div className="text-gray-300">{r.decided_by_name || 'Unknown'}</div>
-                          {r.requested_by === r.decided_by && <div className="text-[11px] text-gray-400">Granted directly</div>}
-                        </Td>
-                        <Td nowrap>
-                          <div className="text-gray-100 tabular-nums">{formatRemaining(left)}</div>
-                          {pct !== null && (
-                            <div className="mt-1 h-1 w-28 rounded bg-gray-800 overflow-hidden" aria-label={`${pct}% of the window used`}>
-                              <div className={`h-full ${pct >= 80 ? 'bg-amber-500' : 'bg-emerald-500'}`} style={{ width: `${pct}%` }} />
+          {tab === 'now' && (
+            <div role="tabpanel" aria-label="Waiting and active" className="space-y-4">
+              <AttentionList items={attention} clearText="No request has waited over an hour and no elevation is about to end." />
+              <Panel>
+                <PanelHeader icon={Hourglass} title="Waiting for a decision" subtitle={`${parts.pending.length} request${parts.pending.length === 1 ? '' : 's'}. Undecided requests lapse after 24 hours.`} tone={parts.pending.length ? 'warning' : 'default'} />
+                {!parts.pending.length ? (
+                  <EmptyState icon={Hourglass} title="Nothing waiting" reason="No elevation request is waiting for a decision." />
+                ) : (
+                  <Table>
+                    <THead><Th>User</Th><Th>Access asked for</Th><Th>Duration</Th><Th>Reason</Th><Th>Requested</Th><Th align="right">Decision</Th></THead>
+                    <tbody>
+                      {parts.pending.map((r) => (
+                        <Tr key={r.id}>
+                          <Td><Who row={r} /></Td>
+                          <Td><What row={r} /></Td>
+                          <Td nowrap>{formatMinutes(r.requested_minutes)}</Td>
+                          <Td><span className="text-gray-300 block max-w-[18rem]" title={r.reason}>{r.reason}</span></Td>
+                          <Td nowrap>{fmtWhen(r.created_at)}</Td>
+                          <Td align="right" nowrap>
+                            <div className="inline-flex gap-1.5">
+                              <Btn size="xs" variant="good" icon={ShieldCheck} onClick={() => setDecide({ row: r, approve: true })}>Approve</Btn>
+                              <Btn size="xs" variant="danger" icon={ShieldOff} onClick={() => setDecide({ row: r, approve: false })}>Deny</Btn>
                             </div>
-                          )}
-                        </Td>
-                        <Td nowrap>{fmtWhen(r.expires_at)}</Td>
-                        <Td align="right"><Btn size="xs" variant="danger" icon={Ban} onClick={() => setRevokeTarget(r)}>End now</Btn></Td>
-                      </Tr>
-                    )
-                  })}
-                </tbody>
-              </Table>
-            )}
-          </Panel>
+                          </Td>
+                        </Tr>
+                      ))}
+                    </tbody>
+                  </Table>
+                )}
+              </Panel>
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Panel>
-              <PanelHeader icon={BarChart3} title="Requests per day" subtitle={`${trend.total} in the last 14 days`} />
-              <TrendChart labels={trend.labels} series={[{ label: 'Requests', values: trend.values }]} height={180}
-                summary={`${trend.total} elevation requests in the last 14 days`} emptyText="No requests in the last 14 days." />
-            </Panel>
-            <Panel>
-              <PanelHeader icon={BarChart3} title="Most requested modules" subtitle="All time, every status" />
-              <BarsChart bars={topModules.map((m) => ({ label: m.label, value: m.value }))}
-                summary={topModules.map((m) => `${m.label} ${m.value}`).join(', ')} emptyText="No requests yet." />
-            </Panel>
-          </div>
-
-          <Panel flush>
-            <div className="p-4 pb-3 space-y-3">
-              <PanelHeader icon={History} title="History" subtitle={`${history.length} of ${parts.history.length} shown`} />
-              <Toolbar>
-                <Segmented options={histTabs} value={histStatus} onChange={setHistStatus} ariaLabel="Filter history by outcome" />
-                <SearchInput value={search} onChange={setSearch} placeholder="Search user, module, reason, decider" className="w-72" />
-              </Toolbar>
+              <Panel>
+                <PanelHeader icon={ShieldCheck} title="Active elevations" subtitle="Soonest to expire first. Time left updates every second." />
+                {!parts.active.length ? (
+                  <EmptyState icon={ShieldCheck} title="No active elevations" reason="Nobody holds temporary access right now." />
+                ) : (
+                  <Table>
+                    <THead><Th>User</Th><Th>Access</Th><Th>Approved by</Th><Th>Time left</Th><Th>Ends</Th><Th align="right">Actions</Th></THead>
+                    <tbody>
+                      {parts.active.map((r) => {
+                        const left = remainingMs(r, now)
+                        const pct = elapsedPct(r, now)
+                        return (
+                          <Tr key={r.id}>
+                            <Td><Who row={r} /></Td>
+                            <Td><What row={r} /></Td>
+                            <Td nowrap>
+                              <div className="text-gray-300">{r.decided_by_name || 'Unknown'}</div>
+                              {r.requested_by === r.decided_by && <div className="text-[11px] text-gray-400">Granted directly</div>}
+                            </Td>
+                            <Td nowrap>
+                              <div className="text-gray-100 tabular-nums">{formatRemaining(left)}</div>
+                              {pct !== null && (
+                                <div className="mt-1 h-1 w-28 rounded bg-gray-800 overflow-hidden" role="img" aria-label={`${pct}% of the window used`}>
+                                  <div className={`h-full ${pct >= 80 ? 'bg-amber-500' : 'bg-emerald-500'}`} style={{ width: `${pct}%` }} />
+                                </div>
+                              )}
+                            </Td>
+                            <Td nowrap>{fmtWhen(r.expires_at)}</Td>
+                            <Td align="right"><Btn size="xs" variant="danger" icon={Ban} onClick={() => setRevokeTarget(r)}>End now</Btn></Td>
+                          </Tr>
+                        )
+                      })}
+                    </tbody>
+                  </Table>
+                )}
+              </Panel>
             </div>
-            {!parts.history.length ? (
-              <div className="p-4 pt-0"><EmptyState icon={History} title="No history yet" reason="No elevation has ended, been denied or been cancelled." /></div>
-            ) : !history.length ? (
-              <div className="p-4 pt-0"><EmptyState title="Nothing matches" reason="No past request matches the current filters." /></div>
-            ) : (
-              <Table className="rounded-none border-x-0 border-b-0">
-                <THead>
-                  <Th sortKey="target_name" sort={sort} onSort={onSort}>User</Th>
-                  <Th sortKey="access" sort={sort} onSort={onSort}>Access</Th>
-                  <Th sortKey="outcome" sort={sort} onSort={onSort}>Outcome</Th>
-                  <Th sortKey="created_at" sort={sort} onSort={onSort}>Requested</Th>
-                  <Th sortKey="decided_at" sort={sort} onSort={onSort}>Decided</Th>
-                  <Th>Detail</Th>
-                </THead>
-                <tbody>
-                  {history.map((r) => {
-                    const s = effectiveStatus(r, minuteNow)
-                    const meta = STATUS_META[s] || { label: s, tone: 'quiet' }
-                    const detail = s === 'revoked' ? `${r.revoked_by_name || 'Unknown'}: ${r.revoke_reason || ''}`
-                      : s === 'denied' ? r.decision_note || ''
-                        : r.granted_minutes ? `Granted ${formatMinutes(r.granted_minutes)}${r.expires_at ? `, ended ${fmtWhen(r.expires_at)}` : ''}` : r.reason
-                    return (
-                      <Tr key={r.id}>
-                        <Td><Who row={r} /></Td>
-                        <Td><What row={r} /></Td>
-                        <Td><Badge tone={meta.tone}>{meta.label}</Badge></Td>
-                        <Td nowrap>
-                          <div className="text-gray-300">{fmtWhen(r.created_at)}</div>
-                          <div className="text-[11px] text-gray-400">{r.requested_by_name || 'Unknown'}, {formatMinutes(r.requested_minutes)}</div>
-                        </Td>
-                        <Td nowrap>
-                          <div className="text-gray-300">{fmtWhen(r.decided_at)}</div>
-                          {r.decided_by_name && <div className="text-[11px] text-gray-400">{r.decided_by_name}</div>}
-                        </Td>
-                        <Td><span className="text-gray-400 block max-w-[18rem]" title={detail}>{detail || 'N/A'}</span></Td>
-                      </Tr>
-                    )
-                  })}
-                </tbody>
-              </Table>
-            )}
-          </Panel>
+          )}
+
+          {tab === 'history' && (
+            <div role="tabpanel" aria-label="History">
+              <Panel flush>
+                <div className="p-4 pb-3 space-y-3">
+                  <PanelHeader icon={History} title="History" subtitle={`${history.length} of ${parts.history.length} shown`} />
+                  <Toolbar>
+                    <Segmented options={histTabs} value={histStatus} onChange={setHistStatus} ariaLabel="Filter history by outcome" />
+                    <SearchInput value={search} onChange={setSearch} placeholder="Search user, module, reason, decider" className="w-72" />
+                  </Toolbar>
+                </div>
+                {!parts.history.length ? (
+                  <div className="p-4 pt-0"><EmptyState icon={History} title="No history yet" reason="No elevation has ended, been denied or been cancelled." /></div>
+                ) : !history.length ? (
+                  <div className="p-4 pt-0"><EmptyState title="Nothing matches" reason="No past request matches the current filters." /></div>
+                ) : (
+                  <>
+                    <Table className="rounded-none border-x-0 border-b-0">
+                      <THead>
+                        <Th sortKey="target_name" sort={sort} onSort={onSort}>User</Th>
+                        <Th sortKey="access" sort={sort} onSort={onSort}>Access</Th>
+                        <Th sortKey="outcome" sort={sort} onSort={onSort}>Outcome</Th>
+                        <Th sortKey="created_at" sort={sort} onSort={onSort}>Requested</Th>
+                        <Th sortKey="decided_at" sort={sort} onSort={onSort}>Decided</Th>
+                        <Th>Detail</Th>
+                      </THead>
+                      <tbody>
+                        {pagedHistory.pageRows.map((r) => {
+                          const s = effectiveStatus(r, minuteNow)
+                          const meta = STATUS_META[s] || { label: s, tone: 'quiet' }
+                          const detail = s === 'revoked' ? `${r.revoked_by_name || 'Unknown'}: ${r.revoke_reason || ''}`
+                            : s === 'denied' ? r.decision_note || ''
+                              : r.granted_minutes ? `Granted ${formatMinutes(r.granted_minutes)}${r.expires_at ? `, ended ${fmtWhen(r.expires_at)}` : ''}` : r.reason
+                          return (
+                            <Tr key={r.id}>
+                              <Td><Who row={r} /></Td>
+                              <Td><What row={r} /></Td>
+                              <Td><Badge tone={meta.tone}>{meta.label}</Badge></Td>
+                              <Td nowrap>
+                                <div className="text-gray-300">{fmtWhen(r.created_at)}</div>
+                                <div className="text-[11px] text-gray-400">{r.requested_by_name || 'Unknown'}, {formatMinutes(r.requested_minutes)}</div>
+                              </Td>
+                              <Td nowrap>
+                                <div className="text-gray-300">{fmtWhen(r.decided_at)}</div>
+                                {r.decided_by_name && <div className="text-[11px] text-gray-400">{r.decided_by_name}</div>}
+                              </Td>
+                              <Td><span className="text-gray-400 block max-w-[18rem]" title={detail}>{detail || 'N/A'}</span></Td>
+                            </Tr>
+                          )
+                        })}
+                      </tbody>
+                    </Table>
+                    <Pager {...pagedHistory} onPage={pagedHistory.setPage} />
+                  </>
+                )}
+              </Panel>
+            </div>
+          )}
+
+          {tab === 'insights' && (
+            <div role="tabpanel" aria-label="Insights" className="space-y-4">
+              <div className="grid gap-4 lg:grid-cols-3">
+                <Panel>
+                  <PanelHeader icon={BarChart3} title="Requests per day" subtitle={`${trend.total} in the last 14 days`} />
+                  <TrendChart labels={trend.labels} series={[{ label: 'Requests', values: trend.values }]} height={180}
+                    summary={`${trend.total} elevation requests in the last 14 days`} emptyText="No requests in the last 14 days." />
+                </Panel>
+                <Panel>
+                  <PanelHeader icon={BarChart3} title="Most requested modules" subtitle="All time, every status" />
+                  <BarsChart bars={topModules.map((m) => ({ label: m.label, value: m.value }))}
+                    summary={topModules.map((m) => `${m.label} ${m.value}`).join(', ')} emptyText="No requests yet." />
+                </Panel>
+                <Panel>
+                  <PanelHeader icon={BarChart3} title="Most frequent requesters" subtitle="A person who elevates every week may need a role change instead" />
+                  <BarsChart bars={topUsers.map((m) => ({ label: m.label, value: m.value }))}
+                    summary={topUsers.map((m) => `${m.label} ${m.value}`).join(', ')} emptyText="No requests yet." />
+                </Panel>
+              </div>
+              <Note icon={Info}>
+                Access ends exactly at expiry even between sweeps: every permission check already ignores an expired grant. Admins and super admins cannot be elevated because they already hold every capability. Requests are filed with the <Code>request_elevation</Code> RPC; users get a notification when you decide.
+              </Note>
+            </div>
+          )}
         </>
       )}
 

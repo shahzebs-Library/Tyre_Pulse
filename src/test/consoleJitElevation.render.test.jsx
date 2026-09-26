@@ -29,7 +29,10 @@ describe('ConsoleJitElevation', () => {
     render(<ConsoleJitElevation />)
     expect(await screen.findByText('Adnan')).toBeTruthy()
     expect(screen.getByText('Omar')).toBeTruthy()
+    // History moved to its own tab so the page opens on what needs a decision.
+    fireEvent.click(screen.getByRole('tab', { name: /History/ }))
     expect(screen.getByText(/not your remit/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('tab', { name: /Waiting and active/ }))
     fireEvent.click(screen.getByRole('button', { name: /^Approve$/ }))
     const approveBtn = (await screen.findAllByRole('button', { name: /^Approve$/ })).at(-1)
     fireEvent.click(approveBtn)

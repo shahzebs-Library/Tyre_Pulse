@@ -7,23 +7,27 @@
  * and promotable to permanent field synonyms so future uploads auto-map them.
  */
 
-import { useState, useEffect, useCallback, useMemo, Fragment } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import * as customData from '../lib/api/customData'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
-import { formatCurrencyCompact, formatDate } from '../lib/formatters'
+import { formatDate } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
 import {
   Database, Search, Plus, Trash2, Check, X, ArrowRight,
-  ChevronRight, Download, RefreshCw, Eye, EyeOff, Filter,
-  Layers, Tag, Link2, AlertTriangle, Info, Zap, BookOpen,
-  FileSpreadsheet, ChevronDown,
+  Download, RefreshCw, Eye, Layers, Tag, Link2, AlertTriangle, Info, Zap, Hash,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import StatTile from '../components/ui/StatTile'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
+import { exportToExcel, reportFileName, reportDateLabel } from '../lib/exportUtils'
+import {
+  summarizeCustomData, filterFieldStats, filterSynonyms, flattenForExport, pageCount,
+} from '../lib/customDataAnalytics'
 
 // Canonical tyre_records fields the user can map to
 const CANONICAL_FIELDS = [
@@ -61,17 +65,26 @@ export default function CustomData() {
   const [records, setRecords]     = useState([])
   const [totalRecords, setTotalRecords] = useState(0)
   const [loading, setLoading]     = useState(true)
-  const [synLoading, setSynLoading] = useState(false)
+  const [synLoading, setSynLoading] = useState(true)
   const [recLoading, setRecLoading] = useState(false)
+
+  const [statsError, setStatsError] = useState('')
+  const [synError, setSynError]     = useState('')
+  const [recordCount, setRecordCount] = useState(null)
+  const [exporting, setExporting]   = useState(false)
+  const [exportMsg, setExportMsg]   = useState(null)
+  const [backfillError, setBackfillError] = useState('')
+  const [selectedRecord, setSelectedRecord] = useState(null)
 
   // Field stats filters
   const [statsSearch, setStatsSearch] = useState('')
+  const [statsMapping, setStatsMapping] = useState('all')
+  const [synSearch, setSynSearch] = useState('')
 
   // Records tab
   const [filterKey, setFilterKey]   = useState('')
   const [filterVal, setFilterVal]   = useState('')
   const [recPage, setRecPage]       = useState(0)
-  const [expandedRows, setExpandedRows] = useState(new Set())
   const REC_PAGE_SIZE = 20
 
   // Add synonym form
@@ -99,23 +112,34 @@ export default function CustomData() {
 
   const loadFieldStats = useCallback(async () => {
     setLoading(true)
+    setStatsError('')
     const country = activeCountry !== 'All' ? activeCountry : null
     try {
-      const data = await customData.getExtraFieldStats({ country })
+      const [data, head] = await Promise.all([
+        customData.getExtraFieldStats({ country }),
+        // One-row read for the exact count of records carrying custom data.
+        customData.listRecordsWithExtraFields({ country: activeCountry, from: 0, to: 0 }).catch(() => null),
+      ])
       setFieldStats(data ?? [])
-    } catch {
+      setRecordCount(head ? head.count : null)
+    } catch (error) {
+      // A failed read is not "no custom fields": keep the error on screen.
       setFieldStats([])
+      setRecordCount(null)
+      setStatsError(toUserMessage(error, 'Could not read the custom field summary.'))
     }
     setLoading(false)
   }, [activeCountry])
 
   const loadSynonyms = useCallback(async () => {
     setSynLoading(true)
+    setSynError('')
     try {
       const data = await customData.listFieldSynonyms()
       setSynonyms(data ?? [])
-    } catch {
+    } catch (error) {
       setSynonyms([])
+      setSynError(toUserMessage(error, 'Could not read the synonyms.'))
     }
     setSynLoading(false)
   }, [])
@@ -207,6 +231,7 @@ export default function CustomData() {
     if (!backfillKey || !backfillTarget) return
     setBackfillRunning(true)
     setBackfillResult(null)
+    setBackfillError('')
 
     // Fetch ALL records where this extra_field exists but canonical column is null
     const { data: batch, error } = await customData.listTyreRecordsForBackfill({
@@ -214,20 +239,27 @@ export default function CustomData() {
       target: backfillTarget,
     })
 
-    if (error) { setBackfillRunning(false); return }
+    if (error) {
+      setBackfillError(toUserMessage(error, 'Could not read the records to copy.'))
+      setBackfillRunning(false)
+      return
+    }
 
     let updated = 0
+    let failed = 0
     const CHUNK = 200
     for (let i = 0; i < batch.length; i += CHUNK) {
       const slice = batch.slice(i, i + CHUNK)
-      // Update each record - set canonical field = extra_fields value (dynamic key)
-      await Promise.all(slice.map(r =>
+      // Update each record - set canonical field = extra_fields value (dynamic key).
+      // Settled per row so one refused write is counted, not hidden behind the rest.
+      const results = await Promise.allSettled(slice.map(r =>
         customData.updateTyreRecordFields(r.id, { [backfillTarget]: r.extra_fields[backfillKey] })
       ))
-      updated += slice.length
+      for (const res of results) { if (res.status === 'fulfilled') updated += 1; else failed += 1 }
     }
 
     setBackfillResult({ updated, total: batch.length })
+    if (failed) setBackfillError(`${failed.toLocaleString()} record${failed === 1 ? '' : 's'} could not be updated.`)
     setBackfillRunning(false)
     loadFieldStats()
   }
@@ -235,41 +267,37 @@ export default function CustomData() {
   // ── Export extra_fields data ──────────────────────────────────────────────
 
   async function exportExtraFields() {
-    const XLSX = await import('xlsx')
-    // Fetch ALL records with extra_fields
-    const { data } = await customData.listTyreRecordsForExport()
-
-    if (!data?.length) return
-
-    // Flatten: each row = standard fields + all extra_fields keys spread out
-    const allKeys = [...new Set(data.flatMap(r => Object.keys(r.extra_fields ?? {})))]
-    const rows = data.map(r => ({
-      id:         r.id,
-      asset_no:   r.asset_no,
-      serial_no:  r.serial_no,
-      issue_date: r.issue_date,
-      site:       r.site,
-      brand:      r.brand,
-      country:    r.country,
-      ...Object.fromEntries(allKeys.map(k => [k, r.extra_fields?.[k] ?? ''])),
-    }))
-
-    const ws = XLSX.utils.json_to_sheet(rows)
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Custom Data')
-    XLSX.writeFile(wb, `custom_data_export_${new Date().toISOString().split('T')[0]}.xlsx`)
+    setExporting(true)
+    setExportMsg(null)
+    try {
+      const { data, error } = await customData.listTyreRecordsForExport()
+      if (error) throw error
+      if (!data?.length) {
+        setExportMsg({ type: 'info', text: 'There are no records with custom data to export.' })
+        return
+      }
+      const { rows, columns, headers } = flattenForExport(data)
+      await exportToExcel(rows, columns, headers, reportFileName('Custom Data', activeCountry, reportDateLabel()), 'Custom Data')
+    } catch (error) {
+      setExportMsg({ type: 'err', text: toUserMessage(error, 'Could not export the custom data.') })
+    } finally {
+      setExporting(false)
+    }
   }
 
   // ── Derived ──────────────────────────────────────────────────────────────────
 
-  const filteredStats = useMemo(() =>
-    fieldStats.filter(f => !statsSearch || f.field_key.toLowerCase().includes(statsSearch.toLowerCase())),
-    [fieldStats, statsSearch]
+  const filteredStats = useMemo(
+    () => filterFieldStats(fieldStats, { search: statsSearch, mapping: statsMapping, synonyms }),
+    [fieldStats, statsSearch, statsMapping, synonyms],
   )
+  const filteredSynonyms = useMemo(() => filterSynonyms(synonyms, synSearch), [synonyms, synSearch])
   const statsPager = usePagedRows(filteredStats)
-  const synonymsPager = usePagedRows(synonyms)
-
-  const totalCustomRecords = fieldStats.reduce((a, b) => a + Number(b.record_count), 0)
+  const synonymsPager = usePagedRows(filteredSynonyms)
+  const summary = useMemo(
+    () => summarizeCustomData({ fieldStats, synonyms, recordCount }),
+    [fieldStats, synonyms, recordCount],
+  )
 
   // Check if a custom field key already has a synonym
   const synonymMap = useMemo(() => {
@@ -278,7 +306,63 @@ export default function CustomData() {
     return m
   }, [synonyms])
 
-  const totalPages = Math.ceil(totalRecords / REC_PAGE_SIZE)
+  const totalPages = pageCount(totalRecords, REC_PAGE_SIZE)
+  const fieldLabel = useCallback(
+    (key) => (CANONICAL_FIELDS.find(f => f.key === key) ? t(`customdata.fields.${key}`) : key),
+    [t],
+  )
+
+  const synonymColumns = useMemo(() => [
+    { id: 'custom_name', header: t('customdata.synonyms.table.columnName'), accessorKey: 'custom_name',
+      cell: ({ getValue }) => <span className="font-mono text-[var(--text-primary)]">{getValue()}</span> },
+    { id: 'maps_to', header: t('customdata.synonyms.table.mapsTo'), accessorFn: (s) => fieldLabel(s.maps_to),
+      cell: ({ getValue }) => (
+        <span className="flex items-center gap-1.5">
+          <ArrowRight size={12} className="text-[var(--text-dim)]" aria-hidden="true" />
+          <span className="font-medium text-[var(--text-secondary)]">{getValue()}</span>
+        </span>
+      ) },
+    { id: 'use_count', header: t('customdata.synonyms.table.timesUsed'), accessorFn: (s) => Number(s.use_count) || 0, meta: { align: 'right' },
+      cell: ({ getValue }) => <span className="tabular-nums text-[var(--text-muted)]">{getValue().toLocaleString()}</span> },
+    { id: 'last_used_at', header: t('customdata.synonyms.table.lastUsed'), accessorFn: (s) => s.last_used_at || '',
+      cell: ({ row }) => <span className="text-xs text-[var(--text-muted)]">{row.original.last_used_at ? formatDate(row.original.last_used_at) : t('customdata.synonyms.table.never')}</span> },
+    { id: 'actions', header: '', enableSorting: false, meta: { export: false }, size: 64,
+      cell: ({ row }) => (
+        <button
+          type="button"
+          onClick={() => confirmDeleteSynonym(row.original)}
+          aria-label={`Delete synonym ${row.original.custom_name}`}
+          className="min-w-[44px] min-h-[44px] grid place-items-center rounded hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]"
+        >
+          <Trash2 size={14} aria-hidden="true" />
+        </button>
+      ) },
+  ], [t, fieldLabel])
+
+  const recordColumns = useMemo(() => [
+    { id: 'asset_no', header: t('customdata.records.table.assetNo'), accessorFn: (r) => r.asset_no ?? 'N/A',
+      cell: ({ getValue }) => <span className="font-mono text-[var(--text-primary)]">{getValue()}</span> },
+    { id: 'serial_no', header: t('customdata.records.table.serialNo'), accessorFn: (r) => r.serial_no ?? 'N/A',
+      cell: ({ getValue }) => <span className="font-mono text-[var(--text-secondary)]">{getValue()}</span> },
+    { id: 'issue_date', header: t('customdata.records.table.date'), accessorFn: (r) => r.issue_date ?? 'N/A' },
+    { id: 'site', header: t('customdata.records.table.site'), accessorFn: (r) => r.site ?? 'N/A' },
+    { id: 'custom', header: t('customdata.records.table.customFields'), enableSorting: false,
+      accessorFn: (r) => Object.entries(r.extra_fields ?? {}).map(([k, v]) => `${k}: ${v}`).join('; '),
+      cell: ({ row }) => {
+        const ef = row.original.extra_fields ?? {}
+        const keys = Object.keys(ef)
+        return (
+          <div className="flex flex-wrap gap-1">
+            {keys.slice(0, 3).map(k => (
+              <span key={k} className="bg-[var(--input-bg)] text-[var(--text-secondary)] px-2 py-0.5 rounded-full text-xs max-w-[160px] truncate" title={`${k}: ${ef[k]}`}>
+                <span className="font-medium text-[var(--text-primary)]">{k}</span>: {String(ef[k])}
+              </span>
+            ))}
+            {keys.length > 3 && <span className="text-[var(--text-dim)] text-xs">{t('customdata.records.table.moreCount', { count: keys.length - 3 })}</span>}
+          </div>
+        )
+      } },
+  ], [t])
 
   // ── Render ────────────────────────────────────────────────────────────────────
 
@@ -289,26 +373,33 @@ export default function CustomData() {
         subtitle={t('customdata.subtitle')}
         icon={Database}
         actions={
-          <button onClick={exportExtraFields} className="btn-secondary flex items-center gap-2 text-sm">
-            <Download size={14} /> {t('customdata.actions.exportAll')}
+          <button type="button" onClick={exportExtraFields} disabled={exporting} className="btn-secondary flex items-center gap-2 text-sm min-h-[44px] disabled:opacity-50">
+            {exporting ? <RefreshCw size={14} className="animate-spin" aria-hidden="true" /> : <Download size={14} aria-hidden="true" />} {t('customdata.actions.exportAll')}
           </button>
         }
       />
 
+      {exportMsg && (
+        <div role="status" className={`text-sm rounded-lg px-3 py-2 border ${exportMsg.type === 'err' ? 'bg-red-900/25 border-red-700/40 text-red-300' : 'bg-[var(--input-bg)] border-[var(--input-border)] text-[var(--text-secondary)]'}`}>
+          {exportMsg.text}
+        </div>
+      )}
+
       {/* ── Summary strip ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatTile icon={Layers}        label={t('customdata.stats.uniqueFields')}  value={fieldStats.length}         color="blue" />
-        <StatTile icon={Database}      label={t('customdata.stats.recordsWithCustomData')} value={totalCustomRecords}     color="green" />
-        <StatTile icon={Tag}           label={t('customdata.stats.permanentSynonyms')}    value={synonyms.length}           color="purple" />
-        <StatTile icon={Link2}         label={t('customdata.stats.autoMappedOnUpload')} value={synonyms.reduce((a,b) => a + b.use_count, 0)} color="yellow" />
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <StatTile index={0} icon={Layers} tone="info" label={t('customdata.stats.uniqueFields')} value={statsError ? 'N/A' : summary.uniqueFields.toLocaleString()} sub={statsError ? 'Could not be read' : `${summary.unmappedFields.toLocaleString()} not yet mapped`} />
+        <StatTile index={1} icon={Database} tone="accent" label={t('customdata.stats.recordsWithCustomData')} value={summary.recordCount == null ? 'N/A' : summary.recordCount.toLocaleString()} sub={summary.recordCount == null ? 'Count unavailable' : 'Distinct tyre records'} />
+        <StatTile index={2} icon={Hash} tone="neutral" label="Custom values captured" value={statsError ? 'N/A' : summary.fieldValues.toLocaleString()} sub="One record can carry several" />
+        <StatTile index={3} icon={Tag} tone="neutral" label={t('customdata.stats.permanentSynonyms')} value={synError ? 'N/A' : summary.synonyms.toLocaleString()} sub={summary.mappedShare == null ? 'No custom fields yet' : `${Math.round(summary.mappedShare * 100)}% of fields mapped`} />
+        <StatTile index={4} icon={Link2} tone="neutral" label={t('customdata.stats.autoMappedOnUpload')} value={synError ? 'N/A' : summary.autoMapped.toLocaleString()} />
       </div>
 
       {/* ── How it works banner ── */}
-      <div className="card border-blue-800/40 bg-blue-900/10">
+      <div className="card">
         <div className="flex items-start gap-3">
-          <Info size={18} className="text-blue-400 flex-shrink-0 mt-0.5" />
+          <Info size={18} className="text-[var(--accent)] flex-shrink-0 mt-0.5" aria-hidden="true" />
           <div className="space-y-1">
-            <p className="text-sm font-semibold text-blue-300">{t('customdata.banner.title')}</p>
+            <p className="text-sm font-semibold text-[var(--text-primary)]">{t('customdata.banner.title')}</p>
             <p className="text-sm text-[var(--text-muted)]">
               {t('customdata.banner.bodyPart1')}<strong className="text-[var(--text-secondary)]">{t('customdata.banner.customData')}</strong>{t('customdata.banner.bodyPart2')}<strong className="text-[var(--text-secondary)]">{t('customdata.banner.permanentSynonym')}</strong>{t('customdata.banner.bodyPart3')}
             </p>
@@ -317,18 +408,24 @@ export default function CustomData() {
       </div>
 
       {/* ── Tabs ── */}
-      <div className="flex gap-1 bg-[var(--surface-1)]/60 rounded-xl p-1 w-fit border border-[var(--input-border)]">
+      <div role="tablist" aria-label="Custom data sections" className="flex flex-wrap gap-1 bg-[var(--surface-1)]/60 rounded-xl p-1 w-fit max-w-full border border-[var(--input-border)]">
         {TABS.map((tabKey, i) => (
           <button
             key={tabKey}
+            type="button"
+            role="tab"
+            aria-selected={tab === i}
             onClick={() => setTab(i)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              tab === i ? 'bg-gray-700 text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+            className={`px-4 min-h-[44px] rounded-lg text-sm font-medium transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] ${
+              tab === i ? 'bg-[var(--accent)] text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
             }`}
           >
             {t(`customdata.tabs.${tabKey}`)}
             {i === 0 && fieldStats.length > 0 && (
-              <span className="ml-2 text-xs bg-blue-900/60 text-blue-300 px-1.5 py-0.5 rounded-full">{fieldStats.length}</span>
+              <span className="ml-2 text-xs bg-[var(--input-bg)] text-[var(--text-secondary)] px-1.5 py-0.5 rounded-full">{fieldStats.length}</span>
+            )}
+            {i === 1 && synonyms.length > 0 && (
+              <span className="ml-2 text-xs bg-[var(--input-bg)] text-[var(--text-secondary)] px-1.5 py-0.5 rounded-full">{synonyms.length}</span>
             )}
           </button>
         ))}
@@ -341,20 +438,34 @@ export default function CustomData() {
           <motion.div key="fields" initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0, y:-8 }} className="space-y-4">
 
             {/* Search + refresh */}
-            <div className="flex items-center gap-3">
-              <div className="relative flex-1 max-w-xs">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="relative flex-1 min-w-[180px] max-w-xs">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
                 <input
+                  aria-label="Search custom fields"
                   className="input pl-8 text-sm w-full"
                   placeholder={t('customdata.customFields.searchPlaceholder')}
                   value={statsSearch}
                   onChange={e => setStatsSearch(e.target.value)}
                 />
               </div>
-              <button onClick={loadFieldStats} className="btn-secondary p-2"><RefreshCw size={14} /></button>
+              <select aria-label="Mapping state" className="input text-sm w-auto min-h-[44px]" value={statsMapping} onChange={e => setStatsMapping(e.target.value)}>
+                <option value="all">All fields</option>
+                <option value="unmapped">Not yet mapped</option>
+                <option value="mapped">Mapped to a field</option>
+              </select>
+              <button type="button" onClick={loadFieldStats} aria-label="Refresh custom fields" className="btn-secondary min-w-[44px] min-h-[44px] grid place-items-center"><RefreshCw size={14} aria-hidden="true" /></button>
+              <span className="text-xs text-[var(--text-muted)]">{filteredStats.length.toLocaleString()} of {fieldStats.length.toLocaleString()} fields</span>
             </div>
 
-            {loading ? (
+            {statsError ? (
+              <div role="alert" className="card text-center py-12">
+                <AlertTriangle size={28} className="text-red-400 mx-auto mb-3" aria-hidden="true" />
+                <p className="text-[var(--text-primary)] font-medium">Custom fields could not be read</p>
+                <p className="text-[var(--text-muted)] text-sm mt-1">{statsError}</p>
+                <button type="button" onClick={loadFieldStats} className="btn-secondary mt-4 min-h-[44px]">Retry</button>
+              </div>
+            ) : loading ? (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                 {Array.from({ length: 6 }).map((_, i) => (
                   <div key={i} className="card space-y-3">
@@ -380,9 +491,18 @@ export default function CustomData() {
               </div>
             ) : filteredStats.length === 0 ? (
               <div className="card text-center py-16">
-                <Database size={32} className="text-[var(--text-dim)] mx-auto mb-3" />
-                <p className="text-[var(--text-muted)] font-medium">{t('customdata.customFields.empty.title')}</p>
-                <p className="text-[var(--text-dim)] text-sm mt-1">{t('customdata.customFields.empty.body')}</p>
+                <Database size={32} className="text-[var(--text-dim)] mx-auto mb-3" aria-hidden="true" />
+                {fieldStats.length > 0 ? (
+                  <>
+                    <p className="text-[var(--text-muted)] font-medium">No custom field matches these filters.</p>
+                    <button type="button" onClick={() => { setStatsSearch(''); setStatsMapping('all') }} className="btn-secondary mt-4 min-h-[44px]">Clear filters</button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-[var(--text-muted)] font-medium">{t('customdata.customFields.empty.title')}</p>
+                    <p className="text-[var(--text-dim)] text-sm mt-1">{t('customdata.customFields.empty.body')}</p>
+                  </>
+                )}
               </div>
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -471,8 +591,9 @@ export default function CustomData() {
                             <option value="">{t('customdata.customFields.backfill.chooseTarget')}</option>
                             {CANONICAL_FIELDS.map(f => <option key={f.key} value={f.key}>{t(`customdata.fields.${f.key}`)}</option>)}
                           </select>
+                          {backfillError && <p role="alert" className="text-xs text-red-300">{backfillError}</p>}
                           {backfillResult && (
-                            <p className="text-xs text-green-300">✓ {t('customdata.customFields.backfill.result', { count: backfillResult.updated.toLocaleString() })}</p>
+                            <p className="text-xs text-green-300 flex items-center gap-1"><Check size={11} aria-hidden="true" /> {t('customdata.customFields.backfill.result', { count: backfillResult.updated.toLocaleString() })}</p>
                           )}
                           <div className="flex gap-2">
                             <button
@@ -482,7 +603,7 @@ export default function CustomData() {
                             >
                               {backfillRunning ? <><RefreshCw size={11} className="animate-spin" /> {t('customdata.customFields.backfill.running')}</> : t('customdata.customFields.backfill.run')}
                             </button>
-                            <button onClick={() => { setBackfillKey(null); setBackfillResult(null) }} className="btn-secondary text-xs py-1.5 px-3">{t('customdata.customFields.backfill.done')}</button>
+                            <button onClick={() => { setBackfillKey(null); setBackfillResult(null); setBackfillError('') }} className="btn-secondary text-xs py-1.5 px-3">{t('customdata.customFields.backfill.done')}</button>
                           </div>
                         </div>
                       )}
@@ -534,72 +655,40 @@ export default function CustomData() {
             </div>
 
             {/* Synonym list */}
-            {synLoading ? (
-              <div className="card overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr>
-                      <th className="table-header">{t('customdata.synonyms.table.columnName')}</th>
-                      <th className="table-header">{t('customdata.synonyms.table.mapsTo')}</th>
-                      <th className="table-header">{t('customdata.synonyms.table.timesUsed')}</th>
-                      <th className="table-header">{t('customdata.synonyms.table.lastUsed')}</th>
-                      <th className="table-header w-16"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Array.from({ length: 5 }).map((_, i) => (
-                      <tr key={i} className="border-b border-[var(--input-border)]/40">
-                        <td className="table-cell"><div className="h-3 w-32 rounded bg-[var(--input-bg)]/40 animate-pulse" /></td>
-                        <td className="table-cell"><div className="h-3 w-28 rounded bg-[var(--input-bg)]/40 animate-pulse" /></td>
-                        <td className="table-cell"><div className="h-3 w-12 rounded bg-[var(--input-bg)]/40 animate-pulse" /></td>
-                        <td className="table-cell"><div className="h-3 w-20 rounded bg-[var(--input-bg)]/40 animate-pulse" /></td>
-                        <td className="table-cell"><div className="w-6 h-6 rounded bg-[var(--input-bg)]/40 animate-pulse" /></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            {synError ? (
+              <div role="alert" className="card text-center py-12">
+                <AlertTriangle size={28} className="text-red-400 mx-auto mb-3" aria-hidden="true" />
+                <p className="text-[var(--text-primary)] font-medium">Synonyms could not be read</p>
+                <p className="text-[var(--text-muted)] text-sm mt-1">{synError}</p>
+                <button type="button" onClick={loadSynonyms} className="btn-secondary mt-4 min-h-[44px]">Retry</button>
               </div>
-            ) : synonyms.length === 0 ? (
+            ) : !synLoading && synonyms.length === 0 ? (
               <div className="card text-center py-12">
-                <Tag size={28} className="text-[var(--text-dim)] mx-auto mb-3" />
+                <Tag size={28} className="text-[var(--text-dim)] mx-auto mb-3" aria-hidden="true" />
                 <p className="text-[var(--text-muted)] font-medium">{t('customdata.synonyms.empty.title')}</p>
                 <p className="text-[var(--text-dim)] text-sm mt-1">{t('customdata.synonyms.empty.body')}</p>
               </div>
             ) : (
-              <div className="card overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr>
-                      <th className="table-header">{t('customdata.synonyms.table.columnName')}</th>
-                      <th className="table-header">{t('customdata.synonyms.table.mapsTo')}</th>
-                      <th className="table-header">{t('customdata.synonyms.table.timesUsed')}</th>
-                      <th className="table-header">{t('customdata.synonyms.table.lastUsed')}</th>
-                      <th className="table-header w-16"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {synonymsPager.pageRows.map(s => (
-                      <tr key={s.id} className="hover:bg-[var(--input-bg)]/30 transition-colors">
-                        <td className="table-cell font-mono text-yellow-300">{s.custom_name}</td>
-                        <td className="table-cell">
-                          <span className="flex items-center gap-1.5">
-                            <ArrowRight size={12} className="text-[var(--text-dim)]" />
-                            <span className="text-green-300 font-medium">{CANONICAL_FIELDS.find(f => f.key === s.maps_to) ? t(`customdata.fields.${s.maps_to}`) : s.maps_to}</span>
-                          </span>
-                        </td>
-                        <td className="table-cell text-[var(--text-muted)]">{s.use_count.toLocaleString()}</td>
-                        <td className="table-cell text-[var(--text-muted)] text-xs">
-                          {s.last_used_at ? formatDate(s.last_used_at) : t('customdata.synonyms.table.never')}
-                        </td>
-                        <td className="table-cell">
-                          <button onClick={() => confirmDeleteSynonym(s)} className="p-1.5 rounded hover:bg-red-900/30 text-[var(--text-dim)] hover:text-red-400 transition-colors">
-                            <Trash2 size={13} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="card space-y-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="relative flex-1 min-w-[180px] max-w-xs">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+                    <input aria-label="Search synonyms" className="input pl-8 text-sm w-full" placeholder="Search column or field" value={synSearch} onChange={e => setSynSearch(e.target.value)} />
+                  </div>
+                  <span className="text-xs text-[var(--text-muted)]">{filteredSynonyms.length.toLocaleString()} of {synonyms.length.toLocaleString()} synonyms</span>
+                </div>
+                <EnterpriseTable
+                  columns={synonymColumns}
+                  data={synonymsPager.pageRows}
+                  getRowId={(s) => String(s.id)}
+                  loading={synLoading}
+                  enableGlobalFilter={false}
+                  enableColumnFilters={false}
+                  exportFileName={reportFileName('Custom Data synonyms', reportDateLabel())}
+                  virtual
+                  maxHeight={560}
+                  emptyMessage="No synonym matches this search."
+                />
                 <TablePagination {...synonymsPager} />
               </div>
             )}
@@ -627,136 +716,71 @@ export default function CustomData() {
             <div className="card">
               <div className="flex flex-wrap gap-3 items-end">
                 <div className="flex-1 min-w-[180px]">
-                  <label className="label text-xs">{t('customdata.records.filters.byFieldLabel')}</label>
-                  <select className="input text-sm" value={filterKey} onChange={e => { setFilterKey(e.target.value); setFilterVal(''); setRecPage(0) }}>
+                  <label htmlFor="cd-filter-key" className="label text-xs">{t('customdata.records.filters.byFieldLabel')}</label>
+                  <select id="cd-filter-key" className="input text-sm" value={filterKey} onChange={e => { setFilterKey(e.target.value); setFilterVal(''); setRecPage(0) }}>
                     <option value="">{t('customdata.records.filters.allFields')}</option>
                     {fieldStats.map(f => <option key={f.field_key} value={f.field_key}>{f.field_key} ({Number(f.record_count).toLocaleString()})</option>)}
                   </select>
                 </div>
                 {filterKey && (
                   <div className="flex-1 min-w-[180px]">
-                    <label className="label text-xs">{t('customdata.records.filters.valueLabel')}</label>
-                    <input className="input text-sm" placeholder={t('customdata.records.filters.valuePlaceholder')}
+                    <label htmlFor="cd-filter-val" className="label text-xs">{t('customdata.records.filters.valueLabel')}</label>
+                    <input id="cd-filter-val" className="input text-sm" placeholder={t('customdata.records.filters.valuePlaceholder')}
                       value={filterVal} onChange={e => { setFilterVal(e.target.value); setRecPage(0) }} />
                   </div>
                 )}
-                <button onClick={() => { setFilterKey(''); setFilterVal(''); setRecPage(0) }} className="btn-secondary text-xs self-end flex items-center gap-1.5">
+                <button type="button" onClick={() => { setFilterKey(''); setFilterVal(''); setRecPage(0) }} className="btn-secondary text-xs self-end flex items-center gap-1.5 min-h-[44px]">
                   <X size={12} /> {t('customdata.records.filters.clear')}
                 </button>
-                <button onClick={exportExtraFields} className="btn-secondary text-xs self-end flex items-center gap-1.5">
-                  <Download size={12} /> {t('customdata.records.filters.export')}
+                <button type="button" onClick={exportExtraFields} disabled={exporting} className="btn-secondary text-xs self-end flex items-center gap-1.5 min-h-[44px] disabled:opacity-50">
+                  <Download size={12} aria-hidden="true" /> {t('customdata.records.filters.export')}
                 </button>
               </div>
             </div>
 
-            {/* Records table */}
-            <div className="card overflow-x-auto">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-sm text-[var(--text-muted)]">
-                  <span className="text-[var(--text-primary)] font-semibold">{totalRecords.toLocaleString()}</span> {t('customdata.records.countSuffix')}
-                </p>
-                {totalPages > 1 && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <button onClick={() => setRecPage(p => Math.max(0, p-1))} disabled={recPage === 0} className="btn-secondary py-1 px-2 disabled:opacity-40">‹</button>
-                    <span className="text-[var(--text-muted)]">{recPage + 1} / {totalPages}</span>
-                    <button onClick={() => setRecPage(p => Math.min(totalPages-1, p+1))} disabled={recPage >= totalPages-1} className="btn-secondary py-1 px-2 disabled:opacity-40">›</button>
+            {/* Records table (server-paged: only this page is loaded) */}
+            <div className="card space-y-3">
+              <p className="text-sm text-[var(--text-muted)]">
+                <span className="text-[var(--text-primary)] font-semibold">{totalRecords.toLocaleString()}</span> {t('customdata.records.countSuffix')}
+                <span className="ml-2 text-xs">Select a row to see all of its custom values.</span>
+              </p>
+              <EnterpriseTable
+                columns={recordColumns}
+                data={records}
+                getRowId={(r) => String(r.id)}
+                loading={recLoading}
+                enableGlobalFilter={false}
+                enableColumnFilters={false}
+                enableExport={false}
+                manualPagination
+                pageIndex={recPage}
+                pageCount={totalPages}
+                totalRows={totalRecords}
+                pageSize={REC_PAGE_SIZE}
+                pageSizeOptions={[REC_PAGE_SIZE]}
+                onPageChange={(p) => { setRecPage(p); setSelectedRecord(null) }}
+                onRowClick={(r) => setSelectedRecord((cur) => (cur?.id === r.id ? null : r))}
+                emptyMessage={filterKey ? 'No record carries this custom field value.' : t('customdata.records.empty')}
+              />
+              {selectedRecord && (
+                <div className="rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)]/40 p-4">
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <p className="text-sm font-semibold text-[var(--text-primary)]">
+                      Custom values for {selectedRecord.asset_no ?? 'N/A'} {selectedRecord.serial_no ? `| ${selectedRecord.serial_no}` : ''}
+                    </p>
+                    <button type="button" onClick={() => setSelectedRecord(null)} aria-label="Close record details" className="min-w-[44px] min-h-[44px] grid place-items-center rounded text-[var(--text-muted)] hover:text-[var(--text-primary)]">
+                      <X size={16} aria-hidden="true" />
+                    </button>
                   </div>
-                )}
-              </div>
-
-              {recLoading ? (
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr>
-                      <th className="table-header w-8"></th>
-                      <th className="table-header">{t('customdata.records.table.assetNo')}</th>
-                      <th className="table-header">{t('customdata.records.table.serialNo')}</th>
-                      <th className="table-header">{t('customdata.records.table.date')}</th>
-                      <th className="table-header">{t('customdata.records.table.site')}</th>
-                      <th className="table-header">{t('customdata.records.table.customFields')}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Array.from({ length: 8 }).map((_, i) => (
-                      <tr key={i} className="border-b border-[var(--input-border)]/40">
-                        <td className="table-cell"><div className="w-3 h-3 rounded bg-[var(--input-bg)]/40 animate-pulse" /></td>
-                        <td className="table-cell"><div className="h-3 w-20 rounded bg-[var(--input-bg)]/40 animate-pulse" /></td>
-                        <td className="table-cell"><div className="h-3 w-24 rounded bg-[var(--input-bg)]/40 animate-pulse" /></td>
-                        <td className="table-cell"><div className="h-3 w-16 rounded bg-[var(--input-bg)]/40 animate-pulse" /></td>
-                        <td className="table-cell"><div className="h-3 w-20 rounded bg-[var(--input-bg)]/40 animate-pulse" /></td>
-                        <td className="table-cell">
-                          <div className="flex gap-1.5">
-                            <div className="h-4 w-24 rounded-full bg-[var(--input-bg)]/40 animate-pulse" />
-                            <div className="h-4 w-20 rounded-full bg-[var(--input-bg)]/40 animate-pulse" />
-                            <div className="h-4 w-16 rounded-full bg-[var(--input-bg)]/40 animate-pulse" />
-                          </div>
-                        </td>
-                      </tr>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                    {Object.entries(selectedRecord.extra_fields ?? {}).map(([k, v]) => (
+                      <div key={k} className="bg-[var(--surface-1)]/60 rounded-lg px-3 py-2 border border-[var(--input-border)]/40">
+                        <p className="text-[var(--text-primary)] text-xs font-medium truncate" title={k}>{k}</p>
+                        <p className="text-[var(--text-secondary)] text-xs mt-0.5 break-all">{String(v)}</p>
+                      </div>
                     ))}
-                  </tbody>
-                </table>
-              ) : records.length === 0 ? (
-                <div className="text-center py-10 text-[var(--text-muted)]">{t('customdata.records.empty')}</div>
-              ) : (
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr>
-                      <th className="table-header w-8"></th>
-                      <th className="table-header">{t('customdata.records.table.assetNo')}</th>
-                      <th className="table-header">{t('customdata.records.table.serialNo')}</th>
-                      <th className="table-header">{t('customdata.records.table.date')}</th>
-                      <th className="table-header">{t('customdata.records.table.site')}</th>
-                      <th className="table-header">{t('customdata.records.table.customFields')}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {records.map(r => {
-                      const expanded = expandedRows.has(r.id)
-                      const efKeys   = Object.keys(r.extra_fields ?? {})
-                      return (
-                        <Fragment key={r.id}>
-                          <tr className="hover:bg-[var(--input-bg)]/30 transition-colors cursor-pointer"
-                            onClick={() => setExpandedRows(s => { const n = new Set(s); n.has(r.id) ? n.delete(r.id) : n.add(r.id); return n })}>
-                            <td className="table-cell">
-                              <ChevronRight size={12} className={`text-[var(--text-muted)] transition-transform ${expanded ? 'rotate-90' : ''}`} />
-                            </td>
-                            <td className="table-cell font-mono text-blue-300">{r.asset_no ?? '-'}</td>
-                            <td className="table-cell font-mono text-[var(--text-secondary)]">{r.serial_no ?? '-'}</td>
-                            <td className="table-cell text-[var(--text-muted)]">{r.issue_date ?? '-'}</td>
-                            <td className="table-cell text-[var(--text-muted)]">{r.site ?? '-'}</td>
-                            <td className="table-cell">
-                              <div className="flex flex-wrap gap-1">
-                                {efKeys.slice(0, 3).map(k => (
-                                  <span key={k} className="bg-[var(--input-bg)] text-[var(--text-secondary)] px-2 py-0.5 rounded-full text-xs max-w-[120px] truncate">
-                                    <span className="text-yellow-400">{k}</span>: {r.extra_fields[k]}
-                                  </span>
-                                ))}
-                                {efKeys.length > 3 && (
-                                  <span className="text-[var(--text-dim)] text-xs">{t('customdata.records.table.moreCount', { count: efKeys.length - 3 })}</span>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                          {expanded && (
-                            <tr key={r.id + '_exp'} className="bg-[var(--input-bg)]/20">
-                              <td />
-                              <td colSpan={5} className="px-4 py-3">
-                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                                  {Object.entries(r.extra_fields ?? {}).map(([k, v]) => (
-                                    <div key={k} className="bg-[var(--surface-1)]/60 rounded-lg px-3 py-2 border border-[var(--input-border)]/40">
-                                      <p className="text-yellow-400 text-xs font-medium truncate">{k}</p>
-                                      <p className="text-[var(--text-secondary)] text-xs mt-0.5 break-all">{v}</p>
-                                    </div>
-                                  ))}
-                                </div>
-                              </td>
-                            </tr>
-                          )}
-                        </Fragment>
-                      )
-                    })}
-                  </tbody>
-                </table>
+                  </div>
+                </div>
               )}
             </div>
           </motion.div>
@@ -776,7 +800,7 @@ export default function CustomData() {
           >
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-[var(--text-primary)]">{t('customdata.synonyms.delete.title')}</h2>
-              <button onClick={closeDeleteSynonym} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
+              <button type="button" onClick={closeDeleteSynonym} aria-label="Close" className="min-w-[44px] min-h-[44px] grid place-items-center text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} aria-hidden="true" /></button>
             </div>
             <div className="flex gap-3 mb-4">
               <AlertTriangle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
@@ -811,20 +835,3 @@ export default function CustomData() {
   )
 }
 
-function StatTile({ icon: Icon, label, value, color }) {
-  const c = {
-    blue:   { bg: 'bg-blue-900/20',   border: 'border-blue-800/40',   text: 'text-blue-300',   icon: 'text-blue-400' },
-    green:  { bg: 'bg-green-900/20',  border: 'border-green-800/40',  text: 'text-green-300',  icon: 'text-green-400' },
-    purple: { bg: 'bg-purple-900/20', border: 'border-purple-800/40', text: 'text-purple-300', icon: 'text-purple-400' },
-    yellow: { bg: 'bg-yellow-900/10', border: 'border-yellow-800/40', text: 'text-yellow-300', icon: 'text-yellow-400' },
-  }[color]
-  return (
-    <div className={`rounded-xl border p-4 flex items-center gap-3 ${c.bg} ${c.border}`}>
-      <Icon size={20} className={c.icon} />
-      <div>
-        <p className={`text-xl font-bold ${c.text}`}>{(value ?? 0).toLocaleString()}</p>
-        <p className="text-xs text-[var(--text-muted)] mt-0.5">{label}</p>
-      </div>
-    </div>
-  )
-}

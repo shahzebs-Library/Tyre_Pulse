@@ -1,12 +1,12 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Camera, Loader2, MapPin, Save, CircleDot, DollarSign, AlertTriangle, Gauge as GaugeIcon, Car, ClipboardCheck, Wrench, ShieldCheck, Timer, Search, FileSpreadsheet, FileText, ArrowUpDown, Info } from 'lucide-react'
+import { ArrowLeft, Camera, Loader2, MapPin, Save, CircleDot, DollarSign, AlertTriangle, Gauge as GaugeIcon, Car, ClipboardCheck, Wrench, ShieldCheck, Timer, Search, FileSpreadsheet, FileText, Info } from 'lucide-react'
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Tooltip, Legend } from 'chart.js'
 import { Bar } from 'react-chartjs-2'
 import { useSettings } from '../contexts/SettingsContext'
 import * as v360 from '../lib/api/vehicle360'
 import { toUserMessage } from '../lib/safeError'
-import { recordCost } from '../lib/analyticsEngine'
+import { currencyForCountry } from '../lib/governedCost'
 import Gauge from '../components/ui/Gauge'
 import StatTile from '../components/ui/StatTile'
 import VehicleMap from '../components/ui/VehicleMap'
@@ -14,13 +14,14 @@ import StatusBadge from '../components/ui/StatusBadge'
 import LoadingState from '../components/LoadingState'
 import EmptyState from '../components/EmptyState'
 import CopilotCard from '../components/ai/CopilotCard'
-import { TablePagination, usePagedRows } from '../components/ui/TablePagination'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { loadAssetHistory } from '../lib/api/assetHistory'
 import { listVehicleInsuranceLines } from '../lib/api/vehicleInsurance'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { colorAt, withAlpha } from '../lib/reportColors'
 import {
   buildVehicle360, activityRows, filterActivity, sortActivity, monthlyCost, ACTIVITY_TYPES,
+  tyreMetrics, tyreKmRun, tyreCost, isHighRiskTyre,
 } from '../lib/vehicle360Analytics'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend)
@@ -34,7 +35,15 @@ const fmtN = (v) => (v == null || !Number.isFinite(Number(v)) ? 'N/A' : Math.rou
 const fmtMoney = (cur, v) => (v == null ? 'N/A' : `${cur} ${Math.round(v).toLocaleString()}`)
 const ACTIVITY_LABEL = Object.fromEntries(ACTIVITY_TYPES.map((t) => [t.key, t.label]))
 
-const isHigh = (r) => r.risk_level === 'High' || r.risk_level === 'Critical'
+function GaugeNa({ label, note }) {
+  return (
+    <div className="flex flex-col items-center justify-center text-center min-h-[116px] px-1">
+      <p className="text-2xl font-semibold text-[var(--text-muted)]">N/A</p>
+      <p className="text-xs font-medium text-[var(--text-secondary)] mt-1">{label}</p>
+      <p className="text-[10px] text-[var(--text-dim)] mt-0.5">{note}</p>
+    </div>
+  )
+}
 
 export default function Vehicle360() {
   const { assetNo } = useParams()
@@ -57,7 +66,6 @@ export default function Vehicle360() {
   const [actSearch, setActSearch] = useState('')
   const [actFrom, setActFrom] = useState('')
   const [actTo, setActTo] = useState('')
-  const [actSort, setActSort] = useState({ key: 'date', dir: 'desc' })
 
   const loadHistory = useCallback(async (v) => {
     setHistoryLoading(true)
@@ -109,22 +117,13 @@ export default function Vehicle360() {
     finally { setSavingGps(false) }
   }
 
-  const m = useMemo(() => {
-    const total = tyres.length
-    const spend = tyres.reduce((s, t) => s + recordCost(t), 0)
-    const critical = tyres.filter(isHigh).length
-    const highRate = total ? (critical / total) * 100 : 0
-    const health = total ? Math.max(0, Math.min(100, Math.round(100 - highRate * 0.4))) : 0
-    // avg life (km) from fitment→removal on closed tyres
-    const lives = tyres.map((t) => (t.km_at_removal || 0) - (t.km_at_fitment || 0)).filter((k) => k > 0 && k < 400000)
-    const avgLifeKm = lives.length ? Math.round(lives.reduce((a, b) => a + b, 0) / lives.length) : 0
-    const cpkVals = tyres.map((t) => {
-      const km = (t.km_at_removal || 0) - (t.km_at_fitment || 0)
-      return km > 0 ? recordCost(t) / km : null
-    }).filter((x) => x != null && Number.isFinite(x))
-    const cpk = cpkVals.length ? cpkVals.reduce((a, b) => a + b, 0) / cpkVals.length : 0
-    return { total, spend, critical, highRate, health, avgLifeKm, cpk }
-  }, [tyres])
+  const m = useMemo(
+    () => tyreMetrics(tyres, { targetKm: vehicle?.expected_km_per_tyre }),
+    [tyres, vehicle?.expected_km_per_tyre],
+  )
+  // Tyre prices are held in the vehicle's own country currency. Under the All
+  // countries view the settings currency is not this vehicle's, so it is not used.
+  const tyreCurrency = currencyForCountry(vehicle?.country) || (activeCountry !== 'All' ? activeCurrency : null)
 
   const src = history?.sources || {}
   const rowsOf = (k) => (src[k]?.ok ? src[k].rows : [])
@@ -161,25 +160,68 @@ export default function Vehicle360() {
     inspections: rowsOf('inspection'), partsLines: rowsOf('parts_line'),
   }), [history, tyres]) // eslint-disable-line react-hooks/exhaustive-deps
   const activityView = useMemo(
-    () => sortActivity(filterActivity(activity, { type: actType, search: actSearch, from: actFrom, to: actTo }), actSort.key, actSort.dir),
-    [activity, actType, actSearch, actFrom, actTo, actSort],
+    () => sortActivity(filterActivity(activity, { type: actType, search: actSearch, from: actFrom, to: actTo }), 'date', 'desc'),
+    [activity, actType, actSearch, actFrom, actTo],
   )
-  const actPager = usePagedRows(activityView, { pageSize: 25 })
-  const toggleActSort = (key) => setActSort((s0) => ({ key, dir: s0.key === key && s0.dir === 'desc' ? 'asc' : 'desc' }))
   const ACT_COLS = ['date', 'type', 'ref', 'detail', 'status', 'amount', 'currency']
   const ACT_HEAD = ['Date', 'Type', 'Reference', 'Detail', 'Status', 'Amount', 'Currency']
   const activityExportRows = () => activityView.map((r) => ({ ...r, type: ACTIVITY_LABEL[r.type] || r.type, date: r.date || 'N/A', amount: r.amount ?? 'N/A', currency: r.currency || 'N/A' }))
   function exportActivity(kind) {
     const rows = activityExportRows()
     if (!rows.length) return
-    const name = `Vehicle 360 ${vehicle?.asset_no || ''}`
+    const name = reportFileName('Vehicle 360', vehicle?.asset_no, actFrom && `from ${actFrom}`, actTo && `to ${actTo}`)
     if (kind === 'excel') exportToExcel(rows, ACT_COLS, ACT_HEAD, name)
     else exportToPdf(rows, ACT_COLS.map((k, i) => ({ key: k, header: ACT_HEAD[i] })), `${name} activity`, name, 'landscape')
   }
   const gridTyre = a360.cost.length === 1 ? a360.cost[0] : null
 
-  const targetKm = vehicle?.expected_km_per_tyre || 100000
-  const money = (n) => `${activeCurrency} ${Math.round(n).toLocaleString()}`
+  const costColumns = useMemo(() => [
+    { id: 'currency', header: 'Currency', accessorKey: 'currency', cell: ({ getValue }) => <span className="font-medium">{getValue()}</span> },
+    ...['tyre', 'spare', 'oil', 'total', 'lines'].map((k) => ({
+      id: k, header: k === 'lines' ? 'Lines' : k[0].toUpperCase() + k.slice(1), accessorKey: k, meta: { align: 'right' },
+      cell: ({ getValue }) => <span className={`tabular-nums ${k === 'total' ? 'font-semibold' : ''}`}>{fmtN(getValue())}</span>,
+    })),
+  ], [])
+
+  const insuranceColumns = useMemo(() => [
+    { id: 'policy_no', header: 'Policy', accessorFn: (r) => r.policy_no || 'N/A' },
+    { id: 'cover_type', header: 'Cover', accessorFn: (r) => r.cover_type || 'N/A' },
+    { id: 'cover_from', header: 'From', accessorFn: (r) => r.cover_from?.slice(0, 10) || 'N/A' },
+    { id: 'cover_to', header: 'To', accessorFn: (r) => r.cover_to?.slice(0, 10) || 'N/A' },
+    { id: 'sum_insured', header: 'Sum insured', accessorFn: (r) => (r.sum_insured == null ? -1 : Number(r.sum_insured)), meta: { align: 'right', exportValue: (r) => r.sum_insured ?? 'N/A' },
+      cell: ({ row }) => <span className="tabular-nums">{row.original.sum_insured == null ? 'N/A' : fmtMoney(row.original.currency || '', Number(row.original.sum_insured))}</span> },
+  ], [])
+
+  const tyreColumns = useMemo(() => [
+    { id: 'issue_date', header: 'Date', accessorFn: (t) => t.issue_date?.slice(0, 10) || '', cell: ({ getValue }) => <span className="text-[var(--text-muted)] whitespace-nowrap">{getValue() || 'N/A'}</span> },
+    { id: 'serial_no', header: 'Serial', accessorFn: (t) => t.serial_no || 'N/A', cell: ({ getValue }) => <span className="font-medium text-[var(--text-primary)]">{getValue()}</span> },
+    { id: 'brand', header: 'Brand', accessorFn: (t) => t.brand || 'N/A', meta: { filterVariant: 'select' } },
+    { id: 'position', header: 'Position', accessorFn: (t) => t.position || 'N/A', meta: { filterVariant: 'select' } },
+    { id: 'size', header: 'Size', accessorFn: (t) => t.size || 'N/A', meta: { filterVariant: 'select' } },
+    { id: 'km', header: 'KM run', accessorFn: (t) => tyreKmRun(t) ?? -1, meta: { align: 'right', exportValue: (t) => tyreKmRun(t) ?? 'N/A' },
+      cell: ({ row }) => <span className="tabular-nums">{fmtN(tyreKmRun(row.original))}</span> },
+    { id: 'cost', header: tyreCurrency ? `Cost (${tyreCurrency})` : 'Cost', accessorFn: (t) => tyreCost(t) ?? -1, meta: { align: 'right', exportValue: (t) => tyreCost(t) ?? 'N/A' },
+      cell: ({ row }) => <span className="tabular-nums text-[var(--text-primary)]">{fmtN(tyreCost(row.original))}</span> },
+    { id: 'risk', header: 'Risk', accessorFn: (t) => t.risk_level || 'N/A', meta: { filterVariant: 'select' },
+      cell: ({ row }) => {
+        const risk = row.original.risk_level || 'N/A'
+        const tone = isHighRiskTyre(row.original) ? 'text-red-400 bg-red-900/30' : risk === 'Medium' ? 'text-amber-400 bg-amber-900/30' : risk === 'N/A' ? 'text-[var(--text-muted)] bg-[var(--input-bg)]' : 'text-green-400 bg-green-900/30'
+        return <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${tone}`}>{risk}</span>
+      } },
+  ], [tyreCurrency])
+
+  const activityColumns = useMemo(() => [
+    { id: 'date', header: 'Date', accessorFn: (r) => r.date || '', cell: ({ getValue }) => <span className="text-[var(--text-muted)] whitespace-nowrap">{getValue() || 'N/A'}</span> },
+    { id: 'type', header: 'Type', accessorFn: (r) => ACTIVITY_LABEL[r.type] || r.type },
+    { id: 'ref', header: 'Reference', accessorFn: (r) => r.ref || 'N/A', cell: ({ getValue }) => <span className="font-medium text-[var(--text-primary)]">{getValue()}</span> },
+    { id: 'detail', header: 'Detail', accessorFn: (r) => r.detail || 'N/A', size: 320, cell: ({ getValue }) => <span className="block max-w-[320px] truncate" title={getValue()}>{getValue()}</span> },
+    { id: 'status', header: 'Status', accessorFn: (r) => r.status || 'N/A' },
+    { id: 'amount', header: 'Amount', accessorFn: (r) => (r.amount == null ? -1 : r.amount), meta: { align: 'right' },
+      cell: ({ row }) => <span className="tabular-nums">{row.original.amount == null ? 'N/A' : Math.round(row.original.amount).toLocaleString()}</span> },
+    { id: 'currency', header: 'Currency', accessorFn: (r) => r.currency || 'N/A' },
+  ], [])
+
+  const money = (n) => (n == null ? 'N/A' : tyreCurrency ? `${tyreCurrency} ${Math.round(n).toLocaleString()}` : Math.round(n).toLocaleString())
 
   if (loading) return <LoadingState message="Loading vehicle..." />
   if (error) return (
@@ -194,7 +236,7 @@ export default function Vehicle360() {
       {/* header */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
-          <Link to="/fleet-master" className="p-2 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"><ArrowLeft size={16} /></Link>
+          <Link to="/fleet-master" aria-label="Back to fleet" className="p-2 min-w-[44px] min-h-[44px] grid place-items-center rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"><ArrowLeft size={16} /></Link>
           <div>
             <h1 className="text-xl font-semibold text-[var(--text-primary)] tracking-tight flex items-center gap-2">
               <Car size={20} className="text-[var(--accent)]" />
@@ -230,7 +272,7 @@ export default function Vehicle360() {
                 ? <img src={photoUrl} alt={vehicle.asset_no} className="w-full h-full object-cover" />
                 : <div className="text-center text-[var(--text-muted)]"><Car size={40} className="mx-auto mb-2 opacity-50" /><p className="text-xs">No photo yet</p></div>}
               <button onClick={() => fileRef.current?.click()} disabled={uploading}
-                className="absolute bottom-3 right-3 px-3 py-2 rounded-lg bg-[var(--accent)] text-white text-xs font-semibold flex items-center gap-2 shadow disabled:opacity-60">
+                className="absolute bottom-3 right-3 px-3 min-h-[44px] rounded-lg bg-[var(--accent)] text-white text-xs font-semibold flex items-center gap-2 shadow disabled:opacity-60">
                 {uploading ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
                 {photoUrl ? 'Replace photo' : 'Add photo'}
               </button>
@@ -247,7 +289,7 @@ export default function Vehicle360() {
                 ['Type', vehicle.vehicle_type], ['Year', vehicle.year], ['Tyre size', vehicle.tyre_size],
                 ['Site', vehicle.site], ['Region', vehicle.region], ['Department', vehicle.department],
                 ['Operator', vehicle.operator_name],
-                ['Monthly budget', vehicle.monthly_tyre_budget ? money(vehicle.monthly_tyre_budget) : null],
+                ['Monthly budget', vehicle.monthly_tyre_budget ? money(Number(vehicle.monthly_tyre_budget)) : null],
               ].filter(([, v]) => v != null && v !== '').map(([k, v]) => (
                 <div key={k}>
                   <dt className="text-[11px] uppercase tracking-wide text-[var(--text-muted)]">{k}</dt>
@@ -261,8 +303,14 @@ export default function Vehicle360() {
           <form onSubmit={saveGps} className="card space-y-3">
             <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2"><MapPin size={15} className="text-[var(--accent)]" /> Location</h3>
             <div className="grid grid-cols-2 gap-2">
-              <input className="input" placeholder="Latitude" value={gps.lat} onChange={(e) => setGps((g) => ({ ...g, lat: e.target.value }))} inputMode="decimal" />
-              <input className="input" placeholder="Longitude" value={gps.lng} onChange={(e) => setGps((g) => ({ ...g, lng: e.target.value }))} inputMode="decimal" />
+              <div>
+                <label htmlFor="v360-lat" className="label text-xs">Latitude</label>
+                <input id="v360-lat" className="input" placeholder="24.7136" value={gps.lat} onChange={(e) => setGps((g) => ({ ...g, lat: e.target.value }))} inputMode="decimal" />
+              </div>
+              <div>
+                <label htmlFor="v360-lng" className="label text-xs">Longitude</label>
+                <input id="v360-lng" className="input" placeholder="46.6753" value={gps.lng} onChange={(e) => setGps((g) => ({ ...g, lng: e.target.value }))} inputMode="decimal" />
+              </div>
             </div>
             <button type="submit" disabled={savingGps} className="btn-secondary w-full justify-center text-sm disabled:opacity-60">
               {savingGps ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Save location
@@ -279,8 +327,8 @@ export default function Vehicle360() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <StatTile index={0} icon={CircleDot} tone="info" label="Tyres" value={m.total.toLocaleString()} />
             <StatTile index={1} icon={DollarSign} tone="accent" label="Tyre spend (expense grid)" value={historyLoading ? '...' : gridTyre ? `${(gridTyre.tyre / 1000).toFixed(1)}K` : a360.cost.length > 1 ? 'Mixed' : 'N/A'} unit={gridTyre ? gridTyre.currency : ''} />
-            <StatTile index={2} icon={GaugeIcon} tone="neutral" label="Avg CPK" value={m.cpk ? m.cpk.toFixed(2) : 'N/A'} unit={m.cpk ? `${activeCurrency}/km` : ''} />
-            <StatTile index={3} icon={AlertTriangle} tone="crit" label="Critical" value={m.critical.toLocaleString()} unit={m.total ? `(${m.highRate.toFixed(0)}%)` : ''} />
+            <StatTile index={2} icon={GaugeIcon} tone="neutral" label="Avg CPK" value={m.cpk == null ? 'N/A' : m.cpk.toFixed(2)} unit={m.cpk != null && tyreCurrency ? `${tyreCurrency}/km` : ''} sub={m.cpk == null ? 'Needs a priced tyre with a measured run' : `from ${m.cpkSample} tyre${m.cpkSample === 1 ? '' : 's'}`} />
+            <StatTile index={3} icon={AlertTriangle} tone="crit" label="Critical" value={m.critical.toLocaleString()} unit={m.highRate != null ? `(${m.highRate.toFixed(0)}%)` : ''} />
           </div>
 
 
@@ -299,7 +347,7 @@ export default function Vehicle360() {
               <div>
                 {unreadable.length > 0 && <p>Could not be read: {unreadable.join(', ')}. Those figures show N/A, not zero.</p>}
                 {truncatedSources.length > 0 && <p>Read ceiling reached for: {truncatedSources.join(', ')}. Totals cover the rows loaded.</p>}
-                <button type="button" className="btn-secondary text-xs mt-2" onClick={() => vehicle && loadHistory(vehicle)}>Retry</button>
+                <button type="button" className="btn-secondary text-xs mt-2 min-h-[44px]" onClick={() => vehicle && loadHistory(vehicle)}>Retry</button>
               </div>
             </div>
           )}
@@ -311,19 +359,18 @@ export default function Vehicle360() {
               {historyLoading ? <p className="text-sm text-[var(--text-muted)]">Loading cost...</p>
                 : !a360.cost.length ? <p className="text-sm text-[var(--text-muted)]">No expense lines are recorded against this vehicle.</p>
                 : (
-                  <table className="w-full text-xs">
-                    <thead><tr className="text-[var(--text-muted)]">{['Currency', 'Tyre', 'Spare', 'Oil', 'Total', 'Lines'].map((h) => <th key={h} className="text-left py-1.5 pr-2">{h}</th>)}</tr></thead>
-                    <tbody>{a360.cost.map((c) => (
-                      <tr key={c.currency} className="border-t border-[var(--table-cell-border)]">
-                        <td className="py-1.5 pr-2 font-medium">{c.currency}</td>
-                        <td className="py-1.5 pr-2 tabular-nums">{fmtN(c.tyre)}</td>
-                        <td className="py-1.5 pr-2 tabular-nums">{fmtN(c.spare)}</td>
-                        <td className="py-1.5 pr-2 tabular-nums">{fmtN(c.oil)}</td>
-                        <td className="py-1.5 pr-2 tabular-nums font-semibold">{fmtN(c.total)}</td>
-                        <td className="py-1.5 pr-2 tabular-nums">{fmtN(c.lines)}</td>
-                      </tr>))}
-                    </tbody>
-                  </table>
+                  <EnterpriseTable
+                    columns={costColumns}
+                    data={a360.cost}
+                    getRowId={(r) => r.currency}
+                    enableGlobalFilter={false}
+                    enableColumnFilters={false}
+                    enableColumnVisibility={false}
+                    enableExport={false}
+                    initialPageSize={25}
+                    pageSizeOptions={[25]}
+                    emptyMessage="No expense lines are recorded against this vehicle."
+                  />
                 )}
               {costChart && (
                 <div className="h-48 mt-3">
@@ -347,17 +394,19 @@ export default function Vehicle360() {
                       <div><p className="text-[var(--text-muted)]">Days to next expiry</p><p className="text-lg font-semibold">{fmtN(a360.insurance.daysToExpiry)}</p></div>
                     </div>
                     {a360.insurance.sumInsured.map((si) => <p key={si.currency} className="text-xs text-[var(--text-secondary)]">Sum insured (active): {fmtMoney(si.currency, si.amount)}</p>)}
-                    <div className="overflow-x-auto max-h-48 overflow-y-auto mt-2">
-                      <table className="w-full text-xs">
-                        <thead><tr className="text-[var(--text-muted)]">{['Policy', 'Cover', 'From', 'To', 'Sum insured'].map((h) => <th key={h} className="text-left py-1 pr-2">{h}</th>)}</tr></thead>
-                        <tbody>{insurance.rows.map((r) => (
-                          <tr key={r.id} className="border-t border-[var(--table-cell-border)]">
-                            <td className="py-1 pr-2">{r.policy_no || 'N/A'}</td><td className="py-1 pr-2">{r.cover_type || 'N/A'}</td>
-                            <td className="py-1 pr-2">{r.cover_from?.slice(0, 10) || 'N/A'}</td><td className="py-1 pr-2">{r.cover_to?.slice(0, 10) || 'N/A'}</td>
-                            <td className="py-1 pr-2 tabular-nums">{r.sum_insured == null ? 'N/A' : fmtMoney(r.currency || '', Number(r.sum_insured))}</td>
-                          </tr>))}
-                        </tbody>
-                      </table>
+                    <div className="mt-2">
+                      <EnterpriseTable
+                        columns={insuranceColumns}
+                        data={insurance.rows}
+                        getRowId={(r) => String(r.id)}
+                        enableGlobalFilter={false}
+                        enableColumnFilters={false}
+                        enableColumnVisibility={false}
+                        exportFileName={reportFileName('Vehicle 360', vehicle.asset_no, 'insurance')}
+                        virtual
+                        maxHeight={240}
+                        emptyMessage="No schedule line names this asset."
+                      />
                     </div>
                   </>
                 )}
@@ -369,9 +418,11 @@ export default function Vehicle360() {
             <div className="card">
               <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-1">Health &amp; wear</h3>
               <div className="grid grid-cols-3 gap-1 pt-2 justify-items-center">
-                <Gauge index={0} value={m.health} max={100} label="Health" size={116} />
-                <Gauge index={1} value={m.highRate} max={100} unit="%" label="Critical rate" reverse format={(x) => x.toFixed(0)} size={116} />
-                <Gauge index={2} value={Math.min(100, (m.avgLifeKm / targetKm) * 100)} max={100} unit="%" label="Life vs target" format={(x) => Math.round(x)} size={116} />
+                {m.health == null ? <GaugeNa label="Health" note="No tyres recorded" /> : <Gauge index={0} value={m.health} max={100} label="Health" size={116} />}
+                {m.highRate == null ? <GaugeNa label="Critical rate" note="No tyres recorded" /> : <Gauge index={1} value={m.highRate} max={100} unit="%" label="Critical rate" reverse format={(x) => x.toFixed(0)} size={116} />}
+                {m.lifeVsTargetPct == null
+                  ? <GaugeNa label="Life vs target" note={m.avgLifeKm == null ? 'No tyre with a measured run' : 'No expected km per tyre on this vehicle'} />
+                  : <Gauge index={2} value={m.lifeVsTargetPct} max={100} unit="%" label="Life vs target" format={(x) => Math.round(x)} size={116} />}
               </div>
             </div>
             <div className="card !p-0 overflow-hidden">
@@ -389,35 +440,19 @@ export default function Vehicle360() {
             {m.total === 0 ? (
               <div className="px-4 py-8"><EmptyState illustration="module/tyres" icon={CircleDot} title="No tyre records" description="No tyres are recorded against this vehicle yet." /></div>
             ) : (
-              <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
-                <table className="w-full text-xs">
-                  <thead className="bg-[var(--table-head-bg)] text-[var(--table-head-text)] sticky top-0">
-                    <tr>
-                      {['Date', 'Serial', 'Brand', 'Position', 'Size', 'KM run', 'Cost', 'Risk'].map((h) => (
-                        <th key={h} className={`text-left px-3 py-2 font-semibold ${['KM run', 'Cost'].includes(h) ? 'text-right' : ''}`}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {tyres.map((t) => {
-                      const km = (t.km_at_removal || 0) - (t.km_at_fitment || 0)
-                      const risk = t.risk_level || 'N/A'
-                      const tone = isHigh(t) ? 'text-red-400 bg-red-900/30' : risk === 'Medium' ? 'text-amber-400 bg-amber-900/30' : 'text-green-400 bg-green-900/30'
-                      return (
-                        <tr key={t.id} className="border-t border-[var(--table-cell-border)]">
-                          <td className="px-3 py-2 text-[var(--text-muted)]">{t.issue_date?.slice(0, 10) || 'N/A'}</td>
-                          <td className="px-3 py-2 text-[var(--text-primary)] font-medium">{t.serial_no || 'N/A'}</td>
-                          <td className="px-3 py-2">{t.brand || 'N/A'}</td>
-                          <td className="px-3 py-2">{t.position || 'N/A'}</td>
-                          <td className="px-3 py-2">{t.size || 'N/A'}</td>
-                          <td className="px-3 py-2 text-right tabular-nums">{km > 0 ? km.toLocaleString() : 'N/A'}</td>
-                          <td className="px-3 py-2 text-right tabular-nums text-[var(--text-primary)]">{money(recordCost(t))}</td>
-                          <td className="px-3 py-2"><span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${tone}`}>{risk}</span></td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
+              <div className="p-3">
+                <EnterpriseTable
+                  columns={tyreColumns}
+                  data={tyres}
+                  getRowId={(t) => String(t.id)}
+                  searchPlaceholder="Search serial, brand, position"
+                  exportFileName={reportFileName('Vehicle 360', vehicle.asset_no, 'tyres')}
+                  initialPageSize={25}
+                  emptyMessage="No tyres match these filters."
+                />
+                {m.priced < m.total && (
+                  <p className="text-[11px] text-[var(--text-muted)] mt-2">{m.total - m.priced} of {m.total} tyres carry no price, so their cost shows N/A rather than zero.</p>
+                )}
               </div>
             )}
           </div>
@@ -442,31 +477,18 @@ export default function Vehicle360() {
             {historyLoading ? <p className="px-4 py-8 text-sm text-[var(--text-muted)]">Loading activity...</p>
               : !activityView.length ? <p className="px-4 py-8 text-sm text-center text-[var(--text-muted)]">{activity.length ? 'No activity matches these filters.' : 'No activity is recorded for this vehicle.'}</p>
               : (
-                <>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs">
-                      <thead className="bg-[var(--table-head-bg)] text-[var(--table-head-text)]">
-                        <tr>{ACT_COLS.map((k, i) => (
-                          <th key={k} className="text-left px-3 py-2 font-semibold">
-                            <button type="button" className="inline-flex items-center gap-1" onClick={() => toggleActSort(k)}>{ACT_HEAD[i]} <ArrowUpDown size={11} className="opacity-50" /></button>
-                          </th>))}
-                        </tr>
-                      </thead>
-                      <tbody>{actPager.pageRows.map((r) => (
-                        <tr key={r.key} className="border-t border-[var(--table-cell-border)]">
-                          <td className="px-3 py-2 text-[var(--text-muted)] whitespace-nowrap">{r.date || 'N/A'}</td>
-                          <td className="px-3 py-2">{ACTIVITY_LABEL[r.type] || r.type}</td>
-                          <td className="px-3 py-2 font-medium text-[var(--text-primary)]">{r.ref || 'N/A'}</td>
-                          <td className="px-3 py-2 max-w-[320px] truncate">{r.detail || 'N/A'}</td>
-                          <td className="px-3 py-2">{r.status || 'N/A'}</td>
-                          <td className="px-3 py-2 tabular-nums">{r.amount == null ? 'N/A' : Math.round(r.amount).toLocaleString()}</td>
-                          <td className="px-3 py-2">{r.currency || 'N/A'}</td>
-                        </tr>))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <TablePagination {...actPager} />
-                </>
+                <div className="p-3">
+                  <EnterpriseTable
+                    columns={activityColumns}
+                    data={activityView}
+                    getRowId={(r) => String(r.key)}
+                    enableGlobalFilter={false}
+                    enableColumnFilters={false}
+                    enableExport={false}
+                    initialPageSize={25}
+                    emptyMessage="No activity matches these filters."
+                  />
+                </div>
               )}
           </div>
         </div>

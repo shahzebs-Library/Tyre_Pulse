@@ -262,3 +262,64 @@ export function buildVehicle360({ fleet = null, jobCards = [], tyres = [], accid
     insurance: insuranceSummary(insurance, { now }),
   }
 }
+
+// ── Per-tyre metrics for the Vehicle 360 tyre register ──────────────────────
+
+/** Tyre risk counted as critical (High or Critical risk_level). */
+export const isHighRiskTyre = (t) => t?.risk_level === 'High' || t?.risk_level === 'Critical'
+
+/** Upper bound on a believable single-tyre life; above it the km is a data error. */
+export const MAX_TYRE_LIFE_KM = 400000
+
+/**
+ * Distance a tyre ran (removal minus fitment odometer), or null when either
+ * reading is missing or the run is implausible. A fitted tyre with no removal
+ * reading has no measured life yet - that is not 0 km.
+ */
+export function tyreKmRun(t) {
+  const a = num(t?.km_at_fitment)
+  const b = num(t?.km_at_removal)
+  if (a == null || b == null) return null
+  const km = b - a
+  return km > 0 && km < MAX_TYRE_LIFE_KM ? km : null
+}
+
+/** Price x qty for one tyre, or null when it carries no price (unpriced is not free). */
+export function tyreCost(t) {
+  const p = num(t?.cost_per_tyre)
+  if (p == null || p <= 0) return null
+  const q = num(t?.qty)
+  return p * (q != null && q > 0 ? q : 1)
+}
+
+/**
+ * Tyre register roll-up. Every ratio is null when its denominator is empty:
+ *  - highRate / health: no tyres -> null (a vehicle with no tyres is not 100% healthy)
+ *  - avgLifeKm: no tyre with a measured run -> null
+ *  - cpk: mean cost-per-km over tyres that have BOTH a price and a measured run.
+ *    An unpriced tyre is left out rather than read as costing nothing.
+ *  - lifeVsTargetPct: needs a stated expected_km_per_tyre; no default is invented.
+ */
+export function tyreMetrics(tyres = [], { targetKm = null } = {}) {
+  const list = tyres || []
+  const total = list.length
+  const critical = list.filter(isHighRiskTyre).length
+  const highRate = total ? (critical / total) * 100 : null
+  const health = highRate == null ? null : Math.max(0, Math.min(100, Math.round(100 - highRate * 0.4)))
+  const lives = list.map(tyreKmRun).filter((k) => k != null)
+  const avgLifeKm = lives.length ? Math.round(lives.reduce((a, b) => a + b, 0) / lives.length) : null
+  const cpks = []
+  let priced = 0
+  for (const t of list) {
+    const c = tyreCost(t)
+    if (c != null) priced += 1
+    const km = tyreKmRun(t)
+    if (c != null && km != null) cpks.push(c / km)
+  }
+  const cpk = cpks.length ? cpks.reduce((a, b) => a + b, 0) / cpks.length : null
+  const target = num(targetKm)
+  const lifeVsTargetPct = avgLifeKm != null && target != null && target > 0
+    ? Math.min(100, (avgLifeKm / target) * 100)
+    : null
+  return { total, critical, highRate, health, avgLifeKm, cpk, cpkSample: cpks.length, priced, lifeVsTargetPct }
+}

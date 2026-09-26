@@ -2524,7 +2524,8 @@ export async function exportDailyOpsBriefingPdf(data = {}, opts = {}) {
     { v: (k.inspections ?? 0).toLocaleString(), l: 'Inspections',  rgb: P.emerald },
     { v: (k.workOrders  ?? 0).toLocaleString(), l: 'Work Orders',  rgb: P.violet },
     { v: (k.alerts      ?? 0).toLocaleString(), l: 'Alerts Raised', rgb: P.crimson },
-    { v: fmtCurr(k.cost ?? 0, currency),        l: "Today's Cost",  rgb: P.gold },
+    // Unknown cost is N/A, never a fabricated zero.
+    { v: (k.cost == null || !Number.isFinite(Number(k.cost))) ? 'N/A' : fmtCurr(k.cost, currency), l: "Today's Cost", rgb: P.gold },
   ]
   const cw = (PW - 28 - (cards.length - 1) * 4) / cards.length
   cards.forEach((c, i) => _kpiBox(doc, 14 + i * (cw + 4), y, cw, 26, c.v, c.l, null, c.rgb))

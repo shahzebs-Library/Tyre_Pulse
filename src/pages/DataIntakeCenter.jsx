@@ -37,7 +37,12 @@ import ImportTemplatePanel from '../components/intake/ImportTemplatePanel'
 import HeaderChangeDialog from '../components/intake/HeaderChangeDialog'
 import IntakeDiagnosticsPanel from '../components/intake/IntakeDiagnosticsPanel'
 import { toUserMessage } from '../lib/safeError'
-import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import {
+  isExactLiveMatch, mappingRows, mappingSummary, confidenceBand, dupLabel, issuesText,
+  attachmentSummary, matchedByLabel, fileSizeLabel, recentImportsKpis, recentImportRows,
+} from '../lib/dataIntakeCenterAnalytics'
+import { OUTCOME_META } from '../lib/api/importHistory'
 
 // Trigger a client-side text download (diagnostics report export).
 function downloadText(filename, text) {
@@ -93,44 +98,26 @@ function applyProfileRules(suggestions, rules, { blankUnknown = true } = {}) {
   })
 }
 const ELEVATED = ['admin', 'manager', 'director']
+// How many of the latest batches the recent-imports strip and table cover.
+const RECENT_LIMIT = 50
 const STEP_KEYS = ['upload', 'mapColumns', 'validate', 'approve']
+
+// Tone -> classes for chips. Every chip also carries its text label, so colour
+// is never the only signal.
+const TONE_CLASS = {
+  good: 'bg-green-900/30 text-green-400',
+  info: 'bg-sky-900/30 text-sky-300',
+  warning: 'bg-amber-900/30 text-amber-400',
+  danger: 'bg-red-900/30 text-red-400',
+  quiet: 'bg-[var(--surface-2)] text-[var(--text-secondary)]',
+}
+const FOCUS_RING = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-1'
 
 function statusColor(s) {
   return s === 'ready' ? 'text-green-400 bg-green-900/30'
     : s === 'warning' ? 'text-amber-400 bg-amber-900/30'
     : s === 'error' ? 'text-red-400 bg-red-900/30'
     : 'text-[var(--text-secondary)] bg-[var(--surface-2)]'
-}
-
-function hasValue(v) {
-  return v != null && String(v).trim() !== ''
-}
-
-function comparableValue(v, type) {
-  if (!hasValue(v)) return ''
-  if (['number', 'integer', 'currency', 'pressure', 'distance', 'mass'].includes(type)) {
-    const n = Number(String(v).replace(/,/g, ''))
-    return Number.isFinite(n) ? String(n) : String(v).trim().toLowerCase()
-  }
-  if (type === 'date') {
-    const d = new Date(v)
-    return Number.isNaN(d.getTime()) ? String(v).trim().toLowerCase() : d.toISOString().slice(0, 10)
-  }
-  return String(v).trim().toLowerCase()
-}
-
-function isExactLiveMatch(transformed, live, module) {
-  if (!transformed || !live) return false
-  const fields = MODULE_FIELDS[module] || []
-  for (const f of fields) {
-    // Compare every field actually supplied by the upload, including an
-    // explicitly blank cell. Fields absent from the file are not evidence that
-    // the live record differs.
-    if (!Object.prototype.hasOwnProperty.call(transformed, f.key)) continue
-    const uploaded = transformed[f.key]
-    if (comparableValue(uploaded, f.type) !== comparableValue(live[f.key], f.type)) return false
-  }
-  return true
 }
 
 export default function DataIntakeCenter() {
@@ -205,9 +192,22 @@ export default function DataIntakeCenter() {
     [module],
   )
 
+  // Recent imports + uploaded files. A failed read is SHOWN (with Retry), never
+  // rendered as "No imports yet". The two reads fail independently.
+  const [recentState, setRecentState] = useState({ loading: true, error: '', filesError: '' })
   const loadRecent = useCallback(async () => {
-    try { setRecent(await imports.listBatches({ country: activeCountry, limit: 8 })) } catch { /* non-blocking */ }
-    try { setFiles(await imports.listFiles({ country: activeCountry, limit: 25 })) } catch { /* non-blocking */ }
+    setRecentState((p) => ({ ...p, loading: true }))
+    const [bRes, fRes] = await Promise.allSettled([
+      imports.listBatches({ country: activeCountry, limit: RECENT_LIMIT }),
+      imports.listFiles({ country: activeCountry, limit: 25 }),
+    ])
+    if (bRes.status === 'fulfilled') setRecent(bRes.value || [])
+    if (fRes.status === 'fulfilled') setFiles(fRes.value || [])
+    setRecentState({
+      loading: false,
+      error: bRes.status === 'rejected' ? toUserMessage(bRes.reason, 'Recent imports could not be loaded.') : '',
+      filesError: fRes.status === 'rejected' ? toUserMessage(fRes.reason, 'Uploaded files could not be loaded.') : '',
+    })
   }, [activeCountry])
   useEffect(() => { loadRecent() }, [loadRecent])
 
@@ -281,7 +281,6 @@ export default function DataIntakeCenter() {
   // Paged, not capped: the review table used to render annotated.slice(0, 200),
   // so on a large file rows 201+ could never be inspected or overridden row by
   // row. Bulk actions and the commit itself always covered the whole batch.
-  const reviewPager = usePagedRows(annotated)
 
   const commitDiag = useMemo(() => (result ? summarizeCommitResult(result) : null), [result])
 
@@ -877,6 +876,195 @@ export default function DataIntakeCenter() {
     } finally { setBusy(false); setCommitProgress(null) }
   }
 
+  // ── Derived view data (pure engine: src/lib/dataIntakeCenterAnalytics.js) ──
+  const recentKpis = useMemo(() => recentImportsKpis(recent, files), [recent, files])
+  const recentRows = useMemo(() => recentImportRows(recent), [recent])
+  const mapRows = useMemo(() => mappingRows(mapping, sheet?.rows || []), [mapping, sheet])
+  const mapSummary = useMemo(() => mappingSummary(mapping, targetOptions), [mapping, targetOptions])
+  const attachSummary = useMemo(() => attachmentSummary(attachItems), [attachItems])
+
+  // Row handlers are plain functions redefined each render; the table columns
+  // read them through a ref so the column defs stay stable.
+  const handlersRef = useRef({})
+  handlersRef.current = { deleteRecent, deleteOrphan, diagnoseRecent }
+
+  const mappingColumns = useMemo(() => [
+    { id: 'sourceHeader', header: 'Source header', accessorKey: 'sourceHeader', size: 200,
+      cell: ({ getValue }) => <span className="font-medium">{getValue()}</span> },
+    { id: 'sample', header: 'Sample', accessorKey: 'sample', size: 180,
+      cell: ({ getValue }) => <span className="block truncate max-w-[180px] text-[var(--text-muted)]" title={getValue()}>{getValue() || 'No sample'}</span> },
+    { id: 'target', header: 'Map to', accessorFn: (m) => targetOptions.find((o) => o.key === m.target)?.label || 'Custom (kept)', size: 260,
+      meta: { filterVariant: 'select' },
+      cell: ({ row }) => {
+        const m = row.original
+        const apply = (target) => setMapping((list) => list.map((x) => x.sourceHeader === m.sourceHeader
+          ? { ...x, target: target || null, action: target ? 'mapped' : 'preserve_custom' }
+          : x))
+        return (
+          <div>
+            <select
+              value={m.target || ''}
+              onChange={(e) => apply(e.target.value)}
+              aria-label={`Map column ${m.sourceHeader} to a field`}
+              className={`min-h-[36px] bg-[var(--surface-1)] border border-[var(--border-bright)] rounded px-2 py-1 text-xs text-[var(--text-primary)] ${FOCUS_RING}`}
+            >
+              <option value="">Preserve as custom</option>
+              {targetOptions.map((o) => <option key={o.key} value={o.key}>{o.label}{o.required ? ' *' : ''}</option>)}
+            </select>
+            {!m.target && m.suggestedTarget && (
+              <button
+                type="button"
+                onClick={() => apply(m.suggestedTarget)}
+                className={`mt-1 block text-[11px] text-amber-400 hover:text-amber-300 underline decoration-dotted ${FOCUS_RING}`}
+                title="Low-confidence guess, click to apply"
+              >
+                Suggested: {targetOptions.find((o) => o.key === m.suggestedTarget)?.label || m.suggestedTarget}
+                {typeof m.suggestedConfidence === 'number' ? ` (${m.suggestedConfidence}%)` : ''}
+              </button>
+            )}
+          </div>
+        )
+      } },
+    { id: 'confidence', header: 'Confidence', accessorFn: (m) => (m.target ? Number(m.confidence) || 0 : -1), size: 130,
+      meta: { exportValue: (m) => confidenceBand(m).label },
+      cell: ({ row }) => {
+        const band = confidenceBand(row.original)
+        return <span className={`text-xs px-2 py-0.5 rounded ${TONE_CLASS[band.tone]}`}>{band.label}</span>
+      } },
+  ], [targetOptions])
+
+  const reviewColumns = useMemo(() => [
+    { id: 'sourceRowNo', header: 'Row', accessorKey: 'sourceRowNo', size: 70 },
+    { id: 'validationStatus', header: 'Status', accessorKey: 'validationStatus', size: 110, meta: { filterVariant: 'select' },
+      cell: ({ getValue }) => <span className={`text-xs px-2 py-0.5 rounded capitalize ${statusColor(getValue())}`}>{getValue()}</span> },
+    { id: 'dup', header: 'Duplicate', accessorFn: (r) => dupLabel(r), size: 150, meta: { filterVariant: 'select' },
+      cell: ({ row, getValue }) => {
+        const r = row.original
+        const tone = r.liveDuplicate ? 'text-sky-400' : r.dupStatus === 'conflict' ? 'text-amber-400' : 'text-[var(--text-muted)]'
+        const title = r.liveDuplicate
+          ? 'Commit will verify and drop this only if every supplied value still matches'
+          : r.dupStatus === 'duplicate' ? 'Exact whole-row copy of an earlier row in this file'
+            : r.dupStatus === 'conflict' ? 'Same key as another row in this file but different data' : undefined
+        return <span className={`text-xs ${tone}`} title={title}>{getValue()}</span>
+      } },
+    { id: 'issues', header: 'Issues', accessorFn: (r) => issuesText(r), size: 320,
+      cell: ({ getValue }) => <span className="block text-xs text-[var(--text-muted)] truncate max-w-[320px]" title={getValue()}>{getValue()}</span> },
+    { id: 'action', header: 'Action', accessorFn: (r) => effectiveAction(r), size: 140, meta: { filterVariant: 'select' },
+      cell: ({ row }) => {
+        const r = row.original
+        const act = effectiveAction(r)
+        if (!isElevated) {
+          const tone = act === 'insert' ? 'good' : act === 'update' ? 'info' : act === 'reject' ? 'danger' : 'quiet'
+          return <span className={`text-xs px-2 py-0.5 rounded capitalize ${TONE_CLASS[tone]}`}>{act}</span>
+        }
+        const overridden = !!rowActionOverride[r.sourceRowNo]
+        return (
+          <select
+            value={act}
+            aria-label={`Action for row ${r.sourceRowNo}${overridden ? ' (overridden)' : ''}`}
+            onChange={(e) => {
+              const val = e.target.value
+              setRowActionOverride((prev) => {
+                const next = { ...prev }
+                if (val === smartAction(r)) delete next[r.sourceRowNo]
+                else next[r.sourceRowNo] = val
+                return next
+              })
+            }}
+            className={`min-h-[36px] text-xs rounded px-1.5 py-1 bg-[var(--surface-2)] border ${overridden ? 'border-amber-600/60 text-amber-300' : 'border-[var(--border-dim)] text-[var(--text-secondary)]'} ${FOCUS_RING}`}
+          >
+            <option value="insert">Insert</option>
+            <option value="update">Update</option>
+            <option value="skip">Skip</option>
+            <option value="reject">Reject</option>
+          </select>
+        )
+      } },
+  ], [effectiveAction, smartAction, isElevated, rowActionOverride])
+
+  const attachColumns = useMemo(() => [
+    { id: 'name', header: 'File', accessorKey: 'name', size: 220,
+      cell: ({ getValue }) => <span className="block truncate max-w-[220px] text-[var(--text-primary)]" title={getValue()}>{getValue()}</span> },
+    { id: 'matchedBy', header: 'Matched to', accessorFn: (it) => matchedByLabel(it.matchedBy), size: 130, meta: { filterVariant: 'select' },
+      cell: ({ row, getValue }) => <span className={row.original.matchedBy ? 'text-green-400' : 'text-[var(--text-muted)]'}>{getValue()}</span> },
+    { id: 'size', header: 'Size', accessorKey: 'sizeBytes', size: 90, meta: { align: 'right', exportValue: (it) => fileSizeLabel(it.sizeBytes) },
+      cell: ({ getValue }) => <span className="tabular-nums text-[var(--text-secondary)]">{fileSizeLabel(getValue())}</span> },
+    { id: 'status', header: 'Status', accessorKey: 'status', size: 200, meta: { filterVariant: 'select' },
+      cell: ({ row }) => {
+        const it = row.original
+        const tone = it.status === 'uploaded' ? 'good' : it.status === 'failed' ? 'danger' : 'quiet'
+        return (
+          <span>
+            <span className={`px-2 py-0.5 rounded capitalize ${TONE_CLASS[tone]}`}>{it.status}</span>
+            {it.error && <span className="ml-2 text-red-400">{it.error}</span>}
+          </span>
+        )
+      } },
+  ], [])
+
+  const recentColumns = useMemo(() => [
+    { id: 'module', header: 'Module', accessorFn: (b) => MODULE_LABELS[b.module] || b.module || 'N/A', size: 150, meta: { filterVariant: 'select' } },
+    { id: 'country', header: 'Country', accessorFn: (b) => b.country || 'N/A', size: 90 },
+    { id: 'outcome', header: 'Outcome', accessorFn: (b) => b.outcomeLabel, size: 150, meta: { filterVariant: 'select' },
+      cell: ({ row }) => {
+        const tone = OUTCOME_META[row.original.outcome]?.tone || 'quiet'
+        return <span className={`text-xs px-2 py-0.5 rounded ${TONE_CLASS[tone]}`}>{row.original.outcomeLabel}</span>
+      } },
+    { id: 'status', header: 'Status', accessorFn: (b) => b.import_status || 'N/A', size: 110, meta: { filterVariant: 'select' } },
+    { id: 'rows', header: 'Rows imported', accessorFn: (b) => Number(b.imported_rows) || 0, size: 130, meta: { align: 'right', exportValue: (b) => `${b.imported_rows ?? 'N/A'} / ${b.total_rows ?? 'N/A'}` },
+      cell: ({ row }) => {
+        const b = row.original
+        return <span className="tabular-nums text-[var(--text-secondary)]">{b.imported_rows ?? 'N/A'} / {b.total_rows ?? 'N/A'}</span>
+      } },
+    { id: 'created_at', header: 'When', accessorFn: (b) => b.created_at || '', size: 160,
+      meta: { exportValue: (b) => (b.created_at ? new Date(b.created_at).toLocaleString('en-GB') : 'N/A') },
+      cell: ({ getValue }) => <span className="text-xs text-[var(--text-muted)]">{getValue() ? new Date(getValue()).toLocaleString('en-GB') : 'N/A'}</span> },
+    { id: 'actions', header: 'Actions', enableSorting: false, size: 290, meta: { export: false, align: 'right' },
+      cell: ({ row }) => {
+        const b = row.original
+        const committed = b.import_status === 'committed'
+        const rowBusy = rowBusyId === b.id
+        const open = diag?.batchId === b.id
+        return (
+          <div className="flex items-center justify-end gap-1.5">
+            <Link to="/data-intake/history" title="Open in import history"
+              className={`inline-flex items-center gap-1 min-h-[36px] text-xs px-2 rounded border border-[var(--border-bright)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] ${FOCUS_RING}`}>
+              Open
+            </Link>
+            <button type="button" onClick={() => handlersRef.current.diagnoseRecent(b)} aria-expanded={open}
+              title="Diagnose this batch (health, dropped rows, commit failures)"
+              className={`inline-flex items-center gap-1 min-h-[36px] text-xs px-2 rounded border ${open ? 'border-sky-600/60 text-sky-300' : 'border-[var(--border-bright)] text-[var(--text-secondary)] hover:text-sky-300'} ${FOCUS_RING}`}>
+              <Activity size={12} aria-hidden="true" /> Diagnose
+            </button>
+            <button type="button" onClick={() => handlersRef.current.deleteRecent(b)} disabled={rowBusy} aria-busy={rowBusy}
+              title={committed ? 'Reverse this committed import' : 'Delete this staged batch'}
+              className={`inline-flex items-center gap-1 min-h-[36px] text-xs px-2 rounded border border-[var(--border-bright)] text-[var(--text-secondary)] hover:text-red-400 disabled:opacity-50 ${FOCUS_RING}`}>
+              {rowBusy ? <Loader2 size={12} className="animate-spin" aria-hidden="true" /> : committed ? <RotateCcw size={12} aria-hidden="true" /> : <Trash2 size={12} aria-hidden="true" />}
+              {committed ? 'Reverse' : 'Delete'}
+            </button>
+          </div>
+        )
+      } },
+  ], [rowBusyId, diag?.batchId])
+
+  const orphanColumns = useMemo(() => [
+    { id: 'original_filename', header: 'File', accessorFn: (f) => f.original_filename || 'N/A', size: 240,
+      cell: ({ getValue }) => <span className="block truncate max-w-[240px] text-[var(--text-secondary)]" title={getValue()}>{getValue()}</span> },
+    { id: 'country', header: 'Country', accessorFn: (f) => f.country || 'N/A', size: 90 },
+    { id: 'size', header: 'Size', accessorFn: (f) => Number(f.size_bytes) || 0, size: 90, meta: { align: 'right', exportValue: (f) => fileSizeLabel(f.size_bytes) },
+      cell: ({ row }) => <span className="text-xs tabular-nums text-[var(--text-muted)]">{fileSizeLabel(row.original.size_bytes)}</span> },
+    { id: 'created_at', header: 'Uploaded', accessorFn: (f) => f.created_at || '', size: 160,
+      meta: { exportValue: (f) => (f.created_at ? new Date(f.created_at).toLocaleString('en-GB') : 'N/A') },
+      cell: ({ getValue }) => <span className="text-xs text-[var(--text-muted)]">{getValue() ? new Date(getValue()).toLocaleString('en-GB') : 'N/A'}</span> },
+    { id: 'actions', header: 'Actions', enableSorting: false, size: 120, meta: { export: false, align: 'right' },
+      cell: ({ row }) => (
+        <button type="button" onClick={() => handlersRef.current.deleteOrphan(row.original)} title="Remove this unused upload"
+          className={`inline-flex items-center gap-1 min-h-[36px] text-xs px-2 rounded border border-[var(--border-bright)] text-[var(--text-secondary)] hover:text-red-400 ${FOCUS_RING}`}>
+          <Trash2 size={12} aria-hidden="true" /> Remove
+        </button>
+      ) },
+  ], [])
+
   const INTAKE_TABS = [
     { key: 'erp', label: 'ERP Import' },
     { key: 'production', label: 'Production' },
@@ -885,10 +1073,10 @@ export default function DataIntakeCenter() {
     { key: 'sites', label: 'Sites & Regions' },
   ]
   const IntakeTabStrip = (
-    <div className="mb-4 flex flex-wrap gap-1 border-b border-[var(--border-subtle)]">
+    <div role="tablist" aria-label="Import type" className="mb-4 flex flex-wrap gap-1 border-b border-[var(--border-subtle)]">
       {INTAKE_TABS.map((tb) => (
-        <button key={tb.key} type="button" onClick={() => setIntakeTab(tb.key)}
-          className={`px-3 py-2 text-sm border-b-2 -mb-px ${intakeTab === tb.key ? 'border-orange-500 font-semibold text-[var(--text-primary)]' : 'border-transparent'}`}
+        <button key={tb.key} type="button" role="tab" aria-selected={intakeTab === tb.key} onClick={() => setIntakeTab(tb.key)}
+          className={`min-h-[44px] px-3 py-2 text-sm border-b-2 -mb-px ${FOCUS_RING} ${intakeTab === tb.key ? 'border-orange-500 font-semibold text-[var(--text-primary)]' : 'border-transparent'}`}
           style={intakeTab === tb.key ? undefined : { color: 'var(--text-secondary)' }}>{tb.label}</button>
       ))}
     </div>
@@ -912,8 +1100,8 @@ export default function DataIntakeCenter() {
       <div className="p-8 max-w-3xl mx-auto">
         <h1 className="text-2xl font-bold text-[var(--text-primary)] mb-2">Data Intake Center</h1>
         {IntakeTabStrip}
-        <div className="bg-amber-900/20 border border-amber-700/50 rounded-xl p-6 text-amber-300 flex gap-3">
-          <AlertTriangle className="shrink-0" />
+        <div role="status" className="bg-amber-900/20 border border-amber-700/50 rounded-xl p-6 text-amber-300 flex gap-3">
+          <AlertTriangle className="shrink-0" aria-hidden="true" />
           <p>Select a single country (top bar) before importing. Every import is scoped to one country, mixing countries is not allowed.</p>
         </div>
       </div>
@@ -931,44 +1119,46 @@ export default function DataIntakeCenter() {
         onApply={acceptHeaderChange}
         onDismiss={() => setHeaderChange(null)}
       />
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-[var(--text-primary)] flex items-center gap-2"><Database size={22} /> Data Intake Center</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold text-[var(--text-primary)] flex items-center gap-2"><Database size={22} aria-hidden="true" /> Data Intake Center</h1>
           <p className="text-sm text-[var(--text-secondary)]">Controlled import for <span className="text-[var(--text-primary)]">{activeCountry}</span> - staged, validated, approved, then committed.</p>
         </div>
-        <button onClick={reset} className="text-sm px-3 py-2 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-3)] flex items-center gap-2"><RefreshCw size={15} /> New import</button>
+        <button type="button" onClick={reset} className={`min-h-[44px] text-sm px-3 py-2 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-3)] flex items-center gap-2 ${FOCUS_RING}`}><RefreshCw size={15} aria-hidden="true" /> New import</button>
       </div>
 
       {IntakeTabStrip}
 
       {/* stepper */}
-      <div className="flex items-center gap-2 mb-6">
+      <ol aria-label="Import steps" className="flex flex-wrap items-center gap-2 mb-6">
         {STEP_KEYS.map((key, i) => (
-          <div key={key} className={`flex items-center gap-2 text-sm ${i === step ? 'text-[var(--text-primary)]' : i < step ? 'text-green-400' : 'text-[var(--text-muted)]'}`}>
-            <span className={`w-6 h-6 rounded-full grid place-items-center text-xs ${i === step ? 'bg-green-600 text-white' : i < step ? 'bg-green-900/40' : 'bg-[var(--surface-2)]'}`}>{i + 1}</span>
-            {t(`intake.steps.${key}`)}{i < STEP_KEYS.length - 1 && <span className="text-[var(--text-dim)] mx-1">-</span>}
-          </div>
+          <li key={key} aria-current={i === step ? 'step' : undefined} className={`flex items-center gap-2 text-sm ${i === step ? 'text-[var(--text-primary)] font-semibold' : i < step ? 'text-green-400' : 'text-[var(--text-muted)]'}`}>
+            <span aria-hidden="true" className={`w-6 h-6 rounded-full grid place-items-center text-xs ${i === step ? 'bg-green-600 text-white' : i < step ? 'bg-green-900/40' : 'bg-[var(--surface-2)]'}`}>{i < step ? <CheckCircle2 size={13} /> : i + 1}</span>
+            {t(`intake.steps.${key}`)}
+            <span className="sr-only">{i < step ? ' (done)' : i === step ? ' (current)' : ''}</span>
+            {i < STEP_KEYS.length - 1 && <ArrowRight size={13} className="text-[var(--text-dim)] mx-1" aria-hidden="true" />}
+          </li>
         ))}
-      </div>
+      </ol>
 
-      {error && <div className="mb-4 bg-red-900/20 border border-red-700/50 rounded-lg p-3 text-red-300 text-sm flex gap-2"><AlertTriangle size={16} /> {error}</div>}
+      {error && <div role="alert" className="mb-4 bg-red-900/20 border border-red-700/50 rounded-lg p-3 text-red-300 text-sm flex gap-2"><AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden="true" /> {error}</div>}
 
       {/* STEP 1 */}
       {step === 0 && (
         <div className="space-y-5">
           <div>
-            <label className="block text-sm text-[var(--text-secondary)] mb-2">Module</label>
-            <div className="flex gap-2">
+            <p id="intake-module-label" className="block text-sm text-[var(--text-secondary)] mb-2">Module</p>
+            <div role="group" aria-labelledby="intake-module-label" className="flex flex-wrap gap-2">
               {MODULES.map((m) => (
-                <button key={m.key} onClick={() => setModule(m.key)} className={`px-4 py-2 rounded-lg text-sm border ${module === m.key ? 'bg-green-600 border-green-600 text-white' : 'bg-[var(--surface-1)] border-[var(--border-bright)] hover:border-[var(--border-bright)]'}`}>{m.label}</button>
+                <button key={m.key} type="button" aria-pressed={module === m.key} onClick={() => setModule(m.key)} className={`min-h-[44px] px-4 py-2 rounded-lg text-sm border ${FOCUS_RING} ${module === m.key ? 'bg-green-600 border-green-600 text-white' : 'bg-[var(--surface-1)] border-[var(--border-bright)] hover:bg-[var(--surface-2)]'}`}>{m.label}</button>
               ))}
             </div>
           </div>
 
           <ImportTemplatePanel module={module} />
-          <label className="block border-2 border-dashed border-[var(--border-bright)] rounded-xl p-10 text-center cursor-pointer hover:border-green-600/60">
-            <input type="file" accept=".xlsx,.xls,.xlsm,.xlsb,.ods,.csv,.tsv,.txt" multiple className="hidden" onChange={onFile} />
-            {busy ? <Loader2 className="animate-spin mx-auto text-green-400" /> : <UploadCloud className="mx-auto text-[var(--text-muted)]" size={34} />}
+          <label className="block border-2 border-dashed border-[var(--border-bright)] rounded-xl p-10 text-center cursor-pointer hover:border-green-600/60 focus-within:ring-2 focus-within:ring-green-500">
+            <input type="file" accept=".xlsx,.xls,.xlsm,.xlsb,.ods,.csv,.tsv,.txt" multiple className="sr-only" onChange={onFile} aria-label="Choose one or more Excel or CSV files to import" />
+            {busy ? <Loader2 className="animate-spin mx-auto text-green-400" aria-hidden="true" /> : <UploadCloud className="mx-auto text-[var(--text-muted)]" size={34} aria-hidden="true" />}
             <p className="mt-2 text-sm text-[var(--text-secondary)]">{file ? file.name : 'Choose one or more Excel / CSV files'}</p>
             {fileQueue.length > 0 && (
               <p className="mt-1 text-xs text-sky-400">{fileQueue.length} more file{fileQueue.length !== 1 ? 's' : ''} queued - offered after this import finishes.</p>
@@ -980,11 +1170,11 @@ export default function DataIntakeCenter() {
               <p className="text-sm text-[var(--text-secondary)] flex items-center gap-2"><FileSpreadsheet size={15} /> {parsed.sheets.length} sheet(s)</p>
               <div className="flex flex-wrap gap-2">
                 {parsed.sheets.map((s, i) => (
-                  <button key={s.name + i} onClick={() => setSheetIdx(i)} className={`px-3 py-1.5 rounded-lg text-xs ${i === sheetIdx ? 'bg-green-600 text-white' : 'bg-[var(--surface-2)] hover:bg-[var(--surface-3)]'}`}>{s.name} <span className="opacity-70">({s.rows.length} rows)</span></button>
+                  <button key={s.name + i} type="button" aria-pressed={i === sheetIdx} onClick={() => setSheetIdx(i)} className={`min-h-[44px] px-3 py-1.5 rounded-lg text-xs ${FOCUS_RING} ${i === sheetIdx ? 'bg-green-600 text-white' : 'bg-[var(--surface-2)] hover:bg-[var(--surface-3)]'}`}>{s.name} <span className="opacity-70">({s.rows.length} rows)</span></button>
                 ))}
               </div>
               {sheet && <p className="text-xs text-[var(--text-muted)]">Header row detected at line {(sheet.headerRow ?? 0) + 1} · {sheet.columns.length} columns</p>}
-              <button onClick={startBatch} disabled={busy || !sheet} className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm flex items-center gap-2 disabled:opacity-50">{busy ? <Loader2 size={15} className="animate-spin" /> : <ArrowRight size={15} />} Continue to mapping</button>
+              <button onClick={startBatch} disabled={busy || !sheet} className="min-h-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm flex items-center gap-2 disabled:opacity-50">{busy ? <Loader2 size={15} className="animate-spin" /> : <ArrowRight size={15} />} Continue to mapping</button>
             </div>
           )}
 
@@ -1022,54 +1212,48 @@ export default function DataIntakeCenter() {
                     onChange={(e) => { applyProfile(e.target.value); e.target.value = '' }}
                     className="bg-[var(--surface-1)] border border-[var(--border-bright)] rounded-lg px-2 py-1.5 text-xs"
                     title="Apply a saved mapping profile"
+                    aria-label="Apply a saved mapping profile"
                   >
                     <option value="">Apply saved profile...</option>
                     {profiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
                 </div>
               )}
-              <button onClick={saveAsProfile} disabled={busy || !mapping.some((m) => m.target)} className="px-3 py-1.5 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-xs flex items-center gap-1.5 disabled:opacity-50" title="Save this mapping for reuse"><Save size={14} /> Save as profile</button>
+              <button onClick={saveAsProfile} disabled={busy || !mapping.some((m) => m.target)} className="min-h-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 px-3 py-1.5 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-xs flex items-center gap-1.5 disabled:opacity-50" title="Save this mapping for reuse"><Save size={14} /> Save as profile</button>
             </div>
           </div>
-          <div className="overflow-x-auto border border-[var(--border-dim)] rounded-xl">
-            <table className="w-full text-sm">
-              <thead className="bg-[var(--surface-2)] text-[var(--text-secondary)] text-xs">
-                <tr><th className="text-left px-3 py-2">Source header</th><th className="text-left px-3 py-2">Sample</th><th className="text-left px-3 py-2">Map to</th><th className="text-left px-3 py-2">Confidence</th></tr>
-              </thead>
-              <tbody>
-                {mapping.map((m) => {
-                  const sample = sheet.rows.find((r) => r[m.sourceHeader] != null && r[m.sourceHeader] !== '')?.[m.sourceHeader]
-                  return (
-                    <tr key={m.sourceHeader} className="border-t border-[var(--border-dim)]">
-                      <td className="px-3 py-2 font-medium">{m.sourceHeader}</td>
-                      <td className="px-3 py-2 text-[var(--text-muted)] truncate max-w-[160px]">{String(sample ?? '')}</td>
-                      <td className="px-3 py-2">
-                        <select value={m.target || ''} onChange={(e) => setTarget(m.sourceHeader, e.target.value)} className="bg-[var(--surface-1)] border border-[var(--border-bright)] rounded px-2 py-1 text-xs">
-                          <option value="">- preserve as custom -</option>
-                          {targetOptions.map((t) => <option key={t.key} value={t.key}>{t.label}{t.required ? ' *' : ''}</option>)}
-                        </select>
-                        {!m.target && m.suggestedTarget && (
-                          <button
-                            type="button"
-                            onClick={() => setTarget(m.sourceHeader, m.suggestedTarget)}
-                            className="mt-1 block text-[11px] text-amber-400 hover:text-amber-300 underline decoration-dotted"
-                            title="Low-confidence guess, click to apply"
-                          >
-                            Suggested: {targetOptions.find((t) => t.key === m.suggestedTarget)?.label || m.suggestedTarget}
-                            {typeof m.suggestedConfidence === 'number' ? ` (${m.suggestedConfidence}%)` : ''}
-                          </button>
-                        )}
-                      </td>
-                      <td className="px-3 py-2"><span className={`text-xs px-2 py-0.5 rounded ${m.confidence >= 90 ? 'bg-green-900/30 text-green-400' : m.confidence >= 60 ? 'bg-amber-900/30 text-amber-400' : 'bg-[var(--surface-2)] text-[var(--text-secondary)]'}`}>{m.target ? `${m.confidence}%` : 'custom'}</span></td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+          <section aria-label="Mapping summary" className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: 'Columns in file', value: mapSummary.columns, tone: 'text-[var(--text-primary)]' },
+              { label: 'Mapped to fields', value: mapSummary.mapped, tone: 'text-green-400' },
+              { label: 'Kept as custom', value: mapSummary.custom, tone: 'text-[var(--text-secondary)]' },
+              { label: 'Low confidence', value: mapSummary.lowConfidence, tone: mapSummary.lowConfidence ? 'text-amber-400' : 'text-[var(--text-secondary)]' },
+            ].map((k) => (
+              <div key={k.label} className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-3">
+                <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
+                <p className={`text-2xl font-bold tabular-nums ${k.tone}`}>{k.value}</p>
+              </div>
+            ))}
+          </section>
+          {mapSummary.missingRequired.length > 0 && (
+            <div role="status" className="bg-amber-900/20 border border-amber-700/50 rounded-xl p-3 text-amber-300 text-sm flex gap-2">
+              <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden="true" />
+              <span>Required field{mapSummary.missingRequired.length !== 1 ? 's' : ''} with no column mapped: <span className="font-semibold">{mapSummary.missingRequired.join(', ')}</span>. Rows will fail validation until a column is mapped.</span>
+            </div>
+          )}
+          <EnterpriseTable
+            columns={mappingColumns}
+            data={mapRows}
+            getRowId={(r) => r.id}
+            emptyMessage="The selected sheet has no columns to map."
+            searchPlaceholder="Search columns..."
+            exportFileName={`Column mapping ${module}`}
+            initialPageSize={50}
+            pageSizeOptions={[50, 100, 250]}
+          />
           <div className="flex gap-2">
-            <button onClick={() => setStep(0)} className="px-4 py-2 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-sm flex items-center gap-2"><ArrowLeft size={15} /> Back</button>
-            <button onClick={() => setStep(2)} className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm flex items-center gap-2">Validate <ArrowRight size={15} /></button>
+            <button onClick={() => setStep(0)} className="min-h-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 px-4 py-2 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-sm flex items-center gap-2"><ArrowLeft size={15} /> Back</button>
+            <button onClick={() => setStep(2)} className="min-h-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm flex items-center gap-2">Validate <ArrowRight size={15} /></button>
           </div>
         </div>
       )}
@@ -1185,58 +1369,28 @@ export default function DataIntakeCenter() {
             {isElevated && (
               <div className="ml-auto flex items-center gap-1.5">
                 <span className="text-[var(--text-muted)]">Set all:</span>
-                <button onClick={() => setAllActions('insert')} className="px-2 py-0.5 rounded bg-[var(--surface-2)] hover:bg-green-900/40 text-[var(--text-secondary)] hover:text-green-300">Insert</button>
-                <button onClick={() => setAllActions('update')} className="px-2 py-0.5 rounded bg-[var(--surface-2)] hover:bg-sky-900/40 text-[var(--text-secondary)] hover:text-sky-300">Update</button>
-                <button onClick={() => setAllActions('skip')} className="px-2 py-0.5 rounded bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-[var(--text-secondary)]">Skip</button>
-                <button onClick={() => setAllActions('reject')} className="px-2 py-0.5 rounded bg-[var(--surface-2)] hover:bg-red-900/40 text-[var(--text-secondary)] hover:text-red-300">Reject</button>
-                <button onClick={() => setAllActions(null)} className="px-2 py-0.5 rounded bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-[var(--text-muted)]">Reset to smart</button>
+                <button onClick={() => setAllActions('insert')} className="min-h-[36px] px-2 py-0.5 rounded bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 hover:bg-green-900/40 text-[var(--text-secondary)] hover:text-green-300">Insert</button>
+                <button onClick={() => setAllActions('update')} className="min-h-[36px] px-2 py-0.5 rounded bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 hover:bg-sky-900/40 text-[var(--text-secondary)] hover:text-sky-300">Update</button>
+                <button onClick={() => setAllActions('skip')} className="min-h-[36px] px-2 py-0.5 rounded bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 hover:bg-[var(--surface-3)] text-[var(--text-secondary)]">Skip</button>
+                <button onClick={() => setAllActions('reject')} className="min-h-[36px] px-2 py-0.5 rounded bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 hover:bg-red-900/40 text-[var(--text-secondary)] hover:text-red-300">Reject</button>
+                <button onClick={() => setAllActions(null)} className="min-h-[36px] px-2 py-0.5 rounded bg-[var(--surface-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 hover:bg-[var(--surface-3)] text-[var(--text-muted)]">Reset to smart</button>
               </div>
             )}
           </div>
-          <div className="overflow-x-auto border border-[var(--border-dim)] rounded-xl max-h-80 overflow-y-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-[var(--surface-2)] text-[var(--text-secondary)] text-xs sticky top-0"><tr><th className="text-left px-3 py-2">#</th><th className="text-left px-3 py-2">Status</th><th className="text-left px-3 py-2">Dup</th><th className="text-left px-3 py-2">Issues</th><th className="text-left px-3 py-2">Action</th></tr></thead>
-              <tbody>
-                {reviewPager.pageRows.map((r) => {
-                  const act = effectiveAction(r)
-                  const overridden = isElevated && !!rowActionOverride[r.sourceRowNo]
-                  return (
-                  <tr key={r.sourceRowNo} className="border-t border-[var(--border-dim)]">
-                    <td className="px-3 py-1.5 text-[var(--text-muted)]">{r.sourceRowNo}</td>
-                    <td className="px-3 py-1.5"><span className={`text-xs px-2 py-0.5 rounded ${statusColor(r.validationStatus)}`}>{r.validationStatus}</span></td>
-                    <td className="px-3 py-1.5 text-xs text-[var(--text-secondary)]">{r.liveDuplicate ? <span className="text-sky-400" title="Commit will verify and drop this only if every supplied value still matches">exact live copy</span> : r.dupStatus === 'duplicate' ? <span className="text-[var(--text-muted)]" title="Exact whole-row copy of an earlier row in this file">exact copy</span> : r.dupStatus === 'conflict' ? <span className="text-amber-400" title="Same key as another row in this file but different data">conflict</span> : '-'}</td>
-                    <td className="px-3 py-1.5 text-xs text-[var(--text-muted)] truncate max-w-[240px]">{r.issues.map((i) => i.message).join('; ') || '-'}</td>
-                    <td className="px-3 py-1.5">
-                      {isElevated ? (
-                        <select
-                          value={act}
-                          onChange={(e) => {
-                            const val = e.target.value
-                            setRowActionOverride((prev) => {
-                              const next = { ...prev }
-                              if (val === smartAction(r)) delete next[r.sourceRowNo]
-                              else next[r.sourceRowNo] = val
-                              return next
-                            })
-                          }}
-                          className={`text-xs rounded px-1.5 py-1 bg-[var(--surface-2)] border ${overridden ? 'border-amber-600/60 text-amber-300' : 'border-[var(--border-dim)] text-[var(--text-secondary)]'}`}
-                        >
-                          <option value="insert">Insert</option>
-                          <option value="update">Update</option>
-                          <option value="skip">Skip</option>
-                          <option value="reject">Reject</option>
-                        </select>
-                      ) : (
-                        <span className={`text-xs px-2 py-0.5 rounded ${act === 'insert' ? 'text-green-300 bg-green-900/25' : act === 'update' ? 'text-sky-300 bg-sky-900/25' : act === 'reject' ? 'text-red-300 bg-red-900/25' : 'text-[var(--text-secondary)] bg-[var(--surface-2)]'}`}>{act}</span>
-                      )}
-                    </td>
-                  </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-          <TablePagination {...reviewPager} className="border border-t-0 border-[var(--border-dim)] rounded-b-xl" />
+          {/* Every staged row (not a first-page slice): search, filter by status /
+              duplicate / action, and override row by row. Bulk actions above apply
+              to the whole batch, not just the page on screen. */}
+          <EnterpriseTable
+            columns={reviewColumns}
+            data={annotated}
+            getRowId={(r) => String(r.sourceRowNo)}
+            loading={!!validating && annotated.length === 0}
+            emptyMessage="No rows were read from this sheet."
+            searchPlaceholder="Search rows, issues..."
+            exportFileName={`Import review ${module}`}
+            initialPageSize={50}
+            pageSizeOptions={[50, 100, 250]}
+          />
           {isElevated && <p className="text-xs text-[var(--text-muted)]">You have the final say on every row, override any action above. Anything set to <span className="text-green-300">Insert</span>/<span className="text-sky-300">Update</span> is committed even if it was flagged; genuinely un-insertable rows still fail safely per-row and are logged. Bulk actions apply to the whole batch, not just the page on screen.</p>}
           {counts?.countryConflict > 0 && (
             <div className="bg-amber-900/20 border border-amber-600/50 rounded-xl p-4 space-y-2">
@@ -1265,8 +1419,8 @@ export default function DataIntakeCenter() {
             </div>
           )}
           <div className="flex gap-2">
-            <button onClick={() => setStep(1)} className="px-4 py-2 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-sm flex items-center gap-2"><ArrowLeft size={15} /> Back</button>
-            <button onClick={stageAll} disabled={busy || (counts?.countryConflict > 0 && !countryAck)} className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm flex items-center gap-2 disabled:opacity-50">{busy ? <Loader2 size={15} className="animate-spin" /> : <ShieldCheck size={15} />} Stage & continue{forceFlagged ? ' (forced)' : ''}</button>
+            <button onClick={() => setStep(1)} className="min-h-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 px-4 py-2 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-sm flex items-center gap-2"><ArrowLeft size={15} /> Back</button>
+            <button onClick={stageAll} disabled={busy || (counts?.countryConflict > 0 && !countryAck)} className="min-h-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm flex items-center gap-2 disabled:opacity-50">{busy ? <Loader2 size={15} className="animate-spin" /> : <ShieldCheck size={15} />} Stage & continue{forceFlagged ? ' (forced)' : ''}</button>
           </div>
         </div>
       )}
@@ -1287,7 +1441,7 @@ export default function DataIntakeCenter() {
                 Unmatched files are kept for later reconciliation.
               </p>
               <label className={`block border-2 border-dashed rounded-xl p-6 text-center cursor-pointer ${attachBusy ? 'border-[var(--border-bright)] opacity-60 pointer-events-none' : 'border-[var(--border-bright)] hover:border-sky-600/60'}`}>
-                <input type="file" accept=".zip,application/zip" className="hidden" onChange={onAttachmentZip} disabled={attachBusy} />
+                <input type="file" accept=".zip,application/zip" className="sr-only" onChange={onAttachmentZip} disabled={attachBusy} aria-label="Choose a zip evidence package" />
                 {attachBusy ? <Loader2 className="animate-spin mx-auto text-sky-400" /> : <FileArchive className="mx-auto text-[var(--text-muted)]" size={28} />}
                 <p className="mt-2 text-xs text-[var(--text-secondary)]">{attachBusy ? 'Processing package...' : 'Choose a .zip evidence package'}</p>
               </label>
@@ -1302,41 +1456,21 @@ export default function DataIntakeCenter() {
               )}
 
               {attachItems.length > 0 && (
-                <div className="overflow-x-auto border border-[var(--border-dim)] rounded-lg max-h-72 overflow-y-auto">
-                  <table className="w-full text-xs">
-                    <thead className="bg-[var(--surface-2)] text-[var(--text-secondary)] sticky top-0">
-                      <tr>
-                        <th className="text-left px-3 py-2">File</th>
-                        <th className="text-left px-3 py-2">Matched to</th>
-                        <th className="text-left px-3 py-2">Size</th>
-                        <th className="text-left px-3 py-2">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {attachItems.map((it, i) => (
-                        <tr key={it.name + i} className="border-t border-[var(--border-dim)]">
-                          <td className="px-3 py-1.5 text-[var(--text-primary)] truncate max-w-[200px]">{it.name}</td>
-                          <td className="px-3 py-1.5">
-                            {it.matchedBy
-                              ? <span className="text-green-400">{it.matchedBy === 'claim_no' ? 'Claim no' : it.matchedBy === 'police_report_no' ? 'Police report' : 'Asset no'}</span>
-                              : <span className="text-[var(--text-muted)]">unmatched</span>}
-                          </td>
-                          <td className="px-3 py-1.5 text-[var(--text-secondary)]">{(it.sizeBytes / 1024).toFixed(0)} KB</td>
-                          <td className="px-3 py-1.5">
-                            <span className={`px-2 py-0.5 rounded ${it.status === 'uploaded' ? 'text-green-400 bg-green-900/30' : it.status === 'failed' ? 'text-red-400 bg-red-900/30' : 'text-[var(--text-secondary)] bg-[var(--surface-2)]'}`}>{it.status}</span>
-                            {it.error && <span className="ml-2 text-red-400">{it.error}</span>}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <EnterpriseTable
+                  columns={attachColumns}
+                  data={attachItems}
+                  getRowId={(it, i) => `${it.name}-${i}`}
+                  emptyMessage="No files in the package."
+                  exportFileName="Evidence package"
+                  enableColumnVisibility={false}
+                  initialPageSize={25}
+                />
               )}
 
               {attachDone && attachItems.length > 0 && (
                 <p className="text-xs text-green-400 flex items-center gap-1.5">
                   <CheckCircle2 size={13} />
-                  {attachItems.filter((i) => i.status === 'uploaded').length} uploaded · {attachItems.filter((i) => i.matchedBy).length} matched · {attachItems.filter((i) => i.status === 'failed').length} failed
+                  {attachSummary.uploaded} uploaded, {attachSummary.matched} matched, {attachSummary.failed} failed
                 </p>
               )}
             </div>
@@ -1364,7 +1498,7 @@ export default function DataIntakeCenter() {
                   </label>
                 </div>
               )}
-              <button onClick={commit} disabled={busy || (!!fingerprint && !repeatAck)} className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm flex items-center gap-2 disabled:opacity-50">{busy ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />} {isElevated ? 'Approve & commit' : 'Submit for approval'}</button>
+              <button onClick={commit} disabled={busy || (!!fingerprint && !repeatAck)} className="min-h-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm flex items-center gap-2 disabled:opacity-50">{busy ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />} {isElevated ? 'Approve & commit' : 'Submit for approval'}</button>
               {/* Uploading runs BEFORE the commit and is the longer of the two
                   on a large file. It reported nothing at all until now. */}
               {busy && staging && !commitProgress && (
@@ -1453,7 +1587,7 @@ export default function DataIntakeCenter() {
               )}
               {fileQueue.length > 0 ? (
                 <div className="mt-3 flex items-center gap-4">
-                  <button onClick={nextQueuedFile} className="px-3 py-1.5 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm flex items-center gap-2">
+                  <button onClick={nextQueuedFile} className="min-h-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 px-3 py-1.5 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm flex items-center gap-2">
                     <UploadCloud size={14} /> Import next file ({fileQueue.length} remaining)
                   </button>
                   <button onClick={() => { setFileQueue([]); reset() }} className="text-sm underline">Discard queue</button>
@@ -1477,48 +1611,47 @@ export default function DataIntakeCenter() {
       )}
 
       {/* recent imports */}
-      <div className="mt-10">
-        <h2 className="text-sm font-semibold text-[var(--text-secondary)] mb-2">Recent imports</h2>
-        <div className="border border-[var(--border-dim)] rounded-xl overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-[var(--surface-2)] text-[var(--text-secondary)] text-xs"><tr><th className="text-left px-3 py-2">Module</th><th className="text-left px-3 py-2">Country</th><th className="text-left px-3 py-2">Status</th><th className="text-left px-3 py-2">Rows</th><th className="text-left px-3 py-2">When</th><th className="text-right px-3 py-2">Actions</th></tr></thead>
-            <tbody>
-              {recent.length === 0 && <tr><td colSpan={6} className="px-3 py-4 text-center text-[var(--text-dim)]">No imports yet.</td></tr>}
-              {recent.map((b) => {
-                const committed = b.import_status === 'committed'
-                const rowBusy = rowBusyId === b.id
-                return (
-                <tr key={b.id} className="border-t border-[var(--border-dim)]">
-                  <td className="px-3 py-1.5 capitalize">{b.module}</td>
-                  <td className="px-3 py-1.5 text-[var(--text-secondary)]">{b.country || '-'}</td>
-                  <td className="px-3 py-1.5"><span className={`text-xs px-2 py-0.5 rounded ${committed ? 'bg-green-900/30 text-green-400' : 'bg-[var(--surface-2)] text-[var(--text-secondary)]'}`}>{b.import_status}</span></td>
-                  <td className="px-3 py-1.5 text-[var(--text-secondary)]">{b.imported_rows || 0}/{b.total_rows || 0}</td>
-                  <td className="px-3 py-1.5 text-[var(--text-muted)] text-xs">{b.created_at ? new Date(b.created_at).toLocaleString('en-GB') : ''}</td>
-                  <td className="px-3 py-1.5 text-right">
-                    <div className="flex items-center justify-end gap-1.5">
-                      <Link to="/data-intake/history" title="Open in import history"
-                        className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded border border-[var(--border-bright)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-bright)]">
-                        Open
-                      </Link>
-                      <button onClick={() => diagnoseRecent(b)}
-                        title="Diagnose this batch (health, dropped rows, commit failures)"
-                        className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded border ${diag?.batchId === b.id ? 'border-sky-600/60 text-sky-300' : 'border-[var(--border-bright)] text-[var(--text-secondary)] hover:text-sky-300 hover:border-sky-700/50'}`}>
-                        <Activity size={12} /> Diagnose
-                      </button>
-                      <button onClick={() => deleteRecent(b)} disabled={rowBusy}
-                        title={committed ? 'Reverse this committed import' : 'Delete this staged batch'}
-                        className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded border border-[var(--border-bright)] text-[var(--text-secondary)] hover:text-red-400 hover:border-red-700/50 disabled:opacity-50">
-                        {rowBusy ? <Loader2 size={12} className="animate-spin" /> : committed ? <RotateCcw size={12} /> : <Trash2 size={12} />}
-                        {committed ? 'Reverse' : 'Delete'}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-                )
-              })}
-            </tbody>
-          </table>
+      <section className="mt-10 space-y-3" aria-labelledby="recent-imports-heading">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 id="recent-imports-heading" className="text-sm font-semibold text-[var(--text-secondary)]">
+            Recent imports <span className="font-normal text-[var(--text-muted)]">(latest {RECENT_LIMIT} for {activeCountry})</span>
+          </h2>
+          <button type="button" onClick={loadRecent} disabled={recentState.loading}
+            className={`inline-flex items-center gap-1.5 min-h-[44px] px-3 rounded-lg text-xs bg-[var(--surface-2)] hover:bg-[var(--surface-3)] disabled:opacity-50 ${FOCUS_RING}`}>
+            <RefreshCw size={13} className={recentState.loading ? 'animate-spin' : ''} aria-hidden="true" /> Refresh
+          </button>
         </div>
+        {!recentState.error && (
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3" aria-label="Recent import summary">
+            {[
+              { label: 'Batches', value: recentState.loading && !recent.length ? '...' : recentKpis.batches.toLocaleString(), sub: `${recentKpis.imported} imported` },
+              { label: 'Never approved', value: recentKpis.unfinished.toLocaleString(), sub: recentKpis.staleUnfinished ? `${recentKpis.staleUnfinished} older than 7 days` : 'None stale', tone: recentKpis.unfinished ? 'text-amber-400' : '' },
+              { label: 'Nothing imported', value: recentKpis.nothing.toLocaleString(), sub: 'Finished with 0 rows', tone: recentKpis.nothing ? 'text-red-400' : '' },
+              { label: 'Rows imported', value: recentKpis.rowsImported == null ? 'N/A' : recentKpis.rowsImported.toLocaleString(), sub: recentKpis.rowsRead == null ? 'No row counts recorded' : `of ${recentKpis.rowsRead.toLocaleString()} read` },
+              { label: 'Import rate', value: recentKpis.importRate == null ? 'N/A' : `${Number(recentKpis.importRate).toFixed(1)}%`, sub: 'Rows imported / read' },
+              { label: 'Files not imported', value: recentState.filesError ? 'N/A' : recentKpis.orphanFiles.toLocaleString(), sub: recentState.filesError ? 'Could not check' : 'Uploaded, wizard not finished', tone: recentKpis.orphanFiles ? 'text-amber-400' : '' },
+            ].map((k) => (
+              <div key={k.label} className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-3 min-w-0">
+                <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
+                <p className={`text-xl font-bold tabular-nums ${k.tone || 'text-[var(--text-primary)]'}`}>{k.value}</p>
+                <p className="text-[11px] text-[var(--text-muted)] truncate" title={k.sub}>{k.sub}</p>
+              </div>
+            ))}
+          </div>
+        )}
+        <EnterpriseTable
+          columns={recentColumns}
+          data={recentRows}
+          getRowId={(b) => String(b.id)}
+          loading={recentState.loading && !recent.length}
+          error={recentState.error || null}
+          onRetry={loadRecent}
+          emptyMessage={`No imports yet for ${activeCountry}.`}
+          searchPlaceholder="Search imports..."
+          exportFileName={`Recent imports ${activeCountry}`}
+          initialPageSize={10}
+          pageSizeOptions={[10, 25, 50]}
+        />
         {diag && (
           <div className="mt-3">
             <IntakeDiagnosticsPanel
@@ -1534,36 +1667,33 @@ export default function DataIntakeCenter() {
             />
           </div>
         )}
-        <p className="mt-3 text-xs text-[var(--text-dim)]">Original files are stored privately; every source row is preserved. Commits run server-side (permission + country scope + idempotency). <Link to="/upload" className="underline">Legacy upload</Link></p>
-      </div>
+        <p className="text-xs text-[var(--text-dim)]">Original files are stored privately; every source row is preserved. Commits run server-side (permission + country scope + idempotency). <Link to="/upload" className="underline">Legacy upload</Link></p>
+      </section>
 
       {/* uploaded-but-not-imported files (orphans) - nothing is hidden */}
-      {orphanFiles.length > 0 && (
-        <div className="mt-8">
-          <h2 className="text-sm font-semibold text-amber-400/90 mb-2 flex items-center gap-2"><AlertTriangle size={15} /> Uploaded but not yet imported</h2>
-          <p className="text-xs text-[var(--text-muted)] mb-2">These files were uploaded but never completed the wizard, so they added nothing to your live data. Re-run the import from step 1, or remove them.</p>
-          <div className="border border-amber-800/40 rounded-xl overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-amber-900/10 text-[var(--text-secondary)] text-xs"><tr><th className="text-left px-3 py-2">File</th><th className="text-left px-3 py-2">Country</th><th className="text-left px-3 py-2">Size</th><th className="text-left px-3 py-2">Uploaded</th><th className="text-right px-3 py-2">Actions</th></tr></thead>
-              <tbody>
-                {orphanFiles.map((f) => (
-                  <tr key={f.id} className="border-t border-[var(--border-dim)]">
-                    <td className="px-3 py-1.5 text-[var(--text-secondary)] truncate max-w-[240px]">{f.original_filename}</td>
-                    <td className="px-3 py-1.5 text-[var(--text-secondary)]">{f.country || '-'}</td>
-                    <td className="px-3 py-1.5 text-[var(--text-muted)] text-xs">{f.size_bytes ? `${Math.round(f.size_bytes / 1024)} KB` : '-'}</td>
-                    <td className="px-3 py-1.5 text-[var(--text-muted)] text-xs">{f.created_at ? new Date(f.created_at).toLocaleString('en-GB') : ''}</td>
-                    <td className="px-3 py-1.5 text-right">
-                      <button onClick={() => deleteOrphan(f)} title="Remove this unused upload"
-                        className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded border border-[var(--border-bright)] text-[var(--text-secondary)] hover:text-red-400 hover:border-red-700/50">
-                        <Trash2 size={12} /> Remove
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+      {recentState.filesError ? (
+        <div role="alert" className="mt-8 bg-red-900/20 border border-red-700/50 rounded-xl p-3 text-red-300 text-sm flex flex-wrap items-center gap-2">
+          <AlertTriangle size={16} aria-hidden="true" />
+          <span className="flex-1">{recentState.filesError} Files that never finished the wizard cannot be listed right now.</span>
+          <button type="button" onClick={loadRecent} className={`inline-flex items-center gap-1.5 min-h-[44px] px-3 rounded-lg text-xs bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-[var(--text-primary)] ${FOCUS_RING}`}>
+            <RefreshCw size={13} aria-hidden="true" /> Retry
+          </button>
         </div>
+      ) : orphanFiles.length > 0 && (
+        <section className="mt-8 space-y-2" aria-labelledby="orphan-files-heading">
+          <h2 id="orphan-files-heading" className="text-sm font-semibold text-amber-400/90 flex items-center gap-2"><AlertTriangle size={15} aria-hidden="true" /> Uploaded but not yet imported ({orphanFiles.length})</h2>
+          <p className="text-xs text-[var(--text-muted)]">These files were uploaded but never completed the wizard, so they added nothing to your live data. Re-run the import from step 1, or remove them.</p>
+          <EnterpriseTable
+            columns={orphanColumns}
+            data={orphanFiles}
+            getRowId={(f) => String(f.id)}
+            emptyMessage="Every uploaded file became an import."
+            searchPlaceholder="Search files..."
+            exportFileName={`Uploaded files not imported ${activeCountry}`}
+            initialPageSize={10}
+            pageSizeOptions={[10, 25, 50]}
+          />
+        </section>
       )}
     </div>
   )

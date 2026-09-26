@@ -18,7 +18,7 @@ import {
   ShieldAlert, DollarSign, BarChart2, Target,
   Zap, CheckCircle, XCircle, Clock, Activity,
   Building2, Wrench, Star, AlertOctagon,
-  ChevronRight, Award, Package, Users, Mail,
+  Award, Package, Users, Mail, RefreshCw,
   ScrollText, Presentation,
   Settings2, Plus, Eye, EyeOff, X, ArrowUp, ArrowDown,
   Trash2, GripVertical, RotateCcw, StickyNote, SeparatorHorizontal,
@@ -49,6 +49,17 @@ import PageHeader from '../components/ui/PageHeader'
 import YearlyTrendPanel from '../components/expense/YearlyTrendPanel'
 import PeriodFilter, { filterByPeriodValue, periodLabel as periodValueLabel } from '../components/ui/PeriodFilter'
 import { loadAutoTable } from '../lib/pdfEngine'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import { colorAt, withAlpha } from '../lib/reportColors'
+import {
+  fmtCurrency, fmtNum, fmtPct, fmtRatio, fmtCpk, withUnit,
+  statusLabel, cpkStatus, pctStatus, lowerIsBetter, higherIsBetter,
+  periodBounds, siteOptions, filterBySite, ALL_SITES,
+  computeRootCauses, topCostVehicles as rankCostVehicles, costByDimension,
+  periodBudget, projectAnnual, monthOverMonth, savingsOpportunity as computeSavings,
+  riskCounts, riskScore, riskBand, buildRiskMatrix, topHighRisk, riskTrend,
+  honestKpis, kpiExportRows, actionPhaseOf, RISK_LEVELS,
+} from '../lib/executiveReportAnalytics'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement,
@@ -98,181 +109,18 @@ const DOUGHNUT_OPTS = {
 
 // ── Period helpers ────────────────────────────────────────────────────────────
 // Period selection is data-aware (All time / data years / custom calendar) via
-// the shared PeriodFilter, so historic imports always have a matching window.
+// the shared PeriodFilter. All report maths (root causes, risk, cost breakdowns,
+// honest KPI view, formatters) lives in src/lib/executiveReportAnalytics.js.
 function filterByPeriod(records, period, dateField = 'issue_date') {
   return filterByPeriodValue(records, period, dateField)
 }
 
-// Convert a PeriodFilter value into INCLUSIVE server-side date bounds so the raw
-// pulls fetch only the report's window instead of the whole all-time table.
-// `filterByPeriod` still runs client-side on top, so the bounds only need to be
-// a SUPERSET of the kept rows - the exact set (and every number) stays identical
-// to the client-only result. `toExclusive` is the day after the range end, so
-// `.lt(dateField, toExclusive)` includes the last day for both date and
-// timestamp columns. Returns null for "all time" (no date filter, ceiling only).
-function periodBounds(period) {
-  const v = period || { mode: 'all' }
-  if (v.mode === 'year') {
-    const y = Number(v.year)
-    if (!Number.isFinite(y)) return null
-    return { from: `${y}-01-01`, toExclusive: `${y + 1}-01-01` }
-  }
-  if (v.mode === 'custom') {
-    const from = v.from && /^\d{4}-\d{2}-\d{2}/.test(v.from) ? v.from.slice(0, 10) : null
-    let toExclusive = null
-    if (v.to && /^\d{4}-\d{2}-\d{2}/.test(v.to)) {
-      const d = new Date(`${v.to.slice(0, 10)}T00:00:00Z`)
-      d.setUTCDate(d.getUTCDate() + 1)
-      toExclusive = d.toISOString().slice(0, 10)
-    }
-    if (!from && !toExclusive) return null
-    return { from, toExclusive }
-  }
-  return null // 'all'
-}
-
-// ── Root cause classifier ─────────────────────────────────────────────────────
-const RC_CATEGORIES = [
-  {
-    key: 'inflation',
-    label: 'Inflation Issues',
-    color: '#ef4444',
-    keywords: ['inflation', 'pressure', 'under-inflat', 'over-inflat', 'deflat', 'blow'],
-    prevention: 'Implement weekly pressure checks, install TPMS sensors, calibrate gauges quarterly.',
-  },
-  {
-    key: 'alignment',
-    label: 'Alignment / Suspension',
-    color: '#f97316',
-    keywords: ['align', 'suspension', 'camber', 'toe', 'wheel balance', 'balancing', 'bounce'],
-    prevention: 'Schedule alignment checks every 20,000 km, inspect after impact events.',
-  },
-  {
-    key: 'driver',
-    label: 'Driver Behavior',
-    color: '#eab308',
-    keywords: ['driver', 'driving', 'speed', 'braking', 'cornering', 'abuse', 'misuse', 'overload'],
-    prevention: 'Deploy telematics, run defensive driving training, review high-loss records monthly.',
-  },
-  {
-    key: 'road',
-    label: 'Road / Load Conditions',
-    color: '#8b5cf6',
-    keywords: ['road', 'terrain', 'load', 'overload', 'weight', 'debris', 'pothole', 'cut'],
-    prevention: 'Map high-risk routes, enforce load compliance, carry puncture repair kits.',
-  },
-  {
-    key: 'maintenance',
-    label: 'Maintenance Quality',
-    color: '#06b6d4',
-    keywords: ['mainten', 'workshop', 'rotation', 'install', 'torque', 'fitment', 'rim'],
-    prevention: 'Audit workshop standards, enforce mandatory service intervals, verify torque spec.',
-  },
-  {
-    key: 'manufacturing',
-    label: 'Manufacturing Defects',
-    color: '#10b981',
-    keywords: ['defect', 'manufactur', 'warranty', 'sidewall', 'bead', 'delamination', 'separation'],
-    prevention: 'Raise warranty claims, audit supplier quality, inspect all incoming tyres.',
-  },
-  {
-    key: 'other',
-    label: 'Other / Unclassified',
-    color: '#6b7280',
-    keywords: [],
-    prevention: 'Investigate individual records and assign to appropriate root cause category.',
-  },
-]
-
-function classifyRootCause(record) {
-  const text = [record.findings, record.category, record.risk_level]
-    .join(' ')
-    .toLowerCase()
-  for (const cat of RC_CATEGORIES.slice(0, -1)) {
-    if (cat.keywords.some(kw => text.includes(kw))) return cat.key
-  }
-  // Additional heuristics
-  if (record.risk_level === 'Critical' || record.risk_level === 'High') {
-    if (text.includes('tread')) return 'maintenance'
-    if (text.includes('pressure')) return 'inflation'
-  }
-  return 'other'
-}
-
-function computeRootCauses(records) {
-  const counts = {}
-  RC_CATEGORIES.forEach(c => { counts[c.key] = { count: 0, cost: 0 } })
-  records.forEach(r => {
-    const key = classifyRootCause(r)
-    counts[key].count += 1
-    counts[key].cost += recordCost(r)
-  })
-  const total = records.length
-  return RC_CATEGORIES.map(cat => ({
-    ...cat,
-    count:   counts[cat.key].count,
-    cost:    counts[cat.key].cost,
-    pct:     total > 0 ? (counts[cat.key].count / total) * 100 : 0,
-  })).filter(c => c.count > 0).sort((a, b) => b.count - a.count)
-}
-
-// ── Number formatters ────────────────────────────────────────────────────────
-// NOTE: use Number.isFinite (not the global isFinite) + an explicit null check.
-// The global isFinite COERCES its argument, so isFinite(null) === true (null -> 0),
-// which let a null value skip the guard and hit null.toFixed() -> whole page crash.
-// Engine KPIs (e.g. an unmeasurable CPK) are legitimately null, so this must be safe.
-function fmtCurrency(n, currency) {
-  const v = Number(n)
-  // Unknown is N/A, never a fabricated zero (e.g. a spend total refused because
-  // the scope spans several currencies).
-  if (n == null || !Number.isFinite(v)) return 'N/A'
-  if (v === 0) return `${currency} 0`
-  return `${currency} ${Math.round(v).toLocaleString()}`
-}
-function fmtNum(n, decimals = 0) {
-  const v = Number(n)
-  if (n == null || !Number.isFinite(v)) return '0'
-  return v.toFixed(decimals).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
-}
-function fmtPct(n) { return `${fmtNum(n, 1)}%` }
-// A KPI with no measurable input must read N/A, never 0.0%. fmtNum maps null to
-// '0', which on a safety metric is a claim the data does not support.
-function fmtPctOrNA(n) {
-  return (n == null || !Number.isFinite(Number(n))) ? 'N/A' : fmtPct(n)
-}
-function fmtCpk(n, currency) {
-  const v = Number(n)
-  if (n == null || !Number.isFinite(v) || v === 0) return `${currency} 0.00`
-  return `${currency} ${v.toFixed(4)}`
-}
-
-// ── Status color helpers ──────────────────────────────────────────────────────
-function cpkStatus(cpk) {
-  if (cpk <= 0.005) return 'green'
-  if (cpk <= 0.012) return 'amber'
-  return 'red'
-}
-// Both guard null FIRST. Without it `null >= 85` is false so an unmeasured
-// percentage renders red (unknown is not bad), and `null <= 0.1` is TRUE so an
-// unmeasured failure rate renders GREEN - a healthy fleet drawn from no data.
-function pctStatus(pct, goodAbove = 85) {
-  if (pct == null || !Number.isFinite(Number(pct))) return 'neutral'
-  if (pct >= goodAbove) return 'green'
-  if (pct >= goodAbove * 0.7) return 'amber'
-  return 'red'
-}
-function failStatus(rate) {
-  if (rate == null || !Number.isFinite(Number(rate))) return 'neutral'
-  if (rate <= 0.1) return 'green'
-  if (rate <= 0.25) return 'amber'
-  return 'red'
-}
 const STATUS_COLORS = {
   green: { text: 'text-emerald-400', bg: 'bg-emerald-400/10', border: 'border-emerald-400/30', dot: 'bg-emerald-400' },
   amber: { text: 'text-amber-400', bg: 'bg-amber-400/10', border: 'border-amber-400/30', dot: 'bg-amber-400' },
   red:   { text: 'text-red-400', bg: 'bg-red-400/10', border: 'border-red-400/30', dot: 'bg-red-400' },
   // "not measured" - deliberately colourless so an unknown never reads as a verdict
-  neutral: { text: 'text-slate-400', bg: 'bg-slate-400/10', border: 'border-slate-400/30', dot: 'bg-slate-400' },
+  neutral: { text: 'text-[var(--text-muted)]', bg: 'bg-[var(--surface-2)]', border: 'border-[var(--border-bright)]', dot: 'bg-[var(--text-dim)]' },
 }
 
 const PRIORITY_STYLES = {
@@ -281,6 +129,19 @@ const PRIORITY_STYLES = {
   Medium:   'bg-amber-500/20 text-amber-400 border border-amber-500/30',
   Low:      'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30',
 }
+
+// EnterpriseTable cell for a risk-level count: a tinted chip when non-zero.
+function riskCountCell(tone) {
+  return function RiskCountCell({ getValue }) {
+    const v = getValue()
+    return v > 0
+      ? <span className={`px-1.5 py-0.5 rounded font-bold tabular-nums ${tone}`}>{v}</span>
+      : <span className="text-[var(--text-dim)]">0</span>
+  }
+}
+
+// Shared header action style: 44px touch target, visible keyboard focus.
+const HEADER_BTN = 'inline-flex items-center gap-1.5 min-h-[44px] px-3 rounded-lg text-xs font-medium transition-colors border disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-1'
 
 // ── Card component ────────────────────────────────────────────────────────────
 function Card({ children, className = '' }) {
@@ -319,7 +180,8 @@ function WidgetShell({ onRemove, icon: Icon, title, subtitle, children }) {
       <button
         onClick={onRemove}
         title="Remove this block"
-        className="no-print absolute top-3 right-3 z-10 p-1.5 rounded-lg bg-[var(--surface-2)] hover:bg-red-500/15 text-[var(--text-muted)] hover:text-red-400 border border-[var(--border-dim)] opacity-0 group-hover:opacity-100 transition-opacity"
+        aria-label="Remove this block"
+        className="no-print absolute top-3 right-3 z-10 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg bg-[var(--surface-2)] hover:bg-red-500/15 text-[var(--text-muted)] hover:text-red-400 border border-[var(--border-dim)] opacity-0 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:outline-none transition-opacity"
       >
         <Trash2 className="w-3.5 h-3.5" />
       </button>
@@ -441,6 +303,12 @@ export default function ExecutiveReport() {
   const [loading,     setLoading]     = useState(true)
   const [error,       setError]       = useState(null)
   const [period,      setPeriod]      = useState({ mode: 'all' })
+  // Site scope for the whole report (All = every site in the active country).
+  const [site,        setSite]        = useState(ALL_SITES)
+  // Re-run the main load without changing any filter (Retry after an error).
+  const [reloadKey,   setReloadKey]   = useState(0)
+  // Export failures are surfaced, never swallowed into the console.
+  const [exportError, setExportError] = useState(null)
   const [exporting,   setExporting]   = useState(false)
   const [emailModalOpen, setEmailModalOpen] = useState(false)
   // Executive reports open as a clean WHITE printed-document view by default
@@ -508,6 +376,13 @@ export default function ExecutiveReport() {
     x.id === id ? { ...x, text } : x
   ))), [])
   const resetLayout = useCallback(() => setLayout(defaultLayout()), [])
+  // Escape closes the customize drawer (keyboard escape route).
+  useEffect(() => {
+    if (!customizeOpen) return undefined
+    const onKey = (e) => { if (e.key === 'Escape') setCustomizeOpen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [customizeOpen])
 
   // Live chart -> white-paper PNG (falls back to the raw canvas), null-guarded for
   // pre-mount refs so export never throws before charts render.
@@ -549,13 +424,13 @@ export default function ExecutiveReport() {
     }
     load()
     return () => { cancelled = true }
-  }, [activeCountry, period])
+  }, [activeCountry, period, reloadKey])
 
   // ── Tyres vs Maintenance cost split load (12 calendar months) ──────────────
   useEffect(() => {
     let cancelled = false
     setCostSplitState('loading')
-    loadGovernedCostSplit({ country: activeCountry, maxAgeMs: COST_SPLIT_TTL_MS })
+    loadGovernedCostSplit({ country: activeCountry, site: site === ALL_SITES ? undefined : site, maxAgeMs: COST_SPLIT_TTL_MS })
       .then((res) => {
         if (cancelled) return
         setCostSplit(res || { tyre: 0, maintenance: 0, byMonth: [] })
@@ -567,7 +442,7 @@ export default function ExecutiveReport() {
         setCostSplitState('error')
       })
     return () => { cancelled = true }
-  }, [activeCountry])
+  }, [activeCountry, site, reloadKey])
 
   // ── Authoritative tyre SPEND for the report period (expense grid) ─────────
   // The headline "Total Period Spend" used to sum tyre_records.cost_per_tyre,
@@ -579,7 +454,7 @@ export default function ExecutiveReport() {
     let cancelled = false
     setGridSpend(null)
     if (!spendWin) return () => { cancelled = true }
-    loadGovernedCostSplit({ country: activeCountry, from: spendWin.from, to: spendWin.to, maxAgeMs: COST_SPLIT_TTL_MS })
+    loadGovernedCostSplit({ country: activeCountry, site: site === ALL_SITES ? undefined : site, from: spendWin.from, to: spendWin.to, maxAgeMs: COST_SPLIT_TTL_MS })
       .then((res) => {
         if (cancelled) return
         const amt = Number(res?.tyre)
@@ -587,12 +462,17 @@ export default function ExecutiveReport() {
       })
       .catch(() => { if (!cancelled) setGridSpend(null) })
     return () => { cancelled = true }
-  }, [activeCountry, spendWin])
+  }, [activeCountry, spendWin, site])
 
   // ── Period-filtered datasets ───────────────────────────────────────────────
-  const periodRecords     = useMemo(() => filterByPeriod(records,     period, 'issue_date'),      [records,     period])
-  const periodInspections = useMemo(() => filterByPeriod(inspections, period, 'scheduled_date'),  [inspections, period])
-  const periodActions     = useMemo(() => filterByPeriod(actions,     period, 'created_at'),      [actions,     period])
+  const sites             = useMemo(() => siteOptions(records, fleet), [records, fleet])
+  // A site that disappears from the options (country switch) falls back to All.
+  useEffect(() => { if (site !== ALL_SITES && sites.length && !sites.includes(site)) setSite(ALL_SITES) }, [sites, site])
+  const siteRecords       = useMemo(() => filterBySite(records, site), [records, site])
+  const siteFleet         = useMemo(() => filterBySite(fleet, site), [fleet, site])
+  const periodRecords     = useMemo(() => filterByPeriod(siteRecords, period, 'issue_date'), [siteRecords, period])
+  const periodInspections = useMemo(() => filterByPeriod(filterBySite(inspections, site), period, 'scheduled_date'), [inspections, period, site])
+  const periodActions     = useMemo(() => filterByPeriod(filterBySite(actions, site), period, 'created_at'), [actions, period, site])
 
   // True when any raw pull hit its 50,000-row ceiling: the report then reflects a
   // capped sample of the selected period, not the full history.
@@ -600,16 +480,18 @@ export default function ExecutiveReport() {
 
   // ── KPIs ──────────────────────────────────────────────────────────────────
   const fleetSize = useMemo(() =>
-    fleet.length > 0
-      ? fleet.length
-      : new Set(records.map(r => r.asset_no).filter(Boolean)).size,
-    [fleet, records]
+    siteFleet.length > 0
+      ? siteFleet.length
+      : new Set(siteRecords.map(r => r.asset_no).filter(Boolean)).size,
+    [siteFleet, siteRecords]
   )
 
   const kpis        = useMemo(() => computeAllKpis(periodRecords, periodInspections, periodActions, fleetSize), [periodRecords, periodInspections, periodActions, fleetSize])
   const costTrend   = useMemo(() => computeCostTrend(periodRecords), [periodRecords])
   const vendors     = useMemo(() => computeVendorPerformance(periodRecords), [periodRecords])
   const rootCauses  = useMemo(() => computeRootCauses(periodRecords), [periodRecords])
+  // Honest view of the KPIs: an unmeasured figure is null (renders N/A).
+  const hk          = useMemo(() => honestKpis(kpis, periodRecords), [kpis, periodRecords])
 
   // ── Financial computations ────────────────────────────────────────────────
   // Per-tyre sum over the period's records. Kept ONLY as the fallback when the
@@ -635,139 +517,21 @@ export default function ExecutiveReport() {
         ? 'Mixed currencies: pick a country for a spend total'
         : 'No tyre spend recorded for this period'
 
-  const totalBudget = useMemo(() => {
-    if (!fleet.length) return 0
-    // Months covered by the selected period, measured from the data itself.
-    const dates = periodRecords.map(r => r.issue_date).filter(Boolean).sort()
-    const months = dates.length
-      ? Math.max(1, Math.round((new Date(dates[dates.length - 1]) - new Date(dates[0])) / 2_592_000_000) + 1)
-      : 1
-    return fleet.reduce((s, v) => s + (Number(v.monthly_tyre_budget) || 0), 0) * months
-  }, [fleet, periodRecords])
-
-  const projectedAnnual = useMemo(() => {
-    if (!costTrend.avgMonthlyCost) return 0
-    return costTrend.avgMonthlyCost * 12
-  }, [costTrend])
-
-  const topCostVehicles = useMemo(() => {
-    const byAsset = {}
-    periodRecords.forEach(r => {
-      if (!r.asset_no) return
-      if (!byAsset[r.asset_no]) byAsset[r.asset_no] = { asset_no: r.asset_no, site: r.site, cost: 0, count: 0 }
-      byAsset[r.asset_no].cost  += recordCost(r)
-      byAsset[r.asset_no].count += 1
-    })
-    return Object.values(byAsset).sort((a, b) => b.cost - a.cost).slice(0, 5)
-  }, [periodRecords])
-
-  const costBySite = useMemo(() => {
-    const by = {}
-    periodRecords.forEach(r => {
-      const site = r.site || 'Unknown'
-      if (!by[site]) by[site] = 0
-      by[site] += recordCost(r)
-    })
-    return Object.entries(by).map(([site, cost]) => ({ site, cost })).sort((a, b) => b.cost - a.cost)
-  }, [periodRecords])
-
-  const costByBrand = useMemo(() => {
-    const by = {}
-    periodRecords.forEach(r => {
-      const brand = r.brand || 'Unknown'
-      if (!by[brand]) by[brand] = 0
-      by[brand] += recordCost(r)
-    })
-    return Object.entries(by).map(([brand, cost]) => ({ brand, cost })).sort((a, b) => b.cost - a.cost).slice(0, 8)
-  }, [periodRecords])
-
-  // ── Cost savings opportunity ──────────────────────────────────────────────
-  const savingsOpportunity = useMemo(() => {
-    if (!kpis.cpk.fleetAvgCpk || !kpis.cpk.p10Cpk) return 0
-    const improvement = kpis.cpk.fleetAvgCpk - kpis.cpk.p10Cpk
-    if (improvement <= 0) return 0
-    const totalKm = periodRecords.filter(r => {
-      const f = Number(r.km_at_fitment), rem = Number(r.km_at_removal)
-      return isFinite(f) && isFinite(rem) && rem > f
-    }).reduce((s, r) => s + (Number(r.km_at_removal) - Number(r.km_at_fitment)), 0)
-    const dates2 = periodRecords.map(r => r.issue_date).filter(Boolean).sort()
-    const periodDays = dates2.length
-      ? Math.max(30, (new Date(dates2[dates2.length - 1]) - new Date(dates2[0])) / 86_400_000 + 1)
-      : 90
-    return improvement * totalKm * (12 / periodDays * 30)
-  }, [kpis, periodRecords])
-
-  // ── Risk matrix ───────────────────────────────────────────────────────────
-  const riskMatrix = useMemo(() => {
-    const sites = [...new Set(periodRecords.map(r => r.site).filter(Boolean))]
-    const levels = ['Critical', 'High', 'Medium', 'Low']
-    return sites.map(site => {
-      const siteRecs = periodRecords.filter(r => r.site === site)
-      const counts = {}
-      levels.forEach(l => { counts[l] = siteRecs.filter(r => r.risk_level === l).length })
-      const score = (counts.Critical * 4 + counts.High * 3 + counts.Medium * 2 + counts.Low) /
-        Math.max(siteRecs.length, 1)
-      return { site, ...counts, total: siteRecs.length, score }
-    }).sort((a, b) => b.score - a.score)
-  }, [periodRecords])
-
-  const fleetRiskScore = useMemo(() => {
-    const total = periodRecords.length
-    if (!total) return 0
-    const weighted =
-      periodRecords.filter(r => r.risk_level === 'Critical').length * 4 +
-      periodRecords.filter(r => r.risk_level === 'High').length * 3 +
-      periodRecords.filter(r => r.risk_level === 'Medium').length * 2 +
-      periodRecords.filter(r => r.risk_level === 'Low').length
-    return weighted / total
-  }, [periodRecords])
-
-  const top10HighRisk = useMemo(() =>
-    [...periodRecords]
-      .filter(r => r.risk_level === 'Critical' || r.risk_level === 'High')
-      .sort((a, b) => {
-        const order = { Critical: 0, High: 1 }
-        return (order[a.risk_level] ?? 2) - (order[b.risk_level] ?? 2)
-      })
-      .slice(0, 10),
-    [periodRecords]
-  )
-
-  // ── Risk trend (6-month) ──────────────────────────────────────────────────
-  const riskTrend6m = useMemo(() => {
-    const months = []
-    const now = new Date()
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-      months.push(key)
-    }
-    return months.map(mo => {
-      const recs = records.filter(r => {
-        if (!r.issue_date) return false
-        const k = r.issue_date.slice(0, 7)
-        return k === mo
-      })
-      const total = recs.length
-      if (!total) return { month: mo, score: 0 }
-      const score =
-        (recs.filter(r => r.risk_level === 'Critical').length * 4 +
-         recs.filter(r => r.risk_level === 'High').length * 3 +
-         recs.filter(r => r.risk_level === 'Medium').length * 2 +
-         recs.filter(r => r.risk_level === 'Low').length) / total
-      return { month: mo, score }
-    })
-  }, [records])
-
-  // ── Month-over-month cost change ──────────────────────────────────────────
-  const momChange = useMemo(() => {
-    const months = costTrend.byMonth
-    if (months.length < 2) return null
-    const last = months[months.length - 1]
-    const prev = months[months.length - 2]
-    if (!prev.totalCost) return null
-    return ((last.totalCost - prev.totalCost) / prev.totalCost) * 100
-  }, [costTrend])
+  // Engine-derived figures (src/lib/executiveReportAnalytics.js). Each one is
+  // null when the data cannot support it, so the page renders N/A, not a 0.
+  const totalBudget      = useMemo(() => periodBudget(siteFleet, periodRecords), [siteFleet, periodRecords])
+  const projectedAnnual  = useMemo(() => projectAnnual(costTrend.avgMonthlyCost), [costTrend])
+  const topCostVehicles  = useMemo(() => rankCostVehicles(periodRecords, 5), [periodRecords])
+  const costBySite       = useMemo(() => costByDimension(periodRecords, 'site'), [periodRecords])
+  const costByBrand      = useMemo(() => costByDimension(periodRecords, 'brand', 8), [periodRecords])
+  const savingsOpportunity = useMemo(() => computeSavings(kpis.cpk, periodRecords), [kpis, periodRecords])
+  const riskMatrix       = useMemo(() => buildRiskMatrix(periodRecords), [periodRecords])
+  const riskTally        = useMemo(() => riskCounts(periodRecords), [periodRecords])
+  const fleetRiskScore   = useMemo(() => riskScore(periodRecords), [periodRecords])
+  const fleetRiskBand    = riskBand(fleetRiskScore)
+  const top10HighRisk    = useMemo(() => topHighRisk(periodRecords, 10), [periodRecords])
+  const riskTrend6m      = useMemo(() => riskTrend(siteRecords, { months: 6, now: new Date() }), [siteRecords])
+  const momChange        = useMemo(() => monthOverMonth(costTrend.byMonth), [costTrend])
 
   // ── Best brand by CPK ─────────────────────────────────────────────────────
   const bestBrand = useMemo(() => {
@@ -792,13 +556,13 @@ export default function ExecutiveReport() {
   // ── Recommendations ───────────────────────────────────────────────────────
   const recommendations = useMemo(() => {
     const recs = []
-    const inspComp = kpis.inspectionCompliance?.compliancePct ?? 0
-    const scrapRate = kpis.scrapRate?.scrapRate ?? 0
-    const failRate  = kpis.failureRate?.failureRate ?? 0
-    const critRate  = kpis.failureRate?.criticalRate ?? 0
-    const fleetCpk  = kpis.cpk?.fleetAvgCpk ?? 0
+    // Recommendations fire only on MEASURED figures: an unknown compliance or
+    // rate is not evidence of a problem (hk.* is null when unmeasured).
+    const inspComp = hk.inspectionPct
+    const scrapRate = hk.scrapRate
+    const critRate  = hk.criticalRate
 
-    if (critRate > 0.15) {
+    if (critRate != null && critRate > 0.15) {
       recs.push({
         priority: 'Critical',
         title: t('execreport.recommendations.criticalRemoval.title'),
@@ -808,9 +572,9 @@ export default function ExecutiveReport() {
       })
     }
 
-    if (inspComp < 85) {
+    if (inspComp != null && inspComp < 85) {
       recs.push({
-        priority: critRate > 0.1 ? 'Critical' : 'High',
+        priority: critRate != null && critRate > 0.1 ? 'Critical' : 'High',
         title: t('execreport.recommendations.inspectionCompliance.title'),
         description: t('execreport.recommendations.inspectionCompliance.description', { pct: fmtPct(inspComp) }),
         impact: t('execreport.recommendations.inspectionCompliance.impact', { amount: fmtCurrency(spendShare(totalSpend, 0.15), currency) }),
@@ -824,7 +588,7 @@ export default function ExecutiveReport() {
         priority: 'High',
         title: t('execreport.recommendations.procurementReview.title', { brand: worst.brand }),
         description: t('execreport.recommendations.procurementReview.description', { brand: worst.brand, cpk: fmtCpk(worst.avgCpk, currency), rate: fmtPct(worst.failureRate * 100) }),
-        impact: t('execreport.recommendations.procurementReview.impact', { bestBrand: bestBrandByScore.brand, amount: fmtCurrency(savingsOpportunity * 0.3, currency) }),
+        impact: t('execreport.recommendations.procurementReview.impact', { bestBrand: bestBrandByScore.brand, amount: fmtCurrency(spendShare(savingsOpportunity, 0.3), currency) }),
         owner: t('execreport.owners.procurement'),
       })
     }
@@ -849,7 +613,7 @@ export default function ExecutiveReport() {
       })
     }
 
-    if (scrapRate > 0.15) {
+    if (scrapRate != null && scrapRate > 0.15) {
       recs.push({
         priority: 'High',
         title: t('execreport.recommendations.scrapRateInvestigation.title'),
@@ -869,7 +633,7 @@ export default function ExecutiveReport() {
       })
     }
 
-    if (kpis.cpk.fleetAvgCpk > 0 && savingsOpportunity > 5000) {
+    if (kpis.cpk.fleetAvgCpk > 0 && savingsOpportunity != null && savingsOpportunity > 5000) {
       recs.push({
         priority: 'Medium',
         title: t('execreport.recommendations.cpkOptimisation.title'),
@@ -900,7 +664,7 @@ export default function ExecutiveReport() {
     }
 
     return recs.slice(0, 10)
-  }, [kpis, vendors, bestBrandByScore, topRootCause, worstSiteByFailure, totalSpend, savingsOpportunity, currency, costBySite, t])
+  }, [kpis, hk, vendors, bestBrandByScore, topRootCause, worstSiteByFailure, totalSpend, savingsOpportunity, currency, costBySite, t])
 
   // ── Action plan ───────────────────────────────────────────────────────────
   const actionPlan = useMemo(() => {
@@ -931,7 +695,7 @@ export default function ExecutiveReport() {
       {
         action: t('execreport.actionPlan.actions.procurementReviewBrand'),
         priority: 'High', timeline: t('execreport.actionPlan.daysSuffix', { range: '30-60' }),
-        owner: t('execreport.owners.procurement'), saving: fmtCurrency(savingsOpportunity * 0.3, currency), status: t('execreport.status.open'),
+        owner: t('execreport.owners.procurement'), saving: fmtCurrency(spendShare(savingsOpportunity, 0.3), currency), status: t('execreport.status.open'),
       },
       {
         action: t('execreport.actionPlan.actions.deployTelematics'),
@@ -958,101 +722,124 @@ export default function ExecutiveReport() {
       {
         action: t('execreport.actionPlan.actions.negotiateContracts'),
         priority: 'Medium', timeline: t('execreport.actionPlan.daysSuffix', { range: '60-90' }),
-        owner: t('execreport.owners.procurement'), saving: fmtCurrency(savingsOpportunity * 0.4, currency), status: t('execreport.status.open'),
+        owner: t('execreport.owners.procurement'), saving: fmtCurrency(spendShare(savingsOpportunity, 0.4), currency), status: t('execreport.status.open'),
       },
     ]
     return [...actions30, ...actions60, ...actions90]
   }, [periodRecords, kpis, totalSpend, savingsOpportunity, topRootCause, currency, t])
 
+  // ── Table column definitions (EnterpriseTable: search, sort, filter, export) ─
+  const actionPlanRows = useMemo(
+    () => actionPlan.map((a, i) => ({ ...a, id: `ap-${i}`, seq: i + 1, phase: actionPhaseOf(i) })),
+    [actionPlan],
+  )
+  const reportMeta = useMemo(() => ({
+    title: 'Executive Intelligence Report',
+    company,
+    currency,
+    branding,
+    dateRange: site === ALL_SITES ? periodValueLabel(period) : `${periodValueLabel(period)} | ${site}`,
+  }), [company, currency, branding, period, site])
+
+  const topVehicleColumns = useMemo(() => [
+    { id: 'rank', header: '#', accessorFn: (_r, i) => i + 1, size: 50, enableSorting: false },
+    { id: 'asset_no', header: 'Asset No', accessorKey: 'asset_no', size: 140,
+      cell: ({ getValue }) => <span className="font-medium text-[var(--text-primary)]">{getValue()}</span> },
+    { id: 'site', header: 'Site', accessorFn: (r) => r.site || 'N/A', size: 140, meta: { filterVariant: 'select' } },
+    { id: 'count', header: 'Tyres', accessorKey: 'count', size: 80, meta: { align: 'right' } },
+    { id: 'cost', header: 'Cost', accessorKey: 'cost', size: 140, meta: { align: 'right', exportValue: (r) => Math.round(r.cost) },
+      cell: ({ getValue }) => <span className="font-semibold tabular-nums text-amber-400">{fmtCurrency(getValue(), currency)}</span> },
+  ], [currency])
+
+  const rootCauseColumns = useMemo(() => [
+    { id: 'label', header: 'Cause', accessorKey: 'label', size: 200,
+      cell: ({ row }) => (
+        <span className="inline-flex items-center gap-2">
+          <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: row.original.color }} aria-hidden="true" />
+          <span className="text-[var(--text-primary)]">{row.original.label}</span>
+        </span>
+      ) },
+    { id: 'count', header: 'Count', accessorKey: 'count', size: 80, meta: { align: 'right' } },
+    { id: 'pct', header: '%', accessorKey: 'pct', size: 80, meta: { align: 'right', exportValue: (r) => Number(r.pct.toFixed(1)) },
+      cell: ({ getValue }) => <span className="tabular-nums">{fmtPct(getValue())}</span> },
+    { id: 'cost', header: 'Cost Impact', accessorKey: 'cost', size: 130, meta: { align: 'right', exportValue: (r) => Math.round(r.cost) },
+      cell: ({ getValue }) => <span className="tabular-nums text-amber-400">{fmtCurrency(getValue(), currency)}</span> },
+    { id: 'prevention', header: 'Prevention', accessorKey: 'prevention', size: 280,
+      cell: ({ getValue }) => <span className="text-xs text-[var(--text-muted)]">{getValue()}</span> },
+  ], [currency])
+
+  const riskMatrixColumns = useMemo(() => [
+    { id: 'site', header: 'Site', accessorKey: 'site', size: 160,
+      cell: ({ getValue }) => <span className="font-medium text-[var(--text-primary)]">{getValue()}</span> },
+    { id: 'Critical', header: 'Critical', accessorKey: 'Critical', size: 90, meta: { align: 'center' }, cell: riskCountCell('bg-red-500/20 text-red-400') },
+    { id: 'High', header: 'High', accessorKey: 'High', size: 90, meta: { align: 'center' }, cell: riskCountCell('bg-orange-500/20 text-orange-400') },
+    { id: 'Medium', header: 'Medium', accessorKey: 'Medium', size: 90, meta: { align: 'center' }, cell: riskCountCell('bg-amber-500/20 text-amber-400') },
+    { id: 'Low', header: 'Low', accessorKey: 'Low', size: 90, meta: { align: 'center' }, cell: riskCountCell('bg-emerald-500/20 text-emerald-400') },
+    { id: 'rated', header: 'Rated', accessorKey: 'rated', size: 80, meta: { align: 'center' } },
+    { id: 'total', header: 'Total', accessorKey: 'total', size: 80, meta: { align: 'center' } },
+    { id: 'score', header: 'Risk Score', accessorFn: (r) => r.score ?? -1, size: 150,
+      meta: { align: 'center', exportValue: (r) => (r.score == null ? 'N/A' : Number(r.score.toFixed(2))) },
+      cell: ({ row }) => {
+        const band = riskBand(row.original.score)
+        return (
+          <span className={`font-bold tabular-nums ${(STATUS_COLORS[band.key] || STATUS_COLORS.neutral).text}`}>
+            {fmtNum(row.original.score, 2)} <span className="text-[10px] font-medium">{band.label}</span>
+          </span>
+        )
+      } },
+  ], [])
+
+  const highRiskColumns = useMemo(() => [
+    { id: 'asset_no', header: 'Asset No', accessorFn: (r) => r.asset_no || 'N/A', size: 120,
+      cell: ({ getValue }) => <span className="font-medium text-[var(--text-primary)]">{getValue()}</span> },
+    { id: 'site', header: 'Site', accessorFn: (r) => r.site || 'N/A', size: 130, meta: { filterVariant: 'select' } },
+    { id: 'risk_level', header: 'Risk', accessorKey: 'risk_level', size: 100, meta: { align: 'center', filterVariant: 'select' },
+      cell: ({ getValue }) => (
+        <span className={`px-1.5 py-0.5 rounded text-xs font-semibold ${getValue() === 'Critical' ? 'bg-red-500/20 text-red-400' : 'bg-orange-500/20 text-orange-400'}`}>
+          {getValue()}
+        </span>
+      ) },
+    { id: 'brand', header: 'Brand', accessorFn: (r) => r.brand || 'N/A', size: 120 },
+    { id: 'position', header: 'Position', accessorFn: (r) => r.position || 'N/A', size: 100 },
+    { id: 'findings', header: 'Findings', accessorFn: (r) => r.findings || 'N/A', size: 280,
+      cell: ({ getValue }) => <span className="block max-w-xs truncate" title={getValue()}>{getValue()}</span> },
+  ], [])
+
+  const actionPlanColumns = useMemo(() => [
+    { id: 'seq', header: '#', accessorKey: 'seq', size: 50 },
+    { id: 'phase', header: 'Phase', accessorKey: 'phase', size: 110, meta: { filterVariant: 'select' } },
+    { id: 'action', header: 'Action', accessorKey: 'action', size: 320,
+      cell: ({ getValue }) => <span className="text-[var(--text-primary)]">{getValue()}</span> },
+    { id: 'priority', header: 'Priority', accessorKey: 'priority', size: 100, meta: { align: 'center', filterVariant: 'select' },
+      cell: ({ getValue }) => <span className={`px-1.5 py-0.5 rounded-full text-xs font-semibold ${PRIORITY_STYLES[getValue()] || ''}`}>{getValue()}</span> },
+    { id: 'timeline', header: 'Timeline', accessorKey: 'timeline', size: 110, meta: { align: 'center' } },
+    { id: 'owner', header: 'Owner', accessorKey: 'owner', size: 140, meta: { filterVariant: 'select' } },
+    { id: 'saving', header: 'Est. Saving', accessorKey: 'saving', size: 130, meta: { align: 'right' },
+      cell: ({ getValue }) => <span className="font-medium tabular-nums text-emerald-400">{getValue()}</span> },
+    { id: 'status', header: 'Status', accessorKey: 'status', size: 100, meta: { align: 'center' } },
+  ], [])
+
   // ── KPI cards (single source: on-screen grid + PDF/PPTX exports) ───────────
   const kpiCards = useMemo(() => [
-    {
-      label: t('execreport.kpi.fleetAvgCpk'),
-      value: fmtCpk(kpis.cpk.fleetAvgCpk, currency),
-      status: cpkStatus(kpis.cpk.fleetAvgCpk),
-      target: '< 0.012',
-      icon: DollarSign,
-    },
-    {
-      label: t('execreport.kpi.medianCpk'),
-      value: fmtCpk(kpis.cpk.medianCpk, currency),
-      status: cpkStatus(kpis.cpk.medianCpk),
-      target: '< 0.012',
-      icon: BarChart2,
-    },
-    {
-      label: t('execreport.kpi.fleetAvgTyreLife'),
-      value: `${fmtNum(kpis.avgTyreLife.avgKm)} km`,
-      status: kpis.avgTyreLife.avgKm >= 60000 ? 'green' : kpis.avgTyreLife.avgKm >= 40000 ? 'amber' : 'red',
-      target: '>= 60,000 km',
-      icon: Activity,
-    },
-    {
-      label: t('execreport.kpi.inspectionCompliance'),
-      value: fmtPct(kpis.inspectionCompliance.compliancePct),
-      status: pctStatus(kpis.inspectionCompliance.compliancePct),
-      target: '>= 85%',
-      icon: CheckCircle,
-    },
-    {
-      label: t('execreport.kpi.pressureCompliance'),
-      value: fmtPctOrNA(kpis.pressureCompliance.compliancePct),
-      status: pctStatus(kpis.pressureCompliance.compliancePct),
-      target: '>= 90%',
-      icon: Target,
-    },
-    {
-      label: t('execreport.kpi.failureRate'),
-      value: kpis.failureRate.failureRate == null ? 'N/A' : fmtPct(kpis.failureRate.failureRate * 100),
-      status: failStatus(kpis.failureRate.failureRate),
-      target: '< 10%',
-      icon: AlertTriangle,
-    },
-    {
-      label: t('execreport.kpi.criticalRate'),
-      value: kpis.failureRate.criticalRate == null ? 'N/A' : fmtPct(kpis.failureRate.criticalRate * 100),
-      status: kpis.failureRate.criticalRate == null ? 'neutral'
-        : kpis.failureRate.criticalRate <= 0.05 ? 'green'
-        : kpis.failureRate.criticalRate <= 0.15 ? 'amber' : 'red',
-      target: '< 5%',
-      icon: ShieldAlert,
-    },
-    {
-      label: t('execreport.kpi.scrapRate'),
-      value: fmtPct(kpis.scrapRate.scrapRate * 100),
-      status: kpis.scrapRate.scrapRate <= 0.15 ? 'green' : kpis.scrapRate.scrapRate <= 0.25 ? 'amber' : 'red',
-      target: '< 15%',
-      icon: Package,
-    },
-    {
-      label: t('execreport.kpi.replacementRate'),
-      value: `${fmtNum(kpis.replacementRate.avgPerVehiclePerMonth, 2)}/veh/mo`,
-      status: 'amber',
-      target: '< 1.0',
-      icon: Wrench,
-    },
-    {
-      label: t('execreport.kpi.totalDowntimeHours'),
-      value: `${fmtNum(kpis.downtimeImpact.totalDowntimeHours)} hrs`,
-      status: kpis.downtimeImpact.totalDowntimeHours <= 100 ? 'green' : kpis.downtimeImpact.totalDowntimeHours <= 300 ? 'amber' : 'red',
-      target: '< 100 hrs',
-      icon: Clock,
-    },
-    {
-      label: t('execreport.kpi.fleetAvailability'),
-      value: fmtPct(kpis.fleetAvailability.availabilityPct),
-      status: pctStatus(kpis.fleetAvailability.availabilityPct, 95),
-      target: '>= 95%',
-      icon: Zap,
-    },
+    { label: t('execreport.kpi.fleetAvgCpk'), value: fmtCpk(hk.fleetAvgCpk, currency), status: cpkStatus(hk.fleetAvgCpk), target: '< 0.012', icon: DollarSign },
+    { label: t('execreport.kpi.medianCpk'), value: fmtCpk(hk.medianCpk, currency), status: cpkStatus(hk.medianCpk), target: '< 0.012', icon: BarChart2 },
+    { label: t('execreport.kpi.fleetAvgTyreLife'), value: withUnit(fmtNum(hk.avgTyreLifeKm), 'km'), status: higherIsBetter(hk.avgTyreLifeKm, 60000, 40000), target: '>= 60,000 km', icon: Activity },
+    { label: t('execreport.kpi.inspectionCompliance'), value: fmtPct(hk.inspectionPct), status: pctStatus(hk.inspectionPct), target: '>= 85%', icon: CheckCircle },
+    { label: t('execreport.kpi.pressureCompliance'), value: fmtPct(hk.pressurePct), status: pctStatus(hk.pressurePct), target: '>= 90%', icon: Target },
+    { label: t('execreport.kpi.failureRate'), value: fmtRatio(hk.failureRate), status: lowerIsBetter(hk.failureRate, 0.1, 0.25), target: '< 10%', icon: AlertTriangle },
+    { label: t('execreport.kpi.criticalRate'), value: fmtRatio(hk.criticalRate), status: lowerIsBetter(hk.criticalRate, 0.05, 0.15), target: '< 5%', icon: ShieldAlert },
+    { label: t('execreport.kpi.scrapRate'), value: fmtRatio(hk.scrapRate), status: lowerIsBetter(hk.scrapRate, 0.15, 0.25), target: '< 15%', icon: Package },
+    { label: t('execreport.kpi.replacementRate'), value: withUnit(fmtNum(hk.replacementPerVehicleMonth, 2), '/veh/mo'), status: lowerIsBetter(hk.replacementPerVehicleMonth, 1, 1.5), target: '< 1.0', icon: Wrench },
+    { label: t('execreport.kpi.totalDowntimeHours'), value: withUnit(fmtNum(hk.downtimeHours), 'hrs'), status: lowerIsBetter(hk.downtimeHours, 100, 300), target: '< 100 hrs', icon: Clock },
+    { label: t('execreport.kpi.fleetAvailability'), value: fmtPct(hk.availabilityPct), status: pctStatus(hk.availabilityPct, 95), target: '>= 95%', icon: Zap },
     {
       label: t('execreport.kpi.costTrend'),
-      value: t(`execreport.trend.${costTrend.trend}`),
-      status: costTrend.trend === 'improving' ? 'green' : costTrend.trend === 'stable' ? 'amber' : 'red',
+      value: costTrend.byMonth.length >= 2 ? t(`execreport.trend.${costTrend.trend}`) : 'N/A',
+      status: costTrend.byMonth.length < 2 ? 'neutral' : costTrend.trend === 'improving' ? 'green' : costTrend.trend === 'stable' ? 'amber' : 'red',
       target: t('execreport.kpi.improvingTarget'),
       icon: TrendingUp,
     },
-  ], [kpis, costTrend, currency, t])
+  ], [hk, costTrend, currency, t])
 
   // ── Chart datasets ────────────────────────────────────────────────────────
   const costTrendChart = useMemo(() => ({
@@ -1060,8 +847,8 @@ export default function ExecutiveReport() {
     datasets: [{
       label: 'Monthly Spend',
       data: costTrend.byMonth.slice(-12).map(m => m.totalCost),
-      backgroundColor: 'rgba(16,185,129,0.7)',
-      borderColor: '#10b981',
+      backgroundColor: withAlpha(colorAt(0), 0.7),
+      borderColor: colorAt(0),
       borderWidth: 1,
       borderRadius: 4,
     }],
@@ -1083,8 +870,8 @@ export default function ExecutiveReport() {
     datasets: [{
       label: 'Total Cost',
       data: costBySite.slice(0, 8).map(s => s.cost),
-      backgroundColor: 'rgba(99,102,241,0.7)',
-      borderColor: '#6366f1',
+      backgroundColor: withAlpha(colorAt(1), 0.7),
+      borderColor: colorAt(1),
       borderWidth: 1,
       borderRadius: 4,
     }],
@@ -1095,8 +882,8 @@ export default function ExecutiveReport() {
     datasets: [{
       label: 'Total Cost',
       data: costByBrand.map(b => b.cost),
-      backgroundColor: 'rgba(245,158,11,0.7)',
-      borderColor: '#f59e0b',
+      backgroundColor: withAlpha(colorAt(2), 0.7),
+      borderColor: colorAt(2),
       borderWidth: 1,
       borderRadius: 4,
     }],
@@ -1107,11 +894,11 @@ export default function ExecutiveReport() {
     datasets: [{
       label: 'Risk Score',
       data: riskTrend6m.map(m => m.score),
-      borderColor: '#f97316',
-      backgroundColor: 'rgba(249,115,22,0.1)',
+      borderColor: colorAt(3),
+      backgroundColor: withAlpha(colorAt(3), 0.1),
       fill: true,
       tension: 0.4,
-      pointBackgroundColor: '#f97316',
+      pointBackgroundColor: colorAt(3),
       pointRadius: 4,
     }],
   }), [riskTrend6m])
@@ -1128,8 +915,8 @@ export default function ExecutiveReport() {
     datasets: [{
       label: `${costModeLabel(costMode)} Spend`,
       data: costSplitSeries.map(m => m.value),
-      backgroundColor: 'rgba(20,184,166,0.7)',
-      borderColor: '#14b8a6',
+      backgroundColor: withAlpha(colorAt(4), 0.7),
+      borderColor: colorAt(4),
       borderWidth: 1,
       borderRadius: 4,
     }],
@@ -1137,13 +924,14 @@ export default function ExecutiveReport() {
 
   // ── PDF Export (WYSIWYG: KPI cards + charts + tables, matches report view) ──
   const exportPDF = useCallback(async () => {
-    const { default: jsPDF } = await import('jspdf')
-    const autoTable = await loadAutoTable()
     setExporting(true)
+    setExportError(null)
     try {
+      const { default: jsPDF } = await import('jspdf')
+      const autoTable = await loadAutoTable()
       const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
       const brand = await resolvePdfBrand(branding)
-      const periodLabel = periodValueLabel(period)
+      const periodLabel = site === ALL_SITES ? periodValueLabel(period) : `${periodValueLabel(period)} | ${site}`
       const W = doc.internal.pageSize.getWidth()
       const H = doc.internal.pageSize.getHeight()
       const M = 14
@@ -1241,7 +1029,7 @@ export default function ExecutiveReport() {
             margin: { left: M + halfW + GAP },
             tableWidth: halfW,
             head: [['Site', 'Crit', 'High', 'Med', 'Low', 'Total', 'Score']],
-            body: riskMatrix.map(r => [r.site, r.Critical, r.High, r.Medium, r.Low, r.total, r.score.toFixed(2)]),
+            body: riskMatrix.map(r => [r.site, r.Critical, r.High, r.Medium, r.Low, r.total, fmtNum(r.score, 2)]),
           })
         },
         recommendations: () => {
@@ -1274,21 +1062,22 @@ export default function ExecutiveReport() {
 
       doc.save(`${reportFileName('TyrePulse Executive Report', periodLabel, reportDateLabel())}.pdf`)
     } catch (e) {
-      console.error('PDF export failed', e)
+      setExportError(toUserMessage(e, 'The PDF export could not be created.'))
     } finally {
       setExporting(false)
     }
-  }, [period, rootCauses, riskMatrix, actionPlan, recommendations, kpiCards, currency, company, branding, chartImg, visibleBuiltinKeys, costMode, costSplitHeadline, costSplitSums, costSplitHasData])
+  }, [period, site, rootCauses, riskMatrix, actionPlan, recommendations, kpiCards, currency, company, branding, chartImg, visibleBuiltinKeys, costMode, costSplitHeadline, costSplitSums, costSplitHasData])
 
   // ── PowerPoint Export (WYSIWYG white deck: title + KPI + chart + table slides) ─
   const exportPPTX = useCallback(async () => {
-    const PptxGen = (await import('pptxgenjs')).default
     setExporting(true)
+    setExportError(null)
     try {
+      const PptxGen = (await import('pptxgenjs')).default
       const pptx = new PptxGen()
       pptx.defineLayout({ name: 'TP16x9', width: 13.33, height: 7.5 })
       pptx.layout = 'TP16x9'
-      const periodLabel = periodValueLabel(period)
+      const periodLabel = site === ALL_SITES ? periodValueLabel(period) : `${periodValueLabel(period)} | ${site}`
       const BG = 'FFFFFF', INK = '0F172A', SUBTLE = '475569', MUTED = '94A3B8'
       const CARD = 'F8FAFC', BORDER = 'E2E8F0', HEAD = '1E293B'
 
@@ -1360,7 +1149,7 @@ export default function ExecutiveReport() {
         risk: () => {
           chartSlide(riskTrendRef, '6-Month Risk Score Trend')
           tableSlide('Risk Matrix', ['Site', 'Critical', 'High', 'Medium', 'Low', 'Total', 'Risk Score'],
-            riskMatrix.map(r => [r.site, r.Critical, r.High, r.Medium, r.Low, r.total, r.score.toFixed(2)]))
+            riskMatrix.map(r => [r.site, r.Critical, r.High, r.Medium, r.Low, r.total, fmtNum(r.score, 2)]))
         },
         recommendations: () => {
           tableSlide('Recommendations', ['Priority', 'Recommendation', 'Owner', 'Expected Impact'],
@@ -1376,30 +1165,20 @@ export default function ExecutiveReport() {
 
       await pptx.writeFile({ fileName: `${reportFileName('TyrePulse Executive Report', periodLabel, reportDateLabel())}.pptx` })
     } catch (e) {
-      console.error('PPTX export failed', e)
+      setExportError(toUserMessage(e, 'The PowerPoint export could not be created.'))
     } finally {
       setExporting(false)
     }
-  }, [period, kpiCards, rootCauses, riskMatrix, actionPlan, recommendations, currency, company, chartImg, visibleBuiltinKeys, costMode, costSplitByMonth])
+  }, [period, site, kpiCards, rootCauses, riskMatrix, actionPlan, recommendations, currency, company, chartImg, visibleBuiltinKeys, costMode, costSplitByMonth])
 
   // ── Excel Export ──────────────────────────────────────────────────────────
   const exportExcel = useCallback(async () => {
+    setExportError(null)
+    try {
     const XLSX = await import('xlsx')
     const wb = XLSX.utils.book_new()
 
-    const kpiRows = [
-      { KPI: 'Fleet Avg CPK', Value: Number(kpis.cpk.fleetAvgCpk || 0).toFixed(6), Unit: `${currency}/km` },
-      { KPI: 'Median CPK', Value: Number(kpis.cpk.medianCpk || 0).toFixed(6), Unit: `${currency}/km` },
-      { KPI: 'Fleet Avg Tyre Life', Value: Math.round(Number(kpis.avgTyreLife.avgKm) || 0), Unit: 'km' },
-      { KPI: 'Inspection Compliance', Value: Number(kpis.inspectionCompliance.compliancePct || 0).toFixed(1), Unit: '%' },
-      { KPI: 'Failure Rate', Value: (kpis.failureRate.failureRate * 100).toFixed(1), Unit: '%' },
-      { KPI: 'Critical Rate', Value: (kpis.failureRate.criticalRate * 100).toFixed(1), Unit: '%' },
-      { KPI: 'Scrap Rate', Value: (kpis.scrapRate.scrapRate * 100).toFixed(1), Unit: '%' },
-      { KPI: 'Total Downtime Hours', Value: Math.round(kpis.downtimeImpact.totalDowntimeHours), Unit: 'hrs' },
-      { KPI: 'Fleet Availability', Value: kpis.fleetAvailability.availabilityPct.toFixed(1), Unit: '%' },
-      { KPI: 'Total Spend', Value: totalSpend == null ? 'N/A' : Math.round(totalSpend), Unit: totalSpend == null ? '' : currency },
-      { KPI: 'Projected Annual Spend', Value: Math.round(projectedAnnual), Unit: currency },
-    ]
+    const kpiRows = kpiExportRows(hk, { currency, totalSpend, projectedAnnual })
     const addSheet = (rows, name) => XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows.length ? rows : [{}]), name)
 
     // Sheets are appended per visible built-in section, in the customized order.
@@ -1419,7 +1198,7 @@ export default function ExecutiveReport() {
       })), 'Tyres vs Maintenance'),
       risk: () => addSheet(riskMatrix.map(r => ({
         Site: r.site, Critical: r.Critical, High: r.High, Medium: r.Medium,
-        Low: r.Low, Total: r.total, 'Risk Score': r.score.toFixed(2),
+        Low: r.Low, Rated: r.rated, Total: r.total, 'Risk Score': fmtNum(r.score, 2),
       })), 'Risk Matrix'),
       recommendations: () => addSheet(recommendations.map(r => ({
         Priority: r.priority, Recommendation: r.title, Owner: r.owner, 'Expected Impact': r.impact,
@@ -1432,34 +1211,42 @@ export default function ExecutiveReport() {
     const excelSeq = visibleBuiltinKeys.filter(k => excelRenderers[k])
     ;(excelSeq.length ? excelSeq : ['kpis']).forEach(k => excelRenderers[k]())
 
-    XLSX.writeFile(wb, `TyrePulse_Executive_Report_${periodValueLabel(period).replace(/[^\w-]+/g, '_')}_${new Date().toISOString().slice(0, 10)}.xlsx`)
-  }, [kpis, rootCauses, riskMatrix, actionPlan, recommendations, costTrend, costBySite, totalSpend, projectedAnnual, currency, period, visibleBuiltinKeys, costSplitByMonth])
+    XLSX.writeFile(wb, `${reportFileName('TyrePulse Executive Report', periodValueLabel(period), site === ALL_SITES ? '' : site, reportDateLabel())}.xlsx`)
+    } catch (e) {
+      setExportError(toUserMessage(e, 'The Excel export could not be created.'))
+    }
+  }, [hk, site, rootCauses, riskMatrix, actionPlan, recommendations, costTrend, costBySite, totalSpend, projectedAnnual, currency, period, visibleBuiltinKeys, costSplitByMonth])
 
   const exportActionPlanPDF = useCallback(async () => {
-    const { default: jsPDF } = await import('jspdf')
-    const autoTable = await loadAutoTable()
-    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
-    const brand = await resolvePdfBrand(branding)
-    pdfHeader(doc, 'Action Plan', `Period: ${periodValueLabel(period)}`, company, brand)
-
-    autoTable(doc, {
-      ...pdfTableTheme(brand.accent),
-      startY: 28,
-      head: [['#', 'Action', 'Priority', 'Timeline', 'Owner', 'Est. Saving', 'Status']],
-      body: actionPlan.map((a, i) => [i + 1, a.action, a.priority, a.timeline, a.owner, a.saving, a.status]),
-      columnStyles: { 1: { cellWidth: 100 } },
-    })
-    const totalPages = doc.internal.getNumberOfPages()
-    for (let p = 1; p <= totalPages; p++) { doc.setPage(p); pdfFooter(doc, p, totalPages, company, brand) }
-    doc.save(`TyrePulse_ActionPlan_${new Date().toISOString().slice(0, 10)}.pdf`)
-  }, [actionPlan, company, branding, period])
+    setExportError(null)
+    try {
+      const { default: jsPDF } = await import('jspdf')
+      const autoTable = await loadAutoTable()
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+      const brand = await resolvePdfBrand(branding)
+      const scopeLabel = site === ALL_SITES ? periodValueLabel(period) : `${periodValueLabel(period)} | ${site}`
+      pdfHeader(doc, 'Action Plan', `Period: ${scopeLabel}`, company, brand)
+      autoTable(doc, {
+        ...pdfTableTheme(brand.accent),
+        startY: 28,
+        head: [['#', 'Phase', 'Action', 'Priority', 'Timeline', 'Owner', 'Est. Saving', 'Status']],
+        body: actionPlan.map((a, i) => [i + 1, actionPhaseOf(i), a.action, a.priority, a.timeline, a.owner, a.saving, a.status]),
+        columnStyles: { 2: { cellWidth: 95 } },
+      })
+      const totalPages = doc.internal.getNumberOfPages()
+      for (let p = 1; p <= totalPages; p++) { doc.setPage(p); pdfFooter(doc, p, totalPages, company, brand) }
+      doc.save(`${reportFileName('TyrePulse Action Plan', scopeLabel, reportDateLabel())}.pdf`)
+    } catch (e) {
+      setExportError(toUserMessage(e, 'The action plan PDF could not be created.'))
+    }
+  }, [actionPlan, company, branding, period, site])
 
   // ── Loading / Error states ────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="min-h-screen bg-[var(--surface-0)] flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-12 h-12 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+        <div className="text-center" role="status" aria-live="polite">
+          <div className="w-12 h-12 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" aria-hidden="true" />
           <p className="text-[var(--text-secondary)] text-sm">{t('execreport.states.loading')}</p>
         </div>
       </div>
@@ -1472,23 +1259,23 @@ export default function ExecutiveReport() {
         <Card className="max-w-md text-center">
           <AlertOctagon className="w-10 h-10 text-red-400 mx-auto mb-3" />
           <p className="text-[var(--text-primary)] font-semibold mb-1">{t('execreport.states.errorTitle')}</p>
-          <p className="text-[var(--text-secondary)] text-sm">{error}</p>
+          <p className="text-[var(--text-secondary)] text-sm" role="alert">{error}</p>
+          <button
+            type="button"
+            onClick={() => setReloadKey(k => k + 1)}
+            className="mt-4 inline-flex items-center gap-1.5 min-h-[44px] px-4 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+          >
+            <RefreshCw className="w-4 h-4" aria-hidden="true" />
+            Retry
+          </button>
         </Card>
       </div>
     )
   }
 
-  if (!periodRecords.length && !periodInspections.length) {
-    return (
-      <div className="min-h-screen bg-[var(--surface-0)] flex items-center justify-center">
-        <Card className="max-w-md text-center">
-          <FileText className="w-10 h-10 text-[var(--text-dim)] mx-auto mb-3" />
-          <p className="text-[var(--text-primary)] font-semibold mb-1">{t('execreport.states.emptyTitle')}</p>
-          <p className="text-[var(--text-secondary)] text-sm">{t('execreport.states.emptyDesc')}</p>
-        </Card>
-      </div>
-    )
-  }
+  // Empty scope: the header (period + site filters) stays on screen so the user
+  // can widen the scope again; an early return here used to strand them.
+  const isEmpty = !periodRecords.length && !periodInspections.length
 
   const trendIcon = costTrend.trend === 'improving'
     ? <TrendingDown className="w-4 h-4 text-emerald-400" />
@@ -1531,7 +1318,8 @@ export default function ExecutiveReport() {
             <button
               onClick={() => removeBlock(item.id)}
               title="Remove this block"
-              className="no-print absolute top-3 right-3 z-10 p-1.5 rounded-lg bg-[var(--surface-2)] hover:bg-red-500/15 text-[var(--text-muted)] hover:text-red-400 border border-[var(--border-dim)] opacity-0 group-hover:opacity-100 transition-opacity"
+              aria-label="Remove this block"
+              className="no-print absolute top-3 right-3 z-10 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg bg-[var(--surface-2)] hover:bg-red-500/15 text-[var(--text-muted)] hover:text-red-400 border border-[var(--border-dim)] opacity-0 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:outline-none transition-opacity"
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
@@ -1544,6 +1332,7 @@ export default function ExecutiveReport() {
                 value={item.text || ''}
                 onChange={(e) => updateBlockText(item.id, e.target.value)}
                 placeholder="Type a note, commentary, or context for this report..."
+                aria-label="Report note"
                 rows={3}
                 className="w-full resize-y bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-lg p-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-dim)] focus:outline-none focus:border-blue-400"
               />
@@ -1556,7 +1345,8 @@ export default function ExecutiveReport() {
             <button
               onClick={() => removeBlock(item.id)}
               title="Remove this block"
-              className="no-print absolute top-0 right-0 z-10 p-1.5 rounded-lg bg-[var(--surface-2)] hover:bg-red-500/15 text-[var(--text-muted)] hover:text-red-400 border border-[var(--border-dim)] opacity-0 group-hover:opacity-100 transition-opacity"
+              aria-label="Remove this divider"
+              className="no-print absolute top-0 right-0 z-10 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg bg-[var(--surface-2)] hover:bg-red-500/15 text-[var(--text-muted)] hover:text-red-400 border border-[var(--border-dim)] opacity-0 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:outline-none transition-opacity"
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
@@ -1599,39 +1389,23 @@ export default function ExecutiveReport() {
         return (
           <WidgetShell onRemove={() => removeBlock(item.id)} icon={ShieldAlert} title="Risk Score Trend" subtitle="Six-month fleet risk score">
             <div className="h-64">
-              {riskTrend6m.length > 0 ? <Line data={riskTrendChart} options={lineOpts} /> : emptyState('No risk trend data')}
+              {riskTrend6m.some(m => m.score != null) ? <Line data={riskTrendChart} options={lineOpts} /> : emptyState('No rated tyres in the last six months')}
             </div>
           </WidgetShell>
         )
       case 'w:tableTopVehicles':
         return (
           <WidgetShell onRemove={() => removeBlock(item.id)} icon={Users} title="Top Cost Vehicles" subtitle="Highest-cost vehicles in the period">
-            {topCostVehicles.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="border-b border-[var(--border-dim)]">
-                      <th className="text-left py-2 px-3 text-[var(--text-secondary)] font-medium">#</th>
-                      <th className="text-left py-2 px-3 text-[var(--text-secondary)] font-medium">Asset No</th>
-                      <th className="text-left py-2 px-3 text-[var(--text-secondary)] font-medium">Site</th>
-                      <th className="text-right py-2 px-3 text-[var(--text-secondary)] font-medium">Tyres</th>
-                      <th className="text-right py-2 px-3 text-[var(--text-secondary)] font-medium">Cost</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {topCostVehicles.map((v, i) => (
-                      <tr key={v.asset_no} className="border-b border-[var(--border-dim)] hover:bg-[var(--surface-2)] transition-colors">
-                        <td className="py-2 px-3 text-[var(--text-muted)]">{i + 1}</td>
-                        <td className="py-2 px-3 text-[var(--text-primary)] font-medium">{v.asset_no}</td>
-                        <td className="py-2 px-3 text-[var(--text-secondary)]">{v.site || '-'}</td>
-                        <td className="py-2 px-3 text-right text-[var(--text-secondary)]">{v.count}</td>
-                        <td className="py-2 px-3 text-right text-amber-400 font-bold">{fmtCurrency(v.cost, currency)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : emptyState('No vehicle cost data')}
+            <EnterpriseTable
+              columns={topVehicleColumns}
+              data={topCostVehicles}
+              getRowId={(r) => String(r.asset_no)}
+              emptyMessage="No priced tyre records in this scope, so there is no vehicle cost ranking."
+              exportFileName={reportFileName('TyrePulse Top Cost Vehicles', reportDateLabel())}
+              reportMeta={reportMeta}
+              enableColumnFilters={false}
+              initialPageSize={25}
+            />
           </WidgetShell>
         )
       case 'w:insights':
@@ -1713,71 +1487,94 @@ export default function ExecutiveReport() {
             icon={FileText}
             actions={<>
               <PeriodFilter records={periodBasis} value={period} onChange={setPeriod} />
+              <label className="inline-flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
+                <span>Site</span>
+                <select
+                  value={site}
+                  onChange={(e) => setSite(e.target.value)}
+                  aria-label="Filter the report by site"
+                  className="min-h-[44px] rounded-lg border border-[var(--border-bright)] bg-[var(--surface-1)] px-2 text-xs text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+                >
+                  <option value={ALL_SITES}>All sites</option>
+                  {sites.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </label>
               <button
+                type="button"
                 onClick={() => setCustomizeOpen(o => !o)}
                 aria-pressed={customizeOpen}
                 title="Customize which sections show, reorder them, and add blocks"
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
+                className={`${HEADER_BTN} ${
                   customizeOpen
                     ? 'bg-blue-600 hover:bg-blue-500 text-white border-blue-500'
                     : 'bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-[var(--text-primary)] border-[var(--border-bright)]'
                 }`}
               >
-                <Settings2 className="w-3.5 h-3.5" />
+                <Settings2 className="w-3.5 h-3.5" aria-hidden="true" />
                 Customize
               </button>
               <button
+                type="button"
                 onClick={() => setReportMode(m => !m)}
                 aria-pressed={reportMode}
                 title={reportMode ? 'Switch back to dark dashboard' : 'Switch to white report view'}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
+                className={`${HEADER_BTN} ${
                   reportMode
                     ? 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-500'
                     : 'bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-[var(--text-primary)] border-[var(--border-bright)]'
                 }`}
               >
-                <ScrollText className="w-3.5 h-3.5" />
+                <ScrollText className="w-3.5 h-3.5" aria-hidden="true" />
                 {reportMode ? 'Dashboard view' : 'Report view'}
               </button>
               <button
+                type="button"
                 onClick={exportExcel}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-[var(--text-primary)] text-xs font-medium transition-all border border-[var(--border-bright)]"
+                disabled={isEmpty}
+                className={`${HEADER_BTN} bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-[var(--text-primary)] border-[var(--border-bright)]`}
               >
-                <FileSpreadsheet className="w-3.5 h-3.5" />
+                <FileSpreadsheet className="w-3.5 h-3.5" aria-hidden="true" />
                 {t('execreport.header.excel')}
               </button>
               <button
+                type="button"
                 onClick={() => window.print()}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-[var(--text-primary)] text-xs font-medium transition-all border border-[var(--border-bright)]"
+                className={`${HEADER_BTN} bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-[var(--text-primary)] border-[var(--border-bright)]`}
               >
-                <Printer className="w-3.5 h-3.5" />
+                <Printer className="w-3.5 h-3.5" aria-hidden="true" />
                 {t('execreport.header.print')}
               </button>
               <button
+                type="button"
                 onClick={exportPDF}
-                disabled={exporting}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium transition-all disabled:opacity-50"
+                disabled={exporting || isEmpty}
+                aria-busy={exporting}
+                className={`${HEADER_BTN} bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-500`}
               >
                 {exporting
-                  ? <div className="w-3.5 h-3.5 border border-white border-t-transparent rounded-full animate-spin" />
-                  : <Download className="w-3.5 h-3.5" />
+                  ? <div className="w-3.5 h-3.5 border border-white border-t-transparent rounded-full animate-spin" aria-hidden="true" />
+                  : <Download className="w-3.5 h-3.5" aria-hidden="true" />
                 }
                 {t('execreport.header.exportPdf')}
               </button>
               <button
+                type="button"
                 onClick={exportPPTX}
-                disabled={exporting}
+                disabled={exporting || isEmpty}
+                aria-busy={exporting}
                 title="Export a white 16:9 PowerPoint deck"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white text-xs font-medium transition-all disabled:opacity-50"
+                className={`${HEADER_BTN} bg-orange-600 hover:bg-orange-500 text-white border-orange-500`}
               >
-                <Presentation className="w-3.5 h-3.5" />
+                <Presentation className="w-3.5 h-3.5" aria-hidden="true" />
                 Export PPTX
               </button>
               <button
+                type="button"
                 onClick={() => setEmailModalOpen(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+                disabled={isEmpty}
+                className={`${HEADER_BTN} bg-blue-600 hover:bg-blue-700 text-white border-blue-500`}
               >
-                <Mail size={16} />{t('execreport.header.emailReport')}
+                <Mail className="w-3.5 h-3.5" aria-hidden="true" />{t('execreport.header.emailReport')}
               </button>
             </>}
           />
@@ -1798,8 +1595,59 @@ export default function ExecutiveReport() {
           </div>
         )}
 
+        {exportError && (
+          <div role="alert" className="no-print flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-xs text-red-400">
+            <AlertOctagon className="w-4 h-4 mt-0.5 flex-shrink-0" aria-hidden="true" />
+            <span className="flex-1">{exportError}</span>
+            <button
+              type="button"
+              onClick={() => setExportError(null)}
+              aria-label="Dismiss export error"
+              className="min-h-[44px] min-w-[44px] -my-2.5 inline-flex items-center justify-center rounded-lg hover:bg-red-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
+            >
+              <X className="w-4 h-4" aria-hidden="true" />
+            </button>
+          </div>
+        )}
+
+        {/* Scope strip: what the report below is built from, stated up front so
+            every figure is read against its real basis. */}
+        <section aria-label="Report scope" className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+          {[
+            { label: 'Scope', value: site === ALL_SITES ? 'All sites' : site, sub: periodValueLabel(period) },
+            { label: 'Tyre records', value: periodRecords.length.toLocaleString(), sub: cappedView ? 'Capped sample' : 'In selected period' },
+            { label: 'Risk rated', value: riskTally.rated.toLocaleString(), sub: periodRecords.length ? `${fmtPct((riskTally.rated / periodRecords.length) * 100)} of records` : 'No records' },
+            { label: 'Inspections', value: periodInspections.length.toLocaleString(), sub: `${periodActions.length.toLocaleString()} corrective actions` },
+            { label: 'Tyre spend', value: fmtCurrency(totalSpend, currency), sub: spendBasisNote },
+          ].map((k) => (
+            <div key={k.label} className="rounded-xl border border-[var(--border-dim)] bg-[var(--surface-1)] px-4 py-3 min-w-0">
+              <p className="text-[11px] uppercase tracking-wide text-[var(--text-muted)]">{k.label}</p>
+              <p className="mt-0.5 text-lg font-bold tabular-nums text-[var(--text-primary)] truncate" title={String(k.value)}>{k.value}</p>
+              <p className="text-[11px] text-[var(--text-muted)] truncate" title={k.sub}>{k.sub}</p>
+            </div>
+          ))}
+        </section>
+
         {/* Multi-year expense trend + forecast (on-screen intelligence block). */}
         <YearlyTrendPanel title="Expense trend by year (tyres / spare / lubricant) + forecast" />
+
+        {isEmpty ? (
+          <Card className="text-center py-10">
+            <FileText className="w-10 h-10 text-[var(--text-dim)] mx-auto mb-3" aria-hidden="true" />
+            <p className="text-[var(--text-primary)] font-semibold mb-1">{t('execreport.states.emptyTitle')}</p>
+            <p className="text-[var(--text-secondary)] text-sm max-w-md mx-auto">{t('execreport.states.emptyDesc')}</p>
+            {(site !== ALL_SITES || (period && period.mode !== 'all')) && (
+              <button
+                type="button"
+                onClick={() => { setSite(ALL_SITES); setPeriod({ mode: 'all' }) }}
+                className="mt-4 inline-flex items-center gap-1.5 min-h-[44px] px-4 rounded-lg border border-[var(--border-bright)] bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-sm text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+              >
+                <RotateCcw className="w-4 h-4" aria-hidden="true" />
+                Show all sites and all time
+              </button>
+            )}
+          </Card>
+        ) : (<>
 
         {/* User-added palette widgets, positioned by the shared flex order. */}
         {addedBlocks.map((item) => (
@@ -1842,7 +1690,7 @@ export default function ExecutiveReport() {
                     fleetSize: fleetSize.toLocaleString(),
                     records: periodRecords.length.toLocaleString(),
                     spend: fmtCurrency(totalSpend, currency),
-                    cpk: fmtCpk(kpis.cpk.fleetAvgCpk, currency),
+                    cpk: fmtCpk(hk.fleetAvgCpk, currency),
                   })}
                   {momChange !== null && (
                     <>{' '}
@@ -1859,10 +1707,10 @@ export default function ExecutiveReport() {
               <div className="border-l-4 border-amber-500 pl-4">
                 <p className="text-sm leading-relaxed text-[var(--text-primary)]">
                   {t('execreport.section1.p2', {
-                    criticalCount: periodRecords.filter(r => r.risk_level === 'Critical').length,
-                    criticalPct: fmtPct(kpis.failureRate.criticalRate * 100),
-                    failureRate: fmtPct(kpis.failureRate.failureRate * 100),
-                    inspectionCompliance: fmtPct(kpis.inspectionCompliance.compliancePct),
+                    criticalCount: riskTally.rated ? riskTally.Critical : 'N/A',
+                    criticalPct: fmtRatio(hk.criticalRate),
+                    failureRate: fmtRatio(hk.failureRate),
+                    inspectionCompliance: fmtPct(hk.inspectionPct),
                   })}
                   {topRootCause && (
                     <>{' '}
@@ -1915,8 +1763,8 @@ export default function ExecutiveReport() {
                   )}
                   {' '}
                   {t('execreport.section1.p4Closing', {
-                    avgLife: fmtNum(kpis.avgTyreLife.avgKm),
-                    availability: fmtPct(kpis.fleetAvailability.availabilityPct),
+                    avgLife: fmtNum(hk.avgTyreLifeKm),
+                    availability: fmtPct(hk.availabilityPct),
                   })}
                 </p>
               </div>
@@ -1926,15 +1774,18 @@ export default function ExecutiveReport() {
              <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-4 flex flex-col gap-2.5">
                <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-0.5">{t('execreport.section1.keyHighlights')}</p>
                {[
-                 { key: 'fleetAvailability', label: t('execreport.section1.highlights.fleetAvailability'),    value: fmtPct(kpis.fleetAvailability.availabilityPct),   good: kpis.fleetAvailability.availabilityPct >= 95 },
-                 { key: 'inspectionCompliance', label: t('execreport.section1.highlights.inspectionCompliance'), value: fmtPct(kpis.inspectionCompliance.compliancePct),  good: kpis.inspectionCompliance.compliancePct >= 85 },
-                 { key: 'failureRate', label: t('execreport.section1.highlights.failureRate'),          value: fmtPct(kpis.failureRate.failureRate * 100),        good: kpis.failureRate.failureRate <= 0.1 },
-                 { key: 'avgCostPerKm', label: t('execreport.section1.highlights.avgCostPerKm'),         value: `${fmtCpk(kpis.cpk.fleetAvgCpk, currency)}`,       good: true, neutral: true },
-                 { key: 'criticalAlerts', label: t('execreport.section1.highlights.criticalAlerts'),       value: periodRecords.filter(r => r.risk_level === 'Critical').length.toLocaleString(), good: periodRecords.filter(r => r.risk_level === 'Critical').length === 0 },
+                 { key: 'fleetAvailability', label: t('execreport.section1.highlights.fleetAvailability'), value: fmtPct(hk.availabilityPct), status: pctStatus(hk.availabilityPct, 95) },
+                 { key: 'inspectionCompliance', label: t('execreport.section1.highlights.inspectionCompliance'), value: fmtPct(hk.inspectionPct), status: pctStatus(hk.inspectionPct) },
+                 { key: 'failureRate', label: t('execreport.section1.highlights.failureRate'), value: fmtRatio(hk.failureRate), status: lowerIsBetter(hk.failureRate, 0.1, 0.25) },
+                 { key: 'avgCostPerKm', label: t('execreport.section1.highlights.avgCostPerKm'), value: fmtCpk(hk.fleetAvgCpk, currency), status: 'info' },
+                 { key: 'criticalAlerts', label: t('execreport.section1.highlights.criticalAlerts'), value: riskTally.rated ? riskTally.Critical.toLocaleString() : 'N/A', status: riskTally.rated ? (riskTally.Critical === 0 ? 'green' : 'red') : 'neutral' },
                ].map((h) => (
                  <div key={h.key} className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-lg px-3 py-2.5 flex items-center justify-between">
                    <span className="text-xs text-[var(--text-secondary)]">{h.label}</span>
-                   <span className={`text-base font-bold tabular-nums ${h.neutral ? 'text-[var(--text-primary)]' : h.good ? 'text-emerald-400' : 'text-amber-400'}`}>{h.value}</span>
+                   <span className="text-right">
+                     <span className={`block text-base font-bold tabular-nums ${h.status === 'info' ? 'text-[var(--text-primary)]' : (STATUS_COLORS[h.status] || STATUS_COLORS.neutral).text}`}>{h.value}</span>
+                     {h.status !== 'info' && <span className="block text-[10px] text-[var(--text-muted)]">{statusLabel(h.status)}</span>}
+                   </span>
                  </div>
                ))}
              </div>
@@ -1964,8 +1815,11 @@ export default function ExecutiveReport() {
                     className={`rounded-xl p-3 border ${sc.border} ${sc.bg} flex flex-col gap-2`}
                   >
                     <div className="flex items-center justify-between">
-                      <IconComp className={`w-4 h-4 ${sc.text}`} />
-                      <span className={`w-2 h-2 rounded-full ${sc.dot}`} />
+                      <IconComp className={`w-4 h-4 ${sc.text}`} aria-hidden="true" />
+                      <span className="inline-flex items-center gap-1 text-[10px] font-medium text-[var(--text-secondary)]">
+                        <span className={`w-2 h-2 rounded-full ${sc.dot}`} aria-hidden="true" />
+                        {statusLabel(card.status)}
+                      </span>
                     </div>
                     <div>
                       <p className={`text-lg font-bold leading-tight tabular-nums ${sc.text}`}>{card.value}</p>
@@ -2005,35 +1859,16 @@ export default function ExecutiveReport() {
               </div>
 
               {/* Table */}
-              <div className="overflow-auto">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="border-b border-[var(--border-dim)]">
-                      <th className="text-left py-2 text-[var(--text-secondary)] font-medium">Cause</th>
-                      <th className="text-right py-2 text-[var(--text-secondary)] font-medium">Count</th>
-                      <th className="text-right py-2 text-[var(--text-secondary)] font-medium">%</th>
-                      <th className="text-right py-2 text-[var(--text-secondary)] font-medium">Cost Impact</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rootCauses.map(cause => (
-                      <tr key={cause.key} className="border-b border-[var(--border-dim)] hover:bg-[var(--surface-2)] transition-colors">
-                        <td className="py-2">
-                          <div className="flex items-center gap-2">
-                            <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: cause.color }} />
-                            <span className="text-[var(--text-primary)]">{cause.label}</span>
-                          </div>
-                        </td>
-                        <td className="py-2 text-right text-[var(--text-primary)] font-medium">{cause.count}</td>
-                        <td className="py-2 text-right">
-                          <span className="text-[var(--text-secondary)]">{fmtPct(cause.pct)}</span>
-                        </td>
-                        <td className="py-2 text-right text-amber-400">{fmtCurrency(cause.cost, currency)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <EnterpriseTable
+                columns={rootCauseColumns}
+                data={rootCauses}
+                getRowId={(r) => r.key}
+                emptyMessage="No tyre events in this scope to classify."
+                exportFileName={reportFileName('TyrePulse Root Causes', reportDateLabel())}
+                reportMeta={reportMeta}
+                enableColumnFilters={false}
+                initialPageSize={25}
+              />
             </div>
 
             {/* Prevention summaries */}
@@ -2125,7 +1960,7 @@ export default function ExecutiveReport() {
                       <span className="text-xs font-bold text-[var(--text-muted)] w-4">{i + 1}</span>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-semibold text-[var(--text-primary)] truncate">{v.asset_no}</p>
-                        <p className="text-xs text-[var(--text-muted)]">{v.site} · {v.count} tyres</p>
+                        <p className="text-xs text-[var(--text-muted)]">{v.site || 'N/A'} | {v.count} tyres</p>
                       </div>
                       <span className="text-xs font-bold text-amber-400">{fmtCurrency(v.cost, currency)}</span>
                     </div>
@@ -2223,32 +2058,38 @@ export default function ExecutiveReport() {
               {/* Fleet risk score */}
               <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-4 flex flex-col items-center justify-center text-center">
                 <p className="text-xs text-[var(--text-secondary)] uppercase tracking-wide font-medium mb-3">Fleet Risk Score</p>
-                <div className={`text-5xl font-black mb-2 tabular-nums ${
-                  fleetRiskScore >= 3 ? 'text-red-400' : fleetRiskScore >= 2 ? 'text-amber-400' : 'text-emerald-400'
-                }`}>
-                  {fleetRiskScore.toFixed(2)}
+                <div className={`text-5xl font-black mb-2 tabular-nums ${(STATUS_COLORS[fleetRiskBand.key] || STATUS_COLORS.neutral).text}`}>
+                  {fmtNum(fleetRiskScore, 2)}
                 </div>
-                <p className="text-xs text-[var(--text-muted)]">out of 4.00 (max)</p>
-                <div className="mt-3 w-full bg-[var(--surface-3)] rounded-full h-2">
+                <p className="text-xs text-[var(--text-muted)]">
+                  {fleetRiskScore == null
+                    ? 'No tyre in this scope carries a risk rating yet'
+                    : `out of 4.00 (max), from ${riskTally.rated.toLocaleString()} rated of ${periodRecords.length.toLocaleString()} records`}
+                </p>
+                <div
+                  className="mt-3 w-full bg-[var(--surface-3)] rounded-full h-2"
+                  role="meter"
+                  aria-label="Fleet risk score"
+                  aria-valuemin={0}
+                  aria-valuemax={4}
+                  aria-valuenow={fleetRiskScore == null ? undefined : Number(fleetRiskScore.toFixed(2))}
+                  aria-valuetext={fleetRiskScore == null ? 'Not rated' : `${fleetRiskScore.toFixed(2)} of 4, ${fleetRiskBand.label}`}
+                >
                   <div
-                    className={`h-2 rounded-full transition-all ${
-                      fleetRiskScore >= 3 ? 'bg-red-500' : fleetRiskScore >= 2 ? 'bg-amber-500' : 'bg-emerald-500'
-                    }`}
-                    style={{ width: `${Math.min((fleetRiskScore / 4) * 100, 100)}%` }}
+                    className={`h-2 rounded-full transition-all ${(STATUS_COLORS[fleetRiskBand.key] || STATUS_COLORS.neutral).dot}`}
+                    style={{ width: `${fleetRiskScore == null ? 0 : Math.min((fleetRiskScore / 4) * 100, 100)}%` }}
                   />
                 </div>
-                <p className={`text-xs font-semibold mt-2 ${
-                  fleetRiskScore >= 3 ? 'text-red-400' : fleetRiskScore >= 2 ? 'text-amber-400' : 'text-emerald-400'
-                }`}>
-                  {fleetRiskScore >= 3 ? 'HIGH RISK' : fleetRiskScore >= 2 ? 'MODERATE RISK' : 'ACCEPTABLE RISK'}
+                <p className={`text-xs font-semibold mt-2 uppercase ${(STATUS_COLORS[fleetRiskBand.key] || STATUS_COLORS.neutral).text}`}>
+                  {fleetRiskBand.label}
                 </p>
 
                 <div className="mt-4 grid grid-cols-2 gap-2 w-full text-xs">
                   {[
-                    { label: 'Critical', count: periodRecords.filter(r => r.risk_level === 'Critical').length, color: 'text-red-400' },
-                    { label: 'High', count: periodRecords.filter(r => r.risk_level === 'High').length, color: 'text-orange-400' },
-                    { label: 'Medium', count: periodRecords.filter(r => r.risk_level === 'Medium').length, color: 'text-amber-400' },
-                    { label: 'Low', count: periodRecords.filter(r => r.risk_level === 'Low').length, color: 'text-emerald-400' },
+                    { label: 'Critical', count: riskTally.Critical, color: 'text-red-400' },
+                    { label: 'High', count: riskTally.High, color: 'text-orange-400' },
+                    { label: 'Medium', count: riskTally.Medium, color: 'text-amber-400' },
+                    { label: 'Low', count: riskTally.Low, color: 'text-emerald-400' },
                   ].map(item => (
                     <div key={item.label} className="bg-[var(--surface-1)] rounded-lg p-2 border border-[var(--border-dim)]">
                       <p className={`text-base font-bold ${item.color}`}>{item.count}</p>
@@ -2261,8 +2102,10 @@ export default function ExecutiveReport() {
               {/* Risk trend chart */}
               <div>
                 <p className="text-xs text-[var(--text-secondary)] font-medium mb-2 uppercase tracking-wide">6-Month Risk Score Trend</p>
-                <div className="h-56">
-                  <Line ref={riskTrendRef} data={riskTrendChart} options={lineOpts} />
+                <div className="h-56" role="img" aria-label={`Six month fleet risk score trend: ${riskTrend6m.map(m => `${m.month} ${fmtNum(m.score, 2)}`).join(', ')}`}>
+                  {riskTrend6m.some(m => m.score != null)
+                    ? <Line ref={riskTrendRef} data={riskTrendChart} options={lineOpts} />
+                    : <div className="h-full flex items-center justify-center text-center px-4 text-[var(--text-dim)] text-sm">No rated tyres in the last six months, so there is no risk trend to draw.</div>}
                 </div>
               </div>
 
@@ -2271,9 +2114,11 @@ export default function ExecutiveReport() {
                 <p className="text-xs text-[var(--text-secondary)] font-medium mb-2 uppercase tracking-wide">Site Risk Heat Map</p>
                 <div className="space-y-1.5 max-h-56 overflow-y-auto">
                   {riskMatrix.slice(0, 10).map(row => {
-                    const sc = row.score >= 3 ? 'bg-red-500/20 border-red-500/30 text-red-400'
-                      : row.score >= 2 ? 'bg-amber-500/20 border-amber-500/30 text-amber-400'
-                      : 'bg-emerald-500/20 border-emerald-500/30 text-emerald-400'
+                    const band = riskBand(row.score)
+                    const sc = band.key === 'red' ? 'bg-red-500/20 border-red-500/30 text-red-400'
+                      : band.key === 'amber' ? 'bg-amber-500/20 border-amber-500/30 text-amber-400'
+                      : band.key === 'green' ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-400'
+                      : 'bg-[var(--surface-2)] border-[var(--border-dim)] text-[var(--text-muted)]'
                     return (
                       <div key={row.site} className={`flex items-center justify-between rounded-lg px-3 py-2 border ${sc} text-xs`}>
                         <span className="font-medium text-[var(--text-primary)]">{row.site}</span>
@@ -2281,7 +2126,7 @@ export default function ExecutiveReport() {
                           <span className="text-red-400">{row.Critical}C</span>
                           <span className="text-orange-400">{row.High}H</span>
                           <span className="text-amber-400">{row.Medium}M</span>
-                          <span className="font-bold">{row.score.toFixed(1)}</span>
+                          <span className="font-bold" title={band.label}>{fmtNum(row.score, 1)}</span>
                         </div>
                       </div>
                     )
@@ -2296,94 +2141,31 @@ export default function ExecutiveReport() {
             {/* Risk matrix table */}
             <div className="mt-6">
               <p className="text-xs text-[var(--text-secondary)] font-medium mb-2 uppercase tracking-wide">Risk Matrix: Sites × Risk Level</p>
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="border-b border-[var(--border-dim)]">
-                      <th className="text-left py-2 px-3 text-[var(--text-secondary)] font-medium">Site</th>
-                      <th className="text-center py-2 px-3 text-red-400 font-medium">Critical</th>
-                      <th className="text-center py-2 px-3 text-orange-400 font-medium">High</th>
-                      <th className="text-center py-2 px-3 text-amber-400 font-medium">Medium</th>
-                      <th className="text-center py-2 px-3 text-emerald-400 font-medium">Low</th>
-                      <th className="text-center py-2 px-3 text-[var(--text-secondary)] font-medium">Total</th>
-                      <th className="text-center py-2 px-3 text-[var(--text-secondary)] font-medium">Risk Score</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {riskMatrix.map(row => (
-                      <tr key={row.site} className="border-b border-[var(--border-dim)] hover:bg-[var(--surface-2)] transition-colors">
-                        <td className="py-2 px-3 text-[var(--text-primary)] font-medium">{row.site}</td>
-                        <td className="py-2 px-3 text-center">
-                          {row.Critical > 0
-                            ? <span className="px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 font-bold">{row.Critical}</span>
-                            : <span className="text-[var(--text-dim)]">-</span>}
-                        </td>
-                        <td className="py-2 px-3 text-center">
-                          {row.High > 0
-                            ? <span className="px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-400 font-bold">{row.High}</span>
-                            : <span className="text-[var(--text-dim)]">-</span>}
-                        </td>
-                        <td className="py-2 px-3 text-center">
-                          {row.Medium > 0
-                            ? <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400">{row.Medium}</span>
-                            : <span className="text-[var(--text-dim)]">-</span>}
-                        </td>
-                        <td className="py-2 px-3 text-center">
-                          {row.Low > 0
-                            ? <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400">{row.Low}</span>
-                            : <span className="text-[var(--text-dim)]">-</span>}
-                        </td>
-                        <td className="py-2 px-3 text-center text-[var(--text-secondary)]">{row.total}</td>
-                        <td className="py-2 px-3 text-center">
-                          <span className={`font-bold ${row.score >= 3 ? 'text-red-400' : row.score >= 2 ? 'text-amber-400' : 'text-emerald-400'}`}>
-                            {row.score.toFixed(2)}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <EnterpriseTable
+                columns={riskMatrixColumns}
+                data={riskMatrix}
+                getRowId={(r) => r.site}
+                emptyMessage="No site in this scope has tyre records."
+                exportFileName={reportFileName('TyrePulse Risk Matrix', reportDateLabel())}
+                reportMeta={reportMeta}
+                enableColumnFilters={false}
+                initialPageSize={25}
+              />
             </div>
 
             {/* Top 10 high risk records */}
-            {top10HighRisk.length > 0 && (
-              <div className="mt-6">
+            <div className="mt-6">
                 <p className="text-xs text-[var(--text-secondary)] font-medium mb-2 uppercase tracking-wide">Top 10 Highest-Risk Records</p>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="border-b border-[var(--border-dim)]">
-                        <th className="text-left py-2 px-3 text-[var(--text-secondary)] font-medium">Asset No</th>
-                        <th className="text-left py-2 px-3 text-[var(--text-secondary)] font-medium">Site</th>
-                        <th className="text-center py-2 px-3 text-[var(--text-secondary)] font-medium">Risk</th>
-                        <th className="text-left py-2 px-3 text-[var(--text-secondary)] font-medium">Brand</th>
-                        <th className="text-left py-2 px-3 text-[var(--text-secondary)] font-medium">Position</th>
-                        <th className="text-left py-2 px-3 text-[var(--text-secondary)] font-medium">Findings</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {top10HighRisk.map((r, i) => (
-                        <tr key={r.id || i} className="border-b border-[var(--border-dim)] hover:bg-[var(--surface-2)] transition-colors">
-                          <td className="py-2 px-3 text-[var(--text-primary)] font-medium">{r.asset_no || '-'}</td>
-                          <td className="py-2 px-3 text-[var(--text-secondary)]">{r.site || '-'}</td>
-                          <td className="py-2 px-3 text-center">
-                            <span className={`px-1.5 py-0.5 rounded text-xs font-semibold ${
-                              r.risk_level === 'Critical' ? 'bg-red-500/20 text-red-400' : 'bg-orange-500/20 text-orange-400'
-                            }`}>
-                              {r.risk_level}
-                            </span>
-                          </td>
-                          <td className="py-2 px-3 text-[var(--text-secondary)]">{r.brand || '-'}</td>
-                          <td className="py-2 px-3 text-[var(--text-secondary)]">{r.position || '-'}</td>
-                          <td className="py-2 px-3 text-[var(--text-secondary)] max-w-xs truncate">{r.findings?.slice(0, 60) || '-'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
+                <EnterpriseTable
+                  columns={highRiskColumns}
+                  data={top10HighRisk}
+                  getRowId={(r, i) => String(r.id ?? i)}
+                  emptyMessage="No Critical or High rated tyres in this scope."
+                  exportFileName={reportFileName('TyrePulse Highest Risk Records', reportDateLabel())}
+                  reportMeta={reportMeta}
+                  initialPageSize={25}
+                />
+            </div>
           </Card>
         </motion.div>
 
@@ -2452,57 +2234,29 @@ export default function ExecutiveReport() {
               </button>
             </div>
 
-            {/* Phase dividers */}
-            {[
-              { label: '30-Day Actions: Immediate', days: '0-30', color: 'text-red-400 border-red-500/30 bg-red-500/5', rows: actionPlan.slice(0, 4) },
-              { label: '60-Day Actions: Short Term', days: '30-60', color: 'text-amber-400 border-amber-500/30 bg-amber-500/5', rows: actionPlan.slice(4, 7) },
-              { label: '90-Day Actions: Strategic', days: '60-90', color: 'text-blue-400 border-blue-500/30 bg-blue-500/5', rows: actionPlan.slice(7) },
-            ].map(phase => (
-              <div key={phase.label} className="mb-5">
-                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border mb-3 ${phase.color}`}>
-                  <Clock className="w-3.5 h-3.5" />
-                  <span className="text-xs font-semibold">{phase.label}</span>
-                  <ChevronRight className="w-3 h-3 ml-auto" />
-                  <span className="text-xs">{phase.days} days</span>
+            {/* Phase summary: counts per 30/60/90 day phase (text + colour) */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+              {[
+                { label: '30-Day Actions: Immediate', phase: '0-30 days', color: 'text-red-400 border-red-500/30 bg-red-500/5' },
+                { label: '60-Day Actions: Short Term', phase: '30-60 days', color: 'text-amber-400 border-amber-500/30 bg-amber-500/5' },
+                { label: '90-Day Actions: Strategic', phase: '60-90 days', color: 'text-blue-400 border-blue-500/30 bg-blue-500/5' },
+              ].map(ph => (
+                <div key={ph.phase} className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${ph.color}`}>
+                  <Clock className="w-3.5 h-3.5" aria-hidden="true" />
+                  <span className="text-xs font-semibold">{ph.label}</span>
+                  <span className="ml-auto text-xs tabular-nums">{actionPlanRows.filter(r => r.phase === ph.phase).length} actions</span>
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="border-b border-[var(--border-dim)]">
-                        <th className="text-left py-1.5 px-3 text-[var(--text-muted)] font-medium">Action</th>
-                        <th className="text-center py-1.5 px-3 text-[var(--text-muted)] font-medium">Priority</th>
-                        <th className="text-center py-1.5 px-3 text-[var(--text-muted)] font-medium">Timeline</th>
-                        <th className="text-center py-1.5 px-3 text-[var(--text-muted)] font-medium">Owner</th>
-                        <th className="text-right py-1.5 px-3 text-[var(--text-muted)] font-medium">Est. Saving</th>
-                        <th className="text-center py-1.5 px-3 text-[var(--text-muted)] font-medium">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {phase.rows.map((action, i) => (
-                        <tr key={i} className="border-b border-[var(--border-dim)] hover:bg-[var(--surface-2)] transition-colors">
-                          <td className="py-2 px-3 text-[var(--text-primary)] max-w-sm">{action.action}</td>
-                          <td className="py-2 px-3 text-center">
-                            <span className={`px-1.5 py-0.5 rounded-full text-xs font-semibold ${PRIORITY_STYLES[action.priority]}`}>
-                              {action.priority}
-                            </span>
-                          </td>
-                          <td className="py-2 px-3 text-center text-[var(--text-secondary)]">{action.timeline}</td>
-                          <td className="py-2 px-3 text-center">
-                            <span className="px-2 py-0.5 rounded bg-[var(--surface-2)] text-[var(--text-secondary)] text-xs">{action.owner}</span>
-                          </td>
-                          <td className="py-2 px-3 text-right text-emerald-400 font-medium">{action.saving}</td>
-                          <td className="py-2 px-3 text-center">
-                            <span className="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 text-xs">
-                              {action.status}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
+            <EnterpriseTable
+              columns={actionPlanColumns}
+              data={actionPlanRows}
+              getRowId={(r) => r.id}
+              emptyMessage="No actions in the plan."
+              exportFileName={reportFileName('TyrePulse Action Plan', reportDateLabel())}
+              reportMeta={reportMeta}
+              initialPageSize={25}
+            />
 
             {/* Summary footer */}
             <div className="mt-4 border-t border-[var(--border-dim)] pt-4 flex flex-wrap items-center gap-4 text-xs text-[var(--text-muted)]">
@@ -2512,7 +2266,7 @@ export default function ExecutiveReport() {
               </span>
               <span className="flex items-center gap-1.5">
                 <DollarSign className="w-3.5 h-3.5 text-emerald-500" />
-                Total opportunity: {fmtCurrency(totalSpend == null ? null : savingsOpportunity + totalSpend * 0.15, currency)} estimated annually
+                Total opportunity: {fmtCurrency(totalSpend == null ? null : (savingsOpportunity ?? 0) + totalSpend * 0.15, currency)} estimated annually
               </span>
               <span className="flex items-center gap-1.5">
                 <Users className="w-3.5 h-3.5 text-blue-400" />
@@ -2524,6 +2278,7 @@ export default function ExecutiveReport() {
             </div>
           </Card>
         </motion.div>
+        </>)}
 
       </div>
 
@@ -2536,7 +2291,7 @@ export default function ExecutiveReport() {
             className="absolute inset-0 bg-black/40 backdrop-blur-sm"
             onClick={() => setCustomizeOpen(false)}
           />
-          <div className="relative w-full max-w-md h-full bg-[var(--surface-0)] border-l border-[var(--border-bright)] shadow-2xl flex flex-col">
+          <div role="dialog" aria-modal="true" aria-label="Customize report" className="relative w-full max-w-md h-full bg-[var(--surface-0)] border-l border-[var(--border-bright)] shadow-2xl flex flex-col">
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border-dim)]">
               <div className="flex items-center gap-2.5">
@@ -2552,6 +2307,7 @@ export default function ExecutiveReport() {
                 onClick={() => setCustomizeOpen(false)}
                 className="p-1.5 rounded-lg hover:bg-[var(--surface-2)] text-[var(--text-muted)]"
                 title="Close"
+                aria-label="Close customize panel"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -2595,6 +2351,7 @@ export default function ExecutiveReport() {
                             disabled={i === 0}
                             className="p-1 rounded hover:bg-[var(--surface-3)] text-[var(--text-muted)] disabled:opacity-30 disabled:cursor-not-allowed"
                             title="Move up"
+                            aria-label={`Move ${blockLabel(item)} up`}
                           >
                             <ArrowUp className="w-3.5 h-3.5" />
                           </button>
@@ -2603,6 +2360,7 @@ export default function ExecutiveReport() {
                             disabled={i === layout.length - 1}
                             className="p-1 rounded hover:bg-[var(--surface-3)] text-[var(--text-muted)] disabled:opacity-30 disabled:cursor-not-allowed"
                             title="Move down"
+                            aria-label={`Move ${blockLabel(item)} down`}
                           >
                             <ArrowDown className="w-3.5 h-3.5" />
                           </button>
@@ -2610,6 +2368,8 @@ export default function ExecutiveReport() {
                             onClick={() => toggleVisible(item.id)}
                             className={`p-1 rounded hover:bg-[var(--surface-3)] ${vis ? 'text-emerald-400' : 'text-[var(--text-dim)]'}`}
                             title={vis ? 'Hide block' : 'Show block'}
+                            aria-label={`${vis ? 'Hide' : 'Show'} ${blockLabel(item)}`}
+                            aria-pressed={vis}
                           >
                             {vis ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
                           </button>
@@ -2618,6 +2378,7 @@ export default function ExecutiveReport() {
                               onClick={() => removeBlock(item.id)}
                               className="p-1 rounded hover:bg-red-500/15 text-[var(--text-muted)] hover:text-red-400"
                               title="Remove block"
+                              aria-label={`Remove ${blockLabel(item)}`}
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -2670,15 +2431,15 @@ export default function ExecutiveReport() {
         onClose={() => setEmailModalOpen(false)}
         reportTitle="Executive Fleet Report"
         pdfColumns={['Site', 'Critical', 'High', 'Medium', 'Low', 'Total', 'Risk Score']}
-        pdfRows={riskMatrix.map(r => [r.site, r.Critical, r.High, r.Medium, r.Low, r.total, r.score.toFixed(2)])}
+        pdfRows={riskMatrix.map(r => [r.site, r.Critical, r.High, r.Medium, r.Low, r.total, fmtNum(r.score, 2)])}
         kpiSummary={{
-          'Fleet Avg CPK':          fmtCpk(kpis.cpk.fleetAvgCpk, currency),
+          'Fleet Avg CPK':          fmtCpk(hk.fleetAvgCpk, currency),
           'Total Period Spend':     fmtCurrency(totalSpend, currency),
           'Projected Annual':       fmtCurrency(projectedAnnual, currency),
-          'Failure Rate':           fmtPct(kpis.failureRate.failureRate * 100),
-          'Inspection Compliance':  fmtPct(kpis.inspectionCompliance.compliancePct),
-          'Fleet Availability':     fmtPct(kpis.fleetAvailability.availabilityPct),
-          'Scrap Rate':             fmtPct(kpis.scrapRate.scrapRate * 100),
+          'Failure Rate':           fmtRatio(hk.failureRate),
+          'Inspection Compliance':  fmtPct(hk.inspectionPct),
+          'Fleet Availability':     fmtPct(hk.availabilityPct),
+          'Scrap Rate':             fmtRatio(hk.scrapRate),
           'Savings Opportunity':    fmtCurrency(savingsOpportunity, currency),
         }}
         period={periodValueLabel(period) || 'Quarter'}

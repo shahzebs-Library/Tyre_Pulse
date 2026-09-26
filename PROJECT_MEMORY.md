@@ -55,6 +55,19 @@ batching stops them being started at all.
 
 ---
 
+# ⚑ SESSION 2026-09-26 (part 6) — 3 MORE PAGES DEEPENED + 2 HONEST-READ PAGING FIXES. No migration.
+- Deepened: ReportSharing (link health: `src/lib/reportSharingAnalytics.js`; revoked = N/A because list returns
+  active rows only), RequestAccess (`src/lib/requestAccessAnalytics.js`, decision time null when unmeasurable),
+  AccidentPortalView (presentation only, same PII-lean snapshot; "checklist" = workstreams map, the RPC has no doc list).
+- MasterAccessControl NOT touched: route only redirects to /console/access.
+- `listBroadcasts` now pages (max 5000, id tiebreak, throws; [] only isNotProvisioned). workflows.js reads add id
+  tiebreak; new `listAllWorkflowInstances({status,max:20000})` -> {rows,count,truncated}; myDelegatedApprovals pages
+  past 200 (a delegate could miss approvals).
+- Dependabot 3 -> 5 = MOBILE only (image-size, query-string/decode-uri-component via expo-router); web + marketing 0.
+- Suite 760 files / 10,550 tests green, build clean.
+
+---
+
 # ⚑ SESSION 2026-09-26 (part 5) — 6 MORE PAGES DEEPENED + FLUTTER WORKSHOP PHOTOS/GPS. No migration.
 - Deepened (engine + test + KPIs/filters/EnterpriseTable/exports/states): SystemHealth, Broadcast, RecallDetail,
   WorkflowSettings, SanyDelayPenalty, CostScenarioPlanner (`src/lib/{systemHealth,broadcast,recallDetail,

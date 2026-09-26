@@ -1,10 +1,14 @@
 /**
- * PartsCatalog (route /parts-catalog) — a master catalog of spare parts: part
+ * PartsCatalog (route /parts-catalog) - the master catalog of spare parts: part
  * number, name, category, unit cost, on-hand quantity, reorder level, supplier
- * and unit of measure. Full CRUD with KPI tiles, category/status/search filters,
- * low-stock highlighting, create/edit modal, delete confirm and Excel/PDF export.
+ * and unit of measure. Full CRUD with a KPI strip, search + category / status /
+ * stock / supplier filters, a sortable paged register, inventory analytics
+ * (valuation, stock status, ABC Pareto), a purchase list and data-quality flags,
+ * with Excel/PDF exports of the full filtered result.
  *
- * Reads through the `partsCatalog` service (org-isolated, country-scoped RLS).
+ * Inventory maths live in `src/lib/partsCatalog.js`; register shaping (filters,
+ * sorting, KPIs, export rows) lives in `src/lib/partsCatalogAnalytics.js`. Reads
+ * go through the `partsCatalog` service (org-isolated, country-scoped RLS).
  * When the backing table is absent it prompts for MIGRATIONS_V140_PARTS_CATALOG.
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
@@ -16,11 +20,13 @@ import { Bar, Doughnut } from 'react-chartjs-2'
 import {
   Boxes, Package, PackageX, DollarSign, Layers, Plus, X, Trash2, Loader2,
   Search, Pencil, AlertTriangle, FileSpreadsheet, FileText, Save,
-  ShoppingCart, BarChart3, ClipboardList, ShieldAlert,
+  ShoppingCart, BarChart3, ClipboardList, ShieldAlert, RefreshCcw,
+  ChevronUp, ChevronDown, ChevronsUpDown,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import Card, { CardHeader } from '../components/ui/Card'
 import Modal from '../components/ui/Modal'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import { useSettings } from '../contexts/SettingsContext'
 import { formatCurrencyCompact, formatCurrency } from '../lib/formatters'
@@ -28,16 +34,22 @@ import {
   listParts, createPart, updatePart, deletePart, PART_STATUSES,
 } from '../lib/api/partsCatalog'
 import {
-  partIsLowStock, summarizeParts, buildPartsAnalytics, partStockStatus,
-  partLineValue, abcClassByPart, STOCK_STATUS_META,
+  summarizeParts, buildPartsAnalytics, abcClassByPart, STOCK_STATUS_META, STOCK_STATUS_KEYS,
 } from '../lib/partsCatalog'
+import {
+  filterParts, partTableRows, PART_SORT_ACCESSORS, sortRows, partsKpis, abcTableRows, abcShare,
+  partExportRows, PART_EXPORT_COLS, PART_EXPORT_HEADERS, reorderExportRows,
+  REORDER_EXPORT_COLS, REORDER_EXPORT_HEADERS, distinctValues, ABC_TABLE_ROWS,
+} from '../lib/partsCatalogAnalytics'
+import { nextSort } from '../lib/consoleTableSort'
 import { colorAt, categorical, withAlpha } from '../lib/reportColors'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { isMissingRelation } from '../lib/api/_client'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
 
+/** ABC class tones are semantic (value tier), so they stay fixed. */
 const ABC_COLORS = { A: '#10b981', B: '#f59e0b', C: '#64748b' }
 
 const CATEGORIES = [
@@ -56,20 +68,105 @@ const EMPTY_FORM = {
   reorder_level: '', supplier: '', uom: 'pcs', status: 'active', notes: '',
 }
 
+const AXIS_TICK = { color: 'var(--text-muted)', font: { size: 11 } }
+const CHART_AXIS = {
+  plugins: { legend: { display: false } },
+  scales: {
+    x: { ticks: AXIS_TICK, grid: { color: 'var(--panel-2)' } },
+    y: { beginAtZero: true, ticks: AXIS_TICK, grid: { color: 'var(--panel-2)' } },
+  },
+  maintainAspectRatio: false,
+  responsive: true,
+}
 
-/** Rows shown in the ABC table. Surfaced in the header when it truncates. */
-const ABC_TABLE_ROWS = 30
+const FOCUS = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-bright,#22c55e)]'
+
+function SortButton({ label, active, dir, onClick, align }) {
+  const Icon = !active ? ChevronsUpDown : dir === 'asc' ? ChevronUp : ChevronDown
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-1 min-h-[32px] rounded ${FOCUS} ${align === 'right' ? 'flex-row-reverse' : ''} ${active ? 'text-[var(--text-primary)]' : ''}`}
+      aria-label={`Sort by ${label}${active ? `, currently ${dir === 'asc' ? 'ascending' : 'descending'}` : ''}`}
+    >
+      {label}
+      <Icon size={12} aria-hidden="true" />
+    </button>
+  )
+}
+
+/**
+ * EnterpriseTable over the shared pager. Sorting runs over the FULL row set
+ * before paging (usePagedRows), so a column sort never re-orders only the
+ * visible page. Columns: { id, header, sort?: accessor, cell?, align?, size? }.
+ */
+function SortedPagedTable({ columns, rows, defaultSort, getRowId, emptyMessage, loading, error, onRetry, maxHeight = 620 }) {
+  const [sort, setSort] = useState(defaultSort)
+  const sorted = useMemo(() => {
+    const col = columns.find((c) => c.id === sort?.key)
+    return col?.sort ? sortRows(rows, sort, { [col.id]: col.sort }) : rows
+  }, [rows, columns, sort])
+  const pager = usePagedRows(sorted)
+  const tableColumns = useMemo(() => columns.map((c) => ({
+    id: c.id,
+    accessorFn: c.sort || ((r) => r[c.id]),
+    header: c.sort
+      ? () => <SortButton label={c.header} align={c.align} active={sort?.key === c.id} dir={sort?.dir} onClick={() => setSort((s) => nextSort(s, c.id, c.firstDir || 'desc'))} />
+      : c.header,
+    cell: c.cell ? ({ row }) => c.cell(row.original) : undefined,
+    size: c.size,
+    enableSorting: false,
+    meta: { align: c.align, export: c.id !== 'actions' },
+  })), [columns, sort])
+  return (
+    <div className="space-y-2">
+      <EnterpriseTable
+        columns={tableColumns}
+        data={pager.pageRows}
+        getRowId={getRowId}
+        loading={loading}
+        error={error || null}
+        onRetry={onRetry}
+        enableGlobalFilter={false}
+        enableColumnFilters={false}
+        enableSorting={false}
+        enableExport={false}
+        virtual
+        maxHeight={maxHeight}
+        emptyMessage={emptyMessage}
+      />
+      {!loading && !error && <TablePagination {...pager} />}
+    </div>
+  )
+}
+
+function Kpi({ label, value, sub, icon: Icon, tone = 'text-[var(--text-primary)]' }) {
+  return (
+    <Card>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs text-[var(--text-muted)] truncate">{label}</p>
+        <Icon size={16} className={tone} aria-hidden="true" />
+      </div>
+      <p className={`text-2xl sm:text-3xl font-bold mt-1 tabular-nums ${tone}`}>{value}</p>
+      {sub ? <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{sub}</p> : null}
+    </Card>
+  )
+}
 
 export default function PartsCatalog() {
   const { activeCountry, activeCurrency } = useSettings()
   const [rows, setRows] = useState(null)
   const [missing, setMissing] = useState(false)
-  const [error, setError] = useState('')
+  const [loadError, setLoadError] = useState('')
+  const [actionError, setActionError] = useState('')
   const [refreshing, setRefreshing] = useState(false)
   const [updatedAt, setUpdatedAt] = useState(null)
 
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [stockFilter, setStockFilter] = useState('all')
+  const [supplierFilter, setSupplierFilter] = useState('all')
   const [search, setSearch] = useState('')
 
   // Modal + form
@@ -86,15 +183,17 @@ export default function PartsCatalog() {
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
 
   const load = useCallback(async () => {
-    setRefreshing(true); setError('')
+    setRefreshing(true); setLoadError('')
     try {
       const data = await listParts({ country: activeCountry })
       setMissing(Array.isArray(data) && data.missing === true)
       setRows(Array.isArray(data) ? [...data] : [])
       setUpdatedAt(new Date())
     } catch (err) {
+      // A failed read is NOT an empty catalog: rows stay null so every figure
+      // reads N/A and the register shows the error with a Retry.
       if (isMissingRelation(err)) { setMissing(true); setRows([]) }
-      else { setError(toUserMessage(err, 'Could not load the parts catalog.')); setRows([]) }
+      else { setLoadError(toUserMessage(err, 'Could not load the parts catalog.')); setRows(null) }
     } finally {
       setRefreshing(false)
     }
@@ -102,19 +201,12 @@ export default function PartsCatalog() {
 
   useEffect(() => { load() }, [load])
 
+  const loaded = rows !== null
   const summary = useMemo(() => summarizeParts(rows || []), [rows])
   const analytics = useMemo(() => buildPartsAnalytics(rows || []), [rows])
   const abcMap = useMemo(() => abcClassByPart(rows || []), [rows])
-
-  const chartAxis = {
-    plugins: { legend: { display: false } },
-    scales: {
-      x: { ticks: { color: '#9ca3af', font: { size: 11 } }, grid: { color: 'var(--panel-2)' } },
-      y: { beginAtZero: true, ticks: { color: '#9ca3af', font: { size: 11 } }, grid: { color: 'var(--panel-2)' } },
-    },
-    maintainAspectRatio: false,
-    responsive: true,
-  }
+  const kpi = useMemo(() => partsKpis(analytics), [analytics])
+  const abcTable = useMemo(() => abcTableRows(analytics.abc.items), [analytics])
 
   const valueByCategory = useMemo(() => {
     const cats = analytics.valuation.byCategory.slice(0, 10)
@@ -148,28 +240,18 @@ export default function PartsCatalog() {
     }
   }, [analytics])
 
-  const categoryOptions = useMemo(
-    () => [...new Set((rows || []).map((r) => r.category).filter(Boolean))].sort(),
-    [rows],
-  )
+  const categoryOptions = useMemo(() => distinctValues(rows || [], 'category'), [rows])
+  const supplierOptions = useMemo(() => distinctValues(rows || [], 'supplier'), [rows])
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return (rows || []).filter((r) => {
-      if (categoryFilter !== 'all' && r.category !== categoryFilter) return false
-      if (statusFilter !== 'all' && r.status !== statusFilter) return false
-      if (q) {
-        const hay = `${r.part_no || ''} ${r.name || ''} ${r.supplier || ''} ${r.category || ''}`.toLowerCase()
-        if (!hay.includes(q)) return false
-      }
-      return true
-    })
-  }, [rows, categoryFilter, statusFilter, search])
-  const partsPager = usePagedRows(filtered)
+  const filteredRaw = useMemo(
+    () => filterParts(rows || [], { search, category: categoryFilter, status: statusFilter, stock: stockFilter, supplier: supplierFilter }),
+    [rows, search, categoryFilter, statusFilter, stockFilter, supplierFilter],
+  )
+  const tableRows = useMemo(() => partTableRows(filteredRaw, abcMap), [filteredRaw, abcMap])
   const reorderPager = usePagedRows(analytics.reorder)
 
   const openCreate = () => { setEditing(null); setForm(EMPTY_FORM); setFormError(''); setShowForm(true) }
-  const openEdit = (p) => {
+  const openEdit = useCallback((p) => {
     setEditing(p)
     setForm({
       part_no: p.part_no ?? '', name: p.name ?? '', category: p.category ?? 'engine',
@@ -178,14 +260,11 @@ export default function PartsCatalog() {
       uom: p.uom ?? 'pcs', status: p.status ?? 'active', notes: p.notes ?? '',
     })
     setFormError(''); setShowForm(true)
-  }
+  }, [])
   // ONE guarded close for each dialog. `Modal` routes Escape, the backdrop and
-  // its own X through a single `onClose`, where the hand-rolled overlay guarded
-  // the backdrop for the delete confirm only and nothing at all for the form.
-  // `submit` deliberately clears the dialog state DIRECTLY rather than calling
-  // this: it runs inside the try, while `saving` is still true, so routing the
-  // success path through a guarded close would leave the dialog open after a
-  // save that had in fact succeeded.
+  // its own X through a single `onClose`. `submit` clears the dialog state
+  // DIRECTLY rather than calling this: it runs while `saving` is still true, so
+  // a guarded close would leave the dialog open after a successful save.
   const closeForm = () => { if (!saving) { setShowForm(false); setEditing(null) } }
   const closeDelete = () => { if (!deleting) setPendingDelete(null) }
 
@@ -209,43 +288,117 @@ export default function PartsCatalog() {
 
   const confirmDelete = useCallback(async () => {
     if (!pendingDelete) return
-    setDeleting(true)
+    setDeleting(true); setActionError('')
     try {
       await deletePart(pendingDelete.id)
       setPendingDelete(null)
       await load()
     } catch (err) {
-      setError(toUserMessage(err, 'Could not delete the part.'))
+      setActionError(toUserMessage(err, 'Could not delete the part.'))
     } finally {
       setDeleting(false)
     }
   }, [pendingDelete, load])
 
-  // Export (enriched with derived stock status, ABC class and line value)
-  const EXPORT_COLS = ['part_no', 'name', 'category', 'unit_cost', 'on_hand_qty', 'reorder_level', 'stock_status', 'line_value', 'abc_class', 'supplier', 'uom', 'status']
-  const EXPORT_HEADERS = ['Part No', 'Name', 'Category', 'Unit Cost', 'On Hand', 'Reorder Lvl', 'Stock Status', 'Line Value', 'ABC', 'Supplier', 'UoM', 'Status']
-  const exportRows = filtered.map((r) => {
-    const lv = partLineValue(r)
-    return {
-      part_no: r.part_no || '', name: r.name || '', category: r.category || '',
-      unit_cost: r.unit_cost ?? '', on_hand_qty: r.on_hand_qty ?? '',
-      reorder_level: r.reorder_level ?? '',
-      stock_status: STOCK_STATUS_META[partStockStatus(r)].label,
-      line_value: lv == null ? '' : lv,
-      abc_class: abcMap.get(r.id) || '',
-      supplier: r.supplier || '', uom: r.uom || '', status: r.status || '',
-    }
-  })
+  // Exports cover the FULL filtered register, in the table's default order.
+  const exportRows = useMemo(
+    () => partExportRows(sortRows(tableRows, { key: 'part_no', dir: 'asc' }, PART_SORT_ACCESSORS)),
+    [tableRows],
+  )
+  const exportExcel = () => exportToExcel(exportRows, PART_EXPORT_COLS, PART_EXPORT_HEADERS, reportFileName('Parts Catalog', activeCountry), 'Parts', { currency: activeCurrency, title: 'Parts Catalog' })
+  const exportPdf = () => exportToPdf(exportRows, PART_EXPORT_COLS.map((k, i) => ({ key: k, header: PART_EXPORT_HEADERS[i] })), 'Parts Catalog', reportFileName('Parts Catalog', activeCountry), 'landscape', '', { currency: activeCurrency })
+  const reorderRows = useMemo(() => reorderExportRows(analytics.reorder), [analytics])
+  const exportReorder = (kind) => {
+    if (!reorderRows.length) return
+    const name = reportFileName('Parts Purchase List', activeCountry)
+    if (kind === 'excel') exportToExcel(reorderRows, REORDER_EXPORT_COLS, REORDER_EXPORT_HEADERS, name, 'Reorder', { currency: activeCurrency, title: 'Parts purchase list' })
+    else exportToPdf(reorderRows, REORDER_EXPORT_COLS.map((k, i) => ({ key: k, header: REORDER_EXPORT_HEADERS[i] })), 'Parts purchase list', name, 'landscape', '', { currency: activeCurrency })
+  }
 
-  const kpis = [
-    { label: 'Total SKUs', value: analytics.kpis.totalSkus, icon: Package, tone: 'text-[var(--text-primary)]' },
-    { label: 'Inventory value', value: formatCurrencyCompact(analytics.kpis.inventoryValue, activeCurrency), icon: DollarSign, tone: 'text-amber-400' },
-    { label: 'Out of stock', value: analytics.kpis.outOfStock, icon: PackageX, tone: 'text-red-400' },
-    { label: 'Below reorder', value: analytics.kpis.belowReorder, icon: ShoppingCart, tone: 'text-orange-400' },
-  ]
+  const clearFilters = () => { setCategoryFilter('all'); setStatusFilter('all'); setStockFilter('all'); setSupplierFilter('all'); setSearch('') }
+  const hasFilters = categoryFilter !== 'all' || statusFilter !== 'all' || stockFilter !== 'all' || supplierFilter !== 'all' || search
 
-  const clearFilters = () => { setCategoryFilter('all'); setStatusFilter('all'); setSearch('') }
-  const hasFilters = categoryFilter !== 'all' || statusFilter !== 'all' || search
+  const na = (v) => (loaded ? v : 'N/A')
+  const money = (v) => (v == null ? 'N/A' : formatCurrencyCompact(v, activeCurrency))
+
+  const registerColumns = useMemo(() => [
+    { id: 'part_no', header: 'Part No', sort: PART_SORT_ACCESSORS.part_no, firstDir: 'asc', size: 150,
+      cell: (p) => <span className="font-mono text-xs text-[var(--text-primary)]">{p.part_no}</span> },
+    { id: 'name', header: 'Name', sort: PART_SORT_ACCESSORS.name, firstDir: 'asc', size: 200,
+      cell: (p) => <span className="text-[var(--text-secondary)]">{p.name || 'N/A'}</span> },
+    { id: 'category', header: 'Category', sort: PART_SORT_ACCESSORS.category, firstDir: 'asc', size: 120,
+      cell: (p) => <span className="text-[var(--text-secondary)] capitalize">{p.category || 'N/A'}</span> },
+    { id: 'unit_cost', header: 'Unit Cost', sort: PART_SORT_ACCESSORS.unit_cost, align: 'right', size: 110,
+      cell: (p) => <span className="tabular-nums">{p._unitCost == null ? 'N/A' : formatCurrency(p._unitCost, activeCurrency)}</span> },
+    { id: 'on_hand', header: 'On Hand', sort: PART_SORT_ACCESSORS.on_hand, align: 'right', size: 100,
+      cell: (p) => (
+        <span className="tabular-nums text-[var(--text-secondary)]">
+          {p.on_hand_qty ?? 'N/A'}{p.uom ? <span className="text-[var(--text-muted)] text-xs"> {p.uom}</span> : null}
+        </span>
+      ) },
+    { id: 'reorder', header: 'Reorder', sort: PART_SORT_ACCESSORS.reorder, align: 'right', size: 90,
+      cell: (p) => <span className="tabular-nums text-[var(--text-muted)]">{p.reorder_level ?? 'N/A'}</span> },
+    { id: 'stock', header: 'Stock', sort: PART_SORT_ACCESSORS.stock, firstDir: 'asc', size: 140,
+      cell: (p) => {
+        const meta = STOCK_STATUS_META[p._stock]
+        return (
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium" style={{ color: meta.color }}>
+            {(p._stock === 'out' || p._stock === 'below_reorder') && <AlertTriangle size={12} aria-hidden="true" />}
+            {meta.label}
+          </span>
+        )
+      } },
+    { id: 'line_value', header: 'Line Value', sort: PART_SORT_ACCESSORS.line_value, align: 'right', size: 120,
+      cell: (p) => <span className="tabular-nums">{p._lineValue == null ? 'N/A' : formatCurrency(p._lineValue, activeCurrency)}</span> },
+    { id: 'abc', header: 'ABC', sort: PART_SORT_ACCESSORS.abc, firstDir: 'asc', size: 70,
+      cell: (p) => (p._abc
+        ? <span className="badge text-[11px] px-2 py-0.5 rounded" style={{ backgroundColor: withAlpha(ABC_COLORS[p._abc], 0.18), color: ABC_COLORS[p._abc] }}>{p._abc}</span>
+        : <span className="text-[var(--text-muted)]">N/A</span>) },
+    { id: 'supplier', header: 'Supplier', sort: PART_SORT_ACCESSORS.supplier, firstDir: 'asc', size: 150,
+      cell: (p) => <span className="text-[var(--text-secondary)]">{p.supplier || 'N/A'}</span> },
+    { id: 'status', header: 'Status', sort: PART_SORT_ACCESSORS.status, firstDir: 'asc', size: 110,
+      cell: (p) => <span className={`badge text-[11px] px-2 py-0.5 rounded ${STATUS_STYLES[p.status] || STATUS_STYLES.active}`}>{p.status || 'active'}</span> },
+    { id: 'actions', header: 'Actions', size: 110,
+      cell: (p) => (
+        <div className="flex items-center gap-1 justify-end">
+          <button type="button" onClick={() => openEdit(p)} className={`min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] ${FOCUS}`} aria-label={`Edit part ${p.part_no}`}><Pencil size={15} aria-hidden="true" /></button>
+          <button type="button" onClick={() => setPendingDelete(p)} className={`min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400 ${FOCUS}`} aria-label={`Delete part ${p.part_no}`}><Trash2 size={15} aria-hidden="true" /></button>
+        </div>
+      ) },
+  ], [activeCurrency, openEdit])
+
+  const reorderColumns = useMemo(() => [
+    { id: 'part', header: 'Part', size: 170,
+      cell: (r) => (
+        <div className="min-w-0">
+          <div className="font-mono text-xs text-[var(--text-primary)]">{r.part_no}</div>
+          {r.name ? <div className="text-xs text-[var(--text-muted)] truncate max-w-[180px]">{r.name}</div> : null}
+        </div>
+      ) },
+    { id: 'on_hand', header: 'On Hand', align: 'right', size: 90,
+      cell: (r) => (
+        <span className="inline-flex items-center gap-1 font-semibold tabular-nums" style={{ color: STOCK_STATUS_META[r.status].color }}>
+          {r.on_hand_qty}<span className="sr-only"> ({STOCK_STATUS_META[r.status].label})</span>
+        </span>
+      ) },
+    { id: 'reorder', header: 'Reorder', align: 'right', size: 80, cell: (r) => <span className="tabular-nums text-[var(--text-muted)]">{r.reorder_level}</span> },
+    { id: 'suggest', header: 'Suggest Qty', align: 'right', size: 110,
+      cell: (r) => <span className="font-semibold tabular-nums text-[var(--text-primary)]">{r.suggestedQty}{r.uom ? <span className="text-[var(--text-muted)] font-normal text-xs"> {r.uom}</span> : null}</span> },
+    { id: 'cost', header: 'Est. Cost', align: 'right', size: 110, cell: (r) => <span className="tabular-nums">{r.estimatedCost == null ? 'N/A' : formatCurrency(r.estimatedCost, activeCurrency)}</span> },
+    { id: 'supplier', header: 'Supplier', size: 140, cell: (r) => <span className="text-[var(--text-secondary)]">{r.supplier || 'N/A'}</span> },
+  ], [activeCurrency])
+
+  const abcColumns = useMemo(() => [
+    { id: 'part', header: 'Part', accessorFn: (i) => i.part_no, cell: ({ row }) => <span className="font-mono text-xs text-[var(--text-primary)]">{row.original.part_no}</span> },
+    { id: 'value', header: 'Value', accessorFn: (i) => i.value, meta: { align: 'right' }, cell: ({ row }) => <span className="tabular-nums">{formatCurrency(row.original.value, activeCurrency)}</span> },
+    { id: 'cum', header: 'Cum %', accessorFn: (i) => i.cumShare, meta: { align: 'right' }, cell: ({ row }) => <span className="tabular-nums text-[var(--text-muted)]">{row.original.cumShare}%</span> },
+    { id: 'class', header: 'Class', accessorFn: (i) => i.abcClass,
+      cell: ({ row }) => <span className="badge text-[11px] px-2 py-0.5 rounded" style={{ backgroundColor: withAlpha(ABC_COLORS[row.original.abcClass], 0.18), color: ABC_COLORS[row.original.abcClass] }}>{row.original.abcClass}</span> },
+  ], [activeCurrency])
+
+  const registerEmpty = summary.total === 0 && !missing
+    ? 'No parts in the catalog yet. Use Add part to create the first one.'
+    : 'No parts match these filters.'
 
   return (
     <div className="space-y-6">
@@ -257,28 +410,25 @@ export default function PartsCatalog() {
         refreshing={refreshing}
         updatedAt={updatedAt}
         actions={
-          <div className="flex items-center gap-2">
-            <button onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'parts_catalog', 'Parts', { currency: activeCurrency, title: 'Parts Catalog' })} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
-              <FileSpreadsheet size={14} /> Excel
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={exportExcel} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!exportRows.length}>
+              <FileSpreadsheet size={14} aria-hidden="true" /> Excel
             </button>
-            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Parts Catalog', 'parts_catalog', 'landscape', '', { currency: activeCurrency })} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
-              <FileText size={14} /> PDF
+            <button type="button" onClick={exportPdf} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!exportRows.length}>
+              <FileText size={14} aria-hidden="true" /> PDF
             </button>
-            <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5">
-              <Plus size={15} /> Add part
+            <button type="button" onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px]">
+              <Plus size={15} aria-hidden="true" /> Add part
             </button>
           </div>
         }
       />
 
-      {/* `tone` carries the amber edge the dead `border border-amber-800/50`
-          class used to: Card writes `border` inline, so a plain border utility
-          on it is silently inert. `flexDirection` is inline for the same reason
-          in reverse - Card is `flex flex-col` and Tailwind emits `.flex-col`
-          after `.flex-row`, so a `flex-row` class could not win. */}
+      {/* `tone` carries the amber edge; `flexDirection` is inline because Card is
+          `flex flex-col` and a `flex-row` class cannot win the cascade. */}
       {missing && (
         <Card tone="warn" className="items-start gap-3" style={{ flexDirection: 'row' }}>
-          <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
+          <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" aria-hidden="true" />
           <div>
             <p className="text-amber-300 font-medium">The parts catalog isn't enabled on this database yet.</p>
             <p className="text-[var(--text-muted)] text-sm mt-1">
@@ -288,161 +438,124 @@ export default function PartsCatalog() {
         </Card>
       )}
 
-      {error && (
-        <Card tone="crit" className="items-start gap-3" style={{ flexDirection: 'row' }}>
-          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
-          <div><p className="text-red-300 font-medium">Something went wrong.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
+      {loadError && (
+        <Card tone="crit" className="items-start gap-3" style={{ flexDirection: 'row' }} role="alert">
+          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
+          <div className="flex-1 min-w-0">
+            <p className="text-red-300 font-medium">The parts catalog could not be loaded.</p>
+            <p className="text-[var(--text-muted)] text-sm mt-1">{loadError} Figures below read N/A until it loads.</p>
+          </div>
+          <button type="button" onClick={load} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] shrink-0"><RefreshCcw size={14} aria-hidden="true" /> Retry</button>
         </Card>
       )}
 
-      {/* KPI tiles */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {kpis.map((k) => {
-          const Icon = k.icon
-          return (
-            <Card key={k.label}>
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
-                <Icon size={16} className={k.tone} />
-              </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
-            </Card>
-          )
-        })}
+      {actionError && (
+        <Card tone="crit" className="items-start gap-3" style={{ flexDirection: 'row' }} role="alert">
+          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
+          <p className="flex-1 text-sm text-red-300">{actionError}</p>
+          <button type="button" onClick={() => setActionError('')} className={`min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg text-[var(--text-muted)] ${FOCUS}`} aria-label="Dismiss error"><X size={15} aria-hidden="true" /></button>
+        </Card>
+      )}
+
+      {/* KPI strip */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+        <Kpi label="Total SKUs" value={na(kpi.totalSkus)} sub={loaded ? `${kpi.active} active, ${kpi.discontinued} discontinued` : null} icon={Package} />
+        <Kpi label="Inventory value" value={loaded ? money(kpi.inventoryValue) : 'N/A'} sub={loaded ? `${kpi.valuedSkus} SKU${kpi.valuedSkus === 1 ? '' : 's'} costed` : null} icon={DollarSign} tone="text-amber-400" />
+        <Kpi label="Out of stock" value={na(kpi.outOfStock)} sub="on hand at or below zero" icon={PackageX} tone={kpi.outOfStock ? 'text-red-400' : 'text-[var(--text-primary)]'} />
+        <Kpi label="At or below reorder" value={na(kpi.belowReorder)} sub="includes out of stock" icon={ShoppingCart} tone={kpi.belowReorder ? 'text-orange-400' : 'text-[var(--text-primary)]'} />
+        <Kpi label="Reorder spend" value={loaded ? money(kpi.reorderSpend) : 'N/A'} sub={loaded ? (kpi.reorderUncosted ? `${kpi.reorderUncosted} line${kpi.reorderUncosted === 1 ? '' : 's'} without a unit cost` : `${kpi.reorderLines} line${kpi.reorderLines === 1 ? '' : 's'} to order`) : null} icon={ClipboardList} tone="text-sky-400" />
+        <Kpi label="Data issues" value={na(kpi.dataIssues)} sub="missing cost, reorder or category" icon={ShieldAlert} tone={kpi.dataIssues ? 'text-amber-400' : 'text-[var(--text-primary)]'} />
       </div>
 
       {/* Filters */}
       <Card className="space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-            <input className="input pl-9 w-full" placeholder="Search part no, name, supplier…" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[minmax(220px,2fr)_repeat(4,minmax(0,1fr))] gap-2 items-end">
+          <div className="relative">
+            <label htmlFor="parts-search" className="sr-only">Search parts</label>
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+            <input id="parts-search" type="search" className="input pl-9 w-full min-h-[44px]" placeholder="Search part no, name, supplier..." value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-          <select className="input" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} aria-label="Category">
+          <select className="input min-h-[44px]" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} aria-label="Category">
             <option value="all">All categories</option>
             {categoryOptions.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
-          <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
+          <select className="input min-h-[44px]" value={stockFilter} onChange={(e) => setStockFilter(e.target.value)} aria-label="Stock status">
+            <option value="all">All stock levels</option>
+            {STOCK_STATUS_KEYS.map((k) => <option key={k} value={k}>{STOCK_STATUS_META[k].label}</option>)}
+          </select>
+          <select className="input min-h-[44px]" value={supplierFilter} onChange={(e) => setSupplierFilter(e.target.value)} aria-label="Supplier">
+            <option value="all">All suppliers</option>
+            {supplierOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <select className="input min-h-[44px]" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
             <option value="all">All statuses</option>
             {PART_STATUSES.map((s) => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}
           </select>
-          {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
-          <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {summary.total}</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {hasFilters && <button type="button" onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]"><X size={14} aria-hidden="true" /> Clear filters</button>}
+          <span className="text-xs text-[var(--text-muted)] ml-auto" aria-live="polite">{loaded ? `${tableRows.length} of ${summary.total} parts` : 'N/A'}</span>
         </div>
       </Card>
 
-      {/* Table. `pad="none" clip` reproduces the edge-to-edge crop the legacy
-          `!p-0 overflow-hidden` gave, without the `!important` this kit retires.
-          Clipping is safe: the only popup inside is TablePagination's rows-per-
-          page control, a native <select> the browser paints outside the page's
-          overflow context. */}
-      <Card pad="none" clip>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                {['Part No', 'Name', 'Category', 'Unit Cost', 'On Hand', 'Reorder', 'Supplier', 'Status', ''].map((h) => (
-                  <th key={h} className="px-4 py-3 font-semibold whitespace-nowrap">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows === null ? (
-                [0, 1, 2, 3, 4].map((i) => <tr key={i} className="border-b border-[var(--input-border)]/50"><td colSpan={9} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>)
-              ) : filtered.length === 0 ? (
-                <tr><td colSpan={9} className="px-4 py-12 text-center text-[var(--text-muted)]">
-                  <Package size={22} className="mx-auto mb-2 opacity-60" />
-                  {summary.total === 0 && !missing ? (
-                    <div className="space-y-3">
-                      <p>No parts in the catalog yet.</p>
-                      <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5"><Plus size={14} /> Add the first part</button>
-                    </div>
-                  ) : 'No parts match these filters.'}
-                </td></tr>
-              ) : (
-                partsPager.pageRows.map((p) => {
-                  const low = partIsLowStock(p)
-                  return (
-                    <tr key={p.id} className={`border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40 ${low ? 'bg-red-900/10' : ''}`}>
-                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{p.part_no}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{p.name || 'N/A'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] capitalize">{p.category || 'N/A'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{p.unit_cost == null ? 'N/A' : formatCurrency(p.unit_cost, activeCurrency)}</td>
-                      <td className="px-4 py-2.5">
-                        <span className={`font-semibold ${low ? 'text-red-400' : 'text-[var(--text-secondary)]'}`}>
-                          {p.on_hand_qty ?? 'N/A'}{p.uom ? <span className="text-[var(--text-muted)] font-normal text-xs"> {p.uom}</span> : null}
-                        </span>
-                        {low && <AlertTriangle size={12} className="inline ml-1.5 text-red-400" />}
-                      </td>
-                      <td className="px-4 py-2.5 text-[var(--text-muted)]">{p.reorder_level ?? 'N/A'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{p.supplier || 'N/A'}</td>
-                      <td className="px-4 py-2.5"><span className={`badge text-[11px] px-2 py-0.5 rounded ${STATUS_STYLES[p.status] || STATUS_STYLES.active}`}>{p.status || 'active'}</span></td>
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-center gap-1 justify-end">
-                          <button onClick={() => openEdit(p)} className="p-1.5 rounded-lg hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Edit"><Pencil size={14} /></button>
-                          <button onClick={() => setPendingDelete(p)} className="p-1.5 rounded-lg hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400" aria-label="Delete"><Trash2 size={14} /></button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-          <TablePagination {...partsPager} />
+      {/* Register */}
+      <Card pad="none">
+        <CardHeader className="px-4 pt-4" icon={Package} title="Parts register" description="Sort any column; exports cover every filtered part, not just this page." />
+        <div className="px-2 pb-3">
+          <SortedPagedTable
+            columns={registerColumns}
+            rows={tableRows}
+            defaultSort={{ key: 'part_no', dir: 'asc' }}
+            getRowId={(r) => String(r.id)}
+            loading={!loaded && !loadError}
+            error={loadError}
+            onRetry={load}
+            emptyMessage={registerEmpty}
+          />
         </div>
       </Card>
 
       {/* Analytics */}
-      {rows !== null && summary.total > 0 && (
+      {loaded && summary.total > 0 && (
         <div className="space-y-6">
           <div className="flex items-center gap-2 pt-1">
-            <BarChart3 size={18} className="text-sky-400" />
+            <BarChart3 size={18} className="text-sky-400" aria-hidden="true" />
             <h2 className="font-bold text-[var(--text-primary)]">Inventory analytics</h2>
             <span className="text-xs text-[var(--text-muted)] ml-auto">Across all {summary.total} catalog parts</span>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* CardHeader replaces the hand-rolled title/subtitle pair so these
-                four render a REAL <h3> under the "Inventory analytics" <h2>,
-                keeping the page's heading outline sequential. The `h-64` well
-                stays an inner div - chart.js sizes from a parent with a
-                definite height. */}
             <Card>
               <CardHeader title="Value by category" description={`Inventory value (${activeCurrency}) contribution per category`} />
-              <div className="h-64">
+              <div className="h-64" role="img" aria-label="Inventory value by category">
                 {analytics.valuation.total > 0
-                  ? <Doughnut data={valueByCategory} options={{ maintainAspectRatio: false, responsive: true, plugins: { legend: { position: 'right', labels: { color: '#9ca3af', font: { size: 11 }, boxWidth: 12 } } } }} />
+                  ? <Doughnut data={valueByCategory} options={{ maintainAspectRatio: false, responsive: true, plugins: { legend: { position: 'right', labels: { color: 'var(--text-muted)', font: { size: 11 }, boxWidth: 12 } } } }} />
                   : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No costed stock to value yet.</div>}
               </div>
             </Card>
 
             <Card>
               <CardHeader title="Stock status" description="Parts by on-hand position vs reorder point" />
-              <div className="h-64"><Bar data={statusBar} options={chartAxis} /></div>
+              <div className="h-64" role="img" aria-label={`Stock status: ${STOCK_STATUS_KEYS.map((k) => `${STOCK_STATUS_META[k].label} ${analytics.statusCounts[k]}`).join(', ')}`}><Bar data={statusBar} options={CHART_AXIS} /></div>
             </Card>
 
             <Card>
               <CardHeader title="ABC class distribution" description="Pareto split by inventory value (A ~80%, B ~15%, C ~5%)" />
-              <div className="h-64"><Bar data={abcBar} options={chartAxis} /></div>
+              <div className="h-64" role="img" aria-label={`ABC classes: A ${analytics.abc.summary.A.count}, B ${analytics.abc.summary.B.count}, C ${analytics.abc.summary.C.count}`}><Bar data={abcBar} options={CHART_AXIS} /></div>
             </Card>
 
             <Card>
               <CardHeader title="Top value parts" description={`Highest line value (${activeCurrency}) SKUs`} />
-              <div className="h-64">
+              <div className="h-64" role="img" aria-label="Top value parts">
                 {topValueBar.labels.length
-                  ? <Bar data={topValueBar} options={{ ...chartAxis, indexAxis: 'y' }} />
+                  ? <Bar data={topValueBar} options={{ ...CHART_AXIS, indexAxis: 'y' }} />
                   : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No costed stock to rank yet.</div>}
               </div>
             </Card>
           </div>
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-            {/* Reorder needed. The header keeps its own padded, bordered row
-                so the rule above the table survives; CardHeader carries the
-                semantic icon through `iconTone` and the count through
-                `actions`, which is a single control and so may not wrap. */}
-            <Card pad="none" clip>
+            <Card pad="none">
               <CardHeader
                 className="px-4 py-3 border-b border-[var(--input-border)] !mb-0"
                 icon={ShoppingCart}
@@ -452,67 +565,50 @@ export default function PartsCatalog() {
               />
               {analytics.reorder.length === 0 ? (
                 <div className="px-4 py-10 text-center text-sm text-[var(--text-muted)]">
-                  <ClipboardList size={20} className="mx-auto mb-2 opacity-60" />
+                  <ClipboardList size={20} className="mx-auto mb-2 opacity-60" aria-hidden="true" />
                   All active parts are above their reorder point.
                 </div>
               ) : (
-                <div className="overflow-x-auto max-h-80 overflow-y-auto">
-                  <table className="w-full text-sm">
-                    <thead className="sticky top-0 bg-[var(--card-bg)]">
-                      <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                        {['Part', 'On Hand', 'Reorder', 'Suggest Qty', 'Est. Cost', 'Supplier'].map((h) => (
-                          <th key={h} className="px-3 py-2 font-semibold whitespace-nowrap">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {reorderPager.pageRows.map((r) => (
-                        <tr key={r.id} className="border-b border-[var(--input-border)]/50">
-                          <td className="px-3 py-2">
-                            <div className="font-mono text-xs text-[var(--text-primary)]">{r.part_no}</div>
-                            {r.name ? <div className="text-xs text-[var(--text-muted)] truncate max-w-[160px]">{r.name}</div> : null}
-                          </td>
-                          <td className="px-3 py-2">
-                            <span className="font-semibold" style={{ color: STOCK_STATUS_META[r.status].color }}>{r.on_hand_qty}</span>
-                          </td>
-                          <td className="px-3 py-2 text-[var(--text-muted)]">{r.reorder_level}</td>
-                          <td className="px-3 py-2 font-semibold text-[var(--text-primary)]">{r.suggestedQty}{r.uom ? <span className="text-[var(--text-muted)] font-normal text-xs"> {r.uom}</span> : null}</td>
-                          <td className="px-3 py-2 text-[var(--text-secondary)]">{r.estimatedCost == null ? 'N/A' : formatCurrency(r.estimatedCost, activeCurrency)}</td>
-                          <td className="px-3 py-2 text-[var(--text-secondary)]">{r.supplier || 'N/A'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="p-2 space-y-2">
+                  <div className="flex flex-wrap items-center gap-2 px-1">
+                    <span className="text-xs text-[var(--text-muted)] mr-auto">Purchase list, most urgent first</span>
+                    <button type="button" onClick={() => exportReorder('excel')} disabled={!reorderRows.length} className="btn-secondary text-xs inline-flex items-center gap-1 min-h-[44px]"><FileSpreadsheet size={12} aria-hidden="true" /> Excel</button>
+                    <button type="button" onClick={() => exportReorder('pdf')} disabled={!reorderRows.length} className="btn-secondary text-xs inline-flex items-center gap-1 min-h-[44px]"><FileText size={12} aria-hidden="true" /> PDF</button>
+                  </div>
+                  <EnterpriseTable
+                    columns={reorderColumns.map((c) => ({ id: c.id, header: c.header, accessorFn: (r) => r[c.id], cell: ({ row }) => c.cell(row.original), size: c.size, enableSorting: false, meta: { align: c.align } }))}
+                    data={reorderPager.pageRows}
+                    getRowId={(r) => String(r.id)}
+                    enableGlobalFilter={false}
+                    enableColumnFilters={false}
+                    enableSorting={false}
+                    enableExport={false}
+                    virtual
+                    maxHeight={360}
+                    emptyMessage="No parts to reorder."
+                  />
                   <TablePagination {...reorderPager} />
                 </div>
               )}
             </Card>
 
-            {/* ABC analysis */}
-            <Card pad="none" clip>
+            <Card pad="none">
               <CardHeader
                 className="px-4 py-3 border-b border-[var(--input-border)] !mb-0"
                 icon={Layers}
                 iconTone="good"
                 title="ABC analysis"
-                actions={(() => {
-                  // STATE THE CAP. This table slices to 30 rows. Without a note a
-                  // reader takes a truncated Pareto for the whole catalogue - the
-                  // silent-truncation class this codebase has been bitten by
-                  // before. Only says "top 30" when something is actually hidden.
-                  const costed = analytics.abc.items.filter((i) => i.value > 0).length
-                  return (
-                    <span className="text-xs text-[var(--text-muted)]">
-                      {costed > ABC_TABLE_ROWS
-                        ? `By inventory value · top ${ABC_TABLE_ROWS} of ${costed}`
-                        : 'By inventory value'}
-                    </span>
-                  )
-                })()}
+                actions={(
+                  // STATE THE CAP. The table lists at most ABC_TABLE_ROWS parts;
+                  // without a note a truncated Pareto reads as the whole catalogue.
+                  <span className="text-xs text-[var(--text-muted)]">
+                    {abcTable.truncated ? `By inventory value, top ${ABC_TABLE_ROWS} of ${abcTable.costed}` : 'By inventory value'}
+                  </span>
+                )}
               />
               {analytics.abc.total <= 0 ? (
                 <div className="px-4 py-10 text-center text-sm text-[var(--text-muted)]">
-                  <BarChart3 size={20} className="mx-auto mb-2 opacity-60" />
+                  <BarChart3 size={20} className="mx-auto mb-2 opacity-60" aria-hidden="true" />
                   No costed stock to rank yet. Add unit cost and on-hand quantity.
                 </div>
               ) : (
@@ -520,46 +616,35 @@ export default function PartsCatalog() {
                   <div className="grid grid-cols-3 gap-px bg-[var(--input-border)]">
                     {['A', 'B', 'C'].map((cls) => {
                       const s = analytics.abc.summary[cls]
-                      const share = analytics.abc.total > 0 ? Math.round((s.value / analytics.abc.total) * 100) : 0
+                      const share = abcShare(s, analytics.abc.total)
                       return (
                         <div key={cls} className="bg-[var(--card-bg)] px-3 py-3 text-center">
                           <div className="text-xs text-[var(--text-muted)]">Class {cls}</div>
-                          <div className="text-xl font-bold" style={{ color: ABC_COLORS[cls] }}>{s.count}</div>
-                          <div className="text-xs text-[var(--text-muted)]">{share}% value</div>
+                          <div className="text-xl font-bold tabular-nums" style={{ color: ABC_COLORS[cls] }}>{s.count}</div>
+                          <div className="text-xs text-[var(--text-muted)]">{share == null ? 'N/A' : `${share}% value`}</div>
                         </div>
                       )
                     })}
                   </div>
-                  <div className="overflow-x-auto max-h-72 overflow-y-auto">
-                    <table className="w-full text-sm">
-                      <thead className="sticky top-0 bg-[var(--card-bg)]">
-                        <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                          {['Part', 'Value', 'Cum %', 'Class'].map((h) => (
-                            <th key={h} className="px-3 py-2 font-semibold whitespace-nowrap">{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {analytics.abc.items.filter((i) => i.value > 0).slice(0, ABC_TABLE_ROWS).map((i) => (
-                          <tr key={i.id} className="border-b border-[var(--input-border)]/50">
-                            <td className="px-3 py-2 font-mono text-xs text-[var(--text-primary)]">{i.part_no}</td>
-                            <td className="px-3 py-2 text-[var(--text-secondary)]">{formatCurrency(i.value, activeCurrency)}</td>
-                            <td className="px-3 py-2 text-[var(--text-muted)]">{i.cumShare}%</td>
-                            <td className="px-3 py-2">
-                              <span className="badge text-[11px] px-2 py-0.5 rounded" style={{ backgroundColor: withAlpha(ABC_COLORS[i.abcClass], 0.18), color: ABC_COLORS[i.abcClass] }}>{i.abcClass}</span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div className="p-2">
+                    <EnterpriseTable
+                      columns={abcColumns}
+                      data={abcTable.rows}
+                      getRowId={(r) => String(r.id)}
+                      enableGlobalFilter={false}
+                      enableColumnFilters={false}
+                      enableExport={false}
+                      virtual
+                      maxHeight={320}
+                      emptyMessage="No costed parts."
+                    />
                   </div>
                 </>
               )}
             </Card>
           </div>
 
-          {/* Data quality. `tone="warn"` carries the amber edge the dead
-              `border border-amber-800/40` class used to. */}
+          {/* Data quality. `tone="warn"` carries the amber edge. */}
           {analytics.dataQuality.totalIssues > 0 && (
             <Card tone="warn">
               <CardHeader
@@ -576,7 +661,7 @@ export default function PartsCatalog() {
                   { label: 'Missing category', value: analytics.dataQuality.counts.missingCategory },
                 ].map((d) => (
                   <div key={d.label} className="rounded-lg bg-[var(--input-bg)]/50 px-3 py-2">
-                    <div className={`text-lg font-bold ${d.value > 0 ? 'text-amber-400' : 'text-[var(--text-muted)]'}`}>{d.value}</div>
+                    <div className={`text-lg font-bold tabular-nums ${d.value > 0 ? 'text-amber-400' : 'text-[var(--text-muted)]'}`}>{d.value}</div>
                     <div className="text-xs text-[var(--text-muted)]">{d.label}</div>
                   </div>
                 ))}
@@ -602,51 +687,51 @@ export default function PartsCatalog() {
             <form onSubmit={submit} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="label">Part number <span className="text-red-400">*</span></label>
-                  <input className="input w-full" value={form.part_no} maxLength={120} onChange={(e) => set('part_no', e.target.value)} placeholder="e.g. FLT-OIL-TY-001" />
+                  <label className="label" htmlFor="part-part_no">Part number <span className="text-red-400">*</span></label>
+                  <input id="part-part_no" aria-required="true" className="input w-full" value={form.part_no} maxLength={120} onChange={(e) => set('part_no', e.target.value)} placeholder="e.g. FLT-OIL-TY-001" />
                 </div>
                 <div>
-                  <label className="label">Name</label>
-                  <input className="input w-full" value={form.name} maxLength={200} onChange={(e) => set('name', e.target.value)} placeholder="e.g. Engine Oil Filter" />
+                  <label className="label" htmlFor="part-name">Name</label>
+                  <input id="part-name" className="input w-full" value={form.name} maxLength={200} onChange={(e) => set('name', e.target.value)} placeholder="e.g. Engine Oil Filter" />
                 </div>
                 <div>
-                  <label className="label">Category</label>
-                  <select className="input w-full" value={form.category} onChange={(e) => set('category', e.target.value)}>
+                  <label className="label" htmlFor="part-category">Category</label>
+                  <select id="part-category" className="input w-full" value={form.category} onChange={(e) => set('category', e.target.value)}>
                     {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="label">Unit of measure</label>
-                  <select className="input w-full" value={form.uom} onChange={(e) => set('uom', e.target.value)}>
+                  <label className="label" htmlFor="part-uom">Unit of measure</label>
+                  <select id="part-uom" className="input w-full" value={form.uom} onChange={(e) => set('uom', e.target.value)}>
                     {UOMS.map((u) => <option key={u} value={u}>{u}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="label">Unit cost ({activeCurrency})</label>
-                  <input type="number" step="0.01" min="0" className="input w-full" value={form.unit_cost} onChange={(e) => set('unit_cost', e.target.value)} placeholder="0.00" />
+                  <label className="label" htmlFor="part-unit_cost">Unit cost ({activeCurrency})</label>
+                  <input id="part-unit_cost" type="number" step="0.01" min="0" className="input w-full" value={form.unit_cost} onChange={(e) => set('unit_cost', e.target.value)} placeholder="0.00" />
                 </div>
                 <div>
-                  <label className="label">On-hand quantity</label>
-                  <input type="number" step="any" min="0" className="input w-full" value={form.on_hand_qty} onChange={(e) => set('on_hand_qty', e.target.value)} placeholder="0" />
+                  <label className="label" htmlFor="part-on_hand_qty">On-hand quantity</label>
+                  <input id="part-on_hand_qty" type="number" step="any" min="0" className="input w-full" value={form.on_hand_qty} onChange={(e) => set('on_hand_qty', e.target.value)} placeholder="0" />
                 </div>
                 <div>
-                  <label className="label">Reorder level</label>
-                  <input type="number" step="any" min="0" className="input w-full" value={form.reorder_level} onChange={(e) => set('reorder_level', e.target.value)} placeholder="e.g. 5" />
+                  <label className="label" htmlFor="part-reorder_level">Reorder level</label>
+                  <input id="part-reorder_level" type="number" step="any" min="0" className="input w-full" value={form.reorder_level} onChange={(e) => set('reorder_level', e.target.value)} placeholder="e.g. 5" />
                 </div>
                 <div>
-                  <label className="label">Supplier</label>
-                  <input className="input w-full" value={form.supplier} maxLength={200} onChange={(e) => set('supplier', e.target.value)} placeholder="e.g. Al Futtaim Parts" />
+                  <label className="label" htmlFor="part-supplier">Supplier</label>
+                  <input id="part-supplier" className="input w-full" value={form.supplier} maxLength={200} onChange={(e) => set('supplier', e.target.value)} placeholder="e.g. Al Futtaim Parts" />
                 </div>
                 <div>
-                  <label className="label">Status</label>
-                  <select className="input w-full" value={form.status} onChange={(e) => set('status', e.target.value)}>
+                  <label className="label" htmlFor="part-status">Status</label>
+                  <select id="part-status" className="input w-full" value={form.status} onChange={(e) => set('status', e.target.value)}>
                     {PART_STATUSES.map((s) => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}
                   </select>
                 </div>
               </div>
               <div>
-                <label className="label">Notes</label>
-                <textarea className="input w-full min-h-[80px] resize-y" value={form.notes} maxLength={8000} onChange={(e) => set('notes', e.target.value)} placeholder="Specifications, compatibility, storage location…" />
+                <label className="label" htmlFor="part-notes">Notes</label>
+                <textarea id="part-notes" className="input w-full min-h-[80px] resize-y" value={form.notes} maxLength={8000} onChange={(e) => set('notes', e.target.value)} placeholder="Specifications, compatibility, storage location..." />
               </div>
               {formError && (
                 <div className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
@@ -656,7 +741,7 @@ export default function PartsCatalog() {
               <div className="flex items-center gap-3 pt-1">
                 <button type="submit" disabled={saving} className="btn-primary inline-flex items-center gap-2 disabled:opacity-60">
                   {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
-                  {saving ? 'Saving…' : editing ? 'Save changes' : 'Add part'}
+                  {saving ? 'Saving...' : editing ? 'Save changes' : 'Add part'}
                 </button>
                 <button type="button" onClick={closeForm} className="btn-secondary">Cancel</button>
               </div>
@@ -681,7 +766,7 @@ export default function PartsCatalog() {
               <button onClick={closeDelete} disabled={deleting} className="btn-secondary">Cancel</button>
               <button onClick={confirmDelete} disabled={deleting} className="btn-primary bg-red-600 hover:bg-red-500 inline-flex items-center gap-2 disabled:opacity-60">
                 {deleting ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
-                {deleting ? 'Deleting…' : 'Delete'}
+                {deleting ? 'Deleting...' : 'Delete'}
               </button>
             </>
           }

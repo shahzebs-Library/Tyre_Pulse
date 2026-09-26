@@ -128,3 +128,57 @@ export function filterByRegister(rows = [], { site = '', vehicleType = '' } = {}
   return rows.filter((r) => (!site || (r.site || NO_SITE) === site)
     && (!vehicleType || (r.vehicle_type || NO_TYPE) === vehicleType))
 }
+
+// ── Register table: sorting + export (page shaping, still pure) ─────────────
+
+/**
+ * Sort accessors for the utilization register. An unmeasured value is null and
+ * the shared sorter (consoleTableSort) keeps it last in either direction, so a
+ * missing reading never masquerades as the busiest or the idlest asset.
+ */
+export const UTILIZATION_SORT_ACCESSORS = {
+  asset_no: (r) => (r.asset_no ? String(r.asset_no) : null),
+  site: (r) => r.site || null,
+  vehicle_type: (r) => r.vehicle_type || null,
+  utilization: (r) => num(r.utilization_pct),
+  distance: (r) => num(r.distance_km),
+  idle: (r) => idlePct(r),
+  working: (r) => secondsToHours(r.working_seconds),
+  idle_hours: (r) => secondsToHours(r.idle_seconds),
+  current_km: (r) => num(r.current_km),
+  max_speed: (r) => num(r.max_speed),
+  captured: (r) => (r.captured_at ? String(r.captured_at).slice(0, 10) : null),
+}
+
+export const UTILIZATION_EXPORT_COLS = ['asset_no', 'country', 'site', 'vehicle_type', 'make', 'model', 'utilization_pct', 'distance_km', 'idle', 'working', 'idle_hours', 'max_speed', 'current_km', 'captured_at', 'in_register']
+export const UTILIZATION_EXPORT_HEADERS = ['Asset', 'Country', 'Site', 'Vehicle type', 'Make', 'Model', 'Utilization %', 'Distance km', 'Idle %', 'Working h', 'Idle h', 'Max speed', 'Current km', 'Captured', 'In fleet register']
+
+/** Export rows for the full filtered register (never just the visible page). */
+export function utilizationExportRows(rows = []) {
+  return (rows || []).map((r) => ({
+    asset_no: r.asset_no, country: r.country || '',
+    site: r.site || NO_SITE, vehicle_type: r.vehicle_type || NO_TYPE,
+    make: r.make || '', model: r.model || '',
+    utilization_pct: num(r.utilization_pct), distance_km: num(r.distance_km),
+    idle: idlePct(r), working: secondsToHours(r.working_seconds), idle_hours: secondsToHours(r.idle_seconds),
+    max_speed: num(r.max_speed), current_km: num(r.current_km),
+    captured_at: r.captured_at ? String(r.captured_at).slice(0, 10) : '',
+    in_register: r.in_register === undefined ? '' : r.in_register ? 'Yes' : 'No',
+  }))
+}
+
+export const COVERAGE_GAP_COLS = ['asset_no', 'country', 'site', 'vehicle_type']
+export const COVERAGE_GAP_HEADERS = ['Asset', 'Country', 'Site', 'Vehicle type']
+
+/** Coverage-gap export rows with honest placeholders for unrecorded fields. */
+export function coverageGapExportRows(coverage) {
+  return (coverage?.uncovered || []).map((u) => ({ ...u, site: u.site || NO_SITE, vehicle_type: u.vehicle_type || NO_TYPE }))
+}
+
+/** Share of the filtered rows that carry a utilization reading (null when none). */
+export function readingCoverage(rows = []) {
+  const list = rows || []
+  if (!list.length) return null
+  const measured = list.filter((r) => num(r.utilization_pct) != null).length
+  return Math.round((measured / list.length) * 1000) / 10
+}

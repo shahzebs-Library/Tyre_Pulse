@@ -11,16 +11,21 @@ import {
   computeWorkshopPerformance,
   computeCpkByBrand,
   computeAvgTyreLife,
-  computeFailureRate,
 } from '../lib/kpiEngine'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
+import { colorAt, withAlpha } from '../lib/reportColors'
+import {
+  filterVendorRecords, uniqueSites as uniqueSitesOf, rankByScore, enrichVendors,
+  actionsBySite, buildExecSummary, buildRecommendations, vendorKpis, radarSeries,
+} from '../lib/vendorIntelligenceAnalytics'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { loadGovernedCostSplit } from '../lib/api/governedCost'
 import { toUserMessage } from '../lib/safeError'
 import {
   Trophy, Download, FileText, AlertTriangle, CheckCircle,
   TrendingUp, TrendingDown, RefreshCw, Building2, Package,
-  Star, Award, Medal, BarChart3, Target, ChevronUp, ChevronDown,
-  Minus, ShieldAlert, Wrench, DollarSign, Activity, Zap, Mail,
+  Star, Award, Medal, BarChart3, Target,
+  ShieldAlert, Wrench, DollarSign, Activity, Zap, Mail, Info,
 } from 'lucide-react'
 import EmailReportModal from '../components/EmailReportModal'
 import PageHeader from '../components/ui/PageHeader'
@@ -45,16 +50,15 @@ const POSITIONS = ['All', 'Steer', 'Drive', 'Trailer', 'Other']
 // i18n key lookup for POSITIONS labels (constant stays stable for filter value comparisons)
 const POSITION_I18N_KEYS = { All: 'all', Steer: 'steer', Drive: 'drive', Trailer: 'trailer', Other: 'other' }
 
+// Theme tokens: chartVarPlugin resolves var(--x) on the canvas, so these follow
+// light and dark mode instead of being pinned to dark-only hex values.
 const CHART_THEME = {
-  gridColor:'var(--text-muted)',
-  tickColor: '#9ca3af',
-  tooltipBg: '#1f2937',
+  gridColor: 'var(--panel-2)',
+  tickColor: 'var(--text-muted)',
+  tooltipBg: 'var(--surface-raised)',
+  tooltipTitle: 'var(--text-primary)',
+  tooltipBody: 'var(--text-secondary)',
 }
-
-const BRAND_PALETTE = [
-  '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
-  '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#84cc16',
-]
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 function fmtCpk(v, currency) {
@@ -74,7 +78,7 @@ function fmtKm(v) {
 }
 
 function fmtCurrency(v, currency) {
-  if (v == null || !isFinite(v)) return `${currency} 0`
+  if (v == null || !isFinite(v)) return 'N/A'
   return `${currency} ${Math.round(v).toLocaleString()}`
 }
 
@@ -91,7 +95,7 @@ function cpkColor(cpk) {
 }
 
 function cpkBgColor(cpk) {
-  if (cpk == null || !isFinite(cpk)) return '#374151'
+  if (cpk == null || !isFinite(cpk)) return 'var(--panel-2)'
   if (cpk <= 1.0) return '#16a34a'
   if (cpk <= 2.0) return '#d97706'
   return '#dc2626'
@@ -104,16 +108,27 @@ function riskColor(rate) {
 }
 
 function rankBadgeStyle(rank) {
-  if (rank === 1) return { bg: 'bg-yellow-500/20 border-yellow-500/50', text: 'text-yellow-400', icon: '🥇' }
-  if (rank === 2) return { bg: 'bg-gray-400/10 border-gray-400/40', text: 'text-[var(--text-secondary)]', icon: '🥈' }
-  if (rank === 3) return { bg: 'bg-amber-700/20 border-amber-700/40', text: 'text-amber-600', icon: '🥉' }
-  return { bg: 'bg-[var(--surface-2)] border-[var(--border-bright)]', text: 'text-[var(--text-secondary)]', icon: null }
+  if (rank === 1) return { bg: 'bg-yellow-500/10 border-yellow-500/50', text: 'text-yellow-500', medal: true }
+  if (rank === 2) return { bg: 'bg-[var(--surface-2)] border-[var(--border-bright)]', text: 'text-[var(--text-secondary)]', medal: true }
+  if (rank === 3) return { bg: 'bg-amber-700/10 border-amber-700/40', text: 'text-amber-600', medal: true }
+  return { bg: 'bg-[var(--surface-2)] border-[var(--border-bright)]', text: 'text-[var(--text-secondary)]', medal: false }
 }
 
-function miniBar(pct, color = '#3b82f6') {
+/** Rank marker: an SVG medal plus the rank number, never an emoji. */
+function RankMark({ rank, className = '' }) {
+  const badge = rankBadgeStyle(rank)
+  return (
+    <span className={`inline-flex items-center gap-1 font-bold ${badge.text} ${className}`}>
+      {badge.medal && <Medal size={14} aria-hidden="true" />}
+      <span>#{rank}</span>
+    </span>
+  )
+}
+
+function miniBar(pct, color = colorAt(0)) {
   const clamped = Math.min(Math.max(pct, 0), 100)
   return (
-    <div className="h-1.5 bg-[var(--surface-2)] rounded-full overflow-hidden mt-1">
+    <div className="h-1.5 bg-[var(--surface-2)] rounded-full overflow-hidden mt-1" aria-hidden="true">
       <div className="h-full rounded-full transition-all duration-500" style={{ width: `${clamped}%`, backgroundColor: color }} />
     </div>
   )
@@ -132,8 +147,8 @@ function barOpts(horizontal = false, tickCallback) {
       legend: { display: false },
       tooltip: {
         backgroundColor: CHART_THEME.tooltipBg,
-        titleColor:'var(--panel-ink)',
-        bodyColor: '#d1d5db',
+        titleColor: CHART_THEME.tooltipTitle,
+        bodyColor: CHART_THEME.tooltipBody,
         padding: 10,
         cornerRadius: 8,
       },
@@ -162,8 +177,8 @@ function radarOpts() {
       },
       tooltip: {
         backgroundColor: CHART_THEME.tooltipBg,
-        titleColor:'var(--panel-ink)',
-        bodyColor: '#d1d5db',
+        titleColor: CHART_THEME.tooltipTitle,
+        bodyColor: CHART_THEME.tooltipBody,
         padding: 10,
         cornerRadius: 8,
         callbacks: { label: ctx => `${ctx.dataset.label}: ${Number(ctx.raw).toFixed(1)}` },
@@ -173,10 +188,10 @@ function radarOpts() {
       r: {
         min: 0,
         max: 100,
-        grid: { color: '#374151' },
-        angleLines: { color: '#374151' },
-        pointLabels: { color: '#9ca3af', font: { size: 11 } },
-        ticks: { color: '#6b7280', font: { size: 9 }, backdropColor: 'transparent', stepSize: 20 },
+        grid: { color: CHART_THEME.gridColor },
+        angleLines: { color: CHART_THEME.gridColor },
+        pointLabels: { color: CHART_THEME.tickColor, font: { size: 11 } },
+        ticks: { color: CHART_THEME.tickColor, font: { size: 9 }, backdropColor: 'transparent', stepSize: 20 },
       },
     },
   }
@@ -193,8 +208,10 @@ export default function VendorIntelligence() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [capped, setCapped] = useState(false)
-  // Authoritative fleet-level tyre cost from the classified expense grid.
-  const [fleetTyreCost, setFleetTyreCost] = useState(null)
+  const [exportError, setExportError] = useState('')
+  // Authoritative fleet-level tyre cost from the classified expense grid
+  // (loadGovernedCostSplit -> loadCostSplit). NEVER a sum of cost_per_tyre.
+  const [fleetCost, setFleetCost] = useState({ loading: true, tyre: null, blended: false, failed: false, window: null })
 
   // Filters
   const [period, setPeriod] = useState({ mode: 'all' })
@@ -205,10 +222,6 @@ export default function VendorIntelligence() {
   // UI state
   const [activeSection, setActiveSection] = useState('vendors')
   const [emailModalOpen, setEmailModalOpen] = useState(false)
-  const [sortCol, setSortCol] = useState('score')
-  const [sortDir, setSortDir] = useState('desc')
-  const [workshopSortCol, setWorkshopSortCol] = useState('score')
-  const [workshopSortDir, setWorkshopSortDir] = useState('desc')
 
   // ── Data fetch ──────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
@@ -221,10 +234,13 @@ export default function VendorIntelligence() {
           .select('id,asset_no,site,brand,supplier,tyre_serial,position,risk_level,category,findings,tread_depth,km_at_fitment,km_at_removal,cost_per_tyre,issue_date,removal_reason')
           .order('id'), activeCountry)
           .range(from, to), { max: ROW_CAP }),
-        applyCountry(supabase
+        // Paged rather than `.limit(2000)`: the server caps any single response
+        // at 1000 rows, so a limit above that was a silent truncation.
+        fetchAllPages((from, to) => applyCountry(supabase
           .from('corrective_actions')
-          .select('id,site,status,priority,created_at,resolved_at'), activeCountry)
-          .limit(2000),
+          .select('id,site,status,priority,created_at,resolved_at')
+          .order('id'), activeCountry)
+          .range(from, to), { max: 20000 }),
       ])
       if (recRes.error) throw recRes.error
       if (actRes.error) throw actRes.error
@@ -240,252 +256,89 @@ export default function VendorIntelligence() {
 
   useEffect(() => { load() }, [load])
 
-  // Fleet-level total tyre spend comes from the authoritative expense grid
-  // (loadCostSplit.tyre), not from summing per-vendor cost_per_tyre.
+  // Fleet-level tyre spend from the expense grid. A blended (All countries)
+  // answer adds SAR + AED + EGP, so it is reported as not comparable.
   useEffect(() => {
     let alive = true
+    setFleetCost((c) => ({ ...c, loading: true, failed: false }))
     loadGovernedCostSplit({ country: activeCountry })
-      .then(r => { if (alive) setFleetTyreCost(r?.tyre ?? null) })
-      .catch(() => { if (alive) setFleetTyreCost(null) })
+      .then((r) => {
+        if (!alive) return
+        setFleetCost({ loading: false, tyre: r?.tyre ?? null, blended: Boolean(r?.blended), failed: false, window: r?.window || null })
+      })
+      .catch(() => { if (alive) setFleetCost({ loading: false, tyre: null, blended: false, failed: true, window: null }) })
     return () => { alive = false }
   }, [activeCountry])
 
-  // ── Unique filter values ───────────────────────────────────────────────────
-  const uniqueSites = useMemo(() => {
-    const s = new Set(records.map(r => r.site).filter(Boolean))
-    return [...s].sort()
-  }, [records])
+  const fleetTyreCost = fleetCost.blended || fleetCost.failed ? null : fleetCost.tyre
 
   // ── Filtered records ───────────────────────────────────────────────────────
-  const filteredRecords = useMemo(() => {
-    return filterByPeriodValue(records, period, 'issue_date').filter(r => {
-      if (siteFilter !== 'all' && r.site !== siteFilter) return false
-      if (positionFilter !== 'all') {
-        const norm = normalizePosition(r.position)
-        if (norm !== positionFilter) return false
-      }
-      return true
-    })
-  }, [records, period, siteFilter, positionFilter])
+  const uniqueSites = useMemo(() => uniqueSitesOf(records), [records])
 
-  const filteredActions = useMemo(() => {
-    return actions.filter(a => {
-      if (siteFilter !== 'all' && a.site !== siteFilter) return false
-      return true
-    })
-  }, [actions, siteFilter])
+  const filteredRecords = useMemo(
+    () => filterVendorRecords(filterByPeriodValue(records, period, 'issue_date'), { site: siteFilter, position: positionFilter }, normalizePosition),
+    [records, period, siteFilter, positionFilter],
+  )
 
-  // ── Vendor computations ───────────────────────────────────────────────────
+  const filteredActions = useMemo(
+    () => actions.filter((a) => siteFilter === 'all' || a.site === siteFilter),
+    [actions, siteFilter],
+  )
+
+  // ── Vendor computations (kpiEngine maths, engine ranking) ─────────────────
   const rawVendors = useMemo(() => computeVendorPerformance(filteredRecords), [filteredRecords])
-
-  const vendors = useMemo(() => {
-    const filtered = rawVendors.filter(v => v.count >= minRecords)
-    const maxScore = Math.max(...filtered.map(v => v.score), 1)
-    return filtered.map((v, i) => ({
-      ...v,
-      rank: i + 1,
-      displayScore: maxScore > 0 ? (v.score / maxScore) * 100 : 0,
-    }))
-  }, [rawVendors, minRecords])
-
+  const vendors = useMemo(() => rankByScore(rawVendors, minRecords, 'count'), [rawVendors, minRecords])
   const cpkByBrand = useMemo(() => computeCpkByBrand(filteredRecords), [filteredRecords])
   const avgTyreLife = useMemo(() => computeAvgTyreLife(filteredRecords), [filteredRecords])
-  const failureRate = useMemo(() => computeFailureRate(filteredRecords), [filteredRecords])
-
-  // Enrich vendors with additional computed fields
-  const enrichedVendors = useMemo(() => {
-    const cpkMap = {}
-    cpkByBrand.forEach(b => { cpkMap[b.brand] = b })
-    const lifeMap = {}
-    avgTyreLife.byBrand.forEach(b => { lifeMap[b.brand] = b })
-    const failMap = {}
-    failureRate.byBrand.forEach(b => { failMap[b.brand] = b })
-
-    return vendors.map(v => ({
-      ...v,
-      medianCpk: cpkMap[v.brand]?.medianCpk ?? null,
-      minCpk: cpkMap[v.brand]?.minCpk ?? null,
-      maxCpk: cpkMap[v.brand]?.maxCpk ?? null,
-      avgLifeKm: lifeMap[v.brand]?.avgKm ?? v.avgLife ?? null,
-    }))
-  }, [vendors, cpkByBrand, avgTyreLife, failureRate])
-
-  // Sorted vendor table
-  const sortedVendors = useMemo(() => {
-    return [...enrichedVendors].sort((a, b) => {
-      const aVal = a[sortCol] ?? 0
-      const bVal = b[sortCol] ?? 0
-      return sortDir === 'desc' ? bVal - aVal : aVal - bVal
-    })
-  }, [enrichedVendors, sortCol, sortDir])
+  const enrichedVendors = useMemo(() => enrichVendors(vendors, cpkByBrand, avgTyreLife), [vendors, cpkByBrand, avgTyreLife])
 
   // ── Workshop computations ─────────────────────────────────────────────────
   const rawWorkshop = useMemo(
     () => computeWorkshopPerformance(filteredRecords, filteredActions),
     [filteredRecords, filteredActions]
   )
+  const workshops = useMemo(() => rankByScore(rawWorkshop.bySite, minRecords, 'recordCount'), [rawWorkshop, minRecords])
+  const siteActionCounts = useMemo(() => actionsBySite(filteredActions), [filteredActions])
 
-  const workshops = useMemo(() => {
-    const filtered = rawWorkshop.bySite.filter(w => w.recordCount >= minRecords)
-    const maxScore = Math.max(...filtered.map(w => w.score), 1)
-    return filtered.map((w, i) => ({
-      ...w,
-      rank: i + 1,
-      displayScore: maxScore > 0 ? (w.score / maxScore) * 100 : 0,
-    }))
-  }, [rawWorkshop, minRecords])
+  // ── Executive summary + KPIs ──────────────────────────────────────────────
+  const execSummary = useMemo(
+    () => buildExecSummary({ vendors: enrichedVendors, workshops, records: filteredRecords, fleetTyreCost }),
+    [enrichedVendors, workshops, filteredRecords, fleetTyreCost],
+  )
+  const kpi = useMemo(
+    () => vendorKpis({ records: filteredRecords, vendors: enrichedVendors, workshops, exec: execSummary }),
+    [filteredRecords, enrichedVendors, workshops, execSummary],
+  )
 
-  const sortedWorkshops = useMemo(() => {
-    return [...workshops].sort((a, b) => {
-      const aVal = a[workshopSortCol] ?? 0
-      const bVal = b[workshopSortCol] ?? 0
-      return workshopSortDir === 'desc' ? bVal - aVal : aVal - bVal
-    })
-  }, [workshops, workshopSortCol, workshopSortDir])
-
-  // ── Executive summary ──────────────────────────────────────────────────────
-  const execSummary = useMemo(() => {
-    const qualified = enrichedVendors.filter(v => v.count >= 10)
-    const bestBrand = qualified.length > 0
-      ? qualified.reduce((a, b) => (a.avgCpk ?? Infinity) < (b.avgCpk ?? Infinity) ? a : b)
-      : enrichedVendors[0] ?? null
-    const worstBrand = qualified.length > 0
-      ? qualified.reduce((a, b) => (a.avgCpk ?? 0) > (b.avgCpk ?? 0) ? a : b)
-      : enrichedVendors[enrichedVendors.length - 1] ?? null
-
-    const totalFleetInvestment = filteredRecords
-      .reduce((s, r) => s + (Number(r.cost_per_tyre) > 0 ? Number(r.cost_per_tyre) * (Number(r.qty) || 1) : 0), 0)
-
-    const bestSite = workshops.length > 0 ? workshops[0] : null
-    const worstSite = workshops.length > 1 ? workshops[workshops.length - 1] : null
-
-    const estAnnualSaving = (() => {
-      if (!bestBrand || !worstBrand || bestBrand.brand === worstBrand.brand) return 0
-      if (!bestBrand.avgCpk || !worstBrand.avgCpk) return 0
-      const totalKm = filteredRecords
-        .filter(r => r.km_at_fitment && r.km_at_removal && r.km_at_removal > r.km_at_fitment)
-        .reduce((s, r) => s + (Number(r.km_at_removal) - Number(r.km_at_fitment)), 0)
-      return (worstBrand.avgCpk - bestBrand.avgCpk) * totalKm
-    })()
-
-    return { bestBrand, worstBrand, totalFleetInvestment, bestSite, worstSite, estAnnualSaving }
-  }, [enrichedVendors, workshops, filteredRecords])
-
-  // ── Procurement recommendations ───────────────────────────────────────────
+  // ── Procurement recommendations (engine descriptors, translated here) ─────
   const recommendations = useMemo(() => {
-    const recs = []
-
-    if (enrichedVendors.length >= 2) {
-      const worst = enrichedVendors[enrichedVendors.length - 1]
-      const best = enrichedVendors[0]
-      if (worst && worst.avgCpk > 2.0) {
-        recs.push({
-          priority: 'Critical',
-          icon: 'cost',
-          text: t('vendorintel.recommendations.messages.highestCpk', { brand: worst.brand, cpk: fmtCpk(worst.avgCpk, activeCurrency) }),
-        })
-      }
-      if (best && best.avgCpk != null && best.avgCpk <= 1.0 && best.count >= 5) {
-        recs.push({
-          priority: 'High',
-          icon: 'value',
-          text: t('vendorintel.recommendations.messages.bestValue', { brand: best.brand, cpk: fmtCpk(best.avgCpk, activeCurrency), count: best.count }),
-        })
-      }
-    }
-
-    const highFailBrands = enrichedVendors.filter(v => v.failureRate > 0.25 && v.count >= 5)
-    highFailBrands.slice(0, 2).forEach(v => {
-      recs.push({
-        priority: 'High',
-        icon: 'failure',
-        text: t('vendorintel.recommendations.messages.highFailure', { brand: v.brand, pct: fmtPct(v.failureRate) }),
-      })
+    const fmt = { cpk: (v) => fmtCpk(v, activeCurrency), ratio: fmtPct, number: (v) => fmtNum(v), km: fmtKm }
+    return buildRecommendations(enrichedVendors, workshops).map((r) => {
+      const vars = { ...r.vars }
+      for (const [k, kind] of Object.entries(r.format || {})) vars[k] = fmt[kind](vars[k])
+      return { priority: r.priority, icon: r.icon, text: t(`vendorintel.recommendations.messages.${r.key}`, vars) }
     })
-
-    const highScrapBrands = enrichedVendors.filter(v => v.scrapRate > 0.20 && v.count >= 5)
-    highScrapBrands.slice(0, 1).forEach(v => {
-      recs.push({
-        priority: 'High',
-        icon: 'scrap',
-        text: t('vendorintel.recommendations.messages.highScrap', { brand: v.brand, pct: fmtPct(v.scrapRate) }),
-      })
-    })
-
-    if (workshops.length > 0) {
-      const worstSite = [...workshops].sort((a, b) => b.highRiskPct - a.highRiskPct)[0]
-      if (worstSite && worstSite.highRiskPct > 25) {
-        recs.push({
-          priority: 'Critical',
-          icon: 'site',
-          text: t('vendorintel.recommendations.messages.worstSiteRisk', { site: worstSite.site, pct: fmtNum(worstSite.highRiskPct) }),
-        })
-      }
-
-      const zeroClose = workshops.filter(w => w.actionCloseRate === 0 && w.recordCount >= 5)
-      zeroClose.slice(0, 2).forEach(w => {
-        recs.push({
-          priority: 'Critical',
-          icon: 'action',
-          text: t('vendorintel.recommendations.messages.zeroCloseRate', { site: w.site }),
-        })
-      })
-
-      const slowClose = workshops.filter(w => w.actionCloseRate > 0 && w.actionCloseRate < 0.3)
-      slowClose.slice(0, 1).forEach(w => {
-        recs.push({
-          priority: 'Medium',
-          icon: 'action',
-          text: t('vendorintel.recommendations.messages.slowCloseRate', { site: w.site, pct: fmtPct(w.actionCloseRate) }),
-        })
-      })
-    }
-
-    if (enrichedVendors.length >= 3) {
-      const lifeSorted = [...enrichedVendors].filter(v => v.avgLifeKm).sort((a, b) => b.avgLifeKm - a.avgLifeKm)
-      if (lifeSorted.length > 0) {
-        recs.push({
-          priority: 'Medium',
-          icon: 'life',
-          text: t('vendorintel.recommendations.messages.longestLife', { brand: lifeSorted[0].brand, km: fmtKm(lifeSorted[0].avgLifeKm) }),
-        })
-      }
-    }
-
-    return recs.slice(0, 8)
   }, [enrichedVendors, workshops, activeCurrency, t])
 
   // ── Radar chart data ───────────────────────────────────────────────────────
   const radarData = useMemo(() => {
-    const top5 = enrichedVendors.slice(0, 5)
-    if (!top5.length) return null
-
-    const maxKm = Math.max(...top5.map(v => v.avgLifeKm ?? 0), 1)
-    const maxCount = Math.max(...top5.map(v => v.count), 1)
-    const maxCpk = Math.max(...top5.map(v => v.avgCpk ?? 0), 0.001)
-
+    const series = radarSeries(enrichedVendors)
+    if (!series.length) return null
     return {
       labels: [
         t('vendorintel.vendor.radarLabels.cpkEfficiency'), t('vendorintel.vendor.radarLabels.quality'),
         t('vendorintel.vendor.radarLabels.tyreLife'), t('vendorintel.vendor.radarLabels.lowScrap'),
         t('vendorintel.vendor.radarLabels.volume'),
       ],
-      datasets: top5.map((v, i) => {
-        const cpkEff = v.avgCpk != null ? Math.max(0, (1 - v.avgCpk / maxCpk)) * 100 : 0
-        const quality = (1 - (v.failureRate ?? 0)) * 100
-        const life = maxKm > 0 ? ((v.avgLifeKm ?? 0) / maxKm) * 100 : 0
-        const lowScrap = (1 - (v.scrapRate ?? 0)) * 100
-        const volume = (v.count / maxCount) * 100
-        return {
-          label: v.brand,
-          data: [cpkEff, quality, life, lowScrap, volume],
-          backgroundColor: BRAND_PALETTE[i % BRAND_PALETTE.length] + '33',
-          borderColor: BRAND_PALETTE[i % BRAND_PALETTE.length],
-          borderWidth: 2,
-          pointBackgroundColor: BRAND_PALETTE[i % BRAND_PALETTE.length],
-          pointRadius: 3,
-        }
-      }),
+      datasets: series.map((v, i) => ({
+        label: v.brand,
+        data: v.values,
+        backgroundColor: withAlpha(colorAt(i), 0.2),
+        borderColor: colorAt(i),
+        borderWidth: 2,
+        pointBackgroundColor: colorAt(i),
+        pointRadius: 3,
+      })),
     }
   }, [enrichedVendors, t])
 
@@ -517,7 +370,7 @@ export default function VendorIntelligence() {
       datasets: [{
         label: t('vendorintel.vendor.lifeDatasetLabel'),
         data: sorted.map(v => v.avgLifeKm),
-        backgroundColor: '#3b82f6',
+        backgroundColor: colorAt(0),
         borderRadius: 4,
       }],
     }
@@ -578,116 +431,152 @@ export default function VendorIntelligence() {
     }],
   }), [workshops, t])
 
-  // ── Sort handlers ─────────────────────────────────────────────────────────
-  function handleSort(col) {
-    if (sortCol === col) setSortDir(d => d === 'desc' ? 'asc' : 'desc')
-    else { setSortCol(col); setSortDir('desc') }
-  }
-
-  function handleWorkshopSort(col) {
-    if (workshopSortCol === col) setWorkshopSortDir(d => d === 'desc' ? 'asc' : 'desc')
-    else { setWorkshopSortCol(col); setWorkshopSortDir('desc') }
-  }
-
   // ── Export ────────────────────────────────────────────────────────────────
-  function handleExcelExport() {
-    const vendorRows = sortedVendors.map(v => ({
-      rank: v.rank,
-      brand: v.brand,
-      records: v.count,
-      validCpk: v.validCount,
-      avgCpk: v.avgCpk != null ? v.avgCpk.toFixed(4) : '',
-      medianCpk: v.medianCpk != null ? v.medianCpk.toFixed(4) : '',
-      avgLifeKm: v.avgLifeKm != null ? Math.round(v.avgLifeKm) : '',
-      failureRate: v.failureRate != null ? (v.failureRate * 100).toFixed(1) + '%' : '',
-      scrapRate: v.scrapRate != null ? (v.scrapRate * 100).toFixed(1) + '%' : '',
-      totalCost: Math.round(v.totalCost),
-      score: v.displayScore.toFixed(1),
-    }))
-    exportToExcel(
-      vendorRows,
-      ['rank', 'brand', 'records', 'validCpk', 'avgCpk', 'medianCpk', 'avgLifeKm', 'failureRate', 'scrapRate', 'totalCost', 'score'],
-      ['Rank', 'Brand', 'Records', 'Valid (CPK)', 'Avg CPK', 'Median CPK', 'Avg Life (km)', 'Failure Rate', 'Scrap Rate', 'Total Cost', 'Score'],
-      'vendor-intelligence',
-      'Brand Performance',
-    )
-    setTimeout(() => {
-      const workshopRows = sortedWorkshops.map(w => ({
-        rank: w.rank,
-        site: w.site,
-        records: w.recordCount,
-        highRiskPct: fmtNum(w.highRiskPct) + '%',
-        avgCpk: w.avgCpk != null ? w.avgCpk.toFixed(4) : '',
-        avgCost: Math.round(w.avgCost),
-        actionCloseRate: fmtPct(w.actionCloseRate),
-        score: w.displayScore.toFixed(1),
-      }))
-      exportToExcel(
-        workshopRows,
-        ['rank', 'site', 'records', 'highRiskPct', 'avgCpk', 'avgCost', 'actionCloseRate', 'score'],
-        ['Rank', 'Site', 'Records', 'High Risk %', 'Avg CPK', 'Avg Cost', 'Close Rate', 'Score'],
-        'workshop-intelligence',
-        'Workshop Performance',
+  // Rank order (the score order the leaderboard shows). Every figure a row
+  // cannot measure exports blank, never a fabricated zero.
+  const vendorExportRows = useMemo(() => enrichedVendors.map(v => ({
+    rank: v.rank,
+    brand: v.brand,
+    records: v.count,
+    validCpk: v.validCount,
+    avgCpk: v.avgCpk != null ? v.avgCpk.toFixed(4) : '',
+    medianCpk: v.medianCpk != null ? v.medianCpk.toFixed(4) : '',
+    avgLifeKm: v.avgLifeKm != null ? Math.round(v.avgLifeKm) : '',
+    failureRate: v.failureRate != null ? (v.failureRate * 100).toFixed(1) + '%' : '',
+    scrapRate: v.scrapRate != null ? (v.scrapRate * 100).toFixed(1) + '%' : '',
+    totalCost: Number.isFinite(v.totalCost) ? Math.round(v.totalCost) : '',
+    score: v.displayScore.toFixed(1),
+  })), [enrichedVendors])
+
+  const workshopExportRows = useMemo(() => workshops.map(w => ({
+    rank: w.rank,
+    site: w.site,
+    records: w.recordCount,
+    highRiskPct: w.highRiskPct != null ? fmtNum(w.highRiskPct) + '%' : '',
+    avgCpk: w.avgCpk != null ? w.avgCpk.toFixed(4) : '',
+    avgCost: Number.isFinite(w.avgCost) ? Math.round(w.avgCost) : '',
+    actionsRaised: siteActionCounts.get(w.site) || 0,
+    actionCloseRate: w.actionCloseRate != null ? fmtPct(w.actionCloseRate) : '',
+    score: w.displayScore.toFixed(1),
+  })), [workshops, siteActionCounts])
+
+  async function handleExcelExport() {
+    setExportError('')
+    try {
+      await exportToExcel(
+        vendorExportRows,
+        ['rank', 'brand', 'records', 'validCpk', 'avgCpk', 'medianCpk', 'avgLifeKm', 'failureRate', 'scrapRate', 'totalCost', 'score'],
+        ['Rank', 'Brand', 'Records', 'Valid (CPK)', 'Avg CPK', 'Median CPK', 'Avg Life (km)', 'Failure Rate', 'Scrap Rate', 'Tyre record cost', 'Score'],
+        reportFileName('Vendor Intelligence Brands'),
+        'Brand Performance',
+        { currency: activeCurrency },
       )
-    }, 500)
+      if (workshopExportRows.length) {
+        await exportToExcel(
+          workshopExportRows,
+          ['rank', 'site', 'records', 'highRiskPct', 'avgCpk', 'avgCost', 'actionsRaised', 'actionCloseRate', 'score'],
+          ['Rank', 'Site', 'Records', 'High Risk %', 'Avg CPK', 'Avg Cost', 'Actions raised', 'Close Rate', 'Score'],
+          reportFileName('Vendor Intelligence Workshops'),
+          'Workshop Performance',
+          { currency: activeCurrency },
+        )
+      }
+    } catch (e) {
+      setExportError(toUserMessage(e, 'Could not export. Try again.'))
+    }
   }
 
-  function handlePdfExport() {
-    const vendorRows = sortedVendors.map(v => ({
-      rank: String(v.rank),
-      brand: v.brand,
-      records: String(v.count),
-      avgCpk: v.avgCpk != null ? fmtCpk(v.avgCpk, activeCurrency) : 'N/A',
-      avgLifeKm: fmtKm(v.avgLifeKm),
-      failureRate: fmtPct(v.failureRate),
-      scrapRate: fmtPct(v.scrapRate),
-      score: v.displayScore.toFixed(1),
-    }))
-    exportToPdf(
-      vendorRows,
-      [
-        { key: 'rank', header: 'Rank' },
-        { key: 'brand', header: 'Brand' },
-        { key: 'records', header: 'Records' },
-        { key: 'avgCpk', header: 'Avg CPK' },
-        { key: 'avgLifeKm', header: 'Avg Life' },
-        { key: 'failureRate', header: 'Failure Rate' },
-        { key: 'scrapRate', header: 'Scrap Rate' },
-        { key: 'score', header: 'Score' },
-      ],
-      'Vendor & Workshop Intelligence',
-      'vendor-intelligence',
-      'landscape',
-    )
+  async function handlePdfExport() {
+    setExportError('')
+    try {
+      const vendorRows = enrichedVendors.map(v => ({
+        rank: String(v.rank),
+        brand: v.brand,
+        records: String(v.count),
+        avgCpk: v.avgCpk != null ? fmtCpk(v.avgCpk, activeCurrency) : 'N/A',
+        avgLifeKm: fmtKm(v.avgLifeKm),
+        failureRate: fmtPct(v.failureRate),
+        scrapRate: fmtPct(v.scrapRate),
+        score: v.displayScore.toFixed(1),
+      }))
+      await exportToPdf(
+        vendorRows,
+        [
+          { key: 'rank', header: 'Rank' },
+          { key: 'brand', header: 'Brand' },
+          { key: 'records', header: 'Records' },
+          { key: 'avgCpk', header: 'Avg CPK' },
+          { key: 'avgLifeKm', header: 'Avg Life' },
+          { key: 'failureRate', header: 'Failure Rate' },
+          { key: 'scrapRate', header: 'Scrap Rate' },
+          { key: 'score', header: 'Score' },
+        ],
+        'Vendor and Workshop Intelligence',
+        reportFileName('Vendor Intelligence'),
+        'landscape',
+        '',
+        { currency: activeCurrency },
+      )
+    } catch (e) {
+      setExportError(toUserMessage(e, 'Could not export. Try again.'))
+    }
   }
 
-  // ── Sort indicator component ────────────────────────────────────────────
-  function SortIcon({ col, activeCol, dir }) {
-    if (col !== activeCol) return <Minus size={11} className="text-[var(--text-dim)] ml-0.5" />
-    return dir === 'desc'
-      ? <ChevronDown size={11} className="text-green-400 ml-0.5" />
-      : <ChevronUp size={11} className="text-green-400 ml-0.5" />
-  }
+  // ── Table columns (EnterpriseTable owns sorting, paging and search) ───────
+  const naText = t('vendorintel.na')
+  const vendorColumns = useMemo(() => [
+    { id: 'rank', header: t('vendorintel.vendor.columns.rank'), accessorFn: (v) => v.rank, cell: ({ row }) => <RankMark rank={row.original.rank} className="text-xs" /> },
+    { id: 'brand', header: t('vendorintel.vendor.columns.brand'), accessorFn: (v) => v.brand,
+      cell: ({ row }) => <span className="font-semibold text-[var(--text-primary)]">{row.original.brand}</span> },
+    { id: 'count', header: t('vendorintel.vendor.columns.records'), accessorFn: (v) => v.count, meta: { align: 'right' },
+      cell: ({ row }) => row.original.count.toLocaleString() },
+    { id: 'validCount', header: t('vendorintel.vendor.columns.validCpk'), accessorFn: (v) => v.validCount, meta: { align: 'right' } },
+    { id: 'avgCpk', header: t('vendorintel.vendor.columns.avgCpk'), accessorFn: (v) => v.avgCpk ?? -1, meta: { align: 'right' },
+      cell: ({ row }) => <span className={`font-semibold tabular-nums ${cpkColor(row.original.avgCpk)}`}>{row.original.avgCpk != null ? row.original.avgCpk.toFixed(4) : naText}</span> },
+    { id: 'medianCpk', header: t('vendorintel.vendor.columns.medianCpk'), accessorFn: (v) => v.medianCpk ?? -1, meta: { align: 'right' },
+      cell: ({ row }) => (row.original.medianCpk != null ? row.original.medianCpk.toFixed(4) : naText) },
+    { id: 'avgLifeKm', header: t('vendorintel.vendor.columns.avgLifeKm'), accessorFn: (v) => v.avgLifeKm ?? -1, meta: { align: 'right' },
+      cell: ({ row }) => (row.original.avgLifeKm != null && row.original.avgLifeKm > 0 ? Math.round(row.original.avgLifeKm).toLocaleString() : naText) },
+    { id: 'failureRate', header: t('vendorintel.vendor.columns.failureRate'), accessorFn: (v) => v.failureRate ?? -1, meta: { align: 'right' },
+      cell: ({ row }) => <span className={`font-semibold ${row.original.failureRate == null ? 'text-[var(--text-muted)]' : riskColor(row.original.failureRate * 100)}`}>{fmtPct(row.original.failureRate)}</span> },
+    { id: 'scrapRate', header: t('vendorintel.vendor.columns.scrapRate'), accessorFn: (v) => v.scrapRate ?? -1, meta: { align: 'right' },
+      cell: ({ row }) => {
+        const r = row.original.scrapRate
+        return <span className={`font-semibold ${r == null ? 'text-[var(--text-muted)]' : r > 0.20 ? 'text-red-400' : r > 0.10 ? 'text-yellow-400' : 'text-green-400'}`}>{fmtPct(r)}</span>
+      } },
+    { id: 'totalCost', header: t('vendorintel.vendor.columns.totalCost'), accessorFn: (v) => v.totalCost ?? 0, meta: { align: 'right' },
+      cell: ({ row }) => fmtCurrency(row.original.totalCost, activeCurrency) },
+    { id: 'displayScore', header: t('vendorintel.vendor.columns.score'), accessorFn: (v) => v.displayScore, meta: { align: 'right' },
+      cell: ({ row }) => <span className="font-bold text-sm text-[var(--text-primary)] tabular-nums">{row.original.displayScore.toFixed(0)}</span> },
+  ], [t, naText, activeCurrency])
 
-  function Th({ col, label, onSort, activeCol, dir, className = '' }) {
-    return (
-      <th
-        className={`table-header text-right py-2 px-3 cursor-pointer select-none hover:text-[var(--text-primary)] transition-colors ${className}`}
-        onClick={() => onSort(col)}
-      >
-        <span className="flex items-center justify-end gap-0.5">
-          {label}
-          <SortIcon col={col} activeCol={activeCol} dir={dir} />
-        </span>
-      </th>
-    )
-  }
+  const workshopColumns = useMemo(() => [
+    { id: 'rank', header: t('vendorintel.workshop.columns.rank'), accessorFn: (w) => w.rank, cell: ({ row }) => <RankMark rank={row.original.rank} className="text-xs" /> },
+    { id: 'site', header: t('vendorintel.workshop.columns.site'), accessorFn: (w) => w.site,
+      cell: ({ row }) => <span className="font-semibold text-[var(--text-primary)]">{row.original.site}</span> },
+    { id: 'recordCount', header: t('vendorintel.workshop.columns.records'), accessorFn: (w) => w.recordCount, meta: { align: 'right' },
+      cell: ({ row }) => row.original.recordCount.toLocaleString() },
+    { id: 'highRiskPct', header: t('vendorintel.workshop.columns.highRiskPct'), accessorFn: (w) => w.highRiskPct ?? -1, meta: { align: 'right' },
+      cell: ({ row }) => <span className={`font-semibold ${riskColor(row.original.highRiskPct)}`}>{fmtNum(row.original.highRiskPct)}%</span> },
+    { id: 'avgCpk', header: t('vendorintel.workshop.columns.avgCpk'), accessorFn: (w) => w.avgCpk ?? -1, meta: { align: 'right' },
+      cell: ({ row }) => <span className={`font-semibold tabular-nums ${cpkColor(row.original.avgCpk)}`}>{row.original.avgCpk != null ? row.original.avgCpk.toFixed(4) : naText}</span> },
+    { id: 'avgCost', header: t('vendorintel.workshop.columns.avgCost'), accessorFn: (w) => w.avgCost ?? 0, meta: { align: 'right' },
+      cell: ({ row }) => fmtCurrency(row.original.avgCost, activeCurrency) },
+    { id: 'actionsRaised', header: t('vendorintel.workshop.columns.actionsRaised'), accessorFn: (w) => siteActionCounts.get(w.site) || 0, meta: { align: 'right' } },
+    { id: 'actionCloseRate', header: t('vendorintel.workshop.columns.closeRatePct'), accessorFn: (w) => w.actionCloseRate ?? -1, meta: { align: 'right' },
+      cell: ({ row }) => {
+        const r = row.original.actionCloseRate
+        return <span className={`font-semibold ${r == null ? 'text-[var(--text-muted)]' : r >= 0.7 ? 'text-green-400' : r >= 0.4 ? 'text-yellow-400' : 'text-red-400'}`}>{fmtPct(r)}</span>
+      } },
+    { id: 'displayScore', header: t('vendorintel.workshop.columns.score'), accessorFn: (w) => w.displayScore, meta: { align: 'right' },
+      cell: ({ row }) => <span className="font-bold text-sm text-[var(--text-primary)] tabular-nums">{row.original.displayScore.toFixed(0)}</span> },
+  ], [t, naText, activeCurrency, siteActionCounts])
 
   // ── Loading / Error / Empty ───────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-72 gap-4 text-[var(--text-secondary)]">
-        <RefreshCw className="animate-spin text-green-500" size={36} />
+      <div role="status" aria-live="polite" className="flex flex-col items-center justify-center h-72 gap-4 text-[var(--text-secondary)]">
+        <RefreshCw className="animate-spin text-[var(--accent)]" size={36} aria-hidden="true" />
         <span className="text-sm">{t('vendorintel.loading')}</span>
       </div>
     )
@@ -695,13 +584,15 @@ export default function VendorIntelligence() {
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center h-72 gap-3 text-red-400">
-        <AlertTriangle size={36} />
-        <span className="text-sm font-medium">{error}</span>
+      <div role="alert" className="flex flex-col items-center justify-center h-72 gap-3 text-center">
+        <AlertTriangle size={36} className="text-red-400" aria-hidden="true" />
+        <span className="text-sm font-medium text-[var(--text-primary)]">{error}</span>
         <button
+          type="button"
           onClick={load}
-          className="px-4 py-2 bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-[var(--text-primary)] rounded-lg text-sm transition-colors"
+          className="btn-secondary min-h-[44px] px-4 text-sm inline-flex items-center gap-1.5"
         >
+          <RefreshCw size={14} aria-hidden="true" />
           {t('vendorintel.retry')}
         </button>
       </div>
@@ -720,24 +611,30 @@ export default function VendorIntelligence() {
         subtitle={t('vendorintel.subtitle')}
         icon={Trophy}
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={handleExcelExport}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-[var(--text-secondary)] rounded-lg text-xs transition-colors border border-[var(--border-bright)]"
+              type="button"
+              disabled={!enrichedVendors.length && !workshops.length}
+              className="btn-secondary min-h-[44px] inline-flex items-center gap-1.5 px-3 text-xs disabled:opacity-50"
             >
-              <Download size={13} /> {t('vendorintel.actions.excel')}
+              <Download size={13} aria-hidden="true" /> {t('vendorintel.actions.excel')}
             </button>
             <button
               onClick={handlePdfExport}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-[var(--text-secondary)] rounded-lg text-xs transition-colors border border-[var(--border-bright)]"
+              type="button"
+              disabled={!enrichedVendors.length && !workshops.length}
+              className="btn-secondary min-h-[44px] inline-flex items-center gap-1.5 px-3 text-xs disabled:opacity-50"
             >
-              <FileText size={13} /> {t('vendorintel.actions.pdf')}
+              <FileText size={13} aria-hidden="true" /> {t('vendorintel.actions.pdf')}
             </button>
             <button
               onClick={() => setEmailModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-[var(--text-secondary)] rounded-lg text-xs transition-colors border border-[var(--border-bright)]"
+              type="button"
+              disabled={!enrichedVendors.length && !workshops.length}
+              className="btn-secondary min-h-[44px] inline-flex items-center gap-1.5 px-3 text-xs disabled:opacity-50"
             >
-              <Mail size={13} /> {t('vendorintel.actions.emailReport')}
+              <Mail size={13} aria-hidden="true" /> {t('vendorintel.actions.emailReport')}
             </button>
           </div>
         }
@@ -749,11 +646,12 @@ export default function VendorIntelligence() {
         <PeriodFilter records={records} value={period} onChange={setPeriod} />
 
         {/* Divider */}
-        <div className="h-4 w-px bg-[var(--surface-3)]" />
+        <div className="hidden sm:block h-4 w-px bg-[var(--surface-3)]" aria-hidden="true" />
 
         {/* Site filter */}
         <select
-          className="bg-[var(--surface-2)] border border-[var(--border-bright)] text-[var(--text-secondary)] text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-green-600"
+          className="input text-xs min-h-[44px]"
+          aria-label="Site"
           value={siteFilter}
           onChange={e => setSiteFilter(e.target.value)}
         >
@@ -763,7 +661,8 @@ export default function VendorIntelligence() {
 
         {/* Position filter */}
         <select
-          className="bg-[var(--surface-2)] border border-[var(--border-bright)] text-[var(--text-secondary)] text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-green-600"
+          className="input text-xs min-h-[44px]"
+          aria-label="Tyre position"
           value={positionFilter}
           onChange={e => setPositionFilter(e.target.value)}
         >
@@ -774,22 +673,24 @@ export default function VendorIntelligence() {
 
         {/* Min records */}
         <div className="flex items-center gap-2">
-          <span className="text-xs text-[var(--text-muted)]">{t('vendorintel.filters.minRecords')}</span>
+          <label htmlFor="vi-min-records" className="text-xs text-[var(--text-muted)]">{t('vendorintel.filters.minRecords')}</label>
           <input
+            id="vi-min-records"
             type="number"
             min={1}
             max={50}
             value={minRecords}
             onChange={e => setMinRecords(Math.max(1, Number(e.target.value)))}
-            className="bg-[var(--surface-2)] border border-[var(--border-bright)] text-[var(--text-secondary)] text-xs rounded-lg px-2 py-1.5 w-16 focus:outline-none focus:border-green-600"
+            className="input text-xs w-20 min-h-[44px]"
           />
         </div>
 
         <button
+          type="button"
           onClick={load}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-lg text-xs transition-colors"
+          className="btn-secondary min-h-[44px] inline-flex items-center gap-1.5 px-3 text-xs"
         >
-          <RefreshCw size={12} /> {t('vendorintel.filters.refresh')}
+          <RefreshCw size={12} aria-hidden="true" /> {t('vendorintel.filters.refresh')}
         </button>
 
         <span className="ml-auto text-xs text-[var(--text-muted)]">{t('vendorintel.filters.recordsCount', { count: filteredRecords.length.toLocaleString() })}</span>
@@ -802,27 +703,70 @@ export default function VendorIntelligence() {
         </div>
       )}
 
+      {exportError && (
+        <div role="alert" className="flex items-start gap-2 rounded-xl border border-red-800/50 bg-red-900/10 px-4 py-2.5 text-xs text-[var(--text-primary)]">
+          <AlertTriangle size={14} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" /> {exportError}
+        </div>
+      )}
+
+      {/* ─── KPI strip ───────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
+        {[
+          { label: 'Records analysed', value: kpi.records.toLocaleString(), sub: `${periodLabel(period)}`, icon: Package },
+          { label: 'Brands ranked', value: kpi.brands.toLocaleString(), sub: `Min ${minRecords} records each`, icon: Award },
+          { label: 'Sites ranked', value: kpi.sites.toLocaleString(), sub: `${filteredActions.length.toLocaleString()} corrective actions`, icon: Building2 },
+          { label: 'Weighted avg CPK', value: kpi.weightedCpk != null ? fmtCpk(kpi.weightedCpk, activeCurrency) : 'N/A', sub: kpi.weightedCpk != null ? 'Per km, across ranked brands' : 'No measured km and cost yet', icon: Target },
+          {
+            label: 'Fleet tyre spend',
+            value: fleetCost.loading ? 'Loading' : fleetTyreCost != null ? fmtCurrency(fleetTyreCost, activeCurrency) : 'N/A',
+            sub: fleetCost.blended ? 'Pick one country: currencies differ' : fleetCost.failed ? 'Expense grid unavailable' : 'Expense grid, last 12 months',
+            icon: DollarSign,
+          },
+          {
+            label: 'Potential saving',
+            value: kpi.estAnnualSaving != null && kpi.estAnnualSaving > 0 ? fmtCurrency(kpi.estAnnualSaving, activeCurrency) : 'N/A',
+            sub: kpi.estAnnualSaving != null && kpi.estAnnualSaving > 0 ? 'Worst to best CPK brand' : 'Needs two brands with CPK',
+            icon: TrendingDown,
+          },
+        ].map(({ label, value, sub, icon: Icon }) => (
+          <div key={label} className="card !p-4">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs text-[var(--text-muted)]">{label}</p>
+              <Icon size={15} className="text-[var(--text-muted)]" aria-hidden="true" />
+            </div>
+            <p className="text-lg font-bold text-[var(--text-primary)] mt-1 tabular-nums truncate" title={value}>{value}</p>
+            <p className="text-[11px] text-[var(--text-muted)] mt-0.5 truncate" title={sub}>{sub}</p>
+          </div>
+        ))}
+      </div>
+
       {/* ─── Section Toggle ──────────────────────────────────────────────────── */}
-      <div className="flex gap-1 p-1 bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl w-fit">
+      <div role="tablist" aria-label="Vendor intelligence sections" className="flex flex-wrap gap-1 p-1 bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl w-fit max-w-full">
         <button
+          type="button"
+          role="tab"
+          aria-selected={activeSection === 'vendors'}
           onClick={() => setActiveSection('vendors')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+          className={`flex items-center gap-2 px-4 min-h-[44px] rounded-lg text-sm font-medium transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] ${
             activeSection === 'vendors'
-              ? 'bg-green-600 text-white shadow-sm'
+              ? 'bg-[var(--accent)] text-white shadow-sm'
               : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
           }`}
         >
-          <Package size={15} /> {t('vendorintel.sections.brandRankings')}
+          <Package size={15} aria-hidden="true" /> {t('vendorintel.sections.brandRankings')}
         </button>
         <button
+          type="button"
+          role="tab"
+          aria-selected={activeSection === 'workshops'}
           onClick={() => setActiveSection('workshops')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+          className={`flex items-center gap-2 px-4 min-h-[44px] rounded-lg text-sm font-medium transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] ${
             activeSection === 'workshops'
-              ? 'bg-green-600 text-white shadow-sm'
+              ? 'bg-[var(--accent)] text-white shadow-sm'
               : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
           }`}
         >
-          <Building2 size={15} /> {t('vendorintel.sections.workshopPerformance')}
+          <Building2 size={15} aria-hidden="true" /> {t('vendorintel.sections.workshopPerformance')}
         </button>
       </div>
 
@@ -866,7 +810,7 @@ export default function VendorIntelligence() {
                         >
                           <div className="flex items-start justify-between mb-3">
                             <div className="flex items-center gap-2">
-                              <span className="text-2xl">{badge.icon ?? `#${v.rank}`}</span>
+                              <Medal size={24} className={badge.text} aria-hidden="true" />
                               <div>
                                 <p className={`text-xs font-bold uppercase tracking-wider ${badge.text}`}>{t('vendorintel.vendor.rank', { rank: v.rank })}</p>
                                 <p className="text-lg font-bold text-[var(--text-primary)]">{v.brand}</p>
@@ -913,7 +857,7 @@ export default function VendorIntelligence() {
                                   {fmtPct(v.failureRate)}
                                 </span>
                               </div>
-                              {miniBar(100 - (v.failureRate ?? 0) * 100, '#3b82f6')}
+                              {miniBar(100 - (v.failureRate ?? 0) * 100, colorAt(0))}
                             </div>
                             {/* Avg Life */}
                             <div>
@@ -947,41 +891,8 @@ export default function VendorIntelligence() {
                     })}
                   </div>
 
-                  {/* Remaining brands compact table */}
                   {enrichedVendors.length > 3 && (
-                    <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-4 overflow-x-auto">
-                      <p className="text-xs font-semibold text-[var(--text-secondary)] mb-3">{t('vendorintel.vendor.remainingBrands')}</p>
-                      <table className="min-w-full text-xs">
-                        <thead>
-                          <tr>
-                            <th className="text-left py-2 pr-4 text-[var(--text-muted)] font-medium">{t('vendorintel.vendor.columns.rank')}</th>
-                            <th className="text-left py-2 pr-4 text-[var(--text-muted)] font-medium">{t('vendorintel.vendor.columns.brand')}</th>
-                            <th className="text-right py-2 px-3 text-[var(--text-muted)] font-medium">{t('vendorintel.vendor.columns.records')}</th>
-                            <th className="text-right py-2 px-3 text-[var(--text-muted)] font-medium">{t('vendorintel.vendor.columns.avgCpk')}</th>
-                            <th className="text-right py-2 px-3 text-[var(--text-muted)] font-medium">{t('vendorintel.vendor.columns.failureRate')}</th>
-                            <th className="text-right py-2 px-3 text-[var(--text-muted)] font-medium">{t('vendorintel.vendor.columns.avgLife')}</th>
-                            <th className="text-right py-2 px-3 text-[var(--text-muted)] font-medium">{t('vendorintel.vendor.columns.score')}</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {enrichedVendors.slice(3).map((v, i) => (
-                            <tr key={v.brand} className={i % 2 === 0 ? '' : 'bg-white/[0.02]'}>
-                              <td className="py-2 pr-4 text-[var(--text-muted)]">#{v.rank}</td>
-                              <td className="py-2 pr-4 font-medium text-[var(--text-primary)]">{v.brand}</td>
-                              <td className="py-2 px-3 text-right text-[var(--text-secondary)]">{v.count}</td>
-                              <td className={`py-2 px-3 text-right font-semibold ${cpkColor(v.avgCpk)}`}>
-                                {v.avgCpk != null ? v.avgCpk.toFixed(4) : t('vendorintel.na')}
-                              </td>
-                              <td className={`py-2 px-3 text-right font-semibold ${riskColor((v.failureRate ?? 0) * 100)}`}>
-                                {fmtPct(v.failureRate)}
-                              </td>
-                              <td className="py-2 px-3 text-right text-[var(--text-secondary)]">{fmtKm(v.avgLifeKm)}</td>
-                              <td className="py-2 px-3 text-right text-green-400 font-semibold">{v.displayScore.toFixed(0)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                    <p className="text-xs text-[var(--text-muted)]">All {enrichedVendors.length} ranked brands are in the Brand Performance table below.</p>
                   )}
                 </>
               )}
@@ -1024,8 +935,8 @@ export default function VendorIntelligence() {
                               legend: { display: false },
                               tooltip: {
                                 backgroundColor: CHART_THEME.tooltipBg,
-                                titleColor:'var(--panel-ink)',
-                                bodyColor: '#d1d5db',
+                                titleColor: CHART_THEME.tooltipTitle,
+                                bodyColor: CHART_THEME.tooltipBody,
                                 padding: 10,
                                 cornerRadius: 8,
                                 callbacks: {
@@ -1057,8 +968,8 @@ export default function VendorIntelligence() {
                               legend: { display: false },
                               tooltip: {
                                 backgroundColor: CHART_THEME.tooltipBg,
-                                titleColor:'var(--panel-ink)',
-                                bodyColor: '#d1d5db',
+                                titleColor: CHART_THEME.tooltipTitle,
+                                bodyColor: CHART_THEME.tooltipBody,
                                 padding: 10,
                                 cornerRadius: 8,
                                 callbacks: {
@@ -1104,8 +1015,8 @@ export default function VendorIntelligence() {
                               legend: { display: false },
                               tooltip: {
                                 backgroundColor: CHART_THEME.tooltipBg,
-                                titleColor:'var(--panel-ink)',
-                                bodyColor: '#d1d5db',
+                                titleColor: CHART_THEME.tooltipTitle,
+                                bodyColor: CHART_THEME.tooltipBody,
                                 padding: 10,
                                 cornerRadius: 8,
                                 callbacks: {
@@ -1144,67 +1055,24 @@ export default function VendorIntelligence() {
             {hasVendorData && (
               <div>
                 <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
-                  <Target size={15} className="text-green-400" /> {t('vendorintel.vendor.fullTableTitle')}
+                  <Target size={15} className="text-[var(--accent)]" aria-hidden="true" /> {t('vendorintel.vendor.fullTableTitle')}
                 </h2>
-                <p className="text-[11px] text-[var(--text-muted)] mb-3">Cost by vendor is from tyre records; the authoritative fleet total is from the expense grid.</p>
-                <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-4 overflow-x-auto">
-                  <table className="min-w-full text-xs">
-                    <thead>
-                      <tr className="border-b border-[var(--border-dim)]">
-                        <th className="text-left py-2.5 pr-4 text-[var(--text-muted)] font-medium">{t('vendorintel.vendor.columns.rank')}</th>
-                        <th className="text-left py-2.5 pr-4 text-[var(--text-muted)] font-medium">{t('vendorintel.vendor.columns.brand')}</th>
-                        <Th col="count" label={t('vendorintel.vendor.columns.records')} onSort={handleSort} activeCol={sortCol} dir={sortDir} />
-                        <Th col="validCount" label={t('vendorintel.vendor.columns.validCpk')} onSort={handleSort} activeCol={sortCol} dir={sortDir} />
-                        <Th col="avgCpk" label={t('vendorintel.vendor.columns.avgCpk')} onSort={handleSort} activeCol={sortCol} dir={sortDir} />
-                        <Th col="medianCpk" label={t('vendorintel.vendor.columns.medianCpk')} onSort={handleSort} activeCol={sortCol} dir={sortDir} />
-                        <Th col="avgLifeKm" label={t('vendorintel.vendor.columns.avgLifeKm')} onSort={handleSort} activeCol={sortCol} dir={sortDir} />
-                        <Th col="failureRate" label={t('vendorintel.vendor.columns.failureRate')} onSort={handleSort} activeCol={sortCol} dir={sortDir} />
-                        <Th col="scrapRate" label={t('vendorintel.vendor.columns.scrapRate')} onSort={handleSort} activeCol={sortCol} dir={sortDir} />
-                        <Th col="totalCost" label={t('vendorintel.vendor.columns.totalCost')} onSort={handleSort} activeCol={sortCol} dir={sortDir} />
-                        <Th col="displayScore" label={t('vendorintel.vendor.columns.score')} onSort={handleSort} activeCol={sortCol} dir={sortDir} />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {sortedVendors.map((v, i) => {
-                        const badge = rankBadgeStyle(v.rank)
-                        return (
-                          <tr key={v.brand} className={i % 2 === 0 ? '' : 'bg-white/[0.02]'}>
-                            <td className="py-2.5 pr-4">
-                              <span className={`text-xs font-bold ${badge.text}`}>
-                                {badge.icon ? badge.icon : `#${v.rank}`}
-                              </span>
-                            </td>
-                            <td className="py-2.5 pr-4 font-semibold text-[var(--text-primary)]">{v.brand}</td>
-                            <td className="py-2.5 px-3 text-right text-[var(--text-secondary)]">{v.count.toLocaleString()}</td>
-                            <td className="py-2.5 px-3 text-right text-[var(--text-secondary)]">{v.validCount}</td>
-                            <td className={`py-2.5 px-3 text-right font-semibold ${cpkColor(v.avgCpk)}`}>
-                              {v.avgCpk != null ? v.avgCpk.toFixed(4) : t('vendorintel.na')}
-                            </td>
-                            <td className="py-2.5 px-3 text-right text-[var(--text-secondary)]">
-                              {v.medianCpk != null ? v.medianCpk.toFixed(4) : t('vendorintel.na')}
-                            </td>
-                            <td className="py-2.5 px-3 text-right text-[var(--text-secondary)]">
-                              {v.avgLifeKm != null && v.avgLifeKm > 0 ? Math.round(v.avgLifeKm).toLocaleString() : t('vendorintel.na')}
-                            </td>
-                            <td className={`py-2.5 px-3 text-right font-semibold ${riskColor((v.failureRate ?? 0) * 100)}`}>
-                              {fmtPct(v.failureRate)}
-                            </td>
-                            <td className={`py-2.5 px-3 text-right font-semibold ${(v.scrapRate ?? 0) > 0.20 ? 'text-red-400' : (v.scrapRate ?? 0) > 0.10 ? 'text-yellow-400' : 'text-green-400'}`}>
-                              {fmtPct(v.scrapRate)}
-                            </td>
-                            <td className="py-2.5 px-3 text-right text-[var(--text-secondary)]">
-                              {fmtCurrency(v.totalCost, activeCurrency)}
-                            </td>
-                            <td className="py-2.5 px-3 text-right">
-                              <span className={`font-bold text-sm ${v.rank <= 3 ? badge.text : 'text-[var(--text-secondary)]'}`}>
-                                {v.displayScore.toFixed(0)}
-                              </span>
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
+                <p className="text-[11px] text-[var(--text-muted)] mb-3 flex items-start gap-1.5">
+                  <Info size={12} className="mt-0.5 shrink-0" aria-hidden="true" />
+                  Cost by brand is from tyre records (unpriced tyres add nothing). The authoritative fleet tyre spend is the expense grid figure in the KPI strip.
+                </p>
+                <div className="card !p-3">
+                  <EnterpriseTable
+                    columns={vendorColumns}
+                    data={enrichedVendors}
+                    getRowId={(v) => v.brand}
+                    enableColumnFilters={false}
+                    enableExport={false}
+                    searchPlaceholder="Search brands"
+                    initialPageSize={25}
+                    viewKey="vendor-intel-brands"
+                    emptyMessage={t('vendorintel.vendor.emptyThreshold', { minRecords })}
+                  />
                 </div>
               </div>
             )}
@@ -1250,7 +1118,7 @@ export default function VendorIntelligence() {
                         >
                           <div className="flex items-start justify-between mb-3">
                             <div className="flex items-center gap-2">
-                              <span className="text-2xl">{badge.icon ?? `#${w.rank}`}</span>
+                              <Medal size={24} className={badge.text} aria-hidden="true" />
                               <div>
                                 <p className={`text-xs font-bold uppercase tracking-wider ${badge.text}`}>{t('vendorintel.vendor.rank', { rank: w.rank })}</p>
                                 <p className="text-base font-bold text-[var(--text-primary)]">{w.site}</p>
@@ -1308,7 +1176,7 @@ export default function VendorIntelligence() {
                                   {fmtPct(w.actionCloseRate)}
                                 </span>
                               </div>
-                              {miniBar((w.actionCloseRate ?? 0) * 100, '#3b82f6')}
+                              {miniBar((w.actionCloseRate ?? 0) * 100, colorAt(0))}
                             </div>
                           </div>
                         </motion.div>
@@ -1316,43 +1184,8 @@ export default function VendorIntelligence() {
                     })}
                   </div>
 
-                  {/* Remaining workshops compact */}
                   {workshops.length > 3 && (
-                    <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-4 overflow-x-auto">
-                      <p className="text-xs font-semibold text-[var(--text-secondary)] mb-3">{t('vendorintel.workshop.allSitesTitle')}</p>
-                      <table className="min-w-full text-xs">
-                        <thead>
-                          <tr>
-                            <th className="text-left py-2 pr-4 text-[var(--text-muted)] font-medium">{t('vendorintel.workshop.columns.rank')}</th>
-                            <th className="text-left py-2 pr-4 text-[var(--text-muted)] font-medium">{t('vendorintel.workshop.columns.site')}</th>
-                            <th className="text-right py-2 px-3 text-[var(--text-muted)] font-medium">{t('vendorintel.workshop.columns.records')}</th>
-                            <th className="text-right py-2 px-3 text-[var(--text-muted)] font-medium">{t('vendorintel.workshop.columns.highRiskPct')}</th>
-                            <th className="text-right py-2 px-3 text-[var(--text-muted)] font-medium">{t('vendorintel.workshop.columns.avgCpk')}</th>
-                            <th className="text-right py-2 px-3 text-[var(--text-muted)] font-medium">{t('vendorintel.workshop.columns.closeRate')}</th>
-                            <th className="text-right py-2 px-3 text-[var(--text-muted)] font-medium">{t('vendorintel.workshop.columns.score')}</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {workshops.slice(3).map((w, i) => (
-                            <tr key={w.site} className={i % 2 === 0 ? '' : 'bg-white/[0.02]'}>
-                              <td className="py-2 pr-4 text-[var(--text-muted)]">#{w.rank}</td>
-                              <td className="py-2 pr-4 font-medium text-[var(--text-primary)]">{w.site}</td>
-                              <td className="py-2 px-3 text-right text-[var(--text-secondary)]">{w.recordCount}</td>
-                              <td className={`py-2 px-3 text-right font-semibold ${riskColor(w.highRiskPct)}`}>
-                                {fmtNum(w.highRiskPct)}%
-                              </td>
-                              <td className={`py-2 px-3 text-right font-semibold ${cpkColor(w.avgCpk)}`}>
-                                {w.avgCpk != null ? w.avgCpk.toFixed(4) : t('vendorintel.na')}
-                              </td>
-                              <td className={`py-2 px-3 text-right font-semibold ${(w.actionCloseRate ?? 0) >= 0.7 ? 'text-green-400' : (w.actionCloseRate ?? 0) >= 0.4 ? 'text-yellow-400' : 'text-red-400'}`}>
-                                {fmtPct(w.actionCloseRate)}
-                              </td>
-                              <td className="py-2 px-3 text-right text-green-400 font-semibold">{w.displayScore.toFixed(0)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                    <p className="text-xs text-[var(--text-muted)]">All {workshops.length} ranked sites are in the Workshop Performance table below.</p>
                   )}
                 </>
               )}
@@ -1379,8 +1212,8 @@ export default function VendorIntelligence() {
                             legend: { display: false },
                             tooltip: {
                               backgroundColor: CHART_THEME.tooltipBg,
-                              titleColor:'var(--panel-ink)',
-                              bodyColor: '#d1d5db',
+                              titleColor: CHART_THEME.tooltipTitle,
+                              bodyColor: CHART_THEME.tooltipBody,
                               padding: 10,
                               cornerRadius: 8,
                               callbacks: { label: ctx => `${Number(ctx.raw).toFixed(1)}%` },
@@ -1408,8 +1241,8 @@ export default function VendorIntelligence() {
                             legend: { display: false },
                             tooltip: {
                               backgroundColor: CHART_THEME.tooltipBg,
-                              titleColor:'var(--panel-ink)',
-                              bodyColor: '#d1d5db',
+                              titleColor: CHART_THEME.tooltipTitle,
+                              bodyColor: CHART_THEME.tooltipBody,
                               padding: 10,
                               cornerRadius: 8,
                               callbacks: { label: ctx => `${activeCurrency} ${Number(ctx.raw).toFixed(4)}/km` },
@@ -1438,8 +1271,8 @@ export default function VendorIntelligence() {
                           legend: { display: false },
                           tooltip: {
                             backgroundColor: CHART_THEME.tooltipBg,
-                            titleColor:'var(--panel-ink)',
-                            bodyColor: '#d1d5db',
+                            titleColor: CHART_THEME.tooltipTitle,
+                            bodyColor: CHART_THEME.tooltipBody,
                             padding: 10,
                             cornerRadius: 8,
                             callbacks: { label: ctx => `${Number(ctx.raw).toFixed(1)}%` },
@@ -1465,59 +1298,21 @@ export default function VendorIntelligence() {
             {hasWorkshopData && (
               <div>
                 <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
-                  <Target size={15} className="text-green-400" /> {t('vendorintel.workshop.tableTitle')}
+                  <Target size={15} className="text-[var(--accent)]" aria-hidden="true" /> {t('vendorintel.workshop.tableTitle')}
                 </h2>
-                <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-4 overflow-x-auto">
-                  <table className="min-w-full text-xs">
-                    <thead>
-                      <tr className="border-b border-[var(--border-dim)]">
-                        <th className="text-left py-2.5 pr-4 text-[var(--text-muted)] font-medium">{t('vendorintel.workshop.columns.rank')}</th>
-                        <th className="text-left py-2.5 pr-4 text-[var(--text-muted)] font-medium">{t('vendorintel.workshop.columns.site')}</th>
-                        <Th col="recordCount" label={t('vendorintel.workshop.columns.records')} onSort={handleWorkshopSort} activeCol={workshopSortCol} dir={workshopSortDir} />
-                        <Th col="highRiskPct" label={t('vendorintel.workshop.columns.highRiskPct')} onSort={handleWorkshopSort} activeCol={workshopSortCol} dir={workshopSortDir} />
-                        <Th col="avgCpk" label={t('vendorintel.workshop.columns.avgCpk')} onSort={handleWorkshopSort} activeCol={workshopSortCol} dir={workshopSortDir} />
-                        <Th col="avgCost" label={t('vendorintel.workshop.columns.avgCost')} onSort={handleWorkshopSort} activeCol={workshopSortCol} dir={workshopSortDir} />
-                        <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">{t('vendorintel.workshop.columns.actionsRaised')}</th>
-                        <Th col="actionCloseRate" label={t('vendorintel.workshop.columns.closeRatePct')} onSort={handleWorkshopSort} activeCol={workshopSortCol} dir={workshopSortDir} />
-                        <Th col="displayScore" label={t('vendorintel.workshop.columns.score')} onSort={handleWorkshopSort} activeCol={workshopSortCol} dir={workshopSortDir} />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {sortedWorkshops.map((w, i) => {
-                        const badge = rankBadgeStyle(w.rank)
-                        const siteActions = actions.filter(a => a.site === w.site)
-                        return (
-                          <tr key={w.site} className={i % 2 === 0 ? '' : 'bg-white/[0.02]'}>
-                            <td className="py-2.5 pr-4">
-                              <span className={`text-xs font-bold ${badge.text}`}>
-                                {badge.icon ?? `#${w.rank}`}
-                              </span>
-                            </td>
-                            <td className="py-2.5 pr-4 font-semibold text-[var(--text-primary)]">{w.site}</td>
-                            <td className="py-2.5 px-3 text-right text-[var(--text-secondary)]">{w.recordCount.toLocaleString()}</td>
-                            <td className={`py-2.5 px-3 text-right font-semibold ${riskColor(w.highRiskPct)}`}>
-                              {fmtNum(w.highRiskPct)}%
-                            </td>
-                            <td className={`py-2.5 px-3 text-right font-semibold ${cpkColor(w.avgCpk)}`}>
-                              {w.avgCpk != null ? w.avgCpk.toFixed(4) : t('vendorintel.na')}
-                            </td>
-                            <td className="py-2.5 px-3 text-right text-[var(--text-secondary)]">
-                              {fmtCurrency(w.avgCost, activeCurrency)}
-                            </td>
-                            <td className="py-2.5 px-3 text-right text-[var(--text-secondary)]">{siteActions.length}</td>
-                            <td className={`py-2.5 px-3 text-right font-semibold ${(w.actionCloseRate ?? 0) >= 0.7 ? 'text-green-400' : (w.actionCloseRate ?? 0) >= 0.4 ? 'text-yellow-400' : 'text-red-400'}`}>
-                              {fmtPct(w.actionCloseRate)}
-                            </td>
-                            <td className="py-2.5 px-3 text-right">
-                              <span className={`font-bold text-sm ${w.rank <= 3 ? badge.text : 'text-[var(--text-secondary)]'}`}>
-                                {w.displayScore.toFixed(0)}
-                              </span>
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
+                <p className="text-[11px] text-[var(--text-muted)] mb-3">Every site at or above the minimum record count. Average cost per tyre is from tyre records; the fleet total is from the expense grid.</p>
+                <div className="card !p-3">
+                  <EnterpriseTable
+                    columns={workshopColumns}
+                    data={workshops}
+                    getRowId={(w) => w.site}
+                    enableColumnFilters={false}
+                    enableExport={false}
+                    searchPlaceholder="Search sites"
+                    initialPageSize={25}
+                    viewKey="vendor-intel-workshops"
+                    emptyMessage={t('vendorintel.workshop.emptyThreshold', { minRecords })}
+                  />
                 </div>
               </div>
             )}
@@ -1589,7 +1384,7 @@ export default function VendorIntelligence() {
                 <TrendingDown size={14} className="text-green-400" />
                 <span className="text-xs font-semibold text-green-300">{t('vendorintel.execSummary.bestValueBrand')}</span>
               </div>
-              <p className="text-lg font-black text-[var(--text-primary)]">{execSummary.bestBrand?.brand ?? '-'}</p>
+              <p className="text-lg font-black text-[var(--text-primary)]">{execSummary.bestBrand?.brand ?? 'N/A'}</p>
               <p className="text-xs text-[var(--text-secondary)] mt-0.5">
                 {execSummary.bestBrand?.avgCpk != null
                   ? t('vendorintel.execSummary.avgCpkPerKm', { cpk: fmtCpk(execSummary.bestBrand.avgCpk, activeCurrency) })
@@ -1604,7 +1399,7 @@ export default function VendorIntelligence() {
                 <TrendingUp size={14} className="text-red-400" />
                 <span className="text-xs font-semibold text-red-300">{t('vendorintel.execSummary.highestCostBrand')}</span>
               </div>
-              <p className="text-lg font-black text-[var(--text-primary)]">{execSummary.worstBrand?.brand ?? '-'}</p>
+              <p className="text-lg font-black text-[var(--text-primary)]">{execSummary.worstBrand?.brand ?? 'N/A'}</p>
               <p className="text-xs text-[var(--text-secondary)] mt-0.5">
                 {execSummary.worstBrand?.avgCpk != null
                   ? t('vendorintel.execSummary.avgCpkPerKm', { cpk: fmtCpk(execSummary.worstBrand.avgCpk, activeCurrency) })
@@ -1620,13 +1415,13 @@ export default function VendorIntelligence() {
                 <span className="text-xs font-semibold text-yellow-300">{t('vendorintel.execSummary.potentialAnnualSaving')}</span>
               </div>
               <p className="text-lg font-black text-yellow-300">
-                {execSummary.estAnnualSaving > 0
+                {(execSummary.estAnnualSaving ?? 0) > 0
                   ? fmtCurrency(execSummary.estAnnualSaving, activeCurrency)
-                  : '-'}
+                  : 'N/A'}
               </p>
               <p className="text-[11px] text-yellow-400/70 mt-1">
-                {execSummary.estAnnualSaving > 0
-                  ? t('vendorintel.execSummary.savingSwitch', { worst: execSummary.worstBrand?.brand ?? '-', best: execSummary.bestBrand?.brand ?? '-' })
+                {(execSummary.estAnnualSaving ?? 0) > 0
+                  ? t('vendorintel.execSummary.savingSwitch', { worst: execSummary.worstBrand?.brand ?? 'N/A', best: execSummary.bestBrand?.brand ?? 'N/A' })
                   : t('vendorintel.execSummary.savingUnlock')}
               </p>
             </div>
@@ -1637,7 +1432,7 @@ export default function VendorIntelligence() {
                 <CheckCircle size={14} className="text-blue-400" />
                 <span className="text-xs font-semibold text-blue-300">{t('vendorintel.execSummary.bestPerformingSite')}</span>
               </div>
-              <p className="text-lg font-black text-[var(--text-primary)]">{execSummary.bestSite?.site ?? '-'}</p>
+              <p className="text-lg font-black text-[var(--text-primary)]">{execSummary.bestSite?.site ?? 'N/A'}</p>
               <p className="text-xs text-[var(--text-secondary)] mt-0.5">
                 {execSummary.bestSite
                   ? t('vendorintel.execSummary.siteScoreLine', { score: execSummary.bestSite.displayScore.toFixed(0), pct: fmtNum(execSummary.bestSite.highRiskPct) })
@@ -1652,7 +1447,7 @@ export default function VendorIntelligence() {
                 <AlertTriangle size={14} className="text-orange-400" />
                 <span className="text-xs font-semibold text-orange-300">{t('vendorintel.execSummary.siteNeedingAttention')}</span>
               </div>
-              <p className="text-lg font-black text-[var(--text-primary)]">{execSummary.worstSite?.site ?? '-'}</p>
+              <p className="text-lg font-black text-[var(--text-primary)]">{execSummary.worstSite?.site ?? 'N/A'}</p>
               <p className="text-xs text-[var(--text-secondary)] mt-0.5">
                 {execSummary.worstSite
                   ? t('vendorintel.execSummary.siteScoreLine', { score: execSummary.worstSite.displayScore.toFixed(0), pct: fmtNum(execSummary.worstSite.highRiskPct) })
@@ -1667,9 +1462,13 @@ export default function VendorIntelligence() {
                 <Wrench size={14} className="text-purple-400" />
                 <span className="text-xs font-semibold text-purple-300">{t('vendorintel.execSummary.totalFleetInvestment')}</span>
               </div>
-              <p className="text-lg font-black text-[var(--text-primary)]">{fmtCurrency(fleetTyreCost != null ? fleetTyreCost : execSummary.totalFleetInvestment, activeCurrency)}</p>
+              <p className="text-lg font-black text-[var(--text-primary)]">{fleetTyreCost != null ? fmtCurrency(fleetTyreCost, activeCurrency) : 'N/A'}</p>
               <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                {t('vendorintel.execSummary.acrossRecords', { count: filteredRecords.filter(r => Number(r.cost_per_tyre) > 0).length.toLocaleString() })}
+                {fleetCost.blended
+                  ? 'Choose one country: the expense grid reports each country in its own currency.'
+                  : fleetCost.failed
+                    ? 'The expense grid could not be read.'
+                    : 'From the classified expense grid, last 12 months, all sites.'}
               </p>
               <p className="text-[11px] text-purple-400/70 mt-1">
                 {enrichedVendors.length > 0 ? t('vendorintel.execSummary.brandsTracked', { count: enrichedVendors.length }) : t('vendorintel.execSummary.noBrandData')}
@@ -1685,7 +1484,7 @@ export default function VendorIntelligence() {
         onClose={() => setEmailModalOpen(false)}
         reportTitle="Vendor & Workshop Intelligence Report"
         pdfColumns={['Rank', 'Brand', 'Records', 'Avg CPK', 'Avg Life', 'Failure Rate', 'Scrap Rate', 'Score']}
-        pdfRows={sortedVendors.map(v => [
+        pdfRows={enrichedVendors.map(v => [
           String(v.rank),
           v.brand,
           String(v.count),
@@ -1697,12 +1496,12 @@ export default function VendorIntelligence() {
         ])}
         kpiSummary={{
           'Total Brands Tracked': String(enrichedVendors.length),
-          'Best Value Brand': execSummary.bestBrand?.brand ?? '-',
-          'Best Brand CPK': execSummary.bestBrand?.avgCpk != null ? fmtCpk(execSummary.bestBrand.avgCpk, activeCurrency) : '-',
-          'Highest Cost Brand': execSummary.worstBrand?.brand ?? '-',
-          'Total Fleet Investment': fmtCurrency(fleetTyreCost != null ? fleetTyreCost : execSummary.totalFleetInvestment, activeCurrency),
-          'Potential Annual Saving': execSummary.estAnnualSaving > 0 ? fmtCurrency(execSummary.estAnnualSaving, activeCurrency) : '-',
-          'Best Performing Site': execSummary.bestSite?.site ?? '-',
+          'Best Value Brand': execSummary.bestBrand?.brand ?? 'N/A',
+          'Best Brand CPK': execSummary.bestBrand?.avgCpk != null ? fmtCpk(execSummary.bestBrand.avgCpk, activeCurrency) : 'N/A',
+          'Highest Cost Brand': execSummary.worstBrand?.brand ?? 'N/A',
+          'Fleet Tyre Spend (expense grid, 12 months)': fleetTyreCost != null ? fmtCurrency(fleetTyreCost, activeCurrency) : 'N/A',
+          'Potential Annual Saving': (execSummary.estAnnualSaving ?? 0) > 0 ? fmtCurrency(execSummary.estAnnualSaving, activeCurrency) : 'N/A',
+          'Best Performing Site': execSummary.bestSite?.site ?? 'N/A',
           'Total Records Analysed': String(filteredRecords.length),
         }}
         period={`Period: ${periodLabel(period)}`}

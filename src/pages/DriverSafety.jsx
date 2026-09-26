@@ -1,15 +1,16 @@
 /**
- * DriverSafety (route /driver-safety) — Driver Safety Events. Captures
+ * DriverSafety (route /driver-safety) - Driver Safety Events. Captures
  * telematics driver-behaviour events (harsh braking / acceleration / cornering,
  * speeding, overspeed, idling, fatigue) per asset and driver, then scores each
  * driver on risk. Driver conduct drives tyre wear, fuel burn and accident
  * exposure, so every event is org-isolated and country-scoped.
  *
- * Runs on the new `driver_safety_events` table (V170). Real data, KPI tiles,
- * per-driver risk scorecard, create/edit modal, filters, search, delete confirm,
- * Excel/PDF export, and loading/empty/error states throughout. The KPI summary,
- * scorecard and event-type roll-ups live in the pure `src/lib/driverSafety.js`
- * helpers.
+ * Runs on the `driver_safety_events` table (V170). The scoring maths lives in
+ * `src/lib/driverSafety.js`; page-level shaping (filters, trip utilisation,
+ * composite band merge, KPI + export shaping) lives in the pure
+ * `src/lib/driverSafetyAnalytics.js`. Every figure is from real rows: no
+ * synthetic trend, no invented utilisation, and a failed read is shown as a
+ * failure with Retry, never as an empty register.
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
@@ -20,11 +21,12 @@ import { Line } from 'react-chartjs-2'
 import {
   ShieldAlert, ShieldCheck, Users, Gauge, AlertTriangle, Search, X, Filter,
   FileSpreadsheet, FileText, Plus, Pencil, Trash2, ListChecks, Award,
-  Wrench, GraduationCap, TrendingUp, Activity,
+  Wrench, GraduationCap, TrendingUp, Activity, RefreshCw, Percent,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import Card, { CardHeader } from '../components/ui/Card'
 import Modal from '../components/ui/Modal'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import EmailPdfButton from '../components/EmailPdfButton'
 import { useSettings } from '../contexts/SettingsContext'
 import {
@@ -33,12 +35,17 @@ import {
 } from '../lib/api/driverSafety'
 import {
   summariseSafety, driverScorecard, byEventType,
-  weightedDriverScorecard, driverTyreCorrelation, computeDriverSafetyBand,
+  weightedDriverScorecard, driverTyreCorrelation,
   coachingQueue, weeklyEventTrend,
 } from '../lib/driverSafety'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import {
+  EVENT_TYPES, EVENT_TYPE_LABEL, SEVERITIES,
+  filterEventsBase, countryOptionsFor, bandScorecard, safetyKpiValues,
+  eventExportRows, correlationExportRows, scorecardExportRows,
+} from '../lib/driverSafetyAnalytics'
+import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
+import { colorAt, withAlpha } from '../lib/reportColors'
 import { toUserMessage } from '../lib/safeError'
-import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 import { isMissingRelation } from '../lib/api/_client'
 
 ChartJS.register(
@@ -72,6 +79,7 @@ const BAND_TONE = {
   unknown: 'text-[var(--text-muted)] bg-[var(--input-bg)] border-[var(--input-border)]',
 }
 const BAND_LABEL = {
+  good: 'Good', watch: 'Watch', coach: 'Coach',
   top_performer: 'Top performer', steady: 'Steady', coaching: 'Coaching',
   risk: 'Safety risk', inactive: 'Inactive', unknown: 'No activity',
 }
@@ -83,6 +91,8 @@ const CATEGORY_LABEL = {
 
 const pct = (v) => (v == null ? 'N/A' : `${Math.round(v * 1000) / 10}%`)
 const kmFmt = (v) => (v == null || !Number.isFinite(v) ? 'N/A' : `${Math.round(v).toLocaleString()} km`)
+const num = (v) => (v == null || v === '' ? 'N/A' : Number(v).toLocaleString())
+const kpiText = (v) => (v == null ? 'N/A' : Number(v).toLocaleString())
 
 const EMPTY_FORM = {
   asset_no: '', driver_name: '', event_type: '', severity: '', event_at: '',
@@ -90,26 +100,15 @@ const EMPTY_FORM = {
   notes: '',
 }
 
-const EVENT_TYPES = [
-  { value: 'harsh_brake', label: 'Harsh braking' },
-  { value: 'harsh_accel', label: 'Harsh acceleration' },
-  { value: 'harsh_corner', label: 'Harsh cornering' },
-  { value: 'speeding', label: 'Speeding' },
-  { value: 'overspeed', label: 'Overspeed' },
-  { value: 'idling', label: 'Excessive idling' },
-  { value: 'fatigue', label: 'Fatigue' },
-  { value: 'other', label: 'Other' },
-]
-const EVENT_TYPE_LABEL = Object.fromEntries(EVENT_TYPES.map((t) => [t.value, t.label]))
-const SEVERITIES = ['low', 'medium', 'high']
-
 const SEVERITY_TONE = {
   high: 'text-red-400 bg-red-900/20 border border-red-800/50',
   medium: 'text-amber-400 bg-amber-900/20 border border-amber-800/50',
   low: 'text-green-400 bg-green-900/20 border border-green-800/50',
 }
 
-const num = (v) => (v == null || v === '' ? 'N/A' : Number(v).toLocaleString())
+const EVENT_EXPORT_COLS = ['asset_no', 'driver_name', 'event_type', 'severity', 'event_at', 'location', 'speed_kmh', 'speed_limit_kmh', 'g_force', 'penalty_points', 'notes']
+const EVENT_EXPORT_HEADERS = ['Asset', 'Driver', 'Event type', 'Severity', 'Event at', 'Location', 'Speed (km/h)', 'Speed limit', 'G-force', 'Penalty points', 'Notes']
+const EVENT_PDF_COLS = EVENT_EXPORT_COLS.map((k, i) => ({ key: k, header: EVENT_EXPORT_HEADERS[i] }))
 
 function fmtDateTime(v) {
   if (!v) return 'N/A'
@@ -123,6 +122,42 @@ function scoreTone(score) {
   return 'text-red-400'
 }
 
+/** A settled side-read: rows on success, null + message on failure. */
+function settled(result, fallbackMsg) {
+  if (result.status === 'fulfilled') return { rows: Array.isArray(result.value) ? result.value : [], error: '' }
+  return { rows: null, error: toUserMessage(result.reason, fallbackMsg) }
+}
+
+function SectionHeader({ icon: Icon, title, hint, action }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-[var(--input-border)]">
+      <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
+        <Icon size={15} aria-hidden="true" /> {title}
+      </h3>
+      <div className="flex items-center gap-2">
+        {hint && <span className="text-xs text-[var(--text-muted)]">{hint}</span>}
+        {action}
+      </div>
+    </div>
+  )
+}
+
+function ErrorPanel({ title, message, onRetry }) {
+  return (
+    <div role="alert" className="flex flex-wrap items-start gap-3 px-4 py-4">
+      <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
+      <div className="flex-1 min-w-[200px]">
+        <p className="text-sm font-medium text-[var(--text-primary)]">{title}</p>
+        <p className="text-sm text-[var(--text-muted)] mt-0.5">{message}</p>
+      </div>
+      {onRetry && (
+        <button type="button" onClick={onRetry} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]">
+          <RefreshCw size={14} aria-hidden="true" /> Retry
+        </button>
+      )}
+    </div>
+  )
+}
 
 export default function DriverSafety() {
   const { activeCountry } = useSettings()
@@ -131,6 +166,9 @@ export default function DriverSafety() {
   const [tyreRecords, setTyreRecords] = useState(null)
   const [trips, setTrips] = useState(null)
   const [error, setError] = useState('')
+  const [loadFailed, setLoadFailed] = useState(false)
+  const [tyreError, setTyreError] = useState('')
+  const [tripError, setTripError] = useState('')
   const [notProvisioned, setNotProvisioned] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [updatedAt, setUpdatedAt] = useState(null)
@@ -149,149 +187,88 @@ export default function DriverSafety() {
   const [deleting, setDeleting] = useState(false)
 
   const load = useCallback(async () => {
-    setRefreshing(true); setError(''); setNotProvisioned(false)
-    try {
-      // Events are the primary source; tyre_records + trips enrich the
-      // Scorecards / Tyre-correlation tabs and degrade to [] independently so a
-      // missing side-table never blocks the core event log.
-      const [data, tyres, trps] = await Promise.all([
-        listDriverSafetyEvents({ country: activeCountry }),
-        listDriverTyreRecords({ country: activeCountry }).catch(() => []),
-        listDriverTrips({ country: activeCountry }).catch(() => []),
-      ])
-      setRows(Array.isArray(data) ? data : [])
-      setTyreRecords(Array.isArray(tyres) ? tyres : [])
-      setTrips(Array.isArray(trps) ? trps : [])
+    setRefreshing(true); setError(''); setLoadFailed(false); setNotProvisioned(false)
+    setTyreError(''); setTripError('')
+    // Events are the primary source; tyre_records + trips enrich the Scorecards
+    // and Tyre-correlation tabs. Each side-read is settled independently so a
+    // failure there never blocks the event log, AND is reported as a failure
+    // instead of silently reading as "no data".
+    const [ev, ty, tr] = await Promise.allSettled([
+      listDriverSafetyEvents({ country: activeCountry }),
+      listDriverTyreRecords({ country: activeCountry }),
+      listDriverTrips({ country: activeCountry }),
+    ])
+    if (ev.status === 'fulfilled') {
+      setRows(Array.isArray(ev.value) ? ev.value : [])
       setUpdatedAt(new Date())
-    } catch (err) {
-      if (isMissingRelation(err)) setNotProvisioned(true)
-      else setError(toUserMessage(err, 'Could not load driver safety events.'))
-      setRows([]); setTyreRecords([]); setTrips([])
-    } finally {
-      setRefreshing(false)
+    } else if (isMissingRelation(ev.reason)) {
+      setNotProvisioned(true); setRows([])
+    } else {
+      setError(toUserMessage(ev.reason, 'Could not load driver safety events.'))
+      setLoadFailed(true); setRows([])
     }
+    const tyres = settled(ty, 'Could not load tyre records for the correlation.')
+    setTyreRecords(tyres.rows); setTyreError(tyres.error)
+    const trps = settled(tr, 'Could not load trips, so utilisation is unavailable.')
+    setTrips(trps.rows); setTripError(trps.error)
+    setRefreshing(false)
   }, [activeCountry])
 
   useEffect(() => { load() }, [load])
 
   /**
    * THE ROWS EVERY FILTER EXCEPT THE EVENT-TYPE ONE LEAVES.
-   *
-   * Split out because the "Events by type" breakdown has to hold its OWN
-   * dimension out. Computed over the already-type-filtered rows it collapses to
-   * a single chip the moment a type is picked, which is the one thing that card
-   * exists to let you compare. Country, severity and the search box narrow every
-   * surface on the page alike.
+   * The "Events by type" breakdown holds its OWN dimension out, or it collapses
+   * to a single chip the moment a type is picked.
    */
-  const filteredBase = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return (rows || []).filter((r) => {
-      if (countryFilter && r.country !== countryFilter) return false
-      if (severityFilter && r.severity !== severityFilter) return false
-      if (q) {
-        const hay = `${r.asset_no || ''} ${r.driver_name || ''} ${r.location || ''} ${r.notes || ''}`.toLowerCase()
-        if (!hay.includes(q)) return false
-      }
-      return true
-    })
-  }, [rows, countryFilter, severityFilter, search])
+  const filteredBase = useMemo(
+    () => filterEventsBase(rows || [], { country: countryFilter, severity: severityFilter, search }),
+    [rows, countryFilter, severityFilter, search],
+  )
 
-  // The event log, and the population every KPI/scorecard/trend on this page is
-  // computed over. Before this they read `rows`, so filtering to one country or
-  // one severity left the four tiles stating fleet-wide totals directly above a
-  // caption reading "12 of 407".
+  // The event log, and the population every KPI/scorecard/trend is computed over.
   const filtered = useMemo(
     () => (typeFilter ? filteredBase.filter((r) => r.event_type === typeFilter) : filteredBase),
     [filteredBase, typeFilter],
   )
 
-  // Is the page showing a NARROWED set? Drives the caption under the tiles.
   const scopeActive = !!(countryFilter || typeFilter || severityFilter || search.trim())
 
   const summary = useMemo(() => summariseSafety(filtered), [filtered])
   const scorecard = useMemo(() => driverScorecard(filtered), [filtered])
-  // Holds out the event-type filter - see filteredBase.
   const eventTypes = useMemo(() => byEventType(filteredBase), [filteredBase])
 
-  // ── Deepened engine derivations ──────────────────────────────────────────
   const weighted = useMemo(() => weightedDriverScorecard(filtered), [filtered])
   const correlation = useMemo(() => driverTyreCorrelation(tyreRecords || []), [tyreRecords])
   const trend = useMemo(() => weeklyEventTrend(filtered), [filtered])
-
-  // Per-driver km from trips → utilisation input for the composite band.
-  const tripKmByDriver = useMemo(() => {
-    const m = new Map()
-    for (const t of trips || []) {
-      const d = (t.driver_name || '').trim()
-      if (!d) continue
-      const km = Number(t.distance_km) || 0
-      m.set(d, (m.get(d) || 0) + km)
-    }
-    return m
-  }, [trips])
-  const tripCountByDriver = useMemo(() => {
-    const m = new Map()
-    for (const t of trips || []) {
-      const d = (t.driver_name || '').trim()
-      if (!d) continue
-      m.set(d, (m.get(d) || 0) + 1)
-    }
-    return m
-  }, [trips])
-
-  // Merge weighted score + trips utilisation into the composite band per driver.
-  const bandedScorecard = useMemo(() => {
-    const fleetKm = [...tripKmByDriver.values()].filter((v) => v > 0)
-    const maxKm = fleetKm.length ? Math.max(...fleetKm) : 0
-    return (weighted || []).map((d) => {
-      const km = tripKmByDriver.get(d.driver_name) || 0
-      const tripCount = tripCountByDriver.get(d.driver_name) || 0
-      const harshEvents = ['harsh_brake', 'harsh_accel', 'harsh_corner']
-        .reduce((acc, c) => acc + (d.categoryRisk?.[c] ? 1 : 0), 0)
-      // Utilisation = this driver's km share of the busiest driver (0–100).
-      const utilization = maxKm > 0 && km > 0 ? Math.round((km / maxKm) * 100) : null
-      const composite = computeDriverSafetyBand({
-        behavior: d.score, utilization, km, trips: tripCount, harshEvents,
-      })
-      return { ...d, km, tripCount, composite }
-    })
-  }, [weighted, tripKmByDriver, tripCountByDriver])
-
+  const bandedScorecard = useMemo(() => bandScorecard(weighted, trips || []), [weighted, trips])
   const coaching = useMemo(() => coachingQueue(weighted || []), [weighted])
+  const countryOptions = useMemo(() => countryOptionsFor(rows || []), [rows])
 
-  const countryOptions = useMemo(
-    () => [...new Set((rows || []).map((r) => r.country).filter(Boolean))].sort(),
-    [rows],
-  )
+  const loaded = rows !== null && !loadFailed && !notProvisioned
+  const kv = safetyKpiValues(summary, { loaded, coachingCount: loaded ? coaching.length : null })
 
-  // ── KPIs ─────────────────────────────────────────────────────────────────
   const kpis = [
-    { label: 'Events logged', value: summary.totalEvents, icon: ShieldAlert, tone: 'text-[var(--text-primary)]' },
-    { label: 'High-severity', value: summary.highSeverityCount, icon: AlertTriangle, tone: 'text-red-400' },
-    { label: 'Drivers tracked', value: summary.distinctDrivers, icon: Users, tone: 'text-sky-400' },
-    { label: 'Penalty points', value: Math.round(summary.totalPenaltyPoints).toLocaleString(), icon: Gauge, tone: 'text-amber-400' },
+    { label: 'Events logged', value: kpiText(kv.events), icon: ShieldAlert, tone: 'text-[var(--text-primary)]' },
+    { label: 'High severity', value: kpiText(kv.high), icon: AlertTriangle, tone: 'text-red-400' },
+    { label: 'High severity share', value: pct(kv.highShare), icon: Percent, tone: 'text-amber-400' },
+    { label: 'Drivers tracked', value: kpiText(kv.drivers), icon: Users, tone: 'text-sky-400' },
+    { label: 'Penalty points', value: kpiText(kv.penalty), icon: Gauge, tone: 'text-amber-400' },
+    { label: 'Drivers to coach', value: kpiText(kv.coaching), icon: GraduationCap, tone: 'text-[var(--text-primary)]' },
   ]
 
-  // ── Export ───────────────────────────────────────────────────────────────
-  const EXPORT_COLS = ['asset_no', 'driver_name', 'event_type', 'severity', 'event_at', 'location', 'speed_kmh', 'speed_limit_kmh', 'g_force', 'penalty_points', 'notes']
-  const EXPORT_HEADERS = ['Asset', 'Driver', 'Event type', 'Severity', 'Event at', 'Location', 'Speed (km/h)', 'Speed limit', 'G-force', 'Penalty points', 'Notes']
-  // Paged, not capped: this table used to render filtered.slice(0, 500) with no
-  // way to reach row 501. The exports below still cover `filtered` in full.
-  const pager = usePagedRows(filtered)
+  const exportRows = useMemo(() => eventExportRows(filtered), [filtered])
+  const fileBase = reportFileName('Driver Safety Events')
 
-  const exportRows = filtered.map((r) => ({
-    asset_no: r.asset_no || '', driver_name: r.driver_name || '',
-    event_type: EVENT_TYPE_LABEL[r.event_type] || r.event_type || '',
-    severity: r.severity || '', event_at: r.event_at || '', location: r.location || '',
-    speed_kmh: r.speed_kmh ?? '', speed_limit_kmh: r.speed_limit_kmh ?? '',
-    g_force: r.g_force ?? '', penalty_points: r.penalty_points ?? '', notes: r.notes || '',
-  }))
+  const runExport = async (fn) => {
+    try { await fn() } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) }
+  }
 
   // ── Modal ────────────────────────────────────────────────────────────────
   const openCreate = () => {
     setEditing(null); setForm(EMPTY_FORM); setFormError(''); setShowModal(true)
   }
-  const openEdit = (r) => {
+  const openEdit = useCallback((r) => {
     setEditing(r)
     setForm({
       asset_no: r.asset_no || '', driver_name: r.driver_name || '',
@@ -302,10 +279,8 @@ export default function DriverSafety() {
       penalty_points: r.penalty_points ?? '', notes: r.notes || '',
     })
     setFormError(''); setShowModal(true)
-  }
+  }, [])
   const closeModal = () => { if (!saving) { setShowModal(false); setEditing(null) } }
-  // One guarded close for Escape, the backdrop and Modal's X, matching what the
-  // legacy overlay guarded on its backdrop.
   const closeDelete = () => { if (!deleting) setConfirmDelete(null) }
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
 
@@ -347,6 +322,64 @@ export default function DriverSafety() {
   const clearFilters = () => { setCountryFilter(''); setTypeFilter(''); setSeverityFilter(''); setSearch('') }
   const hasFilters = countryFilter || typeFilter || severityFilter || search
 
+  // ── Table columns ────────────────────────────────────────────────────────
+  const riskColumns = useMemo(() => [
+    { id: 'driver_name', header: 'Driver', accessorFn: (d) => d.driver_name,
+      cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{row.original.driver_name}</span> },
+    { id: 'events', header: 'Events', accessorFn: (d) => d.events, meta: { align: 'right' } },
+    { id: 'penaltyPoints', header: 'Penalty points', accessorFn: (d) => Math.round(d.penaltyPoints), meta: { align: 'right' },
+      cell: ({ row }) => Math.round(row.original.penaltyPoints).toLocaleString() },
+    { id: 'safetyScore', header: 'Safety score', accessorFn: (d) => Math.round(d.safetyScore),
+      cell: ({ row }) => {
+        const s = row.original.safetyScore
+        return (
+          <div className="flex items-center gap-2">
+            <span className={`font-bold ${scoreTone(s)}`}>{Math.round(s)}</span>
+            <div className="h-1.5 w-24 rounded-full bg-[var(--input-bg)] overflow-hidden" aria-hidden="true">
+              <div className={`h-full ${s >= 85 ? 'bg-green-500' : s >= 60 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${Math.max(4, s)}%` }} />
+            </div>
+          </div>
+        )
+      } },
+  ], [])
+
+  const eventColumns = useMemo(() => [
+    { id: 'driver_name', header: 'Driver', accessorFn: (r) => r.driver_name || '',
+      cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{row.original.driver_name || 'N/A'}</span> },
+    { id: 'asset_no', header: 'Asset', accessorFn: (r) => r.asset_no || '', cell: ({ row }) => row.original.asset_no || 'N/A' },
+    { id: 'event_type', header: 'Event', accessorFn: (r) => EVENT_TYPE_LABEL[r.event_type] || r.event_type || '',
+      cell: ({ row }) => <span className="whitespace-nowrap">{EVENT_TYPE_LABEL[row.original.event_type] || row.original.event_type || 'N/A'}</span> },
+    { id: 'severity', header: 'Severity', accessorFn: (r) => r.severity || '',
+      cell: ({ row }) => {
+        const s = row.original.severity
+        return s ? (
+          <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${SEVERITY_TONE[s] || 'text-[var(--text-secondary)]'}`}>
+            {s[0].toUpperCase() + s.slice(1)}
+          </span>
+        ) : 'N/A'
+      } },
+    { id: 'event_at', header: 'When', accessorFn: (r) => r.event_at || '',
+      cell: ({ row }) => <span className="whitespace-nowrap">{fmtDateTime(row.original.event_at)}</span> },
+    { id: 'speed', header: 'Speed', accessorFn: (r) => Number(r.speed_kmh) || 0, meta: { align: 'right', exportValue: (r) => r.speed_kmh ?? '' },
+      cell: ({ row }) => {
+        const r = row.original
+        return <span className="whitespace-nowrap">{num(r.speed_kmh)}{r.speed_limit_kmh != null && r.speed_limit_kmh !== '' ? ` / ${num(r.speed_limit_kmh)}` : ''}</span>
+      } },
+    { id: 'penalty_points', header: 'Penalty', accessorFn: (r) => Number(r.penalty_points) || 0, meta: { align: 'right', exportValue: (r) => r.penalty_points ?? '' },
+      cell: ({ row }) => <span className="font-semibold text-[var(--text-primary)]">{num(row.original.penalty_points)}</span> },
+    { id: 'actions', header: 'Actions', enableSorting: false, enableHiding: false, meta: { export: false, align: 'right' },
+      cell: ({ row }) => {
+        const r = row.original
+        const who = r.driver_name || r.asset_no || 'event'
+        return (
+          <div className="flex items-center justify-end gap-1">
+            <button type="button" onClick={(e) => { e.stopPropagation(); openEdit(r) }} className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]" aria-label={`Edit event for ${who}`}><Pencil size={14} aria-hidden="true" /></button>
+            <button type="button" onClick={(e) => { e.stopPropagation(); setConfirmDelete(r) }} className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]" aria-label={`Delete event for ${who}`}><Trash2 size={14} aria-hidden="true" /></button>
+          </div>
+        )
+      } },
+  ], [openEdit])
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -357,39 +390,35 @@ export default function DriverSafety() {
         refreshing={refreshing}
         updatedAt={updatedAt}
         actions={
-          <div className="flex items-center gap-2">
-            <button onClick={async () => { try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'driver_safety_events') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
-              <FileSpreadsheet size={14} /> Excel
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={() => runExport(() => exportToExcel(exportRows, EVENT_EXPORT_COLS, EVENT_EXPORT_HEADERS, fileBase))} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!filtered.length}>
+              <FileSpreadsheet size={14} aria-hidden="true" /> Excel
             </button>
-            <button onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Driver Safety Events', 'driver_safety_events', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
-              <FileText size={14} /> PDF
+            <button type="button" onClick={() => runExport(() => exportToPdf(exportRows, EVENT_PDF_COLS, 'Driver Safety Events', fileBase, 'landscape'))} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!filtered.length}>
+              <FileText size={14} aria-hidden="true" /> PDF
             </button>
             <EmailPdfButton
               disabled={!filtered.length}
-              className="btn-secondary text-sm inline-flex items-center gap-1.5 disabled:opacity-50"
+              className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] disabled:opacity-50"
               getPdf={async () => ({
-                base64: await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Driver Safety Events', 'driver_safety_events', 'landscape', '', { returnBase64: true }),
-                filename: 'driver_safety_events.pdf',
+                base64: await exportToPdf(exportRows, EVENT_PDF_COLS, 'Driver Safety Events', fileBase, 'landscape', '', { returnBase64: true }),
+                filename: `${fileBase}.pdf`,
                 subject: 'Driver Safety',
                 bodyHtml: '<p>Attached is the Driver Safety report.</p>',
               })}
             />
-            <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5" disabled={notProvisioned}>
-              <Plus size={14} /> Log event
+            <button type="button" onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={notProvisioned}>
+              <Plus size={14} aria-hidden="true" /> Log event
             </button>
           </div>
         }
       />
 
       {notProvisioned && (
-        // `border border-amber-800/50` as classes would be DEAD here: Card sets
-        // `border` inline and inline beats a class, so the tint is carried by
-        // `tone`. Card is `flex flex-col` and Tailwind emits .flex-col after
-        // .flex-row, so the row direction goes in `style`, which Card spreads last.
         <Card tone="warn" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
-          <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
+          <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" aria-hidden="true" />
           <div>
-            <p className="text-amber-300 font-medium">Driver safety tracking isn’t enabled on this database yet.</p>
+            <p className="text-[var(--text-primary)] font-medium">Driver safety tracking is not enabled on this database yet.</p>
             <p className="text-[var(--text-muted)] text-sm mt-1">
               Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V170_DRIVER_SAFETY_EVENTS.sql</span>, then reload.
             </p>
@@ -398,23 +427,22 @@ export default function DriverSafety() {
       )}
 
       {error && (
-        <Card tone="crit" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
-          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
-          <div><p className="text-red-300 font-medium">Couldn’t load driver safety events.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
+        <Card tone="crit" pad="none">
+          <ErrorPanel title={loadFailed ? 'Could not load driver safety events.' : 'Something went wrong.'} message={error} onRetry={load} />
         </Card>
       )}
 
-      {/* KPI tiles */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-[var(--gap-grid)]">
+      {/* KPI strip */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-[var(--gap-grid)]">
         {kpis.map((k) => {
           const Icon = k.icon
           return (
             <Card key={k.label}>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
-                <Icon size={16} className={k.tone} />
+                <Icon size={16} className={k.tone} aria-hidden="true" />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
+              <p className={`text-2xl sm:text-3xl font-bold mt-1 tabular-nums ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
             </Card>
           )
         })}
@@ -425,190 +453,156 @@ export default function DriverSafety() {
         </p>
       )}
 
+      {/* Filters: they drive the KPI strip, every scorecard and the event log. */}
+      <Card className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 min-w-[200px]">
+            <label htmlFor="ds-search" className="sr-only">Search events</label>
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+            <input id="ds-search" type="search" className="input pl-9 w-full min-h-[44px]" placeholder="Search asset, driver, location, notes" value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
+          {countryOptions.length > 0 && (
+            <select className="input min-h-[44px]" value={countryFilter} onChange={(e) => setCountryFilter(e.target.value)} aria-label="Country">
+              <option value="">All countries</option>
+              {countryOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          )}
+          <select className="input min-h-[44px]" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} aria-label="Event type">
+            <option value="">All event types</option>
+            {EVENT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+          </select>
+          <select className="input min-h-[44px]" value={severityFilter} onChange={(e) => setSeverityFilter(e.target.value)} aria-label="Severity">
+            <option value="">All severities</option>
+            {SEVERITIES.map((s) => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}
+          </select>
+          {hasFilters && <button type="button" onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]"><X size={14} aria-hidden="true" /> Clear</button>}
+          <span className="text-xs text-[var(--text-muted)] ml-auto" aria-live="polite">{filtered.length} of {(rows || []).length}</span>
+        </div>
+      </Card>
+
       {/* Tab bar */}
-      <div className="flex flex-wrap items-center gap-1 border-b border-[var(--input-border)]">
+      <div role="tablist" aria-label="Driver safety views" className="flex flex-wrap items-center gap-1 border-b border-[var(--input-border)]">
         {TABS.map((t) => {
           const Icon = t.icon
           const active = tab === t.key
           return (
             <button
               key={t.key}
+              type="button"
+              role="tab"
+              id={`ds-tab-${t.key}`}
+              aria-selected={active}
+              aria-controls={`ds-panel-${t.key}`}
               onClick={() => setTab(t.key)}
-              className={`inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              className={`inline-flex items-center gap-1.5 px-3 min-h-[44px] text-sm font-medium border-b-2 -mb-px transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] ${
                 active
-                  ? 'border-[var(--accent, #6366f1)] text-[var(--text-primary)]'
+                  ? 'border-[var(--accent)] text-[var(--text-primary)]'
                   : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]'
               }`}
-              aria-current={active ? 'page' : undefined}
             >
-              <Icon size={14} /> {t.label}
+              <Icon size={14} aria-hidden="true" /> {t.label}
             </button>
           )
         })}
       </div>
 
       {tab === 'scorecards' && (
-        <ScorecardsTab
-          loading={rows === null}
-          banded={bandedScorecard}
-          coaching={coaching}
-          trend={trend.fleet}
-        />
+        <div role="tabpanel" id="ds-panel-scorecards" aria-labelledby="ds-tab-scorecards">
+          <ScorecardsTab
+            loading={rows === null}
+            failed={loadFailed}
+            onRetry={load}
+            banded={bandedScorecard}
+            coaching={coaching}
+            trend={trend.fleet}
+            tripError={tripError}
+            onExportError={(e) => setError(toUserMessage(e, 'Could not export. Try again.'))}
+          />
+        </div>
       )}
 
       {tab === 'correlation' && (
-        <CorrelationTab loading={tyreRecords === null} correlation={correlation} />
+        <div role="tabpanel" id="ds-panel-correlation" aria-labelledby="ds-tab-correlation">
+          <CorrelationTab
+            loading={tyreRecords === null && !tyreError}
+            error={tyreError}
+            onRetry={load}
+            correlation={correlation}
+            onExportError={(e) => setError(toUserMessage(e, 'Could not export. Try again.'))}
+          />
+        </div>
       )}
 
-      {tab === 'events' && (<>
-      {/* Driver risk scorecard. `pad="none" clip` reproduces the edge-to-edge
-          crop the legacy `.card overflow-hidden !p-0` gave; nothing inside
-          renders a DOM popover, so clipping is safe. The header stays
-          hand-rolled rather than becoming CardHeader because it carries its own
-          px-4 py-3 and bottom rule inside a zero-padding card - CardHeader sets
-          no padding, so it would sit flush against the edge. */}
-      <Card pad="none" clip>
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--input-border)]">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
-            <ShieldCheck size={15} /> Driver risk scorecard
-          </h3>
-          <span className="text-xs text-[var(--text-muted)]">Worst first · lower score = higher risk</span>
+      {tab === 'events' && (
+      <div role="tabpanel" id="ds-panel-events" aria-labelledby="ds-tab-events" className="space-y-6">
+      <Card pad="none">
+        <SectionHeader icon={ShieldCheck} title="Driver risk scorecard" hint="Worst first. Lower score means higher risk." />
+        <div className="p-3">
+          <EnterpriseTable
+            columns={riskColumns}
+            data={scorecard.slice(0, 15)}
+            getRowId={(d) => d.driver_name}
+            loading={rows === null}
+            error={loadFailed ? error : null}
+            onRetry={load}
+            enableGlobalFilter={false}
+            enableColumnFilters={false}
+            enableExport={false}
+            initialPageSize={25}
+            emptyMessage="No driver events match the current filters."
+          />
         </div>
-        {rows === null ? (
-          <div className="p-4"><div className="h-16 bg-[var(--input-bg)] rounded animate-pulse" /></div>
-        ) : scorecard.length === 0 ? (
-          <p className="px-4 py-8 text-sm text-[var(--text-muted)] text-center">No driver events logged yet.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                  {['Driver', 'Events', 'Penalty points', 'Safety score'].map((h, i) => <th key={i} className="px-4 py-2.5 font-semibold whitespace-nowrap">{h}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {scorecard.slice(0, 15).map((d) => (
-                  <tr key={d.driver_name} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                    <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{d.driver_name}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{d.events}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{Math.round(d.penaltyPoints).toLocaleString()}</td>
-                    <td className="px-4 py-2.5">
-                      <div className="flex items-center gap-2">
-                        <span className={`font-bold ${scoreTone(d.safetyScore)}`}>{Math.round(d.safetyScore)}</span>
-                        <div className="h-1.5 w-24 rounded-full bg-[var(--input-bg)] overflow-hidden">
-                          <div className={`h-full ${d.safetyScore >= 85 ? 'bg-green-500' : d.safetyScore >= 60 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${Math.max(4, d.safetyScore)}%` }} />
-                        </div>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
       </Card>
 
-      {/* Event-type distribution. This card holds its OWN dimension out of the
-          filter set (see filteredBase), so it can still be compared after a type
-          is picked. */}
+      {/* Event-type distribution: holds its OWN dimension out of the filter set. */}
       <Card>
         <CardHeader icon={Filter} title="Events by type" />
         {rows === null ? (
           <div className="h-12 bg-[var(--input-bg)] rounded animate-pulse" />
+        ) : loadFailed ? (
+          <p className="text-sm text-[var(--text-muted)]">Not available: the events could not be loaded.</p>
         ) : eventTypes.length === 0 ? (
           <p className="text-sm text-[var(--text-muted)]">No events logged yet.</p>
         ) : (
           <div className="flex flex-wrap gap-2">
             {eventTypes.map((t) => (
-              <div key={t.type} className="rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)]/40 px-3 py-2">
-                <p className="text-xs text-[var(--text-muted)]">{EVENT_TYPE_LABEL[t.type] || t.type}</p>
-                <p className="text-lg font-semibold text-[var(--text-primary)]">{t.count.toLocaleString()}</p>
-              </div>
+              <button
+                type="button"
+                key={t.type}
+                onClick={() => setTypeFilter(typeFilter === t.type ? '' : t.type)}
+                aria-pressed={typeFilter === t.type}
+                className={`rounded-lg border px-3 py-2 min-h-[44px] text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] ${typeFilter === t.type ? 'border-[var(--accent)] bg-[var(--input-bg)]' : 'border-[var(--input-border)] bg-[var(--input-bg)]/40 hover:border-[var(--accent)]'}`}
+              >
+                <span className="block text-xs text-[var(--text-muted)]">{EVENT_TYPE_LABEL[t.type] || t.type}</span>
+                <span className="block text-lg font-semibold text-[var(--text-primary)] tabular-nums">{t.count.toLocaleString()}</span>
+              </button>
             ))}
           </div>
         )}
       </Card>
 
-      {/* Filters. Left unclipped so any anchored popover added here later stays
-          visible; the country/type/severity controls are native <select>s, whose
-          option lists the browser paints outside this element regardless. */}
-      <Card className="space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-            <input className="input pl-9 w-full" placeholder="Search asset, driver, location, notes…" value={search} onChange={(e) => setSearch(e.target.value)} />
-          </div>
-          {countryOptions.length > 0 && (
-            <select className="input" value={countryFilter} onChange={(e) => setCountryFilter(e.target.value)} aria-label="Country">
-              <option value="">All countries</option>
-              {countryOptions.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-          )}
-          <select className="input" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} aria-label="Event type">
-            <option value="">All event types</option>
-            {EVENT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-          </select>
-          <select className="input" value={severityFilter} onChange={(e) => setSeverityFilter(e.target.value)} aria-label="Severity">
-            <option value="">All severities</option>
-            {SEVERITIES.map((s) => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}
-          </select>
-          {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
-          <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {(rows || []).length}</span>
+      <Card pad="none">
+        <SectionHeader icon={ListChecks} title="Event log" hint={`${filtered.length.toLocaleString()} event${filtered.length === 1 ? '' : 's'}`} />
+        <div className="p-3">
+          <EnterpriseTable
+            columns={eventColumns}
+            data={filtered}
+            getRowId={(r) => String(r.id)}
+            loading={rows === null}
+            error={loadFailed ? error : null}
+            onRetry={load}
+            enableGlobalFilter={false}
+            enableColumnFilters={false}
+            enableExport={false}
+            initialPageSize={25}
+            viewKey="driver-safety-events"
+            emptyIcon={<Filter size={22} className="opacity-60" aria-hidden="true" />}
+            emptyMessage={(rows || []).length === 0 && !notProvisioned ? 'No events logged yet. Log your first event.' : 'No events match these filters.'}
+          />
         </div>
       </Card>
-
-      {/* Table. Clipping is safe: the only popup inside is TablePagination's
-          rows-per-page native <select>, whose option list the browser paints
-          outside this overflow context. */}
-      <Card pad="none" clip>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                {['Driver', 'Asset', 'Event', 'Severity', 'When', 'Speed', 'Penalty', ''].map((h, i) => <th key={i} className="px-4 py-3 font-semibold whitespace-nowrap">{h}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {rows === null ? (
-                [0, 1, 2, 3, 4].map((i) => <tr key={i} className="border-b border-[var(--input-border)]/50"><td colSpan={8} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>)
-              ) : filtered.length === 0 ? (
-                <tr><td colSpan={8} className="px-4 py-12 text-center text-[var(--text-muted)]">
-                  <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {rows.length === 0 && !notProvisioned ? 'No events logged yet. Log your first event.' : 'No events match these filters.'}
-                </td></tr>
-              ) : (
-                pager.pageRows.map((r) => (
-                  <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                    <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.driver_name || 'N/A'}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.asset_no || 'N/A'}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{EVENT_TYPE_LABEL[r.event_type] || r.event_type || 'N/A'}</td>
-                    <td className="px-4 py-2.5">
-                      {r.severity ? (
-                        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${SEVERITY_TONE[r.severity] || 'text-[var(--text-secondary)]'}`}>
-                          {r.severity[0].toUpperCase() + r.severity.slice(1)}
-                        </span>
-                      ) : 'N/A'}
-                    </td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDateTime(r.event_at)}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">
-                      {num(r.speed_kmh)}{r.speed_limit_kmh != null && r.speed_limit_kmh !== '' ? ` / ${num(r.speed_limit_kmh)}` : ''}
-                    </td>
-                    <td className="px-4 py-2.5 font-semibold text-[var(--text-primary)]">{num(r.penalty_points)}</td>
-                    <td className="px-4 py-2.5">
-                      <div className="flex items-center justify-end gap-1">
-                        <button onClick={() => openEdit(r)} className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Edit"><Pencil size={14} /></button>
-                        <button onClick={() => setConfirmDelete(r)} className="p-1.5 rounded hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400" aria-label="Delete"><Trash2 size={14} /></button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-        <TablePagination {...pager} />
-      </Card>
-      </>)}
+      </div>
+      )}
 
       {/* Create / Edit modal. `size="lg"` because the speed / limit / g-force /
           penalty row is a 4-column grid that a narrower panel would crush. The
@@ -625,74 +619,74 @@ export default function DriverSafety() {
             <form onSubmit={submit} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="label">Asset number</label>
-                  <input className="input w-full" placeholder="e.g. TRK-1042" value={form.asset_no} maxLength={120} onChange={(e) => set('asset_no', e.target.value)} />
+                  <label className="label" htmlFor="ds-f-asset_no">Asset number</label>
+                  <input id="ds-f-asset_no" className="input w-full" placeholder="e.g. TRK-1042" value={form.asset_no} maxLength={120} onChange={(e) => set('asset_no', e.target.value)} />
                 </div>
                 <div>
-                  <label className="label">Driver</label>
-                  <input className="input w-full" placeholder="e.g. Ahmed Khan" value={form.driver_name} maxLength={200} onChange={(e) => set('driver_name', e.target.value)} />
+                  <label className="label" htmlFor="ds-f-driver_name">Driver</label>
+                  <input id="ds-f-driver_name" className="input w-full" placeholder="e.g. Ahmed Khan" value={form.driver_name} maxLength={200} onChange={(e) => set('driver_name', e.target.value)} />
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="label">Event type</label>
-                  <select className="input w-full" value={form.event_type} onChange={(e) => set('event_type', e.target.value)}>
-                    <option value="">Select…</option>
+                  <label className="label" htmlFor="ds-f-event_type">Event type</label>
+                  <select id="ds-f-event_type" className="input w-full" value={form.event_type} onChange={(e) => set('event_type', e.target.value)}>
+                    <option value="">Select</option>
                     {EVENT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="label">Severity</label>
-                  <select className="input w-full" value={form.severity} onChange={(e) => set('severity', e.target.value)}>
-                    <option value="">Select…</option>
+                  <label className="label" htmlFor="ds-f-severity">Severity</label>
+                  <select id="ds-f-severity" className="input w-full" value={form.severity} onChange={(e) => set('severity', e.target.value)}>
+                    <option value="">Select</option>
                     {SEVERITIES.map((s) => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}
                   </select>
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="label">Event time</label>
-                  <input className="input w-full" type="datetime-local" value={form.event_at} onChange={(e) => set('event_at', e.target.value)} />
+                  <label className="label" htmlFor="ds-f-event_at">Event time</label>
+                  <input id="ds-f-event_at" className="input w-full" type="datetime-local" value={form.event_at} onChange={(e) => set('event_at', e.target.value)} />
                   <p className="text-[11px] text-[var(--text-muted)] mt-1">Leave blank to use now.</p>
                 </div>
                 <div>
-                  <label className="label">Location (optional)</label>
-                  <input className="input w-full" placeholder="e.g. Riyadh to Dammam Hwy km 210" value={form.location} maxLength={300} onChange={(e) => set('location', e.target.value)} />
+                  <label className="label" htmlFor="ds-f-location">Location (optional)</label>
+                  <input id="ds-f-location" className="input w-full" placeholder="e.g. Riyadh to Dammam Hwy km 210" value={form.location} maxLength={300} onChange={(e) => set('location', e.target.value)} />
                 </div>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 <div>
-                  <label className="label">Speed (km/h)</label>
-                  <input className="input w-full" type="number" step="0.1" min="0" placeholder="98" value={form.speed_kmh} onChange={(e) => set('speed_kmh', e.target.value)} />
+                  <label className="label" htmlFor="ds-f-speed_kmh">Speed (km/h)</label>
+                  <input id="ds-f-speed_kmh" className="input w-full" type="number" step="0.1" min="0" placeholder="98" value={form.speed_kmh} onChange={(e) => set('speed_kmh', e.target.value)} />
                 </div>
                 <div>
-                  <label className="label">Speed limit</label>
-                  <input className="input w-full" type="number" step="0.1" min="0" placeholder="80" value={form.speed_limit_kmh} onChange={(e) => set('speed_limit_kmh', e.target.value)} />
+                  <label className="label" htmlFor="ds-f-speed_limit_kmh">Speed limit</label>
+                  <input id="ds-f-speed_limit_kmh" className="input w-full" type="number" step="0.1" min="0" placeholder="80" value={form.speed_limit_kmh} onChange={(e) => set('speed_limit_kmh', e.target.value)} />
                 </div>
                 <div>
-                  <label className="label">G-force</label>
-                  <input className="input w-full" type="number" step="0.01" min="0" placeholder="0.45" value={form.g_force} onChange={(e) => set('g_force', e.target.value)} />
+                  <label className="label" htmlFor="ds-f-g_force">G-force</label>
+                  <input id="ds-f-g_force" className="input w-full" type="number" step="0.01" min="0" placeholder="0.45" value={form.g_force} onChange={(e) => set('g_force', e.target.value)} />
                 </div>
                 <div>
-                  <label className="label">Penalty points</label>
-                  <input className="input w-full" type="number" step="1" min="0" placeholder="5" value={form.penalty_points} onChange={(e) => set('penalty_points', e.target.value)} />
+                  <label className="label" htmlFor="ds-f-penalty_points">Penalty points</label>
+                  <input id="ds-f-penalty_points" className="input w-full" type="number" step="1" min="0" placeholder="5" value={form.penalty_points} onChange={(e) => set('penalty_points', e.target.value)} />
                 </div>
               </div>
               <div>
-                <label className="label">Notes (optional)</label>
-                <textarea className="input w-full min-h-[80px] resize-y" placeholder="e.g. sudden lane change, wet road" value={form.notes} maxLength={8000} onChange={(e) => set('notes', e.target.value)} />
+                <label className="label" htmlFor="ds-f-notes">Notes (optional)</label>
+                <textarea id="ds-f-notes" className="input w-full min-h-[80px] resize-y" placeholder="e.g. sudden lane change, wet road" value={form.notes} maxLength={8000} onChange={(e) => set('notes', e.target.value)} />
               </div>
 
               {formError && (
-                <div className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
-                  <AlertTriangle size={15} className="mt-0.5 shrink-0" /> {formError}
+                <div role="alert" className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
+                  <AlertTriangle size={15} className="mt-0.5 shrink-0" aria-hidden="true" /> {formError}
                 </div>
               )}
 
               <div className="flex items-center justify-end gap-2 pt-1">
                 <button type="button" onClick={closeModal} className="btn-secondary text-sm" disabled={saving}>Cancel</button>
                 <button type="submit" className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={saving}>
-                  {saving ? 'Saving…' : editing ? 'Save changes' : 'Log event'}
+                  {saving ? 'Saving...' : editing ? 'Save changes' : 'Log event'}
                 </button>
               </div>
             </form>
@@ -711,7 +705,7 @@ export default function DriverSafety() {
             <>
               <button onClick={closeDelete} className="btn-secondary text-sm" disabled={deleting}>Cancel</button>
               <button onClick={doDelete} className="btn-danger text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={deleting}>
-                <Trash2 size={14} /> {deleting ? 'Deleting…' : 'Delete'}
+                <Trash2 size={14} /> {deleting ? 'Deleting...' : 'Delete'}
               </button>
             </>
           }
@@ -719,11 +713,12 @@ export default function DriverSafety() {
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 rounded-full bg-red-900/30 flex items-center justify-center shrink-0"><Trash2 size={18} className="text-red-400" /></div>
             <p className="text-sm text-[var(--text-muted)]">
-              {confirmDelete.driver_name || 'Event'} · {EVENT_TYPE_LABEL[confirmDelete.event_type] || confirmDelete.event_type || 'N/A'} · {fmtDateTime(confirmDelete.event_at)}. This can’t be undone.
+              {confirmDelete.driver_name || 'Event'} · {EVENT_TYPE_LABEL[confirmDelete.event_type] || confirmDelete.event_type || 'N/A'} · {fmtDateTime(confirmDelete.event_at)}. This cannot be undone.
             </p>
           </div>
         </Modal>
       )}
+
     </div>
   )
 }
@@ -731,6 +726,7 @@ export default function DriverSafety() {
 // ── Reusable pills ────────────────────────────────────────────────────────────
 
 function GradePill({ grade }) {
+  if (!grade) return <span className="text-[var(--text-muted)]">N/A</span>
   return (
     <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-bold border ${GRADE_TONE[grade] || BAND_TONE.unknown}`}>
       {grade}
@@ -739,6 +735,7 @@ function GradePill({ grade }) {
 }
 
 function BandPill({ band }) {
+  if (!band) return <span className="text-[var(--text-muted)]">N/A</span>
   return (
     <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium border ${BAND_TONE[band] || BAND_TONE.unknown}`}>
       {BAND_LABEL[band] || band}
@@ -748,24 +745,30 @@ function BandPill({ band }) {
 
 // ── Scorecards tab: weighted score + grade/band + weekly trend + coaching ────
 
-function ScorecardsTab({ loading, banded, coaching, trend }) {
+const SCORECARD_EXPORT_COLS = ['driver_name', 'events', 'riskIndex', 'score', 'grade', 'band', 'composite', 'km', 'trips', 'topIssue']
+const SCORECARD_EXPORT_HEADERS = ['Driver', 'Events', 'Risk index', 'Score', 'Grade', 'Band', 'Composite band', 'Trip km', 'Trips', 'Top issue']
+
+function ScorecardsTab({ loading, failed, onRetry, banded, coaching, trend, tripError, onExportError }) {
+  // Real, dated events only: weeklyEventTrend buckets actual event_at values.
   const chartData = useMemo(() => ({
     labels: (trend || []).map((w) => w.week),
     datasets: [
       {
-        label: 'Events / week',
+        label: 'Events per week',
         data: (trend || []).map((w) => w.events),
-        borderColor: '#38bdf8',
-        backgroundColor: 'rgba(56,189,248,0.15)',
+        borderColor: colorAt(0),
+        backgroundColor: withAlpha(colorAt(0), 0.15),
         fill: true,
         tension: 0.3,
         yAxisID: 'y',
       },
       {
-        label: 'High-severity / week',
+        // Semantic: high severity stays red so the line reads as risk.
+        label: 'High severity per week',
         data: (trend || []).map((w) => w.highSeverity),
-        borderColor: '#f87171',
-        backgroundColor: 'rgba(248,113,113,0.15)',
+        borderColor: '#ef4444',
+        backgroundColor: 'rgba(239,68,68,0.12)',
+        borderDash: [6, 4],
         fill: true,
         tension: 0.3,
         yAxisID: 'y',
@@ -777,86 +780,108 @@ function ScorecardsTab({ loading, banded, coaching, trend }) {
     responsive: true,
     maintainAspectRatio: false,
     interaction: { mode: 'index', intersect: false },
-    plugins: { legend: { labels: { color: '#94a3b8', boxWidth: 12 } } },
+    plugins: { legend: { labels: { color: 'var(--text-muted)', boxWidth: 12 } } },
     scales: {
-      x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(148,163,184,0.1)' } },
-      y: { beginAtZero: true, ticks: { color: '#94a3b8', precision: 0 }, grid: { color: 'rgba(148,163,184,0.1)' } },
+      x: { ticks: { color: 'var(--text-muted)', autoSkip: true, maxRotation: 0 }, grid: { color: 'var(--panel-2)' } },
+      y: { beginAtZero: true, ticks: { color: 'var(--text-muted)', precision: 0 }, grid: { color: 'var(--panel-2)' } },
     },
   }), [])
 
+  const columns = useMemo(() => [
+    { id: 'driver_name', header: 'Driver', accessorFn: (d) => d.driver_name,
+      cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{row.original.driver_name}</span> },
+    { id: 'events', header: 'Events', accessorFn: (d) => d.events, meta: { align: 'right' } },
+    { id: 'riskIndex', header: 'Risk index', accessorFn: (d) => d.riskIndex ?? 0, meta: { align: 'right' },
+      cell: ({ row }) => (row.original.riskIndex == null ? 'N/A' : row.original.riskIndex.toLocaleString(undefined, { maximumFractionDigits: 1 })) },
+    { id: 'score', header: 'Score', accessorFn: (d) => d.score ?? 0,
+      cell: ({ row }) => {
+        const s = row.original.score
+        if (s == null) return 'N/A'
+        return <span className={`font-bold ${s >= 85 ? 'text-green-400' : s >= 70 ? 'text-amber-400' : 'text-red-400'}`}>{s}</span>
+      } },
+    { id: 'grade', header: 'Grade', accessorFn: (d) => d.grade || '', cell: ({ row }) => <GradePill grade={row.original.grade} /> },
+    { id: 'band', header: 'Band', accessorFn: (d) => d.band || '', cell: ({ row }) => <BandPill band={row.original.band} /> },
+    { id: 'composite', header: 'Composite', accessorFn: (d) => d.composite?.band || '', cell: ({ row }) => <BandPill band={row.original.composite?.band} /> },
+    { id: 'km', header: 'Trip km', accessorFn: (d) => d.km || 0, meta: { align: 'right' },
+      cell: ({ row }) => (row.original.km > 0 ? kmFmt(row.original.km) : 'N/A') },
+    { id: 'topIssue', header: 'Top issue', accessorFn: (d) => CATEGORY_LABEL[d.weakestCategory] || d.weakestCategory || '',
+      cell: ({ row }) => <span className="whitespace-nowrap">{CATEGORY_LABEL[row.original.weakestCategory] || row.original.weakestCategory || 'N/A'}</span> },
+  ], [])
+
+  const exportScorecard = async () => {
+    try {
+      await exportToExcel(scorecardExportRows(banded, CATEGORY_LABEL), SCORECARD_EXPORT_COLS, SCORECARD_EXPORT_HEADERS, reportFileName('Driver Safety Scorecard'))
+    } catch (e) { onExportError?.(e) }
+  }
+
   return (
     <div className="space-y-6">
-      {/* Weekly trend chart */}
       <Card>
         <CardHeader icon={TrendingUp} title="Weekly event trend" />
         {loading ? (
           <div className="h-64 bg-[var(--input-bg)] rounded animate-pulse" />
+        ) : failed ? (
+          <ErrorPanel title="Trend unavailable" message="The events could not be loaded." onRetry={onRetry} />
         ) : (trend || []).length === 0 ? (
           <p className="text-sm text-[var(--text-muted)] py-8 text-center">No dated events yet. Log events with a timestamp to build the trend.</p>
         ) : (
-          <div className="h-64"><Line data={chartData} options={chartOpts} /></div>
-        )}
-      </Card>
-
-      {/* Weighted scorecard. `pad="none" clip` keeps the edge-to-edge crop; the
-          header keeps its own padding and bottom rule, which CardHeader (no
-          inline padding) could not reproduce inside a zero-padding card. */}
-      <Card pad="none" clip>
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--input-border)]">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
-            <Award size={15} /> Weighted driver scorecard
-          </h3>
-          <span className="text-xs text-[var(--text-muted)]">Severity × type weighting, per-category capped · worst first</span>
-        </div>
-        {loading ? (
-          <div className="p-4"><div className="h-16 bg-[var(--input-bg)] rounded animate-pulse" /></div>
-        ) : (banded || []).length === 0 ? (
-          <p className="px-4 py-8 text-sm text-[var(--text-muted)] text-center">No driver events logged yet.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                  {['Driver', 'Events', 'Risk index', 'Score', 'Grade', 'Band', 'Composite', 'Top issue'].map((h, i) => <th key={i} className="px-4 py-2.5 font-semibold whitespace-nowrap">{h}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {banded.map((d) => (
-                  <tr key={d.driver_name} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                    <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{d.driver_name}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{d.events}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{d.riskIndex.toLocaleString(undefined, { maximumFractionDigits: 1 })}</td>
-                    <td className="px-4 py-2.5">
-                      <span className={`font-bold ${d.score >= 85 ? 'text-green-400' : d.score >= 70 ? 'text-amber-400' : 'text-red-400'}`}>{d.score}</span>
-                    </td>
-                    <td className="px-4 py-2.5"><GradePill grade={d.grade} /></td>
-                    <td className="px-4 py-2.5"><BandPill band={d.band} /></td>
-                    <td className="px-4 py-2.5"><BandPill band={d.composite?.band} /></td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{CATEGORY_LABEL[d.weakestCategory] || d.weakestCategory || 'N/A'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="h-64" role="img" aria-label={`Weekly driver safety events over ${(trend || []).length} weeks, with the high severity subset.`}>
+            <Line data={chartData} options={chartOpts} />
           </div>
         )}
       </Card>
 
-      {/* Coaching queue */}
-      <Card pad="none" clip>
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--input-border)]">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
-            <GraduationCap size={15} /> Coaching queue
-          </h3>
-          <span className="text-xs text-[var(--text-muted)]">{loading ? '' : `${(coaching || []).length} driver(s) below the good band`}</span>
+      {tripError && (
+        <Card tone="warn" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
+          <AlertTriangle size={16} className="text-amber-400 mt-0.5 shrink-0" aria-hidden="true" />
+          <p className="text-sm text-[var(--text-muted)]">{tripError} Composite bands below use behaviour only.</p>
+        </Card>
+      )}
+
+      <Card pad="none">
+        <SectionHeader
+          icon={Award}
+          title="Weighted driver scorecard"
+          hint="Severity and type weighting, per-category capped, worst first"
+          action={(
+            <button type="button" onClick={exportScorecard} disabled={!(banded || []).length} className="btn-secondary text-xs inline-flex items-center gap-1.5 min-h-[44px]">
+              <FileSpreadsheet size={13} aria-hidden="true" /> Excel
+            </button>
+          )}
+        />
+        <div className="p-3">
+          <EnterpriseTable
+            columns={columns}
+            data={banded || []}
+            getRowId={(d) => d.driver_name}
+            loading={loading}
+            error={failed ? 'The events could not be loaded.' : null}
+            onRetry={onRetry}
+            enableColumnFilters={false}
+            enableExport={false}
+            searchPlaceholder="Search drivers"
+            initialPageSize={25}
+            emptyMessage="No driver events logged yet."
+          />
         </div>
+      </Card>
+
+      <Card pad="none" clip>
+        <SectionHeader
+          icon={GraduationCap}
+          title="Coaching queue"
+          hint={loading || failed ? '' : `${(coaching || []).length} driver(s) below the good band`}
+        />
         {loading ? (
           <div className="p-4"><div className="h-16 bg-[var(--input-bg)] rounded animate-pulse" /></div>
+        ) : failed ? (
+          <ErrorPanel title="Coaching queue unavailable" message="The events could not be loaded." onRetry={onRetry} />
         ) : (coaching || []).length === 0 ? (
           <p className="px-4 py-8 text-sm text-[var(--text-muted)] text-center">Every tracked driver is in the good band. No coaching needed.</p>
         ) : (
-          <div className="divide-y divide-[var(--input-border)]/50">
+          <ul className="divide-y divide-[var(--input-border)]/50">
             {coaching.map((c) => (
-              <div key={c.driver_name} className="px-4 py-3 flex items-start gap-3">
+              <li key={c.driver_name} className="px-4 py-3 flex items-start gap-3">
                 <div className="shrink-0 flex flex-col items-center gap-1 w-16">
                   <span className={`text-lg font-bold ${c.score >= 70 ? 'text-amber-400' : 'text-red-400'}`}>{c.score}</span>
                   <GradePill grade={c.grade} />
@@ -866,107 +891,109 @@ function ScorecardsTab({ loading, banded, coaching, trend }) {
                     <span className="font-medium text-[var(--text-primary)]">{c.driver_name}</span>
                     <span className="text-xs text-[var(--text-muted)]">Focus: {CATEGORY_LABEL[c.focus] || c.focus}</span>
                     <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-muted)] inline-flex items-center gap-1">
-                      <Activity size={11} /> {c.suggestedSessionMin} min session
+                      <Activity size={11} aria-hidden="true" /> {c.suggestedSessionMin} min session
                     </span>
                   </div>
                   <p className="text-sm text-[var(--text-muted)] mt-1">{c.tip}</p>
                 </div>
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
       </Card>
     </div>
   )
 }
 
-// ── Tyre correlation tab: the Tyre-Pulse-unique driver ↔ damage intelligence ──
+// ── Tyre correlation tab: the Tyre-Pulse-unique driver to damage intelligence ──
 
-function CorrelationTab({ loading, correlation }) {
+const CORR_EXPORT_COLS = ['driver_name', 'tyres', 'removals', 'driverCausedRemovalRate', 'driverCpk', 'prematureRemovalRate']
+const CORR_EXPORT_HEADERS = ['Driver', 'Tyres', 'Removals', 'Driver-caused removal %', 'Driver CPK', 'Premature removal %']
+
+function rateTone(v, high) {
+  if (v == null) return 'text-[var(--text-muted)]'
+  if (v >= high) return 'text-red-400 font-semibold'
+  if (v > 0) return 'text-amber-400'
+  return 'text-green-400'
+}
+
+function CorrelationTab({ loading, error, onRetry, correlation, onExportError }) {
   const drivers = correlation?.drivers || []
   const median = correlation?.fleetMedianLifeKm
 
-  const EXPORT_COLS = ['driver_name', 'tyres', 'removals', 'driverCausedRemovalRate', 'driverCpk', 'prematureRemovalRate']
-  const EXPORT_HEADERS = ['Driver', 'Tyres', 'Removals', 'Driver-caused removal %', 'Driver CPK', 'Premature removal %']
-  const exportRows = drivers.map((d) => ({
-    driver_name: d.driver_name,
-    tyres: d.tyres,
-    removals: d.removals,
-    driverCausedRemovalRate: d.driverCausedRemovalRate == null ? '' : `${Math.round(d.driverCausedRemovalRate * 1000) / 10}%`,
-    driverCpk: d.driverCpk == null ? '' : d.driverCpk,
-    prematureRemovalRate: d.prematureRemovalRate == null ? '' : `${Math.round(d.prematureRemovalRate * 1000) / 10}%`,
-  }))
+  const columns = useMemo(() => [
+    { id: 'driver_name', header: 'Driver', accessorFn: (d) => d.driver_name,
+      cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{row.original.driver_name}</span> },
+    { id: 'tyres', header: 'Tyres', accessorFn: (d) => d.tyres, meta: { align: 'right' } },
+    { id: 'removals', header: 'Removals', accessorFn: (d) => d.removals, meta: { align: 'right' } },
+    { id: 'driverCaused', header: 'Driver-caused removals', accessorFn: (d) => d.driverCausedRemovalRate ?? -1,
+      cell: ({ row }) => {
+        const d = row.original
+        return (
+          <span>
+            <span className={rateTone(d.driverCausedRemovalRate, 0.3)}>{pct(d.driverCausedRemovalRate)}</span>
+            {d.driverCausedRemovalRate != null && <span className="text-[var(--text-muted)] text-xs ml-1">({d.driverCausedRemovals}/{d.removals})</span>}
+          </span>
+        )
+      } },
+    { id: 'driverCpk', header: 'Driver CPK', accessorFn: (d) => d.driverCpk ?? -1, meta: { align: 'right' },
+      cell: ({ row }) => (row.original.driverCpk == null ? 'N/A' : row.original.driverCpk.toLocaleString(undefined, { maximumFractionDigits: 3 })) },
+    { id: 'premature', header: 'Premature removals', accessorFn: (d) => d.prematureRemovalRate ?? -1,
+      cell: ({ row }) => {
+        const d = row.original
+        return (
+          <span>
+            <span className={rateTone(d.prematureRemovalRate, 0.5)}>{pct(d.prematureRemovalRate)}</span>
+            {d.prematureRemovalRate != null && <span className="text-[var(--text-muted)] text-xs ml-1">({d.prematureRemovals}/{d.removals})</span>}
+          </span>
+        )
+      } },
+  ], [])
+
+  const exportCorrelation = async () => {
+    try {
+      await exportToExcel(correlationExportRows(drivers), CORR_EXPORT_COLS, CORR_EXPORT_HEADERS, reportFileName('Driver Tyre Correlation'))
+    } catch (e) { onExportError?.(e) }
+  }
 
   return (
     <div className="space-y-6">
-      {/* The sky border was a CLASS on the legacy .card, which would be dead on
-          Card (border is inline); `tone="info"` is the one route to that tint.
-          Row direction goes in `style` - a .flex-row class loses to .flex-col. */}
       <Card tone="info" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
-        <Wrench size={18} className="text-sky-400 mt-0.5 shrink-0" />
+        <Wrench size={18} className="text-sky-400 mt-0.5 shrink-0" aria-hidden="true" />
         <div>
-          <p className="text-[var(--text-primary)] font-medium">Driver ↔ tyre-damage correlation</p>
+          <p className="text-[var(--text-primary)] font-medium">Driver to tyre-damage correlation</p>
           <p className="text-[var(--text-muted)] text-sm mt-1">
-            Joins each driver's tyre_records to surface driver-attributable damage (impact, cut, kerb, under-inflation, run-flat, overload), their real tyre CPK, and how often their tyres come off below the fleet median life
-            {median != null ? <> (<span className="font-mono text-[var(--text-primary)]">{kmFmt(median)}</span>)</> : null}. Drivers with no tyre history show “N/A”, never a guessed rate.
+            Joins each driver&apos;s tyre records to surface driver-attributable damage (impact, cut, kerb, under-inflation, run-flat, overload), their real tyre CPK, and how often their tyres come off below the fleet median life
+            {median != null ? <> (<span className="font-mono text-[var(--text-primary)]">{kmFmt(median)}</span>)</> : null}. Drivers with no tyre history show N/A, never a guessed rate.
           </p>
         </div>
       </Card>
 
-      {/* Clipping is safe: the only control in the header is an Excel export
-          button, not a popover. */}
-      <Card pad="none" clip>
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--input-border)]">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
-            <Wrench size={15} /> Per-driver tyre intelligence
-          </h3>
-          <button
-            onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'driver_tyre_correlation')}
-            className="btn-secondary text-xs inline-flex items-center gap-1.5"
-            disabled={!exportRows.length}
-          >
-            <FileSpreadsheet size={13} /> Excel
-          </button>
+      <Card pad="none">
+        <SectionHeader
+          icon={Wrench}
+          title="Per-driver tyre intelligence"
+          action={(
+            <button type="button" onClick={exportCorrelation} className="btn-secondary text-xs inline-flex items-center gap-1.5 min-h-[44px]" disabled={!drivers.length || !!error}>
+              <FileSpreadsheet size={13} aria-hidden="true" /> Excel
+            </button>
+          )}
+        />
+        <div className="p-3">
+          <EnterpriseTable
+            columns={columns}
+            data={error ? [] : drivers}
+            getRowId={(d) => d.driver_name}
+            loading={loading}
+            error={error || null}
+            onRetry={onRetry}
+            enableColumnFilters={false}
+            enableExport={false}
+            searchPlaceholder="Search drivers"
+            initialPageSize={25}
+            emptyMessage="No tyre records carry a driver name yet. Populate driver_name on tyre records to unlock this analysis."
+          />
         </div>
-        {loading ? (
-          <div className="p-4"><div className="h-16 bg-[var(--input-bg)] rounded animate-pulse" /></div>
-        ) : drivers.length === 0 ? (
-          <p className="px-4 py-8 text-sm text-[var(--text-muted)] text-center">
-            No tyre_records carry a driver name yet. Populate driver_name on tyre records to unlock this analysis.
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                  {['Driver', 'Tyres', 'Removals', 'Driver-caused removals', 'Driver CPK', 'Premature removals'].map((h, i) => <th key={i} className="px-4 py-2.5 font-semibold whitespace-nowrap">{h}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {drivers.map((d) => (
-                  <tr key={d.driver_name} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                    <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{d.driver_name}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{d.tyres}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{d.removals}</td>
-                    <td className="px-4 py-2.5">
-                      <span className={d.driverCausedRemovalRate == null ? 'text-[var(--text-muted)]' : d.driverCausedRemovalRate >= 0.3 ? 'text-red-400 font-semibold' : d.driverCausedRemovalRate > 0 ? 'text-amber-400' : 'text-green-400'}>
-                        {pct(d.driverCausedRemovalRate)}
-                      </span>
-                      {d.driverCausedRemovalRate != null && <span className="text-[var(--text-muted)] text-xs ml-1">({d.driverCausedRemovals}/{d.removals})</span>}
-                    </td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{d.driverCpk == null ? 'N/A' : d.driverCpk.toLocaleString(undefined, { maximumFractionDigits: 3 })}</td>
-                    <td className="px-4 py-2.5">
-                      <span className={d.prematureRemovalRate == null ? 'text-[var(--text-muted)]' : d.prematureRemovalRate >= 0.5 ? 'text-red-400 font-semibold' : d.prematureRemovalRate > 0 ? 'text-amber-400' : 'text-green-400'}>
-                        {pct(d.prematureRemovalRate)}
-                      </span>
-                      {d.prematureRemovalRate != null && <span className="text-[var(--text-muted)] text-xs ml-1">({d.prematureRemovals}/{d.removals})</span>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
       </Card>
     </div>
   )

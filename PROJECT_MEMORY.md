@@ -55,6 +55,21 @@ batching stops them being started at all.
 
 ---
 
+# ⚑ SESSION 2026-09-26 (part 5) — 6 MORE PAGES DEEPENED + FLUTTER WORKSHOP PHOTOS/GPS. No migration.
+- Deepened (engine + test + KPIs/filters/EnterpriseTable/exports/states): SystemHealth, Broadcast, RecallDetail,
+  WorkflowSettings, SanyDelayPenalty, CostScenarioPlanner (`src/lib/{systemHealth,broadcast,recallDetail,
+  workflowSettings,sanyDelayPenalty,costScenario}Analytics.js`). Design ratchet rawTable 194 -> 191.
+- FIXED: `api/recalls.js` selected dead `serial_number` (0/7,504) -> aliased `serial_number:serial_no`, so
+  serial-prefix recalls now match. Recall matching now needs a non-blank brand.
+- `listDelayPenalties` now honest (throws; [] only isNotProvisioned) + paged (id tiebreak, max 50k).
+- Flutter: workshop Report Problem/Request Parts take up to 3 photos (uploaded online-only, refs folded into
+  `note` as Expo does; offline photo DROPPED, event kept = risk R14) + best-effort GPS (never blocks, null not 0).
+  analyze clean; failures only the known Linux-vs-Windows goldens + module_registry drift test.
+- Full web suite 758 files / 10,527 tests green. Honest gaps: Broadcast latest 50 only, Workflow runs latest 500
+  (service order not unique), SystemHealth history is session-only.
+
+---
+
 # ⚑ SESSION 2026-09-26 (part 4) — MODULE UPGRADE, 4 PHASES (5 agents). V613/V614 + accident parity APPLIED LIVE.
 - **Phase 2 correctness:**
   - V613 `set_scrap_reason` now matches serial with upper(btrim). The scrap, unscrap and list RPCs were already case-insensitive (v604).

@@ -1,0 +1,26 @@
+-- 20260926100000_audit_log_org_default
+--
+-- PURPOSE
+--   Client-written audit rows (LOGIN / LOGOUT from src/lib/auditLogger.js, and
+--   src/lib/audit.js) have been REFUSED since 2026-07-12. audit_log_v2.org_id had
+--   no column default, the client insert omits org_id, and the RESTRICTIVE policy
+--   audit_log_v2_org_isolation checks `org_id IS NOT DISTINCT FROM app_current_org()`
+--   so a NULL org is rejected for every user who belongs to an org. auditLogger
+--   swallows the error, so it was silent. Last LOGIN row written: 2026-07-12 14:12.
+--   Security Center login history has been empty since then. Postgres log showed the
+--   42501 "new row violates row-level security policy audit_log_v2_org_isolation".
+--
+--   Fix = default org_id to app_current_org() (same pattern as V290 on the business
+--   tables). No policy is loosened: the insert policy still requires
+--   user_id = auth.uid(), and org/country isolation are unchanged. Server-side audit
+--   triggers that pass org_id explicitly are unaffected.
+--
+-- VERIFY (proved in a rolled-back txn as a real approved Manager before applying)
+--   before default: REFUSED (audit_log_v2_org_isolation)
+--   after default : ACCEPTED
+--   forged user_id: still REFUSED
+--
+-- ROLLBACK
+--   alter table public.audit_log_v2 alter column org_id drop default;
+
+alter table public.audit_log_v2 alter column org_id set default public.app_current_org();

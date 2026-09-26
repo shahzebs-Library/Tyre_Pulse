@@ -7,15 +7,20 @@
  * configuration). A source that fails to load makes its controls "Could not
  * check", never a pass. Controls SQL cannot measure are attested by hand with a
  * note and an expiry, and fall back to "Needs attestation" when that lapses.
+ *
+ * Layout: three tabs synced to ?tab=. Controls (the searchable, paged control
+ * catalogue; a row opens the control and its attestation in a side drawer),
+ * Readiness (score, status share, passing by domain, and what needs attention:
+ * failing controls and attestations about to lapse) and Attestations.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  ClipboardCheck, RefreshCw, FileDown, FileSpreadsheet, CheckCircle2, AlertTriangle,
+  ClipboardCheck, FileDown, FileSpreadsheet, CheckCircle2, AlertTriangle,
   XCircle, Hand, HelpCircle, Stamp, Undo2, Info, Layers, PieChart,
 } from 'lucide-react'
 import {
   Panel, PanelHeader, Note, StatTile, Badge, Btn, Segmented, SearchInput, Select, Toolbar,
-  Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, Modal, Code,
+  Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, Code,
 } from '../components/ui'
 import { sortRows, useTableSort } from '../../lib/consoleTable'
 import { BarsChart, ShareChart, ScoreRing, STATUS, useChartTheme } from '../components/ui/charts'
@@ -30,6 +35,16 @@ import {
 import { toUserMessage } from '../../lib/safeError'
 import { exportToExcel, reportFileName } from '../../lib/exportUtils'
 import { loadPdf } from '../../lib/pdfEngine'
+import PageHeader from './ops/PageHeader'
+import TabBar from './ops/TabBar'
+import useUrlTab from './ops/useUrlTab'
+import usePaged from './ops/usePaged'
+import Pager from './ops/Pager'
+import SideDrawer from './ops/SideDrawer'
+import AttentionList from './ops/AttentionList'
+
+const TABS = ['controls', 'readiness', 'attestations']
+const EXPIRY_WARN_DAYS = 30
 
 const STATUS_TONE = { pass: 'good', warn: 'warning', fail: 'danger', manual: 'info', unknown: 'quiet' }
 const STATUS_ICON = { pass: CheckCircle2, warn: AlertTriangle, fail: XCircle, manual: Hand, unknown: HelpCircle }
@@ -157,7 +172,7 @@ function ControlDrawer({ control, evidence, attestations, onClose, onChanged }) 
   }
 
   return (
-    <Modal open={!!control} onClose={onClose} width="max-w-3xl"
+    <SideDrawer open={!!control} onClose={onClose} width="max-w-2xl"
       title={`${control.id}: ${control.title}`}
       subtitle={`${control.domain} | SOC 2 ${control.soc2.join(', ') || 'N/A'} | ISO 27001 ${control.iso.join(', ') || 'N/A'}`}>
       <div className="space-y-4 text-xs">
@@ -230,7 +245,7 @@ function ControlDrawer({ control, evidence, attestations, onClose, onChanged }) 
         {err && <ErrorState message={err} />}
         {msg && <Note tone="accent" icon={CheckCircle2}>{msg}</Note>}
       </div>
-    </Modal>
+    </SideDrawer>
   )
 }
 
@@ -249,6 +264,7 @@ export default function ConsoleCompliance() {
   const [openId, setOpenId] = useState(null)
   const [exporting, setExporting] = useState(null)
   const [notice, setNotice] = useState(null)
+  const [tab, setTab] = useUrlTab(TABS, 'controls')
 
   const load = useCallback(async () => {
     setLoading(true); setError(null)
@@ -294,6 +310,31 @@ export default function ConsoleCompliance() {
     color: d.fail ? STATUS[theme].critical : d.warn || d.manual ? STATUS[theme].medium : STATUS[theme].good,
   })), [fwResults, theme])
 
+  const paged = usePaged(visible)
+
+  // Live attestations that lapse within EXPIRY_WARN_DAYS of the last read, so
+  // they can be renewed before the control drops back to Needs attestation.
+  const expiring = useMemo(() => {
+    const ref = loadedAt ? new Date(loadedAt).getTime() : 0
+    if (!ref) return []
+    return CONTROLS.filter((c) => c.manual).map((c) => ({ c, a: activeAttestation(attestations, c.id) }))
+      .filter(({ a }) => a && new Date(a.expires_at).getTime() - ref <= EXPIRY_WARN_DAYS * 86400000)
+  }, [attestations, loadedAt])
+
+  const attention = useMemo(() => {
+    const items = []
+    for (const r of fwResults.filter((x) => x.status === 'fail')) {
+      items.push({ key: `f-${r.id}`, tone: 'danger', title: `${r.id}: ${r.title}`, detail: r.detail, action: { label: 'Open', onClick: () => setOpenId(r.id) } })
+    }
+    for (const { c, a } of expiring) {
+      items.push({ key: `e-${c.id}`, tone: 'warning', title: `${c.id}: attestation expires ${fmtDay(a.expires_at)}`, detail: 'Renew it before it lapses, or the control falls back to Needs attestation.', action: { label: 'Renew', onClick: () => setOpenId(c.id) } })
+    }
+    for (const r of fwResults.filter((x) => x.status === 'warn')) {
+      items.push({ key: `w-${r.id}`, tone: 'warning', title: `${r.id}: ${r.title}`, detail: r.detail, action: { label: 'Open', onClick: () => setOpenId(r.id) } })
+    }
+    return items.slice(0, 10)
+  }, [fwResults, expiring])
+
   const domainOptions = useMemo(() => [...new Set(fwResults.map((r) => r.domain))].sort().map((d) => ({ value: d, label: d })), [fwResults])
   const openControl = allResults.find((r) => r.id === openId) || null
 
@@ -325,21 +366,15 @@ export default function ConsoleCompliance() {
 
   return (
     <div className="space-y-5 max-w-7xl">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1>
-            <ClipboardCheck size={18} className="text-orange-400" /> Compliance Center
-          </h1>
-          <p className="text-xs text-gray-500 mt-1">
-            {CONTROLS.length} controls mapped to SOC 2 and ISO 27001 Annex A, each read from live evidence. Last gathered {fmtWhen(loadedAt)}.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Btn icon={FileSpreadsheet} onClick={exportExcel} busy={exporting === 'xlsx'} disabled={!fwResults.length}>Excel</Btn>
-          <Btn icon={FileDown} onClick={exportPdf} busy={exporting === 'pdf'} disabled={!fwResults.length}>Evidence pack PDF</Btn>
-          <Btn icon={RefreshCw} onClick={load} busy={loading}>Refresh</Btn>
-        </div>
-      </header>
+      <PageHeader icon={ClipboardCheck} title="Compliance Center"
+        purpose={`${CONTROLS.length} controls mapped to SOC 2 and ISO 27001 Annex A, each read from live evidence. Last gathered ${fmtWhen(loadedAt)}.`}
+        refreshedAt={loadedAt} onRefresh={load} refreshing={loading}
+        actions={(
+          <>
+            <Btn icon={FileSpreadsheet} onClick={exportExcel} busy={exporting === 'xlsx'} disabled={!fwResults.length}>Excel</Btn>
+            <Btn variant="primary" icon={FileDown} onClick={exportPdf} busy={exporting === 'pdf'} disabled={!fwResults.length}>Evidence pack PDF</Btn>
+          </>
+        )} />
 
       {notice && <Note tone={notice.tone} icon={Info}>{notice.text}</Note>}
       {error && evidence && <ErrorState message={error} onRetry={load} />}
@@ -351,39 +386,58 @@ export default function ConsoleCompliance() {
       )}
 
       <Toolbar>
-        <Segmented options={fwOptions} value={framework} onChange={setFramework} ariaLabel="Framework" />
+        <Segmented options={fwOptions} value={framework} onChange={setFramework} ariaLabel="Framework" role="group" />
       </Toolbar>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Panel className="flex flex-col justify-center gap-2">
-          <ScoreRing score={readiness.score} label="Readiness" />
-          <p className="text-[11px] text-gray-500">
-            Measured {readiness.evaluated} of {readiness.total} controls ({readiness.coveragePct ?? 0}% coverage).
-            Manual controls count as not yet evidenced until attested.
-          </p>
-        </Panel>
-        <Panel>
-          <PanelHeader icon={PieChart} title="Control status" subtitle="Share of controls in each state." />
-          <ShareChart parts={shareParts} height={150}
-            center={{ value: readiness.counts.pass, label: 'passing' }}
-            summary={shareParts.map((p) => `${p.label} ${p.value}`).join(', ')} />
-        </Panel>
-        <Panel>
-          <PanelHeader icon={Layers} title="Passing by domain" subtitle="Percent of each domain's controls passing." />
-          <BarsChart bars={domainBars} valueFormat={(v) => `${v}%`}
-            summary={domainBars.map((b) => `${b.label} ${b.value} percent`).join(', ')}
-            emptyText="No domain has a passing control yet." />
-        </Panel>
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        <StatTile label="Readiness" value={readiness.score === null ? 'N/A' : `${readiness.score}/100`} icon={ClipboardCheck}
+          tone={readiness.score === null ? 'muted' : readiness.score >= 80 ? 'good' : readiness.score >= 50 ? 'warning' : 'danger'}
+          sub={`${readiness.coveragePct ?? 0}% coverage`} active={tab === 'readiness'} onClick={() => setTab('readiness')} />
         {STATUS_ORDER.map((s) => (
           <StatTile key={s} label={STATUS_LABEL[s]} value={readiness.counts[s] ?? 0} icon={STATUS_ICON[s]}
             tone={s === 'pass' ? 'good' : s === 'fail' ? 'danger' : s === 'warn' ? 'warning' : 'muted'}
-            active={statusFilter === s} onClick={() => setStatusFilter(statusFilter === s ? '' : s)} />
+            active={tab === 'controls' && statusFilter === s}
+            onClick={() => { setStatusFilter(statusFilter === s && tab === 'controls' ? '' : s); setTab('controls') }} />
         ))}
       </div>
 
+      <TabBar tabs={[
+        { key: 'controls', label: 'Controls', count: fwResults.length },
+        { key: 'readiness', label: 'Readiness' },
+        { key: 'attestations', label: 'Attestations', count: CONTROLS.filter((c) => c.manual).length },
+      ]} value={tab} onChange={setTab} label="Compliance sections" />
+
+      {tab === 'readiness' && (
+        <div className="space-y-4">
+          <div className="grid gap-4 lg:grid-cols-3">
+            <Panel className="flex flex-col justify-center gap-2">
+              <ScoreRing score={readiness.score} label="Readiness" />
+              <p className="text-[11px] text-gray-500">
+                Measured {readiness.evaluated} of {readiness.total} controls ({readiness.coveragePct ?? 0}% coverage).
+                Manual controls count as not yet evidenced until attested.
+              </p>
+            </Panel>
+            <Panel>
+              <PanelHeader icon={PieChart} title="Control status" subtitle="Share of controls in each state." />
+              <ShareChart parts={shareParts} height={150}
+                center={{ value: readiness.counts.pass, label: 'passing' }}
+                summary={shareParts.map((p) => `${p.label} ${p.value}`).join(', ')} />
+            </Panel>
+            <Panel>
+              <PanelHeader icon={Layers} title="Passing by domain" subtitle="Percent of each domain's controls passing." />
+              <BarsChart bars={domainBars} valueFormat={(v) => `${v}%`}
+                summary={domainBars.map((b) => `${b.label} ${b.value} percent`).join(', ')}
+                emptyText="No domain has a passing control yet." />
+            </Panel>
+          </div>
+
+          <AttentionList items={attention}
+            subtitle={`Failing controls, attestations that lapse within ${EXPIRY_WARN_DAYS} days, then controls needing attention.`}
+            clearText="No control is failing and no attestation lapses soon." />
+        </div>
+      )}
+
+      {tab === 'controls' && (
       <Panel flush>
         <div className="p-4 pb-3">
           <PanelHeader icon={ClipboardCheck} title="Controls"
@@ -396,6 +450,7 @@ export default function ConsoleCompliance() {
           </Toolbar>
         </div>
         {visible.length ? (
+          <>
           <Table className="border-0 rounded-none border-t">
             <THead>
               <Th sortKey="title" sort={sort} onSort={onSort}>Control</Th>
@@ -405,8 +460,8 @@ export default function ConsoleCompliance() {
               <Th sortKey="status" sort={sort} onSort={onSort}>Status</Th><Th>Evidence</Th>
             </THead>
             <tbody>
-              {visible.map((r) => (
-                <Tr key={r.id} onClick={() => setOpenId(r.id)}>
+              {paged.rows.map((r) => (
+                <Tr key={r.id} onClick={() => setOpenId(r.id)} ariaLabel={`Open control ${r.id}`}>
                   <Td>
                     <div className="text-gray-200">{r.title}</div>
                     <div className="text-[10px] text-gray-500 font-mono">{r.id}</div>
@@ -420,10 +475,15 @@ export default function ConsoleCompliance() {
               ))}
             </tbody>
           </Table>
+          <div className="px-4 pb-4"><Pager paged={paged} label="controls" /></div>
+          </>
         ) : (
           <EmptyState title="No controls match" reason="No control in this framework matches the current search and filters." />
         )}
       </Panel>
+      )}
+
+      {tab === 'attestations' && (
 
       <Panel flush>
         <div className="p-4 pb-3">
@@ -454,6 +514,7 @@ export default function ConsoleCompliance() {
           </Table>
         )}
       </Panel>
+      )}
 
       <ControlDrawer control={openControl} evidence={evidence} attestations={attestations}
         onClose={() => setOpenId(null)} onChanged={load} />

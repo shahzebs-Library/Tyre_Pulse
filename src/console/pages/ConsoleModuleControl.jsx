@@ -16,11 +16,20 @@
  * set to Maintenance or Off shows an "unavailable" screen to regular users on
  * every route guarded by that module. Admin and Super Admin always pass. The
  * `visible_to` audience is stored only; it is not enforced.
+ *
+ * Layout: three tabs synced to ?tab= so the page is never a wall of 160 cards:
+ *   Modules        - the filterable, paged card board with bulk actions; a
+ *                    card's Details opens a side drawer (dependencies both ways,
+ *                    maintenance window, status toggle).
+ *   Out of service - everything in Maintenance or Off, overdue maintenance
+ *                    windows first, one action each (bring it back Live).
+ *   Categories     - live / maintenance / off counts per category, sortable
+ *                    and exportable.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Boxes, RefreshCw, Info, AlertTriangle, CheckCircle2,
-  Power, Wrench, Rocket, Sparkles, ShieldCheck, Clock,
+  Power, Wrench, Rocket, Sparkles, ShieldCheck, Clock, Layers, PanelRightOpen,
 } from 'lucide-react'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import {
@@ -33,10 +42,28 @@ import { toUserMessage } from '../../lib/safeError'
 import {
   Panel, PanelHeader, Note, StatTile, Badge, Code, Btn, Segmented, SearchInput,
   Select, Toolbar, LoadingState, EmptyState, ErrorState, Modal,
+  Table, THead, Th, Tr, Td,
 } from '../components/ui'
-import { sortRows } from '../../lib/consoleTable'
+import { sortRows, useTableSort } from '../../lib/consoleTable'
 import ExportButtons from './shared/ExportButtons'
 import { ShareChart, STATUS, useChartTheme } from '../components/ui/charts'
+import PageHeader from './ops/PageHeader'
+import TabBar from './ops/TabBar'
+import useUrlTab from './ops/useUrlTab'
+import usePaged from './ops/usePaged'
+import Pager from './ops/Pager'
+import SideDrawer, { Field } from './ops/SideDrawer'
+import Collapsible from './ops/Collapsible'
+
+const TABS = ['modules', 'service', 'categories']
+const CATEGORY_EXPORT_COLUMNS = [
+  { key: 'category', header: 'Category' },
+  { key: 'total', header: 'Modules' },
+  { key: 'live', header: 'Live' },
+  { key: 'maintenance', header: 'Maintenance' },
+  { key: 'disabled', header: 'Off' },
+  { key: 'beta', header: 'Beta' },
+]
 
 // Sort choices for the module cards. Status sorts out-of-service first.
 const STATUS_RANK = { disabled: 0, maintenance: 1, beta: 2, live: 3 }
@@ -137,6 +164,9 @@ export default function ConsoleModuleControl() {
   const [maintModal, setMaintModal] = useState(null)
   const [maintUntil, setMaintUntil] = useState('')
   const [maintNote, setMaintNote] = useState('')
+  const [tab, setTab] = useUrlTab(TABS, 'modules')
+  const [openId, setOpenId] = useState(null)
+  const [readAt, setReadAt] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -147,6 +177,7 @@ export default function ConsoleModuleControl() {
       await seedFromCatalog(buildNavModuleCatalog(NAV_CATALOG))
       const rows = await listModules()
       setModules(rows)
+      setReadAt(Date.now())
     } catch (err) {
       setError(toUserMessage(err))
     } finally {
@@ -188,6 +219,43 @@ export default function ConsoleModuleControl() {
   }, [modules])
 
   const outOfService = counts.maintenance + counts.disabled
+  const paged = usePaged(filtered, 24)
+
+  // Out of service, worst first: a maintenance window already past its ETA,
+  // then Off, then Maintenance. The reference time is the moment of the read.
+  const serviceRows = useMemo(() => {
+    const ref = readAt || 0
+    return modules
+      .filter((m) => m.status === 'maintenance' || m.status === 'disabled')
+      .map((m) => {
+        const t = m.maintenance_until ? new Date(m.maintenance_until).getTime() : NaN
+        const overdue = m.status === 'maintenance' && Number.isFinite(t) && ref > 0 && t < ref
+        return { ...m, overdue, rank: overdue ? 0 : m.status === 'disabled' ? 1 : 2 }
+      })
+      .sort((a, b) => a.rank - b.rank || String(a.name || a.module_id).localeCompare(String(b.name || b.module_id)))
+  }, [modules, readAt])
+  const overdueWindows = serviceRows.filter((m) => m.overdue).length
+
+  const categoryRows = useMemo(() => {
+    const m = new Map()
+    for (const x of modules) {
+      const k = x.category || 'Uncategorised'
+      const e = m.get(k) || { category: k, total: 0, live: 0, maintenance: 0, disabled: 0, beta: 0 }
+      e.total += 1
+      if (e[x.status] != null) e[x.status] += 1
+      m.set(k, e)
+    }
+    return [...m.values()]
+  }, [modules])
+  const { sort: catSort, onSort: onCatSort } = useTableSort({ key: 'total', dir: 'desc' })
+  const sortedCategories = useMemo(() => sortRows(categoryRows, catSort), [categoryRows, catSort])
+
+  const byId = useMemo(() => new Map(modules.map((m) => [m.module_id, m])), [modules])
+  const openModule = openId ? byId.get(openId) : null
+  const openDeps = useMemo(() => (Array.isArray(openModule?.depends_on) ? openModule.depends_on : []), [openModule])
+  const openDependents = useMemo(() => (openModule
+    ? modules.filter((m) => Array.isArray(m.depends_on) && m.depends_on.includes(openModule.module_id))
+    : []), [modules, openModule])
 
   const shareParts = useMemo(() => {
     const pal = STATUS[theme]
@@ -315,24 +383,18 @@ export default function ConsoleModuleControl() {
 
   return (
     <div className="space-y-5 max-w-7xl">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1>
-            <Boxes size={18} className="text-orange-400" /> Module Control Center
-          </h1>
-          <p className="text-xs text-gray-500 mt-1">
-            {admin?.full_name ? `Signed in as ${admin.full_name}. ` : ''}
-            Turn product modules Live, into Maintenance, or Off across the platform.
-          </p>
-        </div>
-        <Btn icon={RefreshCw} onClick={load} busy={loading}>Refresh</Btn>
-      </header>
+      <PageHeader icon={Boxes} title="Module Control Center"
+        purpose={`${admin?.full_name ? `Signed in as ${admin.full_name}. ` : ''}Turn product modules Live, into Maintenance, or Off across the platform.`}
+        refreshedAt={readAt} onRefresh={load} refreshing={loading} />
 
-      <Note icon={ShieldCheck} tone="accent">
-        A module set to Maintenance or Off shows an "unavailable" screen to regular users on every page
-        guarded by that module. Admins and Super Admins always pass so they can verify it. The
-        "Visible to" audience on each card is recorded only and is not enforced.
-      </Note>
+      <Collapsible icon={ShieldCheck} title="How module status is enforced"
+        subtitle="Maintenance and Off block regular users; Admins always pass. Visible to is recorded only.">
+        <Note icon={ShieldCheck} tone="accent">
+          A module set to Maintenance or Off shows an "unavailable" screen to regular users on every page
+          guarded by that module. Admins and Super Admins always pass so they can verify it. The
+          "Visible to" audience on each card is recorded only and is not enforced.
+        </Note>
+      </Collapsible>
 
       <ErrorState message={!loading ? error : null} onRetry={load} />
 
@@ -347,6 +409,14 @@ export default function ConsoleModuleControl() {
             active={statusFilter === 'disabled'} onClick={() => setStatusFilter(statusFilter === 'disabled' ? 'all' : 'disabled')} />
           <StatTile label="Beta" value={loading ? 'N/A' : counts.beta} tone="muted" icon={Sparkles}
             active={statusFilter === 'beta'} onClick={() => setStatusFilter(statusFilter === 'beta' ? 'all' : 'beta')} />
+          {!loading && overdueWindows > 0 && (
+            <div className="col-span-2">
+              <Note icon={Clock} tone="warning">
+                {overdueWindows} maintenance window{overdueWindows === 1 ? ' is' : 's are'} past the expected return time.{' '}
+                <button type="button" onClick={() => setTab('service')} className="underline hover:text-amber-100 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">Review</button>
+              </Note>
+            </div>
+          )}
         </div>
         <Panel>
           <PanelHeader title="Modules by status"
@@ -363,6 +433,13 @@ export default function ConsoleModuleControl() {
         </Panel>
       </div>
 
+      <TabBar tabs={[
+        { key: 'modules', label: 'Modules', count: loading ? undefined : modules.length },
+        { key: 'service', label: 'Out of service', count: loading ? undefined : outOfService },
+        { key: 'categories', label: 'Categories', count: loading ? undefined : categoryRows.length },
+      ]} value={tab} onChange={setTab} label="Module control sections" />
+
+      {tab === 'modules' && (<>
       {/* Toolbar: status, search, category */}
       <Toolbar>
         <Segmented
@@ -400,7 +477,7 @@ export default function ConsoleModuleControl() {
               className="h-3.5 w-3.5 rounded border-gray-600 bg-gray-800 accent-orange-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />
             {selectedIds.length > 0
               ? <span className="text-orange-200 font-semibold">{selectedIds.length} selected</span>
-              : `Select all ${filtered.length} shown`}
+              : `Select all ${filtered.length} matching`}
           </label>
           {selectedIds.length > 0 && (
             <Toolbar>
@@ -440,19 +517,137 @@ export default function ConsoleModuleControl() {
           />
         </Panel>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {filtered.map((m) => (
-            <ModuleCard
-              key={m.module_id}
-              module={m}
-              busy={busyId === m.module_id}
-              checked={selected.has(m.module_id)}
-              onToggleSelect={() => toggleSelected(m.module_id)}
-              onPick={(status) => requestStatus('one', [m.module_id], status)}
-            />
-          ))}
+        <div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {paged.rows.map((m) => (
+              <ModuleCard
+                key={m.module_id}
+                module={m}
+                busy={busyId === m.module_id}
+                checked={selected.has(m.module_id)}
+                onToggleSelect={() => toggleSelected(m.module_id)}
+                onPick={(status) => requestStatus('one', [m.module_id], status)}
+                onOpen={() => setOpenId(m.module_id)}
+              />
+            ))}
+          </div>
+          <Pager paged={paged} label="modules" />
         </div>
       )}
+      </>)}
+
+      {tab === 'service' && (
+        <Panel>
+          <PanelHeader icon={Wrench} title="Out of service"
+            subtitle="Every module in Maintenance or Off. Maintenance windows past their expected return come first." />
+          {loading ? <LoadingState label="Loading modules" /> : error && modules.length === 0 ? (
+            <ErrorState message={error} onRetry={load} />
+          ) : serviceRows.length === 0 ? (
+            <EmptyState icon={CheckCircle2} title="Every module is available"
+              reason="Nothing is in Maintenance or Off, so no regular user is blocked." />
+          ) : (
+            <ul className="space-y-2">
+              {serviceRows.map((m) => (
+                <li key={m.module_id} className="flex flex-wrap items-start gap-3 rounded-lg border border-gray-800 bg-gray-900/40 px-3 py-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm text-gray-100 font-medium">{m.name || m.module_id}</span>
+                      <StatusBadge status={m.status} />
+                      {m.overdue && <Badge tone="danger" icon={Clock}>Past expected return</Badge>}
+                    </div>
+                    <p className="text-[11px] text-gray-500 mt-0.5">
+                      {m.maintenance_until && formatUntil(m.maintenance_until) ? `Expected back by ${formatUntil(m.maintenance_until)}. ` : ''}
+                      {m.maintenance_note || (m.status === 'disabled' ? 'Switched off; users cannot open it.' : 'No note recorded.')}
+                    </p>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <Btn size="xs" icon={PanelRightOpen} onClick={() => setOpenId(m.module_id)}>Details</Btn>
+                    <Btn size="xs" variant="good" icon={Rocket} busy={busyId === m.module_id}
+                      onClick={() => requestStatus('one', [m.module_id], 'live')}>Set Live</Btn>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+      )}
+
+      {tab === 'categories' && (
+        <Panel>
+          <PanelHeader icon={Layers} title="Modules by category"
+            subtitle="Where the out-of-service modules sit. Select a category to open its modules."
+            actions={<ExportButtons rows={sortedCategories} columns={CATEGORY_EXPORT_COLUMNS} title="Module Control by Category" />} />
+          {loading ? <LoadingState label="Loading modules" /> : sortedCategories.length === 0 ? (
+            <EmptyState icon={Layers} title={error ? 'Modules could not be loaded' : 'No modules registered yet'}
+              reason={error ? 'The module registry could not be read.' : 'Refresh to seed the registry from the product catalog.'} />
+          ) : (
+            <Table>
+              <THead>
+                <Th sortKey="category" sort={catSort} onSort={onCatSort}>Category</Th>
+                <Th sortKey="total" sort={catSort} onSort={onCatSort} align="right">Modules</Th>
+                <Th sortKey="live" sort={catSort} onSort={onCatSort} align="right">Live</Th>
+                <Th sortKey="maintenance" sort={catSort} onSort={onCatSort} align="right">Maintenance</Th>
+                <Th sortKey="disabled" sort={catSort} onSort={onCatSort} align="right">Off</Th>
+                <Th sortKey="beta" sort={catSort} onSort={onCatSort} align="right">Beta</Th>
+              </THead>
+              <tbody>
+                {sortedCategories.map((c) => (
+                  <Tr key={c.category} ariaLabel={`Show ${c.category} modules`}
+                    onClick={() => { setCategory(c.category === 'Uncategorised' ? 'all' : c.category); setStatusFilter('all'); setSearch(''); setTab('modules') }}>
+                    <Td><span className="text-gray-200">{c.category}</span></Td>
+                    <Td align="right" className="tabular-nums">{c.total}</Td>
+                    <Td align="right" className="tabular-nums text-emerald-300">{c.live}</Td>
+                    <Td align="right" className={`tabular-nums ${c.maintenance ? 'text-amber-300' : 'text-gray-500'}`}>{c.maintenance}</Td>
+                    <Td align="right" className={`tabular-nums ${c.disabled ? 'text-red-300' : 'text-gray-500'}`}>{c.disabled}</Td>
+                    <Td align="right" className="tabular-nums text-gray-400">{c.beta}</Td>
+                  </Tr>
+                ))}
+              </tbody>
+            </Table>
+          )}
+        </Panel>
+      )}
+
+      <SideDrawer open={!!openModule} onClose={() => setOpenId(null)} title={openModule?.name || openModule?.module_id || 'Module'}
+        subtitle={openModule ? `Module ${openModule.module_id}` : ''}>
+        {openModule && (
+          <>
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusBadge status={openModule.status} />
+              {openModule.category && <Badge tone="quiet">{openModule.category}</Badge>}
+            </div>
+            <StatusToggle current={openModule.status} disabled={busyId === openModule.module_id}
+              onPick={(status) => requestStatus('one', [openModule.module_id], status)} name={openModule.name || openModule.module_id} />
+            <dl>
+              <Field label="Visible to">{VISIBLE_LABEL[openModule.visible_to] || openModule.visible_to || 'Everyone'} (recorded only)</Field>
+              <Field label="Roles">{Array.isArray(openModule.roles) && openModule.roles.length ? openModule.roles.join(', ') : 'N/A'}</Field>
+              <Field label="Note">{openModule.note || 'N/A'}</Field>
+              <Field label="Maintenance until">{formatUntil(openModule.maintenance_until) || 'N/A'}</Field>
+              <Field label="Maintenance note">{openModule.maintenance_note || 'N/A'}</Field>
+              <Field label="Last changed">{formatUntil(openModule.last_updated) || 'N/A'}</Field>
+            </dl>
+            <div>
+              <p className="text-[11px] uppercase tracking-wide text-gray-500 mb-1.5">Depends on</p>
+              {openDeps.length === 0 ? <p className="text-xs text-gray-500">Nothing recorded.</p> : (
+                <div className="flex flex-wrap gap-1.5">
+                  {openDeps.map((d) => {
+                    const dm = byId.get(d)
+                    return <Badge key={d} tone={STATUS_TONE[dm?.status] || 'default'}>{dm?.name || d}</Badge>
+                  })}
+                </div>
+              )}
+            </div>
+            <div>
+              <p className="text-[11px] uppercase tracking-wide text-gray-500 mb-1.5">Used by</p>
+              {openDependents.length === 0 ? <p className="text-xs text-gray-500">No module depends on this one.</p> : (
+                <div className="flex flex-wrap gap-1.5">
+                  {openDependents.map((dm) => <Badge key={dm.module_id} tone={STATUS_TONE[dm.status] || 'default'}>{dm.name || dm.module_id}</Badge>)}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </SideDrawer>
 
       {/* Dependency confirm modal */}
       <ConfirmModal
@@ -480,7 +675,7 @@ export default function ConsoleModuleControl() {
 
 // ── Sub-components ──────────────────────────────────────────────────────────────
 
-function ModuleCard({ module: m, busy, checked, onToggleSelect, onPick }) {
+function ModuleCard({ module: m, busy, checked, onToggleSelect, onPick, onOpen }) {
   const name = m.name || m.module_id
   return (
     <div className={`rounded-xl border p-3.5 transition-colors ${checked ? 'border-orange-800/50 bg-orange-950/20' : 'border-gray-800 bg-gray-900/50'}`}>
@@ -519,6 +714,7 @@ function ModuleCard({ module: m, busy, checked, onToggleSelect, onPick }) {
 
       <div className="flex flex-wrap items-center justify-between gap-2 mt-3">
         <StatusToggle current={m.status} disabled={busy} onPick={onPick} name={name} />
+        {onOpen && <Btn size="xs" variant="quiet" icon={PanelRightOpen} onClick={onOpen}>Details</Btn>}
         <span className="text-[10px] text-gray-500 flex items-center gap-1"
           title="Who this module is intended for. Recorded only; not enforced.">
           Visible to: {VISIBLE_LABEL[m.visible_to] || m.visible_to || 'Everyone'}

@@ -1,20 +1,26 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  ShieldCheck, RefreshCw, Download, ChevronRight, ChevronDown, Info, Activity, Users,
+  ShieldCheck, Info, Activity, Users, Clock,
 } from 'lucide-react'
 import {
-  Panel, PanelHeader, Note, StatTile, Badge, Btn, Segmented, SearchInput, Select, Toolbar,
+  Panel, PanelHeader, Note, StatTile, Badge, Btn, SearchInput, Select, Toolbar,
   Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, Code,
 } from '../components/ui'
 import { sortRows, useTableSort } from '../../lib/consoleTable'
-import { TrendChart, ShareChart } from '../components/ui/charts'
+import { TrendChart, ShareChart, BarsChart } from '../components/ui/charts'
 import { dailySeries, topShare } from '../../lib/consoleCharts'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import {
   AUDIT_SOURCES, listDataAudit, listAccessAudit, listConsoleAudit,
 } from '../../lib/api/auditTrail'
-import { exportToExcel } from '../../lib/exportUtils'
 import { toUserMessage } from '../../lib/safeError'
+import ExportButtons from './shared/ExportButtons'
+import PageHeader from './ops/PageHeader'
+import TabBar from './ops/TabBar'
+import useUrlTab from './ops/useUrlTab'
+import usePaged from './ops/usePaged'
+import Pager from './ops/Pager'
+import SideDrawer, { Field } from './ops/SideDrawer'
 
 // Read-only unified audit viewer (Module 6). Reads three independently-owned
 // audit tables (data changes, access control, console actions) through the
@@ -24,6 +30,11 @@ import { toUserMessage } from '../../lib/safeError'
 // an action was picked the list shrank to that one action and the only way to
 // pick another was to clear the filter first. Actions seen for a source are now
 // remembered for the session, so the list stays whole while filtering.
+//
+// Layout: the source is the page tab (?tab=), and each source has two views
+// (?view=): Entries (searchable, sortable, paged, Excel/PDF export; a row opens
+// a side drawer with the full entry and, for data changes, before and after)
+// and Insights (events per day, events by action, most active actors).
 
 const PAGE_LIMIT = 200
 const SINCE_OPTIONS = [
@@ -56,6 +67,16 @@ function sinceIso(key) {
   return new Date(Date.now() - opt.days * 86400000).toISOString()
 }
 
+const SOURCE_KEYS = Object.keys(SOURCE_META)
+const EXPORT_COLUMNS = [
+  { key: 'when', header: 'Time', value: (r) => fmtWhen(r.when) },
+  { key: 'actor', header: 'Actor' },
+  { key: 'action', header: 'Action' },
+  { key: 'target', header: 'Target' },
+  { key: 'detail', header: 'Detail' },
+  { key: 'source', header: 'Source' },
+]
+
 function fmtWhen(v) {
   if (!v) return 'N/A'
   const d = new Date(v)
@@ -82,7 +103,9 @@ function JsonBlock({ label, value }) {
 export default function ConsoleAuditTrail() {
   useConsoleAuth() // gate: rendered only inside the super-admin console shell
 
-  const [sourceKey, setSourceKey] = useState('audit_log_v2')
+  const [sourceKey, setSourceKey] = useUrlTab(SOURCE_KEYS, 'audit_log_v2')
+  const [view, setView] = useUrlTab(['entries', 'insights'], 'entries', 'view')
+  const [readAt, setReadAt] = useState(null)
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -106,6 +129,7 @@ export default function ConsoleAuditTrail() {
       })
       const list = Array.isArray(data) ? data : []
       setRows(list)
+      setReadAt(Date.now())
       setSeenActions((prev) => {
         const cur = new Set(prev[sourceKey] || [])
         list.forEach((r) => { if (r.action) cur.add(r.action) })
@@ -154,25 +178,16 @@ export default function ConsoleAuditTrail() {
   const canDiff = sourceKey === 'audit_log_v2'
   const hasFilters = !!(search || actionFilter || since !== '7d')
 
-  async function onExport() {
-    if (filtered.length === 0) return
-    const cols = ['when', 'actor', 'action', 'target', 'detail', 'source']
-    const headers = ['Time', 'Actor', 'Action', 'Target', 'Detail', 'Source']
-    const exportRows = filtered.map((r) => ({
-      when: fmtWhen(r.when),
-      actor: r.actor || '',
-      action: r.action || '',
-      target: r.target || '',
-      detail: r.detail || '',
-      source: r.source || '',
-    }))
-    const label = AUDIT_SOURCES.find((s) => s.key === sourceKey)?.label || 'Audit'
-    try {
-      await exportToExcel(exportRows, cols, headers, `Audit Trail ${label}`, 'Audit')
-    } catch (err) {
-      setError(toUserMessage(err, 'Could not export. Please try again.'))
+  const paged = usePaged(filtered)
+  const openRow = useMemo(() => (expanded ? filtered.find((r, i) => `${r.source}-${r.id ?? i}` === expanded) || null : null), [expanded, filtered])
+  const topActors = useMemo(() => {
+    const m = new Map()
+    for (const r of filtered) {
+      if (!r.actor) continue
+      m.set(r.actor, (m.get(r.actor) || 0) + 1)
     }
-  }
+    return [...m.entries()].map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value).slice(0, 8)
+  }, [filtered])
 
   const capped = rows.length >= PAGE_LIMIT
   const sinceOpt = SINCE_OPTIONS.find((o) => o.key === since)
@@ -190,19 +205,12 @@ export default function ConsoleAuditTrail() {
 
   return (
     <div className="space-y-5 max-w-7xl">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2"><ShieldCheck size={18} className="text-orange-400" /> Audit Trail</h1>
-          <p className="text-xs text-gray-500 mt-1">Read only history across data changes, access control and console actions.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Btn icon={Download} onClick={onExport} disabled={filtered.length === 0}>Export Excel</Btn>
-          <Btn icon={RefreshCw} onClick={load} busy={loading}>Refresh</Btn>
-        </div>
-      </header>
+      <PageHeader icon={ShieldCheck} title="Audit Trail"
+        purpose="Read only history across data changes, access control and console actions."
+        refreshedAt={readAt} onRefresh={load} refreshing={loading}
+        actions={<ExportButtons rows={filtered} columns={EXPORT_COLUMNS} title={`Audit Trail ${sourceLabel}`} onError={setError} />} />
 
-      <Segmented size="md" value={sourceKey} onChange={switchSource}
-        options={AUDIT_SOURCES.map((s) => ({ key: s.key, label: s.label }))} />
+      <TabBar tabs={AUDIT_SOURCES.map((s) => ({ key: s.key, label: s.label }))} value={sourceKey} onChange={switchSource} label="Audit source" />
 
       <Note icon={Info}>{meta.help}</Note>
 
@@ -213,30 +221,13 @@ export default function ConsoleAuditTrail() {
       )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatTile label="Entries shown" value={loading ? 'N/A' : filtered.length.toLocaleString()}
-          sub={capped ? `Latest ${PAGE_LIMIT} loaded` : `${sinceOpt?.label || 'Period'}`} icon={ShieldCheck} />
-        <StatTile label="Distinct actors" value={loading ? 'N/A' : actorCount} icon={Users} />
-        <StatTile label="Distinct actions" value={loading ? 'N/A' : new Set(filtered.map((r) => r.action).filter(Boolean)).size} icon={Activity} />
-        <StatTile label="Most recent" value={loading || !filtered.length ? 'N/A' : fmtWhen(filtered[0]?.when)} />
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Panel className="lg:col-span-2">
-          <PanelHeader icon={Activity} title="Events per day" subtitle={`${sourceLabel}, last ${trendDays} days. ${scopeNote}.`} />
-          {loading ? <LoadingState rows={3} /> : (
-            <TrendChart labels={trend.labels} series={[{ label: 'Events', values: trend.values }]} height={190}
-              summary={`${trend.total} ${sourceLabel} events in the last ${trendDays} days`}
-              emptyText="No audit events in this window." />
-          )}
-        </Panel>
-        <Panel>
-          <PanelHeader icon={Activity} title="Events by action" subtitle={scopeNote} />
-          {loading ? <LoadingState rows={3} /> : (
-            <ShareChart parts={actionShare} height={150}
-              summary={actionShare.map((p) => `${p.label} ${p.value}`).join(', ')}
-              emptyText="No audit events to break down." center={{ value: filtered.length, label: 'Events' }} />
-          )}
-        </Panel>
+        <StatTile label="Entries shown" value={loading || error ? 'N/A' : filtered.length.toLocaleString()}
+          sub={capped ? `Latest ${PAGE_LIMIT} loaded` : `${sinceOpt?.label || 'Period'}`} icon={ShieldCheck}
+          onClick={() => setView('entries')} active={view === 'entries'} />
+        <StatTile label="Distinct actors" value={loading || error ? 'N/A' : actorCount} icon={Users}
+          sub="See who is most active" onClick={() => setView('insights')} active={view === 'insights'} />
+        <StatTile label="Distinct actions" value={loading || error ? 'N/A' : new Set(filtered.map((r) => r.action).filter(Boolean)).size} icon={Activity} />
+        <StatTile label="Most recent" value={loading || error || !filtered.length ? 'N/A' : fmtWhen(filtered[0]?.when)} icon={Clock} />
       </div>
 
       <Toolbar>
@@ -248,7 +239,42 @@ export default function ConsoleAuditTrail() {
         {hasFilters && (
           <Btn variant="quiet" onClick={() => { setSearch(''); setActionFilter(''); setSince('7d') }}>Clear</Btn>
         )}
+        <div className="ml-auto">
+          <SegmentedView value={view} onChange={setView} />
+        </div>
       </Toolbar>
+
+      {view === 'insights' && (
+        error ? <ErrorState message={error} onRetry={load} /> : (
+        <div className="grid gap-4 lg:grid-cols-3">
+          <Panel className="lg:col-span-2">
+            <PanelHeader icon={Activity} title="Events per day" subtitle={`${sourceLabel}, last ${trendDays} days. ${scopeNote}.`} />
+            {loading ? <LoadingState rows={3} /> : (
+              <TrendChart labels={trend.labels} series={[{ label: 'Events', values: trend.values }]} height={190}
+                summary={`${trend.total} ${sourceLabel} events in the last ${trendDays} days`}
+                emptyText="No audit events in this window." />
+            )}
+          </Panel>
+          <Panel>
+            <PanelHeader icon={Activity} title="Events by action" subtitle={scopeNote} />
+            {loading ? <LoadingState rows={3} /> : (
+              <ShareChart parts={actionShare} height={150}
+                summary={actionShare.map((p) => `${p.label} ${p.value}`).join(', ')}
+                emptyText="No audit events to break down." center={{ value: filtered.length, label: 'Events' }} />
+            )}
+          </Panel>
+          <Panel className="lg:col-span-3">
+            <PanelHeader icon={Users} title="Most active actors" subtitle={`Entries per actor in the current filters. ${scopeNote}.`} />
+            {loading ? <LoadingState rows={3} /> : (
+              <BarsChart bars={topActors} summary={topActors.map((b) => `${b.label} ${b.value}`).join(', ')}
+                emptyText="No actor recorded on these entries." />
+            )}
+          </Panel>
+        </div>
+        )
+      )}
+
+      {view === 'entries' && (<>
 
       {loading ? (
         <LoadingState label="Loading audit entries" />
@@ -263,11 +289,10 @@ export default function ConsoleAuditTrail() {
         <Panel flush>
           <div className="px-4 py-2.5 flex items-center justify-between">
             <p className="text-[11px] text-gray-500">{filtered.length.toLocaleString()} entries{capped ? ` (latest ${PAGE_LIMIT} loaded)` : ''}</p>
-            {canDiff && <p className="text-[11px] text-gray-400">Click a row to see before and after values</p>}
+            <p className="text-[11px] text-gray-400">{canDiff ? 'Select a row to see before and after values' : 'Select a row for the full entry'}</p>
           </div>
           <Table className="border-0 rounded-none">
             <THead>
-              {canDiff && <Th className="w-8" />}
               <Th sortKey="when" sort={sort} onSort={onSort}>Time</Th>
               <Th sortKey="actor" sort={sort} onSort={onSort}>Actor</Th>
               <Th sortKey="action" sort={sort} onSort={onSort}>Action</Th>
@@ -275,57 +300,62 @@ export default function ConsoleAuditTrail() {
               <Th sortKey="detail" sort={sort} onSort={onSort}>Detail</Th>
             </THead>
             <tbody>
-              {filtered.map((r, i) => {
-                const key = `${r.source}-${r.id ?? i}`
-                const isOpen = expanded === key
+              {paged.rows.map((row, i) => {
+                const key = `${row.source}-${row.id ?? (paged.from - 1 + i)}`
                 return (
-                  <FragmentRow
-                    key={key}
-                    row={r}
-                    rowKey={key}
-                    isOpen={isOpen}
-                    canDiff={canDiff}
-                    onToggle={() => setExpanded(isOpen ? null : key)}
-                  />
+                  <Tr key={key} onClick={() => setExpanded(key)} ariaLabel={`Open audit entry ${(row.action || '').replace(/_/g, ' ')}`}>
+                    <Td nowrap className="text-gray-500 tabular-nums">{fmtWhen(row.when)}</Td>
+                    <Td className="text-gray-300 max-w-[220px] truncate">
+                      <span title={row.actor || ''}>{row.actor || 'N/A'}</span>
+                      {row.role && <span className="ml-1.5 text-[10px] text-gray-400">({row.role})</span>}
+                    </Td>
+                    <Td><Badge>{(row.action || 'N/A').replace(/_/g, ' ')}</Badge></Td>
+                    <Td className="text-gray-400 max-w-[220px] truncate"><span title={row.target || ''}>{row.target || 'N/A'}</span></Td>
+                    <Td className="text-gray-500 max-w-xs truncate"><span title={row.detail || ''}>{row.detail || 'N/A'}</span></Td>
+                  </Tr>
                 )
               })}
             </tbody>
           </Table>
+          <div className="px-4 pb-4"><Pager paged={paged} label="entries" /></div>
         </Panel>
       )}
+      </>)}
+
+      <SideDrawer open={!!openRow} onClose={() => setExpanded(null)} width="max-w-2xl"
+        title={openRow ? (openRow.action || 'Entry').replace(/_/g, ' ') : 'Entry'} subtitle={sourceLabel}>
+        {openRow && (
+          <>
+            <dl>
+              <Field label="Time">{fmtWhen(openRow.when)}</Field>
+              <Field label="Actor">{openRow.actor || 'N/A'}{openRow.role ? ` (${openRow.role})` : ''}</Field>
+              <Field label="Target">{openRow.target || 'N/A'}</Field>
+              <Field label="Detail">{openRow.detail || 'N/A'}</Field>
+              {openRow.id != null && <Field label="Entry ID"><Code>{String(openRow.id)}</Code></Field>}
+            </dl>
+            {canDiff && (
+              <div className="flex flex-col gap-4">
+                <JsonBlock label="Before" value={openRow.old} />
+                <JsonBlock label="After" value={openRow.new} />
+              </div>
+            )}
+          </>
+        )}
+      </SideDrawer>
     </div>
   )
 }
 
-function FragmentRow({ row, rowKey, isOpen, canDiff, onToggle }) {
+function SegmentedView({ value, onChange }) {
   return (
-    <>
-      <Tr onClick={canDiff ? onToggle : undefined}>
-        {canDiff && (
-          <Td className="text-gray-400">
-            {isOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-          </Td>
-        )}
-        <Td nowrap className="text-gray-500 tabular-nums">{fmtWhen(row.when)}</Td>
-        <Td className="text-gray-300 max-w-[220px] truncate">
-          <span title={row.actor || ''}>{row.actor || 'N/A'}</span>
-          {row.role && <span className="ml-1.5 text-[10px] text-gray-400">({row.role})</span>}
-        </Td>
-        <Td><Badge>{(row.action || 'N/A').replace(/_/g, ' ')}</Badge></Td>
-        <Td className="text-gray-400 max-w-[220px] truncate"><span title={row.target || ''}>{row.target || 'N/A'}</span></Td>
-        <Td className="text-gray-500 max-w-xs truncate"><span title={row.detail || ''}>{row.detail || 'N/A'}</span></Td>
-      </Tr>
-      {canDiff && isOpen && (
-        <tr key={`${rowKey}-exp`} className="border-t border-gray-800/40 bg-gray-900/30">
-          <td colSpan={6} className="px-6 py-3">
-            <div className="flex flex-col sm:flex-row gap-4">
-              <JsonBlock label="Before" value={row.old} />
-              <JsonBlock label="After" value={row.new} />
-            </div>
-            {row.id != null && <p className="text-[10px] text-gray-400 mt-2">Entry ID: <Code>{String(row.id)}</Code></p>}
-          </td>
-        </tr>
-      )}
-    </>
+    <div role="group" aria-label="Audit view" className="inline-flex gap-1 p-1 rounded-lg bg-gray-900/70 border border-gray-800">
+      {[['entries', 'Entries'], ['insights', 'Insights']].map(([k, label]) => (
+        <button key={k} type="button" aria-pressed={value === k} onClick={() => onChange(k)}
+          className={`rounded-md px-3 py-1.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 ${
+            value === k ? 'bg-orange-500/20 text-orange-200 border border-orange-600/50' : 'border border-transparent text-gray-500 hover:text-gray-300 hover:bg-gray-800/60'}`}>
+          {label}
+        </button>
+      ))}
+    </div>
   )
 }

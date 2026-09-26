@@ -7,14 +7,21 @@
  * shows as a mismatch; a day emptied by the retention policy is reported as such,
  * not as tampering. The export pulls the whole set page by page into Excel.
  * SOC 2 CC7.2 / ISO 27001 A.8.15.
+ *
+ * Layout: one tab per audit source plus an Export tab (?tab=). A KPI row and a
+ * "needs attention" list sit above: sources not yet verified this session,
+ * failed verifications and a sealing job that has stopped writing seals. Each
+ * source tab shows its seal stats, the verify result, the daily volume and a
+ * searchable, paged list of its sealed days (a day opens its fingerprint chain
+ * in a side drawer).
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Fingerprint, ShieldCheck, ShieldAlert, RefreshCw, CheckCircle2, XCircle, Download,
-  Archive, FileSpreadsheet, Info,
+  Archive, FileSpreadsheet, Info, CalendarDays,
 } from 'lucide-react'
 import {
-  Panel, PanelHeader, Note, StatTile, Badge, Btn, Select,
+  Panel, PanelHeader, Note, StatTile, Badge, Btn, Select, SearchInput, Toolbar, Code,
   Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState,
 } from '../components/ui'
 import { TrendChart } from '../components/ui/charts'
@@ -27,6 +34,27 @@ import {
 } from '../../lib/auditSeals'
 import { toUserMessage } from '../../lib/safeError'
 import { exportToExcel, reportFileName } from '../../lib/exportUtils'
+import { sortRows, searchRows, useTableSort } from '../../lib/consoleTable'
+import ExportButtons from './shared/ExportButtons'
+import PageHeader from './ops/PageHeader'
+import TabBar from './ops/TabBar'
+import useUrlTab from './ops/useUrlTab'
+import usePaged from './ops/usePaged'
+import Pager from './ops/Pager'
+import SideDrawer, { Field } from './ops/SideDrawer'
+import AttentionList from './ops/AttentionList'
+
+const TAB_KEYS = [...AUDIT_SOURCES.map((s) => s.value), 'export']
+// Seals are written nightly for the previous UTC day, so the newest sealed
+// day is normally yesterday. Two missed nights means the job has stopped.
+const STALE_SEAL_DAYS = 2
+const DAY_EXPORT_COLUMNS = [
+  { key: 'day', header: 'Day (UTC)' },
+  { key: 'row_count', header: 'Rows sealed' },
+  { key: 'sealed_at', header: 'Sealed at' },
+  { key: 'digest', header: 'Digest' },
+  { key: 'chain_digest', header: 'Chain digest' },
+]
 
 function fmtWhen(v) {
   if (!v) return 'N/A'
@@ -76,6 +104,12 @@ function VerifyResult({ result }) {
 
 function SourceCard({ source, stats, seals, result, busy, onVerify }) {
   const trend = useMemo(() => volumeTrend(seals, source.value, 90), [seals, source.value])
+  const days = useMemo(() => (seals || []).filter((r) => r.source === source.value), [seals, source.value])
+  const [search, setSearch] = useState('')
+  const [openDay, setOpenDay] = useState(null)
+  const { sort, onSort } = useTableSort({ key: 'day', dir: 'desc' })
+  const shownDays = useMemo(() => sortRows(searchRows(days, search, ['day', 'digest', 'chain_digest']), sort), [days, search, sort])
+  const paged = usePaged(shownDays)
   return (
     <Panel tone={result?.summary && !result.summary.passed && !result.summary.empty ? 'danger' : undefined}>
       <PanelHeader
@@ -101,6 +135,51 @@ function SourceCard({ source, stats, seals, result, busy, onVerify }) {
           emptyText="No sealed days yet."
         />
       </div>
+      <div className="mt-4">
+        <PanelHeader icon={CalendarDays} title="Sealed days" subtitle="Each closed UTC day and its chained fingerprint. Select a day for the full chain."
+          actions={<ExportButtons rows={shownDays} columns={DAY_EXPORT_COLUMNS} title={`Audit Seals ${source.label}`} />} />
+        <Toolbar className="mb-3">
+          <SearchInput value={search} onChange={setSearch} placeholder="Search day or digest" className="w-full sm:w-64" />
+        </Toolbar>
+        {days.length === 0 ? (
+          <EmptyState icon={CalendarDays} title="No sealed days for this source" reason="The nightly job seals each closed day at 00:45 UTC." />
+        ) : shownDays.length === 0 ? (
+          <EmptyState icon={CalendarDays} title="No days match" reason="Nothing matches the search. Clear it to see every sealed day." />
+        ) : (
+          <>
+            <Table>
+              <THead>
+                <Th sortKey="day" sort={sort} onSort={onSort}>Day (UTC)</Th>
+                <Th sortKey="row_count" sort={sort} onSort={onSort} align="right">Rows sealed</Th>
+                <Th sortKey="sealed_at" sort={sort} onSort={onSort}>Sealed at</Th>
+                <Th>Digest</Th>
+              </THead>
+              <tbody>
+                {paged.rows.map((d) => (
+                  <Tr key={d.id || d.day} onClick={() => setOpenDay(d)} ariaLabel={`Open sealed day ${d.day}`}>
+                    <Td nowrap><span className="font-mono text-gray-200">{d.day}</span></Td>
+                    <Td align="right"><span className="tabular-nums">{fmtNum(d.row_count)}</span></Td>
+                    <Td nowrap><span className="text-gray-400">{fmtWhen(d.sealed_at)}</span></Td>
+                    <Td><span className="font-mono text-[11px] text-gray-500">{String(d.digest || '').slice(0, 16) || 'N/A'}</span></Td>
+                  </Tr>
+                ))}
+              </tbody>
+            </Table>
+            <Pager paged={paged} label="sealed days" />
+          </>
+        )}
+      </div>
+      <SideDrawer open={!!openDay} onClose={() => setOpenDay(null)} title={openDay ? `Sealed day ${openDay.day}` : 'Sealed day'} subtitle={source.label}>
+        {openDay && (
+          <dl>
+            <Field label="Rows sealed">{fmtNum(openDay.row_count)}</Field>
+            <Field label="Sealed at">{fmtWhen(openDay.sealed_at)}</Field>
+            <Field label="Digest"><Code>{openDay.digest || 'N/A'}</Code></Field>
+            <Field label="Previous digest"><Code>{openDay.prev_digest || 'N/A'}</Code></Field>
+            <Field label="Chain digest"><Code>{openDay.chain_digest || 'N/A'}</Code></Field>
+          </dl>
+        )}
+      </SideDrawer>
     </Panel>
   )
 }
@@ -199,12 +278,15 @@ export default function ConsoleAuditIntegrity() {
   const [state, setState] = useState({ loading: true, error: null, seals: [] })
   const [results, setResults] = useState({})
   const [busy, setBusy] = useState({})
+  const [readAt, setReadAt] = useState(null)
+  const [tab, setTab] = useUrlTab(TAB_KEYS, AUDIT_SOURCES[0].value)
 
   const load = useCallback(async () => {
     setState((s) => ({ ...s, loading: true, error: null }))
     try {
       const seals = await listAuditSeals()
       setState({ loading: false, error: null, seals })
+      setReadAt(Date.now())
     } catch (e) {
       setState((s) => ({ ...s, loading: false, error: toUserMessage(e, 'Could not load the audit seals.') }))
     }
@@ -229,41 +311,84 @@ export default function ConsoleAuditIntegrity() {
   const verifyAll = async () => { for (const s of AUDIT_SOURCES) await verify(s.value) }
   const anyBusy = Object.values(busy).some(Boolean)
 
+  const totals = useMemo(() => {
+    let days = 0; let rows = 0; let last = null
+    for (const s of AUDIT_SOURCES) {
+      const st = stats[s.value]
+      days += st.days; rows += st.rows
+      if (st.lastSealedAt && (!last || st.lastSealedAt > last)) last = st.lastSealedAt
+    }
+    const verified = AUDIT_SOURCES.filter((s) => results[s.value]?.summary && !results[s.value].summary.empty)
+    const failedSrc = verified.filter((s) => !results[s.value].summary.passed)
+    const mismatched = failedSrc.reduce((a, s) => a + results[s.value].summary.mismatched.length, 0)
+    return { days, rows, last, verified: verified.length, passed: verified.length - failedSrc.length, mismatched }
+  }, [stats, results])
+
+  const attention = useMemo(() => {
+    if (state.loading || state.error || !state.seals.length) return []
+    const items = []
+    const ref = readAt || 0
+    for (const s of AUDIT_SOURCES) {
+      const r = results[s.value]
+      if (r?.error) items.push({ key: `e-${s.value}`, tone: 'danger', title: `${s.label}: verification could not run`, detail: r.error, action: { label: 'Retry', onClick: () => verify(s.value) } })
+      else if (r?.summary && !r.summary.passed && !r.summary.empty) items.push({ key: `m-${s.value}`, tone: 'danger', title: `${s.label}: ${r.summary.mismatched.length} sealed day(s) changed after sealing`, detail: 'Open the source to see which days and what changed.', action: { label: 'Open', onClick: () => setTab(s.value) } })
+      const st = stats[s.value]
+      const last = st.lastDay ? new Date(`${st.lastDay}T00:00:00Z`).getTime() : NaN
+      if (st.days > 0 && ref && Number.isFinite(last) && (ref - last) / 86400000 > STALE_SEAL_DAYS + 1) {
+        items.push({ key: `s-${s.value}`, tone: 'warning', title: `${s.label}: no seal since ${st.lastDay}`, detail: 'The nightly sealing job may have stopped. Days after this are not protected yet.', action: { label: 'Open', onClick: () => setTab(s.value) } })
+      }
+      if (!r && st.days > 0) items.push({ key: `n-${s.value}`, tone: 'info', title: `${s.label}: not verified this session`, detail: `${fmtNum(st.days)} sealed days are waiting to be checked.`, action: { label: 'Verify', onClick: () => verify(s.value) } })
+    }
+    return items
+  }, [state, stats, results, readAt, setTab])
+  const failedTiles = !!state.error
+
   return (
     <div className="space-y-5 max-w-7xl">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1>
-            <Fingerprint size={18} className="text-orange-400" /> Audit Integrity
-          </h1>
-          <p className="text-xs text-gray-500 mt-1">
-            Every closed day of the audit logs is sealed with a chained fingerprint at 00:45 UTC. Verify proves nothing was changed or deleted since.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Btn icon={RefreshCw} onClick={load} busy={state.loading}>Refresh</Btn>
-          <Btn variant="primary" icon={ShieldCheck} onClick={verifyAll} busy={anyBusy}>Verify all</Btn>
-        </div>
-      </header>
+      <PageHeader icon={Fingerprint} title="Audit Integrity"
+        purpose="Every closed day of the audit logs is sealed with a chained fingerprint at 00:45 UTC. Verify proves nothing was changed or deleted since."
+        refreshedAt={readAt} onRefresh={load} refreshing={state.loading}
+        actions={<Btn variant="primary" icon={ShieldCheck} onClick={verifyAll} busy={anyBusy}>Verify all</Btn>} />
 
       <Note icon={Archive}>
         Days older than the audit retention window (Console, System Configuration) are deleted by the retention job. Those days show as emptied by retention, not as tampering. Today is sealed tomorrow.
       </Note>
 
-      {state.loading && !state.seals.length ? (
-        <LoadingState label="Loading seals" />
-      ) : state.error ? (
-        <ErrorState message={state.error} onRetry={load} />
-      ) : !state.seals.length ? (
-        <EmptyState icon={Fingerprint} title="No seals yet" reason="The first seals are written by the nightly job at 00:45 UTC." />
-      ) : (
-        AUDIT_SOURCES.map((s) => (
-          <SourceCard key={s.value} source={s} stats={stats[s.value]} seals={state.seals}
-            result={results[s.value]} busy={!!busy[s.value]} onVerify={() => verify(s.value)} />
-        ))
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <StatTile label="Sealed days" icon={CalendarDays} value={state.loading ? '...' : failedTiles ? 'N/A' : fmtNum(totals.days)}
+          sub={failedTiles ? undefined : `${fmtNum(totals.rows)} rows covered`} />
+        <StatTile label="Sources verified" icon={ShieldCheck} value={`${totals.verified} of ${AUDIT_SOURCES.length}`}
+          tone={totals.verified === AUDIT_SOURCES.length && totals.passed === totals.verified ? 'good' : 'muted'} sub="This session" />
+        <StatTile label="Days changed after sealing" icon={XCircle}
+          value={totals.verified ? fmtNum(totals.mismatched) : 'N/A'}
+          tone={totals.mismatched ? 'danger' : totals.verified ? 'good' : 'muted'} sub={totals.verified ? 'In verified sources' : 'Not verified yet'} />
+        <StatTile label="Last seal written" icon={Archive} value={state.loading ? '...' : failedTiles || !totals.last ? 'N/A' : fmtWhen(totals.last)} />
+      </div>
+
+      {!state.loading && !state.error && state.seals.length > 0 && (
+        <AttentionList items={attention} subtitle="Failed verifications, a stopped sealing job, then sources not yet verified."
+          clearText="Every source is verified, unaltered and sealed up to date." />
       )}
 
-      <ExportPanel />
+      <TabBar tabs={[
+        ...AUDIT_SOURCES.map((src) => ({ key: src.value, label: src.label, count: failedTiles ? undefined : stats[src.value].days })),
+        { key: 'export', label: 'Export' },
+      ]} value={tab} onChange={setTab} label="Audit integrity sections" />
+
+      {tab === 'export' ? <ExportPanel /> : (
+        state.loading && !state.seals.length ? (
+          <LoadingState label="Loading seals" />
+        ) : state.error ? (
+          <ErrorState message={state.error} onRetry={load} />
+        ) : !state.seals.length ? (
+          <EmptyState icon={Fingerprint} title="No seals yet" reason="The first seals are written by the nightly job at 00:45 UTC." />
+        ) : (
+          AUDIT_SOURCES.filter((src) => src.value === tab).map((src) => (
+            <SourceCard key={src.value} source={src} stats={stats[src.value]} seals={state.seals}
+              result={results[src.value]} busy={!!busy[src.value]} onVerify={() => verify(src.value)} />
+          ))
+        )
+      )}
     </div>
   )
 }

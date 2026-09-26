@@ -10,17 +10,22 @@
  *
  * Off by default, so nothing changes until someone turns it on. Turning it on
  * needs two active super admins; turning it off needs an approved request.
+ *
+ * Layout: two tabs synced to ?tab=. Queue (the searchable, paged request list
+ * with open / waiting-for-you / ready / decided views; a row opens a side drawer
+ * with the full request and its decision buttons) and Insights (requests per
+ * day, outcomes, actions, and who asks most).
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ShieldCheck, UserCheck, Users, CheckCircle2, XCircle, Clock, Ban, Plus,
-  RefreshCw, Power, AlertTriangle, History, Hourglass, FileSignature, Lock, Unlock,
+  Power, AlertTriangle, History, Hourglass, FileSignature, Lock, Unlock,
 } from 'lucide-react'
 import {
-  Panel, PanelHeader, Note, StatTile, Badge, Btn, Segmented, Toolbar, Select,
+  Panel, PanelHeader, Note, StatTile, Badge, Btn, Segmented, Toolbar, Select, SearchInput,
   Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, Modal,
 } from '../components/ui'
-import { sortRows, useTableSort } from '../../lib/consoleTable'
+import { sortRows, searchRows, useTableSort } from '../../lib/consoleTable'
 import ExportButtons from './shared/ExportButtons'
 import { TrendChart, BarsChart, ShareChart } from '../components/ui/charts'
 import {
@@ -32,6 +37,22 @@ import {
 } from '../../lib/dualControl'
 import { dailySeries } from '../../lib/consoleCharts'
 import { toUserMessage } from '../../lib/safeError'
+import PageHeader from './ops/PageHeader'
+import TabBar from './ops/TabBar'
+import useUrlTab from './ops/useUrlTab'
+import usePaged from './ops/usePaged'
+import Pager from './ops/Pager'
+import SideDrawer, { Field as DField } from './ops/SideDrawer'
+
+const TABS = ['queue', 'insights']
+const isOpen = (r) => r.status === 'pending' || r.status === 'approved'
+const VIEW_FILTER = {
+  open: isOpen,
+  awaiting: (r) => canDecide(r),
+  ready: (r) => r.is_mine && r.status === 'approved',
+  decided: (r) => !isOpen(r),
+  all: () => true,
+}
 
 const CLEANUP_KEYS = [
   'audit_logs', 'system_logs', 'access_audit', 'ai_token_logs', 'ai_usage_log', 'odometer_logs',
@@ -221,7 +242,11 @@ const APPROVAL_EXPORT_COLUMNS = [
 ]
 
 export default function ConsoleApprovals() {
-  const [tab, setTab] = useState('open')
+  const [tab, setTab] = useUrlTab(TABS, 'queue')
+  const [view, setView] = useState('open')
+  const [search, setSearch] = useState('')
+  const [openRow, setOpenRow] = useState(null)
+  const [readAt, setReadAt] = useState(null)
   const [data, setData] = useState({ enabled: false, activeSuperAdmins: 0, rows: [] })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -240,6 +265,7 @@ export default function ConsoleApprovals() {
     setError('')
     try {
       setData(await listApprovals(null))
+      setReadAt(Date.now())
     } catch (e) {
       setError(toUserMessage(e, 'Could not load approvals.'))
     } finally {
@@ -252,12 +278,31 @@ export default function ConsoleApprovals() {
   const rows = data.rows
   const summary = useMemo(() => summarizeApprovals(rows), [rows])
   const { sort, onSort } = useTableSort(null)
-  const shown = useMemo(() => sortRows(rows.filter((r) => (tab === 'open'
-    ? (r.status === 'pending' || r.status === 'approved')
-    : tab === 'decided' ? !(r.status === 'pending' || r.status === 'approved') : true)), sort, {
-    action: (r) => APPROVAL_ACTIONS[r.action]?.label || r.action,
-    status: (r) => STATUS_META[r.status]?.label || r.status,
-  }), [rows, tab, sort])
+  const shown = useMemo(() => {
+    const inView = rows.filter(VIEW_FILTER[view] || VIEW_FILTER.all)
+    const found = searchRows(inView, search, [
+      (r) => APPROVAL_ACTIONS[r.action]?.label || r.action, (r) => describePayload(r.action, r.payload),
+      'reason', 'requested_by_name', 'decided_by_name', 'decision_note',
+    ])
+    return sortRows(found, sort, {
+      action: (r) => APPROVAL_ACTIONS[r.action]?.label || r.action,
+      status: (r) => STATUS_META[r.status]?.label || r.status,
+    })
+  }, [rows, view, search, sort])
+  const paged = usePaged(shown)
+  const awaitingCount = useMemo(() => rows.filter(VIEW_FILTER.awaiting).length, [rows])
+  const readyCount = useMemo(() => rows.filter(VIEW_FILTER.ready).length, [rows])
+  const requesters = useMemo(() => {
+    const m = new Map()
+    for (const r of rows) {
+      const k = r.requested_by_name || 'Unknown'
+      const e = m.get(k) || { label: k, value: 0 }
+      e.value += 1
+      m.set(k, e)
+    }
+    return [...m.values()].sort((a, b) => b.value - a.value).slice(0, 8)
+  }, [rows])
+  const showView = useCallback((v) => { setView(v); setSearch(''); setTab('queue') }, [setTab])
   // A failed read must not show as zero requests: tiles read N/A instead.
   const failed = !!error && !loading
   const tileValue = (n) => (loading ? '...' : failed ? 'N/A' : n)
@@ -273,6 +318,7 @@ export default function ConsoleApprovals() {
   const hasOpenDisable = rows.some((r) => r.action === 'dual_control_disable' && r.is_mine && r.status === 'approved')
 
   async function onCancel(row) {
+    setOpenRow(null)
     setBusyId(row.id)
     try {
       await cancelApproval(row.id)
@@ -307,20 +353,10 @@ export default function ConsoleApprovals() {
 
   return (
     <div className="space-y-5 max-w-7xl">
-      <header className="flex flex-wrap items-start gap-3">
-        <div className="flex-1 min-w-0">
-          <h1 className="text-xl font-semibold text-gray-100 flex items-center gap-2">
-            <ShieldCheck size={20} className="text-orange-400" /> Approvals
-          </h1>
-          <p className="text-xs text-gray-500 mt-1">
-            Four-eyes control for data cleanup, backup restore and bulk role changes. A second super admin must approve before these run, and nobody can approve their own request.
-          </p>
-        </div>
-        <Toolbar>
-          <Btn icon={RefreshCw} onClick={load} busy={loading}>Refresh</Btn>
-          <Btn variant="primary" icon={Plus} onClick={() => { setRequestAction(null); setRequestOpen(true) }}>Request approval</Btn>
-        </Toolbar>
-      </header>
+      <PageHeader icon={ShieldCheck} title="Approvals"
+        purpose="Four-eyes control for data cleanup, backup restore and bulk role changes. A second super admin must approve before these run, and nobody can approve their own request."
+        refreshedAt={readAt} onRefresh={load} refreshing={loading}
+        actions={<Btn variant="primary" icon={Plus} onClick={() => { setRequestAction(null); setRequestOpen(true) }}>Request approval</Btn>} />
 
       {flash && <Note tone={flash.tone === 'danger' ? 'danger' : 'accent'} icon={flash.tone === 'danger' ? AlertTriangle : CheckCircle2}>{flash.text}</Note>}
       {failed ? (
@@ -362,42 +398,64 @@ export default function ConsoleApprovals() {
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <StatTile icon={Hourglass} label="Waiting for you" value={tileValue(summary.awaitingMe)}
-          tone={summary.awaitingMe ? 'warning' : 'default'} sub="Other people's requests" onClick={() => setTab('open')} />
+          tone={summary.awaitingMe ? 'warning' : 'default'} sub="Other people's requests"
+          onClick={() => showView('awaiting')} active={tab === 'queue' && view === 'awaiting'} />
         <StatTile icon={UserCheck} label="Ready to run" value={tileValue(summary.readyToRun)}
-          tone={summary.readyToRun ? 'good' : 'default'} sub="Your approved requests" onClick={() => setTab('open')} />
-        <StatTile icon={Clock} label="Pending" value={tileValue(summary.pending)} sub="All waiting requests" />
-        <StatTile icon={CheckCircle2} label="Used" value={tileValue(summary.executed)} sub="Approved and run" onClick={() => setTab('decided')} />
+          tone={summary.readyToRun ? 'good' : 'default'} sub="Your approved requests"
+          onClick={() => showView('ready')} active={tab === 'queue' && view === 'ready'} />
+        <StatTile icon={Clock} label="Pending" value={tileValue(summary.pending)} sub="All waiting requests"
+          onClick={() => showView('open')} active={tab === 'queue' && view === 'open'} />
+        <StatTile icon={CheckCircle2} label="Used" value={tileValue(summary.executed)} sub="Approved and run"
+          onClick={() => showView('decided')} active={tab === 'queue' && view === 'decided'} />
         <StatTile icon={XCircle} label="Rejected" value={tileValue(summary.rejected)}
-          tone={summary.rejected ? 'danger' : 'default'} sub="Refused by a second admin" onClick={() => setTab('decided')} />
+          tone={summary.rejected ? 'danger' : 'default'} sub="Refused by a second admin" onClick={() => showView('decided')} />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Panel className="lg:col-span-2">
-          <PanelHeader icon={History} title="Requests per day" subtitle="Last 30 days" />
-          <TrendChart labels={trend.labels} series={[{ label: 'Requests', values: trend.values }]} height={200}
-            summary={`${trend.total} requests in the last 30 days`} emptyText="No approval requests in the last 30 days." />
-        </Panel>
-        <Panel>
-          <PanelHeader icon={ShieldCheck} title="By outcome" />
-          <ShareChart parts={statusParts} height={150} summary="Requests by outcome"
-            center={{ value: summary.total, label: 'requests' }} emptyText="No requests yet." />
-        </Panel>
-      </div>
-      {actionBars.length > 0 && (
-        <Panel>
-          <PanelHeader icon={FileSignature} title="By action" subtitle="Which destructive actions people ask to run" />
-          <BarsChart bars={actionBars} summary="Requests per action" />
-        </Panel>
+      <TabBar tabs={[
+        { key: 'queue', label: 'Queue', count: failed ? undefined : summary.pending + summary.approved },
+        { key: 'insights', label: 'Insights' },
+      ]} value={tab} onChange={setTab} label="Approval sections" />
+
+      {tab === 'insights' && (
+        <div className="space-y-4">
+          {failed && <ErrorState message={error} onRetry={load} />}
+          <div className="grid gap-4 lg:grid-cols-3">
+            <Panel className="lg:col-span-2">
+              <PanelHeader icon={History} title="Requests per day" subtitle="Last 30 days" />
+              <TrendChart labels={trend.labels} series={[{ label: 'Requests', values: trend.values }]} height={200}
+                summary={`${trend.total} requests in the last 30 days`} emptyText="No approval requests in the last 30 days." />
+            </Panel>
+            <Panel>
+              <PanelHeader icon={ShieldCheck} title="By outcome" />
+              <ShareChart parts={statusParts} height={150} summary="Requests by outcome"
+                center={{ value: summary.total, label: 'requests' }} emptyText="No requests yet." />
+            </Panel>
+          </div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Panel>
+              <PanelHeader icon={FileSignature} title="By action" subtitle="Which destructive actions people ask to run" />
+              <BarsChart bars={actionBars} summary="Requests per action" emptyText="No requests yet." />
+            </Panel>
+            <Panel>
+              <PanelHeader icon={Users} title="Who asks most" subtitle="Requests raised per super admin, all time" />
+              <BarsChart bars={requesters} summary={requesters.map((b) => `${b.label} ${b.value}`).join(', ')} emptyText="No requests yet." />
+            </Panel>
+          </div>
+        </div>
       )}
 
+      {tab === 'queue' && (
       <Panel flush>
         <div className="p-4 pb-3">
           <Toolbar>
-            <Segmented value={tab} onChange={setTab} ariaLabel="Approval view" options={[
+            <Segmented value={view} onChange={setView} ariaLabel="Approval view" role="group" options={[
               { key: 'open', label: 'Open', count: summary.pending + summary.approved },
+              { key: 'awaiting', label: 'Waiting for you', count: awaitingCount },
+              { key: 'ready', label: 'Ready to run', count: readyCount },
               { key: 'decided', label: 'Decided', count: summary.total - summary.pending - summary.approved },
               { key: 'all', label: 'All', count: summary.total },
             ]} />
+            <SearchInput value={search} onChange={setSearch} placeholder="Search action, reason or person" className="w-full sm:w-64" />
             <div className="ml-auto flex flex-wrap items-center gap-2">
               <ExportButtons rows={shown} columns={APPROVAL_EXPORT_COLUMNS} title="Approval Requests" disabled={failed} />
             </div>
@@ -408,11 +466,15 @@ export default function ConsoleApprovals() {
             <div className="px-4 pb-4"><ErrorState message={error} onRetry={load} /></div>
           ) : shown.length === 0 ? (
             <EmptyState icon={ShieldCheck}
-              title={tab === 'open' ? 'Nothing waiting' : 'No decided requests'}
+              title={search ? 'No requests match' : view === 'decided' ? 'No decided requests' : 'Nothing waiting'}
               reason={error ? 'The list could not be loaded, so this may not be complete.'
-                : tab === 'open' ? 'No request is waiting for a decision or ready to run.'
-                  : 'No request has been approved, rejected, used or expired yet.'} />
+                : search ? 'Nothing in this view matches the search. Clear it to see every request.'
+                  : view === 'decided' ? 'No request has been approved, rejected, used or expired yet.'
+                    : view === 'awaiting' ? 'No request from another super admin is waiting for your decision.'
+                      : view === 'ready' ? 'You have no approved request waiting to be run.'
+                        : 'No request is waiting for a decision or ready to run.'} />
           ) : (
+            <>
             <Table className="border-0 rounded-none border-t">
               <THead>
                 <Th sortKey="action" sort={sort} onSort={onSort}>Action</Th><Th>Details</Th>
@@ -422,14 +484,15 @@ export default function ConsoleApprovals() {
                 <Th sortKey="decided_by_name" sort={sort} onSort={onSort}>Decided by</Th><Th align="right">Actions</Th>
               </THead>
               <tbody>
-                {shown.map((r) => {
+                {paged.rows.map((r) => {
                   const meta = STATUS_META[r.status] || { label: r.status, tone: 'default' }
                   return (
-                    <Tr key={r.id} tone={canDecide(r) ? 'warning' : undefined}>
+                    <Tr key={r.id} tone={canDecide(r) ? 'warning' : undefined} onClick={() => setOpenRow(r)}
+                      ariaLabel={`Open request ${APPROVAL_ACTIONS[r.action]?.label || r.action}`}>
                       <Td nowrap><span className="text-gray-200">{APPROVAL_ACTIONS[r.action]?.label || r.action}</span></Td>
                       <Td>
                         <p className="text-gray-300">{describePayload(r.action, r.payload)}</p>
-                        <p className="text-gray-500 mt-0.5">{r.reason}</p>
+                        <p className="text-gray-500 mt-0.5 line-clamp-2">{r.reason}</p>
                         {r.decision_note && <p className="text-gray-500 mt-0.5">Note: {r.decision_note}</p>}
                       </Td>
                       <Td nowrap>{r.requested_by_name || 'N/A'}{r.is_mine && <Badge tone="quiet">You</Badge>}</Td>
@@ -458,8 +521,43 @@ export default function ConsoleApprovals() {
                 })}
               </tbody>
             </Table>
+            <div className="px-4 pb-4"><Pager paged={paged} label="requests" /></div>
+            </>
           )}
       </Panel>
+      )}
+
+      <SideDrawer open={!!openRow} onClose={() => setOpenRow(null)}
+        title={openRow ? (APPROVAL_ACTIONS[openRow.action]?.label || openRow.action) : 'Request'}
+        subtitle={openRow ? `Asked by ${openRow.requested_by_name || 'N/A'}` : ''}
+        footer={openRow && (canDecide(openRow) || canCancel(openRow)) ? (
+          <>
+            {canCancel(openRow) && <Btn icon={Ban} busy={busyId === openRow.id} onClick={() => onCancel(openRow)}>Withdraw</Btn>}
+            {canDecide(openRow) && <>
+              <Btn variant="danger" icon={XCircle} onClick={() => { setDecide({ row: openRow, approve: false }); setOpenRow(null) }}>Reject</Btn>
+              <Btn variant="good" icon={CheckCircle2} onClick={() => { setDecide({ row: openRow, approve: true }); setOpenRow(null) }}>Approve</Btn>
+            </>}
+          </>
+        ) : null}>
+        {openRow && (
+          <>
+            <Badge tone={(STATUS_META[openRow.status] || {}).tone || 'default'}>{(STATUS_META[openRow.status] || {}).label || openRow.status}</Badge>
+            {APPROVAL_ACTIONS[openRow.action]?.risk && <Note icon={AlertTriangle} tone="warning">{APPROVAL_ACTIONS[openRow.action].risk}</Note>}
+            <dl>
+              <DField label="What">{describePayload(openRow.action, openRow.payload)}</DField>
+              <DField label="Reason given">{openRow.reason}</DField>
+              <DField label="Asked by">{openRow.requested_by_name || 'N/A'}{openRow.is_mine ? ' (you)' : ''}</DField>
+              <DField label="Asked">{fmtWhen(openRow.requested_at)}</DField>
+              {isOpen(openRow) && <DField label="Time left">{timeLeft(openRow.expires_at)}</DField>}
+              <DField label="Decided by">{openRow.decided_by_name || 'N/A'}</DField>
+              <DField label="Decision note">{openRow.decision_note || 'N/A'}</DField>
+            </dl>
+            {openRow.status === 'pending' && openRow.is_mine && (
+              <Note icon={Users}>Your own request needs another super admin to decide it.</Note>
+            )}
+          </>
+        )}
+      </SideDrawer>
 
       <RequestModal open={requestOpen} forcedAction={requestAction}
         onClose={() => setRequestOpen(false)}

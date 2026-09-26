@@ -12,11 +12,17 @@
  * These rules ARE alert_thresholds rows (owner-scoped by RLS). They are
  * evaluated hourly by an existing cron job; severity routing (immediate vs
  * daily digest) follows the owner's notification preferences.
+ *
+ * Layout: the builder lives in a dialog opened from "New rule" (or a row's
+ * Edit), so the page is the rule list and not a long form. Two tabs, synced to
+ * ?tab=: Rules (what needs attention, rules per metric, the paged rule table)
+ * and Insights (firings per metric and the rules that fire most). A row opens
+ * its detail in a side drawer.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  BellRing, Plus, Pencil, Trash2, RefreshCw, AlertTriangle, Info,
-  Power, Save, X, Clock, Mail, MonitorSmartphone, BarChart3,
+  BellRing, Plus, Pencil, Trash2, AlertTriangle, Info,
+  Power, Save, Clock, Mail, MonitorSmartphone, BarChart3, Flame,
 } from 'lucide-react'
 import { toUserMessage } from '../../lib/safeError'
 import {
@@ -27,9 +33,19 @@ import {
   Panel, PanelHeader, Note, StatTile, Badge, Btn, Segmented, SearchInput, Select, Toolbar,
   Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, Modal,
 } from '../components/ui'
-import { sortRows, useTableSort } from '../../lib/consoleTable'
+import { sortRows, searchRows, useTableSort } from '../../lib/consoleTable'
 import ExportButtons from './shared/ExportButtons'
 import { BarsChart } from '../components/ui/charts'
+import PageHeader from './ops/PageHeader'
+import TabBar from './ops/TabBar'
+import useUrlTab from './ops/useUrlTab'
+import usePaged from './ops/usePaged'
+import Pager from './ops/Pager'
+import SideDrawer, { Field } from './ops/SideDrawer'
+import AttentionList from './ops/AttentionList'
+
+const TABS = ['rules', 'insights']
+const hasNoChannel = (r) => r.notify_in_app === false && !r.notify_email
 
 const EMPTY_FORM = {
   name: '',
@@ -74,12 +90,17 @@ export default function ConsoleAlertRules() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [search, setSearch] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(null)
+  const [builderOpen, setBuilderOpen] = useState(false)
+  const [openRule, setOpenRule] = useState(null)
+  const [readAt, setReadAt] = useState(null)
+  const [tab, setTab] = useUrlTab(TABS, 'rules')
 
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
       setRules(await listAlertRules())
+      setReadAt(Date.now())
     } catch (err) {
       setError(toUserMessage(err))
     } finally {
@@ -93,9 +114,19 @@ export default function ConsoleAlertRules() {
     setForm(EMPTY_FORM)
     setEditId(null)
     setFormError(null)
+    setBuilderOpen(false)
+  }
+
+  function startNew() {
+    setForm(EMPTY_FORM)
+    setEditId(null)
+    setFormError(null)
+    setBuilderOpen(true)
   }
 
   function startEdit(r) {
+    setOpenRule(null)
+    setBuilderOpen(true)
     setEditId(r.id)
     setFormError(null)
     setForm({
@@ -109,7 +140,6 @@ export default function ConsoleAlertRules() {
       notifyEmail: !!r.notify_email,
       active: r.active !== false,
     })
-    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const validation = useMemo(() => {
@@ -177,18 +207,20 @@ export default function ConsoleAlertRules() {
   const activeCount = rules.filter((r) => r.active !== false).length
   const totalFired = rules.reduce((a, r) => a + (Number(r.triggered_count) || 0), 0)
   const neverFired = rules.filter((r) => !r.last_triggered_at).length
+  const noChannelCount = rules.filter(hasNoChannel).length
+  const neverActive = rules.filter((r) => r.active !== false && !r.last_triggered_at).length
 
   const { sort, onSort } = useTableSort(null)
   const visibleRules = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    const found = rules.filter((r) => {
+    const byStatus = rules.filter((r) => {
       const isActive = r.active !== false
-      if (statusFilter === 'active' && !isActive) return false
-      if (statusFilter === 'paused' && isActive) return false
-      if (!q) return true
-      return [r.name, metricLabel(r.metric), r.site_filter, r.brand_filter]
-        .some((v) => String(v || '').toLowerCase().includes(q))
+      if (statusFilter === 'active') return isActive
+      if (statusFilter === 'paused') return !isActive
+      if (statusFilter === 'never') return !r.last_triggered_at
+      if (statusFilter === 'nochannel') return hasNoChannel(r)
+      return true
     })
+    const found = searchRows(byStatus, search, ['name', (r) => metricLabel(r.metric), 'site_filter', 'brand_filter'])
     return sortRows(found, sort, {
       condition: (r) => metricLabel(r.metric),
       fired: (r) => Number(r.triggered_count) || 0,
@@ -223,46 +255,219 @@ export default function ConsoleAlertRules() {
   }, [rules])
   const ruleBars = useMemo(() => byMetric.filter((x) => x.rules > 0).map((x) => ({ label: x.label, value: x.rules })), [byMetric])
   const firedBars = useMemo(() => byMetric.filter((x) => x.rules > 0).map((x) => ({ label: x.label, value: x.fired })), [byMetric])
+  const paged = usePaged(visibleRules)
+  const noisiest = useMemo(() => rules
+    .filter((r) => (Number(r.triggered_count) || 0) > 0)
+    .sort((a, b) => (Number(b.triggered_count) || 0) - (Number(a.triggered_count) || 0))
+    .slice(0, 8), [rules])
 
+  const filterTo = useCallback((f) => { setStatusFilter(f); setSearch(''); setTab('rules') }, [setTab])
+  const attention = useMemo(() => {
+    const items = []
+    if (noChannelCount) items.push({ key: 'nochannel', tone: 'danger', title: `${noChannelCount} rule${noChannelCount === 1 ? '' : 's'} with no notification channel`, detail: 'They can fire, but nobody is told. Add in-app or email.', action: { label: 'Show', onClick: () => filterTo('nochannel') } })
+    if (neverActive) items.push({ key: 'never', tone: 'info', title: `${neverActive} active rule${neverActive === 1 ? ' has' : 's have'} never fired`, detail: 'Check the threshold is reachable, or that it is simply a healthy fleet.', action: { label: 'Show', onClick: () => filterTo('never') } })
+    const paused = rules.length - activeCount
+    if (paused) items.push({ key: 'paused', tone: 'warning', title: `${paused} rule${paused === 1 ? ' is' : 's are'} paused`, detail: 'Paused rules are kept but never evaluated.', action: { label: 'Show', onClick: () => filterTo('paused') } })
+    return items
+  }, [noChannelCount, neverActive, rules.length, activeCount, filterTo])
+
+  const na = loading || error
   return (
     <div className="space-y-5 max-w-7xl">
-      {/* Header */}
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2">
-            <BellRing size={18} className="text-orange-400" /> Alert Rules
-          </h1>
-          <p className="text-xs text-gray-500 mt-1">
-            No-code rules that watch your fleet and notify you when a threshold is crossed.
-          </p>
-        </div>
-        <Btn icon={RefreshCw} onClick={load} busy={loading}>Refresh</Btn>
-      </header>
+      <PageHeader icon={BellRing} title="Alert Rules"
+        purpose="No-code rules that watch your fleet and notify you when a threshold is crossed. Evaluated hourly."
+        refreshedAt={readAt} onRefresh={load} refreshing={loading}
+        actions={<Btn variant="primary" icon={Plus} onClick={startNew}>New rule</Btn>} />
 
-      {/* Honest evaluation note */}
-      <Note icon={Clock} tone="accent">
-        Rules are evaluated hourly. Critical alerts notify immediately, warnings batch into a daily
-        digest (severity routing via your notification preferences).
-      </Note>
-
-      {/* KPI tiles */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatTile label="Rules" value={(loading || error) ? 'N/A' : rules.length} icon={BellRing} />
-        <StatTile label="Active" value={(loading || error) ? 'N/A' : activeCount} tone="good" icon={Power}
-          sub={(loading || error) ? undefined : `${rules.length - activeCount} paused`} />
-        <StatTile label="Times fired" value={(loading || error) ? 'N/A' : totalFired} tone="accent" icon={AlertTriangle} sub="All rules, all time" />
-        <StatTile label="Never fired" value={(loading || error) ? 'N/A' : neverFired} tone="muted" icon={Clock} />
+      {/* KPI tiles: each one filters the rule list */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <StatTile label="Rules" value={na ? 'N/A' : rules.length} icon={BellRing}
+          onClick={() => filterTo('all')} active={tab === 'rules' && statusFilter === 'all'} />
+        <StatTile label="Active" value={na ? 'N/A' : activeCount} tone="good" icon={Power}
+          sub={na ? undefined : `${rules.length - activeCount} paused`}
+          onClick={() => filterTo('active')} active={tab === 'rules' && statusFilter === 'active'} />
+        <StatTile label="Times fired" value={na ? 'N/A' : totalFired} tone="accent" icon={AlertTriangle} sub="All rules, all time"
+          onClick={() => setTab('insights')} active={tab === 'insights'} />
+        <StatTile label="Never fired" value={na ? 'N/A' : neverFired} tone="muted" icon={Clock}
+          onClick={() => filterTo('never')} active={tab === 'rules' && statusFilter === 'never'} />
+        <StatTile label="No channel" value={na ? 'N/A' : noChannelCount} tone={noChannelCount ? 'danger' : 'default'} icon={MonitorSmartphone}
+          sub="Fires but tells nobody" onClick={() => filterTo('nochannel')} active={tab === 'rules' && statusFilter === 'nochannel'} />
       </div>
 
-      {/* Builder */}
-      <Panel tone={editId ? 'accent' : undefined}>
-        <PanelHeader
-          icon={editId ? Pencil : Plus}
-          title={editId ? 'Edit alert rule' : 'New alert rule'}
-          subtitle="Read it as a sentence: if the metric crosses the value, notify me."
-          actions={editId && <Btn size="xs" variant="quiet" icon={X} onClick={resetForm}>Cancel edit</Btn>}
-        />
-        <form onSubmit={save} className="space-y-4">
+      <TabBar tabs={[
+        { key: 'rules', label: 'Rules', count: na ? undefined : rules.length },
+        { key: 'insights', label: 'Insights' },
+      ]} value={tab} onChange={setTab} label="Alert rule sections" />
+
+      {tab === 'rules' && (
+        <>
+          {!loading && !error && rules.length > 0 && (
+            <div className="grid gap-4 lg:grid-cols-2">
+              <AttentionList items={attention} subtitle="Rules that will not do what you expect." clearText="Every rule is active, has a channel and has fired at least once." />
+              <Panel>
+                <PanelHeader icon={BarChart3} title="Rules per metric" subtitle="How many rules watch each signal." />
+                <BarsChart bars={ruleBars} summary={ruleBars.map((b) => `${b.label} ${b.value}`).join(', ')} />
+              </Panel>
+            </div>
+          )}
+
+          <Panel>
+            <PanelHeader
+              icon={BellRing}
+              title="Your alert rules"
+              subtitle={rules.length > 0 ? `${activeCount} active of ${rules.length}. Select a row for its detail.` : undefined}
+            />
+            <Toolbar className="mb-3">
+              <Segmented
+                value={statusFilter}
+                onChange={setStatusFilter}
+                ariaLabel="Filter by status"
+                role="group"
+                options={[
+                  { key: 'all', label: 'All', count: rules.length },
+                  { key: 'active', label: 'Active', count: activeCount },
+                  { key: 'paused', label: 'Paused', count: rules.length - activeCount },
+                  { key: 'never', label: 'Never fired', count: neverFired },
+                  { key: 'nochannel', label: 'No channel', count: noChannelCount },
+                ]}
+              />
+              <SearchInput value={search} onChange={setSearch} placeholder="Search name, metric, site or brand" className="w-full sm:w-64" />
+              <div className="ml-auto flex flex-wrap items-center gap-2">
+                <ExportButtons rows={visibleRules} columns={exportColumns} title="Alert Rules" />
+              </div>
+            </Toolbar>
+
+        {error ? (
+          <ErrorState message={error} onRetry={load} />
+        ) : loading ? (
+          <LoadingState label="Loading alert rules" />
+        ) : rules.length === 0 ? (
+          <EmptyState icon={BellRing} title="No alert rules yet" reason="Add one with New rule to get notified when a threshold is crossed."
+            action={<Btn variant="primary" icon={Plus} onClick={startNew}>New rule</Btn>} />
+        ) : visibleRules.length === 0 ? (
+          <EmptyState icon={BellRing} title="No rules match" reason="Nothing matches this status and search. Clear the filters to see every rule." />
+        ) : (
+          <>
+          <Table>
+            <THead>
+              <Th sortKey="name" sort={sort} onSort={onSort}>Rule</Th>
+              <Th sortKey="condition" sort={sort} onSort={onSort}>Condition</Th>
+              <Th>Channels</Th>
+              <Th align="right" sortKey="fired" sort={sort} onSort={onSort}>Fired</Th>
+              <Th sortKey="last_triggered_at" sort={sort} onSort={onSort}>Last fired</Th>
+              <Th sortKey="status" sort={sort} onSort={onSort}>Status</Th>
+              <Th align="right">Actions</Th>
+            </THead>
+            <tbody>
+              {paged.rows.map((r) => {
+                const isActive = r.active !== false
+                const noChannel = r.notify_in_app === false && !r.notify_email
+                return (
+                  <Tr key={r.id} className={isActive ? '' : 'opacity-70'} onClick={() => setOpenRule(r)} ariaLabel={`Open rule ${r.name || 'Untitled rule'}`}>
+                    <Td className="max-w-[220px]">
+                      <span className="text-gray-200 font-medium line-clamp-2" title={r.name || ''}>{r.name || 'Untitled rule'}</span>
+                    </Td>
+                    <Td>
+                      <span className="text-gray-400">
+                        If <span className="text-gray-200">{metricLabel(r.metric)}</span>{' '}
+                        is <span className="text-gray-200">{operatorLabel(r.operator)}</span>{' '}
+                        <span className="text-gray-200 tabular-nums">{r.threshold ?? 'N/A'}</span>
+                      </span>
+                      {(r.site_filter || r.brand_filter) && (
+                        <span className="block text-[10px] text-gray-500 mt-0.5">
+                          {r.site_filter ? `site ${r.site_filter}` : ''}
+                          {r.site_filter && r.brand_filter ? ' | ' : ''}
+                          {r.brand_filter ? `brand ${r.brand_filter}` : ''}
+                        </span>
+                      )}
+                    </Td>
+                    <Td nowrap>
+                      <div className="flex gap-1">
+                        {r.notify_in_app !== false && <Badge tone="default" icon={MonitorSmartphone}>In-app</Badge>}
+                        {r.notify_email && <Badge tone="default" icon={Mail}>Email</Badge>}
+                        {noChannel && <Badge tone="warning">No channel</Badge>}
+                      </div>
+                    </Td>
+                    <Td align="right"><span className="tabular-nums text-gray-300">{r.triggered_count ?? 0}</span></Td>
+                    <Td nowrap><span className="text-gray-500">{fmtWhen(r.last_triggered_at)}</span></Td>
+                    <Td>{isActive ? <Badge tone="good">Active</Badge> : <Badge tone="quiet">Paused</Badge>}</Td>
+                    <Td align="right" nowrap>
+                      <div className="inline-flex items-center gap-1">
+                        <Btn size="xs" variant="ghost" icon={Power} onClick={() => onToggle(r)} busy={busyId === r.id}
+                          title={isActive ? 'Pause rule' : 'Activate rule'}>
+                          {isActive ? 'Pause' : 'Activate'}
+                        </Btn>
+                        <Btn size="xs" variant="ghost" icon={Pencil} onClick={() => startEdit(r)} disabled={busyId === r.id} title="Edit rule">
+                          Edit
+                        </Btn>
+                        <Btn size="xs" variant="quiet" icon={Trash2} onClick={() => setConfirmDelete(r)} disabled={busyId === r.id} title="Delete rule">
+                          Delete
+                        </Btn>
+                      </div>
+                    </Td>
+                  </Tr>
+                )
+              })}
+            </tbody>
+          </Table>
+          <Pager paged={paged} label="rules" />
+          </>
+        )}
+          </Panel>
+        </>
+      )}
+
+      {tab === 'insights' && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Panel>
+            <PanelHeader icon={AlertTriangle} title="Times fired per metric" subtitle="All-time firings, summed across the rules on each metric." />
+            {loading ? <LoadingState label="Loading" rows={2} /> : error ? <ErrorState message={error} onRetry={load} /> : (
+              <BarsChart bars={firedBars} summary={firedBars.map((b) => `${b.label} ${b.value}`).join(', ')}
+                emptyText="None of these rules has fired yet." />
+            )}
+          </Panel>
+          <Panel>
+            <PanelHeader icon={Flame} title="Rules that fire most" subtitle="A rule that fires constantly is noise; consider raising its threshold." />
+            {loading ? <LoadingState label="Loading" rows={2} /> : error ? <ErrorState message={error} onRetry={load} /> : noisiest.length === 0 ? (
+              <EmptyState icon={Flame} title="No rule has fired yet" reason="Firings appear here once the hourly evaluation crosses a threshold." />
+            ) : (
+              <ol className="divide-y divide-gray-800/70">
+                {noisiest.map((r) => (
+                  <li key={r.id}>
+                    <button type="button" onClick={() => setOpenRule(r)}
+                      className="w-full flex items-center gap-3 py-2 text-left text-xs rounded hover:bg-gray-900/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
+                      <span className="flex-1 min-w-0 truncate text-gray-200">{r.name || 'Untitled rule'}</span>
+                      <span className="text-gray-500 truncate">{metricLabel(r.metric)}</span>
+                      <span className="tabular-nums text-orange-300 w-16 text-right">{r.triggered_count} fired</span>
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </Panel>
+        </div>
+      )}
+
+      <Modal
+        open={builderOpen}
+        title={editId ? 'Edit alert rule' : 'New alert rule'}
+        subtitle="Read it as a sentence: if the metric crosses the value, notify me."
+        onClose={resetForm}
+        footer={(
+          <>
+            <Btn onClick={resetForm}>Cancel</Btn>
+            <Btn type="submit" form="alert-rule-form" variant="primary" icon={editId ? Save : Plus}
+              busy={saving} disabled={!!validation}>
+              {saving ? 'Saving...' : editId ? 'Save changes' : 'Add rule'}
+            </Btn>
+          </>
+        )}
+      >
+        <form id="alert-rule-form" onSubmit={save} className="space-y-4">
+          <Note icon={Clock} tone="accent">
+            Rules are evaluated hourly. Critical alerts notify immediately, warnings batch into a daily
+            digest (severity routing via your notification preferences).
+          </Note>
           {/* Name */}
           <div>
             <label htmlFor="alert-rule-name" className="block text-xs font-medium text-gray-400 mb-1">Rule name</label>
@@ -357,143 +562,46 @@ export default function ConsoleAlertRules() {
             </div>
           </div>
 
-          {/* Active + submit */}
-          <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-            <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer">
-              <input type="checkbox" checked={form.active}
-                onChange={(e) => setForm((f) => ({ ...f, active: e.target.checked }))}
-                className="accent-orange-500" />
-              Rule is active
-              <InfoDot text="Inactive rules are kept but never evaluated." />
-            </label>
-            <div className="flex items-center gap-2">
-              {(formError || (validation && form.name)) && (
-                <span role="alert" className="flex items-center gap-1 text-xs text-red-300 break-words">
-                  <AlertTriangle size={12} /> {formError || validation}
-                </span>
-              )}
-              <Btn type="submit" variant="primary" size="md" icon={editId ? Save : Plus}
-                busy={saving} disabled={!!validation}>
-                {saving ? 'Saving...' : editId ? 'Save changes' : 'Add rule'}
-              </Btn>
-            </div>
-          </div>
+          <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer">
+            <input type="checkbox" checked={form.active}
+              onChange={(e) => setForm((f) => ({ ...f, active: e.target.checked }))}
+              className="accent-orange-500" />
+            Rule is active
+            <InfoDot text="Inactive rules are kept but never evaluated." />
+          </label>
+          {(formError || (validation && form.name)) && (
+            <p role="alert" className="flex items-center gap-1 text-xs text-red-300 break-words">
+              <AlertTriangle size={12} /> {formError || validation}
+            </p>
+          )}
         </form>
-      </Panel>
+      </Modal>
 
-      {/* Charts */}
-      {!loading && !error && rules.length > 0 && (
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Panel>
-            <PanelHeader icon={BarChart3} title="Rules per metric" subtitle="How many rules watch each signal." />
-            <BarsChart bars={ruleBars} summary={ruleBars.map((b) => `${b.label} ${b.value}`).join(', ')} />
-          </Panel>
-          <Panel>
-            <PanelHeader icon={AlertTriangle} title="Times fired per metric" subtitle="All-time firings, summed across the rules on each metric." />
-            <BarsChart bars={firedBars} summary={firedBars.map((b) => `${b.label} ${b.value}`).join(', ')}
-              emptyText="None of these rules has fired yet." />
-          </Panel>
-        </div>
-      )}
-
-      {/* Existing rules */}
-      <Panel>
-        <PanelHeader
-          icon={BellRing}
-          title="Your alert rules"
-          subtitle={rules.length > 0 ? `${activeCount} active of ${rules.length}` : undefined}
-        />
-        <Toolbar className="mb-3">
-          <Segmented
-            value={statusFilter}
-            onChange={setStatusFilter}
-            ariaLabel="Filter by status"
-            role="group"
-            options={[
-              { key: 'all', label: 'All', count: rules.length },
-              { key: 'active', label: 'Active', count: activeCount },
-              { key: 'paused', label: 'Paused', count: rules.length - activeCount },
-            ]}
-          />
-          <SearchInput value={search} onChange={setSearch} placeholder="Search name, metric, site or brand" className="w-full sm:w-64" />
-          <div className="ml-auto flex flex-wrap items-center gap-2">
-            <ExportButtons rows={visibleRules} columns={exportColumns} title="Alert Rules" />
-          </div>
-        </Toolbar>
-
-        {error ? (
-          <ErrorState message={error} onRetry={load} />
-        ) : loading ? (
-          <LoadingState label="Loading alert rules" />
-        ) : rules.length === 0 ? (
-          <EmptyState icon={BellRing} title="No alert rules yet" reason="Add one above to get notified when a threshold is crossed." />
-        ) : visibleRules.length === 0 ? (
-          <EmptyState icon={BellRing} title="No rules match" reason="Nothing matches this status and search. Clear the filters to see every rule." />
-        ) : (
-          <Table>
-            <THead>
-              <Th sortKey="name" sort={sort} onSort={onSort}>Rule</Th>
-              <Th sortKey="condition" sort={sort} onSort={onSort}>Condition</Th>
-              <Th>Channels</Th>
-              <Th align="right" sortKey="fired" sort={sort} onSort={onSort}>Fired</Th>
-              <Th sortKey="last_triggered_at" sort={sort} onSort={onSort}>Last fired</Th>
-              <Th sortKey="status" sort={sort} onSort={onSort}>Status</Th>
-              <Th align="right">Actions</Th>
-            </THead>
-            <tbody>
-              {visibleRules.map((r) => {
-                const isActive = r.active !== false
-                const noChannel = r.notify_in_app === false && !r.notify_email
-                return (
-                  <Tr key={r.id} className={isActive ? '' : 'opacity-70'}>
-                    <Td className="max-w-[220px]">
-                      <span className="text-gray-200 font-medium line-clamp-2" title={r.name || ''}>{r.name || 'Untitled rule'}</span>
-                    </Td>
-                    <Td>
-                      <span className="text-gray-400">
-                        If <span className="text-gray-200">{metricLabel(r.metric)}</span>{' '}
-                        is <span className="text-gray-200">{operatorLabel(r.operator)}</span>{' '}
-                        <span className="text-gray-200 tabular-nums">{r.threshold ?? 'N/A'}</span>
-                      </span>
-                      {(r.site_filter || r.brand_filter) && (
-                        <span className="block text-[10px] text-gray-500 mt-0.5">
-                          {r.site_filter ? `site ${r.site_filter}` : ''}
-                          {r.site_filter && r.brand_filter ? ' | ' : ''}
-                          {r.brand_filter ? `brand ${r.brand_filter}` : ''}
-                        </span>
-                      )}
-                    </Td>
-                    <Td nowrap>
-                      <div className="flex gap-1">
-                        {r.notify_in_app !== false && <Badge tone="default" icon={MonitorSmartphone}>In-app</Badge>}
-                        {r.notify_email && <Badge tone="default" icon={Mail}>Email</Badge>}
-                        {noChannel && <Badge tone="warning">No channel</Badge>}
-                      </div>
-                    </Td>
-                    <Td align="right"><span className="tabular-nums text-gray-300">{r.triggered_count ?? 0}</span></Td>
-                    <Td nowrap><span className="text-gray-500">{fmtWhen(r.last_triggered_at)}</span></Td>
-                    <Td>{isActive ? <Badge tone="good">Active</Badge> : <Badge tone="quiet">Paused</Badge>}</Td>
-                    <Td align="right" nowrap>
-                      <div className="inline-flex items-center gap-1">
-                        <Btn size="xs" variant="ghost" icon={Power} onClick={() => onToggle(r)} busy={busyId === r.id}
-                          title={isActive ? 'Pause rule' : 'Activate rule'}>
-                          {isActive ? 'Pause' : 'Activate'}
-                        </Btn>
-                        <Btn size="xs" variant="ghost" icon={Pencil} onClick={() => startEdit(r)} disabled={busyId === r.id} title="Edit rule">
-                          Edit
-                        </Btn>
-                        <Btn size="xs" variant="quiet" icon={Trash2} onClick={() => setConfirmDelete(r)} disabled={busyId === r.id} title="Delete rule">
-                          Delete
-                        </Btn>
-                      </div>
-                    </Td>
-                  </Tr>
-                )
-              })}
-            </tbody>
-          </Table>
+      <SideDrawer open={!!openRule} onClose={() => setOpenRule(null)} title={openRule?.name || 'Untitled rule'} subtitle="Alert rule"
+        footer={openRule && (
+          <>
+            <Btn icon={Power} onClick={() => { onToggle(openRule); setOpenRule(null) }}>{openRule.active !== false ? 'Pause' : 'Activate'}</Btn>
+            <Btn icon={Pencil} onClick={() => startEdit(openRule)}>Edit</Btn>
+            <Btn variant="danger" icon={Trash2} onClick={() => { setConfirmDelete(openRule); setOpenRule(null) }}>Delete</Btn>
+          </>
+        )}>
+        {openRule && (
+          <>
+            {hasNoChannel(openRule) && <Note icon={AlertTriangle} tone="danger">This rule has no notification channel, so nobody is told when it fires.</Note>}
+            <dl>
+              <Field label="Condition">If {metricLabel(openRule.metric)} is {operatorLabel(openRule.operator)} {openRule.threshold ?? 'N/A'}</Field>
+              <Field label="Site">{openRule.site_filter || 'All sites'}</Field>
+              <Field label="Brand">{openRule.brand_filter || 'All brands'}</Field>
+              <Field label="Channels">{[openRule.notify_in_app !== false ? 'In-app' : '', openRule.notify_email ? 'Email' : ''].filter(Boolean).join(', ') || 'None'}</Field>
+              <Field label="Status">{openRule.active !== false ? 'Active' : 'Paused'}</Field>
+              <Field label="Times fired">{openRule.triggered_count ?? 0}</Field>
+              <Field label="Last fired">{fmtWhen(openRule.last_triggered_at)}</Field>
+              {openRule.created_at && <Field label="Created">{fmtWhen(openRule.created_at)}</Field>}
+            </dl>
+            <Note icon={Clock} tone="accent">Evaluated hourly. Critical alerts notify immediately, warnings batch into a daily digest.</Note>
+          </>
         )}
-      </Panel>
+      </SideDrawer>
 
       <Modal
         open={!!confirmDelete}

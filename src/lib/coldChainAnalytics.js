@@ -407,3 +407,79 @@ export function summarizeColdChainAnalytics(rows, filters = {}) {
     episodes,
   }
 }
+
+// ── Presentation helpers (pure) shared by the page table cells and exports ──
+
+const NA_TEXT = 'N/A'
+
+/** Human safe-range text for a reading: "-20 to -15 C", ">= -20 C", "N/A". */
+export function safeRangeText(row) {
+  const lo = toFiniteNumber(row?.min_threshold_c)
+  const hi = toFiniteNumber(row?.max_threshold_c)
+  if (lo == null && hi == null) return NA_TEXT
+  if (lo != null && hi != null) return `${lo} to ${hi} C`
+  if (lo != null) return `>= ${lo} C`
+  return `<= ${hi} C`
+}
+
+/** Duration in minutes as "45 min" / "2h" / "2h 5m"; N/A when unknown. */
+export function formatDurationMin(min) {
+  if (min == null || !Number.isFinite(min)) return NA_TEXT
+  if (min < 60) return `${min} min`
+  const h = Math.floor(min / 60)
+  const m = min % 60
+  return m ? `${h}h ${m}m` : `${h}h`
+}
+
+const STATUS_LABEL = { ok: 'OK', warning: 'Warning', breach: 'Breach' }
+const KIND_LABEL = { in_range: 'In range', above: 'Above max', below: 'Below min', mixed: 'Mixed' }
+
+/** Plain label for an excursion direction. */
+export function excursionKindLabel(kind) {
+  return KIND_LABEL[kind] || NA_TEXT
+}
+
+/**
+ * Register rows shaped for the table and the Excel/PDF export. A deviation of
+ * zero (in range) is null, not 0, so the column reads N/A rather than implying
+ * a measured zero-degree excursion on an in-range reading.
+ */
+export function coldChainRegisterRows(rows) {
+  return (Array.isArray(rows) ? rows : []).map((r) => {
+    const st = readingStatus(r)
+    const dev = deviationC(r)
+    return {
+      id: r?.id,
+      asset_no: r?.asset_no || null,
+      site: r?.site || null,
+      temperature_c: toFiniteNumber(r?.temperature_c),
+      range: safeRangeText(r),
+      deviation: dev > 0 ? dev : null,
+      kind: excursionKind(r),
+      kindLabel: excursionKindLabel(excursionKind(r)),
+      status: st,
+      statusLabel: STATUS_LABEL[st] || st || NA_TEXT,
+      recorded_at: r?.recorded_at || null,
+      recordedMs: readingTime(r),
+      notes: r?.notes || '',
+      raw: r,
+    }
+  })
+}
+
+/** Excursion-episode rows shaped for the table and export. */
+export function episodeRows(episodes) {
+  return (Array.isArray(episodes) ? episodes : []).map((e, i) => ({
+    id: `${e.asset_no}-${e.startAt}-${i}`,
+    asset_no: e.asset_no,
+    site: e.site || null,
+    startAt: e.startAt,
+    startMs: new Date(e.startAt).getTime(),
+    durationMin: e.durationMin,
+    duration: formatDurationMin(e.durationMin),
+    readingCount: e.readingCount,
+    peakDeviation: e.peakDeviation > 0 ? e.peakDeviation : null,
+    kindLabel: excursionKindLabel(e.kind),
+    state: e.recovered ? 'Recovered' : 'Open',
+  }))
+}

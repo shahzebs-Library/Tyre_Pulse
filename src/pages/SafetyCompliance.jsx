@@ -1,8 +1,12 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // SafetyCompliance.jsx - Fleet Safety & Regulatory Compliance Dashboard · /safety-compliance
+//
+// Every figure comes from the pure engine `src/lib/safetyComplianceAnalytics.js`
+// (tested). A component with no measurement renders N/A and the overall score
+// renormalises its weights over the measured components only - it is never a
+// flattering 100% built from absent data.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { motion } from 'framer-motion'
 import {
   Chart as ChartJS,
   CategoryScale, LinearScale, BarElement,
@@ -10,24 +14,32 @@ import {
   RadialLinearScale,
   Title, Tooltip, Legend, Filler,
 } from 'chart.js'
-import { Bar, Doughnut, Line, Radar } from 'react-chartjs-2'
+import { Bar, Doughnut, Radar } from 'react-chartjs-2'
 import {
-  ShieldCheck, ShieldAlert, AlertTriangle, AlertOctagon,
-  CheckCircle, XCircle, Clock, TrendingUp, TrendingDown,
-  FileText, Download, RefreshCw, Filter, BarChart2,
-  Loader2, FileSpreadsheet, Minus, Car, CircleDot,
+  ShieldCheck, AlertTriangle, AlertOctagon, CircleDot, Gauge, ClipboardCheck,
+  Car, RefreshCw, FileText, FileSpreadsheet, MapPin, Activity, Layers,
 } from 'lucide-react'
 import * as analytics from '../lib/api/analyticsReads'
-import { normalizePosition } from '../lib/tyrePositions'
 import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
-import { resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme } from '../lib/exportUtils'
+import {
+  resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme,
+  exportSheetsToExcel, reportFileName, reportDateLabel,
+} from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
-import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
+import Card, { CardHeader } from '../components/ui/Card'
+import StatTile from '../components/ui/StatTile'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import { Skeleton } from '../components/ui/Skeleton'
 import { formatDate } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
 import useLatestRequest from '../lib/useLatestRequest'
 import { loadAutoTable } from '../lib/pdfEngine'
+import { ACCENTS, withAlpha } from '../lib/reportColors'
+import {
+  computeSafetyCompliance, complianceSummaryRows, inspectionRows, filterBySite,
+  siteOptions, scoreBand, rangeCutoff, RANGE_OPTIONS, PRESSURE_TOLERANCE, LEGAL_TREAD,
+} from '../lib/safetyComplianceAnalytics'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement,
@@ -36,37 +48,83 @@ ChartJS.register(
   Title, Tooltip, Legend, Filler,
 )
 
-const CHART_OPTS = {
+// Theme-aware chart chrome: chartVarPlugin resolves var(--token) per theme.
+const TICK = 'var(--text-muted)'
+const GRID = 'var(--panel-2)'
+const TOOLTIP = {
+  backgroundColor: 'var(--panel)', borderColor: 'var(--hairline)', borderWidth: 1,
+  titleColor: 'var(--text-primary)', bodyColor: 'var(--text-secondary)',
+}
+const BASE_OPTS = {
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
-    legend: { labels: { color: '#9ca3af', boxWidth: 12, font: { size: 11 } } },
-    tooltip: { backgroundColor: 'var(--panel)', borderColor: 'var(--hairline)', borderWidth: 1, titleColor: '#f9fafb', bodyColor: '#d1d5db' },
+    legend: { labels: { color: TICK, boxWidth: 12, font: { size: 11 } } },
+    tooltip: TOOLTIP,
   },
   scales: {
-    x: { ticks: { color: '#9ca3af', font: { size: 11 } }, grid: { color: 'var(--panel-2)' } },
-    y: { ticks: { color: '#9ca3af', font: { size: 11 } }, grid: { color: 'var(--panel-2)' } },
+    x: { ticks: { color: TICK, font: { size: 11 } }, grid: { color: GRID } },
+    y: { ticks: { color: TICK, font: { size: 11 } }, grid: { color: GRID } },
   },
 }
 
-// Minimum legal tread depth thresholds (mm)
-const LEGAL_TREAD = { steer: 3, drive: 3, trailer: 3, default: 2 }
-// Pressure tolerance %
-const PRESSURE_TOLERANCE = 10
+// Semantic band colours (text label always rendered beside them).
+const BAND_TEXT = {
+  compliant: 'text-green-400',
+  warning: 'text-yellow-400',
+  attention: 'text-orange-400',
+  non_compliant: 'text-red-400',
+  not_measured: 'text-[var(--text-muted)]',
+}
+const BAND_BADGE = {
+  compliant: 'bg-green-900/40 text-green-300 border-green-700/50',
+  warning: 'bg-amber-900/40 text-amber-300 border-amber-700/50',
+  attention: 'bg-orange-900/40 text-orange-300 border-orange-700/50',
+  non_compliant: 'bg-red-900/40 text-red-300 border-red-700/50',
+  not_measured: 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)]',
+}
+const BAND_BAR = {
+  compliant: ACCENTS.good, warning: ACCENTS.watch, attention: '#f97316', non_compliant: ACCENTS.risk, not_measured: 'var(--input-border)',
+}
+const RISK_COLOURS = { Critical: ACCENTS.risk, High: '#f97316', Medium: ACCENTS.watch, Low: ACCENTS.info }
 
-function getPosition(pos) {
-  // Map any coded/free-text position to a LEGAL_TREAD key via the shared mapper.
-  const g = normalizePosition(pos)
-  if (g === 'Steer')   return 'steer'
-  if (g === 'Drive')   return 'drive'
-  if (g === 'Trailer') return 'trailer'
-  return 'default'
+const TABS = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'tread', label: 'Tread depth' },
+  { id: 'pressure', label: 'Pressure' },
+  { id: 'inspections', label: 'Inspections' },
+  { id: 'sites', label: 'By site' },
+  { id: 'trends', label: 'Trends' },
+]
+
+const NA = 'N/A'
+const fmtPct = (n) => (n == null || Number.isNaN(n) ? NA : `${n.toFixed(1)}%`)
+const fmtDay = (d) => (d ? formatDate(d, 'All', { day: '2-digit', month: 'short', year: 'numeric' }) : NA)
+const text = (v) => (v == null || v === '' ? NA : v)
+
+function BandBadge({ value }) {
+  const b = scoreBand(value)
+  return (
+    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium border ${BAND_BADGE[b.key]}`}>{b.label}</span>
+  )
 }
 
-function fmtPct(n) { return (n == null || isNaN(n)) ? 'N/A' : n.toFixed(1) + '%' }
-function fmtDate(d) {
-  if (!d) return '-'
-  return formatDate(d, 'All', { day: '2-digit', month: 'short', year: 'numeric' })
+function Meter({ value, label }) {
+  const b = scoreBand(value)
+  return (
+    <div
+      className="h-1.5 bg-[var(--input-border)] rounded-full overflow-hidden"
+      role="meter" aria-label={label} aria-valuemin={0} aria-valuemax={100}
+      aria-valuenow={value == null ? undefined : Math.round(value)}
+      aria-valuetext={value == null ? 'Not measured' : `${value.toFixed(0)} percent, ${b.label}`}
+    >
+      <div className="h-full rounded-full transition-[width] duration-500 motion-reduce:transition-none" style={{ width: `${value ?? 0}%`, background: BAND_BAR[b.key] }} />
+    </div>
+  )
+}
+
+function ChartEmpty({ children }) {
+  return <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)] text-center px-4">{children}</div>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -74,17 +132,18 @@ export default function SafetyCompliance() {
   const { activeCountry, appSettings } = useSettings()
   const { branding } = useTenant()
   const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
-  const [tyreRecords, setTyreRecords] = useState([])
-  const [inspections, setInspections]  = useState([])
-  const [accidents, setAccidents]      = useState([])
-  const [loading, setLoading]          = useState(true)
-  const [error, setError]              = useState(null)
-  const [activeTab, setActiveTab]      = useState('overview')
-  const [dateRange, setDateRange]      = useState('90d')
+  const [data, setData] = useState({ tyreRecords: [], inspections: [], accidents: [] })
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [exportError, setExportError] = useState(null)
+  const [updatedAt, setUpdatedAt] = useState(null)
+  const [activeTab, setActiveTab] = useState('overview')
+  const [dateRange, setDateRange] = useState('90d')
+  const [site, setSite] = useState('all')
 
-  // Switching the range (30d/90d/6m/1y) fires a new load over the old one. If
-  // the earlier answer lands last, the compliance scores describe the PREVIOUS
-  // window while the chips say otherwise - a safety figure that is quietly wrong.
+  // Switching the range fires a new load over the old one. If the earlier
+  // answer lands last, the compliance scores describe the PREVIOUS window while
+  // the chips say otherwise - a safety figure that is quietly wrong.
   const latestLoad = useLatestRequest()
 
   const load = useCallback(async () => {
@@ -92,690 +151,511 @@ export default function SafetyCompliance() {
     setLoading(true); setError(null)
     try {
       const country = activeCountry !== 'All' ? activeCountry : null
-      const daysBack = dateRange === '30d' ? 30 : dateRange === '90d' ? 90 : dateRange === '6m' ? 180 : 365
-      const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - daysBack)
-      const from = cutoff.toISOString()
-
-      const queries = [
+      const from = rangeCutoff(dateRange)
+      const [tr, insp, acc] = await Promise.all([
         analytics.listTyreRecordsSince({ country, since: from }),
         analytics.listInspectionsSince({ since: from.slice(0, 10) }),
         analytics.listAccidentsSince({ since: from.slice(0, 10) }),
-      ]
-      const [tr, insp, acc] = await Promise.all(queries)
+      ])
       if (stale()) return
-      setTyreRecords(tr.data || [])
-      setInspections(insp.data || [])
-      setAccidents(acc.data || [])
+      const failed = tr.error || insp.error || acc.error
+      if (failed) throw failed
+      setData({ tyreRecords: tr.data || [], inspections: insp.data || [], accidents: acc.data || [] })
+      setUpdatedAt(new Date())
     } catch (e) {
       // A superseded load must not raise a banner over data that loaded fine.
-      if (!stale()) setError(toUserMessage(e, 'Something went wrong. Please try again.'))
+      if (!stale()) setError(toUserMessage(e, 'Could not load compliance data. Please try again.'))
     } finally {
-      // Clearing this from a stale load would make the newer one look finished.
       if (!stale()) setLoading(false)
     }
   }, [activeCountry, dateRange, latestLoad])
 
   useEffect(() => { load() }, [load])
 
-  // ── Compliance computations ───────────────────────────────────────────────
-  const compliance = useMemo(() => {
-    const total = tyreRecords.length
-    if (!total) return null
+  const sites = useMemo(() => siteOptions(data), [data])
+  const scoped = useMemo(() => filterBySite(data, site), [data, site])
+  const compliance = useMemo(() => computeSafetyCompliance(scoped), [scoped])
+  const inspRows = useMemo(() => inspectionRows(scoped.inspections), [scoped])
+  const rangeLabel = RANGE_OPTIONS.find((o) => o.value === dateRange)?.label || dateRange
+  const scopeLabel = `${rangeLabel}${site !== 'all' ? `, ${site}` : ''}`
 
-    // Tread depth compliance
-    const withTread = tyreRecords.filter(r => r.tread_depth != null && r.tread_depth !== '')
-    const treadFails = withTread.filter(r => {
-      const pos = getPosition(r.tyre_position || r.position)
-      const limit = LEGAL_TREAD[pos] || LEGAL_TREAD.default
-      return parseFloat(r.tread_depth) < limit
-    })
-    const treadCompliance = withTread.length ? ((withTread.length - treadFails.length) / withTread.length) * 100 : null
-
-    // Pressure compliance
-    const withPressure = inspections.filter(r => r.pressure_reading != null && r.recommended_pressure != null)
-    const pressureFails = withPressure.filter(r => {
-      const diff = Math.abs((parseFloat(r.pressure_reading) - parseFloat(r.recommended_pressure)) / parseFloat(r.recommended_pressure)) * 100
-      return diff > PRESSURE_TOLERANCE
-    })
-    const pressureCompliance = withPressure.length ? ((withPressure.length - pressureFails.length) / withPressure.length) * 100 : null
-
-    // Critical risk tyres
-    const criticalCount = tyreRecords.filter(r => r.risk_level === 'Critical').length
-    const highRiskCount = tyreRecords.filter(r => r.risk_level === 'High').length
-    // risk_level is unpopulated on most records; rate only the tyres that carry
-    // one, and report N/A (null) rather than a perfect 0% critical when none do.
-    const ratedCount = tyreRecords.filter(r => r.risk_level != null && String(r.risk_level).trim() !== '').length
-    const criticalPct = ratedCount ? (criticalCount / ratedCount) * 100 : null
-
-    // Inspection frequency compliance (vehicles inspected at least once in period)
-    const uniqueAssets = new Set(tyreRecords.map(r => r.asset_number || r.asset_no)).size
-    const inspectedAssets = new Set(inspections.map(r => r.asset_no)).size
-    const inspectionCompliance = uniqueAssets ? Math.min(100, (inspectedAssets / uniqueAssets) * 100) : null
-
-    // Risk distribution
-    const riskDist = { Critical: 0, High: 0, Medium: 0, Low: 0 }
-    tyreRecords.forEach(r => { if (riskDist[r.risk_level] !== undefined) riskDist[r.risk_level]++ })
-
-    // Tread compliance by site
-    const bySite = {}
-    tyreRecords.forEach(r => {
-      const site = r.site || 'Unknown'
-      if (!bySite[site]) bySite[site] = { total: 0, measured: 0, fails: 0 }
-      bySite[site].total++
-      if (r.tread_depth != null) {
-        bySite[site].measured++
-        const pos = getPosition(r.tyre_position || r.position)
-        if (parseFloat(r.tread_depth) < (LEGAL_TREAD[pos] || LEGAL_TREAD.default)) bySite[site].fails++
-      }
-    })
-    const siteTread = Object.entries(bySite)
-      // Compliance is over MEASURED tyres only; a site with no tread reading is
-      // N/A (null), never a flattering 100%.
-      .map(([site, d]) => ({ site, compliance: d.measured ? ((d.measured - d.fails) / d.measured) * 100 : null, fails: d.fails, total: d.total, measured: d.measured }))
-      .sort((a, b) => (a.compliance == null) - (b.compliance == null) || (a.compliance ?? 0) - (b.compliance ?? 0))
-
-    // Monthly trend (last 6 months)
-    const monthlyTrend = []
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(); d.setMonth(d.getMonth() - i)
-      const month = d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' })
-      const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-      const monthRecords = tyreRecords.filter(r => (r.created_at || '').startsWith(monthKey))
-      const monthInspections = inspections.filter(r => (r.inspection_date || '').startsWith(monthKey))
-      const monthRated = monthRecords.filter(r => r.risk_level != null && String(r.risk_level).trim() !== '')
-      const critPct = monthRated.length ? (monthRated.filter(r => r.risk_level === 'Critical').length / monthRated.length) * 100 : null
-      const inspPct = monthInspections.length > 0 ? 100 : 0
-      monthlyTrend.push({ month, critPct, inspPct })
-    }
-
-    // Accident correlation
-    const accidentsWithTyreIssue = accidents.filter(a => {
-      const asset = a.asset_no || a.vehicle
-      const critTyres = tyreRecords.filter(r => (r.asset_number || r.asset_no) === asset && (r.risk_level === 'Critical' || r.risk_level === 'High'))
-      return critTyres.length > 0
-    })
-    const accidentCorrelation = accidents.length ? (accidentsWithTyreIssue.length / accidents.length) * 100 : 0
-
-    // Overall compliance score - only measured components count; renormalize weights.
-    // Null (not fabricated 100) when nothing is measurable.
-    const scoreParts = [
-      { value: treadCompliance, weight: 0.35 },
-      { value: pressureCompliance, weight: 0.25 },
-      { value: inspectionCompliance, weight: 0.30 },
-      { value: criticalPct == null ? null : Math.max(0, 100 - criticalPct * 5), weight: 0.10 },
-    ].filter(p => p.value != null)
-    const scoreWeight = scoreParts.reduce((s, p) => s + p.weight, 0)
-    const overallScore = scoreWeight > 0
-      ? scoreParts.reduce((s, p) => s + p.value * p.weight, 0) / scoreWeight
-      : null
-
-    return {
-      total, treadCompliance, pressureCompliance, inspectionCompliance,
-      criticalCount, highRiskCount, criticalPct, overallScore,
-      riskDist, siteTread, monthlyTrend, treadFails,
-      pressureFails: pressureFails.length, withPressure: withPressure.length,
-      accidentCorrelation, accidents: accidents.length, accidentsWithTyreIssue: accidentsWithTyreIssue.length,
-    }
-  }, [tyreRecords, inspections, accidents])
-  const treadFailsPager = usePagedRows(compliance?.treadFails || [], { pageSize: 25 })
-  const inspectionsPager = usePagedRows(inspections, { pageSize: 25 })
-  const siteTreadPager = usePagedRows(compliance?.siteTread || [], { pageSize: 25 })
-
-  // ── Chart data ────────────────────────────────────────────────────────────
+  // ── Charts ────────────────────────────────────────────────────────────────
   const riskChartData = useMemo(() => {
-    if (!compliance) return null
-    const { riskDist } = compliance
+    if (!compliance || !compliance.ratedCount) return null
+    const keys = Object.keys(compliance.riskDist)
     return {
-      labels: Object.keys(riskDist),
-      datasets: [{
-        data: Object.values(riskDist),
-        backgroundColor: ['#ef4444', '#f97316', '#f59e0b', '#3b82f6'],
-        borderColor: 'var(--panel-2)', borderWidth: 2,
-      }],
-    }
-  }, [compliance])
-
-  const trendChartData = useMemo(() => {
-    if (!compliance) return null
-    return {
-      labels: compliance.monthlyTrend.map(m => m.month),
-      datasets: [
-        {
-          label: 'Critical Risk %',
-          data: compliance.monthlyTrend.map(m => m.critPct),
-          borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.1)',
-          fill: true, tension: 0.4,
-        },
-      ],
-    }
-  }, [compliance])
-
-  const siteChartData = useMemo(() => {
-    if (!compliance) return null
-    const top10 = compliance.siteTread.filter(s => s.compliance != null).slice(0, 10)
-    return {
-      labels: top10.map(s => s.site),
-      datasets: [{
-        label: 'Tread Compliance %',
-        data: top10.map(s => s.compliance),
-        backgroundColor: top10.map(s => s.compliance >= 90 ? '#10b981' : s.compliance >= 75 ? '#f59e0b' : '#ef4444'),
-      }],
+      labels: keys,
+      datasets: [{ data: keys.map((k) => compliance.riskDist[k]), backgroundColor: keys.map((k) => RISK_COLOURS[k]), borderColor: 'var(--panel-2)', borderWidth: 2 }],
     }
   }, [compliance])
 
   const radarData = useMemo(() => {
     if (!compliance) return null
     return {
-      labels: ['Tread Depth', 'Pressure', 'Inspection Rate', 'Risk Level', 'Accident Safety'],
+      labels: ['Tread depth', 'Pressure', 'Inspection coverage', 'Risk level', 'Accident safety'],
       datasets: [{
-        label: 'Compliance Score',
-        data: [
-          compliance.treadCompliance,
-          compliance.pressureCompliance,
-          compliance.inspectionCompliance,
-          compliance.criticalPct == null ? null : Math.max(0, 100 - compliance.criticalPct * 10),
-          Math.max(0, 100 - compliance.accidentCorrelation),
-        ],
-        borderColor: '#3b82f6',
-        backgroundColor: 'rgba(59,130,246,0.15)',
-        pointBackgroundColor: '#3b82f6',
-        borderWidth: 2,
+        label: 'Compliance score',
+        data: [compliance.treadCompliance, compliance.pressureCompliance, compliance.inspectionCompliance, compliance.riskScore, compliance.accidentSafety],
+        borderColor: ACCENTS.primary, backgroundColor: withAlpha(ACCENTS.primary, 0.15), pointBackgroundColor: ACCENTS.primary, borderWidth: 2,
       }],
     }
   }, [compliance])
 
-  // ── Export ────────────────────────────────────────────────────────────────
-  async function exportPdf() {
-    try {
-    const { default: jsPDF } = await import('jspdf')
-    const autoTable = await loadAutoTable()
-    if (!compliance) return
-    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
-    const brand = await resolvePdfBrand(branding)
-    pdfHeader(doc, 'Safety & Compliance Report', `Overall Score: ${fmtPct(compliance.overallScore)}`, company, brand)
+  const siteChartData = useMemo(() => {
+    if (!compliance) return null
+    const rows = compliance.siteTread.filter((s) => s.compliance != null).slice(0, 12)
+    if (!rows.length) return null
+    return {
+      labels: rows.map((s) => s.site),
+      datasets: [{ label: 'Tread compliance %', data: rows.map((s) => s.compliance), backgroundColor: rows.map((s) => BAND_BAR[scoreBand(s.compliance).key]) }],
+    }
+  }, [compliance])
 
-    autoTable(doc, {
-      ...pdfTableTheme(brand.accent),
-      startY: 28,
-      head: [['Metric', 'Score', 'Status']],
-      body: [
-        ['Tread Depth Compliance', fmtPct(compliance.treadCompliance), compliance.treadCompliance == null ? 'N/A' : compliance.treadCompliance >= 90 ? 'PASS' : compliance.treadCompliance >= 75 ? 'WARNING' : 'FAIL'],
-        ['Pressure Compliance', fmtPct(compliance.pressureCompliance), compliance.pressureCompliance == null ? 'N/A' : compliance.pressureCompliance >= 90 ? 'PASS' : 'WARNING'],
-        ['Inspection Compliance', fmtPct(compliance.inspectionCompliance), compliance.inspectionCompliance == null ? 'N/A' : compliance.inspectionCompliance >= 80 ? 'PASS' : 'WARNING'],
-        ['Critical Risk Tyres', compliance.criticalCount + ' tyres (' + fmtPct(compliance.criticalPct) + ')', compliance.criticalPct == null ? 'N/A' : compliance.criticalCount === 0 ? 'PASS' : 'ACTION REQUIRED'],
-        ['Accident-Tyre Correlation', fmtPct(compliance.accidentCorrelation), compliance.accidents === 0 ? 'N/A' : compliance.accidentCorrelation < 30 ? 'LOW' : 'REVIEW'],
-        ['Overall Score', fmtPct(compliance.overallScore), compliance.overallScore == null ? 'N/A' : compliance.overallScore >= 90 ? 'EXCELLENT' : compliance.overallScore >= 75 ? 'GOOD' : 'NEEDS ATTENTION'],
+  const trendChartData = useMemo(() => {
+    if (!compliance) return null
+    const t = compliance.monthlyTrend
+    return {
+      labels: t.map((m) => m.label),
+      datasets: [
+        { type: 'line', label: 'Critical risk % (rated tyres)', data: t.map((m) => m.critPct), borderColor: ACCENTS.risk, backgroundColor: withAlpha(ACCENTS.risk, 0.12), fill: true, tension: 0.35, spanGaps: true, yAxisID: 'y' },
+        { type: 'bar', label: 'Inspections', data: t.map((m) => m.inspections), backgroundColor: withAlpha(ACCENTS.info, 0.45), yAxisID: 'y1' },
       ],
-    })
+    }
+  }, [compliance])
+  const trendHasRisk = compliance?.monthlyTrend.some((m) => m.critPct != null)
 
-    if (compliance.siteTread.length > 0) {
-      const y = (doc.lastAutoTable?.finalY || 80) + 8
+  // ── Table columns ─────────────────────────────────────────────────────────
+  const treadColumns = useMemo(() => [
+    { id: 'asset', header: 'Asset', accessorFn: (r) => r.asset ?? '', cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{text(row.original.asset)}</span> },
+    { id: 'serial', header: 'Serial', accessorFn: (r) => r.serial ?? '', cell: ({ row }) => text(row.original.serial) },
+    { id: 'position', header: 'Position', accessorFn: (r) => r.position ?? '', cell: ({ row }) => text(row.original.position) },
+    { id: 'tread', header: 'Tread (mm)', accessorFn: (r) => r.tread, meta: { align: 'right' }, cell: ({ row }) => <span className="tabular-nums font-semibold text-red-400">{row.original.tread.toFixed(1)}</span> },
+    { id: 'legalMin', header: 'Legal min (mm)', accessorFn: (r) => r.legalMin, meta: { align: 'right' } },
+    { id: 'deficit', header: 'Deficit (mm)', accessorFn: (r) => r.deficit, meta: { align: 'right' }, cell: ({ row }) => <span className="tabular-nums text-red-400">{row.original.deficit.toFixed(1)} below</span> },
+    { id: 'risk', header: 'Risk level', accessorFn: (r) => r.risk ?? 'Not rated', meta: { filterVariant: 'select' } },
+    { id: 'site', header: 'Site', accessorFn: (r) => r.site ?? '', meta: { filterVariant: 'select' }, cell: ({ row }) => text(row.original.site) },
+  ], [])
+
+  const pressureColumns = useMemo(() => [
+    { id: 'asset', header: 'Asset', accessorFn: (r) => r.asset ?? '', cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{text(row.original.asset)}</span> },
+    { id: 'date', header: 'Date', accessorFn: (r) => r.date ?? '', cell: ({ row }) => fmtDay(row.original.date) },
+    { id: 'site', header: 'Site', accessorFn: (r) => r.site ?? '', cell: ({ row }) => text(row.original.site) },
+    { id: 'reading', header: 'Reading', accessorFn: (r) => r.reading, meta: { align: 'right' } },
+    { id: 'target', header: 'Recommended', accessorFn: (r) => r.target, meta: { align: 'right' } },
+    { id: 'deviation', header: 'Deviation %', accessorFn: (r) => r.deviationPct, meta: { align: 'right' }, cell: ({ row }) => <span className="tabular-nums">{row.original.deviationPct > 0 ? '+' : ''}{row.original.deviationPct.toFixed(1)}%</span> },
+    {
+      id: 'result', header: 'Result', accessorFn: (r) => (r.compliant ? 'Within tolerance' : 'Out of tolerance'), meta: { filterVariant: 'select' },
+      cell: ({ row }) => <BandBadge value={row.original.compliant ? 100 : 0} />,
+    },
+  ], [])
+
+  const inspectionColumns = useMemo(() => [
+    { id: 'asset', header: 'Asset', accessorFn: (r) => r.asset ?? '', cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{text(row.original.asset)}</span> },
+    { id: 'inspector', header: 'Inspector', accessorFn: (r) => r.inspector ?? '', cell: ({ row }) => text(row.original.inspector) },
+    { id: 'date', header: 'Date', accessorFn: (r) => r.date ?? '', cell: ({ row }) => fmtDay(row.original.date) },
+    { id: 'site', header: 'Site', accessorFn: (r) => r.site ?? '', meta: { filterVariant: 'select' }, cell: ({ row }) => text(row.original.site) },
+    { id: 'tread', header: 'Tread recorded', accessorFn: (r) => (r.treadRecorded ? 'Yes' : 'No'), meta: { filterVariant: 'select' } },
+    { id: 'pressure', header: 'Pressure recorded', accessorFn: (r) => (r.pressureRecorded ? 'Yes' : 'No'), meta: { filterVariant: 'select' } },
+  ], [])
+
+  const siteColumns = useMemo(() => [
+    { id: 'site', header: 'Site', accessorFn: (r) => r.site, cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{row.original.site}</span> },
+    { id: 'total', header: 'Tyres', accessorFn: (r) => r.total, meta: { align: 'right' } },
+    { id: 'measured', header: 'Tread measured', accessorFn: (r) => r.measured, meta: { align: 'right' } },
+    { id: 'fails', header: 'Below legal', accessorFn: (r) => r.fails, meta: { align: 'right' } },
+    { id: 'critical', header: 'Critical risk', accessorFn: (r) => r.critical, meta: { align: 'right' } },
+    {
+      id: 'compliance', header: 'Compliance', accessorFn: (r) => r.compliance ?? -1, meta: { align: 'right', exportValue: (r) => (r.compliance == null ? NA : r.compliance) },
+      cell: ({ row }) => <span className={`tabular-nums font-medium ${BAND_TEXT[scoreBand(row.original.compliance).key]}`}>{fmtPct(row.original.compliance)}</span>,
+    },
+    { id: 'status', header: 'Status', accessorFn: (r) => scoreBand(r.compliance).label, meta: { filterVariant: 'select' }, cell: ({ row }) => <BandBadge value={row.original.compliance} /> },
+  ], [])
+
+  // ── Export ────────────────────────────────────────────────────────────────
+  const fileBase = reportFileName('Safety Compliance', rangeLabel, site !== 'all' ? site : null, reportDateLabel())
+
+  async function exportPdf() {
+    if (!compliance) return
+    setExportError(null)
+    try {
+      const { default: jsPDF } = await import('jspdf')
+      const autoTable = await loadAutoTable()
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+      const brand = await resolvePdfBrand(branding)
+      pdfHeader(doc, 'Safety and Compliance Report', `${scopeLabel}. Overall score ${fmtPct(compliance.overallScore)}`, company, brand)
       autoTable(doc, {
         ...pdfTableTheme(brand.accent),
-        startY: y,
-        head: [['Site', 'Tread Compliance %', 'Total Tyres', 'Failures', 'Status']],
-        body: compliance.siteTread.map(s => [
-          s.site, fmtPct(s.compliance), s.total, s.fails,
-          s.compliance == null ? 'N/A' : s.compliance >= 90 ? 'COMPLIANT' : s.compliance >= 75 ? 'WARNING' : 'NON-COMPLIANT',
-        ]),
+        startY: 28,
+        head: [['Metric', 'Score', 'Status', 'Basis']],
+        body: complianceSummaryRows(compliance).map((r) => [r.metric, r.score, r.status, r.basis]),
       })
-    }
-
-    const pgCount = doc.internal.getNumberOfPages()
-    for (let i = 1; i <= pgCount; i++) { doc.setPage(i); pdfFooter(doc, i, pgCount, company, brand) }
-    doc.save(`safety-compliance-${new Date().toISOString().slice(0,10)}.pdf`)
+      if (compliance.siteTread.length) {
+        autoTable(doc, {
+          ...pdfTableTheme(brand.accent),
+          startY: (doc.lastAutoTable?.finalY || 80) + 8,
+          head: [['Site', 'Tyres', 'Tread measured', 'Below legal', 'Compliance', 'Status']],
+          body: compliance.siteTread.map((s) => [s.site, s.total, s.measured, s.fails, fmtPct(s.compliance), scoreBand(s.compliance).label]),
+        })
+      }
+      if (compliance.treadFails.length) {
+        autoTable(doc, {
+          ...pdfTableTheme(brand.accent),
+          startY: (doc.lastAutoTable?.finalY || 80) + 8,
+          head: [['Asset', 'Serial', 'Position', 'Tread mm', 'Legal min mm', 'Deficit mm', 'Risk', 'Site']],
+          body: compliance.treadFails.map((r) => [text(r.asset), text(r.serial), text(r.position), r.tread, r.legalMin, r.deficit, r.risk || 'Not rated', text(r.site)]),
+        })
+      }
+      const pages = doc.internal.getNumberOfPages()
+      for (let i = 1; i <= pages; i++) { doc.setPage(i); pdfFooter(doc, i, pages, company, brand) }
+      doc.save(`${fileBase}.pdf`)
     } catch (e) {
-      setError(toUserMessage(e, 'Could not export. Try again.'))
+      setExportError(toUserMessage(e, 'Could not export the PDF. Try again.'))
     }
   }
 
   async function exportExcel() {
-    try {
-    const XLSX = await import('xlsx')
     if (!compliance) return
-    const ws = XLSX.utils.json_to_sheet([
-      { Metric: 'Tread Depth Compliance', Score: fmtPct(compliance.treadCompliance) },
-      { Metric: 'Pressure Compliance', Score: fmtPct(compliance.pressureCompliance) },
-      { Metric: 'Inspection Compliance', Score: fmtPct(compliance.inspectionCompliance) },
-      { Metric: 'Critical Risk Tyres', Score: compliance.criticalCount },
-      { Metric: 'Overall Score', Score: fmtPct(compliance.overallScore) },
-    ])
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Compliance')
-    if (compliance.siteTread.length > 0) {
-      const ws2 = XLSX.utils.json_to_sheet(compliance.siteTread.map(s => ({
-        Site: s.site,
-        'Tread Compliance %': s.compliance == null ? 'N/A' : s.compliance.toFixed(1),
-        'Total Tyres': s.total,
-        Failures: s.fails,
-      })))
-      XLSX.utils.book_append_sheet(wb, ws2, 'By Site')
-    }
-    XLSX.writeFile(wb, `safety-compliance-${new Date().toISOString().slice(0,10)}.xlsx`)
+    setExportError(null)
+    try {
+      await exportSheetsToExcel([
+        { name: 'Compliance', rows: complianceSummaryRows(compliance), columns: ['metric', 'score', 'status', 'basis'], headers: ['Metric', 'Score', 'Status', 'Basis'] },
+        {
+          name: 'By site',
+          rows: compliance.siteTread.map((s) => ({ ...s, compliance: s.compliance == null ? NA : s.compliance, status: scoreBand(s.compliance).label })),
+          columns: ['site', 'total', 'measured', 'fails', 'critical', 'compliance', 'status'],
+          headers: ['Site', 'Tyres', 'Tread measured', 'Below legal', 'Critical risk', 'Compliance %', 'Status'],
+        },
+        {
+          name: 'Below legal tread',
+          rows: compliance.treadFails.map((r) => ({ ...r, risk: r.risk || 'Not rated' })),
+          columns: ['asset', 'serial', 'position', 'tread', 'legalMin', 'deficit', 'risk', 'site'],
+          headers: ['Asset', 'Serial', 'Position', 'Tread mm', 'Legal min mm', 'Deficit mm', 'Risk level', 'Site'],
+        },
+        {
+          name: 'Pressure checks',
+          rows: compliance.pressure.map((r) => ({ ...r, result: r.compliant ? 'Within tolerance' : 'Out of tolerance' })),
+          columns: ['asset', 'date', 'site', 'reading', 'target', 'deviationPct', 'result'],
+          headers: ['Asset', 'Date', 'Site', 'Reading', 'Recommended', 'Deviation %', 'Result'],
+        },
+        {
+          name: 'Inspections',
+          rows: inspRows.map((r) => ({ ...r, treadRecorded: r.treadRecorded ? 'Yes' : 'No', pressureRecorded: r.pressureRecorded ? 'Yes' : 'No' })),
+          columns: ['asset', 'inspector', 'date', 'site', 'treadRecorded', 'pressureRecorded'],
+          headers: ['Asset', 'Inspector', 'Date', 'Site', 'Tread recorded', 'Pressure recorded'],
+        },
+      ], fileBase, { title: 'Safety and Compliance', company, dateRange: scopeLabel })
     } catch (e) {
-      setError(toUserMessage(e, 'Could not export. Try again.'))
+      setExportError(toUserMessage(e, 'Could not export the workbook. Try again.'))
     }
-  }
-
-  // ── Score color ───────────────────────────────────────────────────────────
-  function scoreColor(pct) {
-    if (pct == null || isNaN(pct)) return 'text-[var(--text-muted)]'
-    if (pct >= 90) return 'text-green-400'
-    if (pct >= 75) return 'text-yellow-400'
-    if (pct >= 60) return 'text-orange-400'
-    return 'text-red-400'
-  }
-  function scoreLabel(pct) {
-    if (pct == null || isNaN(pct)) return { text: 'Not measured', color: 'text-[var(--text-muted)]', bg: 'bg-[var(--input-bg)]', border: 'border-[var(--input-border)]' }
-    if (pct >= 90) return { text: 'Compliant', color: 'text-green-400', bg: 'bg-green-900/30', border: 'border-green-700' }
-    if (pct >= 75) return { text: 'Warning', color: 'text-yellow-400', bg: 'bg-yellow-900/30', border: 'border-yellow-700' }
-    if (pct >= 60) return { text: 'Attention', color: 'text-orange-400', bg: 'bg-orange-900/30', border: 'border-orange-700' }
-    return { text: 'Non-Compliant', color: 'text-red-400', bg: 'bg-red-900/30', border: 'border-red-700' }
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-[var(--surface-1)]">
-        <div className="text-center"><Loader2 className="animate-spin text-blue-400 mx-auto mb-3" size={40} /><p className="text-[var(--text-muted)]">Loading compliance data...</p></div>
-      </div>
-    )
-  }
+  const tabId = (id) => `safety-tab-${id}`
+  const panelId = (id) => `safety-panel-${id}`
+  const firstLoad = loading && !updatedAt
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Safety & Compliance"
-        subtitle="Fleet regulatory compliance and safety monitoring"
+        title="Safety and Compliance"
+        subtitle="Fleet regulatory compliance and safety monitoring. Unmeasured checks show N/A and do not count toward the score."
         icon={ShieldCheck}
+        onRefresh={load}
+        refreshing={loading}
+        updatedAt={updatedAt}
         actions={
-          <div className="flex items-center gap-2">
-            <select value={dateRange} onChange={e => setDateRange(e.target.value)}
-              className="px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none">
-              <option value="30d">Last 30 Days</option>
-              <option value="90d">Last 90 Days</option>
-              <option value="6m">Last 6 Months</option>
-              <option value="1y">Last Year</option>
-            </select>
-            <button onClick={load} className="p-2 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"><RefreshCw size={16} /></button>
-            <button onClick={exportPdf} className="flex items-center gap-2 px-4 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-dim)] hover:text-[var(--text-primary)] text-sm rounded-lg transition-colors"><FileText size={16} />PDF</button>
-            <button onClick={exportExcel} className="flex items-center gap-2 px-4 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-dim)] hover:text-[var(--text-primary)] text-sm rounded-lg transition-colors"><FileSpreadsheet size={16} />Excel</button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={exportExcel} disabled={!compliance} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] disabled:opacity-50">
+              <FileSpreadsheet size={15} aria-hidden="true" /> Excel
+            </button>
+            <button type="button" onClick={exportPdf} disabled={!compliance} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] disabled:opacity-50">
+              <FileText size={15} aria-hidden="true" /> PDF
+            </button>
           </div>
         }
       />
 
+      {/* Filters */}
+      <Card pad="tight">
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="flex flex-col gap-1 text-xs text-[var(--text-muted)] min-w-[160px] flex-1 sm:flex-none">
+            Period
+            <select className="input min-h-[44px]" value={dateRange} onChange={(e) => setDateRange(e.target.value)}>
+              {RANGE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-[var(--text-muted)] min-w-[160px] flex-1 sm:flex-none">
+            Site
+            <select className="input min-h-[44px]" value={site} onChange={(e) => setSite(e.target.value)}>
+              <option value="all">All sites</option>
+              {sites.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </label>
+          {site !== 'all' && (
+            <button type="button" onClick={() => setSite('all')} className="btn-secondary text-sm min-h-[44px]">Clear site</button>
+          )}
+          <p className="text-xs text-[var(--text-muted)] sm:ml-auto" aria-live="polite">
+            {loading ? 'Loading' : `${scoped.tyreRecords.length} tyre records, ${scoped.inspections.length} inspections, ${scoped.accidents.length} accidents in scope`}
+          </p>
+        </div>
+      </Card>
+
       {error && (
-        <div className="bg-red-900/30 border border-red-700 rounded-xl p-4 flex items-center gap-3 text-red-300">
-          <AlertTriangle size={18} /><span className="text-sm">{error}</span>
+        <Card tone="crit" role="alert" className="items-start justify-between gap-[var(--space-3)] sm:items-center" style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+          <div className="flex items-start gap-3 min-w-0">
+            <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
+            <div><p className="font-medium text-[var(--text-primary)]">Compliance data could not be loaded.</p><p className="text-sm text-[var(--text-muted)] mt-1">{error}</p></div>
+          </div>
+          <button type="button" onClick={load} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]"><RefreshCw size={14} aria-hidden="true" /> Retry</button>
+        </Card>
+      )}
+      {exportError && (
+        <Card tone="warn" role="alert" className="items-center gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
+          <AlertTriangle size={16} className="text-amber-300 shrink-0" aria-hidden="true" />
+          <p className="text-sm text-[var(--text-primary)] flex-1">{exportError}</p>
+        </Card>
+      )}
+
+      {firstLoad && (
+        <div className="space-y-4" aria-busy="true" aria-label="Loading compliance data">
+          <Skeleton className="h-40 w-full rounded-2xl" />
+          <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">{[0, 1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-24 rounded-xl" />)}</div>
         </div>
       )}
 
-      {!compliance && !loading && (
-        <div className="text-center py-20">
-          <ShieldCheck size={48} className="mx-auto text-[var(--text-dim)] mb-4" />
-          <p className="text-[var(--text-muted)]">No tyre data found for the selected period.</p>
-        </div>
+      {!firstLoad && !error && !compliance && (
+        <Card className="items-center text-center" style={{ paddingBlock: '4rem' }}>
+          <ShieldCheck size={44} className="text-[var(--text-dim)] mb-3" aria-hidden="true" />
+          <p className="text-[var(--text-primary)] font-medium">No tyre records in this period{site !== 'all' ? ` for ${site}` : ''}.</p>
+          <p className="text-sm text-[var(--text-muted)] mt-1">Widen the period or clear the site filter. Compliance cannot be scored without tyre data.</p>
+        </Card>
       )}
 
-      {compliance && (
+      {!firstLoad && compliance && (
         <>
-          {/* Overall Score */}
-          <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-2xl p-6">
+          {/* Overall score + components */}
+          <Card>
             <div className="flex flex-col lg:flex-row items-start lg:items-center gap-6">
               <div className="text-center min-w-36">
-                <div className={`text-5xl font-bold ${scoreColor(compliance.overallScore)}`}>
-                  {compliance.overallScore == null ? 'N/A' : <>{compliance.overallScore.toFixed(0)}<span className="text-2xl">%</span></>}
+                <div className={`text-5xl font-bold tabular-nums ${BAND_TEXT[scoreBand(compliance.overallScore).key]}`}>
+                  {compliance.overallScore == null ? NA : <>{compliance.overallScore.toFixed(0)}<span className="text-2xl">%</span></>}
                 </div>
-                <div className="text-[var(--text-muted)] text-sm mt-1">Overall Score</div>
-                {(() => { const sl = scoreLabel(compliance.overallScore); return (
-                  <span className={`inline-block mt-2 px-3 py-1 rounded-full text-xs font-medium border ${sl.color} ${sl.bg} ${sl.border}`}>{sl.text}</span>
-                ) })()}
+                <div className="text-[var(--text-muted)] text-sm mt-1">Overall score</div>
+                <div className="mt-2"><BandBadge value={compliance.overallScore} /></div>
+                <p className="text-[11px] text-[var(--text-muted)] mt-2">Weighted over {compliance.measuredComponents.length} of 4 measured checks</p>
               </div>
-              <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="flex-1 w-full grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
                 {[
-                  { label: 'Tread Depth', value: compliance.treadCompliance, icon: CircleDot, detail: `${compliance.treadFails.length} below legal limit` },
-                  { label: 'Pressure', value: compliance.pressureCompliance, icon: BarChart2, detail: `${compliance.pressureFails} non-compliant readings` },
-                  { label: 'Inspections', value: compliance.inspectionCompliance, icon: ShieldCheck, detail: `${inspections.length} completed` },
-                  { label: 'Risk Level', value: compliance.criticalPct == null ? null : Math.max(0, 100 - compliance.criticalPct * 10), icon: AlertOctagon, detail: `${compliance.criticalCount} critical tyres` },
-                ].map(({ label, value, icon: Icon, detail }) => {
-                  const sl = scoreLabel(value)
-                  return (
-                    <div key={label} className="bg-[var(--input-bg)] rounded-xl p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Icon size={15} className={scoreColor(value)} />
-                        <span className="text-[var(--text-muted)] text-xs">{label}</span>
-                      </div>
-                      <div className={`text-2xl font-bold ${scoreColor(value)}`}>{value == null ? 'N/A' : `${value.toFixed(0)}%`}</div>
-                      <div className="mt-2 h-1.5 bg-[var(--input-border)] rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full ${value == null ? 'bg-[var(--input-border)]' : value >= 90 ? 'bg-green-500' : value >= 75 ? 'bg-yellow-500' : 'bg-red-500'} transition-all duration-700`}
-                          style={{ width: `${value == null ? 0 : value}%` }} />
-                      </div>
-                      <div className="text-[var(--text-muted)] text-xs mt-1">{detail}</div>
+                  { label: 'Tread depth', value: compliance.treadCompliance, icon: CircleDot, detail: compliance.treadMeasured ? `${compliance.treadFails.length} of ${compliance.treadMeasured} measured below legal` : 'No tread readings in scope' },
+                  { label: 'Pressure', value: compliance.pressureCompliance, icon: Gauge, detail: compliance.pressureChecked ? `${compliance.pressureFails} of ${compliance.pressureChecked} outside tolerance` : 'No readings with a recommended pressure' },
+                  { label: 'Inspection coverage', value: compliance.inspectionCompliance, icon: ClipboardCheck, detail: `${compliance.inspectedAssets} of ${compliance.tyreAssets} assets inspected` },
+                  { label: 'Risk level', value: compliance.riskScore, icon: AlertOctagon, detail: compliance.ratedCount ? `${compliance.criticalCount} critical of ${compliance.ratedCount} rated` : 'No tyres carry a risk rating' },
+                ].map(({ label, value, icon: Icon, detail }) => (
+                  <div key={label} className="bg-[var(--input-bg)] rounded-xl p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Icon size={15} className={BAND_TEXT[scoreBand(value).key]} aria-hidden="true" />
+                      <span className="text-[var(--text-muted)] text-xs">{label}</span>
                     </div>
-                  )
-                })}
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className={`text-2xl font-bold tabular-nums ${BAND_TEXT[scoreBand(value).key]}`}>{value == null ? NA : `${value.toFixed(0)}%`}</span>
+                      <span className="text-[11px] text-[var(--text-muted)]">{scoreBand(value).label}</span>
+                    </div>
+                    <div className="mt-2"><Meter value={value} label={`${label} compliance`} /></div>
+                    <div className="text-[var(--text-muted)] text-xs mt-1">{detail}</div>
+                  </div>
+                ))}
               </div>
             </div>
+          </Card>
+
+          {/* KPI strip */}
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+            <StatTile label="Tyres monitored" value={compliance.total} icon={CircleDot} sub={scopeLabel} />
+            <StatTile label="Risk rated" value={compliance.ratedCount} icon={Layers} sub={`${compliance.total - compliance.ratedCount} not rated`} tone="info" />
+            <StatTile label="Critical tyres" value={compliance.ratedCount ? compliance.criticalCount : NA} icon={AlertOctagon} tone="crit" sub={fmtPct(compliance.criticalPct)} />
+            <StatTile label="High risk tyres" value={compliance.ratedCount ? compliance.highRiskCount : NA} icon={AlertTriangle} tone="warn" />
+            <StatTile label="Avg tread" value={compliance.avgTread == null ? NA : compliance.avgTread.toFixed(1)} unit={compliance.avgTread == null ? undefined : 'mm'} icon={Activity} sub={`${compliance.treadMeasured} measured`} />
+            <StatTile label="Accidents" value={compliance.accidents} icon={Car} tone="warn" sub={compliance.accidentCorrelation == null ? 'Correlation N/A' : `${fmtPct(compliance.accidentCorrelation)} on risky tyres`} />
           </div>
 
-          {/* Alerts */}
           {compliance.criticalCount > 0 && (
-            <div className="bg-red-950/40 border border-red-800 rounded-xl p-4 flex items-start gap-3">
-              <AlertOctagon size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
+            <Card tone="crit" role="status" className="items-start gap-3" style={{ flexDirection: 'row' }}>
+              <AlertOctagon size={20} className="text-red-400 flex-shrink-0 mt-0.5" aria-hidden="true" />
               <div>
-                <p className="text-red-300 font-medium">{compliance.criticalCount} Critical Risk Tyre{compliance.criticalCount !== 1 ? 's' : ''} Detected</p>
-                <p className="text-red-400/70 text-sm mt-1">
-                  {compliance.criticalCount} tyre{compliance.criticalCount !== 1 ? 's' : ''} classified as Critical risk require immediate inspection and potential removal from service.
-                  Legal and safety liability risk is HIGH. Take immediate action.
-                </p>
+                <p className="font-medium text-[var(--text-primary)]">{compliance.criticalCount} critical risk tyre{compliance.criticalCount !== 1 ? 's' : ''} detected</p>
+                <p className="text-sm text-[var(--text-muted)] mt-1">Critical tyres need immediate inspection and possible removal from service. See the Tread depth tab for the tyres below the legal limit.</p>
               </div>
-            </div>
+            </Card>
           )}
 
           {/* Tabs */}
-          <div className="flex gap-1 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-1 w-fit">
-            {[
-              { id: 'overview', label: 'Overview' },
-              { id: 'tread', label: 'Tread Depth' },
-              { id: 'pressure', label: 'Pressure' },
-              { id: 'inspections', label: 'Inspections' },
-              { id: 'sites', label: 'By Site' },
-              { id: 'trends', label: 'Trends' },
-            ].map(t => (
-              <button key={t.id} onClick={() => setActiveTab(t.id)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === t.id ? 'bg-blue-600 text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}>
+          <div role="tablist" aria-label="Compliance sections" className="flex flex-wrap gap-1 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-1 max-w-full">
+            {TABS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                id={tabId(t.id)}
+                aria-selected={activeTab === t.id}
+                aria-controls={panelId(t.id)}
+                onClick={() => setActiveTab(t.id)}
+                className={`px-4 min-h-[44px] rounded-lg text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] ${activeTab === t.id ? 'bg-[var(--accent)] text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
+              >
                 {t.label}
               </button>
             ))}
           </div>
 
-          {/* Overview Tab */}
-          {activeTab === 'overview' && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Risk distribution */}
-              <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
-                <h3 className="text-[var(--text-primary)] font-semibold mb-4">Risk Level Distribution</h3>
-                <div className="h-52">
-                  {riskChartData && <Doughnut data={riskChartData} options={{ ...CHART_OPTS, scales: undefined, plugins: { ...CHART_OPTS.plugins, legend: { position: 'right', labels: { color: '#9ca3af', boxWidth: 12, font: { size: 11 } } } } }} />}
-                </div>
-              </div>
-
-              {/* Radar */}
-              <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
-                <h3 className="text-[var(--text-primary)] font-semibold mb-4">Compliance Radar</h3>
-                <div className="h-52">
-                  {radarData && <Radar data={radarData} options={{
-                    responsive: true, maintainAspectRatio: false,
-                    plugins: { legend: { display: false }, tooltip: CHART_OPTS.plugins.tooltip },
-                    scales: { r: { ticks: { color: '#6b7280', backdropColor: 'transparent', font: { size: 10 } }, grid: { color: 'var(--panel-2)' }, pointLabels: { color: '#9ca3af', font: { size: 11 } }, suggestedMin: 0, suggestedMax: 100 } },
-                  }} />}
-                </div>
-              </div>
-
-              {/* KPI summary cards */}
-              <div className="lg:col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-4">
-                {[
-                  { label: 'Total Tyres Monitored', value: compliance.total, icon: CircleDot, color: 'blue' },
-                  { label: 'Critical Tyres', value: compliance.criticalCount, icon: AlertOctagon, color: 'red' },
-                  { label: 'High Risk Tyres', value: compliance.highRiskCount, icon: AlertTriangle, color: 'orange' },
-                  { label: 'Accidents (Period)', value: compliance.accidents, icon: Car, color: 'yellow' },
-                ].map(({ label, value, icon: Icon, color }) => {
-                  const colorClass = { blue: 'text-blue-400', red: 'text-red-400', orange: 'text-orange-400', yellow: 'text-yellow-400' }[color] || 'text-blue-400';
-                  return (
-                  <div key={label} className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
-                    <div className={`flex items-center gap-2 mb-2`}>
-                      <Icon size={16} className={colorClass} />
-                      <span className="text-[var(--text-muted)] text-xs">{label}</span>
-                    </div>
-                    <div className={`text-2xl font-bold ${colorClass}`}>{value}</div>
+          <div role="tabpanel" id={panelId(activeTab)} aria-labelledby={tabId(activeTab)}>
+            {activeTab === 'overview' && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card>
+                  <CardHeader title="Risk level distribution" description={compliance.ratedCount ? `${compliance.ratedCount} of ${compliance.total} tyres carry a risk rating` : undefined} />
+                  <div className="h-56">
+                    {riskChartData
+                      ? <Doughnut data={riskChartData} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: TICK, boxWidth: 12, font: { size: 11 } } }, tooltip: TOOLTIP } }} aria-label="Risk level distribution chart" />
+                      : <ChartEmpty>No tyre in scope carries a risk rating, so the distribution cannot be drawn.</ChartEmpty>}
                   </div>
-                  );
-                })}
-              </div>
-            </motion.div>
-          )}
-
-          {/* Tread Depth Tab */}
-          {activeTab === 'tread' && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {[
-                  { label: 'Overall Tread Compliance', value: compliance.treadCompliance },
-                  { label: 'Below Legal Limit', value: (compliance.treadFails.length / Math.max(1, tyreRecords.filter(r => r.tread_depth != null).length)) * 100 },
-                  { label: 'Avg Tread Depth (mm)', value: (() => { const vals = tyreRecords.filter(r => r.tread_depth != null).map(r => parseFloat(r.tread_depth)).filter(v => !isNaN(v)); return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0 })() },
-                ].map(({ label, value }) => (
-                  <div key={label} className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
-                    <div className="text-[var(--text-muted)] text-sm mb-1">{label}</div>
-                    <div className={`text-3xl font-bold ${scoreColor(label.includes('Avg') ? (value >= 4 ? 100 : value >= 3 ? 75 : 50) : value)}`}>
-                      {value == null ? 'N/A' : label.includes('Avg') ? value.toFixed(1) + 'mm' : value.toFixed(1) + '%'}
-                    </div>
+                </Card>
+                <Card>
+                  <CardHeader title="Compliance radar" description="Unmeasured checks are left off the shape rather than drawn at zero." />
+                  <div className="h-56">
+                    <Radar data={radarData} aria-label="Compliance radar chart" options={{
+                      responsive: true, maintainAspectRatio: false,
+                      plugins: { legend: { display: false }, tooltip: TOOLTIP },
+                      scales: { r: { ticks: { color: TICK, backdropColor: 'transparent', font: { size: 10 } }, grid: { color: GRID }, angleLines: { color: GRID }, pointLabels: { color: TICK, font: { size: 11 } }, suggestedMin: 0, suggestedMax: 100 } },
+                    }} />
                   </div>
-                ))}
+                </Card>
               </div>
+            )}
 
-              {/* Below legal limit table */}
-              <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
-                <div className="px-5 py-4 border-b border-[var(--input-border)]">
-                  <h3 className="text-[var(--text-primary)] font-semibold">Tyres Below Legal Tread Limit</h3>
-                  <p className="text-[var(--text-muted)] text-sm mt-0.5">Minimum legal: Steer/Drive/Trailer 3mm, Others 2mm</p>
+            {activeTab === 'tread' && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <StatTile label="Tread compliance" value={fmtPct(compliance.treadCompliance)} icon={CircleDot} sub={scoreBand(compliance.treadCompliance).label} />
+                  <StatTile label="Below legal limit" value={fmtPct(compliance.belowLimitPct)} icon={AlertTriangle} tone="crit" sub={`${compliance.treadFails.length} tyres`} />
+                  <StatTile label="Avg tread depth" value={compliance.avgTread == null ? NA : compliance.avgTread.toFixed(1)} unit={compliance.avgTread == null ? undefined : 'mm'} icon={Activity} sub={`${compliance.treadMeasured} measured`} />
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-[var(--input-border)]">
-                        {['Asset', 'Serial', 'Position', 'Tread Depth', 'Legal Min', 'Deficit', 'Risk Level', 'Site'].map(h => (
-                          <th key={h} className="px-4 py-3 text-left text-[var(--text-muted)] font-medium">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {treadFailsPager.pageRows.map(r => {
-                        const pos = getPosition(r.tyre_position || r.position)
-                        const limit = LEGAL_TREAD[pos] || LEGAL_TREAD.default
-                        const deficit = (limit - parseFloat(r.tread_depth)).toFixed(1)
-                        return (
-                          <tr key={r.id} className="border-b border-[var(--input-border)] hover:bg-[var(--input-bg)]">
-                            <td className="px-4 py-3 text-[var(--text-primary)] font-medium">{r.asset_number || r.asset_no || '-'}</td>
-                            <td className="px-4 py-3 text-[var(--text-dim)]">{r.serial_number || r.serial_no || '-'}</td>
-                            <td className="px-4 py-3 text-[var(--text-dim)]">{r.tyre_position || r.position || '-'}</td>
-                            <td className="px-4 py-3 text-red-400 font-bold">{r.tread_depth}mm</td>
-                            <td className="px-4 py-3 text-[var(--text-muted)]">{limit}mm</td>
-                            <td className="px-4 py-3 text-red-400">-{deficit}mm</td>
-                            <td className="px-4 py-3">
-                              <span className={`text-xs font-medium ${r.risk_level === 'Critical' ? 'text-red-400' : r.risk_level === 'High' ? 'text-orange-400' : 'text-yellow-400'}`}>{r.risk_level || '-'}</span>
-                            </td>
-                            <td className="px-4 py-3 text-[var(--text-muted)]">{r.site || '-'}</td>
-                          </tr>
-                        )
-                      })}
-                      {compliance.treadFails.length === 0 && (
-                        <tr><td colSpan={8} className="text-center py-10 text-green-400"><CheckCircle size={28} className="mx-auto mb-2" />All tyres above legal tread limit</td></tr>
-                      )}
-                    </tbody>
-                  </table>
-                  <TablePagination {...treadFailsPager} />
-                </div>
-              </div>
-            </motion.div>
-          )}
-
-          {/* Pressure Tab */}
-          {activeTab === 'pressure' && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
-                  <div className="text-[var(--text-muted)] text-sm mb-1">Pressure Compliance</div>
-                  <div className={`text-3xl font-bold ${scoreColor(compliance.pressureCompliance)}`}>{fmtPct(compliance.pressureCompliance)}</div>
-                  <div className="mt-2 h-2 bg-[var(--input-border)] rounded-full overflow-hidden">
-                    <div className={`h-full ${compliance.pressureCompliance == null ? 'bg-[var(--input-border)]' : compliance.pressureCompliance >= 90 ? 'bg-green-500' : 'bg-yellow-500'}`} style={{ width: `${compliance.pressureCompliance == null ? 0 : compliance.pressureCompliance}%` }} />
+                <Card pad="none">
+                  <div className="px-5 pt-4">
+                    <CardHeader title="Tyres below legal tread limit" description={`Legal minimum: steer, drive and trailer ${LEGAL_TREAD.steer} mm, other positions ${LEGAL_TREAD.default} mm.`} />
                   </div>
-                </div>
-                <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
-                  <div className="text-[var(--text-muted)] text-sm mb-1">Inspections Checked</div>
-                  <div className="text-3xl font-bold text-blue-400">{compliance.withPressure}</div>
-                  <div className="text-[var(--text-muted)] text-xs mt-1">with pressure readings</div>
-                </div>
-                <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
-                  <div className="text-[var(--text-muted)] text-sm mb-1">Pressure Failures</div>
-                  <div className="text-3xl font-bold text-red-400">{compliance.pressureFails}</div>
-                  <div className="text-[var(--text-muted)] text-xs mt-1">outside ±{PRESSURE_TOLERANCE}% tolerance</div>
-                </div>
+                  <EnterpriseTable
+                    columns={treadColumns}
+                    data={compliance.treadFails}
+                    getRowId={(r, i) => String(r.id ?? i)}
+                    searchPlaceholder="Search asset, serial, site"
+                    enableExport={false}
+                    emptyMessage={compliance.treadMeasured ? 'Every measured tyre is above its legal tread limit.' : 'No tread readings in scope, so nothing can be checked against the legal limit.'}
+                  />
+                </Card>
               </div>
+            )}
 
-              <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
-                <h3 className="text-[var(--text-primary)] font-semibold mb-1">Pressure Tolerance Policy</h3>
-                <p className="text-[var(--text-muted)] text-sm">
-                  Any inspection where the recorded pressure reading deviates more than <strong className="text-[var(--text-primary)]">±{PRESSURE_TOLERANCE}%</strong> from
-                  the vehicle manufacturer's recommended pressure is flagged as non-compliant.
-                  Under-inflation accelerates wear, generates heat, and increases risk of blowout.
-                  Over-inflation reduces contact patch and increases susceptibility to impact damage.
-                </p>
+            {activeTab === 'pressure' && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <StatTile label="Pressure compliance" value={fmtPct(compliance.pressureCompliance)} icon={Gauge} sub={scoreBand(compliance.pressureCompliance).label} />
+                  <StatTile label="Readings checked" value={compliance.pressureChecked} icon={ClipboardCheck} tone="info" sub="with a recommended pressure" />
+                  <StatTile label="Out of tolerance" value={compliance.pressureChecked ? compliance.pressureFails : NA} icon={AlertTriangle} tone="crit" sub={`more than ${PRESSURE_TOLERANCE}% from recommended`} />
+                </div>
+                <Card pad="none">
+                  <div className="px-5 pt-4">
+                    <CardHeader title="Pressure checks" description={`A reading more than ${PRESSURE_TOLERANCE}% above or below the recommended pressure is non-compliant. Under-inflation raises heat and blowout risk; over-inflation shrinks the contact patch.`} />
+                  </div>
+                  <EnterpriseTable
+                    columns={pressureColumns}
+                    data={compliance.pressure}
+                    getRowId={(r, i) => String(r.id ?? i)}
+                    searchPlaceholder="Search asset or site"
+                    enableExport={false}
+                    emptyMessage="No inspection in scope records both a pressure reading and a recommended pressure."
+                  />
+                </Card>
               </div>
-            </motion.div>
-          )}
+            )}
 
-          {/* Inspections Tab */}
-          {activeTab === 'inspections' && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
-                  <div className="text-[var(--text-muted)] text-sm mb-1">Inspection Compliance</div>
-                  <div className={`text-3xl font-bold ${scoreColor(compliance.inspectionCompliance)}`}>{fmtPct(compliance.inspectionCompliance)}</div>
+            {activeTab === 'inspections' && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <StatTile label="Inspection coverage" value={fmtPct(compliance.inspectionCompliance)} icon={ShieldCheck} sub={scoreBand(compliance.inspectionCompliance).label} />
+                  <StatTile label="Inspections" value={compliance.inspectionsCount} icon={ClipboardCheck} tone="info" sub={scopeLabel} />
+                  <StatTile label="Assets inspected" value={`${compliance.inspectedAssets} of ${compliance.tyreAssets}`} icon={Car} tone="accent" />
                 </div>
-                <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
-                  <div className="text-[var(--text-muted)] text-sm mb-1">Total Inspections</div>
-                  <div className="text-3xl font-bold text-blue-400">{inspections.length}</div>
-                </div>
-                <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
-                  <div className="text-[var(--text-muted)] text-sm mb-1">Vehicles Inspected</div>
-                  <div className="text-3xl font-bold text-green-400">{new Set(inspections.map(r => r.asset_no)).size}</div>
-                </div>
+                <Card pad="none">
+                  <div className="px-5 pt-4"><CardHeader title="Inspections in period" /></div>
+                  <EnterpriseTable
+                    columns={inspectionColumns}
+                    data={inspRows}
+                    getRowId={(r, i) => String(r.id ?? i)}
+                    searchPlaceholder="Search asset, inspector, site"
+                    enableExport={false}
+                    emptyMessage="No inspections were recorded in this period."
+                  />
+                </Card>
               </div>
+            )}
 
-              <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
-                <div className="px-5 py-4 border-b border-[var(--input-border)]">
-                  <h3 className="text-[var(--text-primary)] font-semibold">Recent Inspections</h3>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-[var(--input-border)]">
-                        {['Asset No', 'Inspector', 'Date', 'Site', 'Tread Noted', 'Pressure Noted'].map(h => (
-                          <th key={h} className="px-4 py-3 text-left text-[var(--text-muted)] font-medium">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {inspectionsPager.pageRows.map(r => (
-                        <tr key={r.id} className="border-b border-[var(--input-border)] hover:bg-[var(--input-bg)]">
-                          <td className="px-4 py-3 text-[var(--text-primary)] font-medium">{r.asset_no || '-'}</td>
-                          <td className="px-4 py-3 text-[var(--text-dim)]">{r.inspector || '-'}</td>
-                          <td className="px-4 py-3 text-[var(--text-muted)]">{fmtDate(r.inspection_date)}</td>
-                          <td className="px-4 py-3 text-[var(--text-muted)]">{r.site || '-'}</td>
-                          <td className="px-4 py-3">{r.tread_depth != null ? <CheckCircle size={14} className="text-green-400" /> : <XCircle size={14} className="text-red-400" />}</td>
-                          <td className="px-4 py-3">{r.pressure_reading != null ? <CheckCircle size={14} className="text-green-400" /> : <XCircle size={14} className="text-red-400" />}</td>
-                        </tr>
-                      ))}
-                      {inspections.length === 0 && (
-                        <tr><td colSpan={6} className="text-center py-10 text-[var(--text-muted)]">No inspections found for this period</td></tr>
-                      )}
-                    </tbody>
-                  </table>
-                  <TablePagination {...inspectionsPager} />
-                </div>
+            {activeTab === 'sites' && (
+              <div className="space-y-6">
+                <Card>
+                  <CardHeader icon={MapPin} title="Tread compliance by site" description="Worst first. Sites with no tread reading are listed in the table as N/A." />
+                  <div className="h-72">
+                    {siteChartData
+                      ? <Bar data={siteChartData} aria-label="Tread compliance by site chart" options={{ ...BASE_OPTS, indexAxis: 'y', plugins: { ...BASE_OPTS.plugins, legend: { display: false } }, scales: { x: { ...BASE_OPTS.scales.x, min: 0, max: 100 }, y: BASE_OPTS.scales.y } }} />
+                      : <ChartEmpty>No site has a tread reading in this scope.</ChartEmpty>}
+                  </div>
+                </Card>
+                <Card pad="none">
+                  <EnterpriseTable
+                    columns={siteColumns}
+                    data={compliance.siteTread}
+                    getRowId={(r) => r.site}
+                    searchPlaceholder="Search site"
+                    enableExport={false}
+                    emptyMessage="No sites in scope."
+                  />
+                </Card>
               </div>
-            </motion.div>
-          )}
+            )}
 
-          {/* By Site Tab */}
-          {activeTab === 'sites' && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-              <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
-                <h3 className="text-[var(--text-primary)] font-semibold mb-4">Tread Compliance by Site</h3>
-                <div className="h-72">
-                  {siteChartData && <Bar data={siteChartData} options={{ ...CHART_OPTS, indexAxis: 'y', plugins: { ...CHART_OPTS.plugins, legend: { display: false } }, scales: { x: { ...CHART_OPTS.scales.x, min: 0, max: 100 }, y: CHART_OPTS.scales.y } }} />}
-                </div>
-              </div>
-
-              <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-[var(--input-border)]">
-                        {['Site', 'Total Tyres', 'Tread Failures', 'Compliance %', 'Status'].map(h => (
-                          <th key={h} className="px-4 py-3 text-left text-[var(--text-muted)] font-medium">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {siteTreadPager.pageRows.map(s => {
-                        const sl = scoreLabel(s.compliance)
-                        return (
-                          <tr key={s.site} className="border-b border-[var(--input-border)] hover:bg-[var(--input-bg)]">
-                            <td className="px-4 py-3 text-[var(--text-primary)] font-medium">{s.site}</td>
-                            <td className="px-4 py-3 text-[var(--text-dim)]">{s.total}</td>
-                            <td className="px-4 py-3 text-red-400">{s.fails}</td>
-                            <td className="px-4 py-3">
-                              <div className="flex items-center gap-2">
-                                <div className="w-24 h-1.5 bg-[var(--input-border)] rounded-full overflow-hidden">
-                                  <div className={`h-full rounded-full ${s.compliance == null ? 'bg-[var(--input-border)]' : s.compliance >= 90 ? 'bg-green-500' : s.compliance >= 75 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ width: `${s.compliance ?? 0}%` }} />
-                                </div>
-                                <span className={`${scoreColor(s.compliance)} font-medium`}>{fmtPct(s.compliance)}</span>
-                              </div>
-                            </td>
-                            <td className="px-4 py-3">
-                              <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium border ${sl.color} ${sl.bg} ${sl.border}`}>{sl.text}</span>
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                  <TablePagination {...siteTreadPager} />
-                </div>
-              </div>
-            </motion.div>
-          )}
-
-          {/* Trends Tab */}
-          {activeTab === 'trends' && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-1 gap-6">
-              <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
-                <h3 className="text-[var(--text-primary)] font-semibold mb-4">Critical Risk Trend (6 Months)</h3>
-                <div className="h-64">
-                  {trendChartData && <Line data={trendChartData} options={{ ...CHART_OPTS, plugins: { ...CHART_OPTS.plugins, legend: { display: false } } }} />}
-                </div>
-              </div>
-
-              {/* Accident correlation */}
-              {compliance.accidents > 0 && (
-                <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
-                  <h3 className="text-[var(--text-primary)] font-semibold mb-4">Accident-Tyre Correlation</h3>
+            {activeTab === 'trends' && (
+              <div className="grid grid-cols-1 gap-6">
+                <Card>
+                  <CardHeader title="Critical risk and inspections, last 6 months" description="Critical share is over risk-rated tyres only; months with none rated are left as gaps." />
+                  <div className="h-64">
+                    <Bar data={trendChartData} aria-label="Critical risk and inspection trend chart" options={{
+                      ...BASE_OPTS,
+                      scales: {
+                        x: BASE_OPTS.scales.x,
+                        y: { ...BASE_OPTS.scales.y, beginAtZero: true, title: { display: true, text: 'Critical %', color: TICK } },
+                        y1: { position: 'right', beginAtZero: true, ticks: { color: TICK, precision: 0 }, grid: { drawOnChartArea: false }, title: { display: true, text: 'Inspections', color: TICK } },
+                      },
+                    }} />
+                  </div>
+                  {!trendHasRisk && <p className="text-xs text-[var(--text-muted)] mt-2">No risk ratings in the last six months, so only inspection counts are drawn.</p>}
+                </Card>
+                <Card>
+                  <CardHeader title="Accident tyre correlation" description="Share of accidents on assets carrying a High or Critical tyre." />
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div className="bg-[var(--input-bg)] rounded-xl p-4">
-                      <div className="text-[var(--text-muted)] text-sm">Total Accidents</div>
-                      <div className="text-2xl font-bold text-yellow-400">{compliance.accidents}</div>
-                    </div>
-                    <div className="bg-[var(--input-bg)] rounded-xl p-4">
-                      <div className="text-[var(--text-muted)] text-sm">With Tyre Issues</div>
-                      <div className="text-2xl font-bold text-orange-400">{compliance.accidentsWithTyreIssue}</div>
-                    </div>
-                    <div className="bg-[var(--input-bg)] rounded-xl p-4">
-                      <div className="text-[var(--text-muted)] text-sm">Correlation Rate</div>
-                      <div className={`text-2xl font-bold ${scoreColor(100 - compliance.accidentCorrelation)}`}>{fmtPct(compliance.accidentCorrelation)}</div>
-                    </div>
+                    <StatTile label="Accidents" value={compliance.accidents} icon={Car} tone="warn" />
+                    <StatTile label="On risky tyres" value={compliance.accidentsWithTyreIssue == null ? NA : compliance.accidentsWithTyreIssue} icon={AlertTriangle} tone="warn" />
+                    <StatTile label="Correlation" value={fmtPct(compliance.accidentCorrelation)} icon={Activity} tone="crit" />
                   </div>
                   <p className="text-[var(--text-muted)] text-sm mt-4">
-                    {compliance.accidentCorrelation > 50
-                      ? 'HIGH RISK: More than half of recorded accidents occurred on vehicles with High/Critical risk tyres. Immediate tyre management review required.'
-                      : compliance.accidentCorrelation > 25
-                      ? 'MODERATE: A significant proportion of accidents involved vehicles with tyre risk. Review maintenance schedules.'
-                      : 'LOW CORRELATION: Most accidents did not involve vehicles with high-risk tyres. Continue monitoring.'}
+                    {compliance.accidentCorrelation == null
+                      ? (compliance.accidents ? 'Not measurable: no tyre in scope carries a risk rating, so accidents cannot be linked to tyre risk.' : 'No accidents were recorded in this period.')
+                      : compliance.accidentCorrelation > 50
+                        ? 'High: more than half of recorded accidents were on vehicles with High or Critical tyres. Review tyre management now.'
+                        : compliance.accidentCorrelation > 25
+                          ? 'Moderate: a significant share of accidents involved vehicles with tyre risk. Review maintenance schedules.'
+                          : 'Low: most accidents did not involve vehicles with high risk tyres. Continue monitoring.'}
                   </p>
-                </div>
-              )}
-            </motion.div>
-          )}
+                </Card>
+              </div>
+            )}
+          </div>
         </>
       )}
     </div>

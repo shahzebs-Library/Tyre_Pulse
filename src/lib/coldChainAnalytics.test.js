@@ -200,3 +200,40 @@ describe('summarizeColdChainAnalytics', () => {
     expect(Number.isNaN(s.avgDeviation)).toBe(false)
   })
 })
+
+describe('coldChainAnalytics presentation helpers', () => {
+  it('safeRangeText covers both, one and no bounds', async () => {
+    const { safeRangeText } = await import('./coldChainAnalytics.js')
+    expect(safeRangeText({ min_threshold_c: -20, max_threshold_c: -15 })).toBe('-20 to -15 C')
+    expect(safeRangeText({ min_threshold_c: -20 })).toBe('>= -20 C')
+    expect(safeRangeText({ max_threshold_c: '4' })).toBe('<= 4 C')
+    expect(safeRangeText({})).toBe('N/A')
+  })
+
+  it('formatDurationMin is honest about unknown durations', async () => {
+    const { formatDurationMin } = await import('./coldChainAnalytics.js')
+    expect(formatDurationMin(null)).toBe('N/A')
+    expect(formatDurationMin(45)).toBe('45 min')
+    expect(formatDurationMin(120)).toBe('2h')
+    expect(formatDurationMin(125)).toBe('2h 5m')
+  })
+
+  it('register rows leave an in-range deviation as null, not 0', async () => {
+    const { coldChainRegisterRows } = await import('./coldChainAnalytics.js')
+    const rows = coldChainRegisterRows([
+      { id: 1, asset_no: 'R1', temperature_c: -18, min_threshold_c: -20, max_threshold_c: -15, recorded_at: '2026-09-01T00:00:00Z' },
+      { id: 2, asset_no: 'R1', temperature_c: -10, min_threshold_c: -20, max_threshold_c: -15, recorded_at: '2026-09-01T01:00:00Z' },
+    ])
+    expect(rows[0].deviation).toBeNull()
+    expect(rows[0].statusLabel).toBe('OK')
+    expect(rows[1].deviation).toBe(5)
+    expect(rows[1].kindLabel).toBe('Above max')
+    expect(rows[1].statusLabel).toBe('Breach')
+  })
+
+  it('episode rows label state and keep an unknown duration as N/A', async () => {
+    const { episodeRows } = await import('./coldChainAnalytics.js')
+    const rows = episodeRows([{ asset_no: 'R1', site: '', startAt: '2026-09-01T00:00:00.000Z', durationMin: null, readingCount: 1, recovered: false, peakDeviation: 2, kind: 'above' }])
+    expect(rows[0]).toMatchObject({ state: 'Open', duration: 'N/A', kindLabel: 'Above max', peakDeviation: 2, site: null })
+  })
+})

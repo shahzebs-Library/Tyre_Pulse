@@ -16,10 +16,18 @@ const SURFACES = [
   'ReportShare.jsx',
 ]
 
+// Pages whose registers moved onto EnterpriseTable, which pages ALL rows
+// itself. They must not fall back to a fixed slice either.
+const ENTERPRISE_SURFACES = new Set(['SafetyCompliance.jsx', 'ApprovalMatrix.jsx'])
+
 describe('admin and configuration registers expose all rows through shared paging', () => {
   for (const file of SURFACES) {
     it(`${file} uses the shared paging contract`, () => {
       const source = read(file)
+      if (ENTERPRISE_SURFACES.has(file)) {
+        expect(source).toContain('<EnterpriseTable')
+        return
+      }
       expect(source).toContain('usePagedRows')
       expect(source).toContain('<TablePagination')
     })

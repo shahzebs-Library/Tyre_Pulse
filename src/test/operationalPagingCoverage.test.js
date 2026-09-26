@@ -8,8 +8,13 @@ const pageSource = (name) => readFileSync(
 )
 
 describe('operational registers expose honest paging', () => {
+  it('RfidRegistry registers page every row through EnterpriseTable', () => {
+    const source = pageSource('RfidRegistry')
+    expect(source).toContain('<EnterpriseTable')
+    expect(source).not.toMatch(/\.slice\(0,\s*\d+\)\.map/)
+  })
+
   it.each([
-    'RfidRegistry',
     'UploadApprovals',
     'WorkshopLive',
     'TyreScrapManagement',

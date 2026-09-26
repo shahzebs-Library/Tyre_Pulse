@@ -22,13 +22,16 @@ import {
 } from 'chart.js'
 import { Doughnut, Line, Bar } from 'react-chartjs-2'
 import {
-  Snowflake, ThermometerSnowflake, AlertTriangle, Boxes, Search, X, Filter,
+  Snowflake, ThermometerSnowflake, AlertTriangle, Boxes, Search, X,
   FileSpreadsheet, FileText, Plus, Pencil, Trash2, Gauge, Timer, Percent,
-  ArrowUp, ArrowDown, MapPin, ArrowUpDown, Activity, Clock,
+  ArrowUp, ArrowDown, MapPin, Activity, Clock, RefreshCw, Info,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import Card, { CardHeader } from '../components/ui/Card'
 import Modal from '../components/ui/Modal'
+import StatTile from '../components/ui/StatTile'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import SegmentedControl from '../components/ui/SegmentedControl'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   listReadings, createReading, updateReading, deleteReading,
@@ -38,25 +41,34 @@ import {
   classifyTemp, summarizeColdChain, COLD_CHAIN_STATUS_META,
 } from '../lib/coldChain'
 import {
-  summarizeColdChainAnalytics, filterReadings, readingStatus, deviationC,
-  excursionKind, readingTime,
+  summarizeColdChainAnalytics, filterReadings, coldChainRegisterRows, episodeRows,
+  formatDurationMin,
 } from '../lib/coldChainAnalytics'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
+import { ACCENTS, withAlpha } from '../lib/reportColors'
 import { toUserMessage } from '../lib/safeError'
-import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement, PointElement,
   ArcElement, Filler, Tooltip, Legend,
 )
 
+// The service reads the newest N readings; say so when the window is full
+// instead of presenting a partial register as the whole history.
+const READ_LIMIT = 500
+
 const STATUS_STYLES = {
   breach: 'bg-red-900/40 text-red-300 border border-red-700/50',
   warning: 'bg-amber-900/40 text-amber-300 border border-amber-700/50',
   ok: 'bg-green-900/40 text-green-300 border border-green-700/50',
 }
-const TEMP_TONE = { breach: 'text-red-400', warning: 'text-amber-400', ok: 'text-[var(--text-primary)]' }
-const KIND_TONE = { above: 'text-red-400', below: 'text-sky-400', in_range: 'text-[var(--text-muted)]', mixed: 'text-amber-400' }
+const TEMP_TONE = { breach: 'text-red-400', warning: 'text-amber-300', ok: 'text-[var(--text-primary)]' }
+const KIND_TONE = { above: 'text-red-400', below: 'text-sky-300', in_range: 'text-[var(--text-muted)]', mixed: 'text-amber-300' }
+
+// Semantic status colours (legend + tooltip always carry the text label).
+const STATUS_COLOURS = { ok: ACCENTS.good, warning: ACCENTS.watch, breach: ACCENTS.risk }
+const TICK = 'var(--text-muted)'
+const GRID = 'var(--panel-2)'
 
 const EMPTY_FORM = {
   asset_no: '', site: '', temperature_c: '', min_threshold_c: '', max_threshold_c: '',
@@ -77,20 +89,11 @@ function fmtDateTime(v) {
   const d = new Date(v)
   return Number.isNaN(d.getTime()) ? NA : d.toLocaleString()
 }
-function fmtDuration(min) {
-  if (min == null) return NA
-  if (min < 60) return `${min} min`
-  const h = Math.floor(min / 60)
-  const m = min % 60
-  return m ? `${h}h ${m}m` : `${h}h`
-}
-const rangeText = (r) => {
-  const lo = r.min_threshold_c
-  const hi = r.max_threshold_c
-  if (lo == null && hi == null) return NA
-  if (lo != null && hi != null) return `${lo} to ${hi} C`
-  if (lo != null) return `>= ${lo} C`
-  return `<= ${hi} C`
+
+function ChartSlot({ loading, empty, emptyText, children }) {
+  if (loading) return <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" aria-hidden="true" />
+  if (empty) return <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)] text-center px-4">{emptyText}</div>
+  return children
 }
 
 export default function ColdChain() {
@@ -107,7 +110,7 @@ export default function ColdChain() {
   const [search, setSearch] = useState('')
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
-  const [sort, setSort] = useState({ key: 'recorded_at', dir: 'desc' })
+  const [breakdown, setBreakdown] = useState('asset')
 
   const [showModal, setShowModal] = useState(false)
   const [editing, setEditing] = useState(null)
@@ -120,7 +123,7 @@ export default function ColdChain() {
   const load = useCallback(async () => {
     setRefreshing(true); setError(''); setNotProvisioned(false)
     try {
-      const data = await listReadings({ country: activeCountry })
+      const data = await listReadings({ country: activeCountry, limit: READ_LIMIT })
       const list = Array.isArray(data) ? data : []
       setRows(list)
       // listReadings degrades a missing table to [] without throwing, so the
@@ -137,7 +140,7 @@ export default function ColdChain() {
       setUpdatedAt(new Date())
     } catch (err) {
       setError(toUserMessage(err, 'Could not load cold-chain readings.'))
-      setRows([])
+      setRows((prev) => prev ?? [])
     } finally {
       setRefreshing(false)
     }
@@ -155,6 +158,9 @@ export default function ColdChain() {
 
   const filtered = useMemo(() => filterReadings(rows || [], filters), [rows, filters])
   const analytics = useMemo(() => summarizeColdChainAnalytics(filtered), [filtered])
+  const registerRows = useMemo(() => coldChainRegisterRows(filtered), [filtered])
+  const episodes = useMemo(() => episodeRows(analytics.episodes), [analytics])
+  const breakdownRows = breakdown === 'asset' ? analytics.byAsset : analytics.bySite
 
   const assetOptions = useMemo(
     () => [...new Set((rows || []).map((r) => r.asset_no).filter(Boolean))].sort(),
@@ -165,50 +171,22 @@ export default function ColdChain() {
     [rows],
   )
 
-  // Sorted view of the filtered rows for the register table.
-  const sorted = useMemo(() => {
-    const list = [...filtered]
-    const { key, dir } = sort
-    const mul = dir === 'asc' ? 1 : -1
-    const val = (r) => {
-      switch (key) {
-        case 'asset_no': return String(r.asset_no || '')
-        case 'site': return String(r.site || '')
-        case 'temperature_c': return r.temperature_c == null ? -Infinity : Number(r.temperature_c)
-        case 'deviation': return deviationC(r)
-        case 'status': return { breach: 0, warning: 1, ok: 2 }[readingStatus(r)] ?? 3
-        case 'recorded_at': return readingTime(r) ?? -Infinity
-        default: return 0
-      }
-    }
-    list.sort((a, b) => {
-      const va = val(a); const vb = val(b)
-      if (typeof va === 'string') return va.localeCompare(vb) * mul
-      return (va - vb) * mul
-    })
-    return list
-  }, [filtered, sort])
-
-  const toggleSort = (key) => setSort((s) => (
-    s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: key === 'asset_no' || key === 'site' ? 'asc' : 'desc' }
-  ))
-
-  // Chart theme ---------------------------------------------------------------
-  const chartText = getComputedStyle(document.documentElement).getPropertyValue('--text-muted') || '#9ca3af'
-  const gridColor = 'var(--panel-2)'
+  const loadingFirst = rows === null
   const hasData = rows != null && filtered.length > 0
+  const truncated = (rows?.length || 0) >= READ_LIMIT
 
+  // Charts --------------------------------------------------------------------
   const donutData = {
     labels: ['OK', 'Warning', 'Breach'],
     datasets: [{
       data: [analytics.ok, analytics.warning, analytics.breach],
-      backgroundColor: ['#22c55e', '#f59e0b', '#ef4444'],
+      backgroundColor: [STATUS_COLOURS.ok, STATUS_COLOURS.warning, STATUS_COLOURS.breach],
       borderWidth: 0,
     }],
   }
   const donutOpts = {
     responsive: true, maintainAspectRatio: false,
-    plugins: { legend: { labels: { color: chartText, boxWidth: 12 } } },
+    plugins: { legend: { position: 'bottom', labels: { color: TICK, boxWidth: 12 } } },
   }
 
   const trendData = {
@@ -216,33 +194,33 @@ export default function ColdChain() {
     datasets: [
       {
         label: 'Avg temp (C)', data: analytics.trend.map((t) => t.avg),
-        borderColor: '#38bdf8', backgroundColor: 'rgba(56,189,248,0.15)',
+        borderColor: ACCENTS.info, backgroundColor: withAlpha(ACCENTS.info, 0.15),
         borderWidth: 2, tension: 0.3, fill: true, pointRadius: 2, spanGaps: true, yAxisID: 'y',
       },
       {
         label: 'Max', data: analytics.trend.map((t) => t.max),
-        borderColor: 'rgba(239,68,68,0.6)', borderWidth: 1, borderDash: [4, 3],
+        borderColor: withAlpha(ACCENTS.risk, 0.7), borderWidth: 1, borderDash: [4, 3],
         pointRadius: 0, tension: 0.3, fill: false, spanGaps: true, yAxisID: 'y',
       },
       {
         label: 'Min', data: analytics.trend.map((t) => t.min),
-        borderColor: 'rgba(96,165,250,0.6)', borderWidth: 1, borderDash: [4, 3],
+        borderColor: withAlpha(ACCENTS.primary, 0.7), borderWidth: 1, borderDash: [4, 3],
         pointRadius: 0, tension: 0.3, fill: false, spanGaps: true, yAxisID: 'y',
       },
       {
         label: 'Breaches', data: analytics.trend.map((t) => t.breaches),
-        type: 'bar', backgroundColor: 'rgba(239,68,68,0.45)', yAxisID: 'y1',
+        type: 'bar', backgroundColor: withAlpha(ACCENTS.risk, 0.45), yAxisID: 'y1',
       },
     ],
   }
   const trendOpts = {
     responsive: true, maintainAspectRatio: false,
     interaction: { mode: 'index', intersect: false },
-    plugins: { legend: { labels: { color: chartText, boxWidth: 12, font: { size: 10 } } } },
+    plugins: { legend: { labels: { color: TICK, boxWidth: 12, font: { size: 10 } } } },
     scales: {
-      x: { ticks: { color: chartText, maxRotation: 0, autoSkip: true }, grid: { color: gridColor } },
-      y: { position: 'left', ticks: { color: chartText }, grid: { color: gridColor }, title: { display: true, text: 'Temp (C)', color: chartText } },
-      y1: { position: 'right', beginAtZero: true, ticks: { color: chartText, precision: 0 }, grid: { drawOnChartArea: false }, title: { display: true, text: 'Breaches', color: chartText } },
+      x: { ticks: { color: TICK, maxRotation: 0, autoSkip: true }, grid: { color: GRID } },
+      y: { position: 'left', ticks: { color: TICK }, grid: { color: GRID }, title: { display: true, text: 'Temp (C)', color: TICK } },
+      y1: { position: 'right', beginAtZero: true, ticks: { color: TICK, precision: 0 }, grid: { drawOnChartArea: false }, title: { display: true, text: 'Breaches', color: TICK } },
     },
   }
 
@@ -251,69 +229,55 @@ export default function ColdChain() {
     datasets: [{
       label: 'Readings',
       data: [analytics.distribution.in_range, analytics.distribution.above, analytics.distribution.below],
-      backgroundColor: ['#22c55e', '#ef4444', '#38bdf8'], borderWidth: 0,
+      backgroundColor: [ACCENTS.good, ACCENTS.risk, ACCENTS.info], borderWidth: 0,
     }],
   }
   const distOpts = {
     responsive: true, maintainAspectRatio: false,
     plugins: { legend: { display: false } },
     scales: {
-      x: { ticks: { color: chartText }, grid: { display: false } },
-      y: { beginAtZero: true, ticks: { color: chartText, precision: 0 }, grid: { color: gridColor } },
+      x: { ticks: { color: TICK }, grid: { display: false } },
+      y: { beginAtZero: true, ticks: { color: TICK, precision: 0 }, grid: { color: GRID } },
     },
   }
 
-  const topBreachAssets = analytics.byAsset.filter((a) => a.breaches > 0).slice(0, 8)
+  const topBreachAssets = useMemo(() => analytics.byAsset.filter((a) => a.breaches > 0).slice(0, 8), [analytics])
   const assetBarData = {
     labels: topBreachAssets.map((a) => a.key),
-    datasets: [{
-      label: 'Breaches', data: topBreachAssets.map((a) => a.breaches),
-      backgroundColor: '#ef4444', borderWidth: 0,
-    }],
+    datasets: [{ label: 'Breaches', data: topBreachAssets.map((a) => a.breaches), backgroundColor: ACCENTS.risk, borderWidth: 0 }],
   }
   const assetBarOpts = {
     indexAxis: 'y', responsive: true, maintainAspectRatio: false,
     plugins: { legend: { display: false } },
     scales: {
-      x: { beginAtZero: true, ticks: { color: chartText, precision: 0 }, grid: { color: gridColor } },
-      y: { ticks: { color: chartText }, grid: { display: false } },
+      x: { beginAtZero: true, ticks: { color: TICK, precision: 0 }, grid: { color: GRID } },
+      y: { ticks: { color: TICK }, grid: { display: false } },
     },
   }
 
-  // KPIs ----------------------------------------------------------------------
-  const kpis = [
-    { label: 'Readings', value: analytics.total, icon: ThermometerSnowflake, tone: 'text-[var(--text-primary)]' },
-    { label: 'Compliance', value: analytics.compliancePct == null ? NA : `${analytics.compliancePct}%`, icon: Percent, tone: analytics.compliancePct != null && analytics.compliancePct < 90 ? 'text-amber-400' : 'text-green-400' },
-    { label: 'Excursions', value: analytics.breaches, icon: AlertTriangle, tone: 'text-red-400' },
-    { label: 'Near limit', value: analytics.warnings, icon: AlertTriangle, tone: 'text-amber-400' },
-    { label: 'Excursion events', value: analytics.excursionEpisodes, icon: Activity, tone: 'text-orange-400' },
-    { label: 'Avg deviation', value: analytics.avgDeviation ? `${analytics.avgDeviation} C` : NA, icon: Gauge, tone: 'text-red-300' },
-    { label: 'Avg duration', value: fmtDuration(analytics.avgExcursionMin), icon: Timer, tone: 'text-sky-300' },
-    { label: 'Assets', value: analytics.assetsMonitored, icon: Boxes, tone: 'text-sky-400' },
-  ]
-
   // Export --------------------------------------------------------------------
-  const EXPORT_COLS = ['asset_no', 'site', 'temperature_c', 'range', 'deviation', 'status', 'recorded_at', 'notes']
-  const EXPORT_HEADERS = ['Asset', 'Site', 'Temp (C)', 'Safe range', 'Deviation (C)', 'Status', 'Recorded at', 'Notes']
-  // Paged, not capped: this table used to render sorted.slice(0, 500) with no
-  // way to reach row 501. The exports below still cover `sorted` in full.
-  const pager = usePagedRows(sorted)
-
-  const exportRows = sorted.map((r) => {
-    const dev = deviationC(r)
-    return {
-      asset_no: r.asset_no || '', site: r.site || '',
-      temperature_c: r.temperature_c ?? '', range: rangeText(r),
-      deviation: dev > 0 ? dev : '',
-      status: COLD_CHAIN_STATUS_META[readingStatus(r)]?.label || readingStatus(r) || '',
-      recorded_at: r.recorded_at ? new Date(r.recorded_at).toLocaleString() : '',
-      notes: r.notes || '',
-    }
-  })
+  const EXPORT_COLS = ['asset_no', 'site', 'temperature_c', 'range', 'deviation', 'kindLabel', 'statusLabel', 'recorded', 'notes']
+  const EXPORT_HEADERS = ['Asset', 'Site', 'Temp (C)', 'Safe range', 'Deviation (C)', 'Direction', 'Status', 'Recorded at', 'Notes']
+  const exportRows = registerRows.map((r) => ({
+    ...r,
+    asset_no: r.asset_no ?? '', site: r.site ?? '', temperature_c: r.temperature_c ?? '',
+    deviation: r.deviation ?? '', recorded: r.recorded_at ? new Date(r.recorded_at).toLocaleString() : '',
+  }))
+  const fileBase = reportFileName('Cold Chain Readings', reportDateLabel())
+  const exportNote = truncated ? `Newest ${READ_LIMIT} readings only` : undefined
+  const doExcel = async () => {
+    try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, fileBase, 'Readings') }
+    catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) }
+  }
+  const doPdf = async () => {
+    try {
+      await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Cold-Chain Monitor', fileBase, 'landscape', '', exportNote ? { subtitleNote: exportNote } : {})
+    } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) }
+  }
 
   // Modal ---------------------------------------------------------------------
   const openCreate = () => { setEditing(null); setForm(EMPTY_FORM); setFormError(''); setShowModal(true) }
-  const openEdit = (r) => {
+  const openEdit = useCallback((r) => {
     setEditing(r)
     setForm({
       asset_no: r.asset_no || '', site: r.site || '',
@@ -322,7 +286,7 @@ export default function ColdChain() {
       notes: r.notes || '',
     })
     setFormError(''); setShowModal(true)
-  }
+  }, [])
   const closeModal = () => { if (!saving) { setShowModal(false); setEditing(null) } }
   // One guarded close for the delete dialog: Modal routes Escape, the backdrop
   // and its X through this, so none of them can drop the dialog mid-delete.
@@ -376,14 +340,77 @@ export default function ColdChain() {
   }
   const hasFilters = statusFilter !== 'all' || assetFilter || siteFilter || search || fromDate || toDate
 
-  const SortHead = ({ label, k, align = 'left' }) => (
-    <th className={`px-4 py-3 font-semibold whitespace-nowrap select-none cursor-pointer hover:text-[var(--text-primary)] ${align === 'right' ? 'text-right' : ''}`} onClick={() => toggleSort(k)}>
-      <span className="inline-flex items-center gap-1">
-        {label}
-        <ArrowUpDown size={11} className={sort.key === k ? 'text-sky-400' : 'opacity-40'} />
-      </span>
-    </th>
-  )
+  // Table columns -------------------------------------------------------------
+  const registerColumns = useMemo(() => [
+    { id: 'asset_no', header: 'Asset', accessorFn: (r) => r.asset_no ?? '', cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{row.original.asset_no || NA}</span> },
+    { id: 'site', header: 'Site', accessorFn: (r) => r.site ?? '', cell: ({ row }) => row.original.site || NA },
+    {
+      id: 'temperature_c', header: 'Temperature', accessorFn: (r) => r.temperature_c ?? -Infinity, meta: { align: 'right' },
+      cell: ({ row }) => <span className={`tabular-nums font-semibold ${TEMP_TONE[row.original.status] || ''}`}>{row.original.temperature_c == null ? NA : `${row.original.temperature_c} C`}</span>,
+    },
+    { id: 'range', header: 'Safe range', accessorFn: (r) => r.range, enableSorting: false },
+    {
+      id: 'deviation', header: 'Deviation', accessorFn: (r) => r.deviation ?? -1, meta: { align: 'right' },
+      cell: ({ row }) => {
+        const r = row.original
+        if (r.deviation == null) return <span className="text-[var(--text-muted)]">{NA}</span>
+        return (
+          <span className={`inline-flex items-center gap-0.5 font-semibold tabular-nums ${KIND_TONE[r.kind]}`}>
+            {r.kind === 'above' ? <ArrowUp size={12} aria-hidden="true" /> : r.kind === 'below' ? <ArrowDown size={12} aria-hidden="true" /> : null}
+            {r.deviation} C <span className="sr-only">{r.kindLabel}</span>
+          </span>
+        )
+      },
+    },
+    {
+      id: 'status', header: 'Status', accessorFn: (r) => ({ breach: 0, warning: 1, ok: 2 }[r.status] ?? 3),
+      cell: ({ row }) => <span className={`badge text-[11px] px-2 py-0.5 rounded ${STATUS_STYLES[row.original.status] || ''}`}>{row.original.statusLabel}</span>,
+    },
+    { id: 'recorded_at', header: 'Recorded at', accessorFn: (r) => r.recordedMs ?? -Infinity, cell: ({ row }) => <span className="whitespace-nowrap">{fmtDateTime(row.original.recorded_at)}</span> },
+    {
+      id: 'actions', header: '', enableSorting: false, meta: { export: false },
+      cell: ({ row }) => {
+        const r = row.original
+        const label = `${r.asset_no || 'reading'} at ${fmtDateTime(r.recorded_at)}`
+        return (
+          <div className="flex items-center justify-end gap-1">
+            <button type="button" onClick={() => openEdit(r.raw)} className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label={`Edit ${label}`}><Pencil size={15} /></button>
+            <button type="button" onClick={() => setConfirmDelete(r.raw)} className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400" aria-label={`Delete ${label}`}><Trash2 size={15} /></button>
+          </div>
+        )
+      },
+    },
+  ], [openEdit])
+
+  const breakdownColumns = useMemo(() => [
+    { id: 'key', header: breakdown === 'asset' ? 'Asset' : 'Site', accessorFn: (r) => r.key, cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{row.original.key}</span> },
+    ...(breakdown === 'asset' ? [{ id: 'site', header: 'Site', accessorFn: (r) => r.site || '', cell: ({ row }) => row.original.site || NA }] : []),
+    { id: 'total', header: 'Reads', accessorFn: (r) => r.total, meta: { align: 'right' } },
+    { id: 'breaches', header: 'Breaches', accessorFn: (r) => r.breaches, meta: { align: 'right' }, cell: ({ row }) => <span className={`tabular-nums font-semibold ${row.original.breaches ? 'text-red-400' : 'text-[var(--text-muted)]'}`}>{row.original.breaches}</span> },
+    { id: 'warnings', header: 'Near limit', accessorFn: (r) => r.warnings, meta: { align: 'right' } },
+    { id: 'maxDeviation', header: 'Max dev.', accessorFn: (r) => r.maxDeviation, meta: { align: 'right' }, cell: ({ row }) => (row.original.maxDeviation > 0 ? `${row.original.maxDeviation} C` : NA) },
+    {
+      id: 'compliancePct', header: 'Compliance', accessorFn: (r) => r.compliancePct ?? -1, meta: { align: 'right' },
+      cell: ({ row }) => {
+        const v = row.original.compliancePct
+        return <span className={`tabular-nums font-semibold ${v != null && v < 90 ? 'text-amber-300' : 'text-green-400'}`}>{v == null ? NA : `${v}%`}</span>
+      },
+    },
+  ], [breakdown])
+
+  const episodeColumns = useMemo(() => [
+    { id: 'asset_no', header: 'Asset', accessorFn: (r) => r.asset_no, cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{row.original.asset_no}</span> },
+    { id: 'startAt', header: 'Started', accessorFn: (r) => r.startMs, cell: ({ row }) => <span className="whitespace-nowrap">{fmtDateTime(row.original.startAt)}</span> },
+    { id: 'duration', header: 'Duration', accessorFn: (r) => r.durationMin ?? -1, meta: { align: 'right' }, cell: ({ row }) => row.original.duration },
+    { id: 'peak', header: 'Peak dev.', accessorFn: (r) => r.peakDeviation ?? -1, meta: { align: 'right' }, cell: ({ row }) => (row.original.peakDeviation == null ? NA : `${row.original.peakDeviation} C`) },
+    { id: 'kind', header: 'Direction', accessorFn: (r) => r.kindLabel },
+    {
+      id: 'state', header: 'State', accessorFn: (r) => r.state,
+      cell: ({ row }) => (
+        <span className={`badge text-[11px] px-2 py-0.5 rounded ${row.original.state === 'Recovered' ? STATUS_STYLES.ok : STATUS_STYLES.breach}`}>{row.original.state}</span>
+      ),
+    },
+  ], [])
 
   return (
     <div className="space-y-6">
@@ -395,15 +422,15 @@ export default function ColdChain() {
         refreshing={refreshing}
         updatedAt={updatedAt}
         actions={
-          <div className="flex items-center gap-2">
-            <button onClick={async () => { try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'cold_chain_readings') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!sorted.length}>
-              <FileSpreadsheet size={14} /> Excel
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={doExcel} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] disabled:opacity-50" disabled={!registerRows.length}>
+              <FileSpreadsheet size={14} aria-hidden="true" /> Excel
             </button>
-            <button onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Cold-Chain Monitor', 'cold_chain_readings', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!sorted.length}>
-              <FileText size={14} /> PDF
+            <button type="button" onClick={doPdf} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] disabled:opacity-50" disabled={!registerRows.length}>
+              <FileText size={14} aria-hidden="true" /> PDF
             </button>
-            <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5" disabled={notProvisioned}>
-              <Plus size={14} /> Log reading
+            <button type="button" onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px] disabled:opacity-50" disabled={notProvisioned}>
+              <Plus size={14} aria-hidden="true" /> Log reading
             </button>
           </div>
         }
@@ -415,10 +442,10 @@ export default function ColdChain() {
         // tint is carried by `tone`. Card is `flex flex-col` and Tailwind emits
         // .flex-col after .flex-row, so the row direction goes in `style`, which
         // Card spreads last.
-        <Card tone="warn" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
-          <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
+        <Card tone="warn" role="status" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
+          <AlertTriangle size={18} className="text-amber-300 mt-0.5 shrink-0" aria-hidden="true" />
           <div>
-            <p className="text-amber-300 font-medium">Cold-Chain monitoring is not enabled on this database yet.</p>
+            <p className="text-[var(--text-primary)] font-medium">Cold-Chain monitoring is not enabled on this database yet.</p>
             <p className="text-[var(--text-muted)] text-sm mt-1">
               Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V143_COLD_CHAIN_LOGS.sql</span>, then reload.
             </p>
@@ -427,53 +454,89 @@ export default function ColdChain() {
       )}
 
       {error && (
-        <Card tone="crit" className="items-start justify-between gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
-          <div className="flex items-start gap-3">
-            <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
-            <div><p className="text-red-300 font-medium">Could not load cold-chain readings.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
+        <Card tone="crit" role="alert" className="items-start justify-between gap-[var(--space-3)]" style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+          <div className="flex items-start gap-3 min-w-0">
+            <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
+            <div><p className="text-[var(--text-primary)] font-medium">Something went wrong with the cold-chain readings.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
           </div>
-          <button onClick={load} className="btn-secondary text-sm shrink-0">Retry</button>
+          <button type="button" onClick={load} className="btn-secondary text-sm shrink-0 inline-flex items-center gap-1.5 min-h-[44px]"><RefreshCw size={14} aria-hidden="true" /> Retry</button>
         </Card>
       )}
 
-      {/* KPI tiles */}
+      {truncated && (
+        <Card tone="info" role="status" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
+          <Info size={16} className="text-sky-300 mt-0.5 shrink-0" aria-hidden="true" />
+          <p className="text-sm text-[var(--text-muted)]">Showing the newest {READ_LIMIT} readings. Older readings are not loaded, so totals below cover this window only.</p>
+        </Card>
+      )}
+
+      {/* Filters scope every KPI, chart and table below. */}
+      <Card className="space-y-3">
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="relative flex-1 min-w-[200px]">
+            <span className="sr-only">Search readings</span>
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+            <input className="input pl-9 w-full min-h-[44px]" placeholder="Search asset, site, notes" value={search} onChange={(e) => setSearch(e.target.value)} />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-[var(--text-muted)]">Status
+            <select className="input min-h-[44px]" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              <option value="all">All statuses</option>
+              <option value="breach">Breach</option>
+              <option value="warning">Warning</option>
+              <option value="ok">OK</option>
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-[var(--text-muted)]">Asset
+            <select className="input min-h-[44px]" value={assetFilter} onChange={(e) => setAssetFilter(e.target.value)}>
+              <option value="">All assets</option>
+              {assetOptions.map((a) => <option key={a} value={a}>{a}</option>)}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-[var(--text-muted)]">Site
+            <select className="input min-h-[44px]" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)}>
+              <option value="">All sites</option>
+              {siteOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-[var(--text-muted)]">From
+            <input type="date" className="input min-h-[44px]" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-[var(--text-muted)]">To
+            <input type="date" className="input min-h-[44px]" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+          </label>
+          {hasFilters && <button type="button" onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]"><X size={14} aria-hidden="true" /> Clear filters</button>}
+        </div>
+        <p className="text-xs text-[var(--text-muted)]" aria-live="polite">{loadingFirst ? 'Loading readings' : `${filtered.length} of ${summary.total} readings in view`}</p>
+      </Card>
+
+      {/* KPI strip */}
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
-        {kpis.map((k) => {
-          const Icon = k.icon
-          return (
-            <Card key={k.label}>
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
-                <Icon size={15} className={k.tone} />
-              </div>
-              <p className={`text-2xl font-bold mt-1 ${k.tone}`}>{rows === null ? NA : k.value}</p>
-            </Card>
-          )
-        })}
+        <StatTile label="Readings" value={loadingFirst ? NA : analytics.total} icon={ThermometerSnowflake} />
+        <StatTile label="Compliance" value={loadingFirst || analytics.compliancePct == null ? NA : analytics.compliancePct} unit={!loadingFirst && analytics.compliancePct != null ? '%' : undefined} icon={Percent} tone="accent" sub="within safe range" />
+        <StatTile label="Breaches" value={loadingFirst ? NA : analytics.breaches} icon={AlertTriangle} tone="crit" />
+        <StatTile label="Near limit" value={loadingFirst ? NA : analytics.warnings} icon={AlertTriangle} tone="warn" />
+        <StatTile label="Excursion events" value={loadingFirst ? NA : analytics.excursionEpisodes} icon={Activity} tone="warn" sub={`${analytics.openEpisodes} still open`} />
+        <StatTile label="Avg deviation" value={loadingFirst || !analytics.avgDeviation ? NA : analytics.avgDeviation} unit={!loadingFirst && analytics.avgDeviation ? 'C' : undefined} icon={Gauge} tone="crit" sub={analytics.maxDeviation ? `max ${analytics.maxDeviation} C` : 'no excursions'} />
+        <StatTile label="Avg duration" value={loadingFirst ? NA : formatDurationMin(analytics.avgExcursionMin)} icon={Timer} tone="info" sub="recovered events" />
+        <StatTile label="Assets" value={loadingFirst ? NA : analytics.assetsMonitored} icon={Boxes} tone="info" sub={`${analytics.sitesMonitored} site${analytics.sitesMonitored === 1 ? '' : 's'}`} />
       </div>
 
       {/* Charts row 1 */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card>
           <CardHeader title="Readings by status" />
-          <div className="h-64">
-            {hasData
-              ? <Doughnut data={donutData} options={donutOpts} />
-              : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">{rows === null ? <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" /> : 'No readings to chart.'}</div>}
+          <div className="h-64" role="img" aria-label={`Status split: ${analytics.ok} OK, ${analytics.warning} warning, ${analytics.breach} breach`}>
+            <ChartSlot loading={loadingFirst} empty={!hasData} emptyText="No readings to chart.">
+              <Doughnut data={donutData} options={donutOpts} />
+            </ChartSlot>
           </div>
-          <p className="text-xs text-[var(--text-muted)] mt-3 flex items-center gap-1.5">
-            <ThermometerSnowflake size={12} />
-            Compliance{' '}
-            <span className="font-semibold text-[var(--text-secondary)]">{analytics.compliancePct == null ? NA : `${analytics.compliancePct}%`}</span>{' '}
-            within safe limits across {analytics.assetsMonitored} asset{analytics.assetsMonitored === 1 ? '' : 's'} / {analytics.sitesMonitored} site{analytics.sitesMonitored === 1 ? '' : 's'}.
-          </p>
         </Card>
         <Card className="lg:col-span-2">
-          <CardHeader icon={Clock} title="Temperature trend (daily)" />
+          <CardHeader icon={Clock} title="Temperature trend (daily)" description="Average with daily min and max; bars count breaches." />
           <div className="h-64">
-            {hasData
-              ? <Line data={trendData} options={trendOpts} />
-              : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">{rows === null ? <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" /> : 'No dated readings to trend.'}</div>}
+            <ChartSlot loading={loadingFirst} empty={!hasData || !analytics.trend.length} emptyText="No dated readings to trend.">
+              <Line data={trendData} options={trendOpts} />
+            </ChartSlot>
           </div>
         </Card>
       </div>
@@ -483,206 +546,91 @@ export default function ColdChain() {
         <Card>
           <CardHeader title="Excursion distribution" />
           <div className="h-56">
-            {hasData
-              ? <Bar data={distData} options={distOpts} />
-              : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">{rows === null ? <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" /> : 'No readings to chart.'}</div>}
+            <ChartSlot loading={loadingFirst} empty={!hasData} emptyText="No readings to chart.">
+              <Bar data={distData} options={distOpts} />
+            </ChartSlot>
           </div>
-          <div className="grid grid-cols-3 gap-2 mt-3 text-center">
-            <div><p className="text-xs text-[var(--text-muted)]">In range</p><p className="text-lg font-bold text-green-400">{analytics.distribution.in_range}</p></div>
-            <div><p className="text-xs text-[var(--text-muted)] flex items-center justify-center gap-0.5"><ArrowUp size={11} /> Above</p><p className="text-lg font-bold text-red-400">{analytics.distribution.above}</p></div>
-            <div><p className="text-xs text-[var(--text-muted)] flex items-center justify-center gap-0.5"><ArrowDown size={11} /> Below</p><p className="text-lg font-bold text-sky-400">{analytics.distribution.below}</p></div>
-          </div>
+          <dl className="grid grid-cols-3 gap-2 mt-3 text-center">
+            <div><dt className="text-xs text-[var(--text-muted)]">In range</dt><dd className="text-lg font-bold text-green-400 tabular-nums">{analytics.distribution.in_range}</dd></div>
+            <div><dt className="text-xs text-[var(--text-muted)] flex items-center justify-center gap-0.5"><ArrowUp size={11} aria-hidden="true" /> Above max</dt><dd className="text-lg font-bold text-red-400 tabular-nums">{analytics.distribution.above}</dd></div>
+            <div><dt className="text-xs text-[var(--text-muted)] flex items-center justify-center gap-0.5"><ArrowDown size={11} aria-hidden="true" /> Below min</dt><dd className="text-lg font-bold text-sky-300 tabular-nums">{analytics.distribution.below}</dd></div>
+          </dl>
         </Card>
         <Card>
           <CardHeader title="Breaches by asset (worst first)" />
           <div className="h-56">
-            {topBreachAssets.length
-              ? <Bar data={assetBarData} options={assetBarOpts} />
-              : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">{rows === null ? <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" /> : 'No excursions recorded.'}</div>}
+            <ChartSlot loading={loadingFirst} empty={!topBreachAssets.length} emptyText="No excursions recorded.">
+              <Bar data={assetBarData} options={assetBarOpts} />
+            </ChartSlot>
           </div>
         </Card>
       </div>
 
-      {/* Worst assets + excursion episodes */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* `pad="none" clip` reproduces the edge-to-edge crop the legacy
-            `.card !p-0 overflow-hidden` gave. Clipping is safe here: nothing
-            inside renders an out-of-flow DOM popover - the sticky header lives
-            in the inner scroller, which is unaffected. */}
-        <Card pad="none" clip>
-          <div style={{ padding: 'var(--pad-card)', paddingBottom: 'var(--space-2)' }}>
-            <CardHeader icon={MapPin} title="Compliance by asset" className="!mb-0" />
-          </div>
-          <div className="overflow-x-auto max-h-72 overflow-y-auto">
-            <table className="w-full text-sm">
-              <thead className="sticky top-0 bg-[var(--surface-raised)]">
-                <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                  <th className="px-4 py-2 font-semibold">Asset</th>
-                  <th className="px-4 py-2 font-semibold">Site</th>
-                  <th className="px-4 py-2 font-semibold text-right">Reads</th>
-                  <th className="px-4 py-2 font-semibold text-right">Breaches</th>
-                  <th className="px-4 py-2 font-semibold text-right">Compliance</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows === null ? (
-                  [0, 1, 2].map((i) => <tr key={i}><td colSpan={5} className="px-4 py-2"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>)
-                ) : analytics.byAsset.length === 0 ? (
-                  <tr><td colSpan={5} className="px-4 py-8 text-center text-[var(--text-muted)]">No assets in view.</td></tr>
-                ) : analytics.byAsset.slice(0, 50).map((a) => (
-                  <tr key={a.key} className="border-b border-[var(--input-border)]/50">
-                    <td className="px-4 py-2 font-medium text-[var(--text-primary)]">{a.key}</td>
-                    <td className="px-4 py-2 text-[var(--text-secondary)]">{a.site || NA}</td>
-                    <td className="px-4 py-2 text-right text-[var(--text-secondary)]">{a.total}</td>
-                    <td className={`px-4 py-2 text-right font-semibold ${a.breaches ? 'text-red-400' : 'text-[var(--text-muted)]'}`}>{a.breaches}</td>
-                    <td className={`px-4 py-2 text-right font-semibold ${a.compliancePct != null && a.compliancePct < 90 ? 'text-amber-400' : 'text-green-400'}`}>{a.compliancePct == null ? NA : `${a.compliancePct}%`}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-        <Card pad="none" clip>
-          <div style={{ padding: 'var(--pad-card)', paddingBottom: 'var(--space-2)' }}>
-            <CardHeader icon={Activity} title="Excursion events" className="!mb-0" />
-          </div>
-          <div className="overflow-x-auto max-h-72 overflow-y-auto">
-            <table className="w-full text-sm">
-              <thead className="sticky top-0 bg-[var(--surface-raised)]">
-                <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                  <th className="px-4 py-2 font-semibold">Asset</th>
-                  <th className="px-4 py-2 font-semibold">Started</th>
-                  <th className="px-4 py-2 font-semibold text-right">Duration</th>
-                  <th className="px-4 py-2 font-semibold text-right">Peak dev.</th>
-                  <th className="px-4 py-2 font-semibold">State</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows === null ? (
-                  [0, 1, 2].map((i) => <tr key={i}><td colSpan={5} className="px-4 py-2"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>)
-                ) : analytics.episodes.length === 0 ? (
-                  <tr><td colSpan={5} className="px-4 py-8 text-center text-[var(--text-muted)]">No excursion events in view.</td></tr>
-                ) : analytics.episodes.slice(0, 50).map((e, i) => (
-                  <tr key={`${e.asset_no}-${e.startAt}-${i}`} className="border-b border-[var(--input-border)]/50">
-                    <td className="px-4 py-2 font-medium text-[var(--text-primary)]">{e.asset_no}</td>
-                    <td className="px-4 py-2 text-[var(--text-secondary)] whitespace-nowrap">{fmtDateTime(e.startAt)}</td>
-                    <td className="px-4 py-2 text-right text-[var(--text-secondary)] whitespace-nowrap">{fmtDuration(e.durationMin)}</td>
-                    <td className="px-4 py-2 text-right font-semibold text-red-300">{e.peakDeviation ? `${e.peakDeviation} C` : NA}</td>
-                    <td className="px-4 py-2">
-                      <span className={`badge text-[11px] px-2 py-0.5 rounded ${e.recovered ? 'bg-green-900/40 text-green-300 border border-green-700/50' : 'bg-red-900/40 text-red-300 border border-red-700/50'}`}>
-                        {e.recovered ? 'Recovered' : 'Open'}
-                      </span>{' '}
-                      <span className={`text-[11px] ${KIND_TONE[e.kind] || ''}`}>{e.kind === 'above' ? 'above max' : e.kind === 'below' ? 'below min' : e.kind}</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      </div>
-
-      {/* Filters. Deliberately NOT clipped, but the native <select>s here would
-          be safe either way: the browser paints an option list as an OS-level
-          popup outside the page's overflow context. */}
-      <Card className="space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-            <input className="input pl-9 w-full" placeholder="Search asset, site, notes" value={search} onChange={(e) => setSearch(e.target.value)} />
-          </div>
-          <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
-            <option value="all">All statuses</option>
-            <option value="breach">Breach</option>
-            <option value="warning">Warning</option>
-            <option value="ok">OK</option>
-          </select>
-          <select className="input" value={assetFilter} onChange={(e) => setAssetFilter(e.target.value)} aria-label="Asset">
-            <option value="">All assets</option>
-            {assetOptions.map((a) => <option key={a} value={a}>{a}</option>)}
-          </select>
-          <select className="input" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} aria-label="Site">
-            <option value="">All sites</option>
-            {siteOptions.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <label className="text-xs text-[var(--text-muted)] flex items-center gap-1.5">From <input type="date" className="input" value={fromDate} onChange={(e) => setFromDate(e.target.value)} /></label>
-          <label className="text-xs text-[var(--text-muted)] flex items-center gap-1.5">To <input type="date" className="input" value={toDate} onChange={(e) => setToDate(e.target.value)} /></label>
-          {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
-          <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {summary.total} readings</span>
-        </div>
-      </Card>
-
-      {/* Register table. Clipping is safe: the only popup inside is
-          TablePagination's rows-per-page native <select>. */}
-      <Card pad="none" clip>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                <SortHead label="Asset" k="asset_no" />
-                <SortHead label="Site" k="site" />
-                <SortHead label="Temperature" k="temperature_c" align="right" />
-                <th className="px-4 py-3 font-semibold whitespace-nowrap">Safe range</th>
-                <SortHead label="Deviation" k="deviation" align="right" />
-                <SortHead label="Status" k="status" />
-                <SortHead label="Recorded at" k="recorded_at" />
-                <th className="px-4 py-3 font-semibold" />
-              </tr>
-            </thead>
-            <tbody>
-              {rows === null ? (
-                [0, 1, 2, 3, 4].map((i) => <tr key={i} className="border-b border-[var(--input-border)]/50"><td colSpan={8} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>)
-              ) : sorted.length === 0 ? (
-                <tr><td colSpan={8} className="px-4 py-12 text-center text-[var(--text-muted)]">
-                  {/* Now that notProvisioned can genuinely be true, this cell must
-                      not report a missing table as a filter miss. The banner
-                      above carries the migration instruction. */}
-                  {notProvisioned ? (
-                    <><AlertTriangle size={22} className="mx-auto mb-2 text-amber-400 opacity-80" />No readings, because the cold-chain table has not been provisioned yet.</>
-                  ) : rows.length === 0 ? (
-                    <><ThermometerSnowflake size={22} className="mx-auto mb-2 opacity-60" />No readings logged yet. Log your first reading.</>
-                  ) : (
-                    <><Filter size={22} className="mx-auto mb-2 opacity-60" />No readings match these filters.</>
-                  )}
-                </td></tr>
-              ) : (
-                pager.pageRows.map((r) => {
-                  const st = readingStatus(r)
-                  const dev = deviationC(r)
-                  const kind = excursionKind(r)
-                  return (
-                    <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                      <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.asset_no || NA}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.site || NA}</td>
-                      <td className={`px-4 py-2.5 text-right font-semibold ${TEMP_TONE[st] || 'text-[var(--text-primary)]'}`}>
-                        {r.temperature_c == null ? NA : `${r.temperature_c} C`}
-                      </td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{rangeText(r)}</td>
-                      <td className="px-4 py-2.5 text-right">
-                        {dev > 0
-                          ? <span className={`inline-flex items-center gap-0.5 font-semibold ${KIND_TONE[kind]}`}>{kind === 'above' ? <ArrowUp size={12} /> : kind === 'below' ? <ArrowDown size={12} /> : null}{dev} C</span>
-                          : <span className="text-[var(--text-muted)]">{NA}</span>}
-                      </td>
-                      <td className="px-4 py-2.5"><span className={`badge text-[11px] px-2 py-0.5 rounded ${STATUS_STYLES[st] || ''}`}>{COLD_CHAIN_STATUS_META[st]?.label || st}</span></td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDateTime(r.recorded_at)}</td>
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-center justify-end gap-1">
-                          <button onClick={() => openEdit(r)} className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Edit"><Pencil size={14} /></button>
-                          <button onClick={() => setConfirmDelete(r)} className="p-1.5 rounded hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400" aria-label="Delete"><Trash2 size={14} /></button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })
+      {/* Compliance breakdown + excursion events */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <Card pad="none">
+          <div className="px-4 pt-4">
+            <CardHeader
+              icon={MapPin}
+              title={breakdown === 'asset' ? 'Compliance by asset' : 'Compliance by site'}
+              actions={(
+                <SegmentedControl
+                  value={breakdown}
+                  onChange={setBreakdown}
+                  options={[{ value: 'asset', label: 'Asset' }, { value: 'site', label: 'Site' }]}
+                  ariaLabel="Group compliance by"
+                />
               )}
-            </tbody>
-          </table>
-        </div>
-        <TablePagination {...pager} />
-      </Card>
+            />
+          </div>
+          <EnterpriseTable
+            columns={breakdownColumns}
+            data={breakdownRows}
+            getRowId={(r) => r.key}
+            loading={loadingFirst}
+            enableExport={false}
+            enableColumnFilters={false}
+            searchPlaceholder={breakdown === 'asset' ? 'Search asset' : 'Search site'}
+            initialPageSize={25}
+            emptyMessage="No readings in view."
+          />
+        </Card>
+        <Card pad="none">
+          <div className="px-4 pt-4">
+            <CardHeader icon={Activity} title="Excursion events" description="A run of consecutive breaches on one unit, closed by the next in-range reading." />
+          </div>
+          <EnterpriseTable
+            columns={episodeColumns}
+            data={episodes}
+            getRowId={(r) => r.id}
+            loading={loadingFirst}
+            enableExport={false}
+            enableColumnFilters={false}
+            searchPlaceholder="Search asset"
+            initialPageSize={25}
+            emptyMessage="No excursion events in view."
+          />
+        </Card>
+      </div>
 
+      {/* Register. The page filter card above is the search, so the table's
+          own search box is off to avoid two competing boxes. */}
+      <Card pad="none">
+        <div className="px-4 pt-4"><CardHeader icon={ThermometerSnowflake} title="Reading register" description={`${registerRows.length} readings`} /></div>
+        <EnterpriseTable
+          columns={registerColumns}
+          data={registerRows}
+          getRowId={(r, i) => String(r.id ?? i)}
+          loading={loadingFirst}
+          enableGlobalFilter={false}
+          enableColumnFilters={false}
+          enableExport={false}
+          initialPageSize={25}
+          emptyMessage={notProvisioned
+            ? 'No readings, because the cold-chain table has not been provisioned yet.'
+            : (rows || []).length === 0 ? 'No readings logged yet. Use "Log reading" to record the first one.' : 'No readings match these filters.'}
+        />
+      </Card>
       {/* Create / Edit modal. The submit button stays INSIDE the <form> rather
           than moving to Modal's `footer`: a footer button would need a
           `form="..."` association to keep submitting, which is a behaviour
@@ -701,36 +649,36 @@ export default function ColdChain() {
             <form onSubmit={submit} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="label">Asset / unit no.</label>
-                  <input className="input w-full" placeholder="e.g. REEFER-01" value={form.asset_no} maxLength={120} onChange={(e) => set('asset_no', e.target.value)} />
+                  <label className="label" htmlFor="cc-asset">Asset / unit no.</label>
+                  <input id="cc-asset" className="input w-full" placeholder="e.g. REEFER-01" value={form.asset_no} maxLength={120} onChange={(e) => set('asset_no', e.target.value)} />
                 </div>
                 <div>
-                  <label className="label">Site (optional)</label>
-                  <input className="input w-full" placeholder="e.g. Riyadh DC" value={form.site} maxLength={200} onChange={(e) => set('site', e.target.value)} />
+                  <label className="label" htmlFor="cc-site">Site (optional)</label>
+                  <input id="cc-site" className="input w-full" placeholder="e.g. Riyadh DC" value={form.site} maxLength={200} onChange={(e) => set('site', e.target.value)} />
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
-                  <label className="label">Temperature (C)</label>
-                  <input className="input w-full" type="number" step="0.1" placeholder="-18" value={form.temperature_c} onChange={(e) => set('temperature_c', e.target.value)} />
+                  <label className="label" htmlFor="cc-temp">Temperature (C)</label>
+                  <input id="cc-temp" className="input w-full" type="number" step="0.1" placeholder="-18" value={form.temperature_c} onChange={(e) => set('temperature_c', e.target.value)} />
                 </div>
                 <div>
-                  <label className="label">Min safe (C)</label>
-                  <input className="input w-full" type="number" step="0.1" placeholder="-20" value={form.min_threshold_c} onChange={(e) => set('min_threshold_c', e.target.value)} />
+                  <label className="label" htmlFor="cc-min">Min safe (C)</label>
+                  <input id="cc-min" className="input w-full" type="number" step="0.1" placeholder="-20" value={form.min_threshold_c} onChange={(e) => set('min_threshold_c', e.target.value)} />
                 </div>
                 <div>
-                  <label className="label">Max safe (C)</label>
-                  <input className="input w-full" type="number" step="0.1" placeholder="-15" value={form.max_threshold_c} onChange={(e) => set('max_threshold_c', e.target.value)} />
+                  <label className="label" htmlFor="cc-max">Max safe (C)</label>
+                  <input id="cc-max" className="input w-full" type="number" step="0.1" placeholder="-15" value={form.max_threshold_c} onChange={(e) => set('max_threshold_c', e.target.value)} />
                 </div>
               </div>
               <div>
-                <label className="label">Recorded at (optional)</label>
-                <input className="input w-full" type="datetime-local" value={form.recorded_at} onChange={(e) => set('recorded_at', e.target.value)} />
+                <label className="label" htmlFor="cc-recorded">Recorded at (optional)</label>
+                <input id="cc-recorded" className="input w-full" type="datetime-local" value={form.recorded_at} onChange={(e) => set('recorded_at', e.target.value)} />
                 <p className="text-[11px] text-[var(--text-muted)] mt-1">Leave blank to stamp now.</p>
               </div>
               <div>
-                <label className="label">Notes (optional)</label>
-                <textarea className="input w-full min-h-[80px] resize-y" placeholder="Door left open during loading" value={form.notes} maxLength={8000} onChange={(e) => set('notes', e.target.value)} />
+                <label className="label" htmlFor="cc-notes">Notes (optional)</label>
+                <textarea id="cc-notes" className="input w-full min-h-[80px] resize-y" placeholder="Door left open during loading" value={form.notes} maxLength={8000} onChange={(e) => set('notes', e.target.value)} />
               </div>
 
               {form.temperature_c !== '' && (

@@ -1,190 +1,178 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+/**
+ * RfidRegistry (route /rfid-registry) - RFID tag inventory, reader/zone health,
+ * tag alerts and read history over the V122/V132 RFID schema.
+ *
+ * Every figure comes from the pure engine `src/lib/rfidRegistryAnalytics.js`
+ * (tested). All registers read every row through fetchAllPages (ordered with an
+ * id tiebreak) and render in EnterpriseTable, which pages and sorts all of them;
+ * nothing is sliced to a preview.
+ */
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import { AnimatePresence } from 'framer-motion'
 import {
-  Radio, Tag, Truck, MapPin, AlertCircle, CheckCircle,
-  Plus, Search, Filter, RefreshCw, Edit, Trash2,
-  Eye, Calendar, Package, Battery, Signal, Activity,
-  ChevronRight, ChevronDown, Download, Upload,
-  BarChart3, Clock, Shield, Wrench, Loader2, History,
+  Chart as ChartJS, ArcElement, Tooltip, Legend, BarElement, CategoryScale, LinearScale,
+} from 'chart.js'
+import { Doughnut, Bar } from 'react-chartjs-2'
+import {
+  Radio, Tag, MapPin, AlertCircle, CheckCircle, Plus, Search, RefreshCw, Pencil, Trash2,
+  BarChart3, History, Link2, Signal, FileSpreadsheet, FileText, ShieldAlert, Activity, X,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { useAuth } from '../contexts/AuthContext'
 import PageHeader from '../components/ui/PageHeader'
-import Card, { CardHeader, CardBody } from '../components/ui/Card'
+import Card, { CardHeader } from '../components/ui/Card'
 import Modal from '../components/ui/Modal'
+import StatTile from '../components/ui/StatTile'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import RfidScanner from '../components/RfidScanner'
 import { toUserMessage } from '../lib/safeError'
-import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import { fetchAllPages } from '../lib/fetchAll'
+import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
+import { ACCENTS, colorAt } from '../lib/reportColors'
+import {
+  summarizeRfidRegistry, filterTags, filterReaders, filterAlerts, filterHistory, topOpenAlerts,
+  readsByZone, distinctValues, tagRows, readerRows, alertRows, historyRows,
+  TAG_STATUSES, TAG_STATUS_LABEL, ALERT_SEVERITIES, READER_HEALTH_LABEL, READER_STALE_HOURS,
+} from '../lib/rfidRegistryAnalytics'
 
-const STATUS_COLORS = {
-  available: 'text-blue-400 bg-blue-400/15 border-blue-400/30',
-  assigned: 'text-yellow-400 bg-yellow-400/15 border-yellow-400/30',
-  attached: 'text-green-400 bg-green-400/15 border-green-400/30',
-  removed: 'text-[var(--text-secondary)] bg-gray-400/15 border-gray-400/30',
-  lost: 'text-red-400 bg-red-400/15 border-red-400/30',
-  damaged: 'text-purple-400 bg-purple-400/15 border-purple-400/30',
-}
+ChartJS.register(ArcElement, Tooltip, Legend, BarElement, CategoryScale, LinearScale)
 
-const SEVERITY_COLORS = {
-  low: 'text-[var(--text-secondary)] bg-gray-400/15',
-  medium: 'text-yellow-400 bg-yellow-400/15',
-  high: 'text-orange-400 bg-orange-400/15',
-  critical: 'text-red-400 bg-red-400/15',
+// Read-event history grows with every scan; bound it and SAY when the bound is hit.
+const HISTORY_MAX = 20000
+
+const STATUS_BADGE = {
+  available: 'bg-sky-900/40 text-sky-300 border border-sky-700/50',
+  assigned: 'bg-yellow-900/40 text-yellow-300 border border-yellow-700/50',
+  attached: 'bg-green-900/40 text-green-300 border border-green-700/50',
+  removed: 'bg-[var(--input-bg)] text-[var(--text-secondary)] border border-[var(--input-border)]',
+  lost: 'bg-red-900/40 text-red-300 border border-red-700/50',
+  damaged: 'bg-purple-900/40 text-purple-300 border border-purple-700/50',
 }
+const STATUS_COLOUR = {
+  available: ACCENTS.info, assigned: ACCENTS.watch, attached: ACCENTS.good,
+  removed: ACCENTS.neutral, lost: ACCENTS.risk, damaged: '#a855f7',
+}
+const SEVERITY_BADGE = {
+  low: 'bg-[var(--input-bg)] text-[var(--text-secondary)] border border-[var(--input-border)]',
+  medium: 'bg-yellow-900/40 text-yellow-300 border border-yellow-700/50',
+  high: 'bg-orange-900/40 text-orange-300 border border-orange-700/50',
+  critical: 'bg-red-900/40 text-red-300 border border-red-700/50',
+}
+const SEVERITY_COLOUR = { critical: ACCENTS.risk, high: '#f97316', medium: ACCENTS.watch, low: ACCENTS.neutral }
+const HEALTH_BADGE = {
+  online: STATUS_BADGE.attached, stale: SEVERITY_BADGE.medium, never: SEVERITY_BADGE.low, inactive: SEVERITY_BADGE.high,
+}
+const RSSI_TONE = { strong: 'text-green-400', fair: 'text-yellow-400', weak: 'text-red-400' }
 
 const TAB_OPTIONS = [
   { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
-  { id: 'tags', label: 'Tag Inventory', icon: Tag },
-  { id: 'readers', label: 'Readers/Zones', icon: MapPin },
+  { id: 'tags', label: 'Tag inventory', icon: Tag },
+  { id: 'readers', label: 'Readers and zones', icon: MapPin },
   { id: 'alerts', label: 'Alerts', icon: AlertCircle },
-  { id: 'history', label: 'Read History', icon: History },
+  { id: 'history', label: 'Read history', icon: History },
 ]
 
+const NA = 'N/A'
+const TICK = 'var(--text-muted)'
+const GRID = 'var(--panel-2)'
+const EMPTY_TAG = { tag_uid: '', tag_epc: '', tag_type: 'UHF', manufacturer: '', site: '' }
+
+const fmtDate = (v) => { if (!v) return NA; const d = new Date(v); return Number.isNaN(d.getTime()) ? NA : d.toLocaleDateString() }
+const fmtDateTime = (v) => { if (!v) return NA; const d = new Date(v); return Number.isNaN(d.getTime()) ? NA : d.toLocaleString() }
+const txt = (v) => (v == null || v === '' ? NA : v)
+
+function Badge({ cls, children }) {
+  return <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold ${cls}`}>{children}</span>
+}
+
+function FilterSelect({ label, value, onChange, children }) {
+  return (
+    <label className="flex flex-col gap-1 text-xs text-[var(--text-muted)]">
+      {label}
+      <select className="input min-h-[44px] text-sm" value={value} onChange={(e) => onChange(e.target.value)}>{children}</select>
+    </label>
+  )
+}
+
+function SearchBox({ label, value, onChange, placeholder }) {
+  return (
+    <label className="relative flex-1 min-w-[200px] self-end">
+      <span className="sr-only">{label}</span>
+      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+      <input className="input pl-9 text-sm w-full min-h-[44px]" placeholder={placeholder} value={value} onChange={(e) => onChange(e.target.value)} />
+    </label>
+  )
+}
+
 export default function RfidRegistry() {
-  const { profile } = useAuth()
   const [activeTab, setActiveTab] = useState('dashboard')
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [scannerOpen, setScannerOpen] = useState(false)
   const [lastUpdated, setLastUpdated] = useState(null)
   const [error, setError] = useState(null)
+  const [actionError, setActionError] = useState(null)
 
-  // Dashboard data
-  const [stats, setStats] = useState({
-    totalTags: 0,
-    attachedTags: 0,
-    availableTags: 0,
-    lostTags: 0,
-    damagedTags: 0,
-    activeReaders: 0,
-    totalReaders: 0,
-    alertsOpen: 0,
-    alertsToday: 0,
-  })
-
-  // Tag inventory data
   const [tags, setTags] = useState([])
+  const [readers, setReaders] = useState([])
+  const [alerts, setAlerts] = useState([])
+  const [history, setHistory] = useState(null) // null = not loaded yet (lazy tab)
+  const [historyTruncated, setHistoryTruncated] = useState(false)
+  const [historyLoading, setHistoryLoading] = useState(false)
+
   const [tagsSearch, setTagsSearch] = useState('')
   const [tagsFilter, setTagsFilter] = useState('all')
   const [tagsSiteFilter, setTagsSiteFilter] = useState('all')
-  const [sites, setSites] = useState([])
-
-  // Readers data
-  const [readers, setReaders] = useState([])
   const [readersSearch, setReadersSearch] = useState('')
-
-  // Alerts data
-  const [alerts, setAlerts] = useState([])
+  const [readersHealth, setReadersHealth] = useState('all')
   const [alertsFilter, setAlertsFilter] = useState('open')
-  const alertsFilterRef = useRef(alertsFilter)
-  alertsFilterRef.current = alertsFilter
-
-  // History data
-  const [history, setHistory] = useState([])
+  const [alertsSeverity, setAlertsSeverity] = useState('all')
+  const [alertsSearch, setAlertsSearch] = useState('')
   const [historySearch, setHistorySearch] = useState('')
+  const [historySite, setHistorySite] = useState('all')
 
-  // Tag form state
   const [showTagForm, setShowTagForm] = useState(false)
   const [editingTag, setEditingTag] = useState(null)
-  const [tagFormData, setTagFormData] = useState({
-    tag_uid: '',
-    tag_epc: '',
-    tag_type: 'UHF',
-    manufacturer: '',
-    site: '',
-  })
+  const [tagFormData, setTagFormData] = useState(EMPTY_TAG)
+  const [linkTyre, setLinkTyre] = useState(null)
+  const [savingTag, setSavingTag] = useState(false)
+  const [tagFormError, setTagFormError] = useState('')
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleting, setDeleting] = useState(false)
+  const [resolvingId, setResolvingId] = useState(null)
 
+  const now = useMemo(() => new Date(), [lastUpdated]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Tags, readers and ALL alerts (the open/all scope is a client-side filter, so
+  // switching it can never show a stale open-only list as "all").
   const loadData = useCallback(async () => {
-    setLoading(true)
     setError(null)
     try {
-      // Load stats
-      const [tagStatsResult, readerStatsResult, alertStatsResult] = await Promise.all([
-        fetchAllPages((from, to) => supabase.from('rfid_tags').select('status').range(from, to)),
-        fetchAllPages((from, to) => supabase.from('rfid_readers').select('status').range(from, to)),
-        fetchAllPages((from, to) => supabase.from('rfid_alerts').select('created_at').is('resolved_at', null).range(from, to)),
-      ])
-      const statsError = tagStatsResult.error || readerStatsResult.error || alertStatsResult.error
-      if (statsError) throw statsError
-      const tagStats = tagStatsResult.data
-      const readerStats = readerStatsResult.data
-      const alertStats = alertStatsResult.data
-
-      setStats({
-        totalTags: tagStats?.length || 0,
-        attachedTags: tagStats?.filter(t => t.status === 'attached').length || 0,
-        availableTags: tagStats?.filter(t => t.status === 'available').length || 0,
-        lostTags: tagStats?.filter(t => t.status === 'lost').length || 0,
-        damagedTags: tagStats?.filter(t => t.status === 'damaged').length || 0,
-        activeReaders: readerStats?.filter(r => r.status === 'active').length || 0,
-        totalReaders: readerStats?.length || 0,
-        alertsOpen: alertStats?.length || 0,
-        alertsToday: alertStats?.filter(a => 
-          new Date(a.created_at).toDateString() === new Date().toDateString()
-        ).length || 0,
-      })
-
-      // Load tags with tyre info
-      if (activeTab === 'tags' || activeTab === 'dashboard') {
-        const { data: tyreTags, error: tagsError } = await fetchAllPages((from, to) => supabase
+      const [tagRes, readerRes, alertRes] = await Promise.all([
+        fetchAllPages((from, to) => supabase
           .from('rfid_tags')
-          .select(`
-            *,
-            tyre_records!left(id, serial_no, asset_no, brand, site, status)
-          `)
+          .select('*, tyre_records!left(id, serial_no, asset_no, brand, site, status)')
           .order('created_at', { ascending: false })
-          .range(from, to))
-        if (tagsError) throw tagsError
-        setTags(tyreTags || [])
-        
-        // Get unique sites
-        const tagSites = [...new Set((tyreTags || []).map(t => t.site).filter(Boolean))].sort()
-        setSites(tagSites)
-      }
-
-      // Load readers
-      if (activeTab === 'readers' || activeTab === 'dashboard') {
-        const { data: readerData, error: readersError } = await fetchAllPages((from, to) => supabase
+          .order('id', { ascending: true })
+          .range(from, to)),
+        fetchAllPages((from, to) => supabase
           .from('rfid_readers')
           .select('*')
           .order('site')
           .order('zone_name')
-          .range(from, to))
-        if (readersError) throw readersError
-        setReaders(readerData || [])
-      }
-
-      // Load alerts
-      if (activeTab === 'alerts' || activeTab === 'dashboard') {
-        const { data: alertData, error: alertsError } = await fetchAllPages((from, to) => {
-          let query = supabase
-            .from('rfid_alerts')
-            .select(`
-              *,
-              rfid_tags!left(tag_uid)
-            `)
-          if (alertsFilterRef.current === 'open') query = query.is('resolved_at', null)
-          return query.order('created_at', { ascending: false }).range(from, to)
-        })
-        if (alertsError) throw alertsError
-        setAlerts(alertData || [])
-      }
-
-      // Load history
-      if (activeTab === 'history') {
-        const { data: historyData, error: historyError } = await fetchAllPages((from, to) => supabase
-          .from('rfid_read_events')
-          .select(`
-            *,
-            rfid_readers!left(name, zone_name)
-          `)
-          .order('read_at', { ascending: false })
-          .range(from, to))
-        if (historyError) throw historyError
-        setHistory(historyData || [])
-      }
-
+          .order('id', { ascending: true })
+          .range(from, to)),
+        fetchAllPages((from, to) => supabase
+          .from('rfid_alerts')
+          .select('*, rfid_tags!left(tag_uid)')
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: true })
+          .range(from, to)),
+      ])
+      const failed = tagRes.error || readerRes.error || alertRes.error
+      if (failed) throw failed
+      setTags(tagRes.data || [])
+      setReaders(readerRes.data || [])
+      setAlerts(alertRes.data || [])
       setLastUpdated(new Date())
     } catch (err) {
       setError(toUserMessage(err, 'Could not load RFID data.'))
@@ -192,633 +180,587 @@ export default function RfidRegistry() {
       setLoading(false)
       setRefreshing(false)
     }
-  }, [activeTab])
+  }, [])
 
-  useEffect(() => {
-    loadData()
-  }, [loadData])
+  const loadHistory = useCallback(async () => {
+    setHistoryLoading(true)
+    try {
+      const res = await fetchAllPages((from, to) => supabase
+        .from('rfid_read_events')
+        .select('*, rfid_readers!left(name, zone_name)')
+        .order('read_at', { ascending: false })
+        .order('id', { ascending: true })
+        .range(from, to), { max: HISTORY_MAX })
+      if (res.error) throw res.error
+      setHistory(res.data || [])
+      setHistoryTruncated(!!res.truncated)
+    } catch (err) {
+      setError(toUserMessage(err, 'Could not load the read history.'))
+      setHistory((prev) => prev ?? [])
+    } finally {
+      setHistoryLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { loadData() }, [loadData])
+  useEffect(() => { if (activeTab === 'history' && history === null) loadHistory() }, [activeTab, history, loadHistory])
 
   async function handleRefresh() {
     setRefreshing(true)
-    await loadData()
+    await Promise.all([loadData(), activeTab === 'history' ? loadHistory() : null])
   }
 
-  // Filter tags
-  const filteredTags = useMemo(() => {
-    return tags.filter(t => {
-      const searchMatch = !tagsSearch || 
-        t.tag_uid?.toLowerCase().includes(tagsSearch.toLowerCase()) ||
-        t.tyre_records?.serial_no?.toLowerCase().includes(tagsSearch.toLowerCase()) ||
-        t.tyre_records?.asset_no?.toLowerCase().includes(tagsSearch.toLowerCase()) ||
-        t.manufacturer?.toLowerCase().includes(tagsSearch.toLowerCase())
-      
-      const statusMatch = tagsFilter === 'all' || t.status === tagsFilter
-      const siteMatch = tagsSiteFilter === 'all' || t.site === tagsSiteFilter
-      
-      return searchMatch && statusMatch && siteMatch
-    })
-  }, [tags, tagsSearch, tagsFilter, tagsSiteFilter])
+  // ── Derived ─────────────────────────────────────────────────────────────────
+  const stats = useMemo(() => summarizeRfidRegistry({ tags, readers, alerts, now }), [tags, readers, alerts, now])
+  const sites = useMemo(() => distinctValues(tags, (t) => t.site), [tags])
+  const historySites = useMemo(() => distinctValues(history || [], (h) => h.site), [history])
+  const tagList = useMemo(() => tagRows(filterTags(tags, { search: tagsSearch, status: tagsFilter, site: tagsSiteFilter })), [tags, tagsSearch, tagsFilter, tagsSiteFilter])
+  const readerList = useMemo(() => readerRows(filterReaders(readers, { search: readersSearch, health: readersHealth, now }), now), [readers, readersSearch, readersHealth, now])
+  const alertList = useMemo(() => alertRows(filterAlerts(alerts, { scope: alertsFilter, severity: alertsSeverity, search: alertsSearch })), [alerts, alertsFilter, alertsSeverity, alertsSearch])
+  const historyList = useMemo(() => historyRows(filterHistory(history || [], { search: historySearch, site: historySite })), [history, historySearch, historySite])
+  const zoneReads = useMemo(() => readsByZone(filterHistory(history || [], { search: historySearch, site: historySite })).slice(0, 10), [history, historySearch, historySite])
+  const urgent = useMemo(() => alertRows(topOpenAlerts(alerts, 5)), [alerts])
 
-  // Filter alerts
-  const filteredAlerts = useMemo(() => {
-    if (alertsFilter === 'open') {
-      return alerts.filter(a => !a.resolved_at)
-    }
-    return alerts
-  }, [alerts, alertsFilter])
+  const statusChart = useMemo(() => ({
+    labels: TAG_STATUSES.map((s) => TAG_STATUS_LABEL[s]),
+    datasets: [{ data: TAG_STATUSES.map((s) => stats.byStatus[s]), backgroundColor: TAG_STATUSES.map((s) => STATUS_COLOUR[s]), borderWidth: 0 }],
+  }), [stats])
+  const severityChart = useMemo(() => ({
+    labels: ALERT_SEVERITIES.map((s) => s.charAt(0).toUpperCase() + s.slice(1)),
+    datasets: [{ label: 'Open alerts', data: ALERT_SEVERITIES.map((s) => stats.openBySeverity[s]), backgroundColor: ALERT_SEVERITIES.map((s) => SEVERITY_COLOUR[s]), borderRadius: 4 }],
+  }), [stats])
+  const zoneChart = useMemo(() => ({
+    labels: zoneReads.map((z) => z.zone),
+    datasets: [{ label: 'Reads', data: zoneReads.map((z) => z.reads), backgroundColor: zoneReads.map((_, i) => colorAt(i)), borderRadius: 4 }],
+  }), [zoneReads])
+  const barOpts = (horizontal) => ({
+    responsive: true, maintainAspectRatio: false, indexAxis: horizontal ? 'y' : 'x',
+    plugins: { legend: { display: false } },
+    scales: { x: { ticks: { color: TICK, precision: 0 }, grid: { color: GRID } }, y: { ticks: { color: TICK, precision: 0 }, grid: { color: GRID } } },
+  })
 
-  const filteredReaders = useMemo(() => readers.filter(r => (
-    !readersSearch || r.name?.toLowerCase().includes(readersSearch.toLowerCase()) || r.zone_name?.toLowerCase().includes(readersSearch.toLowerCase())
-  )), [readers, readersSearch])
-  const filteredHistory = useMemo(() => history.filter(h => (
-    !historySearch || h.tag_uid?.toLowerCase().includes(historySearch.toLowerCase()) || h.zone_name?.toLowerCase().includes(historySearch.toLowerCase())
-  )), [history, historySearch])
-  const tagsPager = usePagedRows(filteredTags)
-  const readersPager = usePagedRows(filteredReaders)
-  const alertsPager = usePagedRows(filteredAlerts)
-  const historyPager = usePagedRows(filteredHistory)
-
-  // Tag form handlers
+  // ── Writes ─────────────────────────────────────────────────────────────────
   function openTagForm(tag = null) {
     setEditingTag(tag)
-    setTagFormData({
-      tag_uid: tag?.tag_uid || '',
-      tag_epc: tag?.tag_epc || '',
-      tag_type: tag?.tag_type || 'UHF',
-      manufacturer: tag?.manufacturer || '',
-      site: tag?.site || '',
-    })
+    setLinkTyre(null)
+    setTagFormError('')
+    setTagFormData(tag ? {
+      tag_uid: tag.tag_uid || '', tag_epc: tag.tag_epc || '', tag_type: tag.tag_type || 'UHF',
+      manufacturer: tag.manufacturer || '', site: tag.site || '',
+    } : EMPTY_TAG)
     setShowTagForm(true)
   }
 
   function closeTagForm() {
+    if (savingTag) return
     setShowTagForm(false)
     setEditingTag(null)
-    setTagFormData({
-      tag_uid: '',
-      tag_epc: '',
-      tag_type: 'UHF',
-      manufacturer: '',
-      site: '',
-    })
+    setLinkTyre(null)
+    setTagFormData(EMPTY_TAG)
   }
 
   async function saveTag() {
-    if (!tagFormData.tag_uid) return
-
-    const tagData = {
-      ...tagFormData,
-      status: 'available',
-      assigned_at: editingTag ? tagFormData.assigned_at : null,
-      attached_at: editingTag ? tagFormData.attached_at : null,
+    if (!tagFormData.tag_uid.trim()) { setTagFormError('A tag UID is required.'); return }
+    setSavingTag(true); setTagFormError('')
+    const fields = {
+      tag_uid: tagFormData.tag_uid.trim(),
+      tag_epc: tagFormData.tag_epc.trim() || null,
+      tag_type: tagFormData.tag_type,
+      manufacturer: tagFormData.manufacturer.trim() || null,
+      site: tagFormData.site.trim() || null,
     }
-
-    if (editingTag) {
-      await supabase.from('rfid_tags').update(tagData).eq('id', editingTag.id)
-    } else {
-      await supabase.from('rfid_tags').insert(tagData)
+    try {
+      // Editing changes the descriptive fields only: it must not reset an
+      // attached tag to "available" or wipe its lifecycle timestamps.
+      const { error: err } = editingTag
+        ? await supabase.from('rfid_tags').update(fields).eq('id', editingTag.id)
+        : await supabase.from('rfid_tags').insert({
+          ...fields,
+          status: 'available',
+          ...(linkTyre ? { tyre_record_id: linkTyre.id } : {}),
+        })
+      if (err) throw err
+      setSavingTag(false)
+      closeTagForm()
+      loadData()
+    } catch (err) {
+      setTagFormError(toUserMessage(err, 'Could not save the tag.'))
+      setSavingTag(false)
     }
-
-    closeTagForm()
-    loadData()
   }
 
-  async function deleteTag(tagId) {
-    if (confirm('Delete this RFID tag?')) {
-      await supabase.from('rfid_tags').delete().eq('id', tagId)
+  async function confirmDeleteTag() {
+    if (!deleteTarget) return
+    setDeleting(true); setActionError(null)
+    try {
+      const { error: err } = await supabase.from('rfid_tags').delete().eq('id', deleteTarget.id)
+      if (err) throw err
+      setDeleteTarget(null)
       loadData()
+    } catch (err) {
+      setActionError(toUserMessage(err, 'Could not delete the tag.'))
+    } finally {
+      setDeleting(false)
     }
   }
 
   async function resolveAlert(alertId) {
-    await supabase.from('rfid_alerts').update({ resolved_at: new Date() }).eq('id', alertId)
-    loadData()
-  }
-
-  function handleScannerResult(result) {
-    // Handle scanner result - navigate or update
-    if (result?.tyre) {
-      // Could assign RFID to tyre here
-      openTagForm({ ...result.tyre, tyre_record_id: result.tyre.id })
+    setResolvingId(alertId); setActionError(null)
+    try {
+      const { error: err } = await supabase.from('rfid_alerts').update({ resolved_at: new Date() }).eq('id', alertId)
+      if (err) throw err
+      loadData()
+    } catch (err) {
+      setActionError(toUserMessage(err, 'Could not resolve the alert.'))
+    } finally {
+      setResolvingId(null)
     }
   }
+
+  // A scan that finds a tyre opens a NEW tag prefilled to link to that tyre.
+  function handleScannerResult(result) {
+    if (!result?.tyre) return
+    setEditingTag(null)
+    setTagFormError('')
+    setTagFormData({ ...EMPTY_TAG, site: result.tyre.site || '' })
+    setLinkTyre({ id: result.tyre.id, serial: result.tyre.serial_no || result.tyre.serial_number || null })
+    setActiveTab('tags')
+    setShowTagForm(true)
+  }
+
+  // ── Columns ────────────────────────────────────────────────────────────────
+  const tagColumns = useMemo(() => [
+    { id: 'tag_uid', header: 'Tag UID', accessorFn: (r) => r.tag_uid ?? '', cell: ({ row }) => <span className="font-mono text-xs text-[var(--text-primary)]">{txt(row.original.tag_uid)}</span> },
+    { id: 'tag_type', header: 'Type', accessorFn: (r) => r.tag_type ?? '', cell: ({ row }) => txt(row.original.tag_type) },
+    { id: 'manufacturer', header: 'Manufacturer', accessorFn: (r) => r.manufacturer ?? '', cell: ({ row }) => txt(row.original.manufacturer) },
+    { id: 'serial', header: 'Tyre serial', accessorFn: (r) => r.serial ?? '', cell: ({ row }) => txt(row.original.serial) },
+    { id: 'asset', header: 'Asset', accessorFn: (r) => r.asset ?? '', cell: ({ row }) => txt(row.original.asset) },
+    { id: 'site', header: 'Site', accessorFn: (r) => r.site ?? '', cell: ({ row }) => txt(row.original.site) },
+    { id: 'status', header: 'Status', accessorFn: (r) => r.statusLabel, cell: ({ row }) => <Badge cls={STATUS_BADGE[row.original.status] || STATUS_BADGE.removed}>{row.original.statusLabel}</Badge> },
+    { id: 'last_seen', header: 'Last seen', accessorFn: (r) => r.lastSeenMs ?? -1, cell: ({ row }) => fmtDate(row.original.last_seen_at) },
+    {
+      id: 'actions', header: '', enableSorting: false, meta: { export: false },
+      cell: ({ row }) => (
+        <div className="flex items-center justify-end gap-1">
+          <button type="button" onClick={() => openTagForm(row.original.raw)} className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg)]" aria-label={`Edit tag ${row.original.tag_uid || ''}`}><Pencil size={15} /></button>
+          <button type="button" onClick={() => setDeleteTarget(row.original.raw)} className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded text-[var(--text-muted)] hover:text-red-400 hover:bg-red-900/30" aria-label={`Delete tag ${row.original.tag_uid || ''}`}><Trash2 size={15} /></button>
+        </div>
+      ),
+    },
+  ], [])
+
+  const readerColumns = useMemo(() => [
+    { id: 'name', header: 'Reader', accessorFn: (r) => r.name ?? '', cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{txt(row.original.name)}</span> },
+    { id: 'zone', header: 'Zone', accessorFn: (r) => r.zone ?? '', cell: ({ row }) => txt(row.original.zone) },
+    { id: 'zoneType', header: 'Zone type', accessorFn: (r) => r.zoneType ?? '', cell: ({ row }) => txt(row.original.zoneType) },
+    { id: 'type', header: 'Reader type', accessorFn: (r) => r.type ?? '', cell: ({ row }) => txt(row.original.type) },
+    { id: 'site', header: 'Site', accessorFn: (r) => r.site ?? '', cell: ({ row }) => txt(row.original.site) },
+    { id: 'status', header: 'Status', accessorFn: (r) => r.status ?? '', cell: ({ row }) => txt(row.original.status) },
+    { id: 'health', header: 'Health', accessorFn: (r) => r.healthLabel, cell: ({ row }) => <Badge cls={HEALTH_BADGE[row.original.health]}>{row.original.healthLabel}</Badge> },
+    { id: 'silence', header: 'Silent for', accessorFn: (r) => r.silenceHours ?? -1, meta: { align: 'right' }, cell: ({ row }) => (row.original.silenceHours == null ? NA : `${row.original.silenceHours} h`) },
+    { id: 'firmware', header: 'Firmware', accessorFn: (r) => r.firmware ?? '', cell: ({ row }) => txt(row.original.firmware) },
+  ], [])
+
+  const alertColumns = useMemo(() => [
+    { id: 'severity', header: 'Severity', accessorFn: (r) => r.severityRank, cell: ({ row }) => <Badge cls={SEVERITY_BADGE[row.original.severity] || SEVERITY_BADGE.low}>{txt(row.original.severity)}</Badge> },
+    { id: 'tag_uid', header: 'Tag', accessorFn: (r) => r.tag_uid ?? '', cell: ({ row }) => <span className="font-mono text-xs">{txt(row.original.tag_uid)}</span> },
+    { id: 'type', header: 'Type', accessorFn: (r) => r.type },
+    { id: 'message', header: 'Message', accessorFn: (r) => r.message ?? '', cell: ({ row }) => <span className="line-clamp-2">{txt(row.original.message)}</span> },
+    { id: 'zone', header: 'Zone', accessorFn: (r) => r.zone ?? '', cell: ({ row }) => txt(row.original.zone) },
+    { id: 'created', header: 'Raised', accessorFn: (r) => r.createdMs ?? -1, cell: ({ row }) => <span className="whitespace-nowrap">{fmtDateTime(row.original.created_at)}</span> },
+    { id: 'state', header: 'State', accessorFn: (r) => r.state },
+    {
+      id: 'actions', header: '', enableSorting: false, meta: { export: false },
+      cell: ({ row }) => (row.original.resolved ? null : (
+        <button
+          type="button"
+          onClick={() => resolveAlert(row.original.id)}
+          disabled={resolvingId === row.original.id}
+          className="text-xs px-3 min-h-[44px] rounded-lg border border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] inline-flex items-center gap-1 disabled:opacity-50"
+        >
+          <CheckCircle size={13} aria-hidden="true" /> Resolve
+        </button>
+      )),
+    },
+  ], [resolvingId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const historyColumns = useMemo(() => [
+    { id: 'read_at', header: 'Time', accessorFn: (r) => r.readMs ?? -1, cell: ({ row }) => <span className="whitespace-nowrap">{fmtDateTime(row.original.read_at)}</span> },
+    { id: 'tag_uid', header: 'Tag UID', accessorFn: (r) => r.tag_uid ?? '', cell: ({ row }) => <span className="font-mono text-xs">{txt(row.original.tag_uid)}</span> },
+    { id: 'zone', header: 'Zone', accessorFn: (r) => r.zone ?? '', cell: ({ row }) => txt(row.original.zone) },
+    { id: 'reader', header: 'Reader', accessorFn: (r) => r.reader ?? '', cell: ({ row }) => txt(row.original.reader) },
+    {
+      id: 'rssi', header: 'Signal', accessorFn: (r) => r.rssi ?? -999, meta: { align: 'right' },
+      cell: ({ row }) => (row.original.rssi == null ? NA : <span className={RSSI_TONE[row.original.rssiBand]}>{row.original.rssi} dBm, {row.original.rssiLabel}</span>),
+    },
+    { id: 'site', header: 'Site', accessorFn: (r) => r.site ?? '', cell: ({ row }) => txt(row.original.site) },
+  ], [])
+
+  // ── Export (the active tab's filtered rows) ────────────────────────────────
+  const EXPORTS = {
+    tags: { rows: tagList, cols: ['tag_uid', 'tag_type', 'manufacturer', 'serial', 'asset', 'site', 'statusLabel', 'last_seen_at'], headers: ['Tag UID', 'Type', 'Manufacturer', 'Tyre serial', 'Asset', 'Site', 'Status', 'Last seen'], title: 'RFID Tag Inventory' },
+    readers: { rows: readerList, cols: ['name', 'zone', 'zoneType', 'type', 'site', 'status', 'healthLabel', 'silenceHours', 'firmware'], headers: ['Reader', 'Zone', 'Zone type', 'Reader type', 'Site', 'Status', 'Health', 'Silent hours', 'Firmware'], title: 'RFID Readers' },
+    alerts: { rows: alertList, cols: ['severity', 'tag_uid', 'type', 'message', 'zone', 'created_at', 'state'], headers: ['Severity', 'Tag', 'Type', 'Message', 'Zone', 'Raised', 'State'], title: 'RFID Alerts' },
+    history: { rows: historyList, cols: ['read_at', 'tag_uid', 'zone', 'reader', 'rssi', 'rssiLabel', 'site'], headers: ['Time', 'Tag UID', 'Zone', 'Reader', 'RSSI dBm', 'Signal', 'Site'], title: 'RFID Read History' },
+  }
+  const exportKey = activeTab === 'dashboard' ? 'tags' : activeTab
+  const exp = EXPORTS[exportKey]
+  const shape = (rows) => rows.map((r) => Object.fromEntries(exp.cols.map((c) => [c, r[c] == null ? '' : r[c]])))
+  const fileBase = reportFileName(exp.title, reportDateLabel())
+  const doExcel = async () => {
+    try { await exportToExcel(shape(exp.rows), exp.cols, exp.headers, fileBase) } catch (e) { setActionError(toUserMessage(e, 'Could not export. Try again.')) }
+  }
+  const doPdf = async () => {
+    try { await exportToPdf(shape(exp.rows), exp.cols.map((k, i) => ({ key: k, header: exp.headers[i] })), exp.title, fileBase, 'landscape') } catch (e) { setActionError(toUserMessage(e, 'Could not export. Try again.')) }
+  }
+
+  const tagFiltersActive = tagsSearch || tagsFilter !== 'all' || tagsSiteFilter !== 'all'
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="RFID Registry"
-        subtitle="Advanced tyre tracking with RFID tags, zone monitoring, and real-time alerts"
+        subtitle="Tyre tracking with RFID tags, zone readers, tag alerts and read history."
         icon={Radio}
         onRefresh={handleRefresh}
         refreshing={refreshing}
         updatedAt={lastUpdated}
         actions={
-          <button
-            onClick={() => setScannerOpen(true)}
-            className="btn-primary flex items-center gap-1.5 text-sm"
-          >
-            <Radio size={14} /> Scan RFID Tag
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={doExcel} disabled={!exp.rows.length} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] disabled:opacity-50">
+              <FileSpreadsheet size={14} aria-hidden="true" /> Excel
+            </button>
+            <button type="button" onClick={doPdf} disabled={!exp.rows.length} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] disabled:opacity-50">
+              <FileText size={14} aria-hidden="true" /> PDF
+            </button>
+            <button type="button" onClick={() => setScannerOpen(true)} className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px]">
+              <Radio size={14} aria-hidden="true" /> Scan RFID tag
+            </button>
+          </div>
         }
       />
 
       {error && (
-        // The red edge is the `crit` tone, not a border-* class: Card writes its
-        // border inline, so `border-red-500/30` would render nothing at all.
-        // Row direction is inline for the same reason - `.flex-col` on the card
-        // is emitted after `.flex-row` and would win.
-        <Card tone="crit" className="items-center gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
-          <AlertCircle size={18} className="text-red-400 shrink-0" />
-          <p className="text-sm text-red-300 flex-1">{error}</p>
-          <button onClick={handleRefresh} disabled={refreshing} className="btn-secondary text-xs inline-flex items-center gap-1.5 disabled:opacity-50">
-            <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} /> Retry
+        <Card tone="crit" role="alert" className="items-center gap-[var(--space-3)]" style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+          <AlertCircle size={18} className="text-red-400 shrink-0" aria-hidden="true" />
+          <p className="text-sm text-[var(--text-primary)] flex-1 min-w-0">{error}</p>
+          <button type="button" onClick={handleRefresh} disabled={refreshing} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] disabled:opacity-50">
+            <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} aria-hidden="true" /> Retry
           </button>
         </Card>
       )}
+      {actionError && (
+        <Card tone="warn" role="alert" className="items-center gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
+          <AlertCircle size={16} className="text-amber-300 shrink-0" aria-hidden="true" />
+          <p className="text-sm text-[var(--text-primary)] flex-1">{actionError}</p>
+          <button type="button" onClick={() => setActionError(null)} className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Dismiss message"><X size={15} /></button>
+        </Card>
+      )}
 
-      {/* Tab Navigation */}
-      <div className="flex gap-2 flex-wrap">
+      {/* KPI strip (always visible) */}
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
+        <StatTile label="Total tags" value={loading ? NA : stats.totalTags} icon={Tag} />
+        <StatTile label="Attached" value={loading ? NA : stats.byStatus.attached} icon={Link2} tone="accent" sub={stats.attachedPct == null ? 'no tags' : `${stats.attachedPct}% of tags`} />
+        <StatTile label="Available" value={loading ? NA : stats.byStatus.available} icon={Tag} tone="info" />
+        <StatTile label="Lost or damaged" value={loading ? NA : stats.lostOrDamaged} icon={ShieldAlert} tone="crit" sub={`${stats.byStatus.lost} lost, ${stats.byStatus.damaged} damaged`} />
+        <StatTile label="Linked to tyre" value={loading ? NA : stats.linkedToTyre} icon={Link2} tone="info" sub={stats.linkedPct == null ? 'no tags' : `${stats.linkedPct}% of tags`} />
+        <StatTile label="Readers online" value={loading ? NA : `${stats.readerHealth.online}/${stats.totalReaders}`} icon={Signal} tone="accent" sub={`${stats.readerHealth.stale} silent over ${READER_STALE_HOURS} h`} />
+        <StatTile label="Open alerts" value={loading ? NA : stats.alertsOpen} icon={AlertCircle} tone="warn" sub={`${stats.alertsToday} raised today`} />
+        <StatTile label="Critical open" value={loading ? NA : stats.criticalOpen} icon={ShieldAlert} tone="crit" />
+      </div>
+
+      {/* Tabs */}
+      <div role="tablist" aria-label="RFID sections" className="flex gap-2 flex-wrap">
         {TAB_OPTIONS.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
+            type="button"
+            role="tab"
+            id={`rfid-tab-${id}`}
+            aria-selected={activeTab === id}
+            aria-controls="rfid-panel"
             onClick={() => setActiveTab(id)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+            className={`flex items-center gap-2 px-4 min-h-[44px] rounded-xl text-sm font-medium transition-colors border focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] ${
               activeTab === id
-                ? 'bg-brand-primary/20 border border-brand-primary/30 text-brand-bright'
-                : 'bg-panel-deep border border-white/5 text-[var(--text-secondary)] hover:text-gray-200'
+                ? 'bg-[var(--accent)] border-[var(--accent)] text-white'
+                : 'bg-[var(--surface-2)] border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`}
           >
-            <Icon size={15} /> {label}
+            <Icon size={15} aria-hidden="true" /> {label}
+            {id === 'alerts' && stats.alertsOpen > 0 && <span className="text-[11px] tabular-nums opacity-80">({stats.alertsOpen})</span>}
           </button>
         ))}
       </div>
 
-      {/* Dashboard Tab */}
-      {activeTab === 'dashboard' && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="space-y-4"
-        >
-          {/* Stats Grid */}
-          {/* `pad="tight"` IS the old `p-4`: --pad-card-tight resolves to
-              --space-4 = 1rem. A `p-4` class here would be dead. */}
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-            <Card pad="tight" className="text-center">
-              <p className="text-2xl font-bold text-[var(--text-primary)]">{stats.totalTags}</p>
-              <p className="text-xs text-[var(--text-muted)] mt-1">Total Tags</p>
-            </Card>
-            <Card pad="tight" className="text-center">
-              <p className="text-2xl font-bold text-green-400">{stats.attachedTags}</p>
-              <p className="text-xs text-[var(--text-muted)] mt-1">Attached</p>
-            </Card>
-            <Card pad="tight" className="text-center">
-              <p className="text-2xl font-bold text-blue-400">{stats.availableTags}</p>
-              <p className="text-xs text-[var(--text-muted)] mt-1">Available</p>
-            </Card>
-            <Card pad="tight" className="text-center">
-              <p className="text-2xl font-bold text-red-400">{stats.lostTags}</p>
-              <p className="text-xs text-[var(--text-muted)] mt-1">Lost/Damaged</p>
-            </Card>
-            <Card pad="tight" className="text-center">
-              <p className="text-2xl font-bold text-green-400">{stats.activeReaders}/{stats.totalReaders}</p>
-              <p className="text-xs text-[var(--text-muted)] mt-1">Readers Active</p>
-            </Card>
-            <Card pad="tight" className="text-center">
-              <p className="text-2xl font-bold text-yellow-400">{stats.alertsOpen}</p>
-              <p className="text-xs text-[var(--text-muted)] mt-1">Open Alerts</p>
-            </Card>
-          </div>
-
-          {/* Quick Actions */}
-          <Card pad="tight">
-            <CardHeader title="Quick Actions" icon={Activity} />
-            <CardBody className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <button
-                onClick={() => { setActiveTab('tags'); openTagForm() }}
-                className="flex flex-col items-center gap-2 p-4 rounded-xl bg-brand-primary/10 border border-brand-primary/20 hover:bg-brand-primary/20 transition-colors"
-              >
-                <Plus size={24} className="text-green-400" />
-                <span className="text-xs font-medium text-[var(--text-primary)]">Add Tag</span>
-              </button>
-              <button
-                onClick={() => setScannerOpen(true)}
-                className="flex flex-col items-center gap-2 p-4 rounded-xl bg-brand-primary/10 border border-brand-primary/20 hover:bg-brand-primary/20 transition-colors"
-              >
-                <Radio size={24} className="text-green-400" />
-                <span className="text-xs font-medium text-[var(--text-primary)]">Scan Tag</span>
-              </button>
-              <button
-                onClick={() => setActiveTab('readers')}
-                className="flex flex-col items-center gap-2 p-4 rounded-xl bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/20 transition-colors"
-              >
-                <MapPin size={24} className="text-blue-400" />
-                <span className="text-xs font-medium text-[var(--text-primary)]">Manage Zones</span>
-              </button>
-              <button
-                onClick={() => setActiveTab('alerts')}
-                className="flex flex-col items-center gap-2 p-4 rounded-xl bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 transition-colors"
-              >
-                <AlertCircle size={24} className="text-red-400" />
-                <span className="text-xs font-medium text-[var(--text-primary)]">View Alerts</span>
-              </button>
-            </CardBody>
-          </Card>
-
-          {/* Recent Alerts */}
-          {alerts.filter(a => !a.resolved_at).slice(0, 5).length > 0 && (
-            // pad="none" so the header strip and the divided list keep running
-            // edge to edge; a `p-0` class on a Card would be dead.
-            <Card pad="none">
-              <div className="px-4 py-3 border-b border-white/5">
-                <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
-                  <AlertCircle size={15} className="text-red-400" /> Recent Alerts
-                </h3>
-              </div>
-              <div className="divide-y divide-white/5">
-                {alerts.filter(a => !a.resolved_at).slice(0, 5).map(alert => (
-                  <div key={alert.id} className="px-4 py-3 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${SEVERITY_COLORS[alert.severity] || SEVERITY_COLORS.medium}`}>
-                        {alert.severity}
-                      </span>
-                      <span className="text-sm text-[var(--text-primary)]">{alert.message}</span>
-                    </div>
-                    <span className="text-xs text-[var(--text-muted)]">
-                      {new Date(alert.created_at).toLocaleDateString()}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          )}
-        </motion.div>
-      )}
-
-      {/* Tags Tab */}
-      {activeTab === 'tags' && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
-          {/* Filters */}
-          <div className="flex gap-3 flex-wrap items-center">
-            <div className="relative flex-1 min-w-52">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-              <input
-                className="input pl-9 text-sm"
-                placeholder="Search tags, serials, manufacturers..."
-                value={tagsSearch}
-                onChange={e => setTagsSearch(e.target.value)}
-              />
-            </div>
-            <select className="input w-36 text-sm" value={tagsFilter} onChange={e => setTagsFilter(e.target.value)}>
-              <option value="all">All Statuses</option>
-              <option value="available">Available</option>
-              <option value="assigned">Assigned</option>
-              <option value="attached">Attached</option>
-              <option value="removed">Removed</option>
-              <option value="lost">Lost</option>
-              <option value="damaged">Damaged</option>
-            </select>
-            <select className="input w-36 text-sm" value={tagsSiteFilter} onChange={e => setTagsSiteFilter(e.target.value)}>
-              <option value="all">All Sites</option>
-              {sites.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-            <button onClick={() => openTagForm()} className="btn-primary flex items-center gap-1.5 text-sm">
-              <Plus size={14} /> Add Tag
-            </button>
-          </div>
-
-          {/* Tags Table */}
-          {/* `clip` is the deliberate opt-in to overflow:hidden so the table
-              crops to the card radius. Safe here: the only popup inside is
-              TablePagination's NATIVE <select>, which the browser paints
-              outside the page's overflow context. */}
-          <Card pad="none" clip>
-            {loading ? (
-              <div className="flex items-center justify-center py-12 text-[var(--text-muted)]">Loading tags...</div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-[10px] text-[var(--text-muted)] uppercase" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                      <th className="px-4 py-3">Tag UID</th>
-                      <th className="px-3 py-3">Type</th>
-                      <th className="px-3 py-3">Tyre Serial</th>
-                      <th className="px-3 py-3">Asset No</th>
-                      <th className="px-3 py-3">Site</th>
-                      <th className="px-3 py-3">Status</th>
-                      <th className="px-3 py-3">Last Seen</th>
-                      <th className="px-3 py-3 w-20">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {tagsPager.pageRows.map(tag => (
-                      <tr key={tag.id} className="border-t border-white/5 hover:bg-white/2">
-                        <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{tag.tag_uid}</td>
-                        <td className="px-3 py-2.5 text-[var(--text-secondary)] text-xs">{tag.tag_type || '-'}</td>
-                        <td className="px-3 py-2.5 text-gray-300 text-xs">{tag.tyre_records?.serial_no || '-'}</td>
-                        <td className="px-3 py-2.5 text-gray-300 text-xs">{tag.tyre_records?.asset_no || '-'}</td>
-                        <td className="px-3 py-2.5 text-[var(--text-secondary)] text-xs">{tag.site || '-'}</td>
-                        <td className="px-3 py-2.5">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${STATUS_COLORS[tag.status] || STATUS_COLORS.attached}`}>
-                            {tag.status}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2.5 text-[var(--text-secondary)] text-xs">
-                          {tag.last_seen_at ? new Date(tag.last_seen_at).toLocaleDateString() : '-'}
-                        </td>
-                        <td className="px-3 py-2.5">
-                          <div className="flex items-center gap-1">
-                            <button onClick={() => openTagForm(tag)} className="p-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)]" title="Edit">
-                              <Edit size={13} />
-                            </button>
-                            <button onClick={() => deleteTag(tag.id)} className="p-1 text-[var(--text-secondary)] hover:text-red-400" title="Delete">
-                              <Trash2 size={13} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                    {filteredTags.length === 0 && (
-                      <tr>
-                        <td colSpan={8} className="py-12 text-center text-[var(--text-muted)]">No RFID tags found</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-                <TablePagination {...tagsPager} />
-              </div>
-            )}
-          </Card>
-        </motion.div>
-      )}
-
-      {/* Readers/Zones Tab */}
-      {activeTab === 'readers' && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
-          {/* Filters */}
-          <div className="flex gap-3 flex-wrap items-center">
-            <div className="relative flex-1 min-w-52">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-              <input
-                className="input pl-9 text-sm"
-                placeholder="Search readers, zones..."
-                value={readersSearch}
-                onChange={e => setReadersSearch(e.target.value)}
-              />
-            </div>
-            <button className="btn-primary flex items-center gap-1.5 text-sm">
-              <Plus size={14} /> Add Reader
-            </button>
-          </div>
-
-          {/* Readers Grid */}
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {readersPager.pageRows.map(reader => (
-                <Card key={reader.id} pad="tight" className="space-y-3">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h3 className="font-semibold text-[var(--text-primary)]">{reader.name}</h3>
-                      <p className="text-xs text-[var(--text-muted)]">{reader.zone_name}</p>
-                    </div>
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                      reader.status === 'active' ? STATUS_COLORS.attached : 'text-[var(--text-secondary)] bg-gray-400/15'
-                    }`}>
-                      {reader.status}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div>
-                      <p className="text-[var(--text-muted)]">Type</p>
-                      <p className="text-[var(--text-primary)]">{reader.reader_type}</p>
-                    </div>
-                    <div>
-                      <p className="text-[var(--text-muted)]">Site</p>
-                      <p className="text-[var(--text-primary)]">{reader.site || '-'}</p>
-                    </div>
-                    <div>
-                      <p className="text-[var(--text-muted)]">Last Seen</p>
-                      <p className="text-[var(--text-primary)]">{reader.last_heartbeat ? new Date(reader.last_heartbeat).toLocaleTimeString() : '-'}</p>
-                    </div>
-                    <div>
-                      <p className="text-[var(--text-muted)]">Firmware</p>
-                      <p className="text-[var(--text-primary)]">{reader.firmware_version || '-'}</p>
-                    </div>
-                  </div>
-                </Card>
-              ))}
-          </div>
-          <TablePagination {...readersPager} />
-        </motion.div>
-      )}
-
-      {/* Alerts Tab */}
-      {activeTab === 'alerts' && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
-          <div className="flex gap-3 flex-wrap items-center">
-            <select className="input w-36 text-sm" value={alertsFilter} onChange={e => setAlertsFilter(e.target.value)}>
-              <option value="open">Open Alerts</option>
-              <option value="all">All Alerts</option>
-            </select>
-            <button onClick={handleRefresh} disabled={refreshing} className="btn-secondary flex items-center gap-1.5 text-xs">
-              <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} /> Refresh
-            </button>
-          </div>
-
-          <Card pad="none" clip>
-            {loading ? (
-              <div className="flex items-center justify-center py-12 text-[var(--text-muted)]">Loading alerts...</div>
-            ) : (
-              <div className="max-h-96 overflow-y-auto">
-                {filteredAlerts.length === 0 ? (
-                  <div className="py-12 text-center text-[var(--text-muted)]">No alerts to display</div>
+      <div id="rfid-panel" role="tabpanel" aria-labelledby={`rfid-tab-${activeTab}`} className="space-y-4">
+        {activeTab === 'dashboard' && (
+          <>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <Card>
+                <CardHeader title="Tags by status" />
+                <div className="h-56">
+                  {loading ? <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" aria-hidden="true" />
+                    : stats.totalTags ? <Doughnut data={statusChart} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: TICK, boxWidth: 12 } } } }} />
+                      : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No tags registered yet.</div>}
+                </div>
+              </Card>
+              <Card>
+                <CardHeader title="Open alerts by severity" />
+                <div className="h-56">
+                  {loading ? <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" aria-hidden="true" />
+                    : stats.alertsOpen ? <Bar data={severityChart} options={barOpts(false)} />
+                      : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No open alerts.</div>}
+                </div>
+              </Card>
+              <Card>
+                <CardHeader title="Reader health" description={`Stale means no heartbeat for over ${READER_STALE_HOURS} hours.`} />
+                {stats.totalReaders === 0 && !loading ? (
+                  <p className="text-sm text-[var(--text-muted)]">No readers registered yet.</p>
                 ) : (
-                  <table className="w-full text-sm">
-                    <thead className="sticky top-0 bg-panel-deep">
-                      <tr className="text-left text-[10px] text-[var(--text-muted)] uppercase" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                        <th className="px-4 py-3">Severity</th>
-                        <th className="px-3 py-3">Tag</th>
-                        <th className="px-3 py-3">Type</th>
-                        <th className="px-3 py-3">Message</th>
-                        <th className="px-3 py-3">Date</th>
-                        <th className="px-3 py-3 w-16">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {alertsPager.pageRows.map(alert => (
-                        <tr key={alert.id} className="border-t border-white/5 hover:bg-white/2">
-                          <td className="px-4 py-2.5">
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${SEVERITY_COLORS[alert.severity]}`}>
-                              {alert.severity}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2.5 font-mono text-xs text-[var(--text-primary)]">{alert.tag_uid}</td>
-                          <td className="px-3 py-2.5 text-[var(--text-secondary)] text-xs">{alert.alert_type.replace('_', ' ')}</td>
-                          <td className="px-3 py-2.5 text-gray-300 text-xs">{alert.message}</td>
-                          <td className="px-3 py-2.5 text-[var(--text-secondary)] text-xs">{new Date(alert.created_at).toLocaleString()}</td>
-                          <td className="px-3 py-2.5">
-                            {!alert.resolved_at && (
-                              <button
-                                onClick={() => resolveAlert(alert.id)}
-                                className="p-1 text-green-400 hover:text-green-300"
-                                title="Resolve"
-                              >
-                                <CheckCircle size={14} />
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <dl className="grid grid-cols-2 gap-3">
+                    {Object.keys(READER_HEALTH_LABEL).map((k) => (
+                      <div key={k} className="rounded-lg bg-[var(--input-bg)] p-3">
+                        <dt className="text-xs text-[var(--text-muted)]">{READER_HEALTH_LABEL[k]}</dt>
+                        <dd className="text-2xl font-semibold tabular-nums text-[var(--text-primary)]">{loading ? NA : stats.readerHealth[k]}</dd>
+                      </div>
+                    ))}
+                  </dl>
                 )}
-              </div>
-            )}
-            {!loading && filteredAlerts.length > 0 && <TablePagination {...alertsPager} />}
-          </Card>
-        </motion.div>
-      )}
-
-      {/* Read History Tab */}
-      {activeTab === 'history' && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
-          <div className="flex gap-3 flex-wrap items-center">
-            <div className="relative flex-1 min-w-52">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-              <input
-                className="input pl-9 text-sm"
-                placeholder="Search tag UID, zone..."
-                value={historySearch}
-                onChange={e => setHistorySearch(e.target.value)}
-              />
+              </Card>
             </div>
-            <button onClick={handleRefresh} disabled={refreshing} className="btn-secondary flex items-center gap-1.5 text-xs">
-              <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} /> Refresh
-            </button>
-          </div>
 
-          <Card pad="none" clip>
-            {loading ? (
-              <div className="flex items-center justify-center py-12 text-[var(--text-muted)]">Loading history...</div>
-            ) : (
-              <div className="max-h-96 overflow-y-auto">
-                <table className="w-full text-sm">
-                  <thead className="sticky top-0 bg-panel-deep">
-                    <tr className="text-left text-[10px] text-[var(--text-muted)] uppercase" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                      <th className="px-4 py-3">Time</th>
-                      <th className="px-3 py-3">Tag UID</th>
-                      <th className="px-3 py-3">Zone</th>
-                      <th className="px-3 py-3">RSSI</th>
-                      <th className="px-3 py-3">Site</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {historyPager.pageRows.map((read) => (
-                        <tr key={read.id || `${read.tag_uid}-${read.read_at}`} className="border-t border-white/5 hover:bg-white/2">
-                          <td className="px-4 py-2.5 text-[var(--text-secondary)] text-xs">{new Date(read.read_at).toLocaleString()}</td>
-                          <td className="px-3 py-2.5 font-mono text-xs text-[var(--text-primary)]">{read.tag_uid}</td>
-                          <td className="px-3 py-2.5 text-[var(--text-secondary)] text-xs">{read.rfid_readers?.zone_name || read.zone_name || '-'}</td>
-                          <td className="px-3 py-2.5 text-xs">
-                            {read.rssi ? (
-                              <span className={`${read.rssi > -50 ? 'text-green-400' : read.rssi > -70 ? 'text-yellow-400' : 'text-red-400'}`}>
-                                {read.rssi} dBm
-                              </span>
-                            ) : '-'}
-                          </td>
-                          <td className="px-3 py-2.5 text-[var(--text-secondary)] text-xs">{read.site || '-'}</td>
-                        </tr>
-                      ))}
-                    {history.length === 0 && (
-                      <tr>
-                        <td colSpan={5} className="py-12 text-center text-[var(--text-muted)]">No read events recorded</td>
-                      </tr>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <Card>
+                <CardHeader title="Quick actions" icon={Activity} />
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { label: 'Add tag', icon: Plus, onClick: () => { setActiveTab('tags'); openTagForm() } },
+                    { label: 'Scan tag', icon: Radio, onClick: () => setScannerOpen(true) },
+                    { label: 'Reader health', icon: MapPin, onClick: () => setActiveTab('readers') },
+                    { label: 'Open alerts', icon: AlertCircle, onClick: () => setActiveTab('alerts') },
+                  ].map(({ label, icon: Icon, onClick }) => (
+                    <button key={label} type="button" onClick={onClick} className="flex flex-col items-center gap-2 p-4 min-h-[44px] rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] hover:border-[var(--accent)] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]">
+                      <Icon size={22} className="text-[var(--accent)]" aria-hidden="true" />
+                      <span className="text-xs font-medium text-[var(--text-primary)]">{label}</span>
+                    </button>
+                  ))}
+                </div>
+              </Card>
+              <Card>
+                <CardHeader title="Most urgent open alerts" icon={AlertCircle} iconTone="crit" description="Highest severity first, then newest." />
+                {loading ? <div className="h-32 bg-[var(--input-bg)] rounded animate-pulse" aria-hidden="true" />
+                  : urgent.length === 0 ? <p className="text-sm text-[var(--text-muted)]">No open alerts. Every alert has been resolved.</p>
+                    : (
+                      <ul className="divide-y divide-[var(--input-border)]">
+                        {urgent.map((a) => (
+                          <li key={a.id} className="py-2.5 flex items-start justify-between gap-3">
+                            <div className="flex items-start gap-2 min-w-0">
+                              <Badge cls={SEVERITY_BADGE[a.severity] || SEVERITY_BADGE.low}>{txt(a.severity)}</Badge>
+                              <span className="text-sm text-[var(--text-primary)] min-w-0 break-words">{txt(a.message)}</span>
+                            </div>
+                            <span className="text-xs text-[var(--text-muted)] whitespace-nowrap">{fmtDate(a.created_at)}</span>
+                          </li>
+                        ))}
+                      </ul>
                     )}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            {!loading && filteredHistory.length > 0 && <TablePagination {...historyPager} />}
-          </Card>
-        </motion.div>
-      )}
+              </Card>
+            </div>
+          </>
+        )}
 
-      {/* Tag Form Modal.
-          The fields are PAGE state (tagFormData), which is exactly the case the
-          hand-rolled overlay could not serve: Modal + useDialogBehavior hold
-          onClose in a ref, so an inline arrow is safe and focus is not pulled
-          out of the field on every keystroke. There is no <form> element here,
-          so the actions belong in the footer slot without a behaviour change. */}
+        {activeTab === 'tags' && (
+          <>
+            <div className="flex gap-3 flex-wrap items-end">
+              <SearchBox label="Search tags" value={tagsSearch} onChange={setTagsSearch} placeholder="Search UID, EPC, serial, asset, manufacturer" />
+              <FilterSelect label="Status" value={tagsFilter} onChange={setTagsFilter}>
+                <option value="all">All statuses</option>
+                {TAG_STATUSES.map((s) => <option key={s} value={s}>{TAG_STATUS_LABEL[s]}</option>)}
+              </FilterSelect>
+              <FilterSelect label="Site" value={tagsSiteFilter} onChange={setTagsSiteFilter}>
+                <option value="all">All sites</option>
+                {sites.map((s) => <option key={s} value={s}>{s}</option>)}
+              </FilterSelect>
+              {tagFiltersActive && (
+                <button type="button" onClick={() => { setTagsSearch(''); setTagsFilter('all'); setTagsSiteFilter('all') }} className="btn-secondary text-sm min-h-[44px] inline-flex items-center gap-1.5"><X size={14} aria-hidden="true" /> Clear</button>
+              )}
+              <button type="button" onClick={() => openTagForm()} className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px]">
+                <Plus size={14} aria-hidden="true" /> Add tag
+              </button>
+            </div>
+            <Card pad="none">
+              <EnterpriseTable
+                columns={tagColumns}
+                data={tagList}
+                getRowId={(r) => String(r.id)}
+                loading={loading}
+                enableGlobalFilter={false}
+                enableColumnFilters={false}
+                enableExport={false}
+                emptyMessage={tags.length === 0 ? 'No RFID tags registered yet. Use "Add tag" or scan a tag to start.' : 'No tags match these filters.'}
+              />
+            </Card>
+          </>
+        )}
+
+        {activeTab === 'readers' && (
+          <>
+            <div className="flex gap-3 flex-wrap items-end">
+              <SearchBox label="Search readers" value={readersSearch} onChange={setReadersSearch} placeholder="Search reader, zone, site, UID" />
+              <FilterSelect label="Health" value={readersHealth} onChange={setReadersHealth}>
+                <option value="all">All readers</option>
+                {Object.entries(READER_HEALTH_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </FilterSelect>
+            </div>
+            <Card pad="none">
+              <EnterpriseTable
+                columns={readerColumns}
+                data={readerList}
+                getRowId={(r) => String(r.id)}
+                loading={loading}
+                enableGlobalFilter={false}
+                enableColumnFilters={false}
+                enableExport={false}
+                emptyMessage={readers.length === 0 ? 'No readers registered. Readers are provisioned by the RFID integration.' : 'No readers match these filters.'}
+              />
+            </Card>
+          </>
+        )}
+
+        {activeTab === 'alerts' && (
+          <>
+            <div className="flex gap-3 flex-wrap items-end">
+              <SearchBox label="Search alerts" value={alertsSearch} onChange={setAlertsSearch} placeholder="Search tag, message, type, zone" />
+              <FilterSelect label="Scope" value={alertsFilter} onChange={setAlertsFilter}>
+                <option value="open">Open alerts</option>
+                <option value="all">All alerts</option>
+              </FilterSelect>
+              <FilterSelect label="Severity" value={alertsSeverity} onChange={setAlertsSeverity}>
+                <option value="all">All severities</option>
+                {ALERT_SEVERITIES.map((s) => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
+              </FilterSelect>
+            </div>
+            <Card pad="none">
+              <EnterpriseTable
+                columns={alertColumns}
+                data={alertList}
+                getRowId={(r) => String(r.id)}
+                loading={loading}
+                enableGlobalFilter={false}
+                enableColumnFilters={false}
+                enableExport={false}
+                emptyMessage={alertsFilter === 'open' ? 'No open alerts. Switch the scope to see resolved ones.' : 'No alerts recorded.'}
+              />
+            </Card>
+          </>
+        )}
+
+        {activeTab === 'history' && (
+          <>
+            <div className="flex gap-3 flex-wrap items-end">
+              <SearchBox label="Search read history" value={historySearch} onChange={setHistorySearch} placeholder="Search tag UID, zone, reader" />
+              <FilterSelect label="Site" value={historySite} onChange={setHistorySite}>
+                <option value="all">All sites</option>
+                {historySites.map((s) => <option key={s} value={s}>{s}</option>)}
+              </FilterSelect>
+            </div>
+            {historyTruncated && (
+              <Card tone="info" role="status"><p className="text-sm text-[var(--text-muted)]">Showing the newest {HISTORY_MAX.toLocaleString()} read events. Older reads are not loaded.</p></Card>
+            )}
+            {zoneReads.length > 0 && (
+              <Card>
+                <CardHeader title="Reads by zone" description="Busiest zones in the filtered history." />
+                <div className="h-56"><Bar data={zoneChart} options={barOpts(true)} /></div>
+              </Card>
+            )}
+            <Card pad="none">
+              <EnterpriseTable
+                columns={historyColumns}
+                data={historyList}
+                getRowId={(r) => String(r.id)}
+                loading={history === null || historyLoading}
+                enableGlobalFilter={false}
+                enableColumnFilters={false}
+                enableExport={false}
+                emptyMessage={(history || []).length === 0 ? 'No read events recorded yet.' : 'No read events match these filters.'}
+              />
+            </Card>
+          </>
+        )}
+      </div>
+
+      {/* Tag form. No <form> element, so the actions sit in the footer. */}
       <Modal
         open={showTagForm}
         onClose={closeTagForm}
-        title={editingTag ? 'Edit RFID Tag' : 'Add New RFID Tag'}
+        title={editingTag ? 'Edit RFID tag' : 'Add RFID tag'}
         size="md"
         footer={(
           <>
-            <button onClick={closeTagForm} className="btn-secondary">Cancel</button>
-            <button onClick={saveTag} className="btn-primary" disabled={!tagFormData.tag_uid}>
-              Save Tag
+            <button type="button" onClick={closeTagForm} disabled={savingTag} className="btn-secondary min-h-[44px]">Cancel</button>
+            <button type="button" onClick={saveTag} className="btn-primary min-h-[44px] disabled:opacity-50" disabled={!tagFormData.tag_uid.trim() || savingTag}>
+              {savingTag ? 'Saving' : 'Save tag'}
             </button>
           </>
         )}
       >
         <div className="space-y-3">
+          {linkTyre && (
+            <p className="text-sm text-[var(--text-muted)] rounded-lg bg-[var(--input-bg)] px-3 py-2">
+              This tag will be linked to tyre <span className="font-mono text-[var(--text-primary)]">{linkTyre.serial || 'from the scan'}</span>.
+            </p>
+          )}
+          {[
+            { key: 'tag_uid', label: 'Tag UID (required)', placeholder: 'Enter the RFID tag UID' },
+            { key: 'tag_epc', label: 'EPC code', placeholder: 'Optional EPC code' },
+            { key: 'manufacturer', label: 'Manufacturer', placeholder: 'e.g. Impinj, Zebra' },
+            { key: 'site', label: 'Site', placeholder: 'Assign to site' },
+          ].map((f) => (
+            <div key={f.key}>
+              <label htmlFor={`rfid-${f.key}`} className="text-xs font-semibold text-[var(--text-muted)] uppercase">{f.label}</label>
+              <input
+                id={`rfid-${f.key}`}
+                type="text"
+                className="input w-full mt-1 min-h-[44px]"
+                value={tagFormData[f.key]}
+                onChange={(e) => setTagFormData({ ...tagFormData, [f.key]: e.target.value })}
+                placeholder={f.placeholder}
+              />
+            </div>
+          ))}
           <div>
-            <label className="text-xs font-semibold text-[var(--text-muted)] uppercase">Tag UID *</label>
-            <input
-              type="text"
-              className="input w-full mt-1"
-              value={tagFormData.tag_uid}
-              onChange={e => setTagFormData({ ...tagFormData, tag_uid: e.target.value })}
-              placeholder="Enter RFID tag UID"
-            />
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-[var(--text-muted)] uppercase">EPC Code</label>
-            <input
-              type="text"
-              className="input w-full mt-1"
-              value={tagFormData.tag_epc}
-              onChange={e => setTagFormData({ ...tagFormData, tag_epc: e.target.value })}
-              placeholder="Optional EPC code"
-            />
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-[var(--text-muted)] uppercase">Tag Type</label>
-            <select
-              className="input w-full mt-1"
-              value={tagFormData.tag_type}
-              onChange={e => setTagFormData({ ...tagFormData, tag_type: e.target.value })}
-            >
+            <label htmlFor="rfid-tag_type" className="text-xs font-semibold text-[var(--text-muted)] uppercase">Tag type</label>
+            <select id="rfid-tag_type" className="input w-full mt-1 min-h-[44px]" value={tagFormData.tag_type} onChange={(e) => setTagFormData({ ...tagFormData, tag_type: e.target.value })}>
               <option value="UHF">UHF</option>
               <option value="HF">HF</option>
               <option value="NFC">NFC</option>
               <option value="Barcode">Barcode</option>
             </select>
           </div>
-          <div>
-            <label className="text-xs font-semibold text-[var(--text-muted)] uppercase">Manufacturer</label>
-            <input
-              type="text"
-              className="input w-full mt-1"
-              value={tagFormData.manufacturer}
-              onChange={e => setTagFormData({ ...tagFormData, manufacturer: e.target.value })}
-              placeholder="e.g. Impinj, Zebra"
-            />
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-[var(--text-muted)] uppercase">Site</label>
-            <input
-              type="text"
-              className="input w-full mt-1"
-              value={tagFormData.site}
-              onChange={e => setTagFormData({ ...tagFormData, site: e.target.value })}
-              placeholder="Assign to site"
-            />
-          </div>
+          {tagFormError && (
+            <p role="alert" className="text-sm text-red-300 bg-red-900/20 rounded-lg px-3 py-2">{tagFormError}</p>
+          )}
         </div>
       </Modal>
 
-      {/* RFID Scanner Modal */}
+      <Modal
+        open={!!deleteTarget}
+        onClose={() => { if (!deleting) setDeleteTarget(null) }}
+        size="sm"
+        title="Delete this RFID tag?"
+        footer={(
+          <>
+            <button type="button" onClick={() => setDeleteTarget(null)} disabled={deleting} className="btn-secondary min-h-[44px]">Cancel</button>
+            <button type="button" onClick={confirmDeleteTag} disabled={deleting} className="btn-danger min-h-[44px] inline-flex items-center gap-1.5 disabled:opacity-60">
+              <Trash2 size={14} aria-hidden="true" /> {deleting ? 'Deleting' : 'Delete'}
+            </button>
+          </>
+        )}
+      >
+        <p className="text-sm text-[var(--text-muted)]">
+          Tag <span className="font-mono text-[var(--text-primary)]">{deleteTarget?.tag_uid || ''}</span> and its alerts and read events will be permanently removed. This cannot be undone.
+        </p>
+      </Modal>
+
       <AnimatePresence>
         {scannerOpen && (
           <RfidScanner onClose={() => setScannerOpen(false)} onResult={handleScannerResult} />

@@ -1,9 +1,9 @@
-import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { formatDate, formatMonthYear } from '../lib/formatters'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import {
   Chart as ChartJS,
   CategoryScale, LinearScale,
@@ -14,17 +14,24 @@ import { Line, Bar } from 'react-chartjs-2'
 import {
   CalendarClock, Download, FileText, AlertTriangle, CheckCircle,
   Clock, TrendingUp, DollarSign, Truck, ChevronDown, ChevronUp,
-  ChevronLeft, ChevronRight, Info, Filter,
-  ShieldAlert, Activity, Gauge, Sigma, Percent, Target, TrendingDown,
+  Info, Filter, ShieldAlert, Activity, Gauge, Sigma, Percent, Target,
+  TrendingDown, Search, X,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import EmailPdfButton from '../components/EmailPdfButton'
 import {
   buildPredictions, buildFailureRiskRows, buildCohortModels, computeFleetStats,
   LEGAL_MIN_TREAD_MM, REPLACE_TARGET_MM, PRESSURE_TARGET_PSI, MAX_AGE_YEARS,
-  DEFAULT_NEW_TREAD_MM, DEFAULT_AVG_KM_LIFE, DEFAULT_DAILY_KM as LIB_DEFAULT_DAILY_KM,
-  LIMITING_FACTORS,
+  DEFAULT_NEW_TREAD_MM, LIMITING_FACTORS,
 } from '../lib/predictiveMaintenance'
+import {
+  HORIZONS, forecastBase as buildForecastBase, filterPredictions, filterRisk,
+  forecastKpis, buildMonthlyBudget, quarterlyForecast, buildSiteBreakdown,
+  urgentVehicles as buildUrgentVehicles, riskKpis as buildRiskKpis, cohortRows as buildCohortRows,
+  monthlyFleetBudget, uniqueSorted, URGENT_DAYS, SOON_DAYS,
+} from '../lib/predictiveMaintenanceAnalytics'
+import { colorAt, withAlpha } from '../lib/reportColors'
 import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(
@@ -34,21 +41,18 @@ ChartJS.register(
 )
 
 // ── Constants ──────────────────────────────────────────────────────────────────
-// Engine constants live in the pure lib (src/lib/predictiveMaintenance.js); the
-// page keeps only presentation-layer values and thin aliases for copy.
-const DEFAULT_DAILY_KM   = LIB_DEFAULT_DAILY_KM
-const DEFAULT_AVG_KM     = DEFAULT_AVG_KM_LIFE
-const URGENT_TREAD_MM    = REPLACE_TARGET_MM
-const SOON_TREAD_MM      = 5
-const URGENT_DAYS        = 30
-const SOON_DAYS          = 90
-const PAGE_SIZE          = 25
-const TODAY              = new Date()
+// Engine constants live in the pure libs (src/lib/predictiveMaintenance.js and
+// src/lib/predictiveMaintenanceAnalytics.js); the page keeps presentation only.
+const URGENT_TREAD_MM = REPLACE_TARGET_MM
+const SOON_TREAD_MM = 5
 
-const CHART_DARK = {
-  color: '#9ca3af',
-  grid: 'rgba(255,255,255,0.08)',
-}
+// Theme tokens: chartVarPlugin resolves var(--*) per theme at draw time, so the
+// same options read on the dark app and on html.light.
+const CHART_TEXT = 'var(--text-muted)'
+const CHART_GRID = 'var(--panel-2)'
+
+// Semantic status colours (the colour carries meaning, so it stays fixed).
+const SEM = { red: '#ef4444', orange: '#f97316', amber: '#f59e0b', green: '#10b981' }
 
 const LIMITING_FACTOR_LABEL = {
   [LIMITING_FACTORS.tread]: 'Tread wear',
@@ -64,484 +68,177 @@ const RISK_BAND_STYLE = {
   unknown:  'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)]',
 }
 
-// ── Utility helpers ────────────────────────────────────────────────────────────
-function addMonths(date, n) {
-  const d = new Date(date)
-  d.setMonth(d.getMonth() + n)
-  return d
-}
+const SELECT_CLS = 'min-h-[44px] bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] rounded-lg px-3 py-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500'
+const BTN_CLS = 'btn-secondary inline-flex items-center gap-2 text-xs px-3 min-h-[44px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500'
 
-function monthKey(date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
-}
-
-function monthLabel(date) {
-  return formatMonthYear(date)
-}
-
+// ── Formatting helpers (N/A for anything unmeasurable, never a fake 0) ─────────
 function fmt(n, dec = 0) {
-  if (n == null || isNaN(n)) return '-'
-  return Number(n).toLocaleString('en-US', {
-    minimumFractionDigits: dec,
-    maximumFractionDigits: dec,
-  })
+  if (n == null || Number.isNaN(Number(n))) return 'N/A'
+  return Number(n).toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec })
 }
 
 function fmtCurrency(n, currency) {
-  if (n == null || isNaN(n)) return '-'
+  if (n == null || Number.isNaN(Number(n))) return 'N/A'
   return `${currency} ${fmt(n, 0)}`
 }
 
 function fmtDate(date) {
-  return formatDate(date)
+  return date ? formatDate(date) : 'N/A'
 }
 
-function mean(arr) {
-  if (!arr.length) return null
-  return arr.reduce((s, v) => s + v, 0) / arr.length
+function todayStamp(now) {
+  return new Date(now).toISOString().slice(0, 10)
 }
 
-// ── Budget forecast bucketing ──────────────────────────────────────────────────
-function buildMonthlyBudget(predictions) {
-  const buckets = {}
-  for (let i = 0; i < 12; i++) {
-    const m = addMonths(TODAY, i)
-    buckets[monthKey(m)] = { label: monthLabel(m), cost: 0, count: 0, date: m }
+// ── Chart option factories ─────────────────────────────────────────────────────
+function tooltipBase() {
+  return {
+    backgroundColor: 'var(--panel)',
+    borderColor: 'var(--hairline)',
+    borderWidth: 1,
+    titleColor: 'var(--text-primary)',
+    bodyColor: 'var(--text-secondary)',
   }
-  for (const p of predictions) {
-    const k = monthKey(p.due_date)
-    if (buckets[k]) {
-      buckets[k].cost += p.estimated_cost
-      buckets[k].count++
-    }
+}
+
+function axes(yCallback) {
+  return {
+    x: { grid: { color: CHART_GRID }, ticks: { color: CHART_TEXT, font: { size: 10 } } },
+    y: {
+      grid: { color: CHART_GRID },
+      ticks: { color: CHART_TEXT, font: { size: 10 }, ...(yCallback ? { callback: yCallback } : {}) },
+      beginAtZero: true,
+    },
   }
-  return Object.values(buckets)
 }
 
-// ── Site breakdown ─────────────────────────────────────────────────────────────
-function buildSiteBreakdown(predictions, totalBudget) {
-  const sites = {}
-  for (const p of predictions) {
-    if (!sites[p.site]) sites[p.site] = { site: p.site, due30: 0, due90: 0, due12mo: 0, cost: 0 }
-    sites[p.site].due12mo++
-    sites[p.site].cost += p.estimated_cost
-    if (p.days_away <= 30) sites[p.site].due30++
-    if (p.days_away <= 90) sites[p.site].due90++
-  }
-  return Object.values(sites)
-    .sort((a, b) => b.cost - a.cost)
-    .map(s => ({
-      ...s,
-      pct_budget: totalBudget > 0 ? ((s.cost / totalBudget) * 100).toFixed(1) : '0.0',
-    }))
-}
-
-// ── Horizon filter helper ──────────────────────────────────────────────────────
-function horizonDays(h) {
-  if (h === '30d') return 30
-  if (h === '90d') return 90
-  if (h === '6mo') return 180
-  return 365
-}
-
-// ── Chart options factories ────────────────────────────────────────────────────
 function lineOpts(currency) {
   return {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
-      legend: { labels: { color: CHART_DARK.color, font: { size: 11 } } },
-      tooltip: {
-        backgroundColor: 'var(--panel)',
-        borderColor: 'var(--hairline)',
-        borderWidth: 1,
-        titleColor: '#f9fafb',
-        bodyColor: '#9ca3af',
-        callbacks: {
-          label: ctx => ` ${currency} ${fmt(ctx.raw, 0)}`,
-        },
-      },
+      legend: { labels: { color: CHART_TEXT, font: { size: 11 } } },
+      tooltip: { ...tooltipBase(), callbacks: { label: (ctx) => ` ${currency} ${fmt(ctx.raw, 0)}` } },
     },
-    scales: {
-      x: {
-        grid: { color: CHART_DARK.grid },
-        ticks: { color: CHART_DARK.color, font: { size: 10 } },
-      },
-      y: {
-        grid: { color: CHART_DARK.grid },
-        ticks: {
-          color: CHART_DARK.color,
-          font: { size: 10 },
-          callback: v => `${currency} ${fmt(v, 0)}`,
-        },
-        beginAtZero: true,
-      },
-    },
+    scales: axes((v) => `${currency} ${fmt(v, 0)}`),
   }
 }
 
-function barOpts() {
+function countBarOpts(unit = 'tyres') {
   return {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
       legend: { display: false },
-      tooltip: {
-        backgroundColor: 'var(--panel)',
-        borderColor: 'var(--hairline)',
-        borderWidth: 1,
-        titleColor: '#f9fafb',
-        bodyColor: '#9ca3af',
-        callbacks: {
-          label: ctx => ` Count: ${ctx.raw}`,
-        },
-      },
+      tooltip: { ...tooltipBase(), callbacks: { label: (ctx) => ` ${ctx.raw} ${unit}` } },
     },
-    scales: {
-      x: {
-        grid: { color: CHART_DARK.grid },
-        ticks: { color: CHART_DARK.color, font: { size: 10 } },
-      },
-      y: {
-        grid: { color: CHART_DARK.grid },
-        ticks: { color: CHART_DARK.color, font: { size: 10 } },
-        beginAtZero: true,
-      },
-    },
+    scales: axes(),
   }
 }
 
-// ── KPI Card component ─────────────────────────────────────────────────────────
-function KpiCard({ icon: Icon, label, value, sub, color = 'blue', loading }) {
+// ── Small presentational pieces ────────────────────────────────────────────────
+function KpiCard({ icon: Icon, label, value, sub, color = 'blue' }) {
   const colorMap = {
-    red:    { bg: 'bg-red-900/20 border-red-800/40',    icon: 'text-red-400',    val: 'text-red-300' },
-    amber:  { bg: 'bg-amber-900/20 border-amber-800/40', icon: 'text-amber-400',  val: 'text-amber-300' },
-    green:  { bg: 'bg-green-900/20 border-green-800/40', icon: 'text-green-400',  val: 'text-green-300' },
-    blue:   { bg: 'bg-blue-900/20 border-blue-800/40',  icon: 'text-blue-400',   val: 'text-blue-300' },
+    red:    { bg: 'bg-red-900/20 border-red-800/40',       icon: 'text-red-400',    val: 'text-red-300' },
+    amber:  { bg: 'bg-amber-900/20 border-amber-800/40',   icon: 'text-amber-400',  val: 'text-amber-300' },
+    green:  { bg: 'bg-green-900/20 border-green-800/40',   icon: 'text-green-400',  val: 'text-green-300' },
+    blue:   { bg: 'bg-blue-900/20 border-blue-800/40',     icon: 'text-blue-400',   val: 'text-blue-300' },
     purple: { bg: 'bg-purple-900/20 border-purple-800/40', icon: 'text-purple-400', val: 'text-purple-300' },
-    cyan:   { bg: 'bg-cyan-900/20 border-cyan-800/40',  icon: 'text-cyan-400',   val: 'text-cyan-300' },
+    cyan:   { bg: 'bg-cyan-900/20 border-cyan-800/40',     icon: 'text-cyan-400',   val: 'text-cyan-300' },
   }
   const c = colorMap[color] || colorMap.blue
   return (
-    <div className={`border rounded-xl p-4 flex gap-3 items-start ${c.bg}`}>
-      <div className={`mt-0.5 ${c.icon}`}>
-        <Icon size={20} />
-      </div>
+    <div className={`border rounded-xl p-4 flex gap-3 items-start min-w-0 ${c.bg}`}>
+      <div className={`mt-0.5 ${c.icon}`} aria-hidden="true"><Icon size={20} /></div>
       <div className="min-w-0">
         <p className="text-xs text-[var(--text-muted)] leading-tight">{label}</p>
-        {loading
-          ? <div className="h-6 w-24 bg-[var(--input-bg)] rounded animate-pulse mt-1" />
-          : <p className={`text-lg font-bold leading-tight mt-0.5 ${c.val}`}>{value}</p>
-        }
-        {sub && !loading && <p className="text-xs text-[var(--text-muted)] mt-0.5">{sub}</p>}
+        <p className={`text-lg font-bold leading-tight mt-0.5 tabular-nums break-words ${c.val}`}>{value}</p>
+        {sub && <p className="text-xs text-[var(--text-muted)] mt-0.5">{sub}</p>}
       </div>
     </div>
   )
 }
 
-// ── Urgency badge ──────────────────────────────────────────────────────────────
-function UrgencyBadge({ urgency }) {
-  if (urgency === 'Urgent')  return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-900/40 text-red-300 border border-red-800/50"><span className="w-1.5 h-1.5 rounded-full bg-red-400" />Urgent</span>
-  if (urgency === 'Soon')    return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-900/40 text-amber-300 border border-amber-800/50"><span className="w-1.5 h-1.5 rounded-full bg-amber-400" />Soon</span>
-  return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-green-900/20 text-green-400 border border-green-800/40"><span className="w-1.5 h-1.5 rounded-full bg-green-500" />Monitor</span>
+function Panel({ title, subtitle, icon: Icon, children, actions }) {
+  return (
+    <section className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4 min-w-0">
+      <div className="flex flex-wrap items-start gap-2 mb-3">
+        {Icon && <Icon size={15} className="text-blue-400 mt-0.5" aria-hidden="true" />}
+        <div className="min-w-0 mr-auto">
+          <h2 className="text-sm font-semibold text-[var(--text-primary)]">{title}</h2>
+          {subtitle && <p className="text-xs text-[var(--text-muted)]">{subtitle}</p>}
+        </div>
+        {actions}
+      </div>
+      {children}
+    </section>
+  )
 }
 
-// ── Risk band badge ──────────────────────────────────────────────────────────
-function RiskBandBadge({ band, score }) {
-  const cls = RISK_BAND_STYLE[band] || RISK_BAND_STYLE.unknown
+// Every status badge carries a text label and a shape, so colour is never the
+// only signal.
+function UrgencyBadge({ urgency }) {
+  const map = {
+    Urgent: 'bg-red-900/40 text-red-300 border-red-800/50',
+    Soon: 'bg-amber-900/40 text-amber-300 border-amber-800/50',
+    Monitor: 'bg-green-900/20 text-green-400 border-green-800/40',
+  }
+  const Icon = urgency === 'Urgent' ? AlertTriangle : urgency === 'Soon' ? Clock : CheckCircle
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border ${cls}`}>
-      {score != null ? score : '-'} · {band}
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border ${map[urgency] || map.Monitor}`}>
+      <Icon size={11} aria-hidden="true" />{urgency || 'Monitor'}
     </span>
   )
 }
 
-// ── Confidence pill ──────────────────────────────────────────────────────────
+function RiskBandBadge({ band, score }) {
+  const cls = RISK_BAND_STYLE[band] || RISK_BAND_STYLE.unknown
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border ${cls}`}>
+      <span className="tabular-nums">{score != null ? score : 'N/A'}</span> | {band || 'unknown'}
+    </span>
+  )
+}
+
 function ConfidenceBadge({ label, value }) {
   const map = {
     high:   'text-green-400 border-green-800/40 bg-green-900/15',
     medium: 'text-amber-300 border-amber-800/40 bg-amber-900/15',
     low:    'text-[var(--text-muted)] border-[var(--input-border)] bg-[var(--input-bg)]/40',
   }
-  const cls = map[label] || map.low
   return (
-    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border ${cls}`} title={value != null ? `confidence ${Math.round(value * 100)}%` : ''}>
-      <Gauge size={10} /> {label}
+    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium border ${map[label] || map.low}`}
+      title={value != null ? `confidence ${Math.round(value * 100)}%` : ''}>
+      <Gauge size={10} aria-hidden="true" /> {label || 'low'}
     </span>
   )
 }
 
-// ── Limiting-factor chip ─────────────────────────────────────────────────────
 function LimitingFactorChip({ factor }) {
-  if (!factor) return <span className="text-[var(--text-dim)]">-</span>
-  const icon = factor === LIMITING_FACTORS.tread
-    ? <TrendingDown size={11} />
-    : factor === LIMITING_FACTORS.age
-      ? <Clock size={11} />
-      : <Activity size={11} />
+  if (!factor) return <span className="text-[var(--text-dim)]">N/A</span>
+  const Icon = factor === LIMITING_FACTORS.tread ? TrendingDown : factor === LIMITING_FACTORS.age ? Clock : Activity
   return (
-    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium text-blue-300 border border-blue-800/40 bg-blue-900/15">
-      {icon} {LIMITING_FACTOR_LABEL[factor] || factor}
+    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium text-blue-300 border border-blue-800/40 bg-blue-900/15">
+      <Icon size={11} aria-hidden="true" /> {LIMITING_FACTOR_LABEL[factor] || factor}
     </span>
   )
 }
 
-// ── Failure Risk panel (G3 composite risk + G4 cohort + G5 confidence) ───────
-function FailureRiskPanel({
-  rows, totalRows, kpis, cohortRows, siteFilter, setSiteFilter, uniqueSites,
-  riskBandFilter, setRiskBandFilter, page, setPage, expanded, setExpanded,
-}) {
-  const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE))
-  const clampedPage = Math.min(page, totalPages)
-  const paged = rows.slice((clampedPage - 1) * PAGE_SIZE, clampedPage * PAGE_SIZE)
-
-  const bandBarData = {
-    labels: ['Extreme (≥70)', 'High (50-69)', 'Elevated (30-49)', 'Low (<30)'],
-    datasets: [{
-      data: [
-        kpis.extreme,
-        kpis.high,
-        kpis.elevated,
-        Math.max(0, kpis.total - kpis.extreme - kpis.high - kpis.elevated),
-      ],
-      backgroundColor: ['rgba(239,68,68,0.7)', 'rgba(249,115,22,0.7)', 'rgba(245,158,11,0.6)', 'rgba(16,185,129,0.5)'],
-      borderColor: ['#ef4444', '#f97316', '#f59e0b', '#10b981'],
-      borderWidth: 1,
-      borderRadius: 4,
-    }],
-  }
-  const bandBarOpts = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${ctx.raw} tyres` } } },
-    scales: {
-      x: { grid: { color: CHART_DARK.grid }, ticks: { color: CHART_DARK.color, font: { size: 10 } } },
-      y: { grid: { color: CHART_DARK.grid }, ticks: { color: CHART_DARK.color, font: { size: 10 } }, beginAtZero: true },
-    },
-  }
-
-  return (
-    <div className="space-y-4">
-      {/* Risk KPI strip */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
-        <KpiCard icon={ShieldAlert} label="Extreme risk (≥70)" value={`${fmt(kpis.extreme)} tyres`} sub="immediate action" color="red" />
-        <KpiCard icon={AlertTriangle} label="High risk (50-69)" value={`${fmt(kpis.high)} tyres`} sub="inspect within 7 days" color="amber" />
-        <KpiCard icon={Activity} label="Elevated (30-49)" value={`${fmt(kpis.elevated)} tyres`} sub="monitor closely" color="purple" />
-        <KpiCard icon={Percent} label="Avg failure probability" value={`${fmt(kpis.avgFp, 1)}%`} sub="Weibull, brand-adjusted" color="cyan" />
-        <KpiCard icon={Gauge} label="Avg composite risk" value={fmt(kpis.avgScore, 1)} sub={`${fmt(kpis.total)} assessed`} color="blue" />
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        {/* Band distribution */}
-        <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
-          <div className="mb-3">
-            <h2 className="text-sm font-semibold text-[var(--text-primary)]">Risk Band Distribution</h2>
-            <p className="text-xs text-[var(--text-muted)]">Active tyres by composite risk score</p>
-          </div>
-          <div style={{ height: 220 }}><Bar data={bandBarData} options={bandBarOpts} /></div>
-        </div>
-
-        {/* Cohort models */}
-        <div className="xl:col-span-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <Sigma size={15} className="text-blue-400" />
-            <div>
-              <h2 className="text-sm font-semibold text-[var(--text-primary)]">Cohort Weibull Life Models</h2>
-              <p className="text-xs text-[var(--text-muted)]">Method-of-moments fit per brand + size (≥5 completed lives)</p>
-            </div>
-          </div>
-          {cohortRows.length === 0 ? (
-            <div className="text-center py-8">
-              <Target className="text-[var(--text-dim)] mx-auto mb-2" size={24} />
-              <p className="text-[var(--text-muted)] text-xs">No cohort has ≥5 completed lives yet. Cohort survival appears once history accrues.</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-[var(--input-border)]">
-                    {['Brand','Size','Samples','η (km)','β shape','Mean life','CV','± CI'].map(h => (
-                      <th key={h} className="text-left text-[var(--text-muted)] font-medium py-2 px-2 whitespace-nowrap">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {cohortRows.map((c, i) => (
-                    <tr key={`${c.brand}-${c.size}-${i}`} className="border-b border-[var(--input-border)]/40 hover:bg-[var(--input-bg)]/30">
-                      <td className="py-2 px-2 text-[var(--text-secondary)] font-medium">{c.brand}</td>
-                      <td className="py-2 px-2 text-[var(--text-muted)]">{c.size}</td>
-                      <td className="py-2 px-2 text-center text-[var(--text-secondary)]">{c.n}</td>
-                      <td className="py-2 px-2 text-right text-[var(--text-secondary)]">{fmt(c.etaKm)}</td>
-                      <td className="py-2 px-2 text-right text-[var(--text-secondary)]">{c.beta}</td>
-                      <td className="py-2 px-2 text-right text-[var(--text-secondary)]">{fmt(c.meanKm)}</td>
-                      <td className="py-2 px-2 text-right text-[var(--text-muted)]">{c.cv}</td>
-                      <td className="py-2 px-2 text-right text-[var(--text-muted)]">±{c.ciSpread}pp</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
-        <div className="flex flex-wrap gap-3 items-end">
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-[var(--text-muted)]">Site</label>
-            <select value={siteFilter} onChange={e => setSiteFilter(e.target.value)}
-              className="bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500">
-              {uniqueSites.map(s => <option key={s} value={s}>{s === 'all' ? 'All Sites' : s}</option>)}
-            </select>
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-[var(--text-muted)]">Risk band</label>
-            <select value={riskBandFilter} onChange={e => setRiskBandFilter(e.target.value)}
-              className="bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500">
-              <option value="all">All bands</option>
-              <option value="extreme">Extreme</option>
-              <option value="high">High</option>
-              <option value="elevated">Elevated</option>
-              <option value="low">Low</option>
-            </select>
-          </div>
-          <div className="flex flex-col gap-1 ml-auto justify-end">
-            <p className="text-xs text-[var(--text-muted)] text-right">Showing</p>
-            <p className="text-sm font-semibold text-[var(--text-secondary)] text-right">{fmt(rows.length)} of {fmt(totalRows)} tyres</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Risk table */}
-      <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
-        <div className="mb-3">
-          <h2 className="text-sm font-semibold text-[var(--text-primary)]">Per-Tyre Failure Risk</h2>
-          <p className="text-xs text-[var(--text-muted)]">Sorted by composite risk · click a row for the reasoning breakdown</p>
-        </div>
-        {rows.length === 0 ? (
-          <div className="text-center py-10">
-            <CheckCircle className="text-green-500 mx-auto mb-2" size={28} />
-            <p className="text-[var(--text-muted)] text-sm">No tyres match the selected filters</p>
-          </div>
-        ) : (
-          <>
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-[var(--input-border)]">
-                    {['','Asset No','Site','Position','Brand','Size','Tread','Total KM','Failure Prob','Risk','Confidence'].map((h, i) => (
-                      <th key={i} className="text-left text-[var(--text-muted)] font-medium py-2 px-2 whitespace-nowrap">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {paged.map((r, i) => {
-                    const isOpen = expanded === r.id
-                    return (
-                      <Fragment key={`${r.id}-${i}`}>
-                        <tr
-                          onClick={() => setExpanded(isOpen ? null : r.id)}
-                          className={`border-b border-[var(--input-border)]/50 cursor-pointer transition-colors ${
-                            r.risk_band === 'extreme' ? 'bg-red-900/10 hover:bg-red-900/20'
-                              : r.risk_band === 'high' ? 'bg-orange-900/5 hover:bg-orange-900/15'
-                                : 'hover:bg-[var(--input-bg)]/40'
-                          }`}
-                        >
-                          <td className="py-2 px-2 text-[var(--text-muted)]">{isOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}</td>
-                          <td className="py-2 px-2 font-mono font-semibold text-blue-300">{r.asset_no}</td>
-                          <td className="py-2 px-2 text-[var(--text-secondary)]">{r.site}</td>
-                          <td className="py-2 px-2 text-[var(--text-secondary)]">{r.position}</td>
-                          <td className="py-2 px-2 text-[var(--text-secondary)]">{r.brand}</td>
-                          <td className="py-2 px-2 text-[var(--text-muted)]">{r.size}</td>
-                          <td className="py-2 px-2 text-center">
-                            {r.tread_depth != null
-                              ? <span className={`font-semibold ${r.tread_depth < URGENT_TREAD_MM ? 'text-red-400' : r.tread_depth < SOON_TREAD_MM ? 'text-amber-400' : 'text-green-400'}`}>{r.tread_depth}</span>
-                              : <span className="text-[var(--text-dim)]">-</span>}
-                          </td>
-                          <td className="py-2 px-2 text-right text-[var(--text-secondary)]">{fmt(r.total_km)}</td>
-                          <td className="py-2 px-2 text-right text-[var(--text-secondary)]">{fmt(r.failure_prob_pct, 1)}%</td>
-                          <td className="py-2 px-2"><RiskBandBadge band={r.risk_band} score={r.risk_score} /></td>
-                          <td className="py-2 px-2"><ConfidenceBadge label={r.confidence_label} value={r.confidence} /></td>
-                        </tr>
-                        {isOpen && (
-                          <tr className="bg-[var(--input-bg)]/30 border-b border-[var(--input-border)]/50">
-                            <td colSpan={11} className="p-4">
-                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                {/* Risk factor breakdown */}
-                                <div>
-                                  <p className="text-xs font-semibold text-blue-300 mb-2">Composite risk breakdown (0-100)</p>
-                                  <RiskFactorBar label="Mileage (Weibull ×40)" value={r.factors.mileage} max={40} />
-                                  <RiskFactorBar label="Tread (≤30)" value={r.factors.tread} max={30} />
-                                  <RiskFactorBar label={`Age (≤15)${r.age_has_data ? '' : ' · no data'}`} value={r.factors.age} max={15} muted={!r.age_has_data} />
-                                  <RiskFactorBar label={`Pressure (≤15)${r.pressure_has_data ? '' : ' · no reading'}`} value={r.factors.pressure} max={15} muted={!r.pressure_has_data} />
-                                </div>
-                                {/* Weibull detail */}
-                                <div className="text-xs space-y-1.5">
-                                  <p className="text-xs font-semibold text-blue-300 mb-2">Reliability model</p>
-                                  <DetailRow k="Failure probability" v={`${fmt(r.failure_prob_pct, 1)}%`} />
-                                  <DetailRow k="Characteristic life η" v={`${fmt(r.eta_km)} km`} />
-                                  <DetailRow k="Weibull shape β" v="2.2 (wear-out)" />
-                                  <DetailRow k="In-service age" v={r.age_has_data ? `${fmt(r.age_days)} days` : 'unknown (no fitment date)'} />
-                                  <DetailRow k="Pressure deviation" v={r.pressure_has_data ? `${fmt(r.pressure_dev_pct, 1)}% vs ${PRESSURE_TARGET_PSI} psi` : 'no reading'} />
-                                </div>
-                                {/* Cohort + confidence */}
-                                <div className="text-xs space-y-1.5">
-                                  <p className="text-xs font-semibold text-blue-300 mb-2">Cohort position & confidence</p>
-                                  {r.cohort ? (
-                                    <>
-                                      <DetailRow k="Cohort survival" v={`${fmt(r.cohort.survivalPct, 1)}%`} />
-                                      <DetailRow k="Percentile in cohort" v={`${fmt(r.cohort.percentileInCohort, 1)}%`} />
-                                      <DetailRow k="Expected remaining" v={`${fmt(r.cohort.expectedRemainingKm)} km`} />
-                                      <DetailRow k="Cohort samples" v={`${r.cohort.n} (±${fmt(r.cohort.ciSpread, 1)}pp)`} />
-                                    </>
-                                  ) : (
-                                    <p className="text-[var(--text-muted)]">No fitted cohort (brand+size needs ≥5 completed lives).</p>
-                                  )}
-                                  <DetailRow k="Prediction confidence" v={`${r.confidence_label} (${Math.round((r.confidence ?? 0) * 100)}% · ${r.completed_samples} samples)`} />
-                                </div>
-                              </div>
-                            </td>
-                          </tr>
-                        )}
-                      </Fragment>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between mt-4 pt-3 border-t border-[var(--input-border)]">
-                <p className="text-xs text-[var(--text-muted)]">Page {clampedPage} of {totalPages} · {fmt(rows.length)} total</p>
-                <div className="flex gap-1">
-                  <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={clampedPage === 1}
-                    className="p-1.5 rounded bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-40 disabled:cursor-not-allowed">
-                    <ChevronLeft size={14} />
-                  </button>
-                  <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={clampedPage === totalPages}
-                    className="p-1.5 rounded bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-40 disabled:cursor-not-allowed">
-                    <ChevronRight size={14} />
-                  </button>
-                </div>
-              </div>
-            )}
-          </>
-        )}
-      </div>
-    </div>
-  )
+function TreadCell({ value }) {
+  if (value == null) return <span className="text-[var(--text-dim)]">N/A</span>
+  const cls = value < URGENT_TREAD_MM ? 'text-red-400' : value < SOON_TREAD_MM ? 'text-amber-400' : 'text-green-400'
+  return <span className={`font-semibold tabular-nums ${cls}`}>{value}</span>
 }
 
 function RiskFactorBar({ label, value, max, muted }) {
-  const pct = max > 0 ? Math.min(100, (Math.max(0, value) / max) * 100) : 0
+  const pct = max > 0 ? Math.min(100, (Math.max(0, Number(value) || 0) / max) * 100) : 0
   return (
     <div className="mb-1.5">
-      <div className="flex justify-between text-[10px] mb-0.5">
+      <div className="flex justify-between text-[11px] mb-0.5">
         <span className={muted ? 'text-[var(--text-dim)]' : 'text-[var(--text-muted)]'}>{label}</span>
-        <span className={muted ? 'text-[var(--text-dim)]' : 'text-[var(--text-secondary)]'}>{fmt(value, 1)}</span>
+        <span className={`tabular-nums ${muted ? 'text-[var(--text-dim)]' : 'text-[var(--text-secondary)]'}`}>{fmt(value, 1)}</span>
       </div>
-      <div className="bg-[var(--input-bg)] rounded-full h-1.5">
+      <div className="bg-[var(--input-bg)] rounded-full h-1.5" role="presentation">
         <div className={`h-1.5 rounded-full ${muted ? 'bg-[var(--text-dim)]/40' : 'bg-blue-500'}`} style={{ width: `${pct}%` }} />
       </div>
     </div>
@@ -557,10 +254,211 @@ function DetailRow({ k, v }) {
   )
 }
 
+function SearchField({ id, value, onChange, placeholder }) {
+  return (
+    <div className="flex flex-col gap-1 min-w-0 flex-1 sm:flex-none sm:w-64">
+      <label htmlFor={id} className="text-xs text-[var(--text-muted)]">Search</label>
+      <div className="relative">
+        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+        <input id={id} type="search" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
+          className={`${SELECT_CLS} w-full pl-8`} />
+      </div>
+    </div>
+  )
+}
+
+// ── Failure-risk detail (replaces the old inline expanded table row) ──────────
+function RiskDetail({ row, onClose }) {
+  return (
+    <section aria-label={`Risk reasoning for ${row.asset_no} ${row.position}`}
+      className="bg-[var(--surface-1)] border border-blue-800/40 rounded-xl p-4">
+      <div className="flex items-start gap-2 mb-3">
+        <div className="mr-auto min-w-0">
+          <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+            {row.asset_no} | {row.position || 'N/A'} | {row.brand || 'N/A'} {row.size || ''}
+          </h3>
+          <p className="text-xs text-[var(--text-muted)]">Why this tyre scored {fmt(row.risk_score)} ({row.risk_band})</p>
+        </div>
+        <button type="button" onClick={onClose} aria-label="Close risk reasoning"
+          className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+          <X size={16} />
+        </button>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+        <div>
+          <p className="font-semibold text-blue-300 mb-2">Composite risk breakdown (0 to 100)</p>
+          <RiskFactorBar label="Mileage (Weibull x40)" value={row.factors?.mileage} max={40} />
+          <RiskFactorBar label="Tread (up to 30)" value={row.factors?.tread} max={30} />
+          <RiskFactorBar label={`Age (up to 15)${row.age_has_data ? '' : ', no data'}`} value={row.factors?.age} max={15} muted={!row.age_has_data} />
+          <RiskFactorBar label={`Pressure (up to 15)${row.pressure_has_data ? '' : ', no reading'}`} value={row.factors?.pressure} max={15} muted={!row.pressure_has_data} />
+        </div>
+        <div className="space-y-1.5">
+          <p className="font-semibold text-blue-300 mb-2">Reliability model</p>
+          <DetailRow k="Failure probability" v={row.failure_prob_pct != null ? `${fmt(row.failure_prob_pct, 1)}%` : 'N/A'} />
+          <DetailRow k="Characteristic life eta" v={row.eta_km != null ? `${fmt(row.eta_km)} km` : 'N/A'} />
+          <DetailRow k="Weibull shape beta" v="2.2 (wear-out)" />
+          <DetailRow k="In-service age" v={row.age_has_data ? `${fmt(row.age_days)} days` : 'Unknown (no fitment date)'} />
+          <DetailRow k="Pressure deviation" v={row.pressure_has_data ? `${fmt(row.pressure_dev_pct, 1)}% vs ${PRESSURE_TARGET_PSI} psi` : 'No reading'} />
+        </div>
+        <div className="space-y-1.5">
+          <p className="font-semibold text-blue-300 mb-2">Cohort position and confidence</p>
+          {row.cohort ? (
+            <>
+              <DetailRow k="Cohort survival" v={`${fmt(row.cohort.survivalPct, 1)}%`} />
+              <DetailRow k="Percentile in cohort" v={`${fmt(row.cohort.percentileInCohort, 1)}%`} />
+              <DetailRow k="Expected remaining" v={`${fmt(row.cohort.expectedRemainingKm)} km`} />
+              <DetailRow k="Cohort samples" v={`${row.cohort.n} (+/-${fmt(row.cohort.ciSpread, 1)}pp)`} />
+            </>
+          ) : (
+            <p className="text-[var(--text-muted)]">No fitted cohort (brand and size need at least 5 completed lives).</p>
+          )}
+          <DetailRow k="Prediction confidence"
+            v={row.confidence != null ? `${row.confidence_label} (${Math.round(row.confidence * 100)}%, ${row.completed_samples} samples)` : 'N/A'} />
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ── Failure Risk panel (G3 composite risk + G4 cohort + G5 confidence) ───────
+function FailureRiskPanel({
+  rows, totalRows, kpis, cohortRows, siteFilter, setSiteFilter, uniqueSites,
+  riskBandFilter, setRiskBandFilter, search, setSearch, selectedId, setSelectedId,
+}) {
+  const bandBarData = {
+    labels: ['Extreme (70+)', 'High (50 to 69)', 'Elevated (30 to 49)', 'Low (under 30)'],
+    datasets: [{
+      data: [kpis.extreme, kpis.high, kpis.elevated, kpis.low],
+      backgroundColor: [SEM.red, SEM.orange, SEM.amber, SEM.green].map((c) => withAlpha(c, 0.65)),
+      borderColor: [SEM.red, SEM.orange, SEM.amber, SEM.green],
+      borderWidth: 1,
+      borderRadius: 4,
+    }],
+  }
+
+  const cohortColumns = useMemo(() => [
+    { id: 'brand', header: 'Brand', accessorKey: 'brand' },
+    { id: 'size', header: 'Size', accessorKey: 'size' },
+    { id: 'n', header: 'Samples', accessorKey: 'n', meta: { align: 'right' } },
+    { id: 'etaKm', header: 'Eta (km)', accessorKey: 'etaKm', meta: { align: 'right' }, cell: ({ getValue }) => fmt(getValue()) },
+    { id: 'beta', header: 'Beta shape', accessorKey: 'beta', meta: { align: 'right' }, cell: ({ getValue }) => fmt(getValue(), 3) },
+    { id: 'meanKm', header: 'Mean life (km)', accessorKey: 'meanKm', meta: { align: 'right' }, cell: ({ getValue }) => fmt(getValue()) },
+    { id: 'cv', header: 'CV', accessorKey: 'cv', meta: { align: 'right' }, cell: ({ getValue }) => fmt(getValue(), 2) },
+    { id: 'ciSpread', header: '+/- CI (pp)', accessorKey: 'ciSpread', meta: { align: 'right' }, cell: ({ getValue }) => fmt(getValue(), 1) },
+  ], [])
+
+  const riskColumns = useMemo(() => [
+    { id: 'asset_no', header: 'Asset No', accessorKey: 'asset_no', cell: ({ getValue }) => <span className="font-mono font-semibold text-blue-300">{getValue()}</span> },
+    { id: 'site', header: 'Site', accessorKey: 'site' },
+    { id: 'position', header: 'Position', accessorKey: 'position' },
+    { id: 'brand', header: 'Brand', accessorKey: 'brand' },
+    { id: 'size', header: 'Size', accessorKey: 'size' },
+    { id: 'tread_depth', header: 'Tread (mm)', accessorKey: 'tread_depth', meta: { align: 'right' }, cell: ({ getValue }) => <TreadCell value={getValue()} /> },
+    { id: 'total_km', header: 'Total KM', accessorKey: 'total_km', meta: { align: 'right' }, cell: ({ getValue }) => <span className="tabular-nums">{fmt(getValue())}</span> },
+    { id: 'failure_prob_pct', header: 'Failure prob', accessorKey: 'failure_prob_pct', meta: { align: 'right' },
+      cell: ({ getValue }) => <span className="tabular-nums">{getValue() != null ? `${fmt(getValue(), 1)}%` : 'N/A'}</span> },
+    { id: 'risk_score', header: 'Risk', accessorKey: 'risk_score', cell: ({ row }) => <RiskBandBadge band={row.original.risk_band} score={row.original.risk_score} /> },
+    { id: 'confidence', header: 'Confidence', accessorKey: 'confidence', cell: ({ row }) => <ConfidenceBadge label={row.original.confidence_label} value={row.original.confidence} /> },
+  ], [])
+
+  const selected = rows.find((r) => r.id === selectedId) || null
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
+        <KpiCard icon={ShieldAlert} label="Extreme risk (70+)" value={`${fmt(kpis.extreme)} tyres`} sub="Immediate action" color="red" />
+        <KpiCard icon={AlertTriangle} label="High risk (50 to 69)" value={`${fmt(kpis.high)} tyres`} sub="Inspect within 7 days" color="amber" />
+        <KpiCard icon={Activity} label="Elevated (30 to 49)" value={`${fmt(kpis.elevated)} tyres`} sub="Monitor closely" color="purple" />
+        <KpiCard icon={Percent} label="Avg failure probability" value={kpis.avgFailureProbPct != null ? `${fmt(kpis.avgFailureProbPct, 1)}%` : 'N/A'} sub="Weibull, brand-adjusted" color="cyan" />
+        <KpiCard icon={Gauge} label="Avg composite risk" value={fmt(kpis.avgRiskScore, 1)} sub={`${fmt(kpis.total)} assessed`} color="blue" />
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <Panel title="Risk Band Distribution" subtitle="Active tyres by composite risk score">
+          {kpis.total === 0 ? (
+            <p className="text-xs text-[var(--text-muted)] py-10 text-center">No scored tyres yet.</p>
+          ) : (
+            <div style={{ height: 220 }} role="img"
+              aria-label={`Risk bands: ${kpis.extreme} extreme, ${kpis.high} high, ${kpis.elevated} elevated, ${kpis.low} low`}>
+              <Bar data={bandBarData} options={countBarOpts('tyres')} />
+            </div>
+          )}
+        </Panel>
+
+        <div className="xl:col-span-2 min-w-0">
+          <Panel title="Cohort Weibull Life Models" icon={Sigma}
+            subtitle="Method-of-moments fit per brand and size (at least 5 completed lives)">
+            {cohortRows.length === 0 ? (
+              <div className="text-center py-8">
+                <Target className="text-[var(--text-dim)] mx-auto mb-2" size={24} aria-hidden="true" />
+                <p className="text-[var(--text-muted)] text-xs">No cohort has 5 completed lives yet. Cohort survival appears once history accrues.</p>
+              </div>
+            ) : (
+              <EnterpriseTable
+                columns={cohortColumns}
+                data={cohortRows}
+                getRowId={(r) => r.id}
+                enableGlobalFilter={false}
+                enableColumnFilters={false}
+                enableExport={false}
+                initialPageSize={25}
+                emptyMessage="No cohorts"
+              />
+            )}
+          </Panel>
+        </div>
+      </div>
+
+      <section aria-label="Failure risk filters" className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
+        <div className="flex flex-wrap gap-3 items-end">
+          <SearchField id="pm-risk-search" value={search} onChange={setSearch} placeholder="Asset, site, brand, size" />
+          <div className="flex flex-col gap-1">
+            <label htmlFor="pm-risk-site" className="text-xs text-[var(--text-muted)]">Site</label>
+            <select id="pm-risk-site" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} className={SELECT_CLS}>
+              {uniqueSites.map((s) => <option key={s} value={s}>{s === 'all' ? 'All sites' : s}</option>)}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label htmlFor="pm-risk-band" className="text-xs text-[var(--text-muted)]">Risk band</label>
+            <select id="pm-risk-band" value={riskBandFilter} onChange={(e) => setRiskBandFilter(e.target.value)} className={SELECT_CLS}>
+              <option value="all">All bands</option>
+              <option value="extreme">Extreme</option>
+              <option value="high">High</option>
+              <option value="elevated">Elevated</option>
+              <option value="low">Low</option>
+            </select>
+          </div>
+          <p className="ml-auto text-sm text-[var(--text-secondary)]" role="status">
+            Showing <span className="font-semibold tabular-nums">{fmt(rows.length)}</span> of {fmt(totalRows)} tyres
+          </p>
+        </div>
+      </section>
+
+      <Panel title="Per-Tyre Failure Risk" subtitle="Sorted by composite risk. Select a row to see the reasoning.">
+        <EnterpriseTable
+          columns={riskColumns}
+          data={rows}
+          getRowId={(r) => String(r.id)}
+          enableGlobalFilter={false}
+          enableColumnFilters={false}
+          enableExport={false}
+          initialPageSize={25}
+          onRowClick={(r) => setSelectedId(r.id === selectedId ? null : r.id)}
+          emptyMessage={totalRows === 0 ? 'No active tyres have been scored yet' : 'No tyres match the selected filters'}
+        />
+      </Panel>
+
+      {selected && <RiskDetail row={selected} onClose={() => setSelectedId(null)} />}
+    </div>
+  )
+}
+
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function PredictiveMaintenance() {
   const loadId = useRef(0)
   const { activeCurrency, activeCountry } = useSettings()
+  // One clock read per mount: every engine gets the same injected "now".
+  const [now] = useState(() => new Date())
 
   const [records, setRecords]         = useState([])
   const [fleetMaster, setFleetMaster] = useState([])
@@ -573,11 +471,11 @@ export default function PredictiveMaintenance() {
   const [urgencyFilter, setUrgencyFilter] = useState('all')
   const [vehicleTypeFilter, setVehicleTypeFilter] = useState('all')
   const [horizonFilter, setHorizonFilter] = useState('90d')
-  const [currentPage, setCurrentPage]   = useState(1)
+  const [search, setSearch]             = useState('')
 
   const [riskBandFilter, setRiskBandFilter] = useState('all')
-  const [riskPage, setRiskPage]         = useState(1)
-  const [expandedRisk, setExpandedRisk] = useState(null)
+  const [riskSearch, setRiskSearch]     = useState('')
+  const [selectedRisk, setSelectedRisk] = useState(null)
 
   const [assumptionsOpen, setAssumptionsOpen] = useState(false)
 
@@ -592,14 +490,12 @@ export default function PredictiveMaintenance() {
     // rows with a NULL country, never silently dropping uncategorised rows. This
     // keeps per-country budget/cost figures in a single currency (activeCurrency)
     // instead of blending SAR + AED + EGP. Applied server-side so a scoped view
-    // fetches only its own rows. For a single-country selection the rows are the
-    // same as before - only the scope predicate changed, no formula changed.
+    // fetches only its own rows.
     const scopeCountry = (q) =>
       activeCountry && activeCountry !== 'All'
         ? q.or(`country.eq.${activeCountry},country.is.null`)
         : q
     try {
-      // Load tyre_records
       const { data: tyreData, error: tyreErr } = await fetchAllPages((from, to) => scopeCountry(supabase
         .from('tyre_records')
         .select('id,asset_no,site,brand,size,tyre_serial,position,tread_depth,pressure_reading,total_km,km_at_fitment,km_at_removal,cost_per_tyre,issue_date,fitment_date,removal_date,status,risk_level,category')
@@ -610,8 +506,8 @@ export default function PredictiveMaintenance() {
       if (tyreErr) throw tyreErr
       setRecords(tyreData || [])
 
-      // Load vehicle_fleet (graceful if missing). Page past the 1000-row cap so
-      // the fleet budget total below is not summed over a silently-capped subset.
+      // vehicle_fleet is optional (graceful if missing). Paged past the 1000-row
+      // cap so the fleet budget total is not summed over a capped subset.
       try {
         const { data: fleetData, error: fleetErr } = await fetchAllPages((from, to) => scopeCountry(supabase
           .from('vehicle_fleet')
@@ -639,16 +535,13 @@ export default function PredictiveMaintenance() {
     }
   }, [activeCountry])
 
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- Invalidate the current request on cleanup.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- Invalidate the current request on cleanup.
   useEffect(() => { loadData(); return () => { loadId.current++ } }, [loadData])
 
-  // ── Fleet-level computed constants (canonical lib) ───────────────────────────
+  // ── Engines (canonical libs) ─────────────────────────────────────────────────
   const fleetStats = useMemo(() => computeFleetStats(records), [records])
-
-  // ── Cohort Weibull models (G4) — shared across engines ───────────────────────
   const cohortModels = useMemo(() => buildCohortModels(records), [records])
 
-  // ── Predictions (deepened engine: G1 wear + G2 min-of-three + G3/G4/G5) ──────
   const allPredictions = useMemo(() => {
     if (!records.length) return []
     return buildPredictions(records, fleetMaster, {
@@ -656,202 +549,71 @@ export default function PredictiveMaintenance() {
       fleetAvgKmLife: fleetStats.avgKmLife,
       fleetAvgDailyKm: fleetStats.avgDailyKm,
       cohortModels,
-      nowMs: TODAY.getTime(),
+      nowMs: now.getTime(),
     })
-  }, [records, fleetMaster, fleetStats, cohortModels])
+  }, [records, fleetMaster, fleetStats, cohortModels, now])
 
-  // ── Per-tyre failure-risk rows (G3 composite + G4 cohort + G5 confidence) ─────
   const failureRiskRows = useMemo(() => {
     if (!records.length) return []
-    return buildFailureRiskRows(records, { cohortModels, nowMs: TODAY.getTime() })
-  }, [records, cohortModels])
+    return buildFailureRiskRows(records, { cohortModels, nowMs: now.getTime() })
+  }, [records, cohortModels, now])
 
-  // ── Derived lists ─────────────────────────────────────────────────────────────
-  const uniqueSites = useMemo(() => {
-    const s = new Set(allPredictions.map(p => p.site).filter(v => v && v !== '-'))
-    for (const r of failureRiskRows) if (r.site && r.site !== '-') s.add(r.site)
-    return ['all', ...Array.from(s).sort()]
-  }, [allPredictions, failureRiskRows])
+  const uniqueSites = useMemo(
+    () => ['all', ...uniqueSorted([...allPredictions.map((p) => p.site), ...failureRiskRows.map((r) => r.site)])],
+    [allPredictions, failureRiskRows],
+  )
+  const uniqueVehicleTypes = useMemo(() => ['all', ...uniqueSorted(fleetMaster.map((f) => f.vehicle_type))], [fleetMaster])
 
-  const uniqueVehicleTypes = useMemo(() => {
-    const t = new Set(fleetMaster.map(f => f.vehicle_type).filter(Boolean))
-    return ['all', ...Array.from(t).sort()]
-  }, [fleetMaster])
-
-  // ── Filtered predictions ──────────────────────────────────────────────────────
-  // Two scopes, following the pattern in Inspections.jsx.
-  //
-  // `forecastBase` applies the POPULATION filters (site, vehicle type) and
-  // deliberately holds out the two TIME filters. Urgency and horizon are both
-  // statements about days-to-replacement, and every forecast surface below
-  // plots days-to-replacement on its own axis: the KPI strip is banded
-  // <=30 / 31-90 / 91-365 days, the budget line is 12 months, the quarterly
-  // cards are Q1/Q2/H2. Applying a 30-day horizon to a 12-month forecast would
-  // zero out months 2-12 and applying urgency=Urgent would zero out every band
-  // except its own, so each control would drive its own number and stop being
-  // a useful target. The forecast therefore answers "for this site and vehicle
-  // type, what is coming and when".
-  //
-  // `filteredPredictions` applies all four and is what the table renders.
-  const forecastBase = useMemo(() => {
-    return allPredictions.filter(p => {
-      if (siteFilter !== 'all' && p.site !== siteFilter) return false
-      if (vehicleTypeFilter !== 'all' && p.vehicle_type !== vehicleTypeFilter) return false
-      return true
-    })
-  }, [allPredictions, siteFilter, vehicleTypeFilter])
-
-  const filteredPredictions = useMemo(() => {
-    const maxDays = horizonDays(horizonFilter)
-    return forecastBase.filter(p => {
-      if (urgencyFilter !== 'all' && p.urgency !== urgencyFilter) return false
-      if (p.days_away > maxDays) return false
-      return true
-    })
-  }, [forecastBase, urgencyFilter, horizonFilter])
-
-  // True when the forecast covers a narrowed population, so the figures say so.
-  const forecastScopeActive = siteFilter !== 'all' || vehicleTypeFilter !== 'all'
-  // True when the table below is narrowed further than the forecast above it.
+  // ── Scoping ──────────────────────────────────────────────────────────────────
+  // `forecastBase` = population filters (site, vehicle type, search); the two
+  // TIME filters are held out because every forecast surface plots its own
+  // timeline. `filteredPredictions` adds urgency + horizon for the table.
+  const forecastBase = useMemo(
+    () => buildForecastBase(allPredictions, { site: siteFilter, vehicleType: vehicleTypeFilter, search }),
+    [allPredictions, siteFilter, vehicleTypeFilter, search],
+  )
+  const filteredPredictions = useMemo(
+    () => filterPredictions(forecastBase, { urgency: urgencyFilter, horizon: horizonFilter }),
+    [forecastBase, urgencyFilter, horizonFilter],
+  )
+  const forecastScopeActive = siteFilter !== 'all' || vehicleTypeFilter !== 'all' || search.trim() !== ''
   const timeScopeActive = urgencyFilter !== 'all' || horizonFilter !== '12mo'
 
-  // ── Failure-risk filtering + KPIs ─────────────────────────────────────────────
-  const filteredRisk = useMemo(() => {
-    return failureRiskRows.filter(r => {
-      if (siteFilter !== 'all' && r.site !== siteFilter) return false
-      if (riskBandFilter !== 'all' && r.risk_band !== riskBandFilter) return false
-      return true
-    })
-  }, [failureRiskRows, siteFilter, riskBandFilter])
+  const filteredRisk = useMemo(
+    () => filterRisk(failureRiskRows, { site: siteFilter, band: riskBandFilter, search: riskSearch }),
+    [failureRiskRows, siteFilter, riskBandFilter, riskSearch],
+  )
+  const riskKpis = useMemo(() => buildRiskKpis(failureRiskRows), [failureRiskRows])
+  const cohortRows = useMemo(() => buildCohortRows(cohortModels), [cohortModels])
 
-  const riskKpis = useMemo(() => {
-    const rows = failureRiskRows
-    const extreme = rows.filter(r => r.risk_band === 'extreme').length
-    const high = rows.filter(r => r.risk_band === 'high').length
-    const elevated = rows.filter(r => r.risk_band === 'elevated').length
-    const avgFp = rows.length ? mean(rows.map(r => r.failure_prob_pct)) : 0
-    const avgScore = rows.length ? mean(rows.map(r => r.risk_score)) : 0
-    return { total: rows.length, extreme, high, elevated, avgFp, avgScore }
-  }, [failureRiskRows])
-
-  const cohortRows = useMemo(() => {
-    return Array.from(cohortModels.values())
-      .map(m => ({
-        brand: m.brand,
-        size: m.size,
-        n: m.n,
-        etaKm: Math.round(m.eta),
-        beta: Math.round(m.beta * 1000) / 1000,
-        meanKm: Math.round(m.mean),
-        cv: Math.round(m.cv * 100) / 100,
-        ciSpread: Math.round(m.ciSpread * 10) / 10,
-      }))
-      .sort((a, b) => b.n - a.n)
-  }, [cohortModels])
-
-  // ── KPI summary ───────────────────────────────────────────────────────────────
-  const kpis = useMemo(() => {
-    const urgent = forecastBase.filter(p => p.urgency === 'Urgent')
-    const soon   = forecastBase.filter(p => p.urgency === 'Soon')
-    const monitor = forecastBase.filter(p => p.urgency === 'Monitor' && p.days_away <= 365)
-    const yr12   = forecastBase.filter(p => p.days_away <= 365)
-
-    const urgentCost  = urgent.reduce((s, p) => s + p.estimated_cost, 0)
-    const soonCost    = soon.reduce((s, p) => s + p.estimated_cost, 0)
-    const monitorCost = monitor.reduce((s, p) => s + p.estimated_cost, 0)
-    const annualCost  = yr12.reduce((s, p) => s + p.estimated_cost, 0)
-
-    return { urgent, soon, monitor, yr12, urgentCost, soonCost, monitorCost, annualCost }
-  }, [forecastBase])
-
-  // ── Monthly budget forecast (12 months) ───────────────────────────────────────
-  const monthlyBudget = useMemo(() => buildMonthlyBudget(forecastBase), [forecastBase])
-
-  const avgMonthlyFleetBudget = useMemo(() => {
-    if (!fleetMaster.length) return null
-    const budgets = fleetMaster.map(f => f.monthly_tyre_budget).filter(v => v > 0)
-    return budgets.length > 0 ? budgets.reduce((s, v) => s + v, 0) : null
-  }, [fleetMaster])
-
-  // ── Site breakdown ────────────────────────────────────────────────────────────
-  const siteBreakdown = useMemo(() => {
-    const annual = forecastBase.filter(p => p.days_away <= 365)
-    const totalCost = annual.reduce((s, p) => s + p.estimated_cost, 0)
-    return buildSiteBreakdown(annual, totalCost)
-  }, [forecastBase])
-
-  // ── Quarterly forecasts ───────────────────────────────────────────────────────
-  const quarterlyForecast = useMemo(() => {
-    const q1 = monthlyBudget.slice(0, 3).reduce((s, m) => s + m.cost, 0)
-    const q2 = monthlyBudget.slice(3, 6).reduce((s, m) => s + m.cost, 0)
-    const h2 = monthlyBudget.slice(6, 12).reduce((s, m) => s + m.cost, 0)
-    const total = q1 + q2 + h2
-    return { q1, q2, h2, total }
-  }, [monthlyBudget])
-
-  // ── Top urgent vehicles ───────────────────────────────────────────────────────
-  const urgentVehicles = useMemo(() => {
-    const byAsset = {}
-    for (const p of forecastBase) {
-      if (!byAsset[p.asset_no]) {
-        byAsset[p.asset_no] = {
-          asset_no: p.asset_no,
-          site: p.site,
-          vehicle_type: p.vehicle_type,
-          urgent_count: 0,
-          soon_count: 0,
-          total_cost: 0,
-          min_days: p.days_away,
-        }
-      }
-      byAsset[p.asset_no].total_cost += p.estimated_cost
-      if (p.urgency === 'Urgent') byAsset[p.asset_no].urgent_count++
-      if (p.urgency === 'Soon')   byAsset[p.asset_no].soon_count++
-      if (p.days_away < byAsset[p.asset_no].min_days) byAsset[p.asset_no].min_days = p.days_away
-    }
-    return Object.values(byAsset)
-      .filter(v => v.urgent_count > 0 || v.min_days <= SOON_DAYS)
-      .sort((a, b) => b.urgent_count - a.urgent_count || a.min_days - b.min_days)
-      .slice(0, 10)
-      .map(v => ({
-        ...v,
-        recommended_action: v.urgent_count >= 3
-          ? 'Schedule immediate full set replacement'
-          : v.urgent_count >= 1
-            ? 'Urgent inspection + prioritise replacement'
-            : 'Schedule within 90 days',
-      }))
-  }, [forecastBase])
-
-  // ── Pagination ────────────────────────────────────────────────────────────────
-  const totalPages = Math.max(1, Math.ceil(filteredPredictions.length / PAGE_SIZE))
-  const pagedRows  = filteredPredictions.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
-
-  // Reset page when filters change
-  useEffect(() => { setCurrentPage(1) }, [siteFilter, urgencyFilter, vehicleTypeFilter, horizonFilter])
-  useEffect(() => { setRiskPage(1) }, [siteFilter, riskBandFilter])
+  // ── Rollups ──────────────────────────────────────────────────────────────────
+  const kpis = useMemo(() => forecastKpis(forecastBase), [forecastBase])
+  const monthlyBudget = useMemo(() => buildMonthlyBudget(forecastBase, now), [forecastBase, now])
+  const avgMonthlyFleetBudget = useMemo(() => monthlyFleetBudget(fleetMaster), [fleetMaster])
+  const siteBreakdown = useMemo(() => buildSiteBreakdown(forecastBase), [forecastBase])
+  const quarterly = useMemo(() => quarterlyForecast(monthlyBudget), [monthlyBudget])
+  const urgentVehicles = useMemo(() => buildUrgentVehicles(forecastBase), [forecastBase])
 
   // ── Chart data ────────────────────────────────────────────────────────────────
   const lineChartData = useMemo(() => {
-    const labels = monthlyBudget.map(m => m.label)
-    const costs  = monthlyBudget.map(m => m.cost)
-    const datasets = [
-      {
-        label: 'Forecast Spend',
-        data: costs,
-        borderColor: '#3b82f6',
-        backgroundColor: 'rgba(59,130,246,0.12)',
-        fill: true,
-        tension: 0.4,
-        pointBackgroundColor: '#3b82f6',
-        pointRadius: 4,
-      },
-    ]
+    const labels = monthlyBudget.map((m) => formatMonthYear(m.date))
+    const spend = colorAt(0)
+    const datasets = [{
+      label: 'Forecast spend',
+      data: monthlyBudget.map((m) => m.cost),
+      borderColor: spend,
+      backgroundColor: withAlpha(spend, 0.12),
+      fill: true,
+      tension: 0.4,
+      pointBackgroundColor: spend,
+      pointRadius: 4,
+    }]
     if (avgMonthlyFleetBudget) {
+      const budget = colorAt(1)
       datasets.push({
-        label: 'Monthly Budget',
+        label: 'Monthly budget',
         data: labels.map(() => avgMonthlyFleetBudget),
-        borderColor: '#10b981',
+        borderColor: budget,
         borderDash: [6, 4],
         backgroundColor: 'transparent',
         pointRadius: 0,
@@ -861,49 +623,107 @@ export default function PredictiveMaintenance() {
     return { labels, datasets }
   }, [monthlyBudget, avgMonthlyFleetBudget])
 
-  const urgencyBarData = useMemo(() => {
-    return {
-      labels: ['Urgent (≤30d)', 'Soon (31-90d)', 'Monitor (91-365d)'],
-      datasets: [{
-        data: [kpis.urgent.length, kpis.soon.length, kpis.monitor.length],
-        backgroundColor: ['rgba(239,68,68,0.7)', 'rgba(245,158,11,0.7)', 'rgba(16,185,129,0.5)'],
-        borderColor: ['#ef4444', '#f59e0b', '#10b981'],
-        borderWidth: 1,
-        borderRadius: 4,
-      }],
-    }
-  }, [kpis])
+  const urgencyBarData = useMemo(() => ({
+    labels: [`Urgent (${URGENT_DAYS}d or less)`, `Soon (31 to ${SOON_DAYS}d)`, 'Monitor (91 to 365d)'],
+    datasets: [{
+      data: [kpis.urgentCount, kpis.soonCount, kpis.monitorCount],
+      backgroundColor: [SEM.red, SEM.amber, SEM.green].map((c) => withAlpha(c, 0.65)),
+      borderColor: [SEM.red, SEM.amber, SEM.green],
+      borderWidth: 1,
+      borderRadius: 4,
+    }],
+  }), [kpis])
+
+  // ── Table columns ────────────────────────────────────────────────────────────
+  const forecastColumns = useMemo(() => [
+    { id: 'asset_no', header: 'Asset No', accessorKey: 'asset_no', cell: ({ getValue }) => <span className="font-mono font-semibold text-blue-300">{getValue()}</span> },
+    { id: 'site', header: 'Site', accessorKey: 'site' },
+    { id: 'vehicle_type', header: 'Type', accessorKey: 'vehicle_type' },
+    { id: 'position', header: 'Position', accessorKey: 'position' },
+    { id: 'brand', header: 'Brand', accessorKey: 'brand' },
+    { id: 'tread_depth', header: 'Tread (mm)', accessorKey: 'tread_depth', meta: { align: 'right' }, cell: ({ getValue }) => <TreadCell value={getValue()} /> },
+    { id: 'km_remaining', header: 'KM remaining', accessorKey: 'km_remaining', meta: { align: 'right' }, cell: ({ getValue }) => <span className="tabular-nums">{fmt(getValue())}</span> },
+    { id: 'due_date', header: 'Due date', accessorFn: (r) => (r.due_date ? new Date(r.due_date).getTime() : null), cell: ({ row }) => <span className="whitespace-nowrap">{fmtDate(row.original.due_date)}</span> },
+    { id: 'urgency', header: 'Urgency', accessorKey: 'urgency', cell: ({ getValue }) => <UrgencyBadge urgency={getValue()} /> },
+    { id: 'limiting_factor', header: 'Limiting factor', accessorKey: 'limiting_factor', cell: ({ getValue }) => <LimitingFactorChip factor={getValue()} /> },
+    { id: 'confidence', header: 'Confidence', accessorKey: 'confidence', cell: ({ row }) => <ConfidenceBadge label={row.original.confidence_label} value={row.original.confidence} /> },
+    { id: 'estimated_cost', header: 'Est. cost', accessorKey: 'estimated_cost', meta: { align: 'right' }, cell: ({ getValue }) => <span className="font-semibold tabular-nums">{fmtCurrency(getValue(), activeCurrency)}</span> },
+    { id: 'days_away', header: 'Days away', accessorKey: 'days_away', meta: { align: 'right' },
+      cell: ({ getValue }) => {
+        const d = getValue()
+        const cls = d <= URGENT_DAYS ? 'text-red-400' : d <= SOON_DAYS ? 'text-amber-400' : 'text-[var(--text-muted)]'
+        return <span className={`font-semibold tabular-nums ${cls}`}>{d != null ? `${d}d` : 'N/A'}</span>
+      } },
+  ], [activeCurrency])
+
+  const siteColumns = useMemo(() => [
+    { id: 'site', header: 'Site', accessorKey: 'site', cell: ({ getValue }) => <span className="font-semibold">{getValue()}</span> },
+    { id: 'due30', header: `Due ${URGENT_DAYS}d`, accessorKey: 'due30', meta: { align: 'right' }, cell: ({ getValue }) => <span className={`tabular-nums font-semibold ${getValue() > 0 ? 'text-red-400' : 'text-[var(--text-muted)]'}`}>{getValue()}</span> },
+    { id: 'due90', header: `Due ${SOON_DAYS}d`, accessorKey: 'due90', meta: { align: 'right' }, cell: ({ getValue }) => <span className={`tabular-nums font-semibold ${getValue() > 0 ? 'text-amber-400' : 'text-[var(--text-muted)]'}`}>{getValue()}</span> },
+    { id: 'due12mo', header: 'Due 12mo', accessorKey: 'due12mo', meta: { align: 'right' } },
+    { id: 'cost', header: 'Forecast cost', accessorKey: 'cost', meta: { align: 'right' }, cell: ({ getValue }) => <span className="font-semibold tabular-nums">{fmtCurrency(getValue(), activeCurrency)}</span> },
+    { id: 'pctBudget', header: 'Share of forecast', accessorKey: 'pctBudget',
+      cell: ({ getValue }) => {
+        const v = getValue()
+        if (v == null) return <span className="text-[var(--text-dim)]">N/A</span>
+        return (
+          <div className="flex items-center gap-2 min-w-[120px]">
+            <div className="flex-1 bg-[var(--input-bg)] rounded-full h-1.5" role="presentation">
+              <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: `${Math.min(100, v)}%` }} />
+            </div>
+            <span className="text-[var(--text-muted)] w-12 text-right tabular-nums">{v}%</span>
+          </div>
+        )
+      } },
+  ], [activeCurrency])
+
+  const vehicleColumns = useMemo(() => [
+    { id: 'rank', header: '#', accessorKey: 'rank', meta: { align: 'right' } },
+    { id: 'asset_no', header: 'Asset No', accessorKey: 'asset_no', cell: ({ getValue }) => <span className="font-mono font-semibold text-blue-300">{getValue()}</span> },
+    { id: 'site', header: 'Site', accessorKey: 'site' },
+    { id: 'vehicle_type', header: 'Type', accessorKey: 'vehicle_type' },
+    { id: 'urgent_count', header: 'Urgent', accessorKey: 'urgent_count', meta: { align: 'right' },
+      cell: ({ getValue }) => (getValue() > 0 ? <span className="px-1.5 py-0.5 bg-red-900/40 text-red-300 rounded font-bold tabular-nums">{getValue()}</span> : <span className="text-[var(--text-dim)]">0</span>) },
+    { id: 'soon_count', header: 'Soon', accessorKey: 'soon_count', meta: { align: 'right' },
+      cell: ({ getValue }) => (getValue() > 0 ? <span className="px-1.5 py-0.5 bg-amber-900/40 text-amber-300 rounded font-bold tabular-nums">{getValue()}</span> : <span className="text-[var(--text-dim)]">0</span>) },
+    { id: 'total_cost', header: 'Forecast cost', accessorKey: 'total_cost', meta: { align: 'right' }, cell: ({ getValue }) => <span className="font-semibold tabular-nums">{fmtCurrency(getValue(), activeCurrency)}</span> },
+    { id: 'recommended_action', header: 'Recommended action', accessorKey: 'recommended_action' },
+  ], [activeCurrency])
 
   // ── Export handlers ───────────────────────────────────────────────────────────
+  const stamp = todayStamp(now)
+  const forecastFile = reportFileName('Predictive Maintenance', stamp)
+  const riskFile = reportFileName('Predictive Failure Risk', stamp)
+
   const handleExcelExport = useCallback(() => {
-    const rows = filteredPredictions.map(p => ({
+    const rows = filteredPredictions.map((p) => ({
       ...p,
       due_date: fmtDate(p.due_date),
       estimated_cost: `${activeCurrency} ${p.estimated_cost}`,
-      limiting_factor: LIMITING_FACTOR_LABEL[p.limiting_factor] || '-',
+      tread_depth: p.tread_depth ?? 'N/A',
+      limiting_factor: LIMITING_FACTOR_LABEL[p.limiting_factor] || 'N/A',
     }))
     exportToExcel(
       rows,
       ['asset_no','site','vehicle_type','position','brand','size','tread_depth','km_remaining','due_date','urgency','limiting_factor','confidence_label','risk_score','estimated_cost','days_away'],
       ['Asset No','Site','Vehicle Type','Position','Brand','Size','Tread Depth (mm)','KM Remaining','Due Date','Urgency','Limiting Factor','Confidence','Risk Score','Estimated Cost','Days Away'],
-      `Predictive_Maintenance_${new Date().toISOString().slice(0,10)}`,
+      forecastFile,
       'Upcoming Replacements',
     )
-  }, [filteredPredictions, activeCurrency])
+  }, [filteredPredictions, activeCurrency, forecastFile])
 
   // A landscape A4 page holds ~30 of these rows, so 500 is already ~17 pages and
-  // the whole document is built in memory. The cap stays; what changes is that
-  // the header now says when it bites, instead of a document headed
-  // "500 records" that the reader takes for the whole filtered forecast.
+  // the whole document is built in memory. The cap stays; the header says when
+  // it bites instead of reading as the whole filtered forecast.
   const PDF_ROW_CAP = 500
 
   const handlePdfExport = useCallback((opts = {}) => {
-    const rows = filteredPredictions.slice(0, PDF_ROW_CAP).map(p => ({
+    const rows = filteredPredictions.slice(0, PDF_ROW_CAP).map((p) => ({
       ...p,
       due_date: fmtDate(p.due_date),
-      estimated_cost: `${activeCurrency} ${fmt(p.estimated_cost, 0)}`,
-      tread_depth: p.tread_depth != null ? `${p.tread_depth} mm` : '-',
-      limiting_factor: LIMITING_FACTOR_LABEL[p.limiting_factor] || '-',
+      estimated_cost: fmtCurrency(p.estimated_cost, activeCurrency),
+      tread_depth: p.tread_depth != null ? `${p.tread_depth} mm` : 'N/A',
+      limiting_factor: LIMITING_FACTOR_LABEL[p.limiting_factor] || 'N/A',
     }))
     return exportToPdf(
       rows,
@@ -922,7 +742,7 @@ export default function PredictiveMaintenance() {
         { key: 'days_away',       header: 'Days Away' },
       ],
       'Predictive Maintenance: Upcoming Tyre Replacements',
-      `Predictive_Maintenance_${new Date().toISOString().slice(0,10)}`,
+      forecastFile,
       'landscape',
       '',
       {
@@ -932,29 +752,55 @@ export default function PredictiveMaintenance() {
           : opts.subtitleNote,
       },
     )
-  }, [filteredPredictions, activeCurrency])
+  }, [filteredPredictions, activeCurrency, forecastFile])
 
-  const handleRiskExport = useCallback(() => {
-    const rows = filteredRisk.map(r => ({
-      ...r,
-      failure_prob_pct: `${fmt(r.failure_prob_pct, 1)}%`,
-      cohort_survival: r.cohort ? `${fmt(r.cohort.survivalPct, 1)}%` : '-',
-    }))
+  const riskExportRows = useCallback(() => filteredRisk.map((r) => ({
+    ...r,
+    tread_depth: r.tread_depth ?? 'N/A',
+    failure_prob_pct: r.failure_prob_pct != null ? `${fmt(r.failure_prob_pct, 1)}%` : 'N/A',
+    cohort_survival: r.cohort ? `${fmt(r.cohort.survivalPct, 1)}%` : 'N/A',
+  })), [filteredRisk])
+
+  const handleRiskExcel = useCallback(() => {
     exportToExcel(
-      rows,
+      riskExportRows(),
       ['asset_no','site','position','brand','size','tread_depth','total_km','eta_km','failure_prob_pct','risk_score','risk_band','confidence_label','completed_samples','cohort_survival'],
       ['Asset No','Site','Position','Brand','Size','Tread (mm)','Total KM','Eta (km)','Failure Prob','Risk Score','Risk Band','Confidence','Samples','Cohort Survival'],
-      `Predictive_Failure_Risk_${new Date().toISOString().slice(0,10)}`,
+      riskFile,
       'Failure Risk',
     )
-  }, [filteredRisk])
+  }, [riskExportRows, riskFile])
+
+  const handleRiskPdf = useCallback(() => {
+    const all = riskExportRows()
+    return exportToPdf(
+      all.slice(0, PDF_ROW_CAP),
+      [
+        { key: 'asset_no', header: 'Asset No' },
+        { key: 'site', header: 'Site' },
+        { key: 'position', header: 'Position' },
+        { key: 'brand', header: 'Brand' },
+        { key: 'size', header: 'Size' },
+        { key: 'tread_depth', header: 'Tread (mm)' },
+        { key: 'failure_prob_pct', header: 'Failure Prob' },
+        { key: 'risk_score', header: 'Risk Score' },
+        { key: 'risk_band', header: 'Risk Band' },
+        { key: 'confidence_label', header: 'Confidence' },
+      ],
+      'Predictive Maintenance: Tyre Failure Risk',
+      riskFile,
+      'landscape',
+      '',
+      all.length > PDF_ROW_CAP ? { subtitleNote: `of ${fmt(all.length)} matching, narrow the filters to include the rest` } : {},
+    )
+  }, [riskExportRows, riskFile])
 
   // ── Render ────────────────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="min-h-screen bg-[var(--surface-1)] flex items-center justify-center">
+      <div className="flex items-center justify-center py-24" role="status" aria-live="polite">
         <div className="text-center space-y-3">
-          <div className="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
+          <div className="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" aria-hidden="true" />
           <p className="text-[var(--text-muted)] text-sm">Loading predictive maintenance data...</p>
         </div>
       </div>
@@ -963,12 +809,14 @@ export default function PredictiveMaintenance() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-[var(--surface-1)] flex items-center justify-center">
-        <div className="bg-[var(--surface-1)] border border-red-800/50 rounded-xl p-8 max-w-md text-center space-y-3">
-          <AlertTriangle className="text-red-400 mx-auto" size={32} />
-          <p className="text-red-300 font-semibold">Failed to load data</p>
+      <div className="flex items-center justify-center py-24">
+        <div role="alert" className="bg-[var(--surface-1)] border border-red-800/50 rounded-xl p-8 max-w-md text-center space-y-3">
+          <AlertTriangle className="text-red-400 mx-auto" size={32} aria-hidden="true" />
+          <p className="text-red-300 font-semibold">Predictive maintenance data could not be loaded</p>
           <p className="text-[var(--text-muted)] text-sm">{error}</p>
-          <button onClick={loadData} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm transition-colors">
+          <p className="text-[var(--text-muted)] text-xs">No forecast is shown, because a failed read is not the same as no replacements due.</p>
+          <button type="button" onClick={loadData}
+            className="min-h-[44px] px-4 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300">
             Retry
           </button>
         </div>
@@ -977,13 +825,17 @@ export default function PredictiveMaintenance() {
   }
 
   const hasAnyData = allPredictions.length > 0 || failureRiskRows.length > 0
+  const tabs = [
+    { key: 'forecast', label: 'Replacement Forecast', icon: CalendarClock, count: allPredictions.length },
+    { key: 'risk', label: 'Failure Risk', icon: ShieldAlert, count: failureRiskRows.length },
+  ]
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-w-0">
 
       <PageHeader
         title="Predictive Maintenance Engine"
-        subtitle={`AI-powered tyre replacement forecasting, failure-risk scoring and budget planning · ${fmtDate(TODAY)}`}
+        subtitle={`Tyre replacement forecasting, failure-risk scoring and budget planning | ${fmtDate(now)}`}
         icon={CalendarClock}
         onRefresh={loadData}
         actions={
@@ -995,26 +847,31 @@ export default function PredictiveMaintenance() {
             )}
             {activeTab === 'forecast' ? (
               <>
-                <button onClick={handleExcelExport} className="btn-secondary flex items-center gap-2 text-xs px-3 py-1.5">
-                  <Download size={14} /> Excel
+                <button type="button" onClick={handleExcelExport} disabled={!filteredPredictions.length} className={BTN_CLS}>
+                  <Download size={14} aria-hidden="true" /> Excel
                 </button>
-                <button onClick={() => handlePdfExport()} className="btn-secondary flex items-center gap-2 text-xs px-3 py-1.5">
-                  <FileText size={14} /> PDF
+                <button type="button" onClick={() => handlePdfExport()} disabled={!filteredPredictions.length} className={BTN_CLS}>
+                  <FileText size={14} aria-hidden="true" /> PDF
                 </button>
                 <EmailPdfButton
-                  className="btn-secondary flex items-center gap-2 text-xs px-3 py-1.5"
+                  className={BTN_CLS}
                   getPdf={async () => ({
                     base64: await handlePdfExport({ returnBase64: true }),
-                    filename: `Predictive_Maintenance_${new Date().toISOString().slice(0,10)}.pdf`,
+                    filename: `${forecastFile}.pdf`,
                     subject: 'Predictive Maintenance',
                     bodyHtml: '<p>Attached is the Predictive Maintenance report.</p>',
                   })}
                 />
               </>
             ) : (
-              <button onClick={handleRiskExport} className="btn-secondary flex items-center gap-2 text-xs px-3 py-1.5">
-                <Download size={14} /> Export Risk
-              </button>
+              <>
+                <button type="button" onClick={handleRiskExcel} disabled={!filteredRisk.length} className={BTN_CLS}>
+                  <Download size={14} aria-hidden="true" /> Excel
+                </button>
+                <button type="button" onClick={() => handleRiskPdf()} disabled={!filteredRisk.length} className={BTN_CLS}>
+                  <FileText size={14} aria-hidden="true" /> PDF
+                </button>
+              </>
             )}
           </div>
         }
@@ -1022,523 +879,288 @@ export default function PredictiveMaintenance() {
 
       {activeCountry === 'All' && hasAnyData && (
         <div className="flex items-start gap-2 text-xs text-amber-400/90 bg-amber-900/15 border border-amber-800/40 rounded-lg px-3 py-2">
-          <Info size={13} className="mt-0.5 flex-shrink-0" />
+          <Info size={13} className="mt-0.5 flex-shrink-0" aria-hidden="true" />
           <span>Showing all countries. Cost and budget figures span multiple currencies (SAR, AED, EGP) and are not a single-currency total. Select a country to see figures in that country's currency.</span>
         </div>
       )}
 
-      {/* ── Empty state ─────────────────────────────────────────────────────── */}
       {!hasAnyData && (
         <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-12 text-center">
-          <CalendarClock className="text-[var(--text-dim)] mx-auto mb-3" size={40} />
+          <CalendarClock className="text-[var(--text-dim)] mx-auto mb-3" size={40} aria-hidden="true" />
           <p className="text-[var(--text-secondary)] font-semibold">No active tyre records found</p>
-          <p className="text-[var(--text-muted)] text-sm mt-1">Upload tyre fitment data to generate replacement forecasts</p>
+          <p className="text-[var(--text-muted)] text-sm mt-1">Upload tyre fitment data to generate replacement forecasts.</p>
         </div>
       )}
 
-      {/* ── Tab switcher ────────────────────────────────────────────────────── */}
       {hasAnyData && (
-        <div className="flex items-center gap-1 border-b border-[var(--input-border)]">
-          {[
-            { key: 'forecast', label: 'Replacement Forecast', icon: CalendarClock, count: allPredictions.length },
-            { key: 'risk', label: 'Failure Risk', icon: ShieldAlert, count: failureRiskRows.length },
-          ].map(t => (
+        <div role="tablist" aria-label="Predictive maintenance views" className="flex items-center gap-1 border-b border-[var(--input-border)] overflow-x-auto">
+          {tabs.map((t) => (
             <button
               key={t.key}
+              type="button"
+              role="tab"
+              id={`pm-tab-${t.key}`}
+              aria-selected={activeTab === t.key}
+              aria-controls={`pm-panel-${t.key}`}
               onClick={() => setActiveTab(t.key)}
-              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              className={`flex items-center gap-2 px-4 min-h-[44px] text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                 activeTab === t.key
                   ? 'border-blue-500 text-[var(--text-primary)]'
                   : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
               }`}
             >
-              <t.icon size={15} /> {t.label}
-              <span className="text-xs px-1.5 py-0.5 rounded-full bg-[var(--input-bg)] text-[var(--text-muted)]">{fmt(t.count)}</span>
+              <t.icon size={15} aria-hidden="true" /> {t.label}
+              <span className="text-xs px-1.5 py-0.5 rounded-full bg-[var(--input-bg)] text-[var(--text-muted)] tabular-nums">{fmt(t.count)}</span>
             </button>
           ))}
         </div>
       )}
 
-      {activeTab === 'forecast' && allPredictions.length === 0 && failureRiskRows.length > 0 && (
-        <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-10 text-center">
-          <CalendarClock className="text-[var(--text-dim)] mx-auto mb-3" size={36} />
-          <p className="text-[var(--text-secondary)] font-semibold">No active replacement forecasts</p>
-          <p className="text-[var(--text-muted)] text-sm mt-1">Switch to the Failure Risk tab to review scored tyres.</p>
+      {hasAnyData && activeTab === 'forecast' && (
+        <div role="tabpanel" id="pm-panel-forecast" aria-labelledby="pm-tab-forecast" className="space-y-6">
+          {allPredictions.length === 0 ? (
+            <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-10 text-center">
+              <CalendarClock className="text-[var(--text-dim)] mx-auto mb-3" size={36} aria-hidden="true" />
+              <p className="text-[var(--text-secondary)] font-semibold">No active replacement forecasts</p>
+              <p className="text-[var(--text-muted)] text-sm mt-1">Switch to the Failure Risk tab to review scored tyres.</p>
+            </div>
+          ) : (
+            <>
+              {/* Filters sit above the KPI strip so the scope is visible before
+                  the figures it shapes. */}
+              <section aria-label="Forecast filters" className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Filter size={14} className="text-[var(--text-muted)]" aria-hidden="true" />
+                  <span className="text-sm font-medium text-[var(--text-secondary)]">Filters</span>
+                </div>
+                <div className="flex flex-wrap gap-3 items-end">
+                  <SearchField id="pm-forecast-search" value={search} onChange={setSearch} placeholder="Asset, site, brand, size" />
+                  <div className="flex flex-col gap-1">
+                    <label htmlFor="pm-site" className="text-xs text-[var(--text-muted)]">Site</label>
+                    <select id="pm-site" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} className={SELECT_CLS}>
+                      {uniqueSites.map((s) => <option key={s} value={s}>{s === 'all' ? 'All sites' : s}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label htmlFor="pm-urgency" className="text-xs text-[var(--text-muted)]">Urgency</label>
+                    <select id="pm-urgency" value={urgencyFilter} onChange={(e) => setUrgencyFilter(e.target.value)} className={SELECT_CLS}>
+                      <option value="all">All urgencies</option>
+                      <option value="Urgent">Urgent</option>
+                      <option value="Soon">Soon</option>
+                      <option value="Monitor">Monitor</option>
+                    </select>
+                  </div>
+                  {uniqueVehicleTypes.length > 1 && (
+                    <div className="flex flex-col gap-1">
+                      <label htmlFor="pm-type" className="text-xs text-[var(--text-muted)]">Vehicle type</label>
+                      <select id="pm-type" value={vehicleTypeFilter} onChange={(e) => setVehicleTypeFilter(e.target.value)} className={SELECT_CLS}>
+                        {uniqueVehicleTypes.map((t) => <option key={t} value={t}>{t === 'all' ? 'All types' : t}</option>)}
+                      </select>
+                    </div>
+                  )}
+                  <fieldset className="flex flex-col gap-1">
+                    <legend className="text-xs text-[var(--text-muted)] mb-1">Horizon</legend>
+                    <div className="flex flex-wrap gap-1">
+                      {HORIZONS.map((h) => (
+                        <button
+                          key={h.key}
+                          type="button"
+                          aria-pressed={horizonFilter === h.key}
+                          onClick={() => setHorizonFilter(h.key)}
+                          className={`min-h-[44px] px-3 rounded-lg text-xs font-medium transition-colors border focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                            horizonFilter === h.key
+                              ? 'bg-blue-600 border-blue-500 text-white'
+                              : 'bg-[var(--input-bg)] border-[var(--input-border)] text-[var(--text-secondary)] hover:bg-[var(--input-bg-hover)]'
+                          }`}
+                        >
+                          {h.label}
+                        </button>
+                      ))}
+                    </div>
+                  </fieldset>
+                  <p className="ml-auto text-sm text-[var(--text-secondary)]" role="status">
+                    <span className="font-semibold tabular-nums">{fmt(filteredPredictions.length)}</span> replacements in the table
+                  </p>
+                </div>
+              </section>
+
+              {forecastScopeActive && (
+                <p className="text-xs text-[var(--text-muted)]">
+                  Forecast figures cover {fmt(forecastBase.length)} of {fmt(allPredictions.length)} tyres
+                  {siteFilter !== 'all' ? ` at ${siteFilter}` : ''}
+                  {vehicleTypeFilter !== 'all' ? ` on ${vehicleTypeFilter}` : ''}
+                  {search.trim() ? ` matching "${search.trim()}"` : ''}.
+                </p>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+                <KpiCard icon={AlertTriangle} label={`Replacements due in ${URGENT_DAYS} days`} value={`${fmt(kpis.urgentCount)} tyres`} sub={fmtCurrency(kpis.urgentCost, activeCurrency)} color="red" />
+                <KpiCard icon={Clock} label={`Replacements due 31 to ${SOON_DAYS} days`} value={`${fmt(kpis.soonCount)} tyres`} sub={fmtCurrency(kpis.soonCost, activeCurrency)} color="amber" />
+                <KpiCard icon={CheckCircle} label="Replacements due 91 to 365 days" value={`${fmt(kpis.monitorCount)} tyres`} sub={fmtCurrency(kpis.monitorCost, activeCurrency)} color="green" />
+                <KpiCard icon={DollarSign} label="12-month budget forecast" value={fmtCurrency(kpis.annualCost, activeCurrency)} sub={`${fmt(kpis.yearCount)} replacements`} color="blue" />
+                <KpiCard icon={TrendingUp} label="Fleet avg tyre life" value={fleetStats.avgKmLife != null ? `${fmt(fleetStats.avgKmLife, 0)} km` : 'N/A'} sub="Based on completed records" color="purple" />
+                <KpiCard icon={Truck} label="Fleet avg daily km per vehicle" value={fleetStats.avgDailyKm != null ? `${fmt(fleetStats.avgDailyKm, 0)} km` : 'N/A'} sub="Estimated from records" color="cyan" />
+              </div>
+
+              <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                <div className="xl:col-span-2 min-w-0">
+                  <Panel title="12-Month Budget Forecast" subtitle="Forecast tyre replacement spend by month">
+                    <div style={{ height: 240 }} role="img"
+                      aria-label={`12-month replacement spend forecast totalling ${fmtCurrency(quarterly.total, activeCurrency)}`}>
+                      <Line data={lineChartData} options={lineOpts(activeCurrency)} />
+                    </div>
+                  </Panel>
+                </div>
+                <Panel title="Replacement Urgency Distribution" subtitle="Active tyres by urgency horizon">
+                  <div style={{ height: 240 }} role="img"
+                    aria-label={`${kpis.urgentCount} urgent, ${kpis.soonCount} soon, ${kpis.monitorCount} monitor`}>
+                    <Bar data={urgencyBarData} options={countBarOpts('tyres')} />
+                  </div>
+                </Panel>
+              </div>
+
+              {timeScopeActive && (
+                <p className="text-xs text-[var(--text-muted)]">
+                  The forecast charts and quarterly cards plot their own timeline, so the urgency and
+                  horizon filters shape the table below but not these figures. Site, vehicle type and search do apply.
+                </p>
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                {[
+                  { label: 'Q1 forecast (months 1 to 3)', value: quarterly.q1 },
+                  { label: 'Q2 forecast (months 4 to 6)', value: quarterly.q2 },
+                  { label: 'H2 forecast (months 7 to 12)', value: quarterly.h2 },
+                  { label: 'Annual total', value: quarterly.total },
+                ].map((card) => (
+                  <div key={card.label} className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
+                    <p className="text-xs text-[var(--text-muted)]">{card.label}</p>
+                    <p className="text-lg font-bold text-[var(--text-primary)] mt-1 tabular-nums">{fmtCurrency(card.value, activeCurrency)}</p>
+                  </div>
+                ))}
+              </div>
+
+              <Panel title="Upcoming Replacements Calendar" subtitle={`${fmt(filteredPredictions.length)} records, sorted by due date`}>
+                <EnterpriseTable
+                  columns={forecastColumns}
+                  data={filteredPredictions}
+                  getRowId={(r, i) => `${r.id}-${i}`}
+                  enableGlobalFilter={false}
+                  enableColumnFilters={false}
+                  enableExport={false}
+                  initialPageSize={25}
+                  emptyMessage="No replacements due within the selected horizon and filters"
+                />
+              </Panel>
+
+              {siteBreakdown.length > 0 && (
+                <Panel title="Site Breakdown: 12-Month Forecast" subtitle="Replacement demand and share of the forecast by site">
+                  <EnterpriseTable
+                    columns={siteColumns}
+                    data={siteBreakdown}
+                    getRowId={(r) => r.site}
+                    enableGlobalFilter={false}
+                    enableColumnFilters={false}
+                    enableExport={false}
+                    initialPageSize={25}
+                    emptyMessage="No site demand in the next 12 months"
+                  />
+                </Panel>
+              )}
+
+              {urgentVehicles.length > 0 && (
+                <Panel title="Vehicles Needing Immediate Attention" icon={AlertTriangle}
+                  subtitle="Top 10 vehicles by urgent replacement count">
+                  <EnterpriseTable
+                    columns={vehicleColumns}
+                    data={urgentVehicles}
+                    getRowId={(r) => r.asset_no}
+                    enableGlobalFilter={false}
+                    enableColumnFilters={false}
+                    enableExport={false}
+                    initialPageSize={25}
+                    emptyMessage="No vehicles need immediate attention"
+                  />
+                </Panel>
+              )}
+
+              <section className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
+                <button
+                  type="button"
+                  aria-expanded={assumptionsOpen}
+                  aria-controls="pm-assumptions"
+                  onClick={() => setAssumptionsOpen((o) => !o)}
+                  className="w-full min-h-[44px] flex items-center justify-between p-4 hover:bg-[var(--input-bg)]/40 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
+                >
+                  <span className="flex items-center gap-2">
+                    <Info className="text-blue-400" size={16} aria-hidden="true" />
+                    <span className="text-sm font-medium text-[var(--text-secondary)]">Prediction model assumptions and methodology</span>
+                  </span>
+                  {assumptionsOpen ? <ChevronUp size={16} className="text-[var(--text-muted)]" aria-hidden="true" /> : <ChevronDown size={16} className="text-[var(--text-muted)]" aria-hidden="true" />}
+                </button>
+                {assumptionsOpen && (
+                  <div id="pm-assumptions" className="px-4 pb-4 border-t border-[var(--input-border)]">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                      {[
+                        {
+                          title: 'G1: Tread wear rate',
+                          body: `Wear rate (mm/km) = (nominal new tread minus current tread) divided by lifetime km, clamped to a physical range. Nominal new tread is a documented size-class value (heavy-commercial ${fmt(DEFAULT_NEW_TREAD_MM, 0)}mm, light ~9mm) because this dataset has no per-tyre initial reading or inspection time-series. Days-to-limit projects tread to the ${LEGAL_MIN_TREAD_MM}mm legal minimum.`,
+                        },
+                        {
+                          title: 'G2: Min-of-three forecast',
+                          body: `Days-to-replace = min(tread-wear, km-lifecycle, age). Km-lifecycle uses avg tyre life (${fmt(fleetStats.avgKmLife, 0)} km fallback) divided by daily km. Age is measured from fitment_date to the ${MAX_AGE_YEARS}yr GCC guideline, an APPROXIMATION, as pre-fitment shelf age is unknown (no manufacture_date). The limiting-factor column shows which bound wins.`,
+                        },
+                        {
+                          title: 'G3: Weibull failure risk',
+                          body: `Reliability R(t)=exp(-(km/eta)^2.2) with a brand eta table (Michelin 135k to default 110k km). Composite 0 to 100 risk = failure-prob x40 + tread (up to 30) + age (up to 15) + pressure (up to 15). Pressure uses the single ${PRESSURE_TARGET_PSI} psi deviation only (no TPMS series) and is flagged when absent, never fabricated.`,
+                        },
+                        {
+                          title: 'G4: Cohort life distribution',
+                          body: 'Completed lives (km_at_removal minus km_at_fitment) are grouped by brand and size; cohorts with at least 5 samples get a method-of-moments Weibull fit (beta from CV, eta = mean/Gamma(1+1/beta)). Gives survival %, cohort percentile and expected remaining km for each active tyre.',
+                        },
+                        {
+                          title: 'G5: Confidence',
+                          body: 'Per-asset confidence = min(1, completed samples / 6). Cohort CI half-width = 30/sqrt(n) (3 to 35pp). Attached to every prediction and risk row so thin-history estimates are labelled, not overstated.',
+                        },
+                        {
+                          title: 'Cost and fleet master',
+                          body: `${fleetMasterAvailable ? 'vehicle_fleet loaded: expected km/tyre, current_km and budgets used.' : 'vehicle_fleet unavailable, tyre_records history only.'} Cost uses the tyre's cost_per_tyre, else asset mean, else fleet average (${fmtCurrency(fleetStats.avgCost, activeCurrency)}). No fabricated costs.`,
+                        },
+                      ].map((item) => (
+                        <div key={item.title} className="bg-[var(--input-bg)]/40 rounded-lg p-3">
+                          <p className="text-xs font-semibold text-blue-300 mb-1">{item.title}</p>
+                          <p className="text-xs text-[var(--text-muted)] leading-relaxed">{item.body}</p>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-xs text-[var(--text-dim)] mt-3">
+                      All forecasts are statistical estimates based on historical patterns. Actual replacement dates may vary due to road conditions, load factors, driver behaviour, and maintenance quality.
+                    </p>
+                  </div>
+                )}
+              </section>
+            </>
+          )}
         </div>
       )}
 
-      {activeTab === 'forecast' && allPredictions.length > 0 && (
-        <>
-          {/* ── KPI Strip ──────────────────────────────────────────────────── */}
-          {/* The filter bar sits BELOW this strip and below the charts, so the
-              scope has to be stated here rather than inferred from a control
-              the reader has not scrolled to yet. */}
-          {forecastScopeActive && (
-            <p className="text-xs text-[var(--text-muted)]">
-              Forecast figures cover {fmt(forecastBase.length)} of {fmt(allPredictions.length)} tyres
-              {siteFilter !== 'all' ? ` at ${siteFilter}` : ''}
-              {vehicleTypeFilter !== 'all' ? ` on ${vehicleTypeFilter}` : ''}.
-            </p>
-          )}
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-            <KpiCard
-              icon={AlertTriangle}
-              label="Replacements due ≤30 days"
-              value={`${fmt(kpis.urgent.length)} tyres`}
-              sub={fmtCurrency(kpis.urgentCost, activeCurrency)}
-              color="red"
-            />
-            <KpiCard
-              icon={Clock}
-              label="Replacements due 31-90 days"
-              value={`${fmt(kpis.soon.length)} tyres`}
-              sub={fmtCurrency(kpis.soonCost, activeCurrency)}
-              color="amber"
-            />
-            <KpiCard
-              icon={CheckCircle}
-              label="Replacements due 91-365 days"
-              value={`${fmt(kpis.monitor.length)} tyres`}
-              sub={fmtCurrency(kpis.monitorCost, activeCurrency)}
-              color="green"
-            />
-            <KpiCard
-              icon={DollarSign}
-              label="12-month budget forecast"
-              value={fmtCurrency(kpis.annualCost, activeCurrency)}
-              sub={`${fmt(kpis.yr12.length)} replacements`}
-              color="blue"
-            />
-            <KpiCard
-              icon={TrendingUp}
-              label="Fleet avg tyre life"
-              value={`${fmt(fleetStats.avgKmLife, 0)} km`}
-              sub="based on completed records"
-              color="purple"
-            />
-            <KpiCard
-              icon={Truck}
-              label="Fleet avg daily km / vehicle"
-              value={`${fmt(fleetStats.avgDailyKm, 0)} km`}
-              sub="estimated from records"
-              color="cyan"
-            />
-          </div>
-
-          {/* ── Filters ────────────────────────────────────────────────────── */}
-          <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Filter size={14} className="text-[var(--text-muted)]" />
-              <span className="text-sm font-medium text-[var(--text-secondary)]">Filters</span>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              {/* Site */}
-              <div className="flex flex-col gap-1">
-                <label className="text-xs text-[var(--text-muted)]">Site</label>
-                <select
-                  value={siteFilter}
-                  onChange={e => setSiteFilter(e.target.value)}
-                  className="bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500"
-                >
-                  {uniqueSites.map(s => (
-                    <option key={s} value={s}>{s === 'all' ? 'All Sites' : s}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Urgency */}
-              <div className="flex flex-col gap-1">
-                <label className="text-xs text-[var(--text-muted)]">Urgency</label>
-                <select
-                  value={urgencyFilter}
-                  onChange={e => setUrgencyFilter(e.target.value)}
-                  className="bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500"
-                >
-                  <option value="all">All Urgencies</option>
-                  <option value="Urgent">Urgent</option>
-                  <option value="Soon">Soon</option>
-                  <option value="Monitor">Monitor</option>
-                </select>
-              </div>
-
-              {/* Vehicle type */}
-              {uniqueVehicleTypes.length > 1 && (
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs text-[var(--text-muted)]">Vehicle Type</label>
-                  <select
-                    value={vehicleTypeFilter}
-                    onChange={e => setVehicleTypeFilter(e.target.value)}
-                    className="bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500"
-                  >
-                    {uniqueVehicleTypes.map(t => (
-                      <option key={t} value={t}>{t === 'all' ? 'All Types' : t}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {/* Horizon */}
-              <div className="flex flex-col gap-1">
-                <label className="text-xs text-[var(--text-muted)]">Horizon</label>
-                <div className="flex gap-1">
-                  {['30d','90d','6mo','12mo'].map(h => (
-                    <button
-                      key={h}
-                      onClick={() => setHorizonFilter(h)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
-                        horizonFilter === h
-                          ? 'bg-blue-600 border-blue-500 text-white'
-                          : 'bg-[var(--input-bg)] border-[var(--input-border)] text-[var(--text-secondary)] hover:bg-[var(--input-bg-hover)]'
-                      }`}
-                    >
-                      {h}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Result count */}
-              <div className="flex flex-col gap-1 ml-auto justify-end">
-                <p className="text-xs text-[var(--text-muted)] text-right">Showing</p>
-                <p className="text-sm font-semibold text-[var(--text-secondary)] text-right">{fmt(filteredPredictions.length)} replacements</p>
-              </div>
-            </div>
-          </div>
-
-          {/* ── Charts row ──────────────────────────────────────────────────── */}
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-            {/* Budget forecast line chart */}
-            <div className="xl:col-span-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
-              <div className="mb-3">
-                <h2 className="text-sm font-semibold text-[var(--text-primary)]">12-Month Budget Forecast</h2>
-                <p className="text-xs text-[var(--text-muted)]">Forecasted tyre replacement spend by month</p>
-              </div>
-              <div style={{ height: 240 }}>
-                <Line data={lineChartData} options={lineOpts(activeCurrency)} />
-              </div>
-            </div>
-
-            {/* Urgency bar chart */}
-            <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
-              <div className="mb-3">
-                <h2 className="text-sm font-semibold text-[var(--text-primary)]">Replacement Urgency Distribution</h2>
-                <p className="text-xs text-[var(--text-muted)]">Active tyres by urgency horizon</p>
-              </div>
-              <div style={{ height: 240 }}>
-                <Bar data={urgencyBarData} options={barOpts()} />
-              </div>
-            </div>
-          </div>
-
-          {/* ── Quarterly forecast cards ────────────────────────────────────── */}
-          {timeScopeActive && (
-            <p className="text-xs text-[var(--text-muted)]">
-              The forecast charts and quarterly cards plot their own timeline, so the urgency and
-              horizon filters shape the table below but not these figures. Site and vehicle type do apply.
-            </p>
-          )}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {[
-              { label: 'Q1 Forecast (Months 1-3)',  value: quarterlyForecast.q1,    color: 'from-blue-900/30 to-blue-800/10 border-blue-800/40' },
-              { label: 'Q2 Forecast (Months 4-6)',  value: quarterlyForecast.q2,    color: 'from-purple-900/30 to-purple-800/10 border-purple-800/40' },
-              { label: 'H2 Forecast (Months 7-12)', value: quarterlyForecast.h2,    color: 'from-cyan-900/30 to-cyan-800/10 border-cyan-800/40' },
-              { label: 'Annual Total',               value: quarterlyForecast.total, color: 'from-green-900/30 to-green-800/10 border-green-800/40' },
-            ].map(card => (
-              <div key={card.label} className={`bg-gradient-to-br ${card.color} border rounded-xl p-4`}>
-                <p className="text-xs text-[var(--text-muted)]">{card.label}</p>
-                <p className="text-lg font-bold text-[var(--text-primary)] mt-1">{fmtCurrency(card.value, activeCurrency)}</p>
-              </div>
-            ))}
-          </div>
-
-          {/* ── Upcoming Replacements Table ────────────────────────────────── */}
-          <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-sm font-semibold text-[var(--text-primary)]">Upcoming Replacements Calendar</h2>
-                <p className="text-xs text-[var(--text-muted)]">{fmt(filteredPredictions.length)} records · sorted by due date</p>
-              </div>
-            </div>
-
-            {filteredPredictions.length === 0 ? (
-              <div className="text-center py-10">
-                <CheckCircle className="text-green-500 mx-auto mb-2" size={28} />
-                <p className="text-[var(--text-muted)] text-sm">No replacements due within selected horizon and filters</p>
-              </div>
-            ) : (
-              <>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="border-b border-[var(--input-border)]">
-                        {['Asset No','Site','Type','Position','Brand','Tread (mm)','KM Remaining','Due Date','Urgency','Limiting Factor','Confidence','Est. Cost','Days Away'].map(h => (
-                          <th key={h} className="text-left text-[var(--text-muted)] font-medium py-2 px-2 whitespace-nowrap">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {pagedRows.map((p, i) => (
-                        <tr
-                          key={`${p.id}-${i}`}
-                          className={`border-b border-[var(--input-border)]/50 transition-colors ${
-                            p.urgency === 'Urgent'
-                              ? 'bg-red-900/10 hover:bg-red-900/20'
-                              : p.urgency === 'Soon'
-                                ? 'bg-amber-900/5 hover:bg-amber-900/15'
-                                : 'hover:bg-[var(--input-bg)]/40'
-                          }`}
-                        >
-                          <td className="py-2 px-2 font-mono font-semibold text-blue-300">{p.asset_no}</td>
-                          <td className="py-2 px-2 text-[var(--text-secondary)]">{p.site}</td>
-                          <td className="py-2 px-2 text-[var(--text-muted)]">{p.vehicle_type}</td>
-                          <td className="py-2 px-2 text-[var(--text-secondary)]">{p.position}</td>
-                          <td className="py-2 px-2 text-[var(--text-secondary)]">{p.brand}</td>
-                          <td className="py-2 px-2 text-center">
-                            {p.tread_depth != null
-                              ? <span className={`font-semibold ${p.tread_depth < URGENT_TREAD_MM ? 'text-red-400' : p.tread_depth < SOON_TREAD_MM ? 'text-amber-400' : 'text-green-400'}`}>{p.tread_depth}</span>
-                              : <span className="text-[var(--text-dim)]">-</span>
-                            }
-                          </td>
-                          <td className="py-2 px-2 text-right text-[var(--text-secondary)]">{fmt(p.km_remaining)}</td>
-                          <td className="py-2 px-2 text-[var(--text-secondary)] whitespace-nowrap">{fmtDate(p.due_date)}</td>
-                          <td className="py-2 px-2"><UrgencyBadge urgency={p.urgency} /></td>
-                          <td className="py-2 px-2"><LimitingFactorChip factor={p.limiting_factor} /></td>
-                          <td className="py-2 px-2"><ConfidenceBadge label={p.confidence_label} value={p.confidence} /></td>
-                          <td className="py-2 px-2 text-right font-semibold text-[var(--text-secondary)]">{fmtCurrency(p.estimated_cost, activeCurrency)}</td>
-                          <td className="py-2 px-2 text-right">
-                            <span className={`font-semibold ${p.days_away <= 30 ? 'text-red-400' : p.days_away <= 90 ? 'text-amber-400' : 'text-[var(--text-muted)]'}`}>
-                              {p.days_away}d
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Pagination */}
-                {totalPages > 1 && (
-                  <div className="flex items-center justify-between mt-4 pt-3 border-t border-[var(--input-border)]">
-                    <p className="text-xs text-[var(--text-muted)]">
-                      Page {currentPage} of {totalPages} · {fmt(filteredPredictions.length)} total
-                    </p>
-                    <div className="flex gap-1">
-                      <button
-                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                        disabled={currentPage === 1}
-                        className="p-1.5 rounded bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                      >
-                        <ChevronLeft size={14} />
-                      </button>
-                      {Array.from({ length: Math.min(7, totalPages) }, (_, i) => {
-                        let page
-                        if (totalPages <= 7) {
-                          page = i + 1
-                        } else if (currentPage <= 4) {
-                          page = i + 1
-                          if (i === 6) page = totalPages
-                        } else if (currentPage >= totalPages - 3) {
-                          page = totalPages - 6 + i
-                        } else {
-                          const offsets = [-3, -2, -1, 0, 1, 2, 3]
-                          page = currentPage + offsets[i]
-                        }
-                        return (
-                          <button
-                            key={page}
-                            onClick={() => setCurrentPage(page)}
-                            className={`px-2.5 py-1 rounded text-xs border transition-colors ${
-                              currentPage === page
-                                ? 'bg-blue-600 border-blue-500 text-white'
-                                : 'bg-[var(--input-bg)] border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg-hover)]'
-                            }`}
-                          >
-                            {page}
-                          </button>
-                        )
-                      })}
-                      <button
-                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                        disabled={currentPage === totalPages}
-                        className="p-1.5 rounded bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                      >
-                        <ChevronRight size={14} />
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-
-          {/* ── Site Breakdown Table ────────────────────────────────────────── */}
-          {siteBreakdown.length > 0 && (
-            <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
-              <div className="mb-4">
-                <h2 className="text-sm font-semibold text-[var(--text-primary)]">Site Breakdown: 12-Month Forecast</h2>
-                <p className="text-xs text-[var(--text-muted)]">Replacement demand and budget allocation by site</p>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="border-b border-[var(--input-border)]">
-                      {['Site','Due ≤30d','Due ≤90d','Due ≤12mo','Forecast Cost','% of Budget'].map(h => (
-                        <th key={h} className="text-left text-[var(--text-muted)] font-medium py-2 px-3 whitespace-nowrap">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {siteBreakdown.map((s) => (
-                      <tr key={s.site} className="border-b border-[var(--input-border)]/40 hover:bg-[var(--input-bg)]/30 transition-colors">
-                        <td className="py-2 px-3 font-semibold text-[var(--text-secondary)]">{s.site}</td>
-                        <td className="py-2 px-3 text-center">
-                          <span className={`font-semibold ${s.due30 > 0 ? 'text-red-400' : 'text-[var(--text-muted)]'}`}>{s.due30}</span>
-                        </td>
-                        <td className="py-2 px-3 text-center">
-                          <span className={`font-semibold ${s.due90 > 0 ? 'text-amber-400' : 'text-[var(--text-muted)]'}`}>{s.due90}</span>
-                        </td>
-                        <td className="py-2 px-3 text-center text-[var(--text-secondary)]">{s.due12mo}</td>
-                        <td className="py-2 px-3 text-right font-semibold text-[var(--text-secondary)]">{fmtCurrency(s.cost, activeCurrency)}</td>
-                        <td className="py-2 px-3">
-                          <div className="flex items-center gap-2">
-                            <div className="flex-1 bg-[var(--input-bg)] rounded-full h-1.5">
-                              <div
-                                className="bg-blue-500 h-1.5 rounded-full"
-                                style={{ width: `${Math.min(100, parseFloat(s.pct_budget))}%` }}
-                              />
-                            </div>
-                            <span className="text-[var(--text-muted)] w-10 text-right">{s.pct_budget}%</span>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* ── Vehicles Needing Immediate Attention ───────────────────────── */}
-          {urgentVehicles.length > 0 && (
-            <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
-              <div className="flex items-center gap-2 mb-4">
-                <AlertTriangle className="text-red-400" size={16} />
-                <div>
-                  <h2 className="text-sm font-semibold text-[var(--text-primary)]">Vehicles Needing Immediate Attention</h2>
-                  <p className="text-xs text-[var(--text-muted)]">Top 10 vehicles with highest urgent replacement count</p>
-                </div>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="border-b border-[var(--input-border)]">
-                      {['#','Asset No','Site','Type','Urgent','Soon','Forecast Cost','Recommended Action'].map(h => (
-                        <th key={h} className="text-left text-[var(--text-muted)] font-medium py-2 px-2 whitespace-nowrap">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {urgentVehicles.map((v, i) => (
-                      <tr key={v.asset_no} className="border-b border-[var(--input-border)]/40 hover:bg-[var(--input-bg)]/30 transition-colors">
-                        <td className="py-2 px-2 text-[var(--text-muted)]">{i + 1}</td>
-                        <td className="py-2 px-2 font-mono font-semibold text-blue-300">{v.asset_no}</td>
-                        <td className="py-2 px-2 text-[var(--text-secondary)]">{v.site}</td>
-                        <td className="py-2 px-2 text-[var(--text-muted)]">{v.vehicle_type}</td>
-                        <td className="py-2 px-2 text-center">
-                          {v.urgent_count > 0
-                            ? <span className="px-1.5 py-0.5 bg-red-900/40 text-red-300 rounded font-bold">{v.urgent_count}</span>
-                            : <span className="text-[var(--text-dim)]">0</span>
-                          }
-                        </td>
-                        <td className="py-2 px-2 text-center">
-                          {v.soon_count > 0
-                            ? <span className="px-1.5 py-0.5 bg-amber-900/40 text-amber-300 rounded font-bold">{v.soon_count}</span>
-                            : <span className="text-[var(--text-dim)]">0</span>
-                          }
-                        </td>
-                        <td className="py-2 px-2 text-right font-semibold text-[var(--text-secondary)]">{fmtCurrency(v.total_cost, activeCurrency)}</td>
-                        <td className="py-2 px-2 text-[var(--text-muted)] italic">{v.recommended_action}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* ── Assumptions & Methodology ───────────────────────────────────── */}
-          <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
-            <button
-              onClick={() => setAssumptionsOpen(o => !o)}
-              className="w-full flex items-center justify-between p-4 hover:bg-[var(--input-bg)]/40 transition-colors"
-            >
-              <div className="flex items-center gap-2">
-                <Info className="text-blue-400" size={16} />
-                <span className="text-sm font-medium text-[var(--text-secondary)]">Prediction Model Assumptions & Methodology</span>
-              </div>
-              {assumptionsOpen ? <ChevronUp size={16} className="text-[var(--text-muted)]" /> : <ChevronDown size={16} className="text-[var(--text-muted)]" />}
-            </button>
-            {assumptionsOpen && (
-              <div className="px-4 pb-4 border-t border-[var(--input-border)]">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                  {[
-                    {
-                      title: 'G1 · Tread Wear Rate',
-                      body: `Wear rate (mm/km) = (nominal new tread − current tread) ÷ lifetime km, clamped to a physical range. Nominal new tread is a documented size-class value (heavy-commercial ${fmt(DEFAULT_NEW_TREAD_MM, 0)}mm, light ~9mm) because this dataset has no per-tyre initial reading or inspection time-series. Days-to-limit projects tread to the ${LEGAL_MIN_TREAD_MM}mm legal minimum.`,
-                    },
-                    {
-                      title: 'G2 · Min-of-Three Forecast',
-                      body: `Days-to-replace = min(tread-wear, km-lifecycle, age). Km-lifecycle uses avg tyre life (${fmt(fleetStats.avgKmLife, 0)} km fallback) ÷ daily km. Age is measured from fitment_date to the ${MAX_AGE_YEARS}yr GCC guideline, an APPROXIMATION, as pre-fitment shelf age is unknown (no manufacture_date). The limiting-factor column shows which bound wins.`,
-                    },
-                    {
-                      title: 'G3 · Weibull Failure Risk',
-                      body: `Reliability R(t)=exp(−(km/η)^2.2) with a brand η table (Michelin 135k … default 110k km). Composite 0 to 100 risk = failure-prob×40 + tread(≤30) + age(≤15) + pressure(≤15). Pressure uses the single ${PRESSURE_TARGET_PSI} psi deviation only (no TPMS series) and is flagged when absent, never fabricated.`,
-                    },
-                    {
-                      title: 'G4 · Cohort Life Distribution',
-                      body: 'Completed lives (km_at_removal − km_at_fitment) are grouped by brand+size; cohorts with ≥5 samples get a method-of-moments Weibull fit (β from CV, η = mean/Γ(1+1/β)). Gives survival %, cohort percentile and expected remaining km for each active tyre.',
-                    },
-                    {
-                      title: 'G5 · Confidence',
-                      body: 'Per-asset confidence = min(1, completed samples ÷ 6). Cohort CI half-width = 30/√n (±3 to 35pp). Attached to every prediction and risk row so thin-history estimates are labelled, not overstated.',
-                    },
-                    {
-                      title: 'Cost & Fleet Master',
-                      body: `${fleetMasterAvailable ? 'vehicle_fleet loaded: expected km/tyre, current_km and budgets used.' : 'vehicle_fleet unavailable, tyre_records history only.'} Cost uses the tyre's cost_per_tyre, else asset mean, else fleet average (${fmtCurrency(fleetStats.avgCost, activeCurrency)}). No fabricated costs.`,
-                    },
-                  ].map(item => (
-                    <div key={item.title} className="bg-[var(--input-bg)]/40 rounded-lg p-3">
-                      <p className="text-xs font-semibold text-blue-300 mb-1">{item.title}</p>
-                      <p className="text-xs text-[var(--text-muted)] leading-relaxed">{item.body}</p>
-                    </div>
-                  ))}
-                </div>
-                <p className="text-xs text-[var(--text-dim)] mt-3">
-                  All forecasts are statistical estimates based on historical patterns. Actual replacement dates may vary due to road conditions, load factors, driver behaviour, and maintenance quality.
-                </p>
-              </div>
-            )}
-          </div>
-        </>
-      )}
-
-      {/* ── Failure Risk tab ────────────────────────────────────────────────── */}
-      {activeTab === 'risk' && (
-        <FailureRiskPanel
-          rows={filteredRisk}
-          totalRows={failureRiskRows.length}
-          kpis={riskKpis}
-          cohortRows={cohortRows}
-          siteFilter={siteFilter}
-          setSiteFilter={setSiteFilter}
-          uniqueSites={uniqueSites}
-          riskBandFilter={riskBandFilter}
-          setRiskBandFilter={setRiskBandFilter}
-          page={riskPage}
-          setPage={setRiskPage}
-          expanded={expandedRisk}
-          setExpanded={setExpandedRisk}
-        />
+      {hasAnyData && activeTab === 'risk' && (
+        <div role="tabpanel" id="pm-panel-risk" aria-labelledby="pm-tab-risk">
+          <FailureRiskPanel
+            rows={filteredRisk}
+            totalRows={failureRiskRows.length}
+            kpis={riskKpis}
+            cohortRows={cohortRows}
+            siteFilter={siteFilter}
+            setSiteFilter={setSiteFilter}
+            uniqueSites={uniqueSites}
+            riskBandFilter={riskBandFilter}
+            setRiskBandFilter={setRiskBandFilter}
+            search={riskSearch}
+            setSearch={setRiskSearch}
+            selectedId={selectedRisk}
+            setSelectedId={setSelectedRisk}
+          />
+        </div>
       )}
     </div>
   )

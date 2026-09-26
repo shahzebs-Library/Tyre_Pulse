@@ -13,7 +13,7 @@ import {
   TrendingUp, TrendingDown, Minus, DollarSign, Activity,
   Truck, FileText, Printer, ChevronDown, ChevronUp,
   ZapOff, Building2, BarChart2, Bell, Eye, User, Timer, Ban, Siren,
-  History, Send, CheckCheck,
+  History, Send, CheckCheck, Download,
 } from 'lucide-react'
 import * as dailyOpsApi from '../lib/api/dailyOps'
 import { useSettings } from '../contexts/SettingsContext'
@@ -22,9 +22,17 @@ import { exportDailyOpsBriefingPdf } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
 import Card from '../components/ui/Card'
 import Modal from '../components/ui/Modal'
-import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import { useLanguage } from '../contexts/LanguageContext'
-import { isOverdueWorkOrder } from '../lib/dailyOpsPriority'
+import {
+  toIsoDay as fmtDate, addDays, weekRange, prevWeek, inDayRange, onDay, tyreSpend, weekDelta,
+  dailyBudgetFromTargets, siteActivity as buildSiteActivity, fleetStatus, upcomingWorkOrders,
+  buildPriorityQueue, queueCounts, filterActionItems, isActiveAction, isSlaBreached, actionKpis,
+  uniqueSorted, buildBriefingHtml,
+} from '../lib/dailyOpsAnalytics'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
+import { colorAt, withAlpha } from '../lib/reportColors'
+import { toUserMessage } from '../lib/safeError'
 import { listActionItems, listActionItemHistory, subscribeToActionItems, transitionActionItem } from '../lib/api/actionCenter'
 import { listShiftHandovers, submitShiftHandover, reviewShiftHandover } from '../lib/api/operationalWorkflow'
 import { useAuth } from '../contexts/AuthContext'
@@ -35,20 +43,20 @@ const CHART_OPTS = {
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
-    legend: { labels: { color: '#9ca3af', boxWidth: 10, font: { size: 10 } } },
-    tooltip: { backgroundColor: 'var(--panel)', borderColor: 'var(--hairline)', borderWidth: 1, titleColor: '#f9fafb', bodyColor: '#d1d5db' },
+    legend: { labels: { color: 'var(--text-muted)', boxWidth: 10, font: { size: 10 } } },
+    tooltip: { backgroundColor: 'var(--panel)', borderColor: 'var(--hairline)', borderWidth: 1, titleColor: 'var(--text-primary)', bodyColor: 'var(--text-secondary)' },
   },
   scales: {
-    x: { ticks: { color: '#9ca3af', font: { size: 10 } }, grid: { color: 'var(--panel-2)' } },
-    y: { ticks: { color: '#9ca3af', font: { size: 10 } }, grid: { color: 'var(--panel-2)' } },
+    x: { ticks: { color: 'var(--text-muted)', font: { size: 10 } }, grid: { color: 'var(--panel-2)' } },
+    y: { ticks: { color: 'var(--text-muted)', font: { size: 10 } }, grid: { color: 'var(--panel-2)' } },
   },
 }
 const DOUGHNUT_OPTS = {
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
-    legend: { position: 'right', labels: { color: '#9ca3af', boxWidth: 10, font: { size: 10 } } },
-    tooltip: { backgroundColor: 'var(--panel)', borderColor: 'var(--hairline)', borderWidth: 1, titleColor: '#f9fafb', bodyColor: '#d1d5db' },
+    legend: { position: 'right', labels: { color: 'var(--text-muted)', boxWidth: 10, font: { size: 10 } } },
+    tooltip: { backgroundColor: 'var(--panel)', borderColor: 'var(--hairline)', borderWidth: 1, titleColor: 'var(--text-primary)', bodyColor: 'var(--text-secondary)' },
   },
 }
 
@@ -78,8 +86,6 @@ const EVENT_TYPE_I18N_KEY = {
   'Work Order':  'workOrder',
 }
 
-function pad(n) { return String(n).padStart(2, '0') }
-function fmtDate(d) { return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}` }
 function fmtDisp(iso) {
   const d = new Date(iso + 'T00:00:00')
   return d.toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
@@ -91,22 +97,14 @@ function fmtShort(iso) {
 function fmtTime(ts) {
   if (!ts) return '--:--'
   const d = new Date(ts)
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`
+  if (Number.isNaN(d.getTime())) return '--:--'
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
-function weekRange(dateStr) {
-  const d = new Date(dateStr + 'T00:00:00')
-  const day = d.getDay()
-  const mon = new Date(d); mon.setDate(d.getDate() - ((day + 6) % 7))
-  const sun = new Date(mon); sun.setDate(mon.getDate() + 6)
-  return { start: fmtDate(mon), end: fmtDate(sun) }
+function fmtMoney(n) {
+  return n == null ? 'N/A' : Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 })
 }
-function prevWeek(dateStr) {
-  const d = new Date(dateStr + 'T00:00:00'); d.setDate(d.getDate() - 7)
-  return weekRange(fmtDate(d))
-}
-function addDays(iso, n) {
-  const d = new Date(iso + 'T00:00:00'); d.setDate(d.getDate() + n)
-  return fmtDate(d)
+function readKpiTargets() {
+  try { return JSON.parse(localStorage.getItem('tp_kpi_targets') || '{}') } catch { return {} }
 }
 
 export default function DailyOps() {
@@ -133,6 +131,7 @@ export default function DailyOps() {
   const [actionSite, setActionSite] = useState('All')
   const [actionShift, setActionShift] = useState('All')
   const [myWork, setMyWork] = useState(true)
+  const [actionSearch, setActionSearch] = useState('')
   const [actionSaving, setActionSaving] = useState('')
   const [actionError, setActionError] = useState('')
   const [workflowDialog, setWorkflowDialog] = useState(null)
@@ -217,94 +216,35 @@ export default function DailyOps() {
     setSelectedDate(fmtDate(d))
   }
 
-  const todayRecs    = useMemo(() => tyreRecords.filter(r => r.issue_date === selectedDate), [tyreRecords, selectedDate])
-  const todayIns     = useMemo(() => inspections.filter(r => r.inspection_date === selectedDate), [inspections, selectedDate])
-  const todayWO      = useMemo(() => workOrders.filter(r => r.created_at?.startsWith(selectedDate)), [workOrders, selectedDate])
-  const todayAlerts  = useMemo(() => alerts.filter(r => r.created_at?.startsWith(selectedDate)), [alerts, selectedDate])
+  const todayRecs    = useMemo(() => onDay(tyreRecords, 'issue_date', selectedDate), [tyreRecords, selectedDate])
+  const todayIns     = useMemo(() => onDay(inspections, 'inspection_date', selectedDate), [inspections, selectedDate])
+  const todayWO      = useMemo(() => onDay(workOrders, 'created_at', selectedDate), [workOrders, selectedDate])
+  const todayAlerts  = useMemo(() => onDay(alerts, 'created_at', selectedDate), [alerts, selectedDate])
 
   const { start: thisWeekStart, end: thisWeekEnd } = useMemo(() => weekRange(selectedDate), [selectedDate])
   const { start: lastWeekStart, end: lastWeekEnd } = useMemo(() => prevWeek(selectedDate), [selectedDate])
 
-  const thisWeekRecs = useMemo(() => tyreRecords.filter(r => r.issue_date >= thisWeekStart && r.issue_date <= thisWeekEnd), [tyreRecords, thisWeekStart, thisWeekEnd])
-  const lastWeekRecs = useMemo(() => tyreRecords.filter(r => r.issue_date >= lastWeekStart && r.issue_date <= lastWeekEnd), [tyreRecords, lastWeekStart, lastWeekEnd])
-  const thisWeekIns  = useMemo(() => inspections.filter(r => r.inspection_date >= thisWeekStart && r.inspection_date <= thisWeekEnd), [inspections, thisWeekStart, thisWeekEnd])
-  const lastWeekIns  = useMemo(() => inspections.filter(r => r.inspection_date >= lastWeekStart && r.inspection_date <= lastWeekEnd), [inspections, lastWeekStart, lastWeekEnd])
-  const thisWeekWO   = useMemo(() => workOrders.filter(r => r.created_at >= thisWeekStart + 'T00:00:00' && r.created_at <= thisWeekEnd + 'T23:59:59'), [workOrders, thisWeekStart, thisWeekEnd])
-  const lastWeekWO   = useMemo(() => workOrders.filter(r => r.created_at >= lastWeekStart + 'T00:00:00' && r.created_at <= lastWeekEnd + 'T23:59:59'), [workOrders, lastWeekStart, lastWeekEnd])
+  const thisWeekRecs = useMemo(() => inDayRange(tyreRecords, 'issue_date', thisWeekStart, thisWeekEnd), [tyreRecords, thisWeekStart, thisWeekEnd])
+  const lastWeekRecs = useMemo(() => inDayRange(tyreRecords, 'issue_date', lastWeekStart, lastWeekEnd), [tyreRecords, lastWeekStart, lastWeekEnd])
+  const thisWeekIns  = useMemo(() => inDayRange(inspections, 'inspection_date', thisWeekStart, thisWeekEnd), [inspections, thisWeekStart, thisWeekEnd])
+  const lastWeekIns  = useMemo(() => inDayRange(inspections, 'inspection_date', lastWeekStart, lastWeekEnd), [inspections, lastWeekStart, lastWeekEnd])
   const thisWeekCrit = useMemo(() => thisWeekRecs.filter(r => r.risk_level === 'Critical').length, [thisWeekRecs])
   const lastWeekCrit = useMemo(() => lastWeekRecs.filter(r => r.risk_level === 'Critical').length, [lastWeekRecs])
 
-  const thisWeekCost = useMemo(() => thisWeekRecs.reduce((s, r) => s + (Number(r.cost_per_tyre) || 0) * (r.qty || 1), 0), [thisWeekRecs])
-  const lastWeekCost = useMemo(() => lastWeekRecs.reduce((s, r) => s + (Number(r.cost_per_tyre) || 0) * (r.qty || 1), 0), [lastWeekRecs])
+  // Spend is null (N/A) when rows exist but none carries a price: an unpriced
+  // day is unknown spend, not zero spend.
+  const thisWeekSpend = useMemo(() => tyreSpend(thisWeekRecs), [thisWeekRecs])
+  const lastWeekSpend = useMemo(() => tyreSpend(lastWeekRecs), [lastWeekRecs])
+  const todaySpend    = useMemo(() => tyreSpend(todayRecs), [todayRecs])
+  const todayCost     = todaySpend.total
 
-  const todayCost = useMemo(() => todayRecs.reduce((s, r) => s + (Number(r.cost_per_tyre) || 0) * (r.qty || 1), 0), [todayRecs])
+  // null when no annual budget target has been set (never a fake 0 budget).
+  const dailyBudget = useMemo(() => dailyBudgetFromTargets(readKpiTargets()), [])
 
-  const dailyBudget = useMemo(() => {
-    try {
-      const targets = JSON.parse(localStorage.getItem('tp_kpi_targets') || '{}')
-      const annual = parseFloat(targets.annual_budget) || 0
-      return annual > 0 ? annual / 365 : 0
-    } catch { return 0 }
-  }, [])
-
-  const priorityQueue = useMemo(() => {
-    const items = []
-
-    todayRecs.filter(r => r.risk_level === 'Critical').forEach(r => {
-      items.push({
-        id: `crit-${r.id}`,
-        severity: 'Critical',
-        type: t('dailyops.priorityQueue.types.criticalTyreFitted'),
-        description: t('dailyops.priorityQueue.descriptions.criticalFitted', { asset: r.asset_no }),
-        asset: r.asset_no,
-        detail: t('dailyops.priorityQueue.details.criticalFitted', {
-          serial: r.serial_number || t('dailyops.na'),
-          position: r.position || t('dailyops.na'),
-          site: r.site || t('dailyops.na'),
-        }),
-        link: '/tyres',
-      })
-    })
-
-    const overdueWOs = workOrders.filter(r => isOverdueWorkOrder(r, selectedDate))
-    overdueWOs.forEach(r => {
-      const daysPast = Math.floor((new Date(selectedDate) - new Date(r.scheduled_date)) / 86400000)
-      items.push({
-        id: `wo-${r.id}`,
-        severity: daysPast > 7 ? 'Critical' : 'High',
-        type: t('dailyops.priorityQueue.types.overdueWorkOrder'),
-        description: t('dailyops.priorityQueue.descriptions.overdueWorkOrder', { wo: r.work_order_no || r.id, days: daysPast }),
-        asset: r.asset_no,
-        detail: t('dailyops.priorityQueue.details.overdueWorkOrder', {
-          status: r.status,
-          priority: r.priority || t('dailyops.na'),
-          site: r.site || t('dailyops.na'),
-        }),
-        link: '/work-orders',
-      })
-    })
-
-    const recentAssets = new Set([
-      ...tyreRecords.filter(r => r.issue_date >= addDays(selectedDate, -14) && r.issue_date <= selectedDate).map(r => r.asset_no),
-      ...inspections.filter(r => r.inspection_date >= addDays(selectedDate, -14) && r.inspection_date <= selectedDate).map(r => r.asset_no),
-    ])
-    const allAssets = new Set([...allTyres30.map(r => r.asset_no)])
-    allAssets.forEach(asset => {
-      if (!recentAssets.has(asset)) {
-        items.push({
-          id: `inactive-${asset}`,
-          severity: 'Medium',
-          type: t('dailyops.priorityQueue.types.noInspection'),
-          description: t('dailyops.priorityQueue.descriptions.noInspection', { asset }),
-          asset,
-          detail: t('dailyops.priorityQueue.details.noInspection'),
-          link: '/inspections',
-        })
-      }
-    })
-
-    return items.sort((a, b) => (SEV[a.severity]?.order ?? 9) - (SEV[b.severity]?.order ?? 9))
-  }, [todayRecs, workOrders, selectedDate, tyreRecords, inspections, allTyres30, t])
+  const priorityQueue = useMemo(
+    () => buildPriorityQueue({ todayRecs, workOrders, tyreRecords, inspections, allTyres30, selectedDate }, t),
+    [todayRecs, workOrders, selectedDate, tyreRecords, inspections, allTyres30, t],
+  )
 
   const activityFeed = useMemo(() => {
     const events = []
@@ -315,7 +255,7 @@ export default function DailyOps() {
         type: r.km_at_removal ? 'Removal' : 'New Fitment',
         asset: r.asset_no,
         site: r.site,
-        detail: `${r.brand || t('dailyops.unknown')} | ${r.position || '-'} | ${r.serial_number || t('dailyops.noSerial')}`,
+        detail: `${r.brand || t('dailyops.unknown')} | ${r.position || 'N/A'} | ${r.serial_number || t('dailyops.noSerial')}`,
       })
     })
     todayIns.forEach(r => {
@@ -355,23 +295,15 @@ export default function DailyOps() {
     return events.sort((a, b) => new Date(b.time) - new Date(a.time))
   }, [todayRecs, todayIns, todayAlerts, todayWO, t])
 
-  const siteActivity = useMemo(() => {
-    const map = {}
-    todayRecs.forEach(r => { map[r.site || 'Unknown'] = (map[r.site || 'Unknown'] || 0) + 1 })
-    return Object.entries(map).sort((a, b) => b[1] - a[1])
-  }, [todayRecs])
+  const siteActivity = useMemo(() => buildSiteActivity(todayRecs), [todayRecs])
 
-  const vehiclesActiveToday = useMemo(() => new Set([
-    ...todayRecs.map(r => r.asset_no),
-    ...todayIns.map(r => r.asset_no),
-  ]).size, [todayRecs, todayIns])
-
-  const vehiclesCritical = useMemo(() => new Set(todayRecs.filter(r => r.risk_level === 'Critical').map(r => r.asset_no)).size, [todayRecs])
-  const vehiclesDormant  = useMemo(() => {
-    const active = new Set([...allTyres30.map(r => r.asset_no)])
-    const recent = new Set([...tyreRecords.filter(r => r.issue_date >= addDays(selectedDate, -30) && r.issue_date <= selectedDate).map(r => r.asset_no)])
-    return [...active].filter(a => !recent.has(a)).length
-  }, [allTyres30, tyreRecords, selectedDate])
+  const fleet = useMemo(
+    () => fleetStatus({ todayRecs, todayIns, tyreRecords, allTyres30, selectedDate }),
+    [todayRecs, todayIns, tyreRecords, allTyres30, selectedDate],
+  )
+  const vehiclesActiveToday = fleet.active
+  const vehiclesCritical = fleet.critical
+  const vehiclesDormant = fleet.dormant
 
   const fleetStatusData = useMemo(() => ({
     labels: [t('dailyops.fleetStatus.activeToday'), t('dailyops.fleetStatus.criticalRisk'), t('dailyops.fleetStatus.chartDormant30d')],
@@ -388,15 +320,15 @@ export default function DailyOps() {
     datasets: [{
       label: t('dailyops.siteActivity.chartLabel'),
       data: siteActivity.map(([, c]) => c),
-      backgroundColor: 'rgba(22,163,74,0.65)',
-      borderColor: '#16a34a',
+      backgroundColor: withAlpha(colorAt(0), 0.65),
+      borderColor: colorAt(0),
       borderWidth: 1,
     }],
   }), [siteActivity, t])
 
   const costDoughnutData = useMemo(() => {
-    const spent = todayCost
-    const budget = dailyBudget
+    const spent = todayCost ?? 0
+    const budget = dailyBudget ?? 0
     const remaining = Math.max(budget - spent, 0)
     const over = spent > budget && budget > 0 ? spent - budget : 0
     if (budget <= 0) {
@@ -409,38 +341,56 @@ export default function DailyOps() {
       labels: over > 0 ? [t('dailyops.costTracker.chartSpentBudget'), t('dailyops.costTracker.chartOverBudget')] : [t('dailyops.costTracker.chartSpent'), t('dailyops.costTracker.chartRemaining')],
       datasets: [{
         data: over > 0 ? [budget, over] : [spent, remaining],
-        backgroundColor: over > 0 ? ['rgba(22,163,74,0.65)', 'rgba(239,68,68,0.65)'] : ['rgba(22,163,74,0.65)', 'rgba(31,41,55,0.9)'],
-        borderColor: over > 0 ? ['#16a34a', '#ef4444'] : ['#16a34a', '#374151'],
+        backgroundColor: over > 0 ? ['rgba(22,163,74,0.65)', 'rgba(239,68,68,0.65)'] : ['rgba(22,163,74,0.65)', 'var(--panel-2)'],
+        borderColor: over > 0 ? ['#16a34a', '#ef4444'] : ['#16a34a', 'var(--input-border)'],
         borderWidth: 1,
       }],
     }
   }, [todayCost, dailyBudget, t])
 
-  const upcomingWOs = useMemo(() => {
-    const nextWeekEnd = addDays(selectedDate, 7)
-    return workOrders.filter(r => r.scheduled_date && r.scheduled_date > selectedDate && r.scheduled_date <= nextWeekEnd && r.status !== 'Completed' && r.status !== 'Cancelled')
-      .sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date))
-  }, [workOrders, selectedDate])
-  const upcomingPager = usePagedRows(upcomingWOs)
+  const upcomingWOs = useMemo(() => upcomingWorkOrders(workOrders, selectedDate), [workOrders, selectedDate])
 
-  function weekDelta(curr, prev) {
-    if (prev === 0 && curr === 0) return { val: 0, pct: 0 }
-    if (prev === 0) return { val: curr, pct: 100 }
-    const pct = Math.round(((curr - prev) / prev) * 100)
-    return { val: curr - prev, pct }
-  }
+  const upcomingColumns = useMemo(() => {
+    const pc = { Critical: 'text-red-400', High: 'text-orange-400', Medium: 'text-yellow-400', Low: 'text-blue-400' }
+    return [
+      { id: 'scheduled_date', header: 'Date', accessorKey: 'scheduled_date', cell: ({ getValue }) => <span className="font-mono text-xs">{fmtShort(String(getValue()).slice(0, 10))}</span> },
+      { id: 'asset_no', header: 'Asset', accessorFn: (r) => r.asset_no || 'N/A', cell: ({ getValue }) => <span className="font-medium text-[var(--text-primary)]">{getValue()}</span> },
+      { id: 'work_order_no', header: 'WO No.', accessorFn: (r) => r.work_order_no || String(r.id || '').slice(0, 8) },
+      { id: 'status', header: 'Status', accessorKey: 'status', cell: ({ getValue }) => <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--input-bg)] text-[var(--text-secondary)]">{getValue() || 'N/A'}</span> },
+      { id: 'priority', header: 'Priority', accessorFn: (r) => r.priority || 'N/A', cell: ({ getValue }) => <span className={`text-xs font-semibold ${pc[getValue()] || 'text-[var(--text-muted)]'}`}>{getValue()}</span> },
+      { id: 'site', header: 'Site', accessorFn: (r) => r.site || 'N/A' },
+    ]
+  }, [])
 
   function WeekTrend({ curr, prev, label, prefix = '' }) {
+    if (curr == null) {
+      return (
+        <Card>
+          <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-1">{label}</p>
+          <p className="text-2xl font-bold text-[var(--text-primary)] tabular-nums">N/A</p>
+          <p className="text-xs text-[var(--text-muted)] mt-1">No priced records this week</p>
+        </Card>
+      )
+    }
+    if (prev == null) {
+      return (
+        <Card>
+          <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-1">{label}</p>
+          <p className="text-2xl font-bold text-[var(--text-primary)] tabular-nums">{prefix}{curr.toLocaleString()}</p>
+          <p className="text-xs text-[var(--text-muted)] mt-1">No priced records last week to compare</p>
+        </Card>
+      )
+    }
     const { val, pct } = weekDelta(curr, prev)
     return (
       // `p-4` as a class would be DEAD here: Card sets padding inline and wins.
       // Its default `--pad-card` is density-aware, which is the point.
       <Card>
-        <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">{label}</p>
+        <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-1">{label}</p>
         <p className="text-2xl font-bold text-[var(--text-primary)] tabular-nums">{prefix}{typeof curr === 'number' ? curr.toLocaleString() : curr}</p>
-        <div className={`flex items-center gap-1 mt-1 text-xs font-semibold ${val > 0 ? 'text-red-400' : val < 0 ? 'text-green-400' : 'text-gray-500'}`}>
+        <div className={`flex items-center gap-1 mt-1 text-xs font-semibold ${val > 0 ? 'text-red-400' : val < 0 ? 'text-green-400' : 'text-[var(--text-muted)]'}`}>
           {val > 0 ? <TrendingUp size={11} /> : val < 0 ? <TrendingDown size={11} /> : <Minus size={11} />}
-          {val !== 0 ? t('dailyops.weekSummary.vsLastWeek', {
+          {val !== 0 && pct == null ? `${val > 0 ? '+' : ''}${prefix}${Math.abs(val).toLocaleString()} vs last week (no prior base)` : val !== 0 ? t('dailyops.weekSummary.vsLastWeek', {
             sign: val > 0 ? '+' : '',
             prefix,
             absVal: Math.abs(typeof val === 'number' ? val : val).toLocaleString(),
@@ -480,74 +430,76 @@ export default function DailyOps() {
   function printBriefing() {
     const win = window.open('', '_blank', 'width=900,height=700')
     if (!win) return
-    const rows = [
-      ['Tyre Changes', todayRecs.length],
-      ['Inspections', todayIns.length],
-      ['Work Orders', todayWO.length],
-      ['Alerts', todayAlerts.length],
-      [`Cost (${activeCurrency})`, todayCost.toLocaleString(undefined, { maximumFractionDigits: 0 })],
-    ]
-    // Escape every DB-sourced value before interpolating into the print HTML —
-    // descriptions/asset/site come from user input and must not inject markup.
-    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
-      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
-    const sevClass = (s) => (['Critical', 'High', 'Medium', 'Low'].includes(s) ? s : 'Low')
-    win.document.write(`<!DOCTYPE html><html><head><title>Daily Ops - ${esc(selectedDate)}</title>
-<style>body{font-family:Arial,sans-serif;margin:0;padding:20px;background:#fff;color:#111}
-h1{font-size:18px;color:#16a34a;margin-bottom:4px}p.sub{color:#666;font-size:12px;margin:0 0 16px}
-table{border-collapse:collapse;width:100%;margin-bottom:20px}
-th{background:#16a34a;color:#fff;padding:7px 10px;text-align:left;font-size:12px}
-td{border:1px solid #e5e7eb;padding:6px 10px;font-size:12px}
-tr:nth-child(even)td{background:#f9fafb}
-h2{font-size:14px;color:#16a34a;margin:16px 0 6px}
-.sev-Critical{color:#dc2626}
-.sev-High{color:#ea580c}
-.sev-Medium{color:#ca8a04}
-.sev-Low{color:#2563eb}
-</style></head><body>
-<h1>Tyre Pulse: Daily Operations Briefing</h1>
-<p class="sub">${esc(fmtDisp(selectedDate))}</p>
-<h2>Today's Activity Summary</h2>
-<table><tr>${rows.map(([k]) => `<th>${esc(k)}</th>`).join('')}</tr>
-<tr>${rows.map(([, v]) => `<td>${esc(v)}</td>`).join('')}</tr></table>
-${priorityQueue.length > 0 ? `<h2>Priority Action Queue (${priorityQueue.length})</h2>
-<table><tr><th>Severity</th><th>Type</th><th>Asset</th><th>Description</th></tr>
-${priorityQueue.slice(0, 20).map(i => `<tr><td class="sev-${sevClass(i.severity)}">${esc(i.severity)}</td><td>${esc(i.type)}</td><td>${esc(i.asset || '-')}</td><td>${esc(i.description)}</td></tr>`).join('')}
-</table>` : ''}
-${siteActivity.length > 0 ? `<h2>Site Activity</h2>
-<table><tr><th>Site</th><th>Events</th></tr>
-${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).join('')}
-</table>` : ''}
-<p style="font-size:10px;color:#9ca3af;margin-top:20px">Generated by Tyre Pulse · ${esc(new Date().toLocaleString())}</p>
-</body></html>`)
+    win.document.write(buildBriefingHtml({
+      dateLabel: fmtDisp(selectedDate),
+      dateIso: selectedDate,
+      summary: [
+        ['Tyre Changes', todayRecs.length],
+        ['Inspections', todayIns.length],
+        ['Work Orders', todayWO.length],
+        ['Alerts', todayAlerts.length],
+        [`Cost (${activeCurrency})`, fmtMoney(todayCost)],
+      ],
+      queue: priorityQueue,
+      sites: siteActivity,
+      generatedAt: new Date().toLocaleString(),
+    }))
     win.document.close()
     win.print()
   }
 
-  const critCount = priorityQueue.filter(i => i.severity === 'Critical').length
-  const highCount = priorityQueue.filter(i => i.severity === 'High').length
+  const { Critical: critCount, High: highCount } = queueCounts(priorityQueue)
   const visibleQueue = queueSeverity === 'All'
     ? priorityQueue
     : priorityQueue.filter((item) => item.severity === queueSeverity)
-  const actionOwners = [...new Set(actionItems.map((item) => item.assigned_to).filter(Boolean))].sort()
-  const actionSites = [...new Set(actionItems.map((item) => item.site).filter(Boolean))].sort()
-  const actionShifts = [...new Set(actionItems.map((item) => item.shift_id).filter(Boolean))].sort()
+  const actionOwners = uniqueSorted(actionItems.map((item) => item.assigned_to))
+  const actionSites = uniqueSorted(actionItems.map((item) => item.site))
+  const actionShifts = uniqueSorted(actionItems.map((item) => item.shift_id))
   const coreFailedCount = failedSources.filter((source) => source !== 'operational actions').length
-  const visibleActions = actionItems.filter((item) => {
-    const active = !['resolved', 'dismissed'].includes(item.status)
-    if (actionStatus === 'active' && !active) return false
-    if (actionStatus === 'overdue' && (!active || !item.due_date || item.due_date >= selectedDate)) return false
-    if (actionStatus === 'resolved' && active) return false
-    if (actionOwner !== 'All' && item.assigned_to !== actionOwner) return false
-    if (actionSite !== 'All' && item.site !== actionSite) return false
-    if (actionShift !== 'All' && item.shift_id !== actionShift) return false
-    if (myWork && user?.id) {
-      if (item.assigned_user_id !== undefined && item.assigned_user_id !== null) {
-        if (item.assigned_user_id !== user.id) return false
-      } else if (!item.assigned_to || ![profile?.full_name, profile?.username, profile?.employee_id].filter(Boolean).includes(item.assigned_to)) return false
-    }
-    return true
-  })
+  const actionsFailed = failedSources.includes('operational actions')
+  const visibleActions = filterActionItems(
+    actionItems,
+    { status: actionStatus, owner: actionOwner, site: actionSite, shift: actionShift, myWork, selectedDate, search: actionSearch },
+    { userId: user?.id, names: [profile?.full_name, profile?.username, profile?.employee_id] },
+  )
+  const nowMs = Date.now()
+  const workKpis = actionKpis(actionItems, selectedDate, nowMs)
+  const openVisibleCount = visibleActions.filter(isActiveAction).length
+
+  const exportStamp = reportFileName('Daily Operations', selectedDate)
+  const exportUpcoming = (kind) => {
+    const rows = upcomingWOs.map((wo) => ({
+      scheduled_date: String(wo.scheduled_date || '').slice(0, 10),
+      asset_no: wo.asset_no || 'N/A',
+      work_order_no: wo.work_order_no || String(wo.id || '').slice(0, 8),
+      status: wo.status || 'N/A',
+      priority: wo.priority || 'N/A',
+      site: wo.site || 'N/A',
+    }))
+    const keys = ['scheduled_date', 'asset_no', 'work_order_no', 'status', 'priority', 'site']
+    const headers = ['Date', 'Asset', 'WO No.', 'Status', 'Priority', 'Site']
+    const file = reportFileName('Daily Operations Upcoming Work Orders', selectedDate)
+    if (kind === 'excel') return exportToExcel(rows, keys, headers, file, 'Upcoming')
+    return exportToPdf(rows, keys.map((key, i) => ({ key, header: headers[i] })), 'Daily Operations: Upcoming Work Orders (next 7 days)', file, 'landscape')
+  }
+  const exportActions = (kind) => {
+    const rows = visibleActions.map((item) => ({
+      title: item.title || 'N/A',
+      severity: item.severity || 'N/A',
+      status: item.status ? item.status.replaceAll('_', ' ') : 'N/A',
+      asset_no: item.asset_no || 'N/A',
+      assigned_to: item.assigned_to || 'Unassigned',
+      site: item.site || 'N/A',
+      due_date: item.due_date || 'N/A',
+      sla_due_at: item.sla_due_at ? new Date(item.sla_due_at).toLocaleString() : 'N/A',
+      sla: isSlaBreached(item, nowMs) ? 'Breached' : item.sla_due_at ? 'Within SLA' : 'N/A',
+    }))
+    const keys = ['title', 'severity', 'status', 'asset_no', 'assigned_to', 'site', 'due_date', 'sla_due_at', 'sla']
+    const headers = ['Action', 'Severity', 'Status', 'Asset', 'Owner', 'Site', 'Due', 'SLA due', 'SLA state']
+    const file = `${exportStamp} Operational Work`
+    if (kind === 'excel') return exportToExcel(rows, keys, headers, file, 'Operational Work')
+    return exportToPdf(rows, keys.map((key, i) => ({ key, header: headers[i] })), 'Daily Operations: Operational Work', file, 'landscape')
+  }
 
   async function transitionAction(item, status, options = {}) {
     setActionSaving(item.id)
@@ -560,7 +512,7 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
       })
       setActionItems((rows) => rows.map((row) => row.id === item.id ? updated : row))
     } catch (err) {
-      setActionError(err?.message || 'Could not update the action. Try again.')
+      setActionError(toUserMessage(err, 'Could not update the action. Try again.'))
     } finally {
       setActionSaving('')
     }
@@ -584,7 +536,7 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
     setHistoryRows([])
     setHistoryLoading(true)
     try { setHistoryRows(await listActionItemHistory(item.id)) }
-    catch (err) { setActionError(err?.message || 'Could not load action history.') }
+    catch (err) { setActionError(toUserMessage(err, 'Could not load action history.')) }
     finally { setHistoryLoading(false) }
   }
 
@@ -592,11 +544,11 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
     setHandoverSaving(true)
     setActionError('')
     try {
-      const activeIds = visibleActions.filter((item) => !['resolved', 'dismissed'].includes(item.status)).map((item) => item.id)
+      const activeIds = visibleActions.filter(isActiveAction).map((item) => item.id)
       const created = await submitShiftHandover({ country: activeCountry, site: actionSite, shiftId: actionShift === 'All' ? null : actionShift, summary: handoverSummary, actionItemIds: activeIds })
       setHandovers((rows) => [created, ...rows])
       setHandoverSummary('')
-    } catch (err) { setActionError(err?.message || 'Could not submit shift handover.') }
+    } catch (err) { setActionError(toUserMessage(err, 'Could not submit shift handover.')) }
     finally { setHandoverSaving(false) }
   }
 
@@ -609,33 +561,33 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
         subtitle={fmtDisp(selectedDate)}
         icon={CalendarDays}
         actions={<>
-          <button onClick={() => navigate(-1)} className="p-2 rounded-lg bg-gray-900 border border-gray-800 text-gray-400 hover:text-white hover:border-gray-600 transition-colors">
+          <button type="button" onClick={() => navigate(-1)} aria-label="Previous day" className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500">
             <ChevronLeft size={16} />
           </button>
-          <button onClick={() => setSelectedDate(fmtDate(new Date()))}
-            className="px-3 py-2 rounded-lg bg-green-900/30 border border-green-700/50 text-green-300 text-sm font-medium hover:bg-green-900/50 transition-colors">
+          <button type="button" onClick={() => setSelectedDate(fmtDate(new Date()))}
+            className="min-h-[44px] px-3 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500 bg-green-900/30 border border-green-700/50 text-green-300 text-sm font-medium hover:bg-green-900/50 transition-colors">
             {t('dailyops.header.today')}
           </button>
-          <button onClick={() => navigate(1)} className="p-2 rounded-lg bg-gray-900 border border-gray-800 text-gray-400 hover:text-white hover:border-gray-600 transition-colors">
+          <button type="button" onClick={() => navigate(1)} aria-label="Next day" className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500">
             <ChevronRight size={16} />
           </button>
-          <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
-            className="px-3 py-2 rounded-lg bg-gray-900 border border-gray-800 text-gray-300 text-sm focus:outline-none focus:border-green-700" />
-          <button onClick={() => fetchData(selectedDate)} className="p-2 rounded-lg bg-gray-900 border border-gray-800 text-gray-400 hover:text-green-400 transition-colors">
-            <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+          <input type="date" value={selectedDate} onChange={e => e.target.value && setSelectedDate(e.target.value)} aria-label="Briefing date"
+            className="min-h-[44px] px-3 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500" />
+          <button type="button" onClick={() => fetchData(selectedDate)} aria-label="Refresh daily operations" disabled={loading} className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500">
+            <RefreshCw size={15} className={loading ? 'animate-spin' : ''} aria-hidden="true" />
           </button>
-          <button onClick={generatePDF} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-gray-900 border border-gray-800 text-gray-300 text-sm hover:text-white hover:border-gray-600 transition-colors">
+          <button type="button" onClick={generatePDF} disabled={loading} className="min-h-[44px] flex items-center gap-1.5 px-3 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] text-sm hover:text-[var(--text-primary)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500">
             <FileText size={14} /> {t('dailyops.header.pdf')}
           </button>
-          <button onClick={printBriefing} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-green-900/30 border border-green-700/50 text-green-300 text-sm font-medium hover:bg-green-900/50 transition-colors">
+          <button type="button" onClick={printBriefing} disabled={loading} className="min-h-[44px] flex items-center gap-1.5 px-3 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500 bg-green-900/30 border border-green-700/50 text-green-300 text-sm font-medium hover:bg-green-900/50 transition-colors">
             <Printer size={14} /> {t('dailyops.header.printBriefing')}
           </button>
         </>}
       />
 
       {loading && (
-        <div className="flex items-center justify-center py-20">
-          <div className="flex items-center gap-3 text-gray-400">
+        <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
+          <div className="flex items-center gap-3 text-[var(--text-muted)]">
             <RefreshCw size={18} className="animate-spin text-green-400" />
             <span>{t('dailyops.loading')}</span>
           </div>
@@ -697,8 +649,38 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
               <select className="input text-sm" value={actionShift} onChange={(e) => setActionShift(e.target.value)} aria-label="Filter operational work by shift"><option value="All">All shifts</option>{actionShifts.map((shift) => <option key={shift} value={shift}>{shift}</option>)}</select>
               <a href="/action-center" className="btn-secondary text-sm text-center">Open Action Center</a>
             </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2" aria-label="Operational work summary">
+              {[
+                { label: 'Active', value: workKpis.active, icon: ClipboardList, cls: 'text-[var(--text-primary)]' },
+                { label: 'Overdue', value: workKpis.overdue, icon: Clock, cls: workKpis.overdue ? 'text-red-400' : 'text-[var(--text-primary)]' },
+                { label: 'SLA breached', value: workKpis.slaBreached, icon: Timer, cls: workKpis.slaBreached ? 'text-red-400' : 'text-[var(--text-primary)]' },
+                { label: 'Pending approval', value: workKpis.pendingApproval, icon: CheckCheck, cls: 'text-[var(--text-primary)]' },
+                { label: 'Blocked', value: workKpis.blocked, icon: Ban, cls: workKpis.blocked ? 'text-amber-400' : 'text-[var(--text-primary)]' },
+              ].map(({ label, value, icon: Icon, cls }) => (
+                <div key={label} className="rounded-lg border border-[var(--input-border)] bg-[var(--surface-2)]/30 p-3 min-w-0">
+                  <p className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-[var(--text-muted)]"><Icon size={12} aria-hidden="true" />{label}</p>
+                  <p className={`text-xl font-bold tabular-nums mt-1 ${cls}`}>{actionsFailed ? 'N/A' : value.toLocaleString()}</p>
+                </div>
+              ))}
+            </div>
+            <div className="flex flex-col sm:flex-row sm:items-end gap-2">
+              <div className="flex-1 min-w-0">
+                <label htmlFor="dailyops-action-search" className="text-xs text-[var(--text-muted)]">Search operational work</label>
+                <input id="dailyops-action-search" type="search" className="input w-full text-sm min-h-[44px]" value={actionSearch}
+                  onChange={(e) => setActionSearch(e.target.value)} placeholder="Title, asset, owner or site" />
+              </div>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => exportActions('excel')} disabled={!visibleActions.length} className="btn-secondary text-sm min-h-[44px] inline-flex items-center gap-1.5"><Download size={14} aria-hidden="true" />Excel</button>
+                <button type="button" onClick={() => exportActions('pdf')} disabled={!visibleActions.length} className="btn-secondary text-sm min-h-[44px] inline-flex items-center gap-1.5"><FileText size={14} aria-hidden="true" />PDF</button>
+              </div>
+            </div>
             {actionError && <p role="alert" className="text-sm text-red-300">{actionError}</p>}
-            {visibleActions.length === 0 ? (
+            {actionsFailed ? (
+              <div role="alert" className="rounded-lg border border-red-800/40 bg-red-900/10 p-5 text-center text-sm text-red-300 flex flex-col items-center gap-2">
+                Operational work could not be loaded, so this list is not shown as empty.
+                <button type="button" onClick={() => fetchData(selectedDate)} className="btn-secondary text-xs min-h-[44px]">Retry</button>
+              </div>
+            ) : visibleActions.length === 0 ? (
               <div className="rounded-lg border border-[var(--input-border)] p-5 text-center text-sm text-[var(--text-muted)]">No actions match these filters.</div>
             ) : (
               <div className="divide-y divide-[var(--input-border)] border border-[var(--input-border)] rounded-xl overflow-hidden">
@@ -710,7 +692,7 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
                         <span className="badge text-xs">{item.severity}</span>
                         <span className="badge text-xs">{item.status?.replace('_', ' ')}</span>
                         {item.approval_status && item.approval_status !== 'not_required' && <span className="badge text-xs">Approval: {item.approval_status}</span>}
-                        {item.sla_due_at && <span className={`inline-flex items-center gap-1 text-xs ${new Date(item.sla_due_at) < new Date() && !['resolved', 'dismissed'].includes(item.status) ? 'text-red-300' : 'text-[var(--text-muted)]'}`}><Timer size={12} />SLA {new Date(item.sla_due_at).toLocaleString()}</span>}
+                        {item.sla_due_at && <span className={`inline-flex items-center gap-1 text-xs ${isSlaBreached(item, nowMs) ? 'text-red-300' : 'text-[var(--text-muted)]'}`}><Timer size={12} aria-hidden="true" />{isSlaBreached(item, nowMs) ? 'SLA breached ' : 'SLA '}{new Date(item.sla_due_at).toLocaleString()}</span>}
                       </div>
                       <p className="text-xs text-[var(--text-muted)] mt-1">
                         {item.asset_no || 'No asset'} · {item.assigned_to || 'Unassigned'} · {item.due_date ? `Due ${item.due_date}` : 'No due date'}
@@ -720,7 +702,7 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <button type="button" onClick={() => openHistory(item)} className="btn-secondary text-xs"><History size={12} className="inline mr-1" />History</button>
-                      {!['resolved', 'dismissed'].includes(item.status) && <>
+                      {isActiveAction(item) && <>
                         {item.status === 'open' && <button type="button" disabled={actionSaving === item.id} onClick={() => transitionAction(item, 'acknowledged')} className="btn-secondary text-xs">Acknowledge</button>}
                         {item.status !== 'in_progress' && <button type="button" disabled={actionSaving === item.id} onClick={() => transitionAction(item, 'in_progress')} className="btn-secondary text-xs">Start</button>}
                         <button type="button" disabled={actionSaving === item.id} onClick={() => openTransition(item, 'blocked', 'Block work')} className="btn-secondary text-xs"><Ban size={12} className="inline mr-1" />Block</button>
@@ -731,6 +713,9 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
                     </div>
                   </div>
                 ))}
+                {visibleActions.length > 20 && (
+                  <p className="p-3 text-xs text-[var(--text-muted)]">Showing 20 of {visibleActions.length.toLocaleString()} matching actions. Narrow the filters or open the Action Center for the rest; the export covers all of them.</p>
+                )}
               </div>
             )}
           </Card>
@@ -738,22 +723,22 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
           <Card as="section" className="space-y-3" aria-labelledby="shift-handover-heading">
             <div className="flex flex-col md:flex-row md:items-start gap-3">
               <div className="flex-1"><h2 id="shift-handover-heading" className="text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider">Shift handover</h2><p className="text-xs text-[var(--text-muted)] mt-1">Submit the filtered open work with an accountable handover note.</p></div>
-              <span className="text-xs text-[var(--text-muted)]">{visibleActions.filter((item) => !['resolved', 'dismissed'].includes(item.status)).length} open items included</span>
+              <span className="text-xs text-[var(--text-muted)]">{openVisibleCount} open items included</span>
             </div>
             <textarea className="input w-full min-h-[84px]" maxLength={8000} value={handoverSummary} onChange={(e) => setHandoverSummary(e.target.value)} aria-label="Shift handover summary" placeholder="Risks, work completed, blocked items, next owner and required follow-up…" />
             <div className="flex justify-end"><button type="button" onClick={createHandover} disabled={handoverSaving || !handoverSummary.trim()} className="btn-primary text-sm"><Send size={13} className="inline mr-1" />{handoverSaving ? 'Submitting…' : 'Submit handover'}</button></div>
             {handovers.length > 0 && <div className="divide-y divide-[var(--input-border)] border border-[var(--input-border)] rounded-lg">
               {handovers.slice(0, 5).map((handover) => <div key={handover.id} className="p-3 flex flex-col md:flex-row gap-3 md:items-center">
                 <div className="flex-1 min-w-0"><p className="text-sm text-[var(--text-primary)]">{handover.summary}</p><p className="text-xs text-[var(--text-muted)] mt-1">{handover.site || 'All sites'} · {handover.open_item_count || 0} items · {handover.status}</p></div>
-                {handover.status === 'submitted' && (isSuperAdmin || ['Admin', 'Manager', 'Supervisor'].includes(profile?.role)) && <button type="button" className="btn-primary text-xs" onClick={async () => { try { const row = await reviewShiftHandover(handover.id, true); setHandovers((all) => all.map((h) => h.id === handover.id ? { ...h, ...row } : h)) } catch (err) { setActionError(err?.message || 'Could not accept handover.') } }}>Accept handover</button>}
+                {handover.status === 'submitted' && (isSuperAdmin || ['Admin', 'Manager', 'Supervisor'].includes(profile?.role)) && <button type="button" className="btn-primary text-xs" onClick={async () => { try { const row = await reviewShiftHandover(handover.id, true); setHandovers((all) => all.map((h) => h.id === handover.id ? { ...h, ...row } : h)) } catch (err) { setActionError(toUserMessage(err, 'Could not accept handover.')) } }}>Accept handover</button>}
               </div>)}
             </div>}
           </Card>
 
           {/* Priority Action Queue */}
           <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
-            <div className="flex items-center gap-2 mb-3">
-              <ShieldAlert size={16} className="text-red-400" />
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              <ShieldAlert size={16} className="text-red-400" aria-hidden="true" />
               <h2 className="text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider">{t('dailyops.priorityQueue.title')}</h2>
               {priorityQueue.length > 0 && (
                 <div className="flex gap-1.5">
@@ -761,14 +746,14 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
                   {highCount > 0 && <span className="px-1.5 py-0.5 rounded text-xs bg-orange-900/30 text-orange-300 border border-orange-700/50">{t('dailyops.priorityQueue.highChip', { count: highCount })}</span>}
                 </div>
               )}
-              <div className="ml-auto flex items-center gap-1" aria-label="Filter priority actions by severity">
+              <div className="ml-auto flex flex-wrap items-center gap-1" role="group" aria-label="Filter priority actions by severity">
                 {['All', 'Critical', 'High', 'Medium'].map((severity) => (
                   <button
                     key={severity}
                     type="button"
                     onClick={() => { setQueueSeverity(severity); setQueueLimit(12) }}
                     aria-pressed={queueSeverity === severity}
-                    className={`px-2.5 py-1 rounded-lg border text-xs font-medium transition-colors ${queueSeverity === severity ? 'border-green-600 bg-green-900/30 text-green-300' : 'border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
+                    className={`min-h-[44px] px-3 rounded-lg border text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500 ${queueSeverity === severity ? 'border-green-600 bg-green-900/30 text-green-300' : 'border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
                   >
                     {severity}
                   </button>
@@ -803,14 +788,14 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className={`text-xs font-bold uppercase ${cfg.text}`}>{item.severity}</span>
-                            <span className="text-xs text-gray-400">{item.type}</span>
-                            {item.asset && <span className="text-xs font-mono text-white bg-gray-800 px-1.5 py-0.5 rounded">{item.asset}</span>}
+                            <span className="text-xs text-[var(--text-muted)]">{item.type}</span>
+                            {item.asset && <span className="text-xs font-mono text-[var(--text-primary)] bg-[var(--input-bg)] px-1.5 py-0.5 rounded">{item.asset}</span>}
                           </div>
-                          <p className="text-sm text-gray-200 mt-0.5">{item.description}</p>
-                          <p className="text-xs text-gray-500 mt-0.5">{item.detail}</p>
+                          <p className="text-sm text-[var(--text-secondary)] mt-0.5">{item.description}</p>
+                          <p className="text-xs text-[var(--text-muted)] mt-0.5">{item.detail}</p>
                         </div>
                         {item.link && (
-                          <a href={item.link} className={`flex-shrink-0 text-xs px-2.5 py-1.5 rounded-lg border ${cfg.border} ${cfg.text} hover:opacity-80 transition-opacity font-medium`}>
+                          <a href={item.link} aria-label={`${t('dailyops.priorityQueue.view')}: ${item.description}`} className={`flex-shrink-0 inline-flex items-center min-h-[44px] text-xs px-3 rounded-lg border ${cfg.border} ${cfg.text} hover:opacity-80 transition-opacity font-medium`}>
                             {t('dailyops.priorityQueue.view')}
                           </a>
                         )}
@@ -851,7 +836,7 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
               ].map(({ label, value, icon: Icon, color, tone }) => (
                 <Card as={motion.div} key={label} tone={tone} whileHover={{ y: -2 }}>
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-gray-500">{label}</p>
+                    <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--text-muted)]">{label}</p>
                     <Icon size={14} className={color} />
                   </div>
                   <p className={`text-3xl font-bold tabular-nums ${color}`}>{value.toLocaleString()}</p>
@@ -873,21 +858,21 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
                   with no popover in it, so cropping to the radius is safe. */}
               <Card pad="none" clip>
                 {activityFeed.length === 0 ? (
-                  <div className="p-8 text-center text-gray-500 text-sm">{t('dailyops.activityFeed.empty')}</div>
+                  <div className="p-8 text-center text-[var(--text-muted)] text-sm">{coreFailedCount > 0 ? 'Some sources could not be loaded, so today\'s activity may be incomplete.' : t('dailyops.activityFeed.empty')}</div>
                 ) : (
                   <div className="overflow-y-auto max-h-[420px]">
-                    {activityFeed.map((ev, i) => (
-                      <div key={ev.id} className={`flex items-start gap-3 px-4 py-3 border-b border-gray-800/50 hover:bg-white/[0.02] transition-colors ${i === 0 ? '' : ''}`}>
-                        <span className="text-[11px] font-mono text-gray-500 w-10 flex-shrink-0 mt-0.5">{fmtTime(ev.time)}</span>
-                        <span className={`text-xs font-semibold w-24 flex-shrink-0 mt-0.5 ${EVENT_COLORS[ev.type] || 'text-gray-400'}`}>
+                    {activityFeed.map((ev) => (
+                      <div key={ev.id} className="flex items-start gap-3 px-4 py-3 border-b border-[var(--input-border)] hover:bg-[var(--input-bg)]/40 transition-colors">
+                        <span className="text-[11px] font-mono text-[var(--text-muted)] w-10 flex-shrink-0 mt-0.5">{fmtTime(ev.time)}</span>
+                        <span className={`text-xs font-semibold w-24 flex-shrink-0 mt-0.5 ${EVENT_COLORS[ev.type] || 'text-[var(--text-muted)]'}`}>
                           {t(`dailyops.activityFeed.eventTypes.${EVENT_TYPE_I18N_KEY[ev.type] || 'workOrder'}`)}
                         </span>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-sm font-medium text-white">{ev.asset || '-'}</span>
-                            {ev.site && <span className="text-xs text-gray-500">{ev.site}</span>}
+                            <span className="text-sm font-medium text-[var(--text-primary)]">{ev.asset || 'N/A'}</span>
+                            {ev.site && <span className="text-xs text-[var(--text-muted)]">{ev.site}</span>}
                           </div>
-                          <p className="text-xs text-gray-400 truncate">{ev.detail}</p>
+                          <p className="text-xs text-[var(--text-muted)] truncate" title={ev.detail}>{ev.detail}</p>
                         </div>
                       </div>
                     ))}
@@ -906,15 +891,15 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
                   {[
                     { label: t('dailyops.fleetStatus.activeToday'), value: vehiclesActiveToday, color: 'text-green-400' },
                     { label: t('dailyops.fleetStatus.criticalRisk'), value: vehiclesCritical, color: 'text-red-400' },
-                    { label: t('dailyops.fleetStatus.dormant30d'), value: vehiclesDormant, color: 'text-gray-400' },
+                    { label: t('dailyops.fleetStatus.dormant30d'), value: vehiclesDormant, color: 'text-[var(--text-muted)]' },
                   ].map(({ label, value, color }) => (
-                    <div key={label} className="text-center p-2 rounded-lg bg-gray-800/40">
+                    <div key={label} className="text-center p-2 rounded-lg bg-[var(--input-bg)]">
                       <p className={`text-xl font-bold tabular-nums ${color}`}>{value}</p>
-                      <p className="text-[10px] text-gray-500 uppercase tracking-wide mt-0.5">{label}</p>
+                      <p className="text-[11px] text-[var(--text-muted)] uppercase tracking-wide mt-0.5">{label}</p>
                     </div>
                   ))}
                 </div>
-                <div className="h-48">
+                <div className="h-48" role="img" aria-label={`Fleet today: ${vehiclesActiveToday} active, ${vehiclesCritical} critical, ${vehiclesDormant} dormant`}>
                   <Doughnut data={fleetStatusData} options={DOUGHNUT_OPTS} />
                 </div>
               </Card>
@@ -929,12 +914,12 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
               </h2>
               <Card>
                 {siteActivity.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-48 text-gray-500 text-sm gap-2">
-                    <ZapOff size={22} />
+                  <div className="flex flex-col items-center justify-center h-48 text-[var(--text-muted)] text-sm gap-2">
+                    <ZapOff size={22} aria-hidden="true" />
                     <span>{t('dailyops.siteActivity.empty')}</span>
                   </div>
                 ) : (
-                  <div className="h-52">
+                  <div className="h-52" role="img" aria-label={`Tyre fitments by site today, busiest ${siteActivity[0]?.[0]} with ${siteActivity[0]?.[1]}`}>
                     <Bar data={sitesChartData} options={CHART_OPTS} />
                   </div>
                 )}
@@ -949,41 +934,48 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
               <Card className="gap-[var(--space-3)]">
                 <div className="flex items-start justify-between">
                   <div>
-                    <p className="text-[11px] text-gray-500 uppercase tracking-wider">{t('dailyops.costTracker.todaysSpend')}</p>
-                    <p className="text-2xl font-bold text-green-400 tabular-nums">{activeCurrency} {todayCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+                    <p className="text-[11px] text-[var(--text-muted)] uppercase tracking-wider">{t('dailyops.costTracker.todaysSpend')}</p>
+                    <p className="text-2xl font-bold text-green-400 tabular-nums">{todayCost == null ? 'N/A' : `${activeCurrency} ${fmtMoney(todayCost)}`}</p>
+                    {todaySpend.count > 0 && todaySpend.priced < todaySpend.count && (
+                      <p className="text-xs text-[var(--text-muted)] mt-0.5">{todaySpend.priced} of {todaySpend.count} fitments priced</p>
+                    )}
                   </div>
-                  {dailyBudget > 0 && (
+                  {dailyBudget != null && (
                     <div className="text-right">
-                      <p className="text-[11px] text-gray-500 uppercase tracking-wider">{t('dailyops.costTracker.dailyBudget')}</p>
-                      <p className="text-lg font-semibold text-gray-300 tabular-nums">{activeCurrency} {dailyBudget.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
-                      {todayCost > dailyBudget && <p className="text-xs text-red-400 font-medium mt-0.5">{t('dailyops.costTracker.overBudget', { currency: activeCurrency, amount: (todayCost - dailyBudget).toLocaleString(undefined, { maximumFractionDigits: 0 }) })}</p>}
+                      <p className="text-[11px] text-[var(--text-muted)] uppercase tracking-wider">{t('dailyops.costTracker.dailyBudget')}</p>
+                      <p className="text-lg font-semibold text-[var(--text-secondary)] tabular-nums">{activeCurrency} {fmtMoney(dailyBudget)}</p>
+                      {todayCost != null && todayCost > dailyBudget && <p className="text-xs text-red-400 font-medium mt-0.5">{t('dailyops.costTracker.overBudget', { currency: activeCurrency, amount: fmtMoney(todayCost - dailyBudget) })}</p>}
                     </div>
                   )}
                 </div>
-                <div className="h-40">
-                  <Doughnut data={costDoughnutData} options={DOUGHNUT_OPTS} />
-                </div>
-                {dailyBudget === 0 && <p className="text-xs text-gray-500 text-center">{t('dailyops.costTracker.noBudgetHint')}</p>}
+                {todayCost == null ? (
+                  <p className="h-40 flex items-center justify-center text-sm text-[var(--text-muted)]">No priced fitments today, so spend cannot be charted.</p>
+                ) : (
+                  <div className="h-40" role="img" aria-label={`Today's spend ${activeCurrency} ${fmtMoney(todayCost)}${dailyBudget != null ? ` against a daily budget of ${activeCurrency} ${fmtMoney(dailyBudget)}` : ''}`}>
+                    <Doughnut data={costDoughnutData} options={DOUGHNUT_OPTS} />
+                  </div>
+                )}
+                {dailyBudget == null && <p className="text-xs text-[var(--text-muted)] text-center">{t('dailyops.costTracker.noBudgetHint')}</p>}
               </Card>
             </motion.section>
           </div>
 
           {/* This Week Summary (collapsible) */}
           <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-            <button onClick={() => setWeekOpen(p => !p)}
-              className="w-full flex items-center justify-between text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider mb-3 group">
+            <button type="button" onClick={() => setWeekOpen(p => !p)} aria-expanded={weekOpen}
+              className="w-full min-h-[44px] flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500 rounded-lg justify-between text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider mb-3 group">
               <span className="flex items-center gap-2">
                 <BarChart2 size={14} className="text-green-400" /> This Week Summary
-                <span className="text-xs text-gray-500 normal-case font-normal">({fmtShort(thisWeekStart)} - {fmtShort(thisWeekEnd)})</span>
+                <span className="text-xs text-[var(--text-muted)] normal-case font-normal">({fmtShort(thisWeekStart)} - {fmtShort(thisWeekEnd)})</span>
               </span>
-              {weekOpen ? <ChevronUp size={14} className="text-gray-500 group-hover:text-white transition-colors" /> : <ChevronDown size={14} className="text-gray-500 group-hover:text-white transition-colors" />}
+              {weekOpen ? <ChevronUp size={14} className="text-[var(--text-muted)] group-hover:text-[var(--text-primary)] transition-colors" aria-hidden="true" /> : <ChevronDown size={14} className="text-[var(--text-muted)] group-hover:text-[var(--text-primary)] transition-colors" aria-hidden="true" />}
             </button>
             <AnimatePresence>
               {weekOpen && (
                 <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.25 }}>
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                     <WeekTrend curr={thisWeekRecs.length} prev={lastWeekRecs.length} label="Tyre Changes" />
-                    <WeekTrend curr={Math.round(thisWeekCost)} prev={Math.round(lastWeekCost)} label={`Cost (${activeCurrency})`} prefix="" />
+                    <WeekTrend curr={thisWeekSpend.total == null ? null : Math.round(thisWeekSpend.total)} prev={lastWeekSpend.total == null ? null : Math.round(lastWeekSpend.total)} label={`Cost (${activeCurrency})`} prefix="" />
                     <WeekTrend curr={thisWeekIns.length} prev={lastWeekIns.length} label="Inspections" />
                     <WeekTrend curr={thisWeekCrit} prev={lastWeekCrit} label="Critical Incidents" />
                   </div>
@@ -996,48 +988,28 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
           <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
             <h2 className="text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider mb-3 flex items-center gap-2">
               <Clock size={14} className="text-green-400" /> Upcoming This Week
-              <span className="text-xs text-gray-500 normal-case font-normal">(next 7 days)</span>
+              <span className="text-xs text-[var(--text-muted)] normal-case font-normal">(next 7 days)</span>
             </h2>
-            {upcomingWOs.length === 0 ? (
-              <Card className="text-center text-gray-500 text-sm">
-                No upcoming work orders in the next 7 days.
-              </Card>
-            ) : (
-              // Safe to `clip`: the only control inside is TablePagination's native
-              // <select>, whose option list the browser paints outside this overflow
-              // context entirely.
-              <Card pad="none" clip>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-gray-800">
-                        {['Date', 'Asset', 'WO No.', 'Status', 'Priority', 'Site'].map(h => (
-                          <th key={h} className="px-4 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-gray-500">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {upcomingPager.pageRows.map((wo, i) => {
-                        const pc = { Critical: 'text-red-400', High: 'text-orange-400', Medium: 'text-yellow-400', Low: 'text-blue-400' }
-                        return (
-                          <tr key={wo.id} className={`border-b border-gray-800/50 hover:bg-white/[0.02] transition-colors ${i % 2 === 0 ? '' : 'bg-white/[0.01]'}`}>
-                            <td className="px-4 py-2.5 text-gray-300 font-mono text-xs">{fmtShort(wo.scheduled_date)}</td>
-                            <td className="px-4 py-2.5 text-white font-medium">{wo.asset_no || '-'}</td>
-                            <td className="px-4 py-2.5 text-gray-400 text-xs">{wo.work_order_no || wo.id?.slice(0, 8)}</td>
-                            <td className="px-4 py-2.5">
-                              <span className="text-xs px-2 py-0.5 rounded-full bg-gray-800 text-gray-300">{wo.status}</span>
-                            </td>
-                            <td className={`px-4 py-2.5 text-xs font-semibold ${pc[wo.priority] || 'text-gray-400'}`}>{wo.priority || '-'}</td>
-                            <td className="px-4 py-2.5 text-gray-400 text-xs">{wo.site || '-'}</td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-                <TablePagination {...upcomingPager} />
-              </Card>
-            )}
+            <Card pad="none">
+              <div className="flex flex-wrap items-center justify-end gap-2 p-3 border-b border-[var(--input-border)]">
+                <span className="mr-auto text-xs text-[var(--text-muted)]">{upcomingWOs.length.toLocaleString()} open work orders scheduled</span>
+                <button type="button" onClick={() => exportUpcoming('excel')} disabled={!upcomingWOs.length} className="btn-secondary text-xs min-h-[44px] inline-flex items-center gap-1.5"><Download size={13} aria-hidden="true" />Excel</button>
+                <button type="button" onClick={() => exportUpcoming('pdf')} disabled={!upcomingWOs.length} className="btn-secondary text-xs min-h-[44px] inline-flex items-center gap-1.5"><FileText size={13} aria-hidden="true" />PDF</button>
+              </div>
+              <EnterpriseTable
+                columns={upcomingColumns}
+                data={upcomingWOs}
+                getRowId={(r) => String(r.id)}
+                error={failedSources.includes('work orders') ? 'Work orders could not be loaded, so upcoming work is not shown as empty.' : null}
+                onRetry={() => fetchData(selectedDate)}
+                enableGlobalFilter
+                searchPlaceholder="Search asset, WO, site"
+                enableColumnFilters={false}
+                enableExport={false}
+                initialPageSize={25}
+                emptyMessage="No upcoming work orders in the next 7 days."
+              />
+            </Card>
           </motion.section>
         </>
       )}

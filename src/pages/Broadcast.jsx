@@ -417,7 +417,7 @@ function HistorySection({
           </div>
           <p className="text-[11px] text-[var(--text-tertiary)]">
             {filtered.length} of {history.length} messages shown. Counts are people addressed and pushes queued;
-            the system records no read receipts, so nothing here confirms a message was read. Only the latest 50 messages are loaded.
+            the system records no read receipts, so nothing here confirms a message was read.
           </p>
 
           <EnterpriseTable

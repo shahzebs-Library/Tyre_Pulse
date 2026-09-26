@@ -166,7 +166,6 @@ function Kpi({ icon: Icon, label, value, sub, tone = '' }) {
 }
 
 const na = (v, suffix = '') => (v == null ? 'N/A' : `${v}${suffix}`)
-const INSTANCE_SAMPLE = 500
 const REFERENCE_ENTITIES = [...new Set(STARTER_TEMPLATES.map((t) => t.entity_type))]
 const EXPORT_KEYS = ['name', 'entity_type', 'trigger_event', 'status', 'steps', 'sla_hours', 'roles', 'evidence', 'health', 'issues']
 const EXPORT_HEADERS = ['Workflow', 'Entity', 'Trigger', 'Status', 'Steps', 'Chain SLA (h)', 'Approvers', 'Evidence required', 'Health', 'Issues']
@@ -199,13 +198,14 @@ export default function WorkflowSettings() {
     finally { setLoading(false) }
   }, [])
 
-  // Usage + SLA rest on the most recent runs only. The exact total comes back
-  // with the page, so the panel states how much of the history it covers.
+  // Usage + SLA read the whole run history (paged, bounded by
+  // WORKFLOW_HISTORY_MAX). When the ceiling is hit the exact total comes back
+  // too, so the panel states how much of the history it covers.
   const fetchInstances = useCallback(async () => {
     setInstLoading(true)
     setInstError(null)
     try {
-      const res = await workflows.listWorkflowInstances({ limit: INSTANCE_SAMPLE, offset: 0 })
+      const res = await workflows.listAllWorkflowInstances()
       setInstances({ rows: res?.rows || [], count: res?.count ?? 0 })
     } catch (err) { setInstError(toUserMessage(err, 'Could not load workflow runs')) }
     finally { setInstLoading(false) }
@@ -539,7 +539,7 @@ export default function WorkflowSettings() {
           </div>
           <div className="rounded-xl bg-gray-800 border border-gray-700 p-4">
             <h3 className="text-sm font-semibold text-white mb-1">Runs by workflow</h3>
-            <p className="text-xs text-gray-500 mb-3">From the most recent runs. Overdue means the current step has waited longer than its SLA.</p>
+            <p className="text-xs text-gray-500 mb-3">From the recorded run history. Overdue means the current step has waited longer than its SLA.</p>
             {instLoading ? (
               <div className="h-24 rounded-lg bg-gray-700/40 animate-pulse" />
             ) : instError ? (

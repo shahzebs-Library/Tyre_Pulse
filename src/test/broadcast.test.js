@@ -10,16 +10,25 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const rpc = vi.fn()
 const table = vi.fn()
+// Thenable builder that records order/range so the paging contract is checked.
 function builder(result) {
+  const calls = { order: [], range: [] }
   const b = {
+    _calls: calls,
     select() { return b },
-    order() { return b },
+    order(col, opts) { calls.order.push([col, opts]); return b },
+    range(a, z) { calls.range.push([a, z]); return b },
     limit() { return b },
-    then(res, rej) { return Promise.resolve(result).then(res, rej) },
+    then(res, rej) {
+      const r = typeof result === 'function' ? result(calls) : result
+      return Promise.resolve(r).then(res, rej)
+    },
   }
   return b
 }
-vi.mock('../lib/api/_client', () => ({
+// Mock the raw client (not _client) so the real fetchAllPages / ServiceError /
+// isNotProvisioned run against the builder.
+vi.mock('../lib/supabase', () => ({
   supabase: { rpc: (...a) => rpc(...a), from: (...a) => table(...a) },
 }))
 
@@ -125,8 +134,49 @@ describe('sendBroadcast', () => {
 })
 
 describe('listBroadcasts', () => {
-  it('returns an empty history before the table exists', async () => {
-    table.mockReturnValue(builder({ data: null, error: { message: 'relation does not exist' } }))
+  it('returns an empty history only when the table is not provisioned', async () => {
+    table.mockReturnValue(builder({ data: null, error: { code: '42P01', message: 'relation does not exist' } }))
     await expect(api.listBroadcasts()).resolves.toEqual([])
+  })
+
+  it('throws on a real failure instead of rendering it as "nothing sent"', async () => {
+    table.mockReturnValue(builder({ data: null, error: { code: '42501', message: 'permission denied for relation broadcast_messages' } }))
+    await expect(api.listBroadcasts()).rejects.toMatchObject({ name: 'ServiceError' })
+  })
+
+  it('does not degrade a code-less error that merely mentions a relation', async () => {
+    table.mockReturnValue(builder({ data: null, error: { message: 'relation does not exist' } }))
+    await expect(api.listBroadcasts()).rejects.toBeTruthy()
+  })
+
+  it('pages past 50 and past the 1000-row cap, newest first with an id tiebreak', async () => {
+    const total = 1234
+    const rows = Array.from({ length: total }, (_, i) => ({ id: `m${i}` }))
+    const built = []
+    table.mockImplementation(() => {
+      const b = builder((calls) => {
+        const [from, to] = calls.range[0]
+        return { data: rows.slice(from, to + 1), error: null }
+      })
+      built.push(b)
+      return b
+    })
+    const out = await api.listBroadcasts()
+    expect(out).toHaveLength(total)
+    expect(new Set(out.map((r) => r.id)).size).toBe(total)
+    expect(built[0]._calls.order).toEqual([
+      ['created_at', { ascending: false }],
+      ['id', { ascending: true }],
+    ])
+    expect(built[0]._calls.range[0]).toEqual([0, 999])
+  })
+
+  it('respects the max ceiling', async () => {
+    table.mockImplementation(() => builder((calls) => {
+      const [from, to] = calls.range[0]
+      return { data: Array.from({ length: to - from + 1 }, (_, i) => ({ id: from + i })), error: null }
+    }))
+    const out = await api.listBroadcasts(1500)
+    expect(out).toHaveLength(1500)
   })
 })

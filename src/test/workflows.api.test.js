@@ -89,7 +89,10 @@ describe('service layer - workflows: instances + step events', () => {
     const { rows, count } = await workflows.listWorkflowInstances({ status: 'pending', limit: 10, offset: 20 })
     expect(h.state.last._table).toBe('workflow_instances')
     expect(h.state.last._calls.select.opts).toEqual({ count: 'exact' })
-    expect(h.state.last._calls.order).toContainEqual(['started_at', { ascending: false }])
+    expect(h.state.last._calls.order).toEqual([
+      ['started_at', { ascending: false }],
+      ['id', { ascending: true }],
+    ])
     expect(h.state.last._calls.range).toContainEqual([20, 29])
     expect(h.state.last._calls.eq).toContainEqual(['status', 'pending'])
     expect(rows).toEqual([{ id: 'i1', status: 'pending' }])
@@ -100,6 +103,31 @@ describe('service layer - workflows: instances + step events', () => {
     await workflows.listWorkflowInstances()
     expect(h.state.last._calls.eq).toEqual([])
     expect(h.state.last._calls.range).toContainEqual([0, 49])
+  })
+
+  it('reads the whole run history in pages with an id tiebreak', async () => {
+    h.state.result = { data: [{ id: 'i1' }, { id: 'i2' }], error: null }
+    const res = await workflows.listAllWorkflowInstances({ status: 'approved' })
+    expect(res).toEqual({ rows: [{ id: 'i1' }, { id: 'i2' }], count: 2, truncated: false })
+    expect(h.state.last._calls.order).toEqual([
+      ['started_at', { ascending: false }],
+      ['id', { ascending: true }],
+    ])
+    expect(h.state.last._calls.range).toContainEqual([0, 999])
+    expect(h.state.last._calls.eq).toContainEqual(['status', 'approved'])
+  })
+
+  it('states the exact total when the history ceiling is hit', async () => {
+    h.state.result = { data: [{ id: 'a' }, { id: 'b' }, { id: 'c' }], error: null, count: 42 }
+    const res = await workflows.listAllWorkflowInstances({ max: 2 })
+    expect(res.rows).toHaveLength(2)
+    expect(res.truncated).toBe(true)
+    expect(res.count).toBe(42)
+  })
+
+  it('throws a ServiceError when the history read fails', async () => {
+    h.state.result = { data: null, error: { code: '42501', message: 'permission denied' } }
+    await expect(workflows.listAllWorkflowInstances()).rejects.toBeInstanceOf(ServiceError)
   })
 
   it('lists step events for one instance in chronological order', async () => {

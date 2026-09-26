@@ -17,7 +17,8 @@
  *
  * @module api/broadcast
  */
-import { supabase } from './_client'
+import { supabase, fetchAllPages, isNotProvisioned, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 
 const COLS = 'id,title,body,title_ar,body_ar,target_roles,target_countries,target_sites,'
   + 'send_push,status,recipient_count,push_count,sent_at,created_at'
@@ -92,14 +93,33 @@ export async function sendBroadcast({
   }
 }
 
-/** Messages already sent, newest first. `[]` before the feature is provisioned. */
-export async function listBroadcasts(limit = 50) {
-  const { data, error } = await supabase
-    .from('broadcast_messages').select(COLS)
-    .order('created_at', { ascending: false }).limit(limit)
+/** Hard ceiling for the sent-message history read. */
+export const BROADCAST_HISTORY_MAX = 5000
+
+/**
+ * Every message already sent, newest first, paged past the PostgREST 1000-row
+ * cap up to `max`. `created_at` is not unique, so `id` is the tiebreak that
+ * keeps a page boundary from dropping or repeating a message.
+ *
+ * Honest read: a real failure (permission, network) THROWS so the page can say
+ * the history could not be loaded; `[]` is returned ONLY when the table is not
+ * provisioned (code-based `isNotProvisioned`), never for an error that merely
+ * mentions a relation.
+ *
+ * @param {number} [max=BROADCAST_HISTORY_MAX]
+ */
+export async function listBroadcasts(max = BROADCAST_HISTORY_MAX) {
+  const { data, error } = await fetchAllPages(
+    (from, to) => supabase
+      .from('broadcast_messages').select(COLS)
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: true })
+      .range(from, to),
+    { max },
+  )
   if (error) {
-    if (missing(error)) return []
-    throw error
+    if (isNotProvisioned(error)) return []
+    throw new ServiceError(toUserMessage(error), error.code, error)
   }
   return data || []
 }

@@ -27,7 +27,7 @@ vi.mock('../lib/api/workflows', () => ({
     { id: 'a', name: 'Accident approval', entity_type: 'accident', trigger_event: 'accident.created', active: true, steps: [{ name: 'Mgr', assignee_type: 'role', approver_role: 'manager', sla_hours: 24 }] },
     { id: 'b', name: 'Broken chain', entity_type: 'purchase_order', trigger_event: null, active: false, steps: [] },
   ])),
-  listWorkflowInstances: vi.fn(() => Promise.resolve({ rows: [{ status: 'approved', definition_name: 'Accident approval', started_at: '2026-09-01T00:00:00Z', completed_at: '2026-09-01T05:00:00Z' }], count: 1 })),
+  listAllWorkflowInstances: vi.fn(() => Promise.resolve({ rows: [{ status: 'approved', definition_name: 'Accident approval', started_at: '2026-09-01T00:00:00Z', completed_at: '2026-09-01T05:00:00Z' }], count: 1, truncated: false })),
   deleteWorkflowDefinition: vi.fn(), updateWorkflowDefinition: vi.fn(),
 }))
 

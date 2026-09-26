@@ -7,7 +7,8 @@
  * Explicit column lists (no SELECT *), unwrap error surfacing, mirrors
  * alertThresholds.js.
  */
-import { supabase, unwrap } from './_client'
+import { supabase, unwrap, fetchAllPages, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 import { isActiveDelegation } from '../approvalDelegations'
 
 // Definition columns for the admin builder (list + edit form).
@@ -86,6 +87,10 @@ export async function listWorkflowInstances({ status = null, limit = 50, offset 
     .from('workflow_instances')
     .select(INSTANCE_COLS, { count: 'exact' })
     .order('started_at', { ascending: false })
+    // started_at is not unique: without an id tiebreak two runs started in the
+    // same instant can swap between requests, so a page boundary would drop
+    // one run and repeat another.
+    .order('id', { ascending: true })
     .range(offset, offset + limit - 1)
 
   if (status) q = q.eq('status', status)
@@ -93,6 +98,41 @@ export async function listWorkflowInstances({ status = null, limit = 50, offset 
   const result = await q
   const rows = unwrap(result) ?? []
   return { rows, count: result.count ?? 0 }
+}
+
+/** Hard ceiling for the full-history read below. */
+export const WORKFLOW_HISTORY_MAX = 20000
+
+/**
+ * EVERY workflow run (most recently started first), paged past the PostgREST
+ * 1000-row response cap up to `max`. For surfaces that present run history as
+ * a whole (usage, SLA, overdue): a fixed `limit` there silently described only
+ * the newest slice. `count` is the exact server total, so a caller can state
+ * the gap honestly when the ceiling is hit (`truncated`).
+ * @param {object} [opts]
+ * @param {string|null} [opts.status]
+ * @param {number} [opts.max=WORKFLOW_HISTORY_MAX]
+ * @returns {Promise<{rows: Array<object>, count: number, truncated: boolean}>}
+ */
+export async function listAllWorkflowInstances({ status = null, max = WORKFLOW_HISTORY_MAX } = {}) {
+  const { data, error, truncated } = await fetchAllPages((from, to) => {
+    let q = supabase
+      .from('workflow_instances')
+      .select(INSTANCE_COLS)
+      .order('started_at', { ascending: false })
+      .order('id', { ascending: true })
+    if (status) q = q.eq('status', status)
+    return q.range(from, to)
+  }, { max })
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
+  const rows = data || []
+  if (!truncated) return { rows, count: rows.length, truncated: false }
+  // Only when the ceiling was hit do we need the true total to state the gap.
+  let cq = supabase.from('workflow_instances').select('id', { count: 'exact', head: true })
+  if (status) cq = cq.eq('status', status)
+  const counted = await cq
+  if (counted.error) throw new ServiceError(toUserMessage(counted.error), counted.error.code, counted.error)
+  return { rows, count: counted.count ?? rows.length, truncated: true }
 }
 
 /**
@@ -127,6 +167,7 @@ export async function getWorkflowForEntity(entityType, entityId) {
       .eq('entity_type', entityType)
       .eq('entity_id', String(entityId))
       .order('started_at', { ascending: false })
+      .order('id', { ascending: true })
       .limit(1)
   )
   return rows?.[0] ?? null
@@ -204,15 +245,21 @@ export async function myDelegatedApprovals() {
     // Pending instances in the org (RLS-scoped). Match each to a delegation whose
     // delegator holds the approver_role of the instance's current step, within
     // the delegation's entity_type scope.
-    const pending =
-      unwrap(
-        await supabase
+    // Paged, not `.limit(200)`: a delegate's inbox must not silently lose a
+    // pending approval because 200 newer ones exist.
+    const { data: pendingRows, error: pendingErr } = await fetchAllPages(
+      (from, to) =>
+        supabase
           .from('workflow_instances')
           .select(INSTANCE_COLS)
           .eq('status', 'pending')
           .order('started_at', { ascending: false })
-          .limit(200),
-      ) || []
+          .order('id', { ascending: true })
+          .range(from, to),
+      { max: WORKFLOW_HISTORY_MAX },
+    )
+    if (pendingErr) throw pendingErr
+    const pending = pendingRows || []
 
     const out = []
     for (const inst of pending) {

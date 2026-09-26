@@ -330,6 +330,17 @@ of the app follows, recorded rather than silently accepted:
    JPEG up to 5 MB; the bucket also admits PDF. Uploading a PDF from the phone
    is not offered.
 
+### 2.16 Flutter ports of Expo modules, recorded as they land
+
+Added 2026-09-26. Section 2.9 inventories the Expo **My Jobs (workshop)**
+screen; this records its Flutter port, so the section numbers the code cites
+stay valid. Columns as in 2.15. Everything is VERIFIED against the Flutter
+source and the migration files named.
+
+| Feature | Flutter source | What it does | Backing surface | Offline | Tests | Access |
+|---|---|---|---|---|---|---|
+| My Jobs (workshop technician) | `features/workshop/` - `domain/workshop_live.dart` (engine), `domain/workshop_evidence.dart` (photo / GPS rules), `data/workshop_repository.dart`, `data/workshop_photo_capture.dart`, `data/workshop_photo_uploader.dart`, `presentation/workshop_technician_screen.dart`; route `/workshop` (`WorkshopRoute`), which renders this screen for `tyre_man`, `inspector`, `mechanic`, `electrician` (`kWorkshopTechnicianRoles`) and the work-order board for everyone else | Port of section 2.9's first row. Open jobs from active `wo_assignments` plus `work_orders.assigned_owner_id`, per-job task chips (`wo_tasks`), the twelve activity buttons and shift check in / out, today's productivity. **Evidence (added 2026-09-26):** Report Problem and Request Parts accept up to 3 optional photos (camera or gallery, compressed by the `image_picker` resize ladder shared with washing and inspections); their `tp-storage://` refs are folded into `note` as `Photos: <ref> \| <ref>` exactly as `mobile/lib/workshopApi.ts` `noteWithPhotos` does, because `tech_activity_events` has no photos column. One best-effort GPS fix (reusing `InspectionGpsSource`, outer 15 s guard in `captureWorkshopGps`) is requested when the screen opens and rides on every event as `gps_lat` / `gps_lng`; a missing fix is `null`, never `0`, and never delays a tap | `wo_assignments`, `work_orders`, `wo_tasks`, `tech_activity_events` (V291, `client_uuid` V292); bucket `tyre-photos` under `modules/workshop/<uid8>/` (artifact 02 section 7.3) | **YES** for the event - `WORKSHOP_EVENT`, idempotent on `client_uuid`. **Photos are online-only at record time** - a photo that cannot upload is dropped and the technician is told; the event is always queued (section 5.28 parity; artifact 06 section 7; artifact 09 R14) | `test/features/workshop/domain/workshop_live_test.dart`, `domain/workshop_evidence_test.dart`, `data/workshop_repository_test.dart` (queued payload: note folding, GPS, null coordinates), `data/workshop_photo_uploader_test.dart` (object path, drop-on-failure), `workshop_technician_screen_test.dart` (photo attach, offline drop, photo offered only on the two actions, a hanging GPS read does not block) | `workshop` module (`route_access.dart`, `ModuleGuarded(RouteModule.workshop)`) |
+
 ---
 
 ## 3. Summary counts

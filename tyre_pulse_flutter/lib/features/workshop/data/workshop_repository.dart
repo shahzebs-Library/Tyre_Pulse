@@ -28,15 +28,16 @@
 /// screen keeps its own device-time copy until then (see
 /// [WorkshopEventRecord.localAt]).
 ///
-/// # Deliberately not ported
+/// # Evidence (photos + GPS)
 ///
-/// - Photos on Report Problem / Request Parts: mobile uploads them and folds
-///   the storage ref into `note` (the table has no photos column). That needs
-///   an online upload path this feature does not own yet; the note itself is
-///   captured.
-/// - GPS: mobile attaches a best-effort fix. The allow-list carries
-///   `gps_lat`/`gps_lng`, but this feature does not take a location
-///   dependency; both are sent as null (a known-absent reading, never 0).
+/// - Photos on Report Problem / Request Parts: exactly as mobile, they are
+///   uploaded at record time (`workshop_photo_uploader.dart`) and their
+///   `tp-storage://` refs are folded into `note` by
+///   [workshopNoteWithPhotos] - the table has no photos column. A photo
+///   that cannot upload is dropped; the event is always queued.
+/// - GPS: the screen passes a best-effort fix (`gps_lat`/`gps_lng`, both in
+///   the allow-list and in V291). A missing fix is sent as null (a
+///   known-absent reading, never 0) and never delays the event.
 library;
 
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -45,6 +46,7 @@ import 'package:tyre_pulse/core/network/supabase_tables.dart';
 import 'package:tyre_pulse/core/sync/command_registry.dart';
 import 'package:tyre_pulse/core/sync/queued_command_repository.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
+import 'package:tyre_pulse/features/workshop/domain/workshop_evidence.dart';
 import 'package:tyre_pulse/features/workshop/domain/workshop_live.dart';
 import 'package:uuid/uuid.dart';
 
@@ -203,6 +205,8 @@ final class RecordWorkshopEventInput {
     this.site,
     this.country,
     this.device,
+    this.photoRefs = const <String>[],
+    this.gps,
   });
 
   final String eventType;
@@ -214,6 +218,12 @@ final class RecordWorkshopEventInput {
   final String? site;
   final String? country;
   final String? device;
+
+  /// Permanent `tp-storage://` refs, folded into `note` on the way out.
+  final List<String> photoRefs;
+
+  /// Best-effort device fix; null = no reading.
+  final WorkshopGpsReading? gps;
 }
 
 abstract interface class WorkshopRepository {
@@ -355,10 +365,10 @@ final class SupabaseWorkshopRepository
         'asset_no': _text(input.assetNo),
         'event_type': input.eventType,
         'reason_code': _text(input.reasonCode),
-        'note': _text(input.note),
+        'note': workshopNoteWithPhotos(input.note, input.photoRefs),
         'device': input.device,
-        'gps_lat': null,
-        'gps_lng': null,
+        'gps_lat': input.gps?.lat,
+        'gps_lng': input.gps?.lng,
         'site': _text(input.site),
         'country': input.country,
       },

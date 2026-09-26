@@ -69,7 +69,7 @@ artifact 01 sections 2.1 to 2.13.
 | 5 | Inspection: draft, tyre editor, conditions, photos, completeness, signature, offline submit, history | 2.3 | 4 | Not started |
 | 6 | Generic checklist engine, then approvals | 2.4 | 5 | Not started |
 | 7 | Tyre replacement, meter logs, washing | 2.7, part of 2.5 | 4, 6 | Not started |
-| 8 | Workshop, work orders, maintenance | 2.9 | 2 | Not started |
+| 8 | Workshop, work orders, maintenance | 2.9 | 2 | Technician My Jobs ported incl. photo and GPS evidence (artifact 01 section 2.16), CI verification pending; D4 still open |
 | 9 | Accidents, evidence, claims, RCA, PDFs | 2.8 | 2, plus characterisation tests | Mock parity implemented, CI verification pending |
 | 10 | Stock, notifications, reports, team, admin, AI | 2.10, 2.11, 2.12 | 2 | Not started |
 | 11 | iOS completion: APNs, permissions, background modes, deep links, signing, TestFlight | all | 2 onward | Continuous, closed here |
@@ -181,6 +181,11 @@ version that writes four of six rows is worse than one that writes none.
 **Exit:** every metric shown is backed by a real column. Anything the backend
 cannot supply renders unavailable, never a plausible number.
 
+**Progress 2026-09-26:** the technician My Jobs screen is ported
+(`features/workshop/`, artifact 01 section 2.16) with Expo-parity evidence:
+optional photos on Report Problem / Request Parts folded into `note`, and a
+best-effort GPS fix that never blocks. Photos are online-only - see R14.
+
 ### Phase 9 - Accidents
 
 **Entry:** phase 2 exit met, AND characterisation tests written against the
@@ -252,6 +257,7 @@ answered first.
 | R11 | Unsynced Expo work is lost at upgrade | Medium | Spec section 68: require the legacy app to drain its queue first, verify pending is zero, warn before upgrade. The server is the migration authority - do NOT read AsyncStorage from Flutter |
 | R12 | A compromised signing key is in repository history | Recorded | Spec section 70. Treat as compromised, never copy into the Flutter repo, rotate. `.gitignore` blocks all signing material |
 | R13 | **The driver workspace bypasses the table-name registry.** Three RPCs, one table and one bucket are called by string literal. All five are real, so nothing fabricated reaches the server today, but it is the exact drift pattern that sank the Kotlin rebuild | Medium | Artifact 02 section 7.5 lists the constants to add. A code change, so it must pass `flutter analyze` and the registry drift test in CI |
+| R14 | **A workshop photo taken offline is dropped.** `tech_activity_events` has no photos column, so photo refs are folded into `note` and uploaded at record time; `WORKSHOP_EVENT` does not declare queued media. The event is kept, the photo is lost. This is Expo parity (artifact 01 section 5.28), not a regression | Medium | The screen tells the technician the photo was not attached. A real fix is a human edit to `command_registry.dart` / `sync_engine.dart` (queued media folded into `note` on push) or a photos column on `tech_activity_events` - a product call, recorded in artifact 06 section 7.1 |
 
 ---
 

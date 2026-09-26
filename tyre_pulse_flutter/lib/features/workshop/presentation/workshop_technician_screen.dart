@@ -14,6 +14,12 @@
 /// - Complete asks for confirmation; blocked reasons, a problem and an
 ///   assistance request collect an optional note.
 ///
+/// Evidence: Report Problem / Request Parts may attach up to three optional
+/// photos (uploaded at record time, refs folded into `note`; a photo that
+/// cannot upload is dropped and the technician is told, the event is never
+/// lost). One best-effort GPS fix is requested when the screen opens and
+/// rides along on every event - it never blocks or delays a tap.
+///
 /// A just-recorded event is shown immediately from its local copy and
 /// dropped as soon as the synced row (same `client_uuid`) is read back, so
 /// the live status never regresses while the queue is still draining.
@@ -33,7 +39,10 @@ import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
+import 'package:tyre_pulse/features/workshop/data/workshop_photo_capture.dart';
+import 'package:tyre_pulse/features/workshop/data/workshop_photo_uploader.dart';
 import 'package:tyre_pulse/features/workshop/data/workshop_repository.dart';
+import 'package:tyre_pulse/features/workshop/domain/workshop_evidence.dart';
 import 'package:tyre_pulse/features/workshop/domain/workshop_live.dart';
 import 'package:tyre_pulse/features/workshop/presentation/workshop_copy.dart';
 import 'package:tyre_pulse/features/workshop/workshop_providers.dart';
@@ -44,6 +53,11 @@ abstract final class WorkshopTechnicianKeys {
   static Key task(String id) => ValueKey<String>('workshop.task.$id');
   static Key action(String key) => ValueKey<String>('workshop.action.$key');
   static const Key productivity = ValueKey<String>('workshop.productivity');
+  static const Key noteField = ValueKey<String>('workshop.note-field');
+  static const Key noteSubmit = ValueKey<String>('workshop.note-submit');
+  static const Key photoCamera = ValueKey<String>('workshop.photo-camera');
+  static const Key photoGallery = ValueKey<String>('workshop.photo-gallery');
+  static Key photoRemove(int i) => ValueKey<String>('workshop.photo-remove.$i');
 }
 
 TpStatus _statusTone(WorkshopStatus s) => switch (s) {
@@ -99,10 +113,14 @@ class _WorkshopTechnicianScreenState
   Timer? _clock;
   DateTime _now = DateTime.now();
 
+  /// The best-effort fix; null until (unless) one arrives.
+  WorkshopGpsReading? _gps;
+
   @override
   void initState() {
     super.initState();
     unawaited(_load());
+    unawaited(_captureGps());
     _clock = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted) setState(() => _now = DateTime.now());
     });
@@ -112,6 +130,13 @@ class _WorkshopTechnicianScreenState
   void dispose() {
     _clock?.cancel();
     super.dispose();
+  }
+
+  /// One best-effort fix, never awaited by any action (mobile parity).
+  Future<void> _captureGps() async {
+    final WorkshopGpsReading? fix =
+        await captureWorkshopGps(ref.read(workshopLocatorProvider));
+    if (mounted && fix != null) setState(() => _gps = fix);
   }
 
   String get _userId => ref.read(workspaceContextProvider)?.userId ?? '';
@@ -185,6 +210,7 @@ class _WorkshopTechnicianScreenState
     String? jobId,
     String? reason,
     String? note,
+    List<String> photos = const <String>[],
   }) async {
     final WorkspaceContext? workspace = ref.read(workspaceContextProvider);
     if (workspace == null || _busyKey != null) return;
@@ -193,6 +219,17 @@ class _WorkshopTechnicianScreenState
     final WorkshopJob? job = jobId == null ? null : _selectedJob;
     setState(() => _busyKey = busyKey);
     try {
+      // Photos upload first (they need a connection); a photo that cannot
+      // upload is dropped, the event itself is always queued.
+      WorkshopPhotoResolution photoResult =
+          const WorkshopPhotoResolution(refs: <String>[], dropped: 0);
+      if (photos.isNotEmpty) {
+        photoResult = await resolveWorkshopPhotos(
+          uploader: ref.read(workshopPhotoUploaderProvider),
+          photos: photos,
+          userId: workspace.userId,
+        );
+      }
       final WorkshopEventRecord local =
           await ref.read(workshopRepositoryProvider).recordEvent(
                 workspace: workspace,
@@ -206,11 +243,24 @@ class _WorkshopTechnicianScreenState
                   site: job?.site ?? workspace.legacySite,
                   country: workspace.activeCountry,
                   device: 'mobile:${defaultTargetPlatform.name.toLowerCase()}',
+                  photoRefs: photoResult.refs,
+                  gps: _gps,
                 ),
               );
+      // Only a server-confirmed photo's local copy is removed.
+      final WorkshopPhotoPicker picker = ref.read(workshopPhotoPickerProvider);
+      for (final String path in photoResult.uploadedLocalPaths) {
+        unawaited(picker.discard(path));
+      }
       if (!mounted) return;
       setState(() => _localEvents.add(local));
-      messenger.showSnackBar(SnackBar(content: Text(copy('queued'))));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            photoResult.dropped > 0 ? copy('photoNotAttached') : copy('queued'),
+          ),
+        ),
+      );
     } on Object {
       if (!mounted) return;
       messenger.showSnackBar(SnackBar(content: Text(copy('saveFailed'))));
@@ -288,14 +338,16 @@ class _WorkshopTechnicianScreenState
       return;
     }
     if (action.needsNote) {
-      final String? note = await _askNote(copy, action);
-      if (note == null) return; // cancelled
+      final _NoteResult? result = await _askNote(copy, action);
+      if (result == null) return; // cancelled
+      final String note = result.note.trim();
       await _record(
         eventType: action.event,
         busyKey: action.key,
         jobId: job.id,
         reason: action.reason,
-        note: note.trim().isEmpty ? null : note.trim(),
+        note: note.isEmpty ? null : note,
+        photos: result.photos,
       );
       return;
     }
@@ -307,32 +359,22 @@ class _WorkshopTechnicianScreenState
     );
   }
 
-  /// Returns the note ('' when left blank), or null when cancelled.
-  Future<String?> _askNote(WorkshopCopy copy, WorkshopTechAction action) {
-    final TextEditingController controller = TextEditingController();
-    return showDialog<String>(
+  /// Returns the note ('' when left blank) plus any attached photos, or
+  /// null when cancelled. Photos are offered only where mobile offers them
+  /// (Report Problem / Request Parts), at most [kWorkshopMaxPhotos].
+  Future<_NoteResult?> _askNote(
+    WorkshopCopy copy,
+    WorkshopTechAction action,
+  ) {
+    return showDialog<_NoteResult>(
       context: context,
-      builder: (BuildContext dialogContext) => AlertDialog(
-        title: Text(copy('a_${action.key}')),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          maxLines: 3,
-          maxLength: 500,
-          decoration: InputDecoration(hintText: copy('noteHint')),
-        ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: Text(copy('cancel')),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(controller.text),
-            child: Text(copy('record')),
-          ),
-        ],
+      builder: (BuildContext dialogContext) => _WorkshopNoteDialog(
+        copy: copy,
+        action: action,
+        withPhotos: workshopActionAllowsPhoto(action),
+        picker: ref.read(workshopPhotoPickerProvider),
       ),
-    ).whenComplete(controller.dispose);
+    );
   }
 
   @override
@@ -480,6 +522,164 @@ class _WorkshopTechnicianScreenState
       ),
     );
   }
+}
+
+/// The note (+ optional photo) dialog. Owns its [TextEditingController] so
+/// the controller outlives the dialog's exit animation.
+class _WorkshopNoteDialog extends StatefulWidget {
+  const _WorkshopNoteDialog({
+    required this.copy,
+    required this.action,
+    required this.withPhotos,
+    required this.picker,
+  });
+
+  final WorkshopCopy copy;
+  final WorkshopTechAction action;
+  final bool withPhotos;
+  final WorkshopPhotoPicker picker;
+
+  @override
+  State<_WorkshopNoteDialog> createState() => _WorkshopNoteDialogState();
+}
+
+class _WorkshopNoteDialogState extends State<_WorkshopNoteDialog> {
+  final TextEditingController _controller = TextEditingController();
+  final List<String> _photos = <String>[];
+  bool _capturing = false;
+  bool _submitted = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    if (!_submitted) {
+      // Cancelled or dismissed: the photos belong to no event.
+      for (final String p in _photos) {
+        unawaited(widget.picker.discard(p));
+      }
+    }
+    super.dispose();
+  }
+
+  Future<void> _add(WorkshopPhotoSource source) async {
+    if (_capturing || _photos.length >= kWorkshopMaxPhotos) return;
+    setState(() => _capturing = true);
+    String? path;
+    try {
+      path = await widget.picker.capture(source);
+    } on Object {
+      path = null; // a failed capture simply attaches nothing
+    }
+    if (!mounted) {
+      if (path != null) unawaited(widget.picker.discard(path));
+      return;
+    }
+    setState(() {
+      _capturing = false;
+      if (path != null) _photos.add(path);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final WorkshopCopy copy = widget.copy;
+    final TextTheme text = Theme.of(context).textTheme;
+    final bool full = _photos.length >= kWorkshopMaxPhotos;
+    return AlertDialog(
+      title: Text(copy('a_${widget.action.key}')),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            TextField(
+              key: WorkshopTechnicianKeys.noteField,
+              controller: _controller,
+              autofocus: true,
+              maxLines: 3,
+              maxLength: 500,
+              decoration: InputDecoration(hintText: copy('noteHint')),
+            ),
+            if (widget.withPhotos) ...<Widget>[
+              Text(copy('photoLabel'), style: text.labelLarge),
+              Text(copy('photoLimit'), style: text.bodySmall),
+              const SizedBox(height: TpSpace.sm),
+              Wrap(
+                spacing: TpSpace.sm,
+                runSpacing: TpSpace.sm,
+                children: <Widget>[
+                  for (int i = 0; i < _photos.length; i++)
+                    InputChip(
+                      key: WorkshopTechnicianKeys.photoRemove(i),
+                      avatar: const Icon(Icons.photo_outlined),
+                      label: Text('${i + 1}'),
+                      deleteButtonTooltipMessage: copy('removePhoto'),
+                      onDeleted: () {
+                        final String removed = _photos[i];
+                        setState(() => _photos.removeAt(i));
+                        unawaited(widget.picker.discard(removed));
+                      },
+                    ),
+                ],
+              ),
+              const SizedBox(height: TpSpace.sm),
+              Wrap(
+                spacing: TpSpace.sm,
+                runSpacing: TpSpace.sm,
+                children: <Widget>[
+                  TpButton.secondary(
+                    key: WorkshopTechnicianKeys.photoCamera,
+                    label: copy('takePhoto'),
+                    icon: Icons.photo_camera_outlined,
+                    isBusy: _capturing,
+                    onPressed: _capturing || full
+                        ? null
+                        : () => unawaited(_add(WorkshopPhotoSource.camera)),
+                  ),
+                  TpButton.secondary(
+                    key: WorkshopTechnicianKeys.photoGallery,
+                    label: copy('pickPhoto'),
+                    icon: Icons.photo_library_outlined,
+                    onPressed: _capturing || full
+                        ? null
+                        : () => unawaited(_add(WorkshopPhotoSource.gallery)),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(copy('cancel')),
+        ),
+        TextButton(
+          key: WorkshopTechnicianKeys.noteSubmit,
+          onPressed: _capturing
+              ? null
+              : () {
+                  _submitted = true;
+                  Navigator.of(context).pop(
+                    _NoteResult(
+                      note: _controller.text,
+                      photos: List<String>.unmodifiable(_photos),
+                    ),
+                  );
+                },
+          child: Text(copy('record')),
+        ),
+      ],
+    );
+  }
+}
+
+final class _NoteResult {
+  const _NoteResult({required this.note, required this.photos});
+
+  final String note;
+  final List<String> photos;
 }
 
 class _CheckCard extends StatelessWidget {

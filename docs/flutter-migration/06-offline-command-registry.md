@@ -167,3 +167,15 @@ to an encrypted snapshot in secure storage keyed per account, refused once it
 is 24 hours old; while that snapshot is shown, `can_manage`, `can_respond` and
 `can_review` all read false, so no decision control is offered. A response the
 driver has not yet sent can be saved explicitly as a draft in the same store.
+
+### 7.1 Workshop evidence photos (added 2026-09-26)
+
+The workshop technician screen (artifact 01 section 2.16) still writes every
+tap through `WORKSHOP_EVENT` (section 2), and GPS rides inside that queued
+payload (`gps_lat` / `gps_lng` are already in its allow-list). Its optional
+photos, however, are NOT queued media:
+
+| Module | Writes | Verdict | Why |
+|---|---|---|---|
+| Workshop evidence photos (Report Problem / Request Parts) | Direct upload to `tyre-photos` at `modules/workshop/<uid8>/<ms>_<i>_<rand>.<ext>` before the event is enqueued; the returned `tp-storage://` refs are folded into the event's `note` | **ONLINE-ONLY, best effort** | `tech_activity_events` has no photos column, so the refs must live inside `note` text. The queue can only substitute uploaded media into a command whose spec sets `requiresMediaReady`, and `WORKSHOP_EVENT`'s does not; changing that means editing `command_registry.dart` / `sync_engine.dart`, which AGENTS.md reserves for a human. This is also exactly the Expo behaviour (artifact 01 section 5.28): a photo that cannot upload is dropped, the event still records, and the screen says so. A local photo copy is deleted only after the server confirmed its upload |
+

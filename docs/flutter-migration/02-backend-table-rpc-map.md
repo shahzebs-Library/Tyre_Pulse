@@ -245,7 +245,7 @@ Section 3 lists no buckets at all. These are the ones the Flutter code touches.
 
 | Bucket | Created or governed by | Flutter use |
 |---|---|---|
-| `tyre-photos` | Read policy `MIGRATIONS_V128_TYRE_PHOTOS_READ_POLICY.sql`, hardened V40/V59/V202 | Inspection and tyre photos; `private_storage_reference_resolver.dart` |
+| `tyre-photos` | Read policy `MIGRATIONS_V128_TYRE_PHOTOS_READ_POLICY.sql`, hardened V40/V59/V202 (V59: 20 MB, images only) | Inspection and tyre photos; `private_storage_reference_resolver.dart`. Since 2026-09-26 also workshop evidence photos under `modules/workshop/<uid8>/`, the same path `mobile/lib/photoUpload.ts` `uploadModulePhoto(..., 'workshop')` uses (`workshopPhotoBucket` in `features/workshop/data/workshop_photo_uploader.dart` - a second literal for the same bucket, beside `inspectionPhotoBucket`) |
 | `accident-photos` | Storage policies in `MIGRATIONS_V40_SECURITY_HARDENING.sql`, `MIGRATIONS_V59_STORAGE_HARDENING.sql`, `MIGRATIONS_V202_SECURITY_HARDENING.sql` | Queued accident evidence (`accident_evidence_command_pusher.dart`), case evidence (`accidentCaseEvidenceBucket` in `accident_case_rows.dart`) and dispatch evidence (`accidentDispatchEvidenceBucket` in `accident_dispatch_repository.dart`). All three name the SAME bucket, through three separate constants |
 | `driver-fine-evidence` | `20260912110823_driver_fine_private_evidence_storage.sql`: private, 5 MB, `image/jpeg`, `image/png`, `application/pdf`; upload and read gated by `private.driver_fine_storage_access` | Fine evidence. Signed URLs live 60 seconds. **Not in registry** |
 

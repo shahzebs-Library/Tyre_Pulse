@@ -21,7 +21,7 @@ const COLS =
 // detector, drawer and exports. Distinct from tyres.js (which selects serial_no
 // and omits km_at_fitment/km_at_removal/serial_number), so kept local here.
 const TYRE_COLS =
-  'id, asset_no, serial_number, brand, size, position, site, country, tread_depth, risk_level, issue_date, km_at_fitment, km_at_removal'
+  'id, asset_no, serial_number:serial_no, brand, size, position, site, country, tread_depth, risk_level, issue_date, km_at_fitment, km_at_removal'
 
 /**
  * List recalls, newest first. No country filter (matches the page's prior

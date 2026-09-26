@@ -14,7 +14,14 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import {
   Activity, Database, Table2, HardDrive, Zap, KeyRound,
   ShieldAlert, CheckCircle2, AlertTriangle, XCircle, HelpCircle,
+  Download, FileText, Gauge, Timer, History, Search,
 } from 'lucide-react'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import {
+  buildHealthRows, healthKpis, filterHealthRows, appendRun, historyStats,
+  flappingChecks, runFreshness, healthExportRows, HEALTH_STATUS_LABEL, HEALTH_GROUP_LABEL,
+} from '../lib/systemHealthAnalytics'
 import { useAuth } from '../contexts/AuthContext'
 import { cn } from '../lib/cn'
 import { toUserMessage } from '../lib/safeError'
@@ -169,6 +176,23 @@ function AccessDenied() {
   )
 }
 
+// ── KPI tile ─────────────────────────────────────────────────────────────────
+
+function Kpi({ icon: Icon, label, value, hint, tone = 'text-[var(--text-primary)]' }) {
+  return (
+    <div className="card p-4 min-w-0">
+      <div className="flex items-center gap-2 text-xs text-muted">
+        <Icon size={14} /> <span className="truncate">{label}</span>
+      </div>
+      <p className={cn('mt-1.5 text-xl font-bold tabular-nums', tone)}>{value}</p>
+      {hint && <p className="mt-0.5 text-[11px] text-muted truncate" title={hint}>{hint}</p>}
+    </div>
+  )
+}
+
+const EXPORT_COLS = ['group', 'label', 'id', 'status', 'latency', 'detail']
+const EXPORT_HEADERS = ['Group', 'Check', 'Identifier', 'Status', 'Latency', 'Detail']
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function SystemHealth() {
@@ -178,6 +202,12 @@ export default function SystemHealth() {
   const [report, setReport]       = useState(null)
   const [refreshing, setRefreshing] = useState(false)
   const [runError, setRunError]   = useState(null)
+  const [history, setHistory]     = useState([])
+  const [now, setNow]             = useState(() => Date.now())
+  const [view, setView]           = useState('tiles')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [groupFilter, setGroupFilter]   = useState('all')
+  const [search, setSearch]       = useState('')
   const mountedRef = useRef(true)
 
   const refresh = useCallback(async () => {
@@ -185,7 +215,10 @@ export default function SystemHealth() {
     setRunError(null)
     try {
       const next = await runAllChecks()
-      if (mountedRef.current) setReport(next)
+      if (mountedRef.current) {
+        setReport(next)
+        setHistory((h) => appendRun(h, next))
+      }
     } catch (err) {
       // runAllChecks isolates per-check failures; this only fires on a bug.
       if (mountedRef.current) setRunError(toUserMessage(err, 'Health run failed'))
@@ -199,16 +232,54 @@ export default function SystemHealth() {
     if (!isAdmin) return undefined
     refresh()
     const timer = setInterval(refresh, REFRESH_MS)
+    const tick = setInterval(() => setNow(Date.now()), 15_000)
     return () => {
       mountedRef.current = false
       clearInterval(timer)
+      clearInterval(tick)
     }
   }, [isAdmin, refresh])
 
+  const rows = useMemo(() => buildHealthRows(report?.checks ?? []), [report])
+  const kpis = useMemo(() => healthKpis(report?.checks ?? []), [report])
+  const hist = useMemo(() => historyStats(history), [history])
+  const flapping = useMemo(() => flappingChecks(history), [history])
+  const freshness = runFreshness(report?.checkedAt, now, REFRESH_MS)
+  const filteredRows = useMemo(
+    () => filterHealthRows(rows, { status: statusFilter, group: groupFilter, search }),
+    [rows, statusFilter, groupFilter, search],
+  )
+  const filteredIds = useMemo(() => new Set(filteredRows.map((r) => r.id)), [filteredRows])
+
   const grouped = useMemo(() => {
-    const checks = report?.checks ?? []
+    const checks = (report?.checks ?? []).filter((c) => filteredIds.has(String(c.id)))
     return GROUPS.map((g) => ({ group: g, checks: checks.filter((c) => c.group === g.key) }))
-  }, [report])
+  }, [report, filteredIds])
+
+  const columns = useMemo(() => [
+    { id: 'groupLabel', header: 'Group', accessorFn: (r) => r.groupLabel, size: 120 },
+    {
+      id: 'label', header: 'Check', accessorFn: (r) => r.label, size: 200,
+      cell: ({ row }) => <span className="font-medium">{row.original.label}</span>,
+    },
+    {
+      id: 'status', header: 'Status', accessorFn: (r) => r.statusLabel, size: 110,
+      cell: ({ row }) => {
+        const st = STATUS_STYLE[row.original.status] ?? STATUS_STYLE[STATUS.UNKNOWN]
+        return <span className={cn('px-2 py-0.5 rounded-full text-[10px] font-medium border whitespace-nowrap', st.pill)}>{st.label}</span>
+      },
+    },
+    {
+      id: 'latencyMs', header: 'Latency', accessorFn: (r) => r.latencyMs ?? -1, size: 90, meta: { align: 'right', exportValue: (r) => formatLatency(r.latencyMs) },
+      cell: ({ row }) => <span className="tabular-nums">{formatLatency(row.original.latencyMs)}</span>,
+    },
+    { id: 'detail', header: 'Detail', accessorFn: (r) => r.detail || 'N/A', size: 280 },
+  ], [])
+
+  const reportTitle = 'System Health'
+  const exportRows = healthExportRows(filteredRows)
+  const doExcel = () => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'system_health')
+  const doPdf = () => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), reportTitle, 'system_health', 'landscape')
 
   if (authLoading) return <LoadingSkeleton />
   if (!isAdmin)    return <AccessDenied />
@@ -216,6 +287,7 @@ export default function SystemHealth() {
   const overall = report?.summary?.overall ?? STATUS.UNKNOWN
   const banner  = OVERALL_BANNER[overall] ?? OVERALL_BANNER[STATUS.UNKNOWN]
   const summary = report?.summary
+  const filtersActive = statusFilter !== 'all' || groupFilter !== 'all' || search.trim() !== ''
 
   return (
     <div className="space-y-6">
@@ -226,11 +298,22 @@ export default function SystemHealth() {
         onRefresh={refresh}
         refreshing={refreshing}
         updatedAt={report?.checkedAt}
+        actions={(
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={doExcel} disabled={!exportRows.length} className="btn-secondary text-sm inline-flex items-center gap-1.5 disabled:opacity-40">
+              <Download size={14} /> Excel
+            </button>
+            <button type="button" onClick={doPdf} disabled={!exportRows.length} className="btn-secondary text-sm inline-flex items-center gap-1.5 disabled:opacity-40">
+              <FileText size={14} /> PDF
+            </button>
+          </div>
+        )}
       />
 
       {runError && (
-        <div className="card border border-red-500/25 bg-red-500/10 p-4 text-sm text-red-300" role="alert">
-          Health run failed: {runError}
+        <div className="card border border-red-500/25 bg-red-500/10 p-4 text-sm text-red-300 flex items-center justify-between gap-3" role="alert">
+          <span>Health run failed: {runError}</span>
+          <button type="button" onClick={refresh} className="btn-secondary text-xs">Retry</button>
         </div>
       )}
 
@@ -252,14 +335,98 @@ export default function SystemHealth() {
             )}
           </div>
 
-          {/* Grouped subsystem tiles */}
-          {grouped.map(({ group, checks }) => (
-            <GroupSection key={group.key} group={group} checks={checks} />
-          ))}
+          {/* KPIs */}
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+            <Kpi icon={Gauge} label="Healthy checks" value={kpis.availabilityPct == null ? 'N/A' : `${kpis.availabilityPct}%`}
+              hint={`${kpis.ok} of ${kpis.total} operational`}
+              tone={kpis.down ? 'text-red-400' : kpis.degraded || kpis.unknown ? 'text-amber-400' : 'text-emerald-400'} />
+            <Kpi icon={Timer} label="Average latency" value={formatLatency(kpis.avgLatencyMs)}
+              hint={`${kpis.measuredLatencyCount} of ${kpis.total} checks timed`} />
+            <Kpi icon={Timer} label="Latency p95" value={formatLatency(kpis.p95LatencyMs)} hint="Slowest 5% of timed checks" />
+            <Kpi icon={AlertTriangle} label="Slowest check" value={kpis.slowest ? formatLatency(kpis.slowest.latencyMs) : 'N/A'}
+              hint={kpis.slowest?.label ?? 'No timed checks'} />
+            <Kpi icon={History} label="Healthy runs (this session)" value={hist.healthyRunPct == null ? 'N/A' : `${hist.healthyRunPct}%`}
+              hint={`${hist.healthyRuns} of ${hist.runs} runs since this page opened`} />
+            <Kpi icon={Activity} label="Last run" value={freshness.label}
+              hint={freshness.stale ? 'Older than two refresh cycles' : 'Refreshes every 60 seconds'}
+              tone={freshness.stale ? 'text-amber-400' : 'text-[var(--text-primary)]'} />
+          </div>
+
+          {(hist.lastIncidentAt || flapping.length > 0) && (
+            <div className="card p-4 text-xs text-muted space-y-1">
+              {hist.lastIncidentAt && (
+                <p>
+                  Last {HEALTH_STATUS_LABEL[hist.lastIncidentStatus]?.toLowerCase() ?? 'incident'} run this session: {' '}
+                  <span className="text-[var(--text-primary)]">{new Date(hist.lastIncidentAt).toLocaleTimeString('en-GB')}</span>
+                </p>
+              )}
+              {flapping.length > 0 && (
+                <p>
+                  Unstable checks (status changed repeatedly): {' '}
+                  <span className="text-amber-300">{flapping.map((f) => `${f.id} (${f.changes}x)`).join(', ')}</span>
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Filters */}
+          <div className="card p-3 flex flex-wrap items-center gap-2">
+            <div className="relative flex-1 min-w-[180px]">
+              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
+              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search checks or detail"
+                aria-label="Search checks"
+                className="w-full rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] pl-8 pr-3 py-1.5 text-sm" />
+            </div>
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Filter by status"
+              className="rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] px-2 py-1.5 text-sm">
+              <option value="all">All statuses</option>
+              {Object.entries(HEALTH_STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+            <select value={groupFilter} onChange={(e) => setGroupFilter(e.target.value)} aria-label="Filter by group"
+              className="rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] px-2 py-1.5 text-sm">
+              <option value="all">All groups</option>
+              {Object.entries(HEALTH_GROUP_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+            {filtersActive && (
+              <button type="button" className="btn-ghost text-xs"
+                onClick={() => { setStatusFilter('all'); setGroupFilter('all'); setSearch('') }}>Clear</button>
+            )}
+            <div className="ml-auto flex rounded-lg border border-[var(--input-border)] overflow-hidden text-xs">
+              {['tiles', 'table'].map((v) => (
+                <button key={v} type="button" onClick={() => setView(v)} aria-pressed={view === v}
+                  className={cn('px-3 py-1.5', view === v ? 'bg-[var(--accent)]/15 text-[var(--accent)]' : 'text-muted')}>
+                  {v === 'tiles' ? 'Tiles' : 'Table'}
+                </button>
+              ))}
+            </div>
+            <span className="w-full text-[11px] text-muted">{filteredRows.length} of {rows.length} checks shown</span>
+          </div>
+
+          {view === 'tiles' ? (
+            filteredRows.length === 0 ? (
+              <div className="card p-8 text-center text-sm text-muted">No checks match the current filters.</div>
+            ) : (
+              grouped.map(({ group, checks }) => (
+                <GroupSection key={group.key} group={group} checks={checks} />
+              ))
+            )
+          ) : (
+            <EnterpriseTable
+              columns={columns}
+              data={filteredRows}
+              getRowId={(r) => r.id}
+              enableGlobalFilter={false}
+              enableExport={false}
+              initialPageSize={25}
+              emptyMessage="No checks match the current filters"
+            />
+          )}
 
           <p className="text-[11px] text-muted">
             Checks run automatically every 60 seconds. Edge functions are probed
-            with a reachability ping only. No AI calls or emails are sent.
+            with a reachability ping only. No AI calls or emails are sent. Run
+            history is kept only while this page is open; there is no stored
+            uptime record, so session figures are not long-term availability.
           </p>
         </>
       )}

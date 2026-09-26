@@ -10,8 +10,17 @@
  * number would let someone believe the fleet had been reached.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Megaphone, Send, RefreshCcw, Users, Smartphone, AlertTriangle, Check } from 'lucide-react'
+import {
+  Megaphone, Send, RefreshCcw, Users, Smartphone, AlertTriangle, Check,
+  Download, FileText, Search, Languages, Inbox, Clock,
+} from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import {
+  BROADCAST_PERIODS, filterBroadcasts, broadcastKpis, targetBreakdown,
+  monthlyVolume, broadcastExportRows, hasArabic, broadcastTime,
+} from '../lib/broadcastAnalytics'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import {
   previewAudience, sendBroadcast, listBroadcasts,
@@ -73,7 +82,12 @@ export default function Broadcast() {
   const [siteOptions, setSiteOptions] = useState([])
   const [audience, setAudience] = useState(null)
   const [history, setHistory] = useState([])
+  const [historyError, setHistoryError] = useState('')
   const [loading, setLoading] = useState(true)
+  const [hSearch, setHSearch] = useState('')
+  const [hPeriod, setHPeriod] = useState('all')
+  const [hAudience, setHAudience] = useState('all')
+  const [hPush, setHPush] = useState('all')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
@@ -81,12 +95,16 @@ export default function Broadcast() {
   const set = (patch) => setForm((f) => ({ ...f, ...patch }))
 
   const load = useCallback(async () => {
-    setLoading(true); setError('')
+    setLoading(true); setError(''); setHistoryError('')
     try {
       const [ro, si, hi] = await Promise.all([
         listAssignableRoles().catch(() => ASSIGNABLE_BUILTIN_ROLES),
         listSites().catch(() => []),
-        listBroadcasts().catch(() => []),
+        // A failed history read must not render as "nothing sent yet".
+        listBroadcasts().catch((e) => {
+          setHistoryError(toUserMessage(e, 'Sent messages could not be loaded.'))
+          return []
+        }),
       ])
       setRoleOptions(Array.isArray(ro) && ro.length ? ro : ASSIGNABLE_BUILTIN_ROLES)
       setSiteOptions([...new Set((si || []).map((s) => s.name || s.site_name).filter(Boolean))].sort())
@@ -233,32 +251,186 @@ export default function Broadcast() {
         </div>
       </div>
 
-      <div className="card">
-        <h3 className="mb-2 text-sm font-semibold text-[var(--text-primary)]">Sent messages</h3>
-        {loading ? (
-          <p className="text-sm text-[var(--text-tertiary)]">Loading</p>
-        ) : history.length === 0 ? (
-          <p className="text-sm text-[var(--text-tertiary)]">
-            Nothing sent yet. Messages you send appear here with who received them.
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {history.map((m) => (
-              <div key={m.id} className="rounded-lg border border-[var(--border-subtle)] p-3">
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <span className="text-sm font-medium text-[var(--text-primary)]">{m.title}</span>
-                  <span className="text-[11px] text-[var(--text-tertiary)]">{fmtDate(m.sent_at || m.created_at)}</span>
-                </div>
-                <p className="mt-1 whitespace-pre-line text-xs text-[var(--text-secondary)]">{m.body}</p>
-                <p className="mt-1.5 text-[11px] text-[var(--text-tertiary)]">
-                  {audienceLabel(m)} · {m.recipient_count} in the app
-                  {m.push_count > 0 ? ` · ${m.push_count} phone` : ' · no phone push'}
-                </p>
-              </div>
-            ))}
-          </div>
-        )}
+      <HistorySection
+        history={history}
+        loading={loading}
+        error={historyError}
+        onRetry={load}
+        search={hSearch} setSearch={setHSearch}
+        period={hPeriod} setPeriod={setHPeriod}
+        audienceFilter={hAudience} setAudienceFilter={setHAudience}
+        push={hPush} setPush={setHPush}
+      />
+    </div>
+  )
+}
+
+const selectCls = 'rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] px-2 py-1.5 text-sm text-[var(--text-primary)]'
+const EXPORT_COLS = ['sent', 'title', 'body', 'audience', 'recipients', 'pushes', 'arabic', 'status']
+const EXPORT_HEADERS = ['Sent', 'Title', 'Message', 'Audience', 'In the app', 'Phone pushes', 'Arabic', 'Status']
+
+function Stat({ icon: Icon, label, value, hint }) {
+  return (
+    <div className="rounded-lg border border-[var(--border-subtle)] p-3 min-w-0">
+      <div className="flex items-center gap-1.5 text-[11px] text-[var(--text-tertiary)]"><Icon size={12} /> {label}</div>
+      <p className="mt-1 text-lg font-semibold tabular-nums text-[var(--text-primary)]">{value}</p>
+      {hint && <p className="text-[11px] text-[var(--text-tertiary)] truncate" title={hint}>{hint}</p>}
+    </div>
+  )
+}
+
+/** Sent-message register: KPIs, filters, table, export. */
+function HistorySection({
+  history, loading, error, onRetry,
+  search, setSearch, period, setPeriod, audienceFilter, setAudienceFilter, push, setPush,
+}) {
+  const [now] = useState(() => Date.now())
+  const filtered = useMemo(
+    () => filterBroadcasts(history, { search, period, audience: audienceFilter, push, now, labelFn: audienceLabel }),
+    [history, search, period, audienceFilter, push, now],
+  )
+  const k = useMemo(() => broadcastKpis(filtered, now), [filtered, now])
+  const topRoles = useMemo(() => targetBreakdown(filtered, 'target_roles').slice(0, 5), [filtered])
+  const months = useMemo(() => monthlyVolume(filtered, now, 6), [filtered, now])
+  const maxMonth = Math.max(1, ...months.map((m) => m.messages))
+  const filtersActive = search.trim() !== '' || period !== 'all' || audienceFilter !== 'all' || push !== 'all'
+
+  const columns = useMemo(() => [
+    {
+      id: 'sent', header: 'Sent', accessorFn: (m) => broadcastTime(m) ?? 0, size: 130,
+      cell: ({ row }) => <span className="whitespace-nowrap text-xs">{fmtDate(row.original.sent_at || row.original.created_at) || 'N/A'}</span>,
+    },
+    {
+      id: 'title', header: 'Message', accessorFn: (m) => m.title || '', size: 320,
+      cell: ({ row }) => (
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-[var(--text-primary)] truncate">{row.original.title || 'N/A'}</p>
+          <p className="text-xs text-[var(--text-secondary)] line-clamp-2 whitespace-pre-line">{row.original.body}</p>
+        </div>
+      ),
+    },
+    { id: 'audience', header: 'Audience', accessorFn: (m) => audienceLabel(m), size: 200 },
+    { id: 'recipients', header: 'In the app', accessorFn: (m) => Number(m.recipient_count) || 0, size: 90, meta: { align: 'right' } },
+    {
+      id: 'pushes', header: 'Phone', accessorFn: (m) => Number(m.push_count) || 0, size: 80, meta: { align: 'right' },
+      cell: ({ getValue }) => (getValue() > 0 ? getValue() : <span className="text-[var(--text-tertiary)]">none</span>),
+    },
+    { id: 'arabic', header: 'Arabic', accessorFn: (m) => (hasArabic(m) ? 'Yes' : 'No'), size: 70 },
+    { id: 'status', header: 'Status', accessorFn: (m) => m.status || 'N/A', size: 90 },
+  ], [])
+
+  const exportRows = broadcastExportRows(filtered, audienceLabel)
+  const doExcel = () => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'team_messages')
+  const doPdf = () => exportToPdf(exportRows, EXPORT_COLS.map((c, i) => ({ key: c, header: EXPORT_HEADERS[i] })), 'Team Messages', 'team_messages', 'landscape')
+
+  return (
+    <div className="card space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold text-[var(--text-primary)]">Sent messages</h3>
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={doExcel} disabled={!exportRows.length} className="btn-secondary text-xs inline-flex items-center gap-1.5 disabled:opacity-40">
+            <Download size={13} /> Excel
+          </button>
+          <button type="button" onClick={doPdf} disabled={!exportRows.length} className="btn-secondary text-xs inline-flex items-center gap-1.5 disabled:opacity-40">
+            <FileText size={13} /> PDF
+          </button>
+        </div>
       </div>
+
+      {error ? (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-500/40 p-3 text-sm text-amber-300">
+          <span className="flex items-center gap-2"><AlertTriangle size={14} /> {error}</span>
+          <button type="button" onClick={onRetry} className="btn-secondary text-xs">Retry</button>
+        </div>
+      ) : loading ? (
+        <p className="text-sm text-[var(--text-tertiary)]">Loading</p>
+      ) : history.length === 0 ? (
+        <p className="text-sm text-[var(--text-tertiary)]">
+          Nothing sent yet. Messages you send appear here with who received them.
+        </p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2">
+            <Stat icon={Megaphone} label="Messages" value={k.messages} hint={`${k.last30Days} in the last 30 days`} />
+            <Stat icon={Inbox} label="Addressed in the app" value={k.recipients}
+              hint={k.avgRecipients == null ? 'N/A' : `${k.avgRecipients} per message on average`} />
+            <Stat icon={Smartphone} label="Phone pushes queued" value={k.pushes}
+              hint={k.phoneReachPct == null ? 'No recipients' : `${k.phoneReachPct}% of recipients`} />
+            <Stat icon={Users} label="Targeted" value={k.targeted} hint={`${k.everyone} went to everyone`} />
+            <Stat icon={Languages} label="With Arabic" value={k.arabicPct == null ? 'N/A' : `${k.arabicPct}%`} hint={`${k.arabic} messages`} />
+            <Stat icon={Clock} label="Last sent" value={k.daysSinceLast == null ? 'N/A' : `${k.daysSinceLast} d ago`}
+              hint={k.lastSentAt ? fmtDate(k.lastSentAt) : undefined} />
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="rounded-lg border border-[var(--border-subtle)] p-3">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-tertiary)]">Messages per month</p>
+              <div className="flex items-end gap-2 h-20" role="img" aria-label="Messages per month for the last six months">
+                {months.map((m) => (
+                  <div key={m.key} className="flex-1 flex flex-col items-center gap-1 min-w-0">
+                    <div className="w-full rounded-t bg-[var(--accent)]/60" style={{ height: `${(m.messages / maxMonth) * 100}%`, minHeight: m.messages ? 4 : 0 }} title={`${m.key}: ${m.messages} messages, ${m.recipients} recipients`} />
+                    <span className="text-[10px] text-[var(--text-tertiary)] tabular-nums">{m.key.slice(5)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-lg border border-[var(--border-subtle)] p-3">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-tertiary)]">Most messaged job titles</p>
+              {topRoles.length === 0 ? (
+                <p className="text-xs text-[var(--text-tertiary)]">No message in this view was narrowed by job title.</p>
+              ) : (
+                <ul className="space-y-1 text-xs">
+                  {topRoles.map((r) => (
+                    <li key={r.value} className="flex justify-between gap-2">
+                      <span className="truncate text-[var(--text-secondary)]">{r.value}</span>
+                      <span className="tabular-nums text-[var(--text-primary)]">{r.count}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative flex-1 min-w-[180px]">
+              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)]" />
+              <input className={`${inputCls} pl-8`} value={search} onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search title, message or audience" aria-label="Search sent messages" />
+            </div>
+            <select className={selectCls} value={period} onChange={(e) => setPeriod(e.target.value)} aria-label="Period">
+              {BROADCAST_PERIODS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+            </select>
+            <select className={selectCls} value={audienceFilter} onChange={(e) => setAudienceFilter(e.target.value)} aria-label="Audience">
+              <option value="all">Any audience</option>
+              <option value="everyone">Everyone</option>
+              <option value="targeted">Targeted</option>
+            </select>
+            <select className={selectCls} value={push} onChange={(e) => setPush(e.target.value)} aria-label="Phone push">
+              <option value="all">Push or not</option>
+              <option value="push">With phone push</option>
+              <option value="nopush">No phone push</option>
+            </select>
+            {filtersActive && (
+              <button type="button" className="btn-ghost text-xs"
+                onClick={() => { setSearch(''); setPeriod('all'); setAudienceFilter('all'); setPush('all') }}>Clear</button>
+            )}
+          </div>
+          <p className="text-[11px] text-[var(--text-tertiary)]">
+            {filtered.length} of {history.length} messages shown. Counts are people addressed and pushes queued;
+            the system records no read receipts, so nothing here confirms a message was read. Only the latest 50 messages are loaded.
+          </p>
+
+          <EnterpriseTable
+            columns={columns}
+            data={filtered}
+            getRowId={(m) => String(m.id)}
+            enableGlobalFilter={false}
+            enableExport={false}
+            initialPageSize={25}
+            emptyMessage="No sent messages match the current filters"
+          />
+        </>
+      )}
     </div>
   )
 }

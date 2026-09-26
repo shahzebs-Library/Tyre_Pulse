@@ -122,6 +122,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           _isSubmitting = false;
           _errorMessage = error.message;
         });
+      case SignInSsoRequired(:final error):
+        setState(() {
+          _isSubmitting = false;
+          _errorMessage = error.message;
+        });
       case SignInFailed(:final error):
         setState(() {
           _isSubmitting = false;

@@ -147,4 +147,55 @@ void main() {
       expect(info.asTemplateLike.requireAreaManager, isNull);
     });
   });
+
+  group('ChecklistApprovalTemplateInfo.blockingAnswers', () {
+    ChecklistApprovalTemplateInfo info0(Object? optionSets) =>
+        ChecklistApprovalTemplateInfo.fromRow(<String, Object?>{
+          'id': 'tpl-1',
+          'option_sets': optionSets,
+          'fields': <Object?>[
+            <String, Object?>{'id': 'q1', 'type': 'select', 'label': 'Brakes'},
+          ],
+        })!;
+
+    test('names every answer carrying a legend blocking mark', () {
+      final ChecklistApprovalTemplateInfo info = info0(<String, Object?>{
+        'legend': <String, Object?>{
+          'blocking': <Object?>['Not OK', 'Missing'],
+        },
+      });
+      expect(info.legendBlocking, <String>['Not OK', 'Missing']);
+      final List<ChecklistApprovalBlockingAnswer> hits = info.blockingAnswers(
+        <String, Object?>{'q1': 'Not OK', 'q2': 'OK', 'q3': 'Missing'},
+      );
+      expect(
+        hits.map((ChecklistApprovalBlockingAnswer b) => b.fieldId),
+        <String>['q1', 'q3'],
+      );
+      expect(hits.first.label, 'Brakes');
+      // A field the template no longer names falls back to its id.
+      expect(hits.last.label, 'q3');
+    });
+
+    test('a corrected sheet or a template with no legend blocks nothing', () {
+      final ChecklistApprovalTemplateInfo info = info0(<String, Object?>{
+        'legend': <String, Object?>{
+          'blocking': <Object?>['Not OK'],
+        },
+      });
+      expect(
+        info.blockingAnswers(<String, Object?>{'q1': 'Repaired'}),
+        isEmpty,
+      );
+      expect(
+        info0(null).blockingAnswers(<String, Object?>{'q1': 'Not OK'}),
+        isEmpty,
+      );
+      expect(
+        info0(<String, Object?>{'legend': 'junk'})
+            .blockingAnswers(<String, Object?>{'q1': 'Not OK'}),
+        isEmpty,
+      );
+    });
+  });
 }

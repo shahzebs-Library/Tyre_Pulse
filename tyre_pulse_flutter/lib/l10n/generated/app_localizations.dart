@@ -2806,6 +2806,18 @@ abstract class AppLocalizations {
   /// **'Cannot sign off'**
   String get checklistApprovalRequirementTitle;
 
+  /// No description provided for @checklistApprovalCannotCloseTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'This sheet cannot be closed yet'**
+  String get checklistApprovalCannotCloseTitle;
+
+  /// No description provided for @checklistApprovalCannotCloseMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Some items are still recorded as a fault. Send the sheet back to have them fixed, then close it.'**
+  String get checklistApprovalCannotCloseMessage;
+
   /// No description provided for @checklistApprovalReasonRequiredTitle.
   ///
   /// In en, this message translates to:
@@ -5319,6 +5331,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'History is too large to load completely. Use the web report.'**
   String get washHistoryLimit;
+
+  /// No description provided for @workshopCopyCatalog.
+  ///
+  /// In en, this message translates to:
+  /// **'title=My Jobs~onDuty=On duty~offDuty=Off duty~checkIn=Check In~checkOut=Check Out~checkInHint=Check in for your shift before recording work.~myJobs=My jobs~emptyTitle=No open jobs~emptyMessage=No open job is assigned to you right now.~loadError=Your jobs could not be loaded right now.~selectJobTitle=Select a job~selectJobMsg=Pick one of your jobs first.~checkInFirstTitle=Check in first~selectTaskTitle=Select a task~selectTaskMsg=Pick the task you are working on first.~tasks=Tasks~confirmTitle=Complete task?~confirmMsg=This records the task as complete and sends it for inspection.~cancel=Cancel~noteHint=Add a note (optional)~record=Record~queued=Saved on this device. It will sync automatically.~saveFailed=The activity could not be saved on this device. Try again.~todayTitle=My productivity today~productive=Productive~blocked=Blocked~unassigned=Unassigned~breakTime=Break~completed=Tasks completed~due=Due~ok=OK~a_start_job=Start Job~a_pause_job=Pause Job~a_resume_job=Resume Job~a_complete_task=Complete Task~a_request_parts=Request Parts~a_request_assistance=Request Assistance~a_waiting_approval=Waiting for Approval~a_waiting_vehicle=Waiting for Vehicle~a_waiting_tools=Waiting for Tools~a_start_break=Start Break~a_end_break=End Break~a_report_problem=Report Problem~s_working=Working~s_available=Available~s_waiting_parts=Waiting for Parts~s_waiting_approval=Waiting for Approval~s_waiting_tools=Waiting for Tools~s_waiting_vehicle=Waiting for Vehicle~s_on_break=On Break~s_training=Training~s_awaiting_inspection=Awaiting Inspection~s_off_duty=Off Duty~s_absent=Absent'**
+  String get workshopCopyCatalog;
 }
 
 class _AppLocalizationsDelegate

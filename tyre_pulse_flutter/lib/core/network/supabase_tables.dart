@@ -249,6 +249,13 @@ abstract final class SupabaseRpcs {
   /// what makes the lockout real: someone who cannot sign in cannot reset it.
   static const String resetLoginAttempts = 'reset_login_attempts';
 
+  /// Asked AFTER a password sign-in succeeds: does this user's organisation
+  /// require SSO (`sso_connections.enforce_sso`)? Returns jsonb
+  /// `{allowed, reason}`; super admins are exempt server-side. Created by
+  /// `supabase/migrations/20260924117000_access_policies.sql`; mirrors
+  /// `mobile/lib/ssoPolicy.ts`.
+  static const String ssoPasswordLoginCheck = 'sso_password_login_check';
+
   static const String registerUserDevice = 'register_user_device';
   static const String revokeUserDevice = 'revoke_user_device';
   static const String setUserAccessGrant = 'set_user_access_grant';
@@ -333,6 +340,7 @@ abstract final class SupabaseRpcs {
     loginAttemptStatus,
     recordLoginFailure,
     resetLoginAttempts,
+    ssoPasswordLoginCheck,
     registerUserDevice,
     revokeUserDevice,
     setUserAccessGrant,

@@ -54,6 +54,19 @@ final class SignInRejected extends SignInOutcome {
   final AppError error;
 }
 
+/// The password was correct, but this user's organisation requires single
+/// sign-on and refuses password sign-in (`sso_password_login_check` answered
+/// `allowed: false`). The session has already been signed out again.
+///
+/// Deliberately NOT a failed attempt: the credentials were right, so this is
+/// never counted towards the login lockout - mirrors `mobile/app/(auth)/
+/// login.tsx`'s `code === 'sso_required'` branch.
+final class SignInSsoRequired extends SignInOutcome {
+  const SignInSsoRequired(this.error);
+
+  final AppError error;
+}
+
 /// The attempt could not be completed at all: offline, a server error, or
 /// anything else that says nothing about whether these credentials are valid.
 /// Retryable by nature.

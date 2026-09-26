@@ -56,6 +56,15 @@ import 'package:tyre_pulse/core/network/supabase_tables.dart';
 /// `MIGRATIONS_V69_LOGIN_IDENTIFIER.sql`; not yet in `SupabaseRpcs`.
 const String _getEmailByIdentifierRpc = 'get_email_by_identifier';
 
+/// Pure interpretation of a `sso_password_login_check` response, exposed for
+/// tests. Anything unclear (null, non-map, missing key) ALLOWS - identical to
+/// `interpretSsoCheck` in `mobile/lib/ssoPolicy.ts`. Only an explicit
+/// `allowed: false` refuses.
+bool ssoCheckAllows(Object? result) {
+  if (result is! Map) return true;
+  return result['allowed'] != false;
+}
+
 /// The minimal shape this layer needs from a Supabase auth event: whether a
 /// session exists, and if so, which user it belongs to.
 final class AuthSessionSignal {
@@ -261,6 +270,17 @@ final class SupabaseAuthRepository implements AuthRepository {
           : const SignInRejected(_invalidCredentialsError);
     }
 
+    // Access Policies: an organisation that requires SSO refuses PASSWORD
+    // sign-in for its non-super-admin users. Asked only AFTER the password is
+    // proven, so it is never an account-enumeration oracle. FAILS OPEN on any
+    // error - a broken check must never lock field staff out (mirrors
+    // `mobile/lib/ssoPolicy.ts`). A refusal signs the session out again and is
+    // NOT recorded as a failed attempt: the password was correct.
+    if (!await _ssoAllowsPasswordLogin()) {
+      await signOut();
+      return const SignInSsoRequired(_ssoRequiredError);
+    }
+
     // Best-effort housekeeping: a successful sign-in must never be reported as
     // failed because the counter-reset call afterwards could not reach the
     // server. `reset_login_attempts` is AUTHENTICATED-only by design (V287) -
@@ -269,6 +289,27 @@ final class SupabaseAuthRepository implements AuthRepository {
     unawaited(_resetLockout());
 
     return const SignInSucceeded();
+  }
+
+  static const AppError _ssoRequiredError = AppError(
+    kind: AppErrorKind.authentication,
+    message: 'Your organisation requires single sign-on (SSO). Password '
+        'sign-in is not allowed for this account. Please contact your '
+        'administrator.',
+    technical: 'sso_password_login_check returned allowed=false '
+        '(reason sso_required); session signed out',
+  );
+
+  /// True unless the server DEFINITELY answered `allowed: false`.
+  Future<bool> _ssoAllowsPasswordLogin() async {
+    try {
+      final Object? result = await _client.rpc<Object?>(
+        SupabaseRpcs.ssoPasswordLoginCheck,
+      );
+      return ssoCheckAllows(result);
+    } on Object {
+      return true;
+    }
   }
 
   Future<LoginLockStatus> _lockStatus(String identifier) async {

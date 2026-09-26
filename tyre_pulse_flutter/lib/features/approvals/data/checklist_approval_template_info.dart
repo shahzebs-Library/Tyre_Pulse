@@ -66,7 +66,38 @@ List<ChecklistField> _decodeFields(Object? raw) {
 /// none - the same distinction `checklist_fill_screen.dart` draws via
 /// `ChecklistTemplateRecord.requireSignature`.
 const String checklistApprovalTemplateColumns =
-    'id,require_area_manager,require_signature,fields';
+    'id,require_area_manager,require_signature,fields,option_sets';
+
+/// `option_sets #> '{legend,blocking}'` - EXACTLY the path the database
+/// trigger `guard_checklist_approval_stages` reads
+/// (`MIGRATIONS_V595_WORKSHOP_DAILY_CHECKLIST.sql`). Anything that is not a
+/// list of strings resolves to "no blocking marks".
+List<String> _decodeLegendBlocking(Object? optionSets) {
+  if (optionSets is! Map) return const <String>[];
+  final Object? legend = optionSets['legend'];
+  if (legend is! Map) return const <String>[];
+  final Object? blocking = legend['blocking'];
+  if (blocking is! List) return const <String>[];
+  return <String>[
+    for (final Object? mark in blocking)
+      if (mark is String && mark.isNotEmpty) mark,
+  ];
+}
+
+/// One answer that still carries a blocking mark.
+final class ChecklistApprovalBlockingAnswer {
+  const ChecklistApprovalBlockingAnswer({
+    required this.fieldId,
+    required this.label,
+    required this.value,
+  });
+
+  final String fieldId;
+
+  /// The field's own label, or its id when the template no longer names it.
+  final String label;
+  final String value;
+}
 
 /// The template facts the ladder engine and the answer-rendering section of
 /// the review screen need.
@@ -76,6 +107,7 @@ final class ChecklistApprovalTemplateInfo {
     this.requireAreaManager,
     this.requireSignature = false,
     this.fields = const <ChecklistField>[],
+    this.legendBlocking = const <String>[],
   });
 
   final String id;
@@ -97,6 +129,47 @@ final class ChecklistApprovalTemplateInfo {
   /// visual structure the fill screen has, for free.
   final List<ChecklistField> fields;
 
+  /// The template's blocking marks (`option_sets.legend.blocking`) - a mark
+  /// that stops the sheet being CLOSED until the item is corrected.
+  final List<String> legendBlocking;
+
+  /// Every answer whose value is a blocking mark - a flat, field-blind scan
+  /// of [answers], mirroring the server trigger (which scans every answer
+  /// value, not only select fields) and `canClose` in
+  /// `mobile/lib/checklistMarks.ts`. Only the rung that CLOSES the sheet is
+  /// held back by this; a send-back is always allowed. Advisory: the server
+  /// refuses the close independently.
+  List<ChecklistApprovalBlockingAnswer> blockingAnswers(
+    Map<String, Object?> answers,
+  ) {
+    if (legendBlocking.isEmpty) {
+      return const <ChecklistApprovalBlockingAnswer>[];
+    }
+    final Map<String, String> labels = <String, String>{
+      for (final ChecklistField f in fields)
+        f.id: (f.label?.trim().isNotEmpty ?? false) ? f.label!.trim() : f.id,
+    };
+    final List<ChecklistApprovalBlockingAnswer> out =
+        <ChecklistApprovalBlockingAnswer>[];
+    answers.forEach((String key, Object? raw) {
+      final String? text = raw is String
+          ? raw
+          : (raw is num || raw is bool)
+              ? raw.toString()
+              : null;
+      if (text != null && legendBlocking.contains(text)) {
+        out.add(
+          ChecklistApprovalBlockingAnswer(
+            fieldId: key,
+            label: labels[key] ?? key,
+            value: text,
+          ),
+        );
+      }
+    });
+    return out;
+  }
+
   /// The narrow view [checklist_approval.dart]'s functions need.
   ApprovalTemplateLike get asTemplateLike =>
       ApprovalTemplateLike(requireAreaManager: requireAreaManager);
@@ -116,6 +189,7 @@ final class ChecklistApprovalTemplateInfo {
           : null,
       requireSignature: row['require_signature'] == true,
       fields: _decodeFields(row['fields']),
+      legendBlocking: _decodeLegendBlocking(row['option_sets']),
     );
   }
 

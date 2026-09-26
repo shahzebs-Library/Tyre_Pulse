@@ -24,12 +24,16 @@
 /// delivery time) belongs entirely to
 /// `checklist_approval_sync_engine.dart`'s [ChecklistApprovalSyncEngine].
 ///
-/// # Why there is no client-side "blocked from closing" check
+/// # The client-side "blocked from closing" check
 ///
-/// The sibling mobile screen additionally computes `canClose(template,
-/// submission.answers)` from `checklistMarks.ts` and disables Approve when
-/// a blocking mark is still present. This port deliberately does NOT
-/// reproduce that check: `checklist_approval.dart`'s own library comment
+/// The sibling mobile screen computes `canClose(template,
+/// submission.answers)` from `checklistMarks.ts` and refuses Approve on the
+/// CLOSING rung while a blocking mark is still present. This screen now does
+/// the same through [ChecklistApprovalTemplateInfo.blockingAnswers] (a flat
+/// scan of `option_sets.legend.blocking`, the trigger's own path), kept in
+/// this feature so it still does not import `checklist_marks.dart`. The
+/// historical note below explains why the marks engine itself is not
+/// imported: `checklist_approval.dart`'s own library comment
 /// states plainly that the blocking-marks engine "belongs to the checklist
 /// FIELD/marks engine (a parallel, separate domain) ... this library
 /// never receives and never will" read it, and this feature's own
@@ -208,6 +212,24 @@ class _ChecklistApprovalReviewScreenState
 
   ApprovalStage? get _stage => stageFor(_templateLike, _item?.asSubmissionLike);
 
+  /// Blocking marks still on this sheet - only when the outstanding rung is
+  /// the one that CLOSES it (mirrors `blockedFromClosing` in
+  /// `mobile/app/(app)/checklists/approvals/[submissionId].tsx`). A
+  /// supervisor may sign off a sheet with a fault recorded; only the close
+  /// waits for it to be corrected. The server enforces this independently.
+  List<ChecklistApprovalBlockingAnswer> _blockingForClose(
+    ChecklistApprovalItem item,
+  ) {
+    final ChecklistApprovalTemplateInfo? info = _templateInfo;
+    if (info == null || _stage == null) {
+      return const <ChecklistApprovalBlockingAnswer>[];
+    }
+    final bool closing =
+        nextStatusFor(_templateLike, item.asSubmissionLike, true) == 'approved';
+    if (!closing) return const <ChecklistApprovalBlockingAnswer>[];
+    return info.blockingAnswers(item.answers);
+  }
+
   Future<void> _decide(bool approved) async {
     final ChecklistApprovalItem? item = _item;
     final ApprovalStage? stage = _stage;
@@ -220,6 +242,15 @@ class _ChecklistApprovalReviewScreenState
       signature: _approverSignature?.dataUrl,
       note: _noteController.text,
     );
+    if (approved && _blockingForClose(item).isNotEmpty) {
+      await _showInfoDialog(
+        context,
+        title: l10n.checklistApprovalCannotCloseTitle,
+        message: l10n.checklistApprovalCannotCloseMessage,
+      );
+      return;
+    }
+
     final String? missing = _localizedRequirementError(l10n, stage, input);
     if (missing != null) {
       await _showInfoDialog(
@@ -415,6 +446,10 @@ class _ChecklistApprovalReviewScreenState
         const SizedBox(height: TpSpace.sm),
         _ResponsesSection(item: item, templateInfo: _templateInfo),
         const SizedBox(height: TpSpace.lg),
+        if (myTurn && _blockingForClose(item).isNotEmpty) ...<Widget>[
+          _CannotCloseCard(l10n: l10n, blocking: _blockingForClose(item)),
+          const SizedBox(height: TpSpace.lg),
+        ],
         if (stage == null)
           _DecidedInfoCard(
             l10n: l10n,
@@ -1459,6 +1494,63 @@ class _ReadOnlySignature extends StatelessWidget {
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// The faults that stop this sheet being closed, named line by line.
+class _CannotCloseCard extends StatelessWidget {
+  const _CannotCloseCard({required this.l10n, required this.blocking});
+
+  final AppLocalizations l10n;
+  final List<ChecklistApprovalBlockingAnswer> blocking;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final TextTheme text = Theme.of(context).textTheme;
+    return TpCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Icon(Icons.error_outline, color: palette.critical.base),
+              const SizedBox(width: TpSpace.sm),
+              Expanded(
+                child: Text(
+                  l10n.checklistApprovalCannotCloseTitle,
+                  style: text.titleSmall?.copyWith(
+                    color: palette.critical.base,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: TpSpace.xs),
+          Text(l10n.checklistApprovalCannotCloseMessage, style: text.bodySmall),
+          const SizedBox(height: TpSpace.sm),
+          for (final ChecklistApprovalBlockingAnswer b in blocking)
+            Padding(
+              padding: const EdgeInsets.only(bottom: TpSpace.xs),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Icon(
+                    Icons.warning_amber_outlined,
+                    size: 16,
+                    color: palette.critical.base,
+                  ),
+                  const SizedBox(width: TpSpace.xs),
+                  Expanded(
+                    child:
+                        Text('${b.label}: ${b.value}', style: text.bodySmall),
+                  ),
+                ],
+              ),
+            ),
+        ],
       ),
     );
   }

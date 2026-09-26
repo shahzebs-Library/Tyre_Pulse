@@ -471,10 +471,17 @@ void main() {
     // `myPlansNavTitle`.
     // 861 + 9 = 870. The asset-first checklist hub adds shared labels for
     // asset search, section headings, content language and checklist states.
-    test('en, ar and ur each carry exactly 870 translatable keys today', () {
-      expect(_translatableKeys(en).length, 870);
-      expect(_translatableKeys(ar).length, 870);
-      expect(_translatableKeys(ur).length, 870);
+    // 870 + 2 = 872. checklistApprovalCannotCloseTitle/Message: the closing
+    // rung of a checklist approval now names the blocking marks that stop
+    // the close, mirroring `cannotCloseTitle`/`cannotCloseMsg` in
+    // mobile/locales (Urdu supplied here - mobile carries none).
+    // 872 + 1 = 873. workshopCopyCatalog: the technician "My Jobs" screen
+    // (ported from mobile/app/(app)/workshop.tsx), one `~`-separated catalog
+    // key in the same convention as tasksCopyCatalog.
+    test('en, ar and ur each carry exactly 873 translatable keys today', () {
+      expect(_translatableKeys(en).length, 873);
+      expect(_translatableKeys(ar).length, 873);
+      expect(_translatableKeys(ur).length, 873);
     });
   });
 

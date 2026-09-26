@@ -1582,6 +1582,14 @@ class AppLocalizationsAr extends AppLocalizations {
   String get checklistApprovalRequirementTitle => 'لا يمكن التوقيع';
 
   @override
+  String get checklistApprovalCannotCloseTitle =>
+      'لا يمكن إغلاق هذا النموذج بعد';
+
+  @override
+  String get checklistApprovalCannotCloseMessage =>
+      'بعض البنود ما زالت مسجلة كعطل. أعد النموذج لإصلاحها ثم أغلقه.';
+
+  @override
   String get checklistApprovalReasonRequiredTitle => 'السبب مطلوب';
 
   @override
@@ -2951,4 +2959,8 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get washHistoryLimit =>
       'السجل كبير جدًا لتحميله بالكامل. استخدم تقرير الويب.';
+
+  @override
+  String get workshopCopyCatalog =>
+      'title=مهامي~onDuty=في المناوبة~offDuty=خارج المناوبة~checkIn=تسجيل الحضور~checkOut=تسجيل الانصراف~checkInHint=سجّل حضورك للمناوبة قبل تسجيل العمل.~myJobs=مهامي~emptyTitle=لا توجد مهام مفتوحة~emptyMessage=لا توجد مهمة مفتوحة مسندة إليك حاليًا.~loadError=تعذر تحميل مهامك الآن.~selectJobTitle=اختر مهمة~selectJobMsg=اختر إحدى مهامك أولًا.~checkInFirstTitle=سجّل الحضور أولًا~selectTaskTitle=اختر خطوة~selectTaskMsg=اختر الخطوة التي تعمل عليها أولًا.~tasks=الخطوات~confirmTitle=إكمال الخطوة؟~confirmMsg=سيتم تسجيل الخطوة كمكتملة وإرسالها للفحص.~cancel=إلغاء~noteHint=أضف ملاحظة (اختياري)~record=تسجيل~queued=تم الحفظ على هذا الجهاز. ستتم المزامنة تلقائيًا.~saveFailed=تعذر حفظ النشاط على هذا الجهاز. حاول مرة أخرى.~todayTitle=إنتاجيتي اليوم~productive=منتج~blocked=متوقف~unassigned=غير مسند~breakTime=استراحة~completed=الخطوات المكتملة~due=الاستحقاق~ok=حسنًا~a_start_job=بدء العمل~a_pause_job=إيقاف مؤقت~a_resume_job=استئناف العمل~a_complete_task=إكمال الخطوة~a_request_parts=طلب قطع غيار~a_request_assistance=طلب مساعدة~a_waiting_approval=بانتظار الموافقة~a_waiting_vehicle=بانتظار المركبة~a_waiting_tools=بانتظار الأدوات~a_start_break=بدء الاستراحة~a_end_break=إنهاء الاستراحة~a_report_problem=الإبلاغ عن مشكلة~s_working=يعمل~s_available=متاح~s_waiting_parts=بانتظار القطع~s_waiting_approval=بانتظار الموافقة~s_waiting_tools=بانتظار الأدوات~s_waiting_vehicle=بانتظار المركبة~s_on_break=في استراحة~s_training=تدريب~s_awaiting_inspection=بانتظار الفحص~s_off_duty=خارج المناوبة~s_absent=غائب';
 }

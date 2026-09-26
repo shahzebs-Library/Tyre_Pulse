@@ -1,138 +1,214 @@
+/**
+ * ChecklistInsights (route /checklist-insights, gated to CHECKLIST_AUTHOR_ROLES
+ * in App.jsx) - analytics across checklist templates and submissions.
+ *
+ * Every figure comes from the pure `src/lib/checklistInsightsAnalytics.js`
+ * engine over rows this page reads (templates, submissions, the scheduled
+ * compliance monitor and the approval-age monitor). The two monitors are read
+ * best-effort: a failed monitor read is SAID on screen, never rendered as
+ * "nothing due" or "nothing pending".
+ */
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   BarChart3, ClipboardList, Inbox, CalendarClock, ShieldCheck, CheckCircle2,
   AlertTriangle, RefreshCw, Search, ListChecks, TrendingUp, Layers,
+  FileSpreadsheet, FileText, ChevronUp, ChevronDown, ChevronsUpDown, X, MapPin, Hourglass,
 } from 'lucide-react'
 import {
-  Chart as ChartJS,
-  CategoryScale, LinearScale,
-  BarElement, LineElement, PointElement,
-  Title, Tooltip, Legend, Filler,
+  Chart as ChartJS, CategoryScale, LinearScale, BarElement, Tooltip, Legend,
 } from 'chart.js'
 import { Bar } from 'react-chartjs-2'
 import PageHeader from '../components/ui/PageHeader'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import { useSettings } from '../contexts/SettingsContext'
 import { listSubmissions, listTemplates } from '../lib/api/checklists'
 import { getApprovalAgeMonitor, getComplianceMonitor } from '../lib/api/checklistSchedules'
-import { isValueField, fieldTypeDef } from '../lib/checklist/fieldTypes'
+import { isValueField } from '../lib/checklist/fieldTypes'
 import { toUserMessage } from '../lib/safeError'
 import { isMissingRelation } from '../lib/api/_client'
+import { colorAt, withAlpha } from '../lib/reportColors'
+import {
+  WEEKS, PERIODS, STATUS_KEYS, STATUS_LABELS,
+  filterSubmissions, siteOptions, computeMetrics, rateTone, weeklySeries, bySite,
+  byTemplate, boolPassRates, complianceSummary, approvalAgeSummary, sortRows,
+  templateExportRows, TEMPLATE_EXPORT_COLS, TEMPLATE_EXPORT_HEADERS,
+  passRateExportRows, PASS_EXPORT_COLS, PASS_EXPORT_HEADERS,
+} from '../lib/checklistInsightsAnalytics'
 
-ChartJS.register(
-  CategoryScale, LinearScale,
-  BarElement, LineElement, PointElement,
-  Title, Tooltip, Legend, Filler,
-)
+ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend)
 
-// ── Missing-table heuristic (mirrors Billing.jsx / Checklists.jsx) ───────────
+const loadExportUtils = () => import('../lib/exportUtils')
 
-// ── Chart options factory (mirrors EngineeringKpi / Analytics style) ─────────
+// Chart colours resolve through chartVarPlugin, so both themes stay legible.
 function chartOpts(horizontal = false, yLabel = '', xLabel = '') {
+  const axisText = { color: 'var(--text-muted)', font: { size: 11 } }
   return {
     responsive: true,
     maintainAspectRatio: false,
     indexAxis: horizontal ? 'y' : 'x',
     plugins: {
-      legend: { display: false, labels: { color: '#9ca3af', font: { size: 10 } } },
-      title: { display: false },
+      legend: { display: false },
       tooltip: {
-        backgroundColor: 'var(--panel)', titleColor: '#f9fafb', bodyColor: '#d1d5db',
+        backgroundColor: 'var(--panel)', titleColor: 'var(--text-primary)', bodyColor: 'var(--text-secondary)',
         borderColor: 'var(--hairline)', borderWidth: 1,
       },
     },
     scales: {
       x: {
-        grid: { color: 'rgba(31,41,55,0.6)' },
-        ticks: { color: '#9ca3af', font: { size: 10 }, autoSkip: false },
-        title: xLabel ? { display: true, text: xLabel, color: '#6b7280', font: { size: 10 } } : { display: false },
+        grid: { color: 'var(--panel-2)' },
+        ticks: { ...axisText, autoSkip: true },
+        title: xLabel ? { display: true, text: xLabel, ...axisText } : { display: false },
       },
       y: {
         beginAtZero: true,
-        grid: { color: 'rgba(31,41,55,0.6)' },
-        ticks: { color: '#9ca3af', font: { size: 10 }, precision: 0 },
-        title: yLabel ? { display: true, text: yLabel, color: '#6b7280', font: { size: 10 } } : { display: false },
+        grid: { color: 'var(--panel-2)' },
+        ticks: { ...axisText, precision: 0 },
+        title: yLabel ? { display: true, text: yLabel, ...axisText } : { display: false },
       },
     },
   }
 }
 
-// ── Safe date parsing / formatting ───────────────────────────────────────────
-function parseDate(v) {
-  if (!v) return null
-  const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? null : d
-}
-function submissionDate(s) {
-  return parseDate(s?.created_at) || parseDate(s?.submitted_at) || null
-}
-function fmtDate(v) {
-  const d = parseDate(v)
-  return d ? d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '-'
-}
-function fmtShort(d) {
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-}
-// Monday-anchored start of the ISO week (mutates a clone, not the input).
-function weekStart(date) {
-  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate())
-  const dow = (d.getDay() + 6) % 7 // 0 = Monday
-  d.setDate(d.getDate() - dow)
-  d.setHours(0, 0, 0, 0)
-  return d
-}
-function weekKey(date) {
-  const w = weekStart(date)
-  return `${w.getFullYear()}-${String(w.getMonth() + 1).padStart(2, '0')}-${String(w.getDate()).padStart(2, '0')}`
+const fmtPct = (v) => (v == null ? 'N/A' : `${v.toFixed(1)}%`)
+const fmtNum = (v) => (v == null ? 'N/A' : Number(v).toLocaleString())
+const fmtHours = (v) => (v == null ? 'N/A' : `${Number(v).toFixed(1)} h`)
+const fmtDate = (d) => (d ? d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A')
+const fmtShort = (d) => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+
+const TONE_TEXT = { good: 'text-green-400', warn: 'text-amber-400', bad: 'text-red-400' }
+const TONE_WORD = { good: 'On target', warn: 'Watch', bad: 'Below target' }
+
+const STATUS_CHIP = {
+  submitted: 'bg-sky-900/40 text-sky-300 border border-sky-700/50',
+  approved: 'bg-green-900/40 text-green-300 border border-green-700/50',
+  rejected: 'bg-red-900/40 text-red-300 border border-red-700/50',
+  draft: 'bg-[var(--surface-2)] text-[var(--text-muted)] border border-[var(--border-dim)]',
 }
 
-// Interpret a boolean answer: is it answered, and is it a "Yes"/pass?
-function boolAnswered(v) {
-  return v !== null && v !== undefined && v !== ''
-}
-function boolIsYes(v) {
-  if (v === true) return true
-  const s = String(v).trim().toLowerCase()
-  return s === 'yes' || s === 'true' || s === 'pass' || s === '1' || s === 'ok'
-}
-
-const WEEKS = 10
-
-const STATUS_META = {
-  submitted: { label: 'Submitted', chip: 'bg-sky-900/40 text-sky-300 border border-sky-700/50' },
-  approved: { label: 'Approved', chip: 'bg-green-900/40 text-green-300 border border-green-700/50' },
-  rejected: { label: 'Rejected', chip: 'bg-red-900/40 text-red-300 border border-red-700/50' },
-  draft: { label: 'Draft', chip: 'bg-[var(--surface-2)] text-[var(--text-muted)] border border-[var(--border-dim)]' },
-}
-function statusChip(s) {
-  return STATUS_META[String(s || '').toLowerCase()]?.chip || STATUS_META.draft.chip
-}
-
-// ── KPI card ─────────────────────────────────────────────────────────────────
-function KpiCard({ title, value, sub, icon: Icon, accent = 'text-[var(--text-primary)]' }) {
+function KpiCard({ title, value, sub, icon: Icon, tone }) {
   return (
-    <div className="card flex flex-col gap-2">
+    <div className="card flex flex-col gap-2 min-w-0">
       <div className="flex items-center gap-2">
-        {Icon && <Icon size={15} className="text-[var(--text-muted)] shrink-0" />}
+        {Icon && <Icon size={15} className="text-[var(--text-muted)] shrink-0" aria-hidden="true" />}
         <span className="text-xs font-medium text-[var(--text-muted)] truncate">{title}</span>
       </div>
-      <p className={`text-2xl font-bold leading-tight ${accent}`}>{value}</p>
-      {sub && <p className="text-xs text-[var(--text-muted)] leading-snug">{sub}</p>}
+      <p className={`text-2xl font-bold leading-tight tabular-nums ${tone ? TONE_TEXT[tone] : 'text-[var(--text-primary)]'}`}>{value}</p>
+      {(sub || tone) && (
+        <p className="text-xs text-[var(--text-muted)] leading-snug">
+          {tone ? `${TONE_WORD[tone]}${sub ? '. ' : ''}` : ''}{sub}
+        </p>
+      )}
     </div>
   )
 }
 
-function pct(n, d) {
-  if (!d) return null
-  return (n / d) * 100
+function SortButton({ label, active, dir, onClick, align }) {
+  const Icon = !active ? ChevronsUpDown : dir === 'asc' ? ChevronUp : ChevronDown
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-1 min-h-[32px] rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--brand-bright)] ${align === 'right' ? 'flex-row-reverse' : ''} ${active ? 'text-[var(--text-primary)]' : ''}`}
+      aria-label={`Sort by ${label}${active ? `, currently ${dir === 'asc' ? 'ascending' : 'descending'}` : ''}`}
+    >
+      {label}
+      <Icon size={12} aria-hidden="true" />
+    </button>
+  )
 }
-function fmtPct(v) {
-  return v == null ? 'N/A' : `${v.toFixed(1)}%`
+
+/**
+ * Sortable, paged register. Sorting runs over the FULL row set before paging
+ * (usePagedRows), so a column sort never re-orders only the visible page.
+ */
+function SortedPagedTable({ columns, rows, defaultSort, getRowId, emptyMessage, onRowClick, maxHeight = 520 }) {
+  const [sort, setSort] = useState(defaultSort)
+  const sorted = useMemo(() => {
+    const col = columns.find((c) => c.id === sort?.id)
+    return col?.sortValue ? sortRows(rows, col.sortValue, sort.dir) : rows
+  }, [rows, columns, sort])
+  const pager = usePagedRows(sorted, { pageSize: 25 })
+  const tableColumns = useMemo(() => columns.map((c) => ({
+    id: c.id,
+    accessorFn: c.sortValue || ((r) => r[c.id]),
+    header: c.sortValue
+      ? () => (
+        <SortButton
+          label={c.header} align={c.align}
+          active={sort?.id === c.id} dir={sort?.dir}
+          onClick={() => setSort((s) => (s?.id === c.id
+            ? { id: c.id, dir: s.dir === 'asc' ? 'desc' : 'asc' }
+            : { id: c.id, dir: c.firstDir || 'desc' }))}
+        />
+      )
+      : c.header,
+    cell: c.cell ? ({ row }) => c.cell(row.original) : undefined,
+    size: c.size,
+    meta: { align: c.align },
+  })), [columns, sort])
+  return (
+    <div className="space-y-2">
+      <EnterpriseTable
+        columns={tableColumns}
+        data={pager.pageRows}
+        getRowId={getRowId}
+        enableGlobalFilter={false}
+        enableColumnFilters={false}
+        enableSorting={false}
+        enableExport={false}
+        virtual
+        maxHeight={maxHeight}
+        emptyMessage={emptyMessage}
+        onRowClick={onRowClick}
+      />
+      <TablePagination {...pager} />
+    </div>
+  )
 }
-function prettyToken(value) {
-  return String(value || '').replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
+
+function SectionCard({ title, description, icon: Icon, actions, children }) {
+  return (
+    <section className="card space-y-3 min-w-0">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
+            {Icon && <Icon size={15} className="text-[var(--text-muted)]" aria-hidden="true" />}{title}
+          </h2>
+          {description && <p className="text-xs text-[var(--text-muted)] mt-1">{description}</p>}
+        </div>
+        {actions}
+      </div>
+      {children}
+    </section>
+  )
 }
+
+function MonitorUnavailable({ what, error, onRetry }) {
+  const missing = isMissingRelation(error)
+  return (
+    <div role="alert" className="flex flex-wrap items-start gap-3 rounded-lg border border-amber-700/50 px-3 py-3">
+      <AlertTriangle size={16} className="text-amber-400 shrink-0 mt-0.5" aria-hidden="true" />
+      <div className="text-sm flex-1 min-w-[200px]">
+        <p className="text-[var(--text-primary)] font-medium">The {what} could not be read.</p>
+        <p className="text-[var(--text-muted)] mt-0.5">
+          {missing
+            ? 'Its database migration is not applied yet, so no figure is shown rather than a zero.'
+            : toUserMessage(error, 'An unexpected error occurred.')}
+        </p>
+      </div>
+      {!missing && (
+        <button type="button" onClick={onRetry} className="btn-secondary text-sm min-h-[44px] inline-flex items-center gap-2">
+          <RefreshCw size={14} aria-hidden="true" /> Retry
+        </button>
+      )}
+    </div>
+  )
+}
+
+const HEADER_TITLE = 'Checklist Insights'
+const HEADER_SUB = 'Analytics across checklist templates and submissions'
 
 export default function ChecklistInsights() {
   const { activeCountry } = useSettings()
@@ -143,14 +219,18 @@ export default function ChecklistInsights() {
   const [complianceRows, setComplianceRows] = useState([])
   const [complianceError, setComplianceError] = useState(null)
   const [approvalAgeRows, setApprovalAgeRows] = useState([])
+  const [approvalAgeError, setApprovalAgeError] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [loadedAt, setLoadedAt] = useState(null)
 
   const [templateFilter, setTemplateFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [siteFilter, setSiteFilter] = useState('all')
+  const [period, setPeriod] = useState('all')
   const [search, setSearch] = useState('')
 
   const reqIdRef = useRef(0)
-
   const country = activeCountry && activeCountry !== 'All' ? activeCountry : undefined
 
   const loadData = useCallback(async () => {
@@ -178,6 +258,8 @@ export default function ChecklistInsights() {
       setComplianceRows(Array.isArray(compliance.rows) ? compliance.rows : [])
       setComplianceError(compliance.error)
       setApprovalAgeRows(Array.isArray(approvalAges.rows) ? approvalAges.rows : [])
+      setApprovalAgeError(approvalAges.error)
+      setLoadedAt(new Date())
     } catch (err) {
       if (myReq === reqIdRef.current) setError(err)
     } finally {
@@ -185,252 +267,166 @@ export default function ChecklistInsights() {
     }
   }, [country])
 
-  const compliance = useMemo(() => {
-    const rows = complianceRows.filter((row) => templateFilter === 'all'
-      || String(row.template_id) === String(templateFilter))
-    const total = (key) => rows.reduce((sum, row) => sum + Number(row[key] || 0), 0)
-    const due = total('due_count')
-    const completed = total('completed_count')
-    const completedOnTime = total('completed_on_time_count')
-    return {
-      rows, due, completed,
-      overdue: total('overdue_count'),
-      evidenceGaps: total('evidence_gap_count'),
-      compliancePct: pct(completed, due - total('skipped_count')),
-      onTimePct: pct(completedOnTime, completed),
-    }
-  }, [complianceRows, templateFilter])
-
-  const approvalAges = useMemo(() => approvalAgeRows.filter((row) =>
-    templateFilter === 'all' || String(row.template_id) === String(templateFilter)),
-  [approvalAgeRows, templateFilter])
-
   useEffect(() => { loadData() }, [loadData])
 
-  // Template lookup by id.
-  const templateById = useMemo(() => {
-    const map = new Map()
-    for (const t of templates) if (t?.id != null) map.set(t.id, t)
-    return map
-  }, [templates])
+  // `now` is pinned to the load, so every figure on screen agrees with itself.
+  const now = loadedAt || new Date()
+  const filters = { template: templateFilter, status: statusFilter, site: siteFilter, period, search }
+  const filteredSubs = useMemo(
+    () => filterSubmissions(submissions, filters, now),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [submissions, templateFilter, statusFilter, siteFilter, period, search, loadedAt],
+  )
+  const sites = useMemo(() => siteOptions(submissions), [submissions])
+  const metrics = useMemo(() => computeMetrics(templates, filteredSubs, now),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [templates, filteredSubs, loadedAt])
+  const weekly = useMemo(() => weeklySeries(filteredSubs, now, WEEKS),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filteredSubs, loadedAt])
+  const siteVolume = useMemo(() => bySite(filteredSubs, 12), [filteredSubs])
+  const templateRows = useMemo(() => byTemplate(filteredSubs, templates), [filteredSubs, templates])
+  const passRates = useMemo(() => boolPassRates(templates, filteredSubs, {
+    template: templateFilter,
+    isBoolField: (f) => f?.type === 'boolean' && isValueField(f.type),
+  }), [templates, filteredSubs, templateFilter])
+  const compliance = useMemo(() => complianceSummary(complianceRows, templateFilter), [complianceRows, templateFilter])
+  const approvalAges = useMemo(() => approvalAgeSummary(approvalAgeRows, templateFilter), [approvalAgeRows, templateFilter])
 
-  // Submissions filtered by the template selector + free-text search.
-  const filteredSubs = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return submissions.filter((s) => {
-      if (!s) return false
-      if (templateFilter !== 'all' && String(s.template_id) !== String(templateFilter)) return false
-      if (!q) return true
-      const hay = [s.site, s.template_name, s.title, s.asset_no].filter(Boolean).join(' ').toLowerCase()
-      return hay.includes(q)
-    })
-  }, [submissions, templateFilter, search])
+  const hasFilters = templateFilter !== 'all' || statusFilter !== 'all' || siteFilter !== 'all' || period !== 'all' || search
+  const clearFilters = () => {
+    setTemplateFilter('all'); setStatusFilter('all'); setSiteFilter('all'); setPeriod('all'); setSearch('')
+  }
 
-  // ── KPI metrics ─────────────────────────────────────────────────────────────
-  const metrics = useMemo(() => {
-    const publishedTemplates = templates.filter((t) => t?.status === 'published').length
-    const total = filteredSubs.length
+  const weeklyChart = useMemo(() => (weekly.inWindow ? {
+    labels: weekly.weeks.map(fmtShort),
+    datasets: [{
+      label: 'Submissions', data: weekly.counts,
+      backgroundColor: withAlpha(colorAt(0), 0.7), borderColor: colorAt(0), borderWidth: 1, borderRadius: 3,
+    }],
+  } : null), [weekly])
+  const siteChart = useMemo(() => (siteVolume.rows.length ? {
+    labels: siteVolume.rows.map((s) => s.site),
+    datasets: [{
+      label: 'Submissions', data: siteVolume.rows.map((s) => s.count),
+      backgroundColor: withAlpha(colorAt(1), 0.7), borderColor: colorAt(1), borderWidth: 1, borderRadius: 3,
+    }],
+  } : null), [siteVolume])
 
-    const now = new Date()
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-    const thisMonth = filteredSubs.filter((s) => {
-      const d = submissionDate(s)
-      return d && d >= monthStart
-    }).length
+  async function exportExcel() {
+    const { exportSheetsToExcel, reportFileName, reportDateLabel } = await loadExportUtils()
+    exportSheetsToExcel([
+      { name: 'By template', rows: templateExportRows(templateRows), columns: TEMPLATE_EXPORT_COLS, headers: TEMPLATE_EXPORT_HEADERS },
+      { name: 'Question pass rates', rows: passRateExportRows(passRates), columns: PASS_EXPORT_COLS, headers: PASS_EXPORT_HEADERS },
+    ], reportFileName('TyrePulse Checklist Insights', country, reportDateLabel()))
+  }
+  async function exportPdf() {
+    const { exportToPdf, reportFileName, reportDateLabel } = await loadExportUtils()
+    exportToPdf(
+      templateExportRows(templateRows),
+      TEMPLATE_EXPORT_COLS.map((key, i) => ({ key, header: TEMPLATE_EXPORT_HEADERS[i] })),
+      'Checklist Insights by Template',
+      reportFileName('TyrePulse Checklist Insights', country, reportDateLabel()),
+      'landscape',
+    )
+  }
 
-    let approved = 0, rejected = 0
-    for (const s of filteredSubs) {
-      if (s?.status === 'approved') approved++
-      else if (s?.status === 'rejected') rejected++
-    }
-    const approvalRate = pct(approved, approved + rejected)
-
-    // Of submissions whose template requires approval, how many passed (approved).
-    let requiresApproval = 0, requiresApprovalPassed = 0
-    for (const s of filteredSubs) {
-      const tpl = templateById.get(s?.template_id)
-      if (tpl?.require_approval) {
-        requiresApproval++
-        if (s?.status === 'approved') requiresApprovalPassed++
-      }
-    }
-    const approvalPassRate = pct(requiresApprovalPassed, requiresApproval)
-
-    return {
-      publishedTemplates,
-      totalTemplates: templates.length,
-      total,
-      thisMonth,
-      approved,
-      rejected,
-      approvalRate,
-      requiresApproval,
-      requiresApprovalPassed,
-      approvalPassRate,
-    }
-  }, [templates, filteredSubs, templateById])
-
-  // ── Submissions over time (last WEEKS weeks) ─────────────────────────────────
-  const weeklyChart = useMemo(() => {
-    const axis = []
-    const now = new Date()
-    for (let i = WEEKS - 1; i >= 0; i--) {
-      const d = weekStart(now)
-      d.setDate(d.getDate() - i * 7)
-      axis.push(d)
-    }
-    const counts = new Map(axis.map((d) => [weekKey(d), 0]))
-    let anyDated = false
-    for (const s of filteredSubs) {
-      const d = submissionDate(s)
-      if (!d) continue
-      const k = weekKey(d)
-      if (counts.has(k)) { counts.set(k, counts.get(k) + 1); anyDated = true }
-    }
-    if (!anyDated) return null
-    return {
-      data: {
-        labels: axis.map(fmtShort),
-        datasets: [{
-          label: 'Submissions',
-          data: axis.map((d) => counts.get(weekKey(d)) || 0),
-          backgroundColor: 'rgba(34,197,94,0.65)',
-          borderColor: 'rgb(34,197,94)',
-          borderWidth: 1,
-          borderRadius: 3,
-        }],
-      },
-    }
-  }, [filteredSubs])
-
-  // ── By template (count, last submitted, status mix) ──────────────────────────
-  const byTemplate = useMemo(() => {
-    const map = new Map()
-    for (const s of filteredSubs) {
-      const id = s?.template_id ?? 'N/A'
-      let row = map.get(id)
-      if (!row) {
-        row = {
-          id,
-          name: s?.template_name || templateById.get(id)?.name || 'Unknown template',
-          count: 0, last: null,
-          submitted: 0, approved: 0, rejected: 0, draft: 0,
-        }
-        map.set(id, row)
-      }
-      row.count++
-      const d = submissionDate(s)
-      if (d && (!row.last || d > row.last)) row.last = d
-      const st = String(s?.status || 'submitted').toLowerCase()
-      if (st === 'approved') row.approved++
-      else if (st === 'rejected') row.rejected++
-      else if (st === 'draft') row.draft++
-      else row.submitted++
-    }
-    return [...map.values()].sort((a, b) => b.count - a.count)
-  }, [filteredSubs, templateById])
-
-  // ── By site (top sites) ──────────────────────────────────────────────────────
-  const bySite = useMemo(() => {
-    const map = new Map()
-    for (const s of filteredSubs) {
-      const site = (s?.site && String(s.site).trim()) || 'Unassigned'
-      map.set(site, (map.get(site) || 0) + 1)
-    }
-    return [...map.entries()]
-      .map(([site, count]) => ({ site, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 12)
-  }, [filteredSubs])
-
-  const siteChart = useMemo(() => {
-    if (!bySite.length) return null
-    return {
-      data: {
-        labels: bySite.map((s) => s.site),
-        datasets: [{
-          label: 'Submissions',
-          data: bySite.map((s) => s.count),
-          backgroundColor: 'rgba(59,130,246,0.6)',
-          borderColor: 'rgb(59,130,246)',
-          borderWidth: 1,
-          borderRadius: 3,
-        }],
-      },
-    }
-  }, [bySite])
-
-  // ── Boolean field pass-rates ─────────────────────────────────────────────────
-  const boolPassRates = useMemo(() => {
-    // Group submissions by template for efficient field scans.
-    const subsByTpl = new Map()
-    for (const s of filteredSubs) {
-      const id = s?.template_id
-      if (!subsByTpl.has(id)) subsByTpl.set(id, [])
-      subsByTpl.get(id).push(s)
-    }
-
-    const rows = []
-    for (const tpl of templates) {
-      if (templateFilter !== 'all' && String(tpl?.id) !== String(templateFilter)) continue
-      const fields = Array.isArray(tpl?.fields) ? tpl.fields : []
-      const boolFields = fields.filter((f) => f?.type === 'boolean' && isValueField(f.type))
-      if (!boolFields.length) continue
-      const subs = subsByTpl.get(tpl.id) || []
-      if (!subs.length) continue
-
-      for (const f of boolFields) {
-        let responses = 0, yes = 0
-        for (const s of subs) {
-          const v = s?.answers?.[f.id]
-          if (!boolAnswered(v)) continue
-          responses++
-          if (boolIsYes(v)) yes++
-        }
-        if (responses < 1) continue
-        rows.push({
-          key: `${tpl.id}:${f.id}`,
-          template: tpl.name || 'Untitled',
-          question: f.label || fieldTypeDef(f.type)?.label || 'Yes / No',
-          yesPct: (yes / responses) * 100,
-          responses,
-        })
-      }
-    }
-    return rows.sort((a, b) => a.yesPct - b.yesPct)
-  }, [templates, filteredSubs, templateFilter])
-  const templatesPager = usePagedRows(byTemplate)
-  const passRatesPager = usePagedRows(boolPassRates)
-
-  const hasActivity = submissions.length > 0 || templates.length > 0
-
-  // ── Loading skeleton ─────────────────────────────────────────────────────────
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        <PageHeader title="Checklist Insights" subtitle="Analytics across checklist templates and submissions" icon={BarChart3} />
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="card animate-pulse h-24" />
+  const templateColumns = useMemo(() => [
+    { id: 'name', header: 'Template', sortValue: (r) => r.name, firstDir: 'asc', size: 260,
+      cell: (r) => <span className="font-medium text-[var(--text-primary)]">{r.name}</span> },
+    { id: 'count', header: 'Submissions', sortValue: (r) => r.count, align: 'right', size: 120,
+      cell: (r) => <span className="tabular-nums">{r.count.toLocaleString()}</span> },
+    { id: 'approvalRate', header: 'Approval rate', sortValue: (r) => r.approvalRate, align: 'right', size: 130,
+      cell: (r) => <span className={`tabular-nums ${r.approvalRate == null ? 'text-[var(--text-muted)]' : TONE_TEXT[rateTone(r.approvalRate)]}`}>{fmtPct(r.approvalRate)}</span> },
+    { id: 'last', header: 'Last submitted', sortValue: (r) => (r.last ? r.last.getTime() : null), size: 140,
+      cell: (r) => <span className="text-[var(--text-muted)]">{fmtDate(r.last)}</span> },
+    { id: 'mix', header: 'Status mix', size: 280,
+      cell: (r) => (
+        <div className="flex flex-wrap gap-1.5">
+          {STATUS_KEYS.filter((k) => r[k] > 0).map((k) => (
+            <span key={k} className={`text-[11px] px-1.5 py-0.5 rounded ${STATUS_CHIP[k]}`}>{r[k]} {STATUS_LABELS[k].toLowerCase()}</span>
           ))}
         </div>
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-          <div className="card animate-pulse h-72" />
-          <div className="card animate-pulse h-72" />
+      ) },
+  ], [])
+
+  const passColumns = useMemo(() => [
+    { id: 'template', header: 'Template', sortValue: (r) => r.template, firstDir: 'asc', size: 200,
+      cell: (r) => <span className="text-[var(--text-muted)]">{r.template}</span> },
+    { id: 'question', header: 'Question', sortValue: (r) => r.question, firstDir: 'asc', size: 320,
+      cell: (r) => <span className="text-[var(--text-primary)]">{r.question}</span> },
+    { id: 'yesPct', header: 'Yes %', sortValue: (r) => r.yesPct, firstDir: 'asc', align: 'right', size: 110,
+      cell: (r) => {
+        const tone = rateTone(r.yesPct)
+        return <span className={`tabular-nums font-semibold ${TONE_TEXT[tone]}`} title={TONE_WORD[tone]}>{r.yesPct.toFixed(1)}%</span>
+      } },
+    { id: 'no', header: 'No answers', sortValue: (r) => r.no, align: 'right', size: 110,
+      cell: (r) => <span className="tabular-nums">{r.no}</span> },
+    { id: 'responses', header: 'Responses', sortValue: (r) => r.responses, align: 'right', size: 110,
+      cell: (r) => <span className="tabular-nums text-[var(--text-muted)]">{r.responses}</span> },
+  ], [])
+
+  const complianceColumns = useMemo(() => [
+    { id: 'template', header: 'Template / site', sortValue: (r) => r.template, firstDir: 'asc', size: 260,
+      cell: (r) => (
+        <div><div className="text-[var(--text-primary)]">{r.template}</div>
+          <div className="text-xs text-[var(--text-muted)]">{[r.site, r.country].filter(Boolean).join(', ')}</div></div>
+      ) },
+    { id: 'due', header: 'Due', sortValue: (r) => r.due, align: 'right', size: 90, cell: (r) => <span className="tabular-nums">{fmtNum(r.due)}</span> },
+    { id: 'completed', header: 'Completed', sortValue: (r) => r.completed, align: 'right', size: 110, cell: (r) => <span className="tabular-nums">{fmtNum(r.completed)}</span> },
+    { id: 'overdue', header: 'Overdue', sortValue: (r) => r.overdue, align: 'right', size: 100,
+      cell: (r) => <span className={`tabular-nums ${r.overdue ? 'text-amber-400' : ''}`}>{fmtNum(r.overdue)}</span> },
+    { id: 'compliancePct', header: 'Compliance', sortValue: (r) => r.compliancePct, firstDir: 'asc', align: 'right', size: 120,
+      cell: (r) => <span className="tabular-nums">{fmtPct(r.compliancePct)}</span> },
+    { id: 'evidenceGaps', header: 'Evidence gaps', sortValue: (r) => r.evidenceGaps, align: 'right', size: 130,
+      cell: (r) => <span className={`tabular-nums ${r.evidenceGaps ? 'text-amber-400' : ''}`}>{fmtNum(r.evidenceGaps)}</span> },
+  ], [])
+
+  const ageColumns = useMemo(() => [
+    { id: 'template', header: 'Template / site', sortValue: (r) => r.template, firstDir: 'asc', size: 240,
+      cell: (r) => (
+        <div><div className="text-[var(--text-primary)]">{r.template}</div>
+          <div className="text-xs text-[var(--text-muted)]">{[r.site, r.country].filter(Boolean).join(', ')}</div></div>
+      ) },
+    { id: 'stage', header: 'Stage', sortValue: (r) => r.stage, firstDir: 'asc', size: 150, cell: (r) => <span className="text-[var(--text-muted)]">{r.stage}</span> },
+    { id: 'pending', header: 'Pending', sortValue: (r) => r.pending, align: 'right', size: 100, cell: (r) => <span className="tabular-nums">{fmtNum(r.pending)}</span> },
+    { id: 'oldestHours', header: 'Oldest age', sortValue: (r) => r.oldestHours, align: 'right', size: 120, cell: (r) => <span className="tabular-nums">{fmtHours(r.oldestHours)}</span> },
+    { id: 'averageHours', header: 'Average age', sortValue: (r) => r.averageHours, align: 'right', size: 120, cell: (r) => <span className="tabular-nums">{fmtHours(r.averageHours)}</span> },
+    { id: 'breached', header: 'SLA / breached', sortValue: (r) => r.breached, align: 'right', size: 150,
+      cell: (r) => (
+        <span className={`tabular-nums ${r.breached > 0 ? 'text-red-400 font-medium' : 'text-green-400'}`}>
+          {fmtHours(r.targetHours)} / {r.breached > 0 ? `${r.breached} breached` : 'none breached'}
+        </span>
+      ) },
+  ], [])
+
+  const header = (extra = {}) => (
+    <PageHeader title={HEADER_TITLE} subtitle={HEADER_SUB} icon={BarChart3} {...extra} />
+  )
+
+  if (loading && !loadedAt) {
+    return (
+      <div className="space-y-6" aria-busy="true">
+        {header()}
+        <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+          {Array.from({ length: 6 }).map((_, i) => <div key={i} className="card animate-pulse h-24" />)}
         </div>
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+          <div className="card animate-pulse h-72" /><div className="card animate-pulse h-72" />
+        </div>
+        <span className="sr-only">Loading checklist insights</span>
       </div>
     )
   }
 
-  // ── Error state ──────────────────────────────────────────────────────────────
   if (error) {
     const missing = isMissingRelation(error)
     return (
       <div className="space-y-6">
-        <PageHeader title="Checklist Insights" subtitle="Analytics across checklist templates and submissions" icon={BarChart3} />
-        <div className="card border border-red-800/50">
+        {header()}
+        <div className="card border border-red-800/50" role="alert">
           <div className="flex items-start gap-3">
-            <AlertTriangle size={20} className="text-red-400 shrink-0 mt-0.5" />
+            <AlertTriangle size={20} className="text-red-400 shrink-0 mt-0.5" aria-hidden="true" />
             <div>
               <p className="text-[var(--text-primary)] font-semibold">Couldn&apos;t load checklist insights.</p>
               <p className="text-[var(--text-muted)] text-sm mt-1">
@@ -439,8 +435,8 @@ export default function ChecklistInsights() {
                     <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V123_CHECKLIST_TEMPLATES.sql</span>, then reload.</>
                   : toUserMessage(error, 'An unexpected error occurred.')}
               </p>
-              <button onClick={loadData} className="btn-secondary text-sm mt-3 inline-flex items-center gap-2">
-                <RefreshCw size={14} /> Retry
+              <button type="button" onClick={loadData} className="btn-secondary text-sm mt-3 min-h-[44px] inline-flex items-center gap-2">
+                <RefreshCw size={14} aria-hidden="true" /> Retry
               </button>
             </div>
           </div>
@@ -449,305 +445,207 @@ export default function ChecklistInsights() {
     )
   }
 
-  // ── Empty state ──────────────────────────────────────────────────────────────
-  if (!hasActivity) {
+  if (submissions.length === 0 && templates.length === 0) {
     return (
       <div className="space-y-6">
-        <PageHeader title="Checklist Insights" subtitle="Analytics across checklist templates and submissions" icon={BarChart3} />
+        {header({ onRefresh: loadData, refreshing: loading, updatedAt: loadedAt })}
         <div className="card text-center py-16 space-y-3">
-          <ListChecks size={34} className="mx-auto text-[var(--text-muted)]" />
+          <ListChecks size={34} className="mx-auto text-[var(--text-muted)]" aria-hidden="true" />
           <p className="text-[var(--text-primary)] font-semibold">No checklist activity yet</p>
           <p className="text-sm text-[var(--text-muted)] max-w-md mx-auto">
             Once teams publish templates and capture submissions, this page fills with submission trends,
             approval rates, per-site volume, and question-level pass rates.
           </p>
-          <Link to="/checklists" className="btn-primary inline-flex items-center gap-2 text-sm mt-2">
-            <ClipboardList size={15} /> Go to Checklists
+          <Link to="/checklists" className="btn-primary inline-flex items-center gap-2 text-sm mt-2 min-h-[44px]">
+            <ClipboardList size={15} aria-hidden="true" /> Go to Checklists
           </Link>
         </div>
       </div>
     )
   }
 
-  // ── Main render ──────────────────────────────────────────────────────────────
+  const noMatch = hasFilters ? 'No submissions match the current filters.' : 'No submissions recorded yet.'
+
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Checklist Insights"
-        subtitle={`Analytics across ${templates.length} template${templates.length === 1 ? '' : 's'} and ${submissions.length} submission${submissions.length === 1 ? '' : 's'}${country ? ` · ${country}` : ''}`}
+        title={HEADER_TITLE}
+        subtitle={`Analytics across ${templates.length} template${templates.length === 1 ? '' : 's'} and ${submissions.length} submission${submissions.length === 1 ? '' : 's'}${country ? `, ${country}` : ''}`}
         icon={BarChart3}
-        updatedAt={new Date()}
+        updatedAt={loadedAt}
         onRefresh={loadData}
         refreshing={loading}
+        actions={(
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={exportExcel} disabled={!templateRows.length && !passRates.length}
+              className="btn-secondary text-sm min-h-[44px] inline-flex items-center gap-1.5">
+              <FileSpreadsheet size={14} aria-hidden="true" /> Excel
+            </button>
+            <button type="button" onClick={exportPdf} disabled={!templateRows.length}
+              className="btn-secondary text-sm min-h-[44px] inline-flex items-center gap-1.5">
+              <FileText size={14} aria-hidden="true" /> PDF
+            </button>
+          </div>
+        )}
       />
 
       {/* Filters */}
-      <div className="card flex flex-wrap items-end gap-3">
+      <div className="card grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 items-end">
+        <div className="flex flex-col gap-1 lg:col-span-2">
+          <label htmlFor="ci-search" className="text-xs text-[var(--text-muted)]">Search</label>
+          <div className="relative">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+            <input id="ci-search" type="search" className="input w-full text-sm pl-9 min-h-[44px]"
+              placeholder="Site, template, asset or title" value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
+        </div>
         <div className="flex flex-col gap-1">
-          <label className="text-xs text-[var(--text-muted)]">Template</label>
-          <select
-            className="input w-56 text-sm"
-            value={templateFilter}
-            onChange={(e) => setTemplateFilter(e.target.value)}
-          >
+          <label htmlFor="ci-template" className="text-xs text-[var(--text-muted)]">Template</label>
+          <select id="ci-template" className="input w-full text-sm min-h-[44px]" value={templateFilter} onChange={(e) => setTemplateFilter(e.target.value)}>
             <option value="all">All templates</option>
-            {templates.map((t) => (
-              <option key={t.id} value={t.id}>{t.name || 'Untitled'}</option>
-            ))}
+            {templates.map((t) => <option key={t.id} value={t.id}>{t.name || 'Untitled'}</option>)}
           </select>
         </div>
-        <div className="flex flex-col gap-1 flex-1 min-w-[200px]">
-          <label className="text-xs text-[var(--text-muted)]">Search</label>
-          <div className="relative">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-            <input
-              type="text"
-              className="input w-full text-sm pl-9"
-              placeholder="Filter by site, template, asset or title…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
+        <div className="flex flex-col gap-1">
+          <label htmlFor="ci-status" className="text-xs text-[var(--text-muted)]">Status</label>
+          <select id="ci-status" className="input w-full text-sm min-h-[44px]" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <option value="all">All statuses</option>
+            {STATUS_KEYS.map((k) => <option key={k} value={k}>{STATUS_LABELS[k]}</option>)}
+          </select>
         </div>
-        {(templateFilter !== 'all' || search) && (
-          <button
-            onClick={() => { setTemplateFilter('all'); setSearch('') }}
-            className="btn-secondary text-xs px-3 py-2"
-          >
-            Clear
-          </button>
-        )}
+        <div className="flex flex-col gap-1">
+          <label htmlFor="ci-site" className="text-xs text-[var(--text-muted)]">Site</label>
+          <select id="ci-site" className="input w-full text-sm min-h-[44px]" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)}>
+            <option value="all">All sites</option>
+            {sites.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label htmlFor="ci-period" className="text-xs text-[var(--text-muted)]">Period</label>
+          <select id="ci-period" className="input w-full text-sm min-h-[44px]" value={period} onChange={(e) => setPeriod(e.target.value)}>
+            {PERIODS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
+          </select>
+        </div>
+        <div className="sm:col-span-2 lg:col-span-6 flex flex-wrap items-center gap-3 text-xs text-[var(--text-muted)]" aria-live="polite">
+          <span>{metrics.total.toLocaleString()} of {submissions.length.toLocaleString()} submissions</span>
+          {hasFilters && (
+            <button type="button" onClick={clearFilters} className="btn-secondary text-xs min-h-[36px] px-3 inline-flex items-center gap-1">
+              <X size={12} aria-hidden="true" /> Clear filters
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* KPI cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-        <KpiCard title="Published templates" value={metrics.publishedTemplates}
-          sub={`${metrics.totalTemplates} total`} icon={Layers} />
+      {/* KPI strip */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+        <KpiCard title="Published templates" value={metrics.publishedTemplates} sub={`${metrics.totalTemplates} total`} icon={Layers} />
         <KpiCard title="Submissions" value={metrics.total.toLocaleString()}
-          sub={templateFilter === 'all' ? 'All templates' : 'Filtered'} icon={Inbox} />
-        <KpiCard title="This month" value={metrics.thisMonth.toLocaleString()}
-          sub="By capture date" icon={CalendarClock} />
-        <KpiCard title="Approval rate" value={fmtPct(metrics.approvalRate)}
-          sub={`${metrics.approved} approved · ${metrics.rejected} rejected`}
-          icon={CheckCircle2}
-          accent={metrics.approvalRate == null ? 'text-[var(--text-primary)]'
-            : metrics.approvalRate >= 85 ? 'text-green-400'
-            : metrics.approvalRate >= 60 ? 'text-amber-400' : 'text-red-400'} />
-        <KpiCard title="Approval pass rate" value={fmtPct(metrics.approvalPassRate)}
-          sub={`${metrics.requiresApprovalPassed} of ${metrics.requiresApproval} required`}
-          icon={ShieldCheck}
-          accent={metrics.approvalPassRate == null ? 'text-[var(--text-primary)]'
-            : metrics.approvalPassRate >= 85 ? 'text-green-400'
-            : metrics.approvalPassRate >= 60 ? 'text-amber-400' : 'text-red-400'} />
+          sub={metrics.undated ? `${metrics.undated} without a date` : (hasFilters ? 'Filtered' : 'All in scope')} icon={Inbox} />
+        <KpiCard title="This month" value={metrics.thisMonth.toLocaleString()} sub="By capture date" icon={CalendarClock} />
+        <KpiCard title="Active sites" value={metrics.activeSites.toLocaleString()} sub="With at least one submission" icon={MapPin} />
+        <KpiCard title="Approval rate" value={fmtPct(metrics.approvalRate)} tone={rateTone(metrics.approvalRate)}
+          sub={metrics.decided ? `${metrics.approved} approved, ${metrics.rejected} rejected` : 'No decided submissions'} icon={CheckCircle2} />
+        <KpiCard title="Approval pass rate" value={fmtPct(metrics.approvalPassRate)} tone={rateTone(metrics.approvalPassRate)}
+          sub={metrics.requiresApproval ? `${metrics.requiresApprovalPassed} of ${metrics.requiresApproval} required` : 'No approval-required templates used'} icon={ShieldCheck} />
       </div>
 
-      <div className="card space-y-3">
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div>
-            <h3 className="text-sm font-medium text-[var(--text-primary)]">Scheduled compliance · last 30 days</h3>
-            <p className="text-xs text-[var(--text-muted)] mt-1">Calculated from due assignments, with skipped work excluded from the denominator.</p>
-          </div>
-          <span className="text-xs text-[var(--text-muted)]">{compliance.rows.length} template/site group{compliance.rows.length === 1 ? '' : 's'}</span>
-        </div>
+      {/* Scheduled compliance */}
+      <SectionCard
+        title="Scheduled compliance, last 30 days" icon={ShieldCheck}
+        description="Calculated from due assignments, with skipped work excluded from the denominator."
+        actions={!complianceError && <span className="text-xs text-[var(--text-muted)]">{compliance.rows.length} template/site group{compliance.rows.length === 1 ? '' : 's'}</span>}
+      >
         {complianceError ? (
-          <p className="text-sm text-amber-400">The compliance monitor is unavailable until its database migration is applied.</p>
+          <MonitorUnavailable what="compliance monitor" error={complianceError} onRetry={loadData} />
         ) : compliance.due === 0 ? (
           <p className="text-sm text-[var(--text-muted)]">No scheduled assignments exist in this period, so a compliance percentage cannot be reported yet.</p>
         ) : (
           <>
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-              <KpiCard title="Due" value={compliance.due.toLocaleString()} icon={CalendarClock} />
-              <KpiCard title="Completed" value={compliance.completed.toLocaleString()} icon={CheckCircle2} />
-              <KpiCard title="Compliance" value={fmtPct(compliance.compliancePct)} icon={ShieldCheck} />
-              <KpiCard title="On time" value={fmtPct(compliance.onTimePct)} icon={TrendingUp} />
-              <KpiCard title="Evidence gaps" value={compliance.evidenceGaps.toLocaleString()}
-                sub={`${compliance.overdue} overdue`} icon={AlertTriangle}
-                accent={compliance.evidenceGaps ? 'text-amber-400' : 'text-green-400'} />
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
+              <KpiCard title="Due" value={fmtNum(compliance.due)} icon={CalendarClock} />
+              <KpiCard title="Completed" value={fmtNum(compliance.completed)} icon={CheckCircle2} />
+              <KpiCard title="Compliance" value={fmtPct(compliance.compliancePct)} tone={rateTone(compliance.compliancePct)} icon={ShieldCheck} />
+              <KpiCard title="On time" value={fmtPct(compliance.onTimePct)} tone={rateTone(compliance.onTimePct)} icon={TrendingUp} />
+              <KpiCard title="Evidence gaps" value={fmtNum(compliance.evidenceGaps)} sub={`${compliance.overdue} overdue`} icon={AlertTriangle} />
             </div>
-            <div className="overflow-x-auto border border-[var(--border-dim)] rounded-lg">
-              <table className="w-full text-sm">
-                <thead><tr className="text-left text-xs text-[var(--text-muted)] border-b border-[var(--border-dim)]">
-                  <th className="px-3 py-2 font-medium">Template / site</th>
-                  <th className="px-3 py-2 font-medium text-right">Due</th>
-                  <th className="px-3 py-2 font-medium text-right">Completed</th>
-                  <th className="px-3 py-2 font-medium text-right">Overdue</th>
-                  <th className="px-3 py-2 font-medium text-right">Compliance</th>
-                  <th className="px-3 py-2 font-medium text-right">Evidence gaps</th>
-                </tr></thead>
-                <tbody>{compliance.rows.map((row) => (
-                  <tr key={`${row.template_id}:${row.country}:${row.site}`} className="border-b border-[var(--border-dim)] last:border-0">
-                    <td className="px-3 py-2"><div className="text-[var(--text-primary)]">{row.template_name}</div><div className="text-xs text-[var(--text-muted)]">{[row.site, row.country].filter(Boolean).join(' · ')}</div></td>
-                    <td className="px-3 py-2 text-right">{Number(row.due_count).toLocaleString()}</td>
-                    <td className="px-3 py-2 text-right">{Number(row.completed_count).toLocaleString()}</td>
-                    <td className="px-3 py-2 text-right">{Number(row.overdue_count).toLocaleString()}</td>
-                    <td className="px-3 py-2 text-right">{row.compliance_pct == null ? 'N/A' : `${Number(row.compliance_pct).toFixed(1)}%`}</td>
-                    <td className={`px-3 py-2 text-right ${Number(row.evidence_gap_count) ? 'text-amber-400' : ''}`}>{Number(row.evidence_gap_count).toLocaleString()}</td>
-                  </tr>
-                ))}</tbody>
-              </table>
-            </div>
+            <SortedPagedTable
+              columns={complianceColumns} rows={compliance.rows}
+              defaultSort={{ id: 'compliancePct', dir: 'asc' }} getRowId={(r) => r.key}
+              emptyMessage="No compliance groups for this template." maxHeight={420}
+            />
           </>
         )}
-      </div>
+      </SectionCard>
 
-      <div className="card p-0 overflow-hidden">
-        <div className="px-4 py-3 border-b border-[var(--border-dim)]">
-          <h3 className="text-sm font-medium text-[var(--text-primary)]">Pending approval age</h3>
-          <p className="text-xs text-[var(--text-muted)] mt-1">Measured from submission or supervisor sign-off against the organisation's configured stage SLA.</p>
-        </div>
-        {approvalAges.length === 0 ? (
-          <div className="px-4 py-8 text-center text-sm text-[var(--text-muted)]">No pending checklist approvals in this scope.</div>
-        ) : (
-          <div className="overflow-x-auto"><table className="w-full text-sm">
-            <thead><tr className="text-left text-xs text-[var(--text-muted)] border-b border-[var(--border-dim)]">
-              <th className="px-4 py-2 font-medium">Template / site</th>
-              <th className="px-4 py-2 font-medium">Stage</th>
-              <th className="px-4 py-2 font-medium text-right">Pending</th>
-              <th className="px-4 py-2 font-medium text-right">Oldest age</th>
-              <th className="px-4 py-2 font-medium text-right">Average age</th>
-              <th className="px-4 py-2 font-medium text-right">SLA / breached</th>
-            </tr></thead>
-            <tbody>{approvalAges.map((row) => (
-              <tr key={`${row.template_id}:${row.country}:${row.site}:${row.approval_stage}`} className="border-b border-[var(--border-dim)] last:border-0">
-                <td className="px-4 py-2.5"><div className="text-[var(--text-primary)]">{row.template_name}</div><div className="text-xs text-[var(--text-muted)]">{[row.site, row.country].filter(Boolean).join(' · ')}</div></td>
-                <td className="px-4 py-2.5 text-[var(--text-muted)]">{prettyToken(row.approval_stage)}</td>
-                <td className="px-4 py-2.5 text-right">{Number(row.pending_count).toLocaleString()}</td>
-                <td className="px-4 py-2.5 text-right">{Number(row.oldest_age_hours).toFixed(1)} h</td>
-                <td className="px-4 py-2.5 text-right">{Number(row.average_age_hours).toFixed(1)} h</td>
-                <td className={`px-4 py-2.5 text-right ${Number(row.breached_count) > 0 ? 'text-red-400 font-medium' : 'text-green-400'}`}>
-                  {Number(row.target_hours).toLocaleString()} h / {Number(row.breached_count).toLocaleString()}
-                </td>
-              </tr>
-            ))}</tbody>
-          </table></div>
+      {/* Pending approval age */}
+      <SectionCard
+        title="Pending approval age" icon={Hourglass}
+        description="Measured from submission or supervisor sign-off against the organisation's configured stage SLA."
+        actions={!approvalAgeError && approvalAges.rows.length > 0 && (
+          <span className="text-xs text-[var(--text-muted)]">
+            {approvalAges.pending} pending, {approvalAges.breached} past SLA, oldest {fmtHours(approvalAges.oldestHours)}
+          </span>
         )}
-      </div>
+      >
+        {approvalAgeError ? (
+          <MonitorUnavailable what="approval-age monitor" error={approvalAgeError} onRetry={loadData} />
+        ) : (
+          <SortedPagedTable
+            columns={ageColumns} rows={approvalAges.rows}
+            defaultSort={{ id: 'oldestHours', dir: 'desc' }} getRowId={(r) => r.key}
+            emptyMessage="No pending checklist approvals in this scope." maxHeight={420}
+          />
+        )}
+      </SectionCard>
 
       {/* Charts */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <div className="card">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-medium text-[var(--text-primary)] flex items-center gap-2">
-              <TrendingUp size={15} className="text-[var(--text-muted)]" /> Submissions over time
-            </h3>
-            <span className="text-xs text-[var(--text-muted)]">Last {WEEKS} weeks</span>
-          </div>
+        <SectionCard title="Submissions over time" icon={TrendingUp}
+          actions={<span className="text-xs text-[var(--text-muted)]">Last {WEEKS} weeks, by week</span>}>
           {weeklyChart ? (
-            <div style={{ height: 280 }}>
-              <Bar data={weeklyChart.data} options={chartOpts(false, 'Submissions', 'Week')} />
+            <div style={{ height: 280 }} role="img"
+              aria-label={`Weekly submissions over the last ${WEEKS} weeks: ${weekly.inWindow} in total, peak ${Math.max(...weekly.counts)} in one week.`}>
+              <Bar data={weeklyChart} options={chartOpts(false, 'Submissions', 'Week starting')} />
             </div>
           ) : (
-            <div className="flex items-center justify-center h-64 text-[var(--text-muted)] text-sm">
-              No dated submissions in this range
-            </div>
+            <div className="flex items-center justify-center h-64 text-[var(--text-muted)] text-sm">No dated submissions in the last {WEEKS} weeks.</div>
           )}
-        </div>
-
-        <div className="card">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-medium text-[var(--text-primary)] flex items-center gap-2">
-              <BarChart3 size={15} className="text-[var(--text-muted)]" /> Top sites by volume
-            </h3>
-            <span className="text-xs text-[var(--text-muted)]">Top {bySite.length}</span>
-          </div>
+        </SectionCard>
+        <SectionCard title="Top sites by volume" icon={BarChart3}
+          actions={<span className="text-xs text-[var(--text-muted)]">Top {siteVolume.rows.length} of {siteVolume.total}</span>}>
           {siteChart ? (
-            <div style={{ height: 280 }}>
-              <Bar data={siteChart.data} options={chartOpts(true, '', 'Submissions')} />
+            <div style={{ height: 280 }} role="img"
+              aria-label={`Submissions by site. Highest: ${siteVolume.rows[0].site} with ${siteVolume.rows[0].count}.`}>
+              <Bar data={siteChart} options={chartOpts(true, '', 'Submissions')} />
             </div>
           ) : (
-            <div className="flex items-center justify-center h-64 text-[var(--text-muted)] text-sm">
-              No site data available
-            </div>
+            <div className="flex items-center justify-center h-64 text-[var(--text-muted)] text-sm">{noMatch}</div>
           )}
-        </div>
+        </SectionCard>
       </div>
 
-      {/* By template table */}
-      <div className="card p-0 overflow-hidden">
-        <div className="px-4 py-3 border-b border-[var(--border-dim)] flex items-center justify-between">
-          <h3 className="text-sm font-medium text-[var(--text-primary)]">By template</h3>
-          <span className="text-xs text-[var(--text-muted)]">{byTemplate.length} active</span>
-        </div>
-        {byTemplate.length === 0 ? (
-          <div className="px-4 py-10 text-center text-sm text-[var(--text-muted)]">No submissions match the current filters.</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs text-[var(--text-muted)] border-b border-[var(--border-dim)]">
-                  <th className="px-4 py-2 font-medium">Template</th>
-                  <th className="px-4 py-2 font-medium text-right">Submissions</th>
-                  <th className="px-4 py-2 font-medium">Last submitted</th>
-                  <th className="px-4 py-2 font-medium">Status mix</th>
-                </tr>
-              </thead>
-              <tbody>
-                {templatesPager.pageRows.map((row) => (
-                  <tr
-                    key={String(row.id)}
-                    className="border-b border-[var(--border-dim)] last:border-0 cursor-pointer hover:bg-[var(--surface-2)]"
-                    onClick={() => navigate(`/checklists?template=${encodeURIComponent(row.id)}`)}
-                    title="Open this template's submissions"
-                  >
-                    <td className="px-4 py-2.5 text-[var(--text-primary)] font-medium">{row.name}</td>
-                    <td className="px-4 py-2.5 text-right text-[var(--text-primary)]">{row.count.toLocaleString()}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-muted)]">{row.last ? fmtDate(row.last) : '-'}</td>
-                    <td className="px-4 py-2.5">
-                      <div className="flex flex-wrap gap-1.5">
-                        {row.submitted > 0 && <span className={`text-[11px] px-1.5 py-0.5 rounded ${statusChip('submitted')}`}>{row.submitted} submitted</span>}
-                        {row.approved > 0 && <span className={`text-[11px] px-1.5 py-0.5 rounded ${statusChip('approved')}`}>{row.approved} approved</span>}
-                        {row.rejected > 0 && <span className={`text-[11px] px-1.5 py-0.5 rounded ${statusChip('rejected')}`}>{row.rejected} rejected</span>}
-                        {row.draft > 0 && <span className={`text-[11px] px-1.5 py-0.5 rounded ${statusChip('draft')}`}>{row.draft} draft</span>}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <TablePagination {...templatesPager} />
-          </div>
-        )}
-      </div>
+      {/* By template */}
+      <SectionCard title="By template" icon={Layers}
+        description="Select a row to open that template's submissions."
+        actions={<span className="text-xs text-[var(--text-muted)]">{templateRows.length} active</span>}>
+        <SortedPagedTable
+          columns={templateColumns} rows={templateRows}
+          defaultSort={{ id: 'count', dir: 'desc' }} getRowId={(r) => String(r.id)}
+          emptyMessage={noMatch}
+          onRowClick={(r) => { if (r.id !== 'unknown') navigate(`/checklists?template=${encodeURIComponent(r.id)}`) }}
+        />
+      </SectionCard>
 
-      {/* Boolean field pass-rates */}
-      <div className="card p-0 overflow-hidden">
-        <div className="px-4 py-3 border-b border-[var(--border-dim)] flex items-center justify-between">
-          <h3 className="text-sm font-medium text-[var(--text-primary)]">Yes / No question pass rates</h3>
-          <span className="text-xs text-[var(--text-muted)]">Lowest pass rate first</span>
-        </div>
-        {boolPassRates.length === 0 ? (
-          <div className="px-4 py-10 text-center text-sm text-[var(--text-muted)]">
-            No answered Yes/No questions yet. Add boolean fields to templates to surface quality signals here.
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs text-[var(--text-muted)] border-b border-[var(--border-dim)]">
-                  <th className="px-4 py-2 font-medium">Template</th>
-                  <th className="px-4 py-2 font-medium">Question</th>
-                  <th className="px-4 py-2 font-medium text-right">Yes %</th>
-                  <th className="px-4 py-2 font-medium text-right">Responses</th>
-                </tr>
-              </thead>
-              <tbody>
-                {passRatesPager.pageRows.map((r) => {
-                  const color = r.yesPct >= 85 ? 'text-green-400' : r.yesPct >= 60 ? 'text-amber-400' : 'text-red-400'
-                  return (
-                    <tr key={r.key} className="border-b border-[var(--border-dim)] last:border-0">
-                      <td className="px-4 py-2.5 text-[var(--text-muted)]">{r.template}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-primary)]">{r.question}</td>
-                      <td className={`px-4 py-2.5 text-right font-semibold ${color}`}>{r.yesPct.toFixed(1)}%</td>
-                      <td className="px-4 py-2.5 text-right text-[var(--text-muted)]">{r.responses}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-            <TablePagination {...passRatesPager} />
-          </div>
-        )}
-      </div>
+      {/* Boolean pass rates */}
+      <SectionCard title="Yes / No question pass rates" icon={CheckCircle2}
+        description="Lowest pass rate first. Only answered questions are counted."
+        actions={<span className="text-xs text-[var(--text-muted)]">{passRates.length} question{passRates.length === 1 ? '' : 's'}</span>}>
+        <SortedPagedTable
+          columns={passColumns} rows={passRates}
+          defaultSort={{ id: 'yesPct', dir: 'asc' }} getRowId={(r) => r.key}
+          emptyMessage={hasFilters ? 'No answered Yes/No questions match these filters.' : 'No answered Yes/No questions yet. Add boolean fields to templates to surface quality signals here.'}
+        />
+      </SectionCard>
     </div>
   )
 }

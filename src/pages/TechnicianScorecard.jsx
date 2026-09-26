@@ -1,22 +1,19 @@
 /**
- * TechnicianScorecard (route /technician-scorecard) — workshop technician
- * competency + performance platform (ported + deepened from tyre_saas's
- * "Technician Skills Matrix"). Four tabs:
+ * TechnicianScorecard (route /technician-scorecard) - workshop technician
+ * competency + performance platform. Four tabs:
  *
- *   • Leaderboard    — performance ranking derived from `work_orders`
- *                      (completion, turnaround, cost, composite score). Runs on
- *                      existing data, no provisioning required.
- *   • Technicians    — per-technician competency card (skills by proficiency,
- *                      certifications by expiry status, a composite lifecycle
- *                      band) with +Skill / +Cert actions.
- *   • Skills matrix  — org-wide skill × proficiency-level coverage roll-up.
- *   • Expiring certs — certification compliance: expired + soon-to-expire.
+ *   Leaderboard    - performance ranking derived from `work_orders`
+ *                    (completion, turnaround, cost, SLA, composite score).
+ *   Technicians    - per-technician competency card (skills by proficiency,
+ *                    certifications by expiry status, a lifecycle band) with
+ *                    +Skill / +Cert actions.
+ *   Skills matrix  - org-wide skill x proficiency-level coverage roll-up.
+ *   Certifications - certification register and expiry compliance.
  *
- * All grouping / KPI / competency logic lives in the pure, unit-tested
- * `src/lib/technicianScorecard.js`. Skills + certs are stored in the V207
- * `technician_skills` / `technician_certs` tables; where those are not yet
- * provisioned (or simply empty) the competency tabs show honest empty states —
- * nothing is fabricated.
+ * Scoring maths lives in `src/lib/technicianScorecard.js`; the page-level
+ * filtering, KPI strips, registers and export shapes live in
+ * `src/lib/technicianScorecardAnalytics.js`. Every source read reports its own
+ * failure: a failed read is never rendered as "no technicians".
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
@@ -24,14 +21,15 @@ import {
 } from 'chart.js'
 import { Bar } from 'react-chartjs-2'
 import {
-  Award, Users, ClipboardList, CheckCircle2, Clock, Search, X, Filter,
-  FileSpreadsheet, FileText, AlertTriangle, Wrench, ChevronUp, ChevronDown,
-  Trophy, GraduationCap, ShieldCheck, LayoutGrid, CalendarClock, Plus,
-  ChevronRight, BadgeCheck, Star, AlertCircle, Loader2,
+  Award, Users, ClipboardList, CheckCircle2, Clock, Search, X,
+  FileSpreadsheet, FileText, AlertTriangle, Wrench, Trophy, GraduationCap,
+  ShieldCheck, LayoutGrid, CalendarClock, Plus, ChevronRight, BadgeCheck, Star,
+  AlertCircle, Loader2, Timer, Coins, RefreshCw, Gauge,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import Card, { CardHeader } from '../components/ui/Card'
 import Modal from '../components/ui/Modal'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import { useSettings } from '../contexts/SettingsContext'
 import { formatCurrencyCompact, formatDate } from '../lib/formatters'
@@ -43,82 +41,134 @@ import { listProfiles } from '../lib/api/users'
 import {
   summarizeTechnicians, completionRating,
   SKILL_CATALOGUE, CERT_CATALOGUE, LEVEL_LABELS, LIFECYCLE_BAND_LABELS,
-  certExpiryStatus, lifecycleScore, skillsMatrix, computeExpiry,
-  skillById, certById,
+  certExpiryStatus, computeExpiry, skillById, certById,
 } from '../lib/technicianScorecard'
+import {
+  MIN_JOB_OPTIONS, RATINGS, CERT_STATUSES, CERT_STATUS_LABELS, CATEGORY_LABELS, profileName,
+  filterLeaderboard, leaderboardKpis, leaderboardExportRows, LEADERBOARD_EXPORT_COLS, LEADERBOARD_EXPORT_HEADERS,
+  buildTechnicianRows, technicianKpis, technicianExportRows, TECH_EXPORT_COLS, TECH_EXPORT_HEADERS,
+  matrixRows, matrixKpis, matrixExportRows, MATRIX_EXPORT_COLS, MATRIX_EXPORT_HEADERS,
+  certRegister, filterCerts, certKpis, certExportRows, CERT_EXPORT_COLS, CERT_EXPORT_HEADERS,
+} from '../lib/technicianScorecardAnalytics'
 import { toUserMessage } from '../lib/safeError'
 import { safeHref } from '../lib/safeUrl'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend)
 
-// Roles that plausibly work in a tyre bay. Matched case-insensitively against
-// profiles.role so the Technicians tab lists field/workshop staff by default.
-const TECH_ROLE_RE = /tyre\s*man|technician|mechanic|fitter|foreman|inspector|workshop|helper|service|bay/i
+const loadExportUtils = () => import('../lib/exportUtils')
 
+// Semantic status tints: the text label always carries the meaning too.
 const RATING_STYLES = {
   Excellent: 'bg-green-900/40 text-green-300 border border-green-700/50',
   Good: 'bg-blue-900/40 text-blue-300 border border-blue-700/50',
   Average: 'bg-amber-900/40 text-amber-300 border border-amber-700/50',
   'Needs Improvement': 'bg-red-900/40 text-red-300 border border-red-700/50',
 }
-
 const LEVEL_STYLES = {
-  1: 'bg-slate-700/40 text-slate-300 border border-slate-600/50',
+  1: 'bg-[var(--input-bg)] text-[var(--text-secondary)] border border-[var(--input-border)]',
   2: 'bg-blue-900/40 text-blue-300 border border-blue-700/50',
   3: 'bg-emerald-900/40 text-emerald-300 border border-emerald-700/50',
 }
-
 const CERT_STATUS_STYLES = {
   valid: 'bg-emerald-900/40 text-emerald-300 border border-emerald-700/50',
   warning: 'bg-amber-900/40 text-amber-300 border border-amber-700/50',
   expired: 'bg-red-900/40 text-red-300 border border-red-700/50',
-  unknown: 'bg-slate-700/40 text-slate-300 border border-slate-600/50',
+  unknown: 'bg-[var(--input-bg)] text-[var(--text-secondary)] border border-[var(--input-border)]',
 }
-
 const BAND_STYLES = {
   expert: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40',
   proficient: 'bg-blue-500/20 text-blue-300 border border-blue-500/40',
   developing: 'bg-amber-500/20 text-amber-300 border border-amber-500/40',
   needs_training: 'bg-red-500/20 text-red-300 border border-red-500/40',
-  unrated: 'bg-slate-700/40 text-slate-400 border border-slate-600/50',
+  unrated: 'bg-[var(--input-bg)] text-[var(--text-muted)] border border-[var(--input-border)]',
 }
-
-const CATEGORY_LABELS = { core: 'Core', hardware: 'Hardware', specialist: 'Specialist', management: 'Management', other: 'Other' }
-
-const SORTS = {
-  rank: { label: 'Rank', get: (r) => r.rank, dir: 'asc' },
-  technician: { label: 'Technician', get: (r) => r.technician.toLowerCase(), dir: 'asc' },
-  jobs: { label: 'Jobs', get: (r) => r.jobs, dir: 'desc' },
-  completed: { label: 'Completed', get: (r) => r.completed, dir: 'desc' },
-  open: { label: 'Open', get: (r) => r.open, dir: 'desc' },
-  completionRate: { label: 'Completion %', get: (r) => r.completionRate, dir: 'desc' },
-  avgTurnaround: { label: 'Avg TAT', get: (r) => (r.avgTurnaround == null ? Infinity : r.avgTurnaround), dir: 'asc' },
-  totalCost: { label: 'Total Cost', get: (r) => r.totalCost, dir: 'desc' },
-  avgCostPerJob: { label: 'Avg/Job', get: (r) => r.avgCostPerJob, dir: 'desc' },
-  score: { label: 'Score', get: (r) => r.score, dir: 'desc' },
-}
+const BAND_KEYS = ['expert', 'proficient', 'developing', 'needs_training', 'unrated']
 
 const scoreTone = (s) => (s >= 80 ? 'text-green-400' : s >= 60 ? 'text-yellow-400' : s >= 40 ? 'text-orange-400' : 'text-red-400')
 const scoreBg = (s) => (s >= 80 ? 'bg-green-500/20 border-green-500/30' : s >= 60 ? 'bg-yellow-500/20 border-yellow-500/30' : s >= 40 ? 'bg-orange-500/20 border-orange-500/30' : 'bg-red-500/20 border-red-500/30')
+const scoreColor = (s) => (s >= 80 ? '#22c55e' : s >= 60 ? '#eab308' : s >= 40 ? '#f97316' : '#ef4444')
 const fmtTat = (d) => (d == null ? 'N/A' : `${d.toFixed(1)}d`)
-const normName = (s) => (s || '').toString().trim().toLowerCase()
-const profileName = (p) => (p?.full_name || p?.username || p?.email || 'Unnamed user')
+const fmtPct = (v) => (v == null ? 'N/A' : `${v}%`)
 
 const TABS = [
   { key: 'leaderboard', label: 'Leaderboard', icon: Trophy },
   { key: 'technicians', label: 'Technicians', icon: Users },
   { key: 'matrix', label: 'Skills matrix', icon: LayoutGrid },
-  { key: 'certs', label: 'Expiring certs', icon: ShieldCheck },
+  { key: 'certs', label: 'Certifications', icon: ShieldCheck },
 ]
+
+function Kpi({ label, value, sub, icon: Icon, tone = 'text-[var(--text-primary)]' }) {
+  return (
+    <Card>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs text-[var(--text-muted)] truncate">{label}</p>
+        {Icon && <Icon size={16} className={tone} aria-hidden="true" />}
+      </div>
+      <p className={`text-2xl font-bold mt-1 tabular-nums ${tone}`}>{value}</p>
+      {sub && <p className="text-xs text-[var(--text-muted)] mt-1">{sub}</p>}
+    </Card>
+  )
+}
+
+function SourceError({ label, message, onRetry }) {
+  return (
+    <Card tone="crit" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row', flexWrap: 'wrap' }} role="alert">
+      <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
+      <div className="flex-1 min-w-[200px]">
+        <p className="text-[var(--text-primary)] font-medium">Couldn&apos;t load {label}.</p>
+        <p className="text-[var(--text-muted)] text-sm mt-1">{message} Nothing below is shown as zero because of this.</p>
+      </div>
+      <button type="button" onClick={onRetry} className="btn-secondary text-sm min-h-[44px] inline-flex items-center gap-1.5">
+        <RefreshCw size={14} aria-hidden="true" /> Retry
+      </button>
+    </Card>
+  )
+}
+
+function SearchField({ id, label, value, onChange, placeholder }) {
+  return (
+    <div className="flex flex-col gap-1 flex-1 min-w-[200px]">
+      <label htmlFor={id} className="text-xs text-[var(--text-muted)]">{label}</label>
+      <div className="relative">
+        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+        <input id={id} type="search" className="input pl-9 w-full min-h-[44px]" placeholder={placeholder} value={value} onChange={(e) => onChange(e.target.value)} />
+      </div>
+    </div>
+  )
+}
+
+function SelectField({ id, label, value, onChange, children }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <label htmlFor={id} className="text-xs text-[var(--text-muted)]">{label}</label>
+      <select id={id} className="input min-h-[44px]" value={value} onChange={(e) => onChange(e.target.value)}>{children}</select>
+    </div>
+  )
+}
+
+function ExportButtons({ onExcel, onPdf, disabled }) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <button type="button" onClick={onExcel} className="btn-secondary text-sm min-h-[44px] inline-flex items-center gap-1.5" disabled={disabled}>
+        <FileSpreadsheet size={14} aria-hidden="true" /> Excel
+      </button>
+      {onPdf && (
+        <button type="button" onClick={onPdf} className="btn-secondary text-sm min-h-[44px] inline-flex items-center gap-1.5" disabled={disabled}>
+          <FileText size={14} aria-hidden="true" /> PDF
+        </button>
+      )}
+    </div>
+  )
+}
 
 export default function TechnicianScorecard() {
   const { activeCountry, activeCurrency } = useSettings()
   const [orders, setOrders] = useState(null)
   const [profiles, setProfiles] = useState(null)
-  const [skills, setSkills] = useState([])
-  const [certs, setCerts] = useState([])
-  const [error, setError] = useState('')
+  const [skills, setSkills] = useState(null)
+  const [certs, setCerts] = useState(null)
+  const [errors, setErrors] = useState({})
+  const [actionError, setActionError] = useState('')
   const [refreshing, setRefreshing] = useState(false)
   const [updatedAt, setUpdatedAt] = useState(null)
   const [tab, setTab] = useState('leaderboard')
@@ -126,75 +176,60 @@ export default function TechnicianScorecard() {
   // Leaderboard filters
   const [search, setSearch] = useState('')
   const [minJobs, setMinJobs] = useState(1)
-  const [sortKey, setSortKey] = useState('rank')
-  const [sortDir, setSortDir] = useState('asc')
-
+  const [rating, setRating] = useState('all')
   // Technicians tab
   const [techSearch, setTechSearch] = useState('')
   const [allRoles, setAllRoles] = useState(false)
+  const [bandFilter, setBandFilter] = useState('all')
   const [expanded, setExpanded] = useState(null)
+  // Matrix tab
+  const [matrixSearch, setMatrixSearch] = useState('')
+  const [category, setCategory] = useState('all')
+  // Certs tab
+  const [certSearch, setCertSearch] = useState('')
+  const [certStatus, setCertStatus] = useState('all')
 
-  // Modals
-  const [skillModal, setSkillModal] = useState(null) // { user_id }
-  const [certModal, setCertModal] = useState(null) // { user_id }
+  const [skillModal, setSkillModal] = useState(null)
+  const [certModal, setCertModal] = useState(null)
 
   const nowMs = updatedAt?.getTime() ?? 0
 
   const load = useCallback(async () => {
-    setRefreshing(true); setError('')
+    setRefreshing(true); setActionError('')
     const [ord, prof, sk, ct] = await Promise.allSettled([
       listWorkOrdersForScorecard({ country: activeCountry }),
       listProfiles(),
       listSkills({ country: activeCountry }),
       listCerts({ country: activeCountry }),
     ])
-    setOrders(ord.status === 'fulfilled' && Array.isArray(ord.value) ? ord.value : [])
-    setProfiles(prof.status === 'fulfilled' && Array.isArray(prof.value) ? prof.value : [])
-    setSkills(sk.status === 'fulfilled' && Array.isArray(sk.value) ? sk.value : [])
-    setCerts(ct.status === 'fulfilled' && Array.isArray(ct.value) ? ct.value : [])
-    if (ord.status === 'rejected') setError(toUserMessage(ord.reason, 'Could not load work orders.'))
+    const val = (r) => (r.status === 'fulfilled' && Array.isArray(r.value) ? r.value : [])
+    setOrders(val(ord)); setProfiles(val(prof)); setSkills(val(sk)); setCerts(val(ct))
+    setErrors({
+      orders: ord.status === 'rejected' ? toUserMessage(ord.reason, 'Could not load work orders.') : '',
+      profiles: prof.status === 'rejected' ? toUserMessage(prof.reason, 'Could not load users.') : '',
+      skills: sk.status === 'rejected' ? toUserMessage(sk.reason, 'Could not load skills.') : '',
+      certs: ct.status === 'rejected' ? toUserMessage(ct.reason, 'Could not load certifications.') : '',
+    })
     setUpdatedAt(new Date())
     setRefreshing(false)
   }, [activeCountry])
 
   useEffect(() => { load() }, [load])
 
-  // ── Leaderboard derivations ────────────────────────────────────────────────
-  const { rows: ranked, totals } = useMemo(() => summarizeTechnicians(orders || []), [orders])
+  const loading = updatedAt === null
+  const competencyError = errors.profiles || errors.skills || errors.certs
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return ranked.filter((r) => {
-      if (r.jobs < minJobs) return false
-      if (q && !r.technician.toLowerCase().includes(q)) return false
-      return true
-    })
-  }, [ranked, search, minJobs])
-
-  const sorted = useMemo(() => {
-    const cfg = SORTS[sortKey] || SORTS.rank
-    const mul = sortDir === 'asc' ? 1 : -1
-    return [...filtered].sort((a, b) => {
-      const av = cfg.get(a); const bv = cfg.get(b)
-      if (av < bv) return -1 * mul
-      if (av > bv) return 1 * mul
-      return a.rank - b.rank
-    })
-  }, [filtered, sortKey, sortDir])
-
-  const toggleSort = (key) => {
-    if (key === sortKey) { setSortDir((d) => (d === 'asc' ? 'desc' : 'asc')); return }
-    setSortKey(key); setSortDir(SORTS[key]?.dir || 'desc')
-  }
-
-  const chartText = getComputedStyle(document.documentElement).getPropertyValue('--text-muted') || '#9ca3af'
+  // ── Leaderboard ────────────────────────────────────────────────────────────
+  const { rows: ranked } = useMemo(() => summarizeTechnicians(orders || []), [orders])
+  const filtered = useMemo(() => filterLeaderboard(ranked, { search, minJobs, rating }), [ranked, search, minJobs, rating])
+  const lbKpis = useMemo(() => leaderboardKpis(filtered, orders || [], nowMs), [filtered, orders, nowMs])
   const topRanked = useMemo(() => filtered.slice(0, 12), [filtered])
   const barData = {
     labels: topRanked.map((r) => r.technician),
     datasets: [{
       label: 'Composite score',
       data: topRanked.map((r) => r.score),
-      backgroundColor: topRanked.map((r) => (r.score >= 80 ? '#22c55e' : r.score >= 60 ? '#eab308' : r.score >= 40 ? '#f97316' : '#ef4444')),
+      backgroundColor: topRanked.map((r) => scoreColor(r.score)),
       borderRadius: 4,
     }],
   }
@@ -202,183 +237,168 @@ export default function TechnicianScorecard() {
     responsive: true, maintainAspectRatio: false, indexAxis: 'y',
     plugins: { legend: { display: false } },
     scales: {
-      x: { min: 0, max: 100, ticks: { color: chartText }, grid: { color: 'rgba(148,163,184,0.12)' } },
-      y: { ticks: { color: chartText }, grid: { display: false } },
+      x: { min: 0, max: 100, ticks: { color: 'var(--text-muted)' }, grid: { color: 'var(--panel-2)' }, title: { display: true, text: 'Composite score (0 to 100)', color: 'var(--text-muted)' } },
+      y: { ticks: { color: 'var(--text-muted)' }, grid: { display: false } },
     },
   }
+  const leaderboardColumns = useMemo(() => [
+    { id: 'rank', header: '#', accessorFn: (r) => r.rank, size: 60, cell: ({ row }) => <span className="tabular-nums text-[var(--text-muted)]">{row.original.rank}</span> },
+    { id: 'technician', header: 'Technician', accessorFn: (r) => r.technician, size: 220,
+      cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{row.original.technician}</span> },
+    { id: 'jobs', header: 'Jobs', accessorFn: (r) => r.jobs, size: 80, meta: { align: 'right' }, cell: ({ row }) => <span className="tabular-nums">{row.original.jobs}</span> },
+    { id: 'completed', header: 'Completed', accessorFn: (r) => r.completed, size: 110, meta: { align: 'right' }, cell: ({ row }) => <span className="tabular-nums">{row.original.completed}</span> },
+    { id: 'open', header: 'Open', accessorFn: (r) => r.open, size: 80, meta: { align: 'right' },
+      cell: ({ row }) => <span className={`tabular-nums ${row.original.open > 0 ? 'text-amber-400' : 'text-[var(--text-muted)]'}`}>{row.original.open}</span> },
+    { id: 'completionRate', header: 'Completion', accessorFn: (r) => r.completionRate, size: 140, meta: { align: 'right' },
+      cell: ({ row }) => {
+        const r = row.original
+        return (
+          <div className="flex items-center gap-2 justify-end">
+            <div className="w-14 bg-[var(--input-bg)] rounded-full h-1.5" aria-hidden="true">
+              <div className={`h-1.5 rounded-full ${r.completionRate >= 85 ? 'bg-green-500' : r.completionRate >= 70 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ width: `${Math.min(r.completionRate, 100)}%` }} />
+            </div>
+            <span className="tabular-nums text-xs w-12 text-right">{r.completionRate}%</span>
+          </div>
+        )
+      } },
+    { id: 'avgTurnaround', header: 'Avg TAT', accessorFn: (r) => (r.avgTurnaround == null ? Number.POSITIVE_INFINITY : r.avgTurnaround), size: 100, meta: { align: 'right' },
+      cell: ({ row }) => <span className="tabular-nums">{fmtTat(row.original.avgTurnaround)}</span> },
+    { id: 'totalCost', header: 'Total cost', accessorFn: (r) => r.totalCost, size: 120, meta: { align: 'right' },
+      cell: ({ row }) => <span className="tabular-nums">{formatCurrencyCompact(row.original.totalCost, activeCurrency)}</span> },
+    { id: 'avgCostPerJob', header: 'Avg/job', accessorFn: (r) => r.avgCostPerJob, size: 110, meta: { align: 'right' },
+      cell: ({ row }) => <span className="tabular-nums text-[var(--text-muted)]">{formatCurrencyCompact(row.original.avgCostPerJob, activeCurrency)}</span> },
+    { id: 'score', header: 'Score', accessorFn: (r) => r.score, size: 90, meta: { align: 'right' },
+      cell: ({ row }) => <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold border ${scoreBg(row.original.score)} ${scoreTone(row.original.score)}`}>{row.original.score}</span> },
+    { id: 'rating', header: 'Rating', accessorFn: (r) => completionRating(r.completionRate), size: 150,
+      cell: ({ row }) => { const rt = completionRating(row.original.completionRate); return <span className={`text-[11px] px-2 py-0.5 rounded ${RATING_STYLES[rt]}`}>{rt}</span> } },
+  ], [activeCurrency])
 
-  const EXPORT_COLS = ['rank', 'technician', 'jobs', 'completed', 'open', 'completionRate', 'avgTurnaround', 'totalCost', 'avgCostPerJob', 'score', 'rating']
-  const EXPORT_HEADERS = ['Rank', 'Technician', 'Jobs', 'Completed', 'Open', 'Completion %', 'Avg TAT (days)', 'Total Cost', 'Avg Cost/Job', 'Score', 'Rating']
-  const exportRows = sorted.map((r) => ({
-    rank: r.rank, technician: r.technician, jobs: r.jobs, completed: r.completed, open: r.open,
-    completionRate: `${r.completionRate}%`, avgTurnaround: r.avgTurnaround == null ? '' : r.avgTurnaround,
-    totalCost: r.totalCost, avgCostPerJob: r.avgCostPerJob, score: r.score, rating: completionRating(r.completionRate),
-  }))
-  const leaderboardPager = usePagedRows(sorted)
+  // ── Technicians ────────────────────────────────────────────────────────────
+  const techRows = useMemo(() => buildTechnicianRows({
+    profiles: profiles || [], skills: skills || [], certs: certs || [], ranked,
+    allRoles, search: techSearch, band: bandFilter,
+  }, nowMs), [profiles, skills, certs, ranked, allRoles, techSearch, bandFilter, nowMs])
+  const techK = useMemo(() => technicianKpis(techRows), [techRows])
+  const techPager = usePagedRows(techRows, { pageSize: 25 })
 
-  const kpis = [
-    { label: 'Technicians', value: totals.technicians, icon: Users, tone: 'text-[var(--text-primary)]' },
-    { label: 'Total jobs', value: totals.totalJobs, icon: ClipboardList, tone: 'text-blue-400' },
-    { label: 'Avg completion rate', value: `${totals.avgCompletionRate}%`, icon: CheckCircle2, tone: 'text-green-400' },
-    { label: 'Avg turnaround', value: fmtTat(totals.avgTurnaround), icon: Clock, tone: 'text-amber-400' },
-  ]
+  // ── Matrix ─────────────────────────────────────────────────────────────────
+  const matrix = useMemo(() => matrixRows(skills || [], { search: matrixSearch, category }), [skills, matrixSearch, category])
+  const mK = useMemo(() => matrixKpis(skills || []), [skills])
+  const matrixColumns = useMemo(() => [
+    { id: 'name', header: 'Skill', accessorFn: (r) => r.name, size: 260, cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{row.original.name}</span> },
+    { id: 'category', header: 'Category', accessorFn: (r) => CATEGORY_LABELS[r.category] || r.category, size: 140 },
+    { id: 'l1', header: LEVEL_LABELS[1], accessorFn: (r) => r.l1, size: 100, meta: { align: 'right' }, cell: ({ row }) => <span className="tabular-nums">{row.original.l1}</span> },
+    { id: 'l2', header: LEVEL_LABELS[2], accessorFn: (r) => r.l2, size: 110, meta: { align: 'right' }, cell: ({ row }) => <span className="tabular-nums">{row.original.l2}</span> },
+    { id: 'l3', header: LEVEL_LABELS[3], accessorFn: (r) => r.l3, size: 100, meta: { align: 'right' }, cell: ({ row }) => <span className="tabular-nums">{row.original.l3}</span> },
+    { id: 'total', header: 'Holders', accessorFn: (r) => r.total, size: 100, meta: { align: 'right' }, cell: ({ row }) => <span className="tabular-nums font-semibold text-[var(--text-primary)]">{row.original.total}</span> },
+  ], [])
 
-  const clearFilters = () => { setSearch(''); setMinJobs(1) }
-  const hasFilters = search || minJobs > 1
-
-  // ── Competency derivations ─────────────────────────────────────────────────
-  const skillsByUser = useMemo(() => {
-    const m = new Map()
-    for (const s of skills) {
-      if (!s?.user_id) continue
-      if (!m.has(s.user_id)) m.set(s.user_id, [])
-      m.get(s.user_id).push(s)
-    }
-    return m
-  }, [skills])
-
-  const certsByUser = useMemo(() => {
-    const m = new Map()
-    for (const c of certs) {
-      if (!c?.user_id) continue
-      if (!m.has(c.user_id)) m.set(c.user_id, [])
-      m.get(c.user_id).push(c)
-    }
-    return m
-  }, [certs])
-
-  // leaderboard row by normalised technician name (for lifecycle scoring)
-  const rankedByName = useMemo(() => {
-    const m = new Map()
-    for (const r of ranked) m.set(normName(r.technician), r)
-    return m
-  }, [ranked])
-
-  const techProfiles = useMemo(() => {
-    const list = Array.isArray(profiles) ? profiles : []
-    const base = allRoles ? list : list.filter((p) => TECH_ROLE_RE.test(p?.role || ''))
-    const q = techSearch.trim().toLowerCase()
-    return base
-      .filter((p) => !q || profileName(p).toLowerCase().includes(q) || (p.role || '').toLowerCase().includes(q))
-      .sort((a, b) => profileName(a).localeCompare(profileName(b)))
-  }, [profiles, allRoles, techSearch])
-
-  const techCards = useMemo(() => techProfiles.map((p) => {
-    const uSkills = skillsByUser.get(p.id) || []
-    const uCerts = certsByUser.get(p.id) || []
-    const perf = rankedByName.get(normName(profileName(p)))
-    const life = lifecycleScore({
-      completed: perf?.completed || 0,
-      passRate: perf?.completionRate || 0,
-      certCount: uCerts.length,
-    })
-    const expiring = uCerts.filter((c) => {
-      const st = certExpiryStatus(c.expiry_date, nowMs).status
-      return st === 'warning' || st === 'expired'
-    }).length
-    return { profile: p, skills: uSkills, certs: uCerts, life, perf, expiring }
-  }), [techProfiles, skillsByUser, certsByUser, rankedByName, nowMs])
-
-  const matrix = useMemo(() => skillsMatrix(skills), [skills])
-  const techWithSkills = skillsByUser.size
-
-  const certRows = useMemo(() => {
-    const nameById = new Map((profiles || []).map((p) => [p.id, profileName(p)]))
-    return certs
-      .map((c) => {
-        const meta = certExpiryStatus(c.expiry_date, nowMs)
-        return {
-          ...c,
-          technician: nameById.get(c.user_id) || 'Unknown',
-          days: meta.days,
-          status: meta.status,
-          displayName: c.cert_name || certById(c.cert_id)?.name || c.cert_id,
-        }
-      })
-      .sort((a, b) => {
-        const av = a.days == null ? Infinity : a.days
-        const bv = b.days == null ? Infinity : b.days
-        return av - bv
-      })
-  }, [certs, profiles, nowMs])
-  const certPager = usePagedRows(certRows)
-
-  const expiringSoon = useMemo(
-    () => certRows.filter((c) => c.status === 'warning' || c.status === 'expired'),
-    [certRows],
-  )
+  // ── Certifications ─────────────────────────────────────────────────────────
+  const certAll = useMemo(() => certRegister(certs || [], profiles || [], nowMs), [certs, profiles, nowMs])
+  const certRows = useMemo(() => filterCerts(certAll, { search: certSearch, status: certStatus }), [certAll, certSearch, certStatus])
+  const cK = useMemo(() => certKpis(certAll), [certAll])
+  const expiringSoon = cK.expired + cK.warning
+  const certColumns = useMemo(() => [
+    { id: 'technician', header: 'Technician', accessorFn: (r) => r.technician, size: 180, cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{row.original.technician}</span> },
+    { id: 'displayName', header: 'Certification', accessorFn: (r) => r.displayName, size: 220 },
+    { id: 'issuer', header: 'Issuer', accessorFn: (r) => r.issuer || '', size: 150, cell: ({ row }) => row.original.issuer || <span className="text-[var(--text-muted)]">N/A</span> },
+    { id: 'issue_date', header: 'Issued', accessorFn: (r) => r.issue_date || '', size: 120, cell: ({ row }) => (row.original.issue_date ? formatDate(row.original.issue_date) : 'N/A') },
+    { id: 'expiry_date', header: 'Expires', accessorFn: (r) => r.expiry_date || '', size: 120, cell: ({ row }) => (row.original.expiry_date ? formatDate(row.original.expiry_date) : 'N/A') },
+    { id: 'days', header: 'Days left', accessorFn: (r) => (r.days == null ? Number.POSITIVE_INFINITY : r.days), size: 100, meta: { align: 'right' },
+      cell: ({ row }) => {
+        const c = row.original
+        const tone = c.status === 'expired' ? 'text-red-300' : c.status === 'warning' ? 'text-amber-300' : 'text-[var(--text-secondary)]'
+        return <span className={`tabular-nums font-medium ${tone}`}>{c.days == null ? 'N/A' : c.days}</span>
+      } },
+    { id: 'status', header: 'Status', accessorFn: (r) => CERT_STATUS_LABELS[r.status], size: 190,
+      cell: ({ row }) => <span className={`text-[11px] px-2 py-0.5 rounded ${CERT_STATUS_STYLES[row.original.status]}`}>{CERT_STATUS_LABELS[row.original.status]}</span> },
+    { id: 'doc', header: 'Document', enableSorting: false, size: 100,
+      cell: ({ row }) => {
+        const href = safeHref(row.original.document_url)
+        return href
+          ? <a href={href} target="_blank" rel="noopener noreferrer" className="text-[var(--brand-bright)] hover:underline text-xs">View<span className="sr-only"> document for {row.original.displayName}</span></a>
+          : <span className="text-[var(--text-muted)]">N/A</span>
+      } },
+  ], [])
 
   // ── Mutations ──────────────────────────────────────────────────────────────
   const reloadCompetency = useCallback(async () => {
-    const [sk, ct] = await Promise.allSettled([
-      listSkills({ country: activeCountry }),
-      listCerts({ country: activeCountry }),
-    ])
-    setSkills(sk.status === 'fulfilled' && Array.isArray(sk.value) ? sk.value : [])
-    setCerts(ct.status === 'fulfilled' && Array.isArray(ct.value) ? ct.value : [])
+    const [sk, ct] = await Promise.allSettled([listSkills({ country: activeCountry }), listCerts({ country: activeCountry })])
+    if (sk.status === 'fulfilled') setSkills(Array.isArray(sk.value) ? sk.value : [])
+    if (ct.status === 'fulfilled') setCerts(Array.isArray(ct.value) ? ct.value : [])
+    setErrors((e) => ({
+      ...e,
+      skills: sk.status === 'rejected' ? toUserMessage(sk.reason, 'Could not load skills.') : '',
+      certs: ct.status === 'rejected' ? toUserMessage(ct.reason, 'Could not load certifications.') : '',
+    }))
   }, [activeCountry])
 
-  const removeSkill = async (id) => { try { await deleteSkill(id); await reloadCompetency() } catch { /* surfaced by RLS; no-op */ } }
-  const removeCert = async (id) => { try { await deleteCert(id); await reloadCompetency() } catch { /* surfaced by RLS; no-op */ } }
+  const removeSkill = async (id) => {
+    setActionError('')
+    try { await deleteSkill(id); await reloadCompetency() } catch (e) { setActionError(toUserMessage(e, 'Could not remove this skill.')) }
+  }
+  const removeCert = async (id) => {
+    setActionError('')
+    try { await deleteCert(id); await reloadCompetency() } catch (e) { setActionError(toUserMessage(e, 'Could not remove this certification.')) }
+  }
 
-  const SortHead = ({ label, k, align = 'left' }) => (
-    <th className={`px-4 py-3 font-semibold whitespace-nowrap ${align === 'right' ? 'text-right' : 'text-left'}`}>
-      <button onClick={() => toggleSort(k)} className={`inline-flex items-center gap-1 hover:text-[var(--text-primary)] ${sortKey === k ? 'text-[var(--text-primary)]' : ''} ${align === 'right' ? 'flex-row-reverse' : ''}`}>
-        {label}
-        {sortKey === k && (sortDir === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
-      </button>
-    </th>
-  )
+  // ── Exports ────────────────────────────────────────────────────────────────
+  async function exportTab(kind) {
+    const { exportToExcel, exportToPdf, reportFileName, reportDateLabel } = await loadExportUtils()
+    const scope = activeCountry && activeCountry !== 'All' ? activeCountry : null
+    const spec = {
+      leaderboard: [leaderboardExportRows(filtered), LEADERBOARD_EXPORT_COLS, LEADERBOARD_EXPORT_HEADERS, 'Technician Leaderboard'],
+      technicians: [technicianExportRows(techRows), TECH_EXPORT_COLS, TECH_EXPORT_HEADERS, 'Technician Competency'],
+      matrix: [matrixExportRows(matrix), MATRIX_EXPORT_COLS, MATRIX_EXPORT_HEADERS, 'Technician Skills Matrix'],
+      certs: [certExportRows(certRows), CERT_EXPORT_COLS, CERT_EXPORT_HEADERS, 'Technician Certifications'],
+    }[tab]
+    const [rows, cols, headers, title] = spec
+    const name = reportFileName('TyrePulse', title, scope, reportDateLabel())
+    if (kind === 'pdf') exportToPdf(rows, cols.map((key, i) => ({ key, header: headers[i] })), title, name, 'landscape')
+    else exportToExcel(rows, cols, headers, name)
+  }
+  const exportCount = { leaderboard: filtered.length, technicians: techRows.length, matrix: matrix.length, certs: certRows.length }[tab]
 
-  const loadingCompetency = profiles === null
+  const lbHasFilters = search || minJobs > 1 || rating !== 'all'
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Technician Scorecard"
-        subtitle="Workshop technician competency & performance: skills matrix, certifications, and a work-order performance leaderboard."
+        subtitle="Workshop technician competency and performance: leaderboard, skills matrix and certification compliance."
         icon={Award}
         onRefresh={load}
         refreshing={refreshing}
         updatedAt={updatedAt}
-        actions={tab === 'leaderboard' ? (
-          <div className="flex items-center gap-2">
-            <button onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'technician_scorecard')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!sorted.length}>
-              <FileSpreadsheet size={14} /> Excel
-            </button>
-            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Technician Scorecard', 'technician_scorecard', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!sorted.length}>
-              <FileText size={14} /> PDF
-            </button>
-          </div>
-        ) : null}
+        actions={<ExportButtons onExcel={() => exportTab('excel')} onPdf={() => exportTab('pdf')} disabled={loading || !exportCount} />}
       />
 
-      {error && (
-        /* `border border-red-800/50` would be DEAD on a Card - Card sets
-           `border`/`borderColor` inline and inline beats a plain utility - so
-           the red edge comes from `tone`. Card is also `flex flex-col` and
-           Tailwind emits .flex-col AFTER .flex-row, so the row direction has to
-           go in `style`, which Card spreads last. */
-        <Card tone="crit" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
-          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
-          <div><p className="text-red-300 font-medium">Couldn't load work orders.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
+      {errors.orders && <SourceError label="work orders" message={errors.orders} onRetry={load} />}
+      {competencyError && tab !== 'leaderboard' && (
+        <SourceError label="competency records" message={competencyError} onRetry={load} />
+      )}
+      {actionError && (
+        <Card tone="crit" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }} role="alert">
+          <AlertCircle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
+          <p className="text-sm text-[var(--text-primary)] flex-1">{actionError}</p>
+          <button type="button" onClick={() => setActionError('')} className="p-2 min-h-[44px] min-w-[44px] rounded hover:bg-[var(--input-bg)]" aria-label="Dismiss error"><X size={14} /></button>
         </Card>
       )}
 
       {/* Tabs */}
-      <div className="flex items-center gap-1 border-b border-[var(--input-border)] overflow-x-auto">
+      <div role="tablist" aria-label="Scorecard sections" className="flex items-center gap-1 border-b border-[var(--input-border)] overflow-x-auto">
         {TABS.map((t) => {
           const Icon = t.icon
           const active = tab === t.key
-          const badge = t.key === 'certs' && expiringSoon.length ? expiringSoon.length : null
+          const badge = t.key === 'certs' && expiringSoon ? expiringSoon : null
           return (
             <button
-              key={t.key}
+              key={t.key} type="button" role="tab" aria-selected={active}
               onClick={() => setTab(t.key)}
-              className={`inline-flex items-center gap-1.5 px-3 py-2 text-sm border-b-2 -mb-px whitespace-nowrap ${active ? 'border-[var(--brand-bright)] text-[var(--text-primary)]' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}
+              className={`inline-flex items-center gap-1.5 px-3 min-h-[44px] text-sm border-b-2 -mb-px whitespace-nowrap focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--brand-bright)] ${active ? 'border-[var(--brand-bright)] text-[var(--text-primary)]' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}
             >
-              <Icon size={14} /> {t.label}
-              {badge != null && <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 tabular-nums">{badge}</span>}
+              <Icon size={14} aria-hidden="true" /> {t.label}
+              {badge != null && <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 tabular-nums">{badge}<span className="sr-only"> expired or expiring</span></span>}
             </button>
           )
         })}
@@ -387,242 +407,197 @@ export default function TechnicianScorecard() {
       {/* ══════════════════ LEADERBOARD ══════════════════ */}
       {tab === 'leaderboard' && (
         <>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            {kpis.map((k) => {
-              const Icon = k.icon
-              return (
-                <Card key={k.label}>
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
-                    <Icon size={16} className={k.tone} />
-                  </div>
-                  <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{orders === null ? 'N/A' : k.value}</p>
-                </Card>
-              )
-            })}
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+            {[
+              { label: 'Technicians', value: lbKpis.technicians, icon: Users },
+              { label: 'Total jobs', value: lbKpis.jobs.toLocaleString(), icon: ClipboardList, sub: `${lbKpis.open} open` },
+              { label: 'Completion rate', value: fmtPct(lbKpis.completionRate), icon: CheckCircle2, sub: lbKpis.jobs ? `${lbKpis.completed} completed` : 'No jobs in scope' },
+              { label: 'Avg turnaround', value: fmtTat(lbKpis.avgTurnaround), icon: Clock, sub: lbKpis.avgTurnaround == null ? 'No dated completions' : 'Created to completed' },
+              { label: 'SLA compliance', value: fmtPct(lbKpis.slaCompliance), icon: Timer, sub: lbKpis.slaCompliance == null ? 'No orders with a known priority' : 'By work-order priority' },
+              { label: 'Avg cost per job', value: lbKpis.avgCostPerJob == null ? 'N/A' : formatCurrencyCompact(lbKpis.avgCostPerJob, activeCurrency), icon: Coins, sub: `${lbKpis.needsImprovement} need improvement` },
+            ].map((k) => <Kpi key={k.label} {...k} value={loading || errors.orders ? 'N/A' : k.value} sub={loading || errors.orders ? null : k.sub} />)}
           </div>
 
           <Card>
-            <CardHeader title={`Composite ranking (top ${topRanked.length || 0})`} />
+            <CardHeader title={`Composite ranking (top ${topRanked.length || 0})`} icon={Gauge} />
             <div style={{ height: Math.max(240, topRanked.length * 30) }}>
-              {orders === null ? (
+              {loading ? (
                 <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" />
               ) : topRanked.length ? (
-                <Bar data={barData} options={barOpts} />
+                <div className="h-full" role="img" aria-label={`Composite score for the top ${topRanked.length} technicians. Highest: ${topRanked[0].technician} at ${topRanked[0].score}.`}>
+                  <Bar data={barData} options={barOpts} />
+                </div>
               ) : (
                 <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">
-                  <div className="text-center"><Wrench size={22} className="mx-auto mb-2 opacity-60" />No technician data yet.</div>
+                  <div className="text-center"><Wrench size={22} className="mx-auto mb-2 opacity-60" aria-hidden="true" />{errors.orders ? 'Work orders could not be read.' : lbHasFilters ? 'No technicians match these filters.' : 'No technician data yet.'}</div>
                 </div>
               )}
             </div>
           </Card>
 
           <Card className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="relative flex-1 min-w-[200px]">
-                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-                <input className="input pl-9 w-full" placeholder="Search technician…" value={search} onChange={(e) => setSearch(e.target.value)} />
-              </div>
-              <label className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
-                Min jobs
-                <select className="input" value={minJobs} onChange={(e) => setMinJobs(Number(e.target.value))} aria-label="Minimum jobs">
-                  {[1, 3, 5, 10, 20, 50].map((n) => <option key={n} value={n}>{n}+</option>)}
-                </select>
-              </label>
-              {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
-              <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {ranked.length}</span>
+            <div className="flex flex-wrap items-end gap-3">
+              <SearchField id="ts-search" label="Search" value={search} onChange={setSearch} placeholder="Technician name" />
+              <SelectField id="ts-minjobs" label="Minimum jobs" value={minJobs} onChange={(v) => setMinJobs(Number(v))}>
+                {MIN_JOB_OPTIONS.map((n) => <option key={n} value={n}>{n}+</option>)}
+              </SelectField>
+              <SelectField id="ts-rating" label="Rating" value={rating} onChange={setRating}>
+                <option value="all">All ratings</option>
+                {RATINGS.map((r) => <option key={r} value={r}>{r}</option>)}
+              </SelectField>
+              {lbHasFilters && (
+                <button type="button" onClick={() => { setSearch(''); setMinJobs(1); setRating('all') }} className="btn-secondary text-sm min-h-[44px] inline-flex items-center gap-1.5">
+                  <X size={14} aria-hidden="true" /> Clear
+                </button>
+              )}
+              <span className="text-xs text-[var(--text-muted)] ml-auto" aria-live="polite">{filtered.length} of {ranked.length}</span>
             </div>
           </Card>
 
-          {/* `!p-0` becomes pad="none" and `overflow-hidden` becomes `clip`, so
-              the table still crops to the card radius. TablePagination's
-              rows-per-page control is a NATIVE <select>, which the browser paints
-              as an OS-level popup outside the page's overflow context, so
-              clipping cannot reach it. */}
-          <Card pad="none" clip>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-[var(--input-border)] text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                    <SortHead label="#" k="rank" />
-                    <SortHead label="Technician" k="technician" />
-                    <SortHead label="Jobs" k="jobs" align="right" />
-                    <SortHead label="Completed" k="completed" align="right" />
-                    <SortHead label="Open" k="open" align="right" />
-                    <SortHead label="Completion" k="completionRate" align="right" />
-                    <SortHead label="Avg TAT" k="avgTurnaround" align="right" />
-                    <SortHead label="Total Cost" k="totalCost" align="right" />
-                    <SortHead label="Avg/Job" k="avgCostPerJob" align="right" />
-                    <SortHead label="Score" k="score" align="right" />
-                    <th className="px-4 py-3 font-semibold whitespace-nowrap text-left">Rating</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {orders === null ? (
-                    [0, 1, 2, 3, 4].map((i) => <tr key={i} className="border-b border-[var(--input-border)]/50"><td colSpan={11} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>)
-                  ) : sorted.length === 0 ? (
-                    <tr><td colSpan={11} className="px-4 py-12 text-center text-[var(--text-muted)]"><Filter size={22} className="mx-auto mb-2 opacity-60" />No technicians match these filters.</td></tr>
-                  ) : (
-                    leaderboardPager.pageRows.map((r) => {
-                      const rating = completionRating(r.completionRate)
-                      return (
-                        <tr key={r.technician} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                          <td className="px-4 py-2.5 text-[var(--text-muted)] tabular-nums">{r.rank}</td>
-                          <td className="px-4 py-2.5">
-                            <div className="flex items-center gap-2">
-                              <div className="w-7 h-7 rounded-full bg-[var(--input-bg)] flex items-center justify-center text-xs font-bold text-[var(--text-secondary)] shrink-0">
-                                {(r.technician || '?')[0].toUpperCase()}
-                              </div>
-                              <span className="text-[var(--text-primary)] font-medium">{r.technician}</span>
-                            </div>
-                          </td>
-                          <td className="px-4 py-2.5 text-right text-[var(--text-secondary)] tabular-nums">{r.jobs}</td>
-                          <td className="px-4 py-2.5 text-right text-[var(--text-secondary)] tabular-nums">{r.completed}</td>
-                          <td className="px-4 py-2.5 text-right tabular-nums"><span className={r.open > 0 ? 'text-amber-400' : 'text-[var(--text-muted)]'}>{r.open}</span></td>
-                          <td className="px-4 py-2.5 text-right">
-                            <div className="flex items-center gap-2 justify-end">
-                              <div className="w-16 bg-[var(--input-bg)] rounded-full h-1.5">
-                                <div className={`h-1.5 rounded-full ${r.completionRate >= 85 ? 'bg-green-500' : r.completionRate >= 70 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ width: `${Math.min(r.completionRate, 100)}%` }} />
-                              </div>
-                              <span className="text-[var(--text-secondary)] text-xs tabular-nums w-12 text-right">{r.completionRate}%</span>
-                            </div>
-                          </td>
-                          <td className="px-4 py-2.5 text-right text-[var(--text-secondary)] tabular-nums">{fmtTat(r.avgTurnaround)}</td>
-                          <td className="px-4 py-2.5 text-right text-[var(--text-secondary)] tabular-nums">{formatCurrencyCompact(r.totalCost, activeCurrency)}</td>
-                          <td className="px-4 py-2.5 text-right text-[var(--text-muted)] tabular-nums">{formatCurrencyCompact(r.avgCostPerJob, activeCurrency)}</td>
-                          <td className="px-4 py-2.5 text-right">
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold border ${scoreBg(r.score)} ${scoreTone(r.score)}`}>{r.score}</span>
-                          </td>
-                          <td className="px-4 py-2.5"><span className={`text-[11px] px-2 py-0.5 rounded ${RATING_STYLES[rating]}`}>{rating}</span></td>
-                        </tr>
-                      )
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-            <TablePagination {...leaderboardPager} />
-          </Card>
+          <EnterpriseTable
+            columns={leaderboardColumns}
+            data={filtered}
+            getRowId={(r) => r.technician}
+            loading={loading}
+            error={errors.orders || null}
+            onRetry={load}
+            enableGlobalFilter={false}
+            enableColumnFilters={false}
+            enableExport={false}
+            initialPageSize={25}
+            emptyMessage={lbHasFilters ? 'No technicians match these filters.' : 'No work orders with a technician yet.'}
+          />
         </>
       )}
 
       {/* ══════════════════ TECHNICIANS ══════════════════ */}
       {tab === 'technicians' && (
         <>
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
+            {[
+              { label: allRoles ? 'Users in view' : 'Technicians', value: techK.people, icon: Users },
+              { label: 'Skills assessed', value: techK.assessed, icon: GraduationCap, sub: 'With at least one skill' },
+              { label: 'Certified', value: techK.certified, icon: BadgeCheck, sub: 'With at least one certificate' },
+              { label: 'Cert renewals due', value: techK.atRisk, icon: CalendarClock, tone: techK.atRisk ? 'text-amber-400' : 'text-[var(--text-primary)]', sub: 'Expired or within 60 days' },
+              { label: 'Avg lifecycle score', value: techK.avgLifecycle == null ? 'N/A' : techK.avgLifecycle, icon: Star, sub: techK.avgLifecycle == null ? 'Nobody rated yet' : 'Out of 100' },
+            ].map((k) => <Kpi key={k.label} {...k} value={loading || competencyError ? 'N/A' : k.value} sub={loading || competencyError ? null : k.sub} />)}
+          </div>
+
           <Card className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="relative flex-1 min-w-[200px]">
-                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-                <input className="input pl-9 w-full" placeholder="Search technician or role…" value={techSearch} onChange={(e) => setTechSearch(e.target.value)} />
-              </div>
-              <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)] cursor-pointer">
-                <input type="checkbox" className="accent-amber-500" checked={allRoles} onChange={(e) => setAllRoles(e.target.checked)} />
+            <div className="flex flex-wrap items-end gap-3">
+              <SearchField id="ts-tech-search" label="Search" value={techSearch} onChange={setTechSearch} placeholder="Technician or role" />
+              <SelectField id="ts-band" label="Lifecycle band" value={bandFilter} onChange={setBandFilter}>
+                <option value="all">All bands</option>
+                {BAND_KEYS.map((b) => <option key={b} value={b}>{LIFECYCLE_BAND_LABELS[b]}</option>)}
+              </SelectField>
+              <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer min-h-[44px]">
+                <input type="checkbox" className="accent-amber-500 w-4 h-4" checked={allRoles} onChange={(e) => setAllRoles(e.target.checked)} />
                 Show all roles
               </label>
-              <span className="text-xs text-[var(--text-muted)] ml-auto">{techCards.length} {allRoles ? 'users' : 'technicians'}</span>
+              <span className="text-xs text-[var(--text-muted)] ml-auto" aria-live="polite">{techRows.length} {allRoles ? 'users' : 'technicians'}</span>
             </div>
           </Card>
 
-          {loadingCompetency ? (
+          {loading ? (
             <div className="space-y-2">{[0, 1, 2].map((i) => <Card key={i} className="h-16 animate-pulse" />)}</div>
-          ) : techCards.length === 0 ? (
-            /* `py-12` would be DEAD on a Card - Card sets `padding` inline and
-               an inline declaration beats a plain utility, so the empty state
-               would silently collapse to --pad-card. The roominess goes in
-               `style`, which Card spreads last. */
+          ) : errors.profiles ? null : techRows.length === 0 ? (
             <Card className="text-center space-y-2" style={{ paddingBlock: 'var(--space-12)' }}>
-              <Users size={30} className="mx-auto text-[var(--text-muted)]" />
+              <Users size={30} className="mx-auto text-[var(--text-muted)]" aria-hidden="true" />
               <p className="text-[var(--text-primary)] font-semibold">No technicians found.</p>
-              <p className="text-sm text-[var(--text-muted)]">{allRoles ? 'No users in this scope.' : 'No users with a workshop/technician role. Toggle “Show all roles” to include everyone.'}</p>
+              <p className="text-sm text-[var(--text-muted)]">
+                {techSearch || bandFilter !== 'all' ? 'No one matches these filters.' : allRoles ? 'No users in this scope.' : 'No users with a workshop or technician role. Turn on "Show all roles" to include everyone.'}
+              </p>
             </Card>
           ) : (
             <div className="space-y-2">
-              {techCards.map(({ profile: p, skills: uSkills, certs: uCerts, life, perf, expiring }) => {
-                const open = expanded === p.id
+              {techPager.pageRows.map((r) => {
+                const open = expanded === r.id
+                const panelId = `tech-panel-${r.id}`
                 return (
-                  /* `clip` keeps the row button's hover fill inside the card
-                     radius, exactly as the old `overflow-hidden` did. Nothing
-                     inside renders out of flow, so nothing can be clipped. */
-                  <Card key={p.id} pad="none" clip>
-                    <button onClick={() => setExpanded(open ? null : p.id)} className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-[var(--input-bg)]/40">
-                      <ChevronRight size={16} className={`text-[var(--text-muted)] transition-transform ${open ? 'rotate-90' : ''}`} />
-                      <div className="w-9 h-9 rounded-full bg-[var(--input-bg)] flex items-center justify-center text-sm font-bold text-[var(--text-secondary)] shrink-0">
-                        {profileName(p)[0].toUpperCase()}
+                  <Card key={r.id} pad="none" clip>
+                    <button
+                      type="button" onClick={() => setExpanded(open ? null : r.id)}
+                      aria-expanded={open} aria-controls={panelId}
+                      className="w-full flex items-center gap-3 px-4 min-h-[56px] py-3 text-left hover:bg-[var(--input-bg)]/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--brand-bright)]"
+                    >
+                      <ChevronRight size={16} className={`text-[var(--text-muted)] transition-transform motion-reduce:transition-none ${open ? 'rotate-90' : ''}`} aria-hidden="true" />
+                      <div className="w-9 h-9 rounded-full bg-[var(--input-bg)] flex items-center justify-center text-sm font-bold text-[var(--text-secondary)] shrink-0" aria-hidden="true">
+                        {r.name[0].toUpperCase()}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-[var(--text-primary)] font-medium truncate">{profileName(p)}</p>
-                        <p className="text-xs text-[var(--text-muted)] truncate">{p.role || 'No role'}{p.site ? ` · ${p.site}` : ''}</p>
+                        <p className="text-[var(--text-primary)] font-medium truncate">{r.name}</p>
+                        <p className="text-xs text-[var(--text-muted)] truncate">{r.role || 'No role'}{r.site ? `, ${r.site}` : ''}</p>
                       </div>
                       <div className="hidden sm:flex items-center gap-3 text-xs text-[var(--text-muted)]">
-                        <span className="inline-flex items-center gap-1"><GraduationCap size={13} /> {uSkills.length}</span>
-                        <span className="inline-flex items-center gap-1"><BadgeCheck size={13} /> {uCerts.length}</span>
-                        {expiring > 0 && <span className="inline-flex items-center gap-1 text-amber-400"><CalendarClock size={13} /> {expiring}</span>}
+                        <span className="inline-flex items-center gap-1"><GraduationCap size={13} aria-hidden="true" /> {r.skillCount} skills</span>
+                        <span className="inline-flex items-center gap-1"><BadgeCheck size={13} aria-hidden="true" /> {r.certCount} certs</span>
+                        {r.expiring > 0 && <span className="inline-flex items-center gap-1 text-amber-400"><CalendarClock size={13} aria-hidden="true" /> {r.expiring} due</span>}
                       </div>
-                      <span className={`text-[11px] px-2 py-0.5 rounded-full ${BAND_STYLES[life.band]}`}>{life.score == null ? LIFECYCLE_BAND_LABELS.unrated : `${LIFECYCLE_BAND_LABELS[life.band]} · ${life.score}`}</span>
+                      <span className={`text-[11px] px-2 py-0.5 rounded-full whitespace-nowrap ${BAND_STYLES[r.life.band]}`}>{r.life.score == null ? LIFECYCLE_BAND_LABELS.unrated : `${LIFECYCLE_BAND_LABELS[r.life.band]}, ${r.life.score}`}</span>
                     </button>
 
                     {open && (
-                      <div className="border-t border-[var(--input-border)] px-4 py-4 space-y-4 bg-[var(--input-bg)]/20">
-                        {perf && (
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
-                            {[
-                              { label: 'Jobs', value: perf.jobs },
-                              { label: 'Completion', value: `${perf.completionRate}%` },
-                              { label: 'Avg TAT', value: fmtTat(perf.avgTurnaround) },
-                              { label: 'Lifecycle', value: life.score == null ? 'N/A' : life.score },
-                            ].map((m) => (
-                              <div key={m.label} className="rounded-lg bg-[var(--input-bg)]/60 p-2">
-                                <p className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">{m.label}</p>
-                                <p className="text-base font-bold text-[var(--text-primary)]">{m.value}</p>
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                      <div id={panelId} className="border-t border-[var(--input-border)] px-4 py-4 space-y-4 bg-[var(--input-bg)]/20">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+                          {[
+                            { label: 'Jobs', value: r.perf ? r.perf.jobs : 'N/A' },
+                            { label: 'Completion', value: r.perf ? `${r.perf.completionRate}%` : 'N/A' },
+                            { label: 'Avg TAT', value: r.perf ? fmtTat(r.perf.avgTurnaround) : 'N/A' },
+                            { label: 'Skill gaps', value: r.gapCount },
+                          ].map((m) => (
+                            <div key={m.label} className="rounded-lg bg-[var(--input-bg)]/60 p-2">
+                              <p className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">{m.label}</p>
+                              <p className="text-base font-bold text-[var(--text-primary)] tabular-nums">{m.value}</p>
+                            </div>
+                          ))}
+                        </div>
+                        {!r.perf && <p className="text-xs text-[var(--text-muted)]">No work orders are recorded under this name, so performance figures are not available.</p>}
 
-                        {/* Skills */}
                         <div>
                           <div className="flex items-center justify-between mb-2">
-                            <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] inline-flex items-center gap-1.5"><GraduationCap size={13} /> Skills</h4>
-                            <button onClick={() => setSkillModal({ user_id: p.id })} className="btn-secondary text-xs inline-flex items-center gap-1"><Plus size={12} /> Skill</button>
+                            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] inline-flex items-center gap-1.5"><GraduationCap size={13} aria-hidden="true" /> Skills</h3>
+                            <button type="button" onClick={() => setSkillModal({ user_id: r.id })} className="btn-secondary text-xs min-h-[36px] inline-flex items-center gap-1"><Plus size={12} aria-hidden="true" /> Skill</button>
                           </div>
-                          {uSkills.length === 0 ? (
+                          {r.skills.length === 0 ? (
                             <p className="text-xs text-[var(--text-muted)] italic">No skills recorded.</p>
                           ) : (
-                            <div className="flex flex-wrap gap-1.5">
-                              {uSkills.map((s) => (
-                                <span key={s.id} className={`group inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded ${LEVEL_STYLES[s.level] || LEVEL_STYLES[1]}`}>
-                                  {skillById(s.skill_id)?.name || s.skill_id}
-                                  <span className="opacity-70">· {LEVEL_LABELS[s.level] || s.level}</span>
-                                  <button onClick={() => removeSkill(s.id)} className="opacity-0 group-hover:opacity-100 hover:text-red-300" title="Remove skill"><X size={11} /></button>
-                                </span>
-                              ))}
-                            </div>
+                            <ul className="flex flex-wrap gap-1.5">
+                              {r.skills.map((s) => {
+                                const nm = skillById(s.skill_id)?.name || s.skill_id
+                                return (
+                                  <li key={s.id} className={`inline-flex items-center gap-1 text-[11px] pl-2 rounded ${LEVEL_STYLES[s.level] || LEVEL_STYLES[1]}`}>
+                                    {nm} <span className="opacity-70">({LEVEL_LABELS[s.level] || s.level})</span>
+                                    <button type="button" onClick={() => removeSkill(s.id)} className="p-1.5 rounded hover:text-red-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--brand-bright)]" aria-label={`Remove skill ${nm}`}><X size={11} /></button>
+                                  </li>
+                                )
+                              })}
+                            </ul>
                           )}
                         </div>
 
-                        {/* Certs */}
                         <div>
                           <div className="flex items-center justify-between mb-2">
-                            <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] inline-flex items-center gap-1.5"><ShieldCheck size={13} /> Certifications</h4>
-                            <button onClick={() => setCertModal({ user_id: p.id })} className="btn-secondary text-xs inline-flex items-center gap-1"><Plus size={12} /> Cert</button>
+                            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] inline-flex items-center gap-1.5"><ShieldCheck size={13} aria-hidden="true" /> Certifications</h3>
+                            <button type="button" onClick={() => setCertModal({ user_id: r.id })} className="btn-secondary text-xs min-h-[36px] inline-flex items-center gap-1"><Plus size={12} aria-hidden="true" /> Cert</button>
                           </div>
-                          {uCerts.length === 0 ? (
+                          {r.certs.length === 0 ? (
                             <p className="text-xs text-[var(--text-muted)] italic">No certifications recorded.</p>
                           ) : (
-                            <div className="flex flex-wrap gap-1.5">
-                              {uCerts.map((c) => {
+                            <ul className="flex flex-wrap gap-1.5">
+                              {r.certs.map((c) => {
                                 const meta = certExpiryStatus(c.expiry_date, nowMs)
+                                const nm = c.cert_name || certById(c.cert_id)?.name || c.cert_id
                                 return (
-                                  <span key={c.id} className={`group inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded ${CERT_STATUS_STYLES[meta.status]}`}>
-                                    {c.cert_name || certById(c.cert_id)?.name || c.cert_id}
+                                  <li key={c.id} className={`inline-flex items-center gap-1 text-[11px] pl-2 rounded ${CERT_STATUS_STYLES[meta.status]}`}>
+                                    {nm}
                                     <span className="opacity-70">
-                                      · {meta.status === 'unknown' ? 'no expiry' : meta.status === 'expired' ? `expired ${Math.abs(meta.days)}d` : `${meta.days}d left`}
+                                      ({meta.status === 'unknown' ? 'no expiry' : meta.status === 'expired' ? `expired ${Math.abs(meta.days)}d ago` : `${meta.days}d left`})
                                     </span>
-                                    <button onClick={() => removeCert(c.id)} className="opacity-0 group-hover:opacity-100 hover:text-red-300" title="Remove certification"><X size={11} /></button>
-                                  </span>
+                                    <button type="button" onClick={() => removeCert(c.id)} className="p-1.5 rounded hover:text-red-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--brand-bright)]" aria-label={`Remove certification ${nm}`}><X size={11} /></button>
+                                  </li>
                                 )
                               })}
-                            </div>
+                            </ul>
                           )}
                         </div>
                       </div>
@@ -630,6 +605,7 @@ export default function TechnicianScorecard() {
                   </Card>
                 )
               })}
+              <TablePagination {...techPager} />
             </div>
           )}
         </>
@@ -638,145 +614,103 @@ export default function TechnicianScorecard() {
       {/* ══════════════════ SKILLS MATRIX ══════════════════ */}
       {tab === 'matrix' && (
         <>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
             {[
-              { label: 'Skills tracked', value: matrix.length, icon: LayoutGrid, tone: 'text-[var(--text-primary)]' },
-              { label: 'Technicians assessed', value: techWithSkills, icon: Users, tone: 'text-blue-400' },
-              { label: 'Skill records', value: skills.length, icon: GraduationCap, tone: 'text-emerald-400' },
-              { label: 'Expert-level holdings', value: matrix.reduce((a, r) => a + r.l3, 0), icon: Star, tone: 'text-amber-400' },
-            ].map((k) => {
-              const Icon = k.icon
-              return (
-                <Card key={k.label}>
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
-                    <Icon size={16} className={k.tone} />
-                  </div>
-                  <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{loadingCompetency ? 'N/A' : k.value}</p>
-                </Card>
-              )
-            })}
+              { label: 'Skills tracked', value: mK.skillsTracked, icon: LayoutGrid, sub: `${SKILL_CATALOGUE.length} in the catalogue` },
+              { label: 'Technicians assessed', value: mK.assessed, icon: Users },
+              { label: 'Skill records', value: mK.records, icon: GraduationCap },
+              { label: 'Expert-level holdings', value: mK.expert, icon: Star, sub: mK.expertShare == null ? 'No records' : `${mK.expertShare}% of records` },
+              { label: 'Uncovered skills', value: mK.uncovered.length, icon: AlertTriangle, tone: mK.uncovered.length ? 'text-amber-400' : 'text-[var(--text-primary)]', sub: 'Nobody holds them' },
+            ].map((k) => <Kpi key={k.label} {...k} value={loading || errors.skills ? 'N/A' : k.value} sub={loading || errors.skills ? null : k.sub} />)}
           </div>
 
-          <Card pad="none" clip>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-[var(--input-border)] text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                    <th className="px-4 py-3 font-semibold text-left">Skill</th>
-                    <th className="px-4 py-3 font-semibold text-left">Category</th>
-                    <th className="px-4 py-3 font-semibold text-right">Basic</th>
-                    <th className="px-4 py-3 font-semibold text-right">Proficient</th>
-                    <th className="px-4 py-3 font-semibold text-right">Expert</th>
-                    <th className="px-4 py-3 font-semibold text-right">Holders</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {loadingCompetency ? (
-                    [0, 1, 2, 3].map((i) => <tr key={i} className="border-b border-[var(--input-border)]/50"><td colSpan={6} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>)
-                  ) : matrix.length === 0 ? (
-                    <tr><td colSpan={6} className="px-4 py-12 text-center text-[var(--text-muted)]"><LayoutGrid size={22} className="mx-auto mb-2 opacity-60" />No skills recorded yet. Add skills from the Technicians tab.</td></tr>
-                  ) : (
-                    matrix.map((r) => (
-                      <tr key={r.skill_id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                        <td className="px-4 py-2.5 text-[var(--text-primary)] font-medium">{r.name}</td>
-                        <td className="px-4 py-2.5 text-[var(--text-muted)]">{CATEGORY_LABELS[r.category] || r.category}</td>
-                        <td className="px-4 py-2.5 text-right tabular-nums text-[var(--text-secondary)]">{r.l1}</td>
-                        <td className="px-4 py-2.5 text-right tabular-nums text-blue-300">{r.l2}</td>
-                        <td className="px-4 py-2.5 text-right tabular-nums text-emerald-300">{r.l3}</td>
-                        <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-[var(--text-primary)]">{r.total}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+          <Card className="space-y-3">
+            <div className="flex flex-wrap items-end gap-3">
+              <SearchField id="ts-matrix-search" label="Search" value={matrixSearch} onChange={setMatrixSearch} placeholder="Skill name" />
+              <SelectField id="ts-category" label="Category" value={category} onChange={setCategory}>
+                <option value="all">All categories</option>
+                {Object.entries(CATEGORY_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </SelectField>
+              <span className="text-xs text-[var(--text-muted)] ml-auto" aria-live="polite">{matrix.length} skills</span>
             </div>
+            {!loading && !errors.skills && mK.uncovered.length > 0 && (
+              <p className="text-xs text-[var(--text-muted)]">
+                <span className="text-amber-400 font-medium">No holder yet:</span> {mK.uncovered.map((s) => s.name).join(', ')}.
+              </p>
+            )}
           </Card>
+
+          <EnterpriseTable
+            columns={matrixColumns}
+            data={matrix}
+            getRowId={(r) => r.skill_id}
+            loading={loading}
+            error={errors.skills || null}
+            onRetry={load}
+            enableGlobalFilter={false}
+            enableColumnFilters={false}
+            enableExport={false}
+            initialPageSize={25}
+            emptyMessage={matrixSearch || category !== 'all' ? 'No skills match these filters.' : 'No skills recorded yet. Add skills from the Technicians tab.'}
+          />
         </>
       )}
 
-      {/* ══════════════════ EXPIRING CERTS ══════════════════ */}
+      {/* ══════════════════ CERTIFICATIONS ══════════════════ */}
       {tab === 'certs' && (
         <>
-          {!loadingCompetency && expiringSoon.length > 0 && (
-            /* `border border-amber-700/50 bg-amber-900/10` would all be DEAD -
-               Card sets border, borderColor AND background inline - so the amber
-               edge comes from `tone` and the row direction from `style`. */
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
+            {[
+              { label: 'Certifications', value: cK.total, icon: BadgeCheck },
+              { label: 'Expired', value: cK.expired, icon: AlertCircle, tone: cK.expired ? 'text-red-400' : 'text-[var(--text-primary)]' },
+              { label: 'Expiring in 60 days', value: cK.warning, icon: CalendarClock, tone: cK.warning ? 'text-amber-400' : 'text-[var(--text-primary)]' },
+              { label: 'No expiry date', value: cK.unknown, icon: AlertTriangle, sub: 'Excluded from compliance' },
+              { label: 'Certification compliance', value: fmtPct(cK.compliance), icon: ShieldCheck, sub: cK.compliance == null ? 'No dated certificates' : 'Valid share of dated certificates' },
+            ].map((k) => <Kpi key={k.label} {...k} value={loading || errors.certs ? 'N/A' : k.value} sub={loading || errors.certs ? null : k.sub} />)}
+          </div>
+
+          {!loading && !errors.certs && expiringSoon > 0 && (
             <Card tone="warn" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
-              <AlertCircle size={18} className="text-amber-400 mt-0.5 shrink-0" />
+              <AlertCircle size={18} className="text-amber-400 mt-0.5 shrink-0" aria-hidden="true" />
               <div>
-                <p className="text-amber-200 font-medium">{expiringSoon.length} certification{expiringSoon.length === 1 ? '' : 's'} expired or expiring within 60 days.</p>
+                <p className="text-[var(--text-primary)] font-medium">{expiringSoon} certification{expiringSoon === 1 ? '' : 's'} expired or expiring within 60 days.</p>
                 <p className="text-[var(--text-muted)] text-sm mt-0.5">Schedule renewals to keep the workshop compliant.</p>
               </div>
             </Card>
           )}
 
-          <div className="flex items-center justify-end">
-            <button
-              onClick={() => {
-                const cols = ['technician', 'displayName', 'issuer', 'issue_date', 'expiry_date', 'status', 'cert_number']
-                const headers = ['Technician', 'Certification', 'Issuer', 'Issued', 'Expires', 'Status', 'Number']
-                const rows = certRows.map((c) => ({
-                  technician: c.technician, displayName: c.displayName, issuer: c.issuer || '',
-                  issue_date: c.issue_date || '', expiry_date: c.expiry_date || '', status: c.status, cert_number: c.cert_number || '',
-                }))
-                exportToExcel(rows, cols, headers, 'technician_certifications')
-              }}
-              className="btn-secondary text-sm inline-flex items-center gap-1.5"
-              disabled={certRows.length === 0}
-            >
-              <FileSpreadsheet size={14} /> Export certs
-            </button>
-          </div>
-
-          <Card pad="none" clip>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-[var(--input-border)] text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                    <th className="px-4 py-3 font-semibold text-left">Technician</th>
-                    <th className="px-4 py-3 font-semibold text-left">Certification</th>
-                    <th className="px-4 py-3 font-semibold text-left">Issuer</th>
-                    <th className="px-4 py-3 font-semibold text-left">Issued</th>
-                    <th className="px-4 py-3 font-semibold text-left">Expires</th>
-                    <th className="px-4 py-3 font-semibold text-right">Days</th>
-                    <th className="px-4 py-3 font-semibold text-left">Status</th>
-                    <th className="px-4 py-3 font-semibold text-left">Doc</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {loadingCompetency ? (
-                    [0, 1, 2, 3].map((i) => <tr key={i} className="border-b border-[var(--input-border)]/50"><td colSpan={8} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>)
-                  ) : certRows.length === 0 ? (
-                    <tr><td colSpan={8} className="px-4 py-12 text-center text-[var(--text-muted)]"><ShieldCheck size={22} className="mx-auto mb-2 opacity-60" />No certifications recorded yet. Add certifications from the Technicians tab.</td></tr>
-                  ) : (
-                    certPager.pageRows.map((c) => {
-                      const rowTone = c.status === 'expired' || (c.days != null && c.days < 30)
-                        ? 'text-red-300' : c.status === 'warning' ? 'text-amber-300' : 'text-[var(--text-secondary)]'
-                      const href = safeHref(c.document_url)
-                      return (
-                        <tr key={c.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                          <td className="px-4 py-2.5 text-[var(--text-primary)] font-medium">{c.technician}</td>
-                          <td className="px-4 py-2.5 text-[var(--text-secondary)]">{c.displayName}</td>
-                          <td className="px-4 py-2.5 text-[var(--text-muted)]">{c.issuer || 'N/A'}</td>
-                          <td className="px-4 py-2.5 text-[var(--text-secondary)]">{c.issue_date ? formatDate(c.issue_date) : 'N/A'}</td>
-                          <td className="px-4 py-2.5 text-[var(--text-secondary)]">{c.expiry_date ? formatDate(c.expiry_date) : 'N/A'}</td>
-                          <td className={`px-4 py-2.5 text-right tabular-nums font-medium ${rowTone}`}>{c.days == null ? 'N/A' : c.days < 0 ? `${c.days}` : c.days}</td>
-                          <td className="px-4 py-2.5"><span className={`text-[11px] px-2 py-0.5 rounded ${CERT_STATUS_STYLES[c.status]}`}>{c.status}</span></td>
-                          <td className="px-4 py-2.5">{href ? <a href={href} target="_blank" rel="noopener noreferrer" className="text-[var(--brand-bright)] hover:underline text-xs">view</a> : <span className="text-[var(--text-muted)]">N/A</span>}</td>
-                        </tr>
-                      )
-                    })
-                  )}
-                </tbody>
-              </table>
+          <Card className="space-y-3">
+            <div className="flex flex-wrap items-end gap-3">
+              <SearchField id="ts-cert-search" label="Search" value={certSearch} onChange={setCertSearch} placeholder="Technician, certification, issuer or number" />
+              <SelectField id="ts-cert-status" label="Status" value={certStatus} onChange={setCertStatus}>
+                <option value="all">All statuses</option>
+                {CERT_STATUSES.map((s) => <option key={s} value={s}>{CERT_STATUS_LABELS[s]}</option>)}
+              </SelectField>
+              {(certSearch || certStatus !== 'all') && (
+                <button type="button" onClick={() => { setCertSearch(''); setCertStatus('all') }} className="btn-secondary text-sm min-h-[44px] inline-flex items-center gap-1.5">
+                  <X size={14} aria-hidden="true" /> Clear
+                </button>
+              )}
+              <span className="text-xs text-[var(--text-muted)] ml-auto" aria-live="polite">{certRows.length} of {certAll.length}</span>
             </div>
-            <TablePagination {...certPager} />
           </Card>
+
+          <EnterpriseTable
+            columns={certColumns}
+            data={certRows}
+            getRowId={(r) => String(r.id)}
+            loading={loading}
+            error={errors.certs || null}
+            onRetry={load}
+            enableGlobalFilter={false}
+            enableColumnFilters={false}
+            enableExport={false}
+            initialPageSize={25}
+            emptyMessage={certSearch || certStatus !== 'all' ? 'No certifications match these filters.' : 'No certifications recorded yet. Add certifications from the Technicians tab.'}
+          />
         </>
       )}
 
-      {/* ══════════════════ MODALS ══════════════════ */}
       {skillModal && (
         <SkillModal
           userId={skillModal.user_id}
@@ -827,27 +761,27 @@ function SkillModal({ userId, userName, country, onClose, onSaved }) {
       <p className="text-xs text-[var(--text-muted)] mb-4 inline-flex items-center gap-1.5"><Users size={12} className="opacity-60" /> {userName}</p>
       <form onSubmit={submit} className="space-y-4">
         <div>
-          <label className="label">Skill</label>
-          <select className="input w-full" value={skillId} onChange={(e) => setSkillId(e.target.value)}>
+          <label className="label" htmlFor="ts-skill">Skill</label>
+          <select id="ts-skill" className="input w-full" value={skillId} onChange={(e) => setSkillId(e.target.value)}>
             <option value="">Select a skill</option>
             {SKILL_CATALOGUE.map((s) => <option key={s.skill_id} value={s.skill_id}>{s.name}</option>)}
           </select>
         </div>
         <div>
-          <label className="label">Proficiency level</label>
-          <select className="input w-full" value={level} onChange={(e) => setLevel(Number(e.target.value))}>
+          <label className="label" htmlFor="ts-level">Proficiency level</label>
+          <select id="ts-level" className="input w-full" value={level} onChange={(e) => setLevel(Number(e.target.value))}>
             {[1, 2, 3].map((n) => <option key={n} value={n}>{n}: {LEVEL_LABELS[n]}</option>)}
           </select>
         </div>
         <div>
-          <label className="label">Notes (optional)</label>
-          <textarea className="input w-full" rows={2} maxLength={2000} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Assessment notes…" />
+          <label className="label" htmlFor="ts-notes">Notes (optional)</label>
+          <textarea id="ts-notes" className="input w-full" rows={2} maxLength={2000} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Assessment notes" />
         </div>
-        {err && <div className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2"><AlertTriangle size={15} className="mt-0.5 shrink-0" /> {err}</div>}
+        {err && <div role="alert" className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2"><AlertTriangle size={15} className="mt-0.5 shrink-0" /> {err}</div>}
         <div className="flex items-center justify-end gap-2 pt-1">
           <button type="button" onClick={onClose} className="btn-secondary text-sm" disabled={saving}>Cancel</button>
           <button type="submit" className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={saving || !skillId}>
-            {saving ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : 'Save skill'}
+            {saving ? <><Loader2 size={14} className="animate-spin" /> Saving</> : 'Save skill'}
           </button>
         </div>
       </form>
@@ -909,41 +843,41 @@ function CertModal({ userId, userName, country, onClose, onSaved }) {
       <p className="text-xs text-[var(--text-muted)] mb-4 inline-flex items-center gap-1.5"><Users size={12} className="opacity-60" /> {userName}</p>
       <form onSubmit={submit} className="space-y-4">
         <div>
-          <label className="label">Certification</label>
-          <select className="input w-full" value={certId} onChange={(e) => onPickCert(e.target.value)}>
+          <label className="label" htmlFor="ts-cert">Certification</label>
+          <select id="ts-cert" className="input w-full" value={certId} onChange={(e) => onPickCert(e.target.value)}>
             <option value="">Select a certification</option>
             {CERT_CATALOGUE.map((c) => <option key={c.cert_id} value={c.cert_id}>{c.name}</option>)}
           </select>
         </div>
         <div>
-          <label className="label">Issuer</label>
-          <input className="input w-full" value={issuer} maxLength={200} onChange={(e) => setIssuer(e.target.value)} placeholder="Issuing body" />
+          <label className="label" htmlFor="ts-issuer">Issuer</label>
+          <input id="ts-issuer" className="input w-full" value={issuer} maxLength={200} onChange={(e) => setIssuer(e.target.value)} placeholder="Issuing body" />
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="label">Issue date</label>
-            <input className="input w-full" type="date" value={issueDate} onChange={(e) => onPickIssue(e.target.value)} />
+            <label className="label" htmlFor="ts-issue">Issue date</label>
+            <input id="ts-issue" className="input w-full" type="date" value={issueDate} onChange={(e) => onPickIssue(e.target.value)} />
           </div>
           <div>
-            <label className="label">Expiry date {certById(certId) ? <span className="text-[10px] text-[var(--text-muted)]">(auto)</span> : null}</label>
-            <input className="input w-full" type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
+            <label className="label" htmlFor="ts-expiry">Expiry date {certById(certId) ? <span className="text-[10px] text-[var(--text-muted)]">(auto)</span> : null}</label>
+            <input id="ts-expiry" className="input w-full" type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
           </div>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="label">Certificate number (optional)</label>
-            <input className="input w-full" value={certNumber} maxLength={120} onChange={(e) => setCertNumber(e.target.value)} />
+            <label className="label" htmlFor="ts-certno">Certificate number (optional)</label>
+            <input id="ts-certno" className="input w-full" value={certNumber} maxLength={120} onChange={(e) => setCertNumber(e.target.value)} />
           </div>
           <div>
-            <label className="label">Document URL (optional)</label>
-            <input className="input w-full" value={documentUrl} maxLength={1000} onChange={(e) => setDocumentUrl(e.target.value)} placeholder="https://…" />
+            <label className="label" htmlFor="ts-docurl">Document URL (optional)</label>
+            <input id="ts-docurl" className="input w-full" value={documentUrl} maxLength={1000} onChange={(e) => setDocumentUrl(e.target.value)} placeholder="https://" />
           </div>
         </div>
-        {err && <div className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2"><AlertTriangle size={15} className="mt-0.5 shrink-0" /> {err}</div>}
+        {err && <div role="alert" className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2"><AlertTriangle size={15} className="mt-0.5 shrink-0" /> {err}</div>}
         <div className="flex items-center justify-end gap-2 pt-1">
           <button type="button" onClick={onClose} className="btn-secondary text-sm" disabled={saving}>Cancel</button>
           <button type="submit" className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={saving || !certId}>
-            {saving ? <><Loader2 size={14} className="animate-spin" /> Saving…</> : 'Save certification'}
+            {saving ? <><Loader2 size={14} className="animate-spin" /> Saving</> : 'Save certification'}
           </button>
         </div>
       </form>

@@ -55,6 +55,34 @@ batching stops them being started at all.
 
 ---
 
+# ⚑ SESSION 2026-09-26 (part 4) — MODULE UPGRADE, 4 PHASES (5 agents). V613/V614 + accident parity APPLIED LIVE.
+- **Phase 2 correctness:**
+  - V613 `set_scrap_reason` now matches serial with upper(btrim). The scrap, unscrap and list RPCs were already case-insensitive (v604).
+  - Web `findTyreBySerial` and mobile `lookupTyreBySerial` now use an escaped ilike.
+  - V614: `get_report_tyre_maintenance` skips brand names in `removal_reason`. The client helper `src/lib/removalReason.js` `isBrandNotReason` is wired into the failure board, the scrap doughnut and opsIntelligence.
+  - SafetyCompliance: per-site tread and the risk level are N/A when not measured.
+  - RootCauseEngine and `formatters.js` no longer default to a ZAR or SAR label.
+  - ExecutiveReport spend now comes from `loadGovernedCostSplit` (`src/lib/executiveSpend.js`); the result is null when the total would blend currencies.
+  - `useLatestRequest` added to Analytics, CostCenter, ExpenseReport, BoardOverview and KpiCommandCenter.
+  - Already done before this session (verified): the PredictiveMaintenance/DailyOps/Warranty currency scope and the web tyre-completeness gate.
+- **Accident mock parity migration `20260916130000` APPLIED LIVE** on the owner's go-ahead. It adds `accident_dispatches` and `accident_fleet_validation_items` (16 policies, no anon access), and `delivered_to_workshop_at` is now timestamptz.
+- **Phase 1:** 12 thin pages deepened, each with an engine and tests:
+  - Vehicle360, DigitalTwin, InspectionPlanner (Coverage tab), FleetUtilization and OdometerLogs (Coverage tab);
+  - MyWorkspace (MyQueuePanel), DriverWorkspace, TyreScan (history is kept in the browser only), RoiCalculator (seeded from real CPK), ApprovalMatrix (coverage check), ErpSync (load history) and CountryComparison (each country in its own currency).
+  - The new tables use EnterpriseTable; the design ratchet is at 194.
+- **Phase 3:** parallel-safe was checked. Every RLS helper is already `s`; `app_user_can` stays `u` because its plpgsql EXCEPTION block creates a subtransaction, which is not allowed in parallel workers. Do NOT mark it safe.
+- **Stale tests fixed:** the backups/consoleSessions/selfHealing tests still asserted "[]-degrade" after the honest-read rounds. They now assert "throws", with `[]` only when the object is not provisioned.
+- **Phase 4 Flutter:**
+  - The SSO check after password sign-in, `SignInSsoRequired`;
+  - blocking marks refuse the checklist close;
+  - a NEW workshop technician screen (`features/workshop/domain/workshop_live.dart`, a repository using the WORKSHOP_EVENT queue).
+  - Compiled with Flutter 3.47.2 in the scratchpad: analyze clean, 2734 tests passed. The 19 failures are Linux-vs-Windows goldens (pre-existing), plus one drift test that needs `mobile/`.
+  - Open: the docs/flutter-migration entries, and workshop photos/GPS.
+- **OWNER DECISION still open:** stop auditing bulk imports (changes the audit contract).
+- **RULE:** `src/test/reportCorrections.test.js` rewrites `audit/checklist-report-review/*.pdf`. Revert them after a full suite run; do not commit them.
+
+---
+
 # ⚑ SESSION 2026-09-26 (part 3) — DAILY COVERAGE NOW WATCHES EVERY MODULE (35 feeds).
 - Migration `20260926093000_upload_feeds_every_module` APPLIED: +23 upload_feeds (checklists, breakdowns,
   telematics, disposals, insurer claims, gate passes, corrective actions, PM, tyre service, store issues, repair/

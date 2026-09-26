@@ -9,6 +9,7 @@
  * Colours use the single shared palette (reportColors) so it reads as one system.
  */
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import useLatestRequest from '../lib/useLatestRequest'
 import { Link } from 'react-router-dom'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement,
@@ -852,7 +853,11 @@ export default function ExpenseReport() {
 
   const money = useMemo(() => moneyIn(activeCurrency), [activeCurrency])
 
+  // Changing the range or scope starts a new load without waiting for the old
+  // one; a slower earlier answer must not paint over the newer window.
+  const latestLoad = useLatestRequest()
   const load = useCallback(async () => {
+    const stale = latestLoad.begin()
     // A scope that resolves to no country reports on nothing, and asks the
     // server for nothing. Falling back to an un-scoped read here would report on
     // every country the reader did not select.
@@ -883,6 +888,7 @@ export default function ExpenseReport() {
           countries: scopeCountryList, from: from || undefined, to: to || undefined, limit: 25,
         }).catch(() => ({ ok: false, blocks: [], refused: [] })),
       ])
+      if (stale()) return
       setReports(scopeReportEntries(scopeCountryList, {
         snap: snapRes.blocks, overview: ovRes.blocks, variance: varRes.blocks,
       }))
@@ -892,6 +898,7 @@ export default function ExpenseReport() {
       let countries = []
       if (isAll) {
         const rows = await getExpenseByCountry({ from: from || undefined, to: to || undefined }).catch(() => [])
+        if (stale()) return
         // BOUND TO THE REPORTING SCOPE. This RPC takes no country and returns
         // every country RLS allows, so without this filter a scope of two
         // countries would still report on three. It cannot widen anything (RLS
@@ -921,6 +928,7 @@ export default function ExpenseReport() {
         ])
         return { ...s, rows, siteOptions: opts }
       }))
+      if (stale()) return
       setSiteGroups(groups)
 
       // Tyre quantity, tyre CPK by site and the demand forecast - ONE READ PER
@@ -959,15 +967,15 @@ export default function ExpenseReport() {
       // carries its own country and currency, so the studio can pick out the one
       // country it is presenting without anything being merged.
       getExpensePeriodTrendMulti({ countries: scopeCountryList, grain: 'year' })
-        .then((res) => setYearly(res.rows.length ? res.rows : null))
-        .catch(() => setYearly(null))
+        .then((res) => { if (!stale()) setYearly(res.rows.length ? res.rows : null) })
+        .catch(() => { if (!stale()) setYearly(null) })
       setUpdatedAt(new Date())
     } catch (e) {
-      setError(toUserMessage(e, 'Could not load the expense report.'))
+      if (!stale()) setError(toUserMessage(e, 'Could not load the expense report.'))
     } finally {
-      setLoading(false); setRefreshing(false)
+      if (!stale()) { setLoading(false); setRefreshing(false) }
     }
-  }, [hasScope, isAll, activeCountry, activeCurrency, from, to, scopeCountryList])
+  }, [hasScope, isAll, activeCountry, activeCurrency, from, to, scopeCountryList, latestLoad])
 
   useEffect(() => { load() }, [load])
 

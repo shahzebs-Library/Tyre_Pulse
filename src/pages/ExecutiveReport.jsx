@@ -40,6 +40,7 @@ import { formatDate } from '../lib/formatters'
 import { recordCost } from '../lib/analyticsEngine'
 import { loadGovernedCostSplit, COST_SPLIT_TTL_MS } from '../lib/api/governedCost'
 import { COST_MODES, pickCost, costModeLabel, pickMonthly, splitTotals } from '../lib/costSources'
+import { resolveReportTyreSpend, spendShare, spendWindow, distinctCountries } from '../lib/executiveSpend'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme, reportFileName, reportDateLabel } from '../lib/exportUtils'
 import { captureChartOnPaper, paperChartOptions } from '../lib/chartCapture'
 import { useTenant } from '../contexts/TenantContext'
@@ -222,7 +223,10 @@ function computeRootCauses(records) {
 // Engine KPIs (e.g. an unmeasurable CPK) are legitimately null, so this must be safe.
 function fmtCurrency(n, currency) {
   const v = Number(n)
-  if (n == null || !Number.isFinite(v) || v === 0) return `${currency} 0`
+  // Unknown is N/A, never a fabricated zero (e.g. a spend total refused because
+  // the scope spans several currencies).
+  if (n == null || !Number.isFinite(v)) return 'N/A'
+  if (v === 0) return `${currency} 0`
   return `${currency} ${Math.round(v).toLocaleString()}`
 }
 function fmtNum(n, decimals = 0) {
@@ -565,6 +569,26 @@ export default function ExecutiveReport() {
     return () => { cancelled = true }
   }, [activeCountry])
 
+  // ── Authoritative tyre SPEND for the report period (expense grid) ─────────
+  // The headline "Total Period Spend" used to sum tyre_records.cost_per_tyre,
+  // which misses every fitment without a price. It now reads the expense grid
+  // for the SAME window the report shows; the per-tyre sum is a fallback only.
+  const spendWin = useMemo(() => spendWindow(periodBounds(period), records), [period, records])
+  const [gridSpend, setGridSpend] = useState(null) // { amount, blended, source } | null
+  useEffect(() => {
+    let cancelled = false
+    setGridSpend(null)
+    if (!spendWin) return () => { cancelled = true }
+    loadGovernedCostSplit({ country: activeCountry, from: spendWin.from, to: spendWin.to, maxAgeMs: COST_SPLIT_TTL_MS })
+      .then((res) => {
+        if (cancelled) return
+        const amt = Number(res?.tyre)
+        setGridSpend({ amount: Number.isFinite(amt) ? amt : null, blended: Boolean(res?.blended), source: res?.source || null })
+      })
+      .catch(() => { if (!cancelled) setGridSpend(null) })
+    return () => { cancelled = true }
+  }, [activeCountry, spendWin])
+
   // ── Period-filtered datasets ───────────────────────────────────────────────
   const periodRecords     = useMemo(() => filterByPeriod(records,     period, 'issue_date'),      [records,     period])
   const periodInspections = useMemo(() => filterByPeriod(inspections, period, 'scheduled_date'),  [inspections, period])
@@ -588,10 +612,28 @@ export default function ExecutiveReport() {
   const rootCauses  = useMemo(() => computeRootCauses(periodRecords), [periodRecords])
 
   // ── Financial computations ────────────────────────────────────────────────
-  const totalSpend = useMemo(() =>
+  // Per-tyre sum over the period's records. Kept ONLY as the fallback when the
+  // expense grid holds nothing for this scope; per-brand / per-site / per-asset
+  // breakdowns below still read tyre_records (the grid cannot attribute them).
+  const legacyTyreSpend = useMemo(() =>
     periodRecords.reduce((s, r) => s + recordCost(r), 0),
     [periodRecords]
   )
+  const spendResolved = useMemo(() => resolveReportTyreSpend({
+    grid: gridSpend,
+    legacy: legacyTyreSpend,
+    legacyCountries: distinctCountries(periodRecords),
+  }), [gridSpend, legacyTyreSpend, periodRecords])
+  // null = unknown (no data, or a mixed-currency scope). Every consumer below is
+  // null-safe: shares go through spendShare, text through fmtCurrency (N/A).
+  const totalSpend = spendResolved.amount
+  const spendBasisNote = spendResolved.source === 'grid'
+    ? 'Tyre spend from the expense grid'
+    : spendResolved.source === 'tyre_records'
+      ? 'Tyre spend from priced tyre records (expense grid had no data)'
+      : spendResolved.reason === 'mixed_currency'
+        ? 'Mixed currencies: pick a country for a spend total'
+        : 'No tyre spend recorded for this period'
 
   const totalBudget = useMemo(() => {
     if (!fleet.length) return 0
@@ -771,7 +813,7 @@ export default function ExecutiveReport() {
         priority: critRate > 0.1 ? 'Critical' : 'High',
         title: t('execreport.recommendations.inspectionCompliance.title'),
         description: t('execreport.recommendations.inspectionCompliance.description', { pct: fmtPct(inspComp) }),
-        impact: t('execreport.recommendations.inspectionCompliance.impact', { amount: fmtCurrency(totalSpend * 0.15, currency) }),
+        impact: t('execreport.recommendations.inspectionCompliance.impact', { amount: fmtCurrency(spendShare(totalSpend, 0.15), currency) }),
         owner: t('execreport.owners.management'),
       })
     }
@@ -852,7 +894,7 @@ export default function ExecutiveReport() {
         priority: 'Medium',
         title: t('execreport.recommendations.tyreRotation.title'),
         description: t('execreport.recommendations.tyreRotation.description'),
-        impact: t('execreport.recommendations.tyreRotation.impact', { amount: fmtCurrency(totalSpend * 0.1, currency) }),
+        impact: t('execreport.recommendations.tyreRotation.impact', { amount: fmtCurrency(spendShare(totalSpend, 0.1), currency) }),
         owner: t('execreport.owners.workshop'),
       })
     }
@@ -872,7 +914,7 @@ export default function ExecutiveReport() {
       {
         action: t('execreport.actionPlan.actions.auditSites'),
         priority: 'Critical', timeline: t('execreport.actionPlan.daysSuffix', { range: '7-14' }),
-        owner: t('execreport.owners.fleetManager'), saving: fmtCurrency(totalSpend * 0.08, currency), status: t('execreport.status.open'),
+        owner: t('execreport.owners.fleetManager'), saving: fmtCurrency(spendShare(totalSpend, 0.08), currency), status: t('execreport.status.open'),
       },
       {
         action: t('execreport.actionPlan.actions.mandatePressureCheck'),
@@ -882,7 +924,7 @@ export default function ExecutiveReport() {
       {
         action: t('execreport.actionPlan.actions.issueCorrectiveNotices'),
         priority: 'High', timeline: t('execreport.actionPlan.daysSuffix', { range: '7-30' }),
-        owner: t('execreport.owners.management'), saving: fmtCurrency(totalSpend * 0.1, currency), status: t('execreport.status.open'),
+        owner: t('execreport.owners.management'), saving: fmtCurrency(spendShare(totalSpend, 0.1), currency), status: t('execreport.status.open'),
       },
     ]
     const actions60 = [
@@ -894,19 +936,19 @@ export default function ExecutiveReport() {
       {
         action: t('execreport.actionPlan.actions.deployTelematics'),
         priority: 'High', timeline: t('execreport.actionPlan.daysSuffix', { range: '30-60' }),
-        owner: t('execreport.owners.fleetManager'), saving: fmtCurrency(totalSpend * 0.12, currency), status: t('execreport.status.open'),
+        owner: t('execreport.owners.fleetManager'), saving: fmtCurrency(spendShare(totalSpend, 0.12), currency), status: t('execreport.status.open'),
       },
       {
         action: t('execreport.actionPlan.actions.implementRotation'),
         priority: 'Medium', timeline: t('execreport.actionPlan.daysSuffix', { range: '30-60' }),
-        owner: t('execreport.owners.workshop'), saving: fmtCurrency(totalSpend * 0.1, currency), status: t('execreport.status.open'),
+        owner: t('execreport.owners.workshop'), saving: fmtCurrency(spendShare(totalSpend, 0.1), currency), status: t('execreport.status.open'),
       },
     ]
     const actions90 = [
       {
         action: t('execreport.actionPlan.actions.completeTpms'),
         priority: 'High', timeline: t('execreport.actionPlan.daysSuffix', { range: '60-90' }),
-        owner: t('execreport.owners.fleetManager'), saving: fmtCurrency(totalSpend * 0.15, currency), status: t('execreport.status.open'),
+        owner: t('execreport.owners.fleetManager'), saving: fmtCurrency(spendShare(totalSpend, 0.15), currency), status: t('execreport.status.open'),
       },
       {
         action: t('execreport.actionPlan.actions.monthlyReview'),
@@ -1355,7 +1397,7 @@ export default function ExecutiveReport() {
       { KPI: 'Scrap Rate', Value: (kpis.scrapRate.scrapRate * 100).toFixed(1), Unit: '%' },
       { KPI: 'Total Downtime Hours', Value: Math.round(kpis.downtimeImpact.totalDowntimeHours), Unit: 'hrs' },
       { KPI: 'Fleet Availability', Value: kpis.fleetAvailability.availabilityPct.toFixed(1), Unit: '%' },
-      { KPI: 'Total Spend', Value: Math.round(totalSpend), Unit: currency },
+      { KPI: 'Total Spend', Value: totalSpend == null ? 'N/A' : Math.round(totalSpend), Unit: totalSpend == null ? '' : currency },
       { KPI: 'Projected Annual Spend', Value: Math.round(projectedAnnual), Unit: currency },
     ]
     const addSheet = (rows, name) => XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows.length ? rows : [{}]), name)
@@ -2024,9 +2066,9 @@ export default function ExecutiveReport() {
             {/* Top stats */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
               {[
-                { label: 'Total Period Spend', value: fmtCurrency(totalSpend, currency), sub: periodValueLabel(period), color: 'text-[var(--text-primary)]' },
+                { label: 'Total Period Spend', value: fmtCurrency(totalSpend, currency), sub: `${periodValueLabel(period)} | ${spendBasisNote}`, color: 'text-[var(--text-primary)]' },
                 { label: 'Projected Annual', value: fmtCurrency(projectedAnnual, currency), sub: 'at current rate', color: 'text-amber-400' },
-                { label: 'Budget vs Actual', value: totalBudget > 0 ? fmtPct(((totalSpend / totalBudget) * 100)) : 'N/A', sub: totalBudget > 0 ? `Budget: ${fmtCurrency(totalBudget, currency)}` : 'No budget data', color: totalBudget > 0 && totalSpend > totalBudget ? 'text-red-400' : 'text-emerald-400' },
+                { label: 'Budget vs Actual', value: totalBudget > 0 && totalSpend != null ? fmtPct(((totalSpend / totalBudget) * 100)) : 'N/A', sub: totalBudget > 0 ? `Budget: ${fmtCurrency(totalBudget, currency)}` : 'No budget data', color: totalBudget > 0 && totalSpend != null && totalSpend > totalBudget ? 'text-red-400' : 'text-emerald-400' },
                 { label: 'Savings Opportunity', value: fmtCurrency(savingsOpportunity, currency), sub: 'if CPK reached fleet best', color: 'text-emerald-400' },
               ].map(s => (
                 <div key={s.label} className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-4">
@@ -2050,7 +2092,7 @@ export default function ExecutiveReport() {
                 </div>
               </div>
               <div>
-                <p className="text-xs text-[var(--text-secondary)] font-medium mb-2 uppercase tracking-wide">Cost by Site</p>
+                <p className="text-xs text-[var(--text-secondary)] font-medium mb-2 uppercase tracking-wide">Cost by Site <span className="normal-case font-normal text-[var(--text-dim)]">(priced tyre records)</span></p>
                 <div className="h-52">
                   {costBySite.length > 0 ? (
                     <Bar ref={costBySiteRef} data={costBySiteChart} options={horizOpts} />
@@ -2064,7 +2106,7 @@ export default function ExecutiveReport() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mt-5">
               {/* Cost by Brand */}
               <div>
-                <p className="text-xs text-[var(--text-secondary)] font-medium mb-2 uppercase tracking-wide">Cost by Brand</p>
+                <p className="text-xs text-[var(--text-secondary)] font-medium mb-2 uppercase tracking-wide">Cost by Brand <span className="normal-case font-normal text-[var(--text-dim)]">(priced tyre records)</span></p>
                 <div className="h-44">
                   {costByBrand.length > 0 ? (
                     <Bar ref={costByBrandRef} data={costByBrandChart} options={horizOpts} />
@@ -2470,7 +2512,7 @@ export default function ExecutiveReport() {
               </span>
               <span className="flex items-center gap-1.5">
                 <DollarSign className="w-3.5 h-3.5 text-emerald-500" />
-                Total opportunity: {fmtCurrency(savingsOpportunity + totalSpend * 0.15, currency)} estimated annually
+                Total opportunity: {fmtCurrency(totalSpend == null ? null : savingsOpportunity + totalSpend * 0.15, currency)} estimated annually
               </span>
               <span className="flex items-center gap-1.5">
                 <Users className="w-3.5 h-3.5 text-blue-400" />

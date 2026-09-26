@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import useLatestRequest from '../lib/useLatestRequest'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Chart as ChartJS,
@@ -575,7 +576,10 @@ export default function KpiCommandCenter() {
   const { from, to } = useMemo(() => periodDates(period, { from: customFrom, to: customTo }, dataAnchor ?? new Date()), [period, customFrom, customTo, dataAnchor])
   const { from: prevFrom, to: prevTo } = useMemo(() => prevPeriodDates(from, to), [from, to])
 
+  // A period/filter change supersedes an in-flight load: drop the stale answer.
+  const latestLoad = useLatestRequest()
   const load = useCallback(async () => {
+    const stale = latestLoad.begin()
     setLoading(true)
     setError(null)
     try {
@@ -618,6 +622,7 @@ export default function KpiCommandCenter() {
         ).range(from_, to_), { max: ROW_CAP }),
       ])
 
+      if (stale()) return
       if (e1) throw e1
       if (e3) throw e3
 
@@ -651,12 +656,13 @@ export default function KpiCommandCenter() {
         setMonthlyKpiMatrix(matrix)
       }
     } catch (err) {
+      if (stale()) return
       setError(toUserMessage(err, 'Could not load KPI data.'))
       setTruncated(false)
     } finally {
-      setLoading(false)
+      if (!stale()) setLoading(false)
     }
-  }, [from, to, prevFrom, prevTo, applyFilters, dataAnchor])
+  }, [from, to, prevFrom, prevTo, applyFilters, dataAnchor, latestLoad])
 
   // Defer the heavy load until the anchor has resolved so the initial fetch
   // already windows over the data's timeline (avoids a wasted empty round-trip).

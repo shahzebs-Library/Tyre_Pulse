@@ -33,6 +33,7 @@
  * `src/lib/boardScope.js` engine.
  */
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import useLatestRequest from '../lib/useLatestRequest'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement,
   PointElement, ArcElement, Filler, Title, Tooltip, Legend,
@@ -252,7 +253,11 @@ export default function BoardOverview() {
   const chartRefs = useRef({})
   const setRef = (key) => (el) => { chartRefs.current[key] = el }
 
+  // A scope change starts a new load without waiting for the old one; a slower
+  // earlier answer must not paint the previous scope's figures.
+  const latestLoad = useLatestRequest()
   const load = useCallback(async () => {
+    const stale = latestLoad.begin()
     // A scope that resolves to no country reports on nothing, and asks the
     // server for nothing. Falling back to an unscoped read here would silently
     // report on every country the reader did not select.
@@ -283,6 +288,7 @@ export default function BoardOverview() {
         listWorkOrdersForPage({ countries, lean: true }).catch(() => []),
         listStockRecords({ countries }).catch(() => []),
       ])
+      if (stale()) return
       const tyres = tyresRes.data ?? []
       const inspections = inspRes.data ?? []
       const actions = actionsQ?.data ?? []
@@ -295,12 +301,13 @@ export default function BoardOverview() {
       })
       setUpdatedAt(new Date())
     } catch (e) {
+      if (stale()) return
       setError(toUserMessage(e, 'Could not load the board overview.'))
       setTruncated(false)
     } finally {
-      setLoading(false); setRefreshing(false)
+      if (!stale()) { setLoading(false); setRefreshing(false) }
     }
-  }, [hasScope, scopeCountryList])
+  }, [hasScope, scopeCountryList, latestLoad])
 
   useEffect(() => { load() }, [load])
 

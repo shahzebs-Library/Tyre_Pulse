@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import useLatestRequest from '../lib/useLatestRequest'
 import { motion, AnimatePresence } from 'framer-motion'
 import { costCenter } from '../lib/api'
 import { useSettings } from '../contexts/SettingsContext'
@@ -182,7 +183,10 @@ export default function CostCenter() {
   }, [activeCountry])
 
   // ── Data Fetch ────────────────────────────────────────────────────────────────
+  // A newer filter change supersedes an in-flight read: drop the stale answer.
+  const latestFetch = useLatestRequest()
   const fetchData = useCallback(async () => {
+    const stale = latestFetch.begin()
     setLoading(true)
     setError(null)
     setTruncated(false)
@@ -192,14 +196,15 @@ export default function CostCenter() {
         dateFrom,
         dateTo
       })
+      if (stale()) return
       setRecords(data)
       setTruncated(trunc)
     } catch (e) {
-      setError(toUserMessage(e, 'Failed to load data'))
+      if (!stale()) setError(toUserMessage(e, 'Failed to load data'))
     } finally {
-      setLoading(false)
+      if (!stale()) setLoading(false)
     }
-  }, [activeCountry, dateFrom, dateTo])
+  }, [activeCountry, dateFrom, dateTo, latestFetch])
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -1443,7 +1448,9 @@ function CostPerUnitSection({ currency, country, siteOptions = [] }) {
   // so, or the pager's "of 200" reads as the total for the range.
   const prodAtLimit = prodRows.length >= PROD_ROW_LIMIT
 
+  const latestUnitLoad = useLatestRequest()
   const load = useCallback(async () => {
+    const stale = latestUnitLoad.begin()
     setLoading(true)
     setError('')
     try {
@@ -1454,14 +1461,15 @@ function CostPerUnitSection({ currency, country, siteOptions = [] }) {
         costCenter.getMeterDeltas({ country, site: siteArg, from, to }),
         listProduction({ country, site: siteArg, from: from || undefined, to: to || undefined, limit: PROD_ROW_LIMIT }),
       ])
+      if (stale()) return
       setData({ split: { tyre: split.tyre, maintenance: split.maintenance }, m3, km: meters.odometer, hours: meters.engineHours })
       setProdRows(rows)
     } catch (e) {
-      setError(toUserMessage(e, 'Could not load unit cost data.'))
+      if (!stale()) setError(toUserMessage(e, 'Could not load unit cost data.'))
     } finally {
-      setLoading(false)
+      if (!stale()) setLoading(false)
     }
-  }, [country, from, to, site])
+  }, [country, from, to, site, latestUnitLoad])
 
   useEffect(() => { load() }, [load])
 

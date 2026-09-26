@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import useLatestRequest from '../lib/useLatestRequest'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -116,7 +117,10 @@ export default function Analytics() {
   // full monthly series), so they keep their exact client computation, but the
   // read is now bounded: country + period date window applied SERVER-SIDE, plus
   // a hard row ceiling. A truncated read is surfaced as a "capped view" note.
+  // A newer filter change supersedes an in-flight read: drop the stale answer.
+  const latestLoad = useLatestRequest()
   const load = useCallback(async () => {
+    const stale = latestLoad.begin()
     setLoading(true); setError(null)
     try {
       const { data, error: e, truncated: tr } = await fetchAllPages((from, to) => {
@@ -129,17 +133,19 @@ export default function Analytics() {
         if (toDate) q = q.lte('issue_date', toDate)
         return q.range(from, to)
       }, { max: ROW_CAP })
+      if (stale()) return
       if (e) throw new Error(e.message || e)
       setRecords(data || [])
       setTruncated(Boolean(tr))
     } catch (err) {
+      if (stale()) return
       setError(toUserMessage(err, 'Failed to load data.'))
       setRecords([])
       setTruncated(false)
     } finally {
-      setLoading(false)
+      if (!stale()) setLoading(false)
     }
-  }, [activeCountry, fromDate, toDate])
+  }, [activeCountry, fromDate, toDate, latestLoad])
 
   useEffect(() => { load() }, [load])
 

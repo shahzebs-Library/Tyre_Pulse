@@ -9,6 +9,7 @@ import {
 import { toUserMessage } from '../../lib/safeError'
 import { formatDate } from '../../lib/formatters'
 import { exportToExcel, reportFileName } from '../../lib/exportUtils'
+import EnterpriseTable from '../ui/EnterpriseTable'
 import { APPROVED_BRANDS, CHINESE_BRANDS } from '../../lib/tyreSpecCatalog'
 
 // Maximum rows rendered in the table (the query already caps at this).
@@ -168,18 +169,68 @@ export default function BrandGapSection({ activeCountry } = {}) {
     }
   }
 
+  const columns = useMemo(() => [
+    { id: 'serial', header: 'Serial', accessorFn: (r) => r.serial_no || 'N/A', size: 150,
+      cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{row.original.serial_no || 'N/A'}</span> },
+    { id: 'asset', header: 'Asset', accessorFn: (r) => r.asset_no || 'N/A', size: 120 },
+    { id: 'size', header: 'Size', accessorFn: (r) => r.size || 'N/A', size: 130, meta: { filterVariant: 'select' } },
+    { id: 'site', header: 'Site', accessorFn: (r) => r.site || 'N/A', size: 130, meta: { filterVariant: 'select' } },
+    { id: 'date', header: 'Date', accessorFn: (r) => r.issue_date || '', size: 120,
+      meta: { exportValue: (r) => r.issue_date || 'N/A' },
+      cell: ({ row }) => <span className="tabular-nums text-[var(--text-muted)]">{row.original.issue_date ? formatDate(row.original.issue_date, row.original.country || 'All') : 'N/A'}</span> },
+    {
+      id: 'brand', header: 'Brand', size: 280, enableSorting: false, meta: { export: false },
+      cell: ({ row }) => {
+        const r = row.original
+        const busy = !!rowBusy[r.id]
+        const rErr = rowError[r.id]
+        return (
+          <div>
+            <div className="flex items-center gap-2">
+              <input
+                list="brand-gap-suggestions"
+                value={drafts[r.id] || ''}
+                onChange={(e) => updateDraft(r.id, e.target.value)}
+                disabled={busy}
+                placeholder="Brand"
+                aria-label={`Brand for tyre ${r.serial_no || r.id}`}
+                aria-invalid={rErr ? true : undefined}
+                className="w-36 min-h-[44px] bg-[var(--surface-2)] border border-[var(--border-dim)] rounded-lg px-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] disabled:opacity-40"
+              />
+              <button
+                type="button"
+                onClick={() => saveBrand(r)}
+                disabled={busy}
+                className="btn-secondary min-h-[44px] text-xs inline-flex items-center gap-1.5 disabled:opacity-40"
+              >
+                {busy ? <RefreshCw size={13} className="animate-spin" /> : <Save size={13} />}
+                {busy ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+            {rErr && (
+              <p role="alert" className="text-[11px] text-red-400 mt-1 flex items-center gap-1">
+                <AlertTriangle size={11} /> {rErr}
+              </p>
+            )}
+          </div>
+        )
+      },
+    },
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [drafts, rowBusy, rowError])
+
   const truncated = rows.length >= TABLE_CAP
 
   return (
     <section className="card p-0 overflow-hidden">
-      <div className="flex flex-wrap items-center gap-3 px-5 py-4 border-b border-[var(--card-border)]">
-        <div className="w-9 h-9 rounded-lg bg-gray-800/60 border border-gray-700/40 flex items-center justify-center shrink-0">
-          <Tag className="w-4.5 h-4.5 text-[var(--text-muted)]" />
+      <div className="flex flex-wrap items-center gap-3 px-5 py-4 border-b border-[var(--border-dim)]">
+        <div className="w-9 h-9 rounded-lg bg-[var(--surface-2)] border border-[var(--border-dim)] flex items-center justify-center shrink-0">
+          <Tag className="w-4 h-4 text-[var(--text-muted)]" />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold text-[var(--text-primary)] truncate">Tyres missing a brand</h2>
-            <span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-800/70 border border-gray-700/50 text-[var(--text-secondary)]">{totalMissing}</span>
+            <span className="text-[11px] px-2 py-0.5 rounded-full bg-[var(--surface-2)] border border-[var(--border-dim)] text-[var(--text-secondary)]">{totalMissing}</span>
           </div>
           <p className="text-xs text-[var(--text-muted)] mt-0.5">Brand drives CPK, warranty and vendor analysis. Fill it in below, or bulk-load via the stg_tyre_brand staging import for UAE and Egypt.</p>
           <p className="text-xs text-[var(--text-muted)] mt-0.5">Download the fill list, add each brand, then import country + serial + brand into the stg_tyre_brand table to backfill automatically.</p>
@@ -187,7 +238,7 @@ export default function BrandGapSection({ activeCountry } = {}) {
         <button
           onClick={downloadFillList}
           disabled={loading || downloading}
-          className="btn-secondary text-xs flex items-center gap-1.5 shrink-0 disabled:opacity-40"
+          className="btn-secondary min-h-[44px] text-xs flex items-center gap-1.5 shrink-0 disabled:opacity-40"
         >
           {downloading ? <RefreshCw size={13} className="animate-spin" /> : <Download size={13} />}
           {downloading ? 'Preparing...' : 'Download fill list'}
@@ -195,7 +246,7 @@ export default function BrandGapSection({ activeCountry } = {}) {
         <button
           onClick={load}
           disabled={loading}
-          className="btn-secondary text-xs flex items-center gap-1.5 shrink-0 disabled:opacity-40"
+          className="btn-secondary min-h-[44px] text-xs flex items-center gap-1.5 shrink-0 disabled:opacity-40"
         >
           <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Refresh
         </button>
@@ -204,21 +255,21 @@ export default function BrandGapSection({ activeCountry } = {}) {
       <div className="px-5 py-4 space-y-4">
         {/* Download error */}
         {downloadError && (
-          <div className="rounded-lg border border-red-800/50 bg-red-950/30 px-4 py-2.5 flex items-start gap-2">
+          <div role="alert" className="rounded-lg border border-red-800/50 bg-red-950/20 px-4 py-2.5 flex items-start gap-2">
             <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-            <p className="text-xs text-red-300/90 break-words flex-1">Could not build the fill list: {downloadError}</p>
+            <p className="text-xs text-[var(--text-secondary)] break-words flex-1">Could not build the fill list: {downloadError}</p>
           </div>
         )}
 
         {/* Error + Retry */}
         {error ? (
-          <div className="rounded-lg border border-red-800/50 bg-red-950/30 px-4 py-3 flex items-start gap-3">
+          <div role="alert" className="rounded-lg border border-red-800/50 bg-red-950/20 px-4 py-3 flex flex-wrap items-start gap-3">
             <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-red-200">Could not load this section</p>
-              <p className="text-xs text-red-300/80 mt-0.5 break-words">{error}</p>
+              <p className="text-sm font-medium text-[var(--text-primary)]">Could not load this section</p>
+              <p className="text-xs text-[var(--text-secondary)] mt-0.5 break-words">{error}</p>
             </div>
-            <button onClick={load} className="btn-secondary text-xs flex items-center gap-1.5 shrink-0">
+            <button onClick={load} className="btn-secondary min-h-[44px] text-xs flex items-center gap-1.5 shrink-0">
               <RefreshCw size={13} /> Retry
             </button>
           </div>
@@ -241,10 +292,11 @@ export default function BrandGapSection({ activeCountry } = {}) {
                       key={s.country}
                       type="button"
                       onClick={() => setCountry(isActive ? 'All' : s.country)}
-                      className={`text-left rounded-xl border px-4 py-3 transition-colors ${
+                      aria-pressed={isActive}
+                      className={`text-left rounded-xl border px-4 py-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${
                         isActive
                           ? 'bg-[var(--surface-2)] border-[var(--text-muted)]'
-                          : 'bg-[var(--surface-2)] border-gray-700/40 hover:border-gray-600/60'
+                          : 'bg-[var(--surface-2)] border-[var(--border-dim)] hover:border-[var(--text-muted)]'
                       }`}
                     >
                       <p className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide">{s.country}</p>
@@ -264,10 +316,10 @@ export default function BrandGapSection({ activeCountry } = {}) {
                 <button
                   type="button"
                   onClick={() => setCountry('All')}
-                  className={`text-xs px-2.5 py-1 rounded-full border ${
+                  className={`text-xs px-3 min-h-[44px] rounded-full border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${
                     country === 'All'
                       ? 'bg-[var(--surface-2)] border-[var(--text-muted)] text-[var(--text-primary)]'
-                      : 'bg-gray-800/40 border-gray-700/40 text-[var(--text-secondary)] hover:border-gray-600/60'
+                      : 'bg-[var(--surface-1)] border-[var(--border-dim)] text-[var(--text-secondary)] hover:border-[var(--text-muted)]'
                   }`}
                 >
                   All
@@ -277,10 +329,10 @@ export default function BrandGapSection({ activeCountry } = {}) {
                     key={c}
                     type="button"
                     onClick={() => setCountry(c)}
-                    className={`text-xs px-2.5 py-1 rounded-full border ${
+                    className={`text-xs px-3 min-h-[44px] rounded-full border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${
                       country === c
                         ? 'bg-[var(--surface-2)] border-[var(--text-muted)] text-[var(--text-primary)]'
-                        : 'bg-gray-800/40 border-gray-700/40 text-[var(--text-secondary)] hover:border-gray-600/60'
+                        : 'bg-[var(--surface-1)] border-[var(--border-dim)] text-[var(--text-secondary)] hover:border-[var(--text-muted)]'
                     }`}
                   >
                     {c}
@@ -293,7 +345,8 @@ export default function BrandGapSection({ activeCountry } = {}) {
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search serial or asset"
-                  className="w-full bg-[var(--surface-2)] border border-gray-700/40 rounded-lg pl-9 pr-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--text-muted)]"
+                  aria-label="Search tyres missing a brand by serial or asset"
+                  className="w-full bg-[var(--surface-2)] border border-[var(--border-dim)] rounded-lg pl-9 pr-3 min-h-[44px] text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--text-muted)]"
                 />
               </div>
             </div>
@@ -308,7 +361,7 @@ export default function BrandGapSection({ activeCountry } = {}) {
             {/* Table / empty state */}
             {filteredRows.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 text-center">
-                <div className="w-10 h-10 rounded-xl bg-gray-800/60 border border-gray-700/40 flex items-center justify-center mb-3">
+                <div className="w-10 h-10 rounded-xl bg-[var(--surface-2)] border border-[var(--border-dim)] flex items-center justify-center mb-3">
                   <Tag className="w-5 h-5 text-[var(--text-muted)]" />
                 </div>
                 <p className="text-sm font-medium text-[var(--text-primary)]">
@@ -327,63 +380,16 @@ export default function BrandGapSection({ activeCountry } = {}) {
                     Showing first {TABLE_CAP.toLocaleString()} of more than {TABLE_CAP.toLocaleString()} affected tyres. Narrow by country or use the staging import for a bulk fill.
                   </p>
                 )}
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="text-left text-[11px] uppercase tracking-wide text-[var(--text-muted)] border-b border-[var(--card-border)]">
-                        <th className="px-3 py-3 font-medium">Serial</th>
-                        <th className="px-3 py-3 font-medium">Asset</th>
-                        <th className="px-3 py-3 font-medium">Size</th>
-                        <th className="px-3 py-3 font-medium">Site</th>
-                        <th className="px-3 py-3 font-medium">Date</th>
-                        <th className="px-3 py-3 font-medium">Brand</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredRows.map((r) => {
-                        const busy = !!rowBusy[r.id]
-                        const rErr = rowError[r.id]
-                        return (
-                          <tr key={r.id} className="border-b border-[var(--card-border)]/60 hover:bg-white/[0.02] align-top">
-                            <td className="px-3 py-3 font-medium text-[var(--text-primary)]">{r.serial_no || 'N/A'}</td>
-                            <td className="px-3 py-3 text-[var(--text-secondary)]">{r.asset_no || 'N/A'}</td>
-                            <td className="px-3 py-3 text-[var(--text-secondary)]">{r.size || 'N/A'}</td>
-                            <td className="px-3 py-3 text-[var(--text-secondary)]">{r.site || 'N/A'}</td>
-                            <td className="px-3 py-3 text-[var(--text-muted)] tabular-nums">
-                              {r.issue_date ? formatDate(r.issue_date, r.country || 'All') : 'N/A'}
-                            </td>
-                            <td className="px-3 py-3">
-                              <div className="flex items-center gap-2">
-                                <input
-                                  list="brand-gap-suggestions"
-                                  value={drafts[r.id] || ''}
-                                  onChange={(e) => updateDraft(r.id, e.target.value)}
-                                  disabled={busy}
-                                  placeholder="Brand"
-                                  className="w-36 bg-[var(--surface-2)] border border-gray-700/40 rounded-lg px-2.5 py-1.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--text-muted)] disabled:opacity-40"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => saveBrand(r)}
-                                  disabled={busy}
-                                  className="btn-secondary text-xs inline-flex items-center gap-1.5 disabled:opacity-40"
-                                >
-                                  {busy ? <RefreshCw size={13} className="animate-spin" /> : <Save size={13} />}
-                                  {busy ? 'Saving...' : 'Save'}
-                                </button>
-                              </div>
-                              {rErr && (
-                                <p className="text-[11px] text-red-300 mt-1 flex items-center gap-1">
-                                  <AlertTriangle size={11} /> {rErr}
-                                </p>
-                              )}
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                <EnterpriseTable
+                  columns={columns}
+                  data={filteredRows}
+                  getRowId={(r) => r.id}
+                  enableKeyboard={false}
+                  enableGlobalFilter={false}
+                  emptyMessage="No matching tyres"
+                  exportFileName={reportFileName('Tyres missing a brand', country === 'All' ? '' : country)}
+                  reportMeta={{ title: 'Tyres missing a brand' }}
+                />
               </>
             )}
           </>

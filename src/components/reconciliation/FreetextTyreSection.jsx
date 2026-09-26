@@ -9,6 +9,7 @@ import {
 import { toUserMessage } from '../../lib/safeError'
 import { formatDate } from '../../lib/formatters'
 import { exportToExcel, reportFileName } from '../../lib/exportUtils'
+import EnterpriseTable from '../ui/EnterpriseTable'
 
 /**
  * Tyre serials the engine read out of a job card sentence, for review.
@@ -73,6 +74,53 @@ export default function FreetextTyreSection({ activeCountry } = {}) {
         (r.job_card || '').toUpperCase().includes(q),
     )
   }, [rows, search])
+
+  const columns = useMemo(() => [
+    { id: 'date', header: 'Date', accessorFn: (r) => r.job_card_date || '', size: 120,
+      meta: { exportValue: (r) => r.job_card_date || 'Not recorded' },
+      cell: ({ row }) => <span className="whitespace-nowrap text-[var(--text-secondary)]">{row.original.job_card_date ? formatDate(row.original.job_card_date) : 'Not recorded'}</span> },
+    { id: 'asset', header: 'Asset', accessorFn: (r) => r.asset_no || 'N/A', size: 110,
+      cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{row.original.asset_no || 'N/A'}</span> },
+    { id: 'serial', header: 'Serial', accessorFn: (r) => r.serial_no || 'N/A', size: 150,
+      meta: { exportValue: (r) => `${r.serial_no || 'N/A'}${r.serial_is_new ? ' (new)' : ''}` },
+      cell: ({ row }) => (
+        <span className="text-[var(--text-primary)]">
+          {row.original.serial_no || 'N/A'}
+          {row.original.serial_is_new && <span className="ml-2 text-xs text-[var(--accent)]">new</span>}
+        </span>
+      ) },
+    { id: 'event', header: 'What the sentence says', accessorFn: (r) => EVENT_KIND_LABEL[r.event_kind] || 'Not stated', size: 200, meta: { filterVariant: 'select' },
+      cell: ({ row }) => (
+        <span className="text-[var(--text-secondary)]">
+          {EVENT_KIND_LABEL[row.original.event_kind] || 'Not stated'}
+          {row.original.confidence !== 'high' && (
+            <span className="ml-2 text-xs text-[var(--text-muted)]">more than one tyre in this line</span>
+          )}
+        </span>
+      ) },
+    { id: 'source', header: 'Original sentence', accessorFn: (r) => r.source_text || '', size: 320,
+      cell: ({ row }) => <span className="block max-w-md truncate text-[var(--text-muted)]" title={row.original.source_text}>{row.original.source_text}</span> },
+    ...(status === 'pending' ? [{
+      id: 'decision', header: 'Decision', size: 230, enableSorting: false, meta: { export: false, align: 'right' },
+      cell: ({ row }) => {
+        const r = row.original
+        return (
+          <div className="flex items-center justify-end gap-2 whitespace-nowrap">
+            <button type="button" onClick={() => decide(r, 'accepted')} disabled={busyId === r.id}
+              aria-label={`Confirm serial ${r.serial_no} as a real tyre change`}
+              className="btn-secondary min-h-[44px] text-xs inline-flex items-center gap-1">
+              <Check className="w-3 h-3" /> Real
+            </button>
+            <button type="button" onClick={() => decide(r, 'rejected')} disabled={busyId === r.id}
+              aria-label={`Mark serial ${r.serial_no} as not a tyre change`}
+              className="btn-secondary min-h-[44px] text-xs inline-flex items-center gap-1">
+              <X className="w-3 h-3" /> Not a change
+            </button>
+          </div>
+        )
+      },
+    }] : []),
+  ], [status, busyId])
 
   const decide = async (row, next) => {
     setBusyId(row.id)
@@ -144,22 +192,22 @@ export default function FreetextTyreSection({ activeCountry } = {}) {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button
+          <button type="button"
             onClick={runExtract}
             disabled={extracting}
-            className="btn-secondary text-sm inline-flex items-center gap-2"
+            className="btn-secondary min-h-[44px] text-sm inline-flex items-center gap-2"
           >
             <Wand2 className={`w-4 h-4 ${extracting ? 'animate-pulse' : ''}`} />
             {extracting ? 'Reading...' : 'Read job cards again'}
           </button>
-          <button onClick={load} className="btn-secondary text-sm inline-flex items-center gap-2">
+          <button type="button" onClick={load} className="btn-secondary min-h-[44px] text-sm inline-flex items-center gap-2">
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </button>
-          <button
+          <button type="button"
             onClick={download}
             disabled={!filtered.length}
-            className="btn-secondary text-sm inline-flex items-center gap-2"
+            className="btn-secondary min-h-[44px] text-sm inline-flex items-center gap-2"
           >
             <Download className="w-4 h-4" />
             Excel
@@ -191,31 +239,34 @@ export default function FreetextTyreSection({ activeCountry } = {}) {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Asset, serial or job card"
-            className="input pl-8 text-sm"
+            aria-label="Search by asset, serial or job card"
+            className="input pl-8 text-sm min-h-[44px]"
           />
         </div>
-        <select value={status} onChange={(e) => setStatus(e.target.value)} className="input text-sm">
+        <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Decision status" className="input text-sm min-h-[44px]">
           <option value="pending">Waiting for review</option>
           <option value="accepted">Confirmed</option>
           <option value="rejected">Not a tyre change</option>
         </select>
-        <label className="text-sm inline-flex items-center gap-2" style={{ color: 'var(--text-secondary)' }}>
-          <input type="checkbox" checked={newOnly} onChange={(e) => setNewOnly(e.target.checked)} />
+        <label className="text-sm inline-flex items-center gap-2 min-h-[44px]" style={{ color: 'var(--text-secondary)' }}>
+          <input type="checkbox" className="w-4 h-4" checked={newOnly} onChange={(e) => setNewOnly(e.target.checked)} />
           Only serials we have never recorded
         </label>
       </div>
 
       {note && (
-        <div className="text-sm rounded-lg px-3 py-2 mb-3"
+        <div role="status" className="text-sm rounded-lg px-3 py-2 mb-3"
              style={{ background: 'var(--panel-2)', color: 'var(--text-secondary)' }}>
           {note}
         </div>
       )}
       {error && (
-        <div className="text-sm rounded-lg px-3 py-2 mb-3 flex items-center gap-2"
-             style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444' }}>
+        <div role="alert" className="text-sm rounded-lg px-3 py-2 mb-3 flex flex-wrap items-center gap-2 border border-red-800/50 bg-red-950/20 text-red-400">
           <AlertTriangle className="w-4 h-4" />
-          {error}
+          <span className="flex-1 min-w-0 text-[var(--text-primary)]">{error}</span>
+          <button type="button" onClick={load} className="btn-secondary min-h-[44px] text-xs inline-flex items-center gap-1.5">
+            <RefreshCw className="w-3.5 h-3.5" /> Retry
+          </button>
         </div>
       )}
 
@@ -223,75 +274,23 @@ export default function FreetextTyreSection({ activeCountry } = {}) {
         <div className="text-sm py-6 text-center" style={{ color: 'var(--text-secondary)' }}>
           Reading the job cards...
         </div>
-      ) : !filtered.length ? (
+      ) : error && !rows.length ? null : !rows.length ? (
         <div className="text-sm py-6 text-center" style={{ color: 'var(--text-secondary)' }}>
           {status === 'pending'
             ? 'Nothing is waiting for review.'
             : 'No records with that decision yet.'}
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr style={{ color: 'var(--text-secondary)' }}>
-                <th className="text-left py-2 pr-3">Date</th>
-                <th className="text-left py-2 pr-3">Asset</th>
-                <th className="text-left py-2 pr-3">Serial</th>
-                <th className="text-left py-2 pr-3">What the sentence says</th>
-                <th className="text-left py-2 pr-3">Original sentence</th>
-                {status === 'pending' && <th className="text-right py-2">Decision</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((r) => (
-                <tr key={r.id} style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                  <td className="py-2 pr-3 whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>
-                    {r.job_card_date ? formatDate(r.job_card_date) : 'Not recorded'}
-                  </td>
-                  <td className="py-2 pr-3 font-medium" style={{ color: 'var(--text-primary)' }}>
-                    {r.asset_no}
-                  </td>
-                  <td className="py-2 pr-3" style={{ color: 'var(--text-primary)' }}>
-                    {r.serial_no}
-                    {r.serial_is_new && (
-                      <span className="ml-2 text-xs" style={{ color: 'var(--accent)' }}>new</span>
-                    )}
-                  </td>
-                  <td className="py-2 pr-3" style={{ color: 'var(--text-secondary)' }}>
-                    {EVENT_KIND_LABEL[r.event_kind] || 'Not stated'}
-                    {r.confidence !== 'high' && (
-                      <span className="ml-2 text-xs" style={{ color: 'var(--text-dim)' }}>
-                        more than one tyre in this line
-                      </span>
-                    )}
-                  </td>
-                  <td className="py-2 pr-3 max-w-md truncate" title={r.source_text}
-                      style={{ color: 'var(--text-dim)' }}>
-                    {r.source_text}
-                  </td>
-                  {status === 'pending' && (
-                    <td className="py-2 text-right whitespace-nowrap">
-                      <button
-                        onClick={() => decide(r, 'accepted')}
-                        disabled={busyId === r.id}
-                        className="btn-secondary text-xs inline-flex items-center gap-1 mr-2"
-                      >
-                        <Check className="w-3 h-3" /> Real
-                      </button>
-                      <button
-                        onClick={() => decide(r, 'rejected')}
-                        disabled={busyId === r.id}
-                        className="btn-secondary text-xs inline-flex items-center gap-1"
-                      >
-                        <X className="w-3 h-3" /> Not a change
-                      </button>
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <EnterpriseTable
+          columns={columns}
+          data={filtered}
+          getRowId={(r) => r.id}
+          enableKeyboard={false}
+          enableGlobalFilter={false}
+          emptyMessage="No record matches that search."
+          exportFileName={reportFileName('Tyre changes read from job cards')}
+          reportMeta={{ title: 'Tyre changes read from job cards' }}
+        />
       )}
     </div>
   )

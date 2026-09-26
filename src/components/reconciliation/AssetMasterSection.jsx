@@ -6,6 +6,7 @@ import { BASIS_KEYS, basisMeta, UNKNOWN_OWNER } from '../../lib/assetOwnership'
 import { formatCurrencyCompact } from '../../lib/formatters'
 import { exportToExcel, reportFileName } from '../../lib/exportUtils'
 import { toUserMessage } from '../../lib/safeError'
+import EnterpriseTable from '../ui/EnterpriseTable'
 
 /**
  * Asset Master - one row per physical vehicle across all countries. This is the
@@ -88,6 +89,51 @@ export default function AssetMasterSection() {
     .map((c) => `${formatCurrencyCompact(Number(c.tyre_expense), COUNTRY_CURRENCY[c.country] || 'SAR')} ${c.country}`)
     .join('  |  ') || 'N/A'
 
+  const columns = useMemo(() => [
+    { id: 'asset', header: 'Asset No', accessorFn: (r) => r.asset_no, size: 120,
+      cell: ({ row }) => <span className="font-mono text-[var(--text-primary)]">{row.original.asset_no}</span> },
+    { id: 'owner', header: 'Owned by', accessorFn: (r) => ownFor(r.asset_no)?.owningCountryLabel || 'N/A', size: 200,
+      meta: { exportValue: (r) => { const o = ownFor(r.asset_no); return o ? `${o.owningCountryLabel || UNKNOWN_OWNER} (${o.basisLabel})` : 'N/A' } },
+      cell: ({ row }) => {
+        // an asset the evidence cannot assign reads N/A with the reason on its
+        // badge, never a guessed country
+        const o = ownFor(row.original.asset_no)
+        if (!o) return <span className="text-xs text-[var(--text-muted)]">N/A</span>
+        return (
+          <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+            <span className={`text-xs ${o.owningCountry ? 'text-[var(--text-primary)]' : 'text-amber-500'}`}>
+              {o.owningCountryLabel || UNKNOWN_OWNER}
+            </span>
+            {o.isCrossCountry && (
+              <span
+                title={basisMeta(o.basis).explain}
+                className={`text-[10px] px-1.5 py-0.5 rounded-full border ${
+                  basisMeta(o.basis).tone === 'warn'
+                    ? 'bg-amber-900/20 text-amber-500 border-amber-700/50'
+                    : 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-bright)]'
+                }`}
+              >{o.basisLabel}</span>
+            )}
+          </span>
+        )
+      } },
+    { id: 'countries', header: 'Countries', accessorFn: (r) => r.countries, size: 140,
+      cell: ({ row }) => (
+        <span className={`text-xs px-2 py-0.5 rounded-full border ${
+          (row.original.country_count || 0) > 1
+            ? 'bg-blue-900/20 text-blue-500 border-blue-700/50'
+            : 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-bright)]'
+        }`}>{row.original.countries}{(row.original.country_count || 0) > 1 ? ' (multi)' : ''}</span>
+      ) },
+    { id: 'type', header: 'Type', accessorFn: (r) => r.vehicle_type || 'N/A', size: 140, meta: { filterVariant: 'select' } },
+    { id: 'tyres', header: 'Tyres', accessorFn: (r) => Number(r.tyres) || 0, size: 90, meta: { align: 'right' },
+      cell: ({ row }) => <span className="tabular-nums">{Number(row.original.tyres).toLocaleString()}</span> },
+    { id: 'wo', header: 'Work Orders', accessorFn: (r) => Number(r.work_orders) || 0, size: 110, meta: { align: 'right' },
+      cell: ({ row }) => <span className="tabular-nums">{Number(row.original.work_orders).toLocaleString()}</span> },
+    { id: 'expense', header: 'Tyre Expense (per country)', accessorFn: (r) => expenseText(r.by_country), size: 260, enableSorting: false,
+      cell: ({ row }) => <span className="text-xs text-[var(--text-secondary)]">{expenseText(row.original.by_country)}</span> },
+  ], [ownFor])
+
   function exportExcel() {
     try {
       const flat = filtered.map((r) => {
@@ -117,14 +163,14 @@ export default function AssetMasterSection() {
 
   return (
     <section className="card p-0 overflow-hidden">
-      <div className="flex flex-wrap items-center gap-3 px-5 py-4 border-b border-[var(--card-border)]">
-        <div className="w-9 h-9 rounded-lg bg-gray-800/60 border border-gray-700/40 flex items-center justify-center shrink-0">
-          <Boxes className="w-4.5 h-4.5 text-[var(--text-muted)]" />
+      <div className="flex flex-wrap items-center gap-3 px-5 py-4 border-b border-[var(--border-dim)]">
+        <div className="w-9 h-9 rounded-lg bg-[var(--surface-2)] border border-[var(--border-dim)] flex items-center justify-center shrink-0">
+          <Boxes className="w-4 h-4 text-[var(--text-muted)]" />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold text-[var(--text-primary)] truncate">Asset master (one row per vehicle)</h2>
-            <span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-800/70 border border-gray-700/50 text-[var(--text-secondary)]">{rows.length}</span>
+            <span className="text-[11px] px-2 py-0.5 rounded-full bg-[var(--surface-2)] border border-[var(--border-dim)] text-[var(--text-secondary)]">{rows.length}</span>
           </div>
           <p className="text-xs text-[var(--text-muted)] mt-0.5">
             Each vehicle once, across all countries. {multiCountry} carry the same asset number in more than one
@@ -134,9 +180,9 @@ export default function AssetMasterSection() {
               : ''}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <select
-            className="input text-sm px-2 py-1.5"
+            className="input text-sm px-2 min-h-[44px]"
             value={basisFilter}
             onChange={(e) => setBasisFilter(e.target.value)}
             aria-label="Filter by ownership"
@@ -150,28 +196,29 @@ export default function AssetMasterSection() {
           <div className="relative">
             <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
             <input
-              className="input text-sm pl-7 pr-3 py-1.5 w-48"
+              className="input text-sm pl-7 pr-3 min-h-[44px] w-48 max-w-full"
               placeholder="Search asset / type / country..."
+              aria-label="Search asset master by asset, type or country"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <button onClick={exportExcel} disabled={loading || filtered.length === 0}
-            className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5 disabled:opacity-50">
+          <button type="button" onClick={exportExcel} disabled={loading || filtered.length === 0}
+            className="btn-secondary min-h-[44px] flex items-center gap-1.5 text-sm px-3 disabled:opacity-50">
             <Download size={14} /> Export
           </button>
-          <button onClick={load} disabled={loading}
-            className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5 disabled:opacity-50">
+          <button type="button" onClick={load} disabled={loading}
+            className="btn-secondary min-h-[44px] flex items-center gap-1.5 text-sm px-3 disabled:opacity-50">
             <RefreshCw size={14} /> Refresh
           </button>
         </div>
       </div>
 
       {error ? (
-        <div className="mx-5 my-5 rounded-lg border border-red-800/50 bg-red-950/30 px-4 py-3 flex items-start gap-3">
+        <div role="alert" className="mx-5 my-5 rounded-lg border border-red-800/50 bg-red-950/20 px-4 py-3 flex flex-wrap items-start gap-3">
           <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
-          <p className="text-sm text-red-200 flex-1">{error}</p>
-          <button onClick={load} className="btn-secondary text-xs px-3 py-1.5">Retry</button>
+          <p className="text-sm text-[var(--text-primary)] flex-1">{error}</p>
+          <button type="button" onClick={load} className="btn-secondary min-h-[44px] text-xs px-3 inline-flex items-center gap-1.5"><RefreshCw size={13} /> Retry</button>
         </div>
       ) : loading ? (
         <div className="px-5 py-10 text-center text-sm text-[var(--text-muted)]">Loading asset master...</div>
@@ -180,67 +227,17 @@ export default function AssetMasterSection() {
           {rows.length === 0 ? 'No assets found.' : 'No asset matches the current search and filter.'}
         </div>
       ) : (
-        <div className="px-5 py-4 overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-[var(--text-secondary)] border-b border-[var(--border-dim)]">
-                <th className="pb-2 pr-4">Asset No</th>
-                <th className="pb-2 pr-4">Owned by</th>
-                <th className="pb-2 pr-4">Countries</th>
-                <th className="pb-2 pr-4">Type</th>
-                <th className="pb-2 pr-4 text-right">Tyres</th>
-                <th className="pb-2 pr-4 text-right">Work Orders</th>
-                <th className="pb-2">Tyre Expense (per country)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.slice(0, 500).map((r) => {
-                const o = ownFor(r.asset_no)
-                return (
-                <tr key={r.asset_no} className="border-b border-[var(--border-dim)] hover:bg-[var(--surface-2)]">
-                  <td className="py-2 pr-4 font-mono text-[var(--text-primary)]">{r.asset_no}</td>
-                  {/* an asset the evidence cannot assign reads N/A with the reason
-                      on its badge, never a guessed country */}
-                  <td className="py-2 pr-4 whitespace-nowrap">
-                    {!o ? (
-                      <span className="text-xs text-[var(--text-muted)]">N/A</span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5">
-                        <span className={`text-xs ${o.owningCountry ? 'text-[var(--text-primary)]' : 'text-amber-300'}`}>
-                          {o.owningCountryLabel || UNKNOWN_OWNER}
-                        </span>
-                        {o.isCrossCountry && (
-                          <span
-                            title={basisMeta(o.basis).explain}
-                            className={`text-[10px] px-1.5 py-0.5 rounded-full border ${
-                              basisMeta(o.basis).tone === 'warn'
-                                ? 'bg-amber-900/20 text-amber-300 border-amber-700/50'
-                                : 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-bright)]'
-                            }`}
-                          >{o.basisLabel}</span>
-                        )}
-                      </span>
-                    )}
-                  </td>
-                  <td className="py-2 pr-4">
-                    <span className={`text-xs px-2 py-0.5 rounded-full border ${
-                      (r.country_count || 0) > 1
-                        ? 'bg-blue-900/30 text-blue-300 border-blue-700/50'
-                        : 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-bright)]'
-                    }`}>{r.countries}</span>
-                  </td>
-                  <td className="py-2 pr-4 text-[var(--text-secondary)] text-xs">{r.vehicle_type || 'N/A'}</td>
-                  <td className="py-2 pr-4 text-[var(--text-secondary)] text-right">{Number(r.tyres).toLocaleString()}</td>
-                  <td className="py-2 pr-4 text-[var(--text-secondary)] text-right">{Number(r.work_orders).toLocaleString()}</td>
-                  <td className="py-2 text-[var(--text-secondary)] text-xs">{expenseText(r.by_country)}</td>
-                </tr>
-                )
-              })}
-            </tbody>
-          </table>
-          {filtered.length > 500 && (
-            <p className="text-xs text-[var(--text-muted)] mt-3">Showing first 500 of {filtered.length}. Use search or Export for the full list.</p>
-          )}
+        <div className="px-4 py-4">
+          <EnterpriseTable
+            columns={columns}
+            data={filtered}
+            getRowId={(r) => String(r.asset_no)}
+            enableKeyboard={false}
+            enableGlobalFilter={false}
+            emptyMessage="No asset matches the current search and filter."
+            exportFileName={reportFileName('TyrePulse Asset Master')}
+            reportMeta={{ title: 'Asset master' }}
+          />
         </div>
       )}
     </section>

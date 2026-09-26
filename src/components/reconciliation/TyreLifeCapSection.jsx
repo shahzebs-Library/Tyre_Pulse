@@ -4,6 +4,7 @@ import { listLifeOverCap } from '../../lib/api/tyreFreetext'
 import { toUserMessage } from '../../lib/safeError'
 import { formatDate } from '../../lib/formatters'
 import { exportToExcel, reportFileName } from '../../lib/exportUtils'
+import EnterpriseTable from '../ui/EnterpriseTable'
 
 /**
  * Tyre lives above the ceiling the owner set for that class of machine:
@@ -56,6 +57,29 @@ export default function TyreLifeCapSection({ activeCountry } = {}) {
     return [...m.entries()].sort((a, b) => b[1] - a[1])
   }, [rows])
 
+  const columns = useMemo(() => [
+    { id: 'asset', header: 'Asset', accessorFn: (r) => r.asset_no || 'N/A', size: 110,
+      cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{row.original.asset_no || 'N/A'}</span> },
+    { id: 'type', header: 'Type', accessorFn: (r) => r.vehicle_type || 'Not recorded', size: 130, meta: { filterVariant: 'select' } },
+    { id: 'position', header: 'Position', accessorFn: (r) => r.tyre_position || 'Not recorded', size: 100 },
+    { id: 'serial', header: 'Serial', accessorFn: (r) => r.serial_no || 'Not recorded', size: 140 },
+    { id: 'life', header: 'Recorded life', accessorFn: (r) => Number(r.total_km), size: 130, meta: { align: 'right' },
+      cell: ({ row }) => <span className="tabular-nums text-[var(--text-primary)]">{Number(row.original.total_km).toLocaleString()} km</span> },
+    { id: 'cap', header: 'Limit', accessorFn: (r) => Number(r.life_cap_km), size: 100, meta: { align: 'right' },
+      cell: ({ row }) => <span className="tabular-nums text-[var(--text-muted)]">{Number(row.original.life_cap_km).toLocaleString()}</span> },
+    { id: 'over', header: 'Over by', accessorFn: (r) => Number(r.over_by_km), size: 110, meta: { align: 'right' },
+      cell: ({ row }) => <span className="tabular-nums font-medium text-amber-500">+{Number(row.original.over_by_km).toLocaleString()}</span> },
+    { id: 'cause', header: 'Most likely cause', accessorFn: (r) => r.likely_cause || 'N/A', size: 240, meta: { filterVariant: 'select' },
+      cell: ({ row }) => (
+        <span className="text-[var(--text-secondary)]">
+          {row.original.likely_cause || 'N/A'}
+          {row.original.issue_date && (
+            <span className="ml-2 text-xs text-[var(--text-muted)]">fitted {formatDate(row.original.issue_date)}</span>
+          )}
+        </span>
+      ) },
+  ], [])
+
   const download = () =>
     exportToExcel(
       filtered,
@@ -84,12 +108,12 @@ export default function TyreLifeCapSection({ activeCountry } = {}) {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={load} className="btn-secondary text-sm inline-flex items-center gap-2">
+          <button type="button" onClick={load} className="btn-secondary min-h-[44px] text-sm inline-flex items-center gap-2">
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </button>
-          <button onClick={download} disabled={!filtered.length}
-                  className="btn-secondary text-sm inline-flex items-center gap-2">
+          <button type="button" onClick={download} disabled={!filtered.length}
+                  className="btn-secondary min-h-[44px] text-sm inline-flex items-center gap-2">
             <Download className="w-4 h-4" />
             Excel
           </button>
@@ -112,7 +136,8 @@ export default function TyreLifeCapSection({ activeCountry } = {}) {
           <Search className="w-4 h-4 absolute left-2 top-1/2 -translate-y-1/2"
                   style={{ color: 'var(--text-dim)' }} />
           <input value={search} onChange={(e) => setSearch(e.target.value)}
-                 placeholder="Asset or serial" className="input pl-8 text-sm" />
+                 placeholder="Asset or serial" aria-label="Search tyre lives by asset or serial"
+                 className="input pl-8 text-sm min-h-[44px]" />
         </div>
         {truncated && (
           <span className="text-xs" style={{ color: 'var(--text-dim)' }}>
@@ -122,10 +147,12 @@ export default function TyreLifeCapSection({ activeCountry } = {}) {
       </div>
 
       {error && (
-        <div className="text-sm rounded-lg px-3 py-2 mb-3 flex items-center gap-2"
-             style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444' }}>
+        <div role="alert" className="text-sm rounded-lg px-3 py-2 mb-3 flex flex-wrap items-center gap-2 border border-red-800/50 bg-red-950/20 text-red-400">
           <AlertTriangle className="w-4 h-4" />
-          {error}
+          <span className="flex-1 min-w-0 text-[var(--text-primary)]">{error}</span>
+          <button type="button" onClick={load} className="btn-secondary min-h-[44px] text-xs inline-flex items-center gap-1.5">
+            <RefreshCw className="w-3.5 h-3.5" /> Retry
+          </button>
         </div>
       )}
 
@@ -133,64 +160,21 @@ export default function TyreLifeCapSection({ activeCountry } = {}) {
         <div className="text-sm py-6 text-center" style={{ color: 'var(--text-secondary)' }}>
           Checking tyre lives...
         </div>
-      ) : !filtered.length ? (
+      ) : error ? null : !rows.length ? (
         <div className="text-sm py-6 text-center" style={{ color: 'var(--text-secondary)' }}>
-          {rows.length
-            ? 'No tyre matches that search.'
-            : 'Every recorded tyre life is within the limit for its machine.'}
+          Every recorded tyre life is within the limit for its machine.
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr style={{ color: 'var(--text-secondary)' }}>
-                <th className="text-left py-2 pr-3">Asset</th>
-                <th className="text-left py-2 pr-3">Type</th>
-                <th className="text-left py-2 pr-3">Position</th>
-                <th className="text-left py-2 pr-3">Serial</th>
-                <th className="text-right py-2 pr-3">Recorded life</th>
-                <th className="text-right py-2 pr-3">Limit</th>
-                <th className="text-right py-2 pr-3">Over by</th>
-                <th className="text-left py-2">Most likely cause</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((r) => (
-                <tr key={r.id} style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                  <td className="py-2 pr-3 font-medium" style={{ color: 'var(--text-primary)' }}>
-                    {r.asset_no}
-                  </td>
-                  <td className="py-2 pr-3" style={{ color: 'var(--text-secondary)' }}>
-                    {r.vehicle_type}
-                  </td>
-                  <td className="py-2 pr-3" style={{ color: 'var(--text-secondary)' }}>
-                    {r.tyre_position || 'Not recorded'}
-                  </td>
-                  <td className="py-2 pr-3" style={{ color: 'var(--text-secondary)' }}>
-                    {r.serial_no || 'Not recorded'}
-                  </td>
-                  <td className="py-2 pr-3 text-right" style={{ color: 'var(--text-primary)' }}>
-                    {Number(r.total_km).toLocaleString()} km
-                  </td>
-                  <td className="py-2 pr-3 text-right" style={{ color: 'var(--text-dim)' }}>
-                    {Number(r.life_cap_km).toLocaleString()}
-                  </td>
-                  <td className="py-2 pr-3 text-right font-medium" style={{ color: '#f59e0b' }}>
-                    +{Number(r.over_by_km).toLocaleString()}
-                  </td>
-                  <td className="py-2" style={{ color: 'var(--text-secondary)' }}>
-                    {r.likely_cause}
-                    {r.issue_date && (
-                      <span className="ml-2 text-xs" style={{ color: 'var(--text-dim)' }}>
-                        fitted {formatDate(r.issue_date)}
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <EnterpriseTable
+          columns={columns}
+          data={filtered}
+          getRowId={(r) => r.id}
+          enableKeyboard={false}
+          enableGlobalFilter={false}
+          emptyMessage="No tyre matches that search."
+          exportFileName={reportFileName('Tyre lives above the limit')}
+          reportMeta={{ title: 'Tyre lives above the limit' }}
+        />
       )}
     </div>
   )

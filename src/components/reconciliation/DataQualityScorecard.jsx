@@ -47,9 +47,9 @@ export default function DataQualityScorecard() {
 
   return (
     <section className="card p-0 overflow-hidden">
-      <div className="flex flex-wrap items-center gap-3 px-5 py-4 border-b border-[var(--card-border)]">
-        <div className="w-9 h-9 rounded-lg bg-gray-800/60 border border-gray-700/40 flex items-center justify-center shrink-0">
-          <ShieldCheck className="w-4.5 h-4.5 text-[var(--text-muted)]" />
+      <div className="flex flex-wrap items-center gap-3 px-5 py-4 border-b border-[var(--border-dim)]">
+        <div className="w-9 h-9 rounded-lg bg-[var(--surface-2)] border border-[var(--border-dim)] flex items-center justify-center shrink-0">
+          <ShieldCheck className="w-4 h-4 text-[var(--text-muted)]" />
         </div>
         <div className="min-w-0 flex-1">
           <h2 className="text-sm font-semibold text-[var(--text-primary)] truncate">Data quality by country</h2>
@@ -58,9 +58,10 @@ export default function DataQualityScorecard() {
           </p>
         </div>
         <button
+          type="button"
           onClick={load}
           disabled={loading}
-          className="btn-secondary flex items-center gap-2 disabled:opacity-40"
+          className="btn-secondary min-h-[44px] flex items-center gap-2 disabled:opacity-40"
         >
           <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
           Refresh
@@ -71,14 +72,14 @@ export default function DataQualityScorecard() {
         {loading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {[0, 1, 2].map((i) => (
-              <div key={i} className="h-40 rounded-xl bg-gray-800/50 animate-pulse" />
+              <div key={i} className="h-40 rounded-xl bg-[var(--surface-2)] animate-pulse" />
             ))}
           </div>
         ) : error ? (
-          <div className="flex flex-col items-center justify-center gap-3 py-8 text-center">
+          <div role="alert" className="flex flex-col items-center justify-center gap-3 py-8 text-center">
             <AlertTriangle className="w-6 h-6 text-red-400" />
             <p className="text-sm text-[var(--text-secondary)]">{error}</p>
-            <button onClick={load} className="btn-secondary flex items-center gap-2">
+            <button type="button" onClick={load} className="btn-secondary min-h-[44px] flex items-center gap-2">
               <RefreshCw size={14} /> Retry
             </button>
           </div>
@@ -95,7 +96,7 @@ export default function DataQualityScorecard() {
               return (
                 <div
                   key={r.country || 'unknown'}
-                  className="rounded-xl border border-[var(--card-border)] bg-gray-900/30 p-4"
+                  className="rounded-xl border border-[var(--border-dim)] bg-[var(--surface-2)] p-4"
                 >
                   <div className="flex items-center justify-between gap-3 mb-3">
                     <div className="min-w-0">

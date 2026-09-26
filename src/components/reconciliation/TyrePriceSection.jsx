@@ -8,6 +8,8 @@ import {
 } from '../../lib/api/tyrePriceBackfill'
 import { comparableStrength } from '../../lib/tyrePriceRules'
 import { toUserMessage } from '../../lib/safeError'
+import { reportFileName } from '../../lib/exportUtils'
+import EnterpriseTable from '../ui/EnterpriseTable'
 
 const nf = new Intl.NumberFormat('en-US')
 const money = (v, country) => {
@@ -112,6 +114,23 @@ export default function TyrePriceSection() {
     }
   }
 
+  const sampleColumns = useMemo(() => [
+    { id: 'asset', header: 'Asset', accessorFn: (r) => r.asset_no || 'N/A', size: 110 },
+    { id: 'serial', header: 'Serial', accessorFn: (r) => r.serial_no || 'N/A', size: 140 },
+    { id: 'country', header: 'Country', accessorFn: (r) => r.country || 'N/A', size: 90 },
+    { id: 'price', header: 'Price', accessorFn: (r) => (Number.isFinite(Number(r.now)) ? Number(r.now) : null), size: 120, meta: { align: 'right', exportValue: (r) => money(r.now, r.country) },
+      cell: ({ row }) => <span className="tabular-nums">{money(row.original.now, row.original.country)}</span> },
+    { id: 'how', header: 'How', accessorFn: (r) => sourceLabel(r.source), size: 240,
+      cell: ({ row }) => (
+        <span>
+          {sourceLabel(row.original.source)}
+          {row.original.source === 'comparable' && (
+            <span className="text-[var(--text-muted)]">{' '}- {comparableStrength(row.original.samples).label}</span>
+          )}
+        </span>
+      ) },
+  ], [])
+
   const byCountry = preview?.by_country || {}
   const previewCountries = Object.keys(byCountry)
 
@@ -121,7 +140,7 @@ export default function TyrePriceSection() {
         <div className="flex items-start gap-3">
           <div className="p-2 rounded-lg bg-amber-500/10 text-amber-400"><Coins size={18} /></div>
           <div>
-            <h3 className="font-semibold text-[var(--text)]">Tyres with no price</h3>
+            <h3 className="font-semibold text-[var(--text-primary)]">Tyres with no price</h3>
             <p className="text-xs text-[var(--text-muted)] mt-0.5 max-w-2xl">
               A tyre with no price counts as zero in every cost figure, which makes the
               fleet look cheaper than it is. This fills the gap from the tyre&apos;s own
@@ -131,24 +150,24 @@ export default function TyrePriceSection() {
             </p>
           </div>
         </div>
-        <button onClick={load} className="btn-ghost text-xs inline-flex items-center gap-1.5">
+        <button type="button" onClick={load} className="btn-ghost min-h-[44px] text-xs inline-flex items-center gap-1.5">
           <RefreshCw size={13} /> Refresh
         </button>
       </div>
 
       {flash && (
-        <div className={`px-4 py-2 text-xs border-b border-[var(--border)] ${
-          flash.tone === 'bad' ? 'text-red-300 bg-red-500/10'
-            : flash.tone === 'ok' ? 'text-emerald-300 bg-emerald-500/10'
+        <div role={flash.tone === 'bad' ? 'alert' : 'status'} className={`px-4 py-2 text-xs border-b border-[var(--border)] ${
+          flash.tone === 'bad' ? 'text-red-400 bg-red-500/10'
+            : flash.tone === 'ok' ? 'text-emerald-500 bg-emerald-500/10'
               : 'text-[var(--text-muted)]'}`}>
           {flash.text}
         </div>
       )}
 
       {error && (
-        <div className="p-4 text-xs text-red-300 flex items-center gap-2">
-          <AlertTriangle size={14} /> {error}
-          <button onClick={load} className="btn-ghost text-xs ml-2">Retry</button>
+        <div role="alert" className="p-4 text-xs text-red-400 flex flex-wrap items-center gap-2">
+          <AlertTriangle size={14} /> <span className="text-[var(--text-primary)]">{error}</span>
+          <button type="button" onClick={load} className="btn-secondary min-h-[44px] text-xs ml-2 inline-flex items-center gap-1.5"><RefreshCw size={13} /> Retry</button>
         </div>
       )}
 
@@ -163,7 +182,7 @@ export default function TyrePriceSection() {
             {coverage.map((r) => (
               <div key={r.country} className="rounded-lg border border-[var(--border)] p-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-[var(--text)]">{r.country}</span>
+                  <span className="text-sm font-medium text-[var(--text-primary)]">{r.country}</span>
                   <span className={`text-xs ${Number(r.coverage_pct) >= 90 ? 'text-emerald-400' : 'text-amber-400'}`}>
                     {r.coverage_pct === null ? 'N/A' : `${r.coverage_pct}% priced`}
                   </span>
@@ -196,31 +215,35 @@ export default function TyrePriceSection() {
               <select
                 value={country}
                 onChange={(e) => { setCountry(e.target.value); setPreview(null) }}
-                className="input text-xs py-1.5"
+                aria-label="Country to backfill"
+                className="input text-xs min-h-[44px]"
               >
                 {countries.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
               <button
+                type="button"
                 onClick={doPreview}
                 disabled={!!busy}
-                className="btn-secondary text-xs inline-flex items-center gap-1.5"
+                className="btn-secondary min-h-[44px] text-xs inline-flex items-center gap-1.5"
               >
                 <Eye size={13} /> {busy === 'preview' ? 'Working it out...' : 'Show me what would change'}
               </button>
               {preview?.rows > 0 && (
                 <button
+                  type="button"
                   onClick={doApply}
                   disabled={!!busy}
-                  className="btn-primary text-xs inline-flex items-center gap-1.5"
+                  className="btn-primary min-h-[44px] text-xs inline-flex items-center gap-1.5"
                 >
                   <Play size={13} /> {busy === 'apply' ? 'Applying...' : `Apply to ${nf.format(preview.rows)} tyres`}
                 </button>
               )}
               {lastBatch && (
                 <button
+                  type="button"
                   onClick={doUndo}
                   disabled={!!busy}
-                  className="btn-ghost text-xs inline-flex items-center gap-1.5"
+                  className="btn-ghost min-h-[44px] text-xs inline-flex items-center gap-1.5"
                 >
                   <Undo2 size={13} /> {busy === 'undo' ? 'Undoing...' : 'Undo that'}
                 </button>
@@ -242,7 +265,7 @@ export default function TyrePriceSection() {
                 return (
                   <div key={c} className="rounded-lg border border-[var(--border)] p-3">
                     <div className="flex items-center justify-between flex-wrap gap-2">
-                      <span className="text-sm font-medium text-[var(--text)]">{c}</span>
+                      <span className="text-sm font-medium text-[var(--text-primary)]">{c}</span>
                       <span className="text-xs text-[var(--text-muted)]">
                         {nf.format(d.rows)} tyres, {money(d.value, c)} in total,
                         typically {money(d.median_price, c)} each
@@ -252,7 +275,7 @@ export default function TyrePriceSection() {
                       {Object.entries(sources).map(([src, s]) => (
                         <div key={src} className="flex items-start justify-between gap-3 text-xs">
                           <div>
-                            <span className="text-[var(--text)]">{sourceLabel(src)}</span>
+                            <span className="text-[var(--text-primary)]">{sourceLabel(src)}</span>
                             <span className="text-[var(--text-muted)]"> - {SOURCE_META[src]?.detail}</span>
                           </div>
                           <span className="text-[var(--text-muted)] whitespace-nowrap">
@@ -266,36 +289,18 @@ export default function TyrePriceSection() {
               })}
 
               {Array.isArray(preview.sample) && preview.sample.length > 0 && (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead className="text-[var(--text-muted)]">
-                      <tr className="text-left">
-                        <th className="py-1.5 pr-3">Asset</th>
-                        <th className="py-1.5 pr-3">Serial</th>
-                        <th className="py-1.5 pr-3">Country</th>
-                        <th className="py-1.5 pr-3 text-right">Price</th>
-                        <th className="py-1.5">How</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {preview.sample.map((r, i) => (
-                        <tr key={i} className="border-t border-[var(--border)]">
-                          <td className="py-1.5 pr-3">{r.asset_no || 'N/A'}</td>
-                          <td className="py-1.5 pr-3 text-[var(--text-muted)]">{r.serial_no || 'N/A'}</td>
-                          <td className="py-1.5 pr-3">{r.country}</td>
-                          <td className="py-1.5 pr-3 text-right">{money(r.now, r.country)}</td>
-                          <td className="py-1.5">
-                            {sourceLabel(r.source)}
-                            {r.source === 'comparable' && (
-                              <span className="text-[var(--text-muted)]">
-                                {' '}- {comparableStrength(r.samples).label}
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div>
+                  <EnterpriseTable
+                    columns={sampleColumns}
+                    data={preview.sample}
+                    getRowId={(r, i) => `${r.id || r.serial_no || 'row'}-${i}`}
+                    enableKeyboard={false}
+                    enableColumnFilters={false}
+                    initialPageSize={25}
+                    emptyMessage="No sample rows"
+                    exportFileName={reportFileName('Tyre price backfill preview', country)}
+                    reportMeta={{ title: 'Tyre price backfill preview' }}
+                  />
                   {preview.rows > preview.sample.length && (
                     <div className="text-[11px] text-[var(--text-muted)] mt-2">
                       Showing the {preview.sample.length} highest of {nf.format(preview.rows)}.

@@ -34,67 +34,46 @@ const code = src
   .replace(/\/\*[\s\S]*?\*\//g, '')
   .replace(/^\s*\/\/.*$/gm, '')
 
-describe('CostCenter paging keeps exports and money on the full set', () => {
-  it('pages the two long tables through the shared pager, not a private one', () => {
-    expect(code).toContain("from '../components/ui/TablePagination'")
-    // 95 brands and 555 assets carry tyre records - both past one page.
-    expect(code).toContain('const brandPager = usePagedRows(byBrand)')
-    expect(code).toContain('const vehiclePager = usePagedRows(byVehicle)')
-    expect(code).toContain('{brandPager.pageRows.map(b => (')
-    expect(code).toContain('{vehiclePager.pageRows.map(v => (')
-    expect(code).toContain('<TablePagination {...brandPager} />')
-    expect(code).toContain('<TablePagination {...vehiclePager} />')
+describe('CostCenter tables keep exports and money on the full set', () => {
+  // The four dimension tables and the production list moved from the private
+  // 50-a-page pager to the shared EnterpriseTable (sortable, searchable, its
+  // own full-set export). The guards below keep the SAME two failure modes out.
+  it('renders the dimension and production tables through EnterpriseTable', () => {
+    expect(code).toContain("import EnterpriseTable from '../components/ui/EnterpriseTable'")
+    for (const data of ['bySite', 'byBrand', 'byVehicle', 'byMonth', 'prodRows']) {
+      expect(code, `${data} must feed an EnterpriseTable in full`).toContain(`data={${data}}`)
+    }
+    expect(code).not.toContain('usePagedRows(')
+    expect(code).not.toMatch(/<table\b/)
   })
 
-  it('exports the full filtered set, never the visible page', () => {
-    // Both exports build their rows from bySite in full. bySite is not paged at
-    // all (23 sites), but the assertion is what stops a later edit repointing an
-    // export at whichever pager happens to exist on this page.
+  it('exports the full filtered set, never a visible page', () => {
     expect(code).toContain('bySite.map(s => ({')
-    for (const pager of ['brandPager', 'vehiclePager', 'prodPager']) {
-      expect(
-        code.includes(`exportToExcel(\n        ${pager}.pageRows`),
-        `exportToExcel must not read ${pager}.pageRows`,
-      ).toBe(false)
-      expect(
-        code.includes(`${pager}.pageRows.map(s => ({`),
-        `an export must not map ${pager}.pageRows`,
-      ).toBe(false)
-    }
+    expect(code).toContain('byBrand.map(b => ({')
+    expect(code).toContain('byVehicle.map(v => ({')
+    expect(code).not.toMatch(/pageRows/)
   })
 
-  it('computes every money figure and chart over the full array', () => {
-    // The doughnut, the top-10 asset bar and the brand CPK bar each slice the
-    // FULL sorted array. Reading a page here would make "top 10 by cost" mean
-    // "top 10 on the page the reader happens to be on".
-    expect(code).toContain('const top8  = bySite.slice(0, 8)')
-    expect(code).toContain('const other = bySite.slice(8).reduce((s, r) => s + r.totalCost, 0)')
-    expect(code).toContain('const top10 = byVehicle.slice(0, 10)')
-    expect(code).toContain('labels: byBrand.slice(0, 10).map(b => b.brand)')
+  it('never sums cost_per_tyre into a headline spend total', () => {
+    // The KPI strip reads the expense grid through the governed split.
+    expect(code).toMatch(/loadGovernedCostSplit\(\{\s*country: activeCountry, from: dateFrom/)
+    expect(code).toContain('<CostValue split={spendSplit} mode="tyres" compact />')
+    expect(code).not.toMatch(/reduce\([^)]*cost_per_tyre/)
+  })
 
-    // Nothing anywhere may aggregate a page.
-    for (const m of ['reduce', 'slice']) {
-      for (const pager of ['brandPager', 'vehiclePager', 'prodPager']) {
-        expect(
-          new RegExp(`${pager}\\.pageRows\\s*\\.?\\s*${m}\\(`).test(code),
-          `${pager}.pageRows must not be ${m}()d into a figure`,
-        ).toBe(false)
-      }
-    }
+  it('computes every chart over the full array', () => {
+    expect(code).toContain('const top8  = bySite.slice(0, 8)')
+    expect(code).toContain('const top10 = byVehicle.slice(0, 10)')
   })
 
   it('keeps the anomaly feed on the population it always scanned', () => {
-    // Lifting the By Vehicle table's old .slice(0, 50) made 555 assets reachable.
-    // The anomaly feed must NOT silently widen with it: which assets a manager is
-    // alerted about is a product decision, not a side effect of paging a table.
+    // Which assets a manager is alerted about is a product decision, not a side
+    // effect of how the vehicle table pages.
     expect(code).toContain('const byVehicleTop50 = useMemo(() => byVehicle.slice(0, 50), [byVehicle])')
-    expect(code).toContain('byVehicleTop50.forEach(v => {')
-    expect(code).not.toContain('byVehicle.forEach(v => {')
+    expect(code).toContain('vehicles: byVehicleTop50')
   })
 
   it('says so when the production list stopped at its own server limit', () => {
-    // listProduction asks for at most PROD_ROW_LIMIT rows. Without the notice the
-    // pager's "of 200" reads as the total for the range, which it is not.
     expect(code).toContain('const PROD_ROW_LIMIT = 200')
     expect(code).toContain('limit: PROD_ROW_LIMIT')
     expect(code).toContain('const prodAtLimit = prodRows.length >= PROD_ROW_LIMIT')

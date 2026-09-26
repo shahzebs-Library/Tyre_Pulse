@@ -7,6 +7,8 @@ import {
 import { shapeSuggestions, suggestionSummary, normalizeBrandToken, MATCH_TYPES } from '../../lib/tyreLearning'
 import { toUserMessage } from '../../lib/safeError'
 import { APPROVED_BRANDS, CHINESE_BRANDS } from '../../lib/tyreSpecCatalog'
+import EnterpriseTable from '../ui/EnterpriseTable'
+import { reportFileName } from '../../lib/exportUtils'
 
 const BRAND_SUGGESTIONS = Array.from(new Set([...APPROVED_BRANDS, ...CHINESE_BRANDS]))
 
@@ -54,6 +56,60 @@ export default function TyreLearningSection({ activeCountry } = {}) {
   useEffect(() => { load() }, [load])
 
   const summary = useMemo(() => suggestionSummary(suggestions), [suggestions])
+
+  const suggestionColumns = useMemo(() => [
+    { id: 'serial', header: 'Serial', accessorFn: (s) => s.serialNo, size: 160,
+      cell: ({ row }) => <span className="font-mono text-[var(--text-primary)]">{row.original.serialNo}</span> },
+    { id: 'country', header: 'Country', accessorFn: (s) => s.country || 'N/A', size: 100, meta: { filterVariant: 'select' } },
+    { id: 'rows', header: 'Rows', accessorFn: (s) => Number(s.rows) || 0, size: 80, meta: { align: 'right' } },
+    { id: 'brand', header: 'Suggested brand', accessorFn: (s) => s.brand, size: 160, meta: { filterVariant: 'select' },
+      cell: ({ row }) => <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-600 dark:text-emerald-500">{row.original.brand}</span> },
+    { id: 'source', header: 'Source', accessorFn: (s) => s.sourceLabel, size: 150, meta: { filterVariant: 'select' } },
+    {
+      id: 'confirm', header: 'Confirm', size: 140, enableSorting: false, meta: { export: false, align: 'right' },
+      cell: ({ row }) => {
+        const s = row.original
+        const key = `sug-${s.serialKey}`
+        return (
+          <button
+            type="button"
+            disabled={busyKey === key}
+            onClick={() => applyConfirm({ matchType: 'serial', matchValue: s.serialNo, targetValue: s.brand, rowCountry: s.country, key })}
+            aria-label={`Confirm brand ${s.brand} for serial ${s.serialNo}`}
+            className="btn-primary inline-flex min-h-[44px] items-center gap-1 px-3 text-xs font-medium disabled:opacity-50"
+          >
+            <Check size={13} /> Confirm
+          </button>
+        )
+      },
+    },
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [busyKey])
+
+  const factColumns = useMemo(() => [
+    { id: 'type', header: 'Rule', accessorFn: (f) => (f.match_type === 'serial' ? 'Serial' : 'Spelling'), size: 100, meta: { filterVariant: 'select' } },
+    { id: 'match', header: 'Matches', accessorFn: (f) => f.match_value, size: 170,
+      cell: ({ row }) => <span className="font-mono text-[var(--text-primary)]">{row.original.match_value}</span> },
+    { id: 'target', header: 'Becomes', accessorFn: (f) => f.target_value, size: 150,
+      cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{row.original.target_value}</span> },
+    { id: 'field', header: 'Field', accessorFn: (f) => f.target_field, size: 90 },
+    { id: 'country', header: 'Country', accessorFn: (f) => f.country || 'All', size: 90 },
+    { id: 'state', header: 'State', accessorFn: (f) => (f.active ? 'On' : 'Off'), size: 80, meta: { filterVariant: 'select' } },
+    {
+      id: 'toggle', header: 'Action', size: 130, enableSorting: false, meta: { export: false, align: 'right' },
+      cell: ({ row }) => {
+        const f = row.original
+        return (
+          <button type="button" disabled={busyKey === `fact-${f.id}`} onClick={() => toggleFact(f)}
+            aria-label={`${f.active ? 'Turn off' : 'Turn on'} rule for ${f.match_value}`}
+            className="btn-secondary inline-flex min-h-[44px] items-center gap-1 px-3 text-xs disabled:opacity-50">
+            <Power size={12} /> {f.active ? 'Turn off' : 'Turn on'}
+          </button>
+        )
+      },
+    },
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [busyKey])
 
   async function applyConfirm({ matchType, matchValue, targetValue, rowCountry, key }) {
     setBusyKey(key); setError(null); setNotice(null)
@@ -110,9 +166,9 @@ export default function TyreLearningSection({ activeCountry } = {}) {
 
   return (
     <section className="card p-0 overflow-hidden">
-      <div className="flex flex-wrap items-center gap-3 px-5 py-4 border-b border-[var(--card-border)]">
-        <div className="w-9 h-9 rounded-lg bg-gray-800/60 border border-gray-700/40 flex items-center justify-center shrink-0">
-          <Brain className="w-5 h-5 text-emerald-300" />
+      <div className="flex flex-wrap items-center gap-3 px-5 py-4 border-b border-[var(--border-dim)]">
+        <div className="w-9 h-9 rounded-lg bg-[var(--surface-2)] border border-[var(--border-dim)] flex items-center justify-center shrink-0">
+          <Brain className="w-5 h-5 text-emerald-500" />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
@@ -123,26 +179,26 @@ export default function TyreLearningSection({ activeCountry } = {}) {
             Confirm a serial's brand (or fix a misspelled brand). It fills every matching row now and auto-applies to future imports. Never touches cost.
           </p>
         </div>
-        <button type="button" onClick={load} className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--card-border)] px-2.5 py-1.5 text-xs text-[var(--text-secondary)] hover:bg-gray-800/40">
+        <button type="button" onClick={load} className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-[var(--border-dim)] px-3 text-xs text-[var(--text-secondary)] hover:bg-[var(--surface-2)]">
           <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh
         </button>
       </div>
 
       <div className="p-5 space-y-5">
         {loadError && (
-          <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+          <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-400">
             <span>{loadError}</span>
-            <button type="button" onClick={load} className="inline-flex items-center gap-1 rounded-md border border-red-400/30 px-2 py-1 text-xs hover:bg-red-500/10">
+            <button type="button" onClick={load} className="inline-flex min-h-[44px] items-center gap-1 rounded-md border border-red-400/30 px-3 text-xs hover:bg-red-500/10">
               <RefreshCw size={13} /> Retry
             </button>
           </div>
         )}
-        {error && <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">{error}</div>}
+        {error && <div role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</div>}
         {notice && (
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-500/25 bg-emerald-500/5 px-3 py-2 text-sm text-emerald-300">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-500/25 bg-emerald-500/5 px-3 py-2 text-sm text-emerald-500">
             <span>{notice}</span>
             {lastBatch?.id && (
-              <button type="button" disabled={busyKey === 'undo'} onClick={onUndo} className="inline-flex items-center gap-1 rounded-md border border-emerald-400/30 px-2 py-1 text-xs hover:bg-emerald-500/10 disabled:opacity-50">
+              <button type="button" disabled={busyKey === 'undo'} onClick={onUndo} className="inline-flex min-h-[44px] items-center gap-1 rounded-md border border-emerald-400/30 px-3 text-xs hover:bg-emerald-500/10 disabled:opacity-50">
                 <Undo2 size={13} /> Undo last
               </button>
             )}
@@ -151,10 +207,10 @@ export default function TyreLearningSection({ activeCountry } = {}) {
 
         {/* summary tiles */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Tile label="Serials to fill" value={summary.serials} />
-          <Tile label="Rows to fill" value={summary.rows} />
-          <Tile label="From another row" value={summary.fromSelf} />
-          <Tile label="From master file" value={summary.fromMaster} />
+          <Tile label="Serials to fill" value={loadError ? null : summary.serials} loading={loading} />
+          <Tile label="Rows to fill" value={loadError ? null : summary.rows} loading={loading} />
+          <Tile label="From another row" value={loadError ? null : summary.fromSelf} loading={loading} />
+          <Tile label="From master file" value={loadError ? null : summary.fromMaster} loading={loading} />
         </div>
 
         {/* suggestions */}
@@ -167,57 +223,30 @@ export default function TyreLearningSection({ activeCountry } = {}) {
           ) : suggestions.length === 0 ? (
             <p className="text-sm text-[var(--text-muted)]">No recoverable brand gaps. Every blank-brand serial either has no source or is already learned.</p>
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-[var(--card-border)]">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-900/40 text-[var(--text-muted)]">
-                  <tr>
-                    <th className="px-3 py-2 text-left font-medium">Serial</th>
-                    <th className="px-3 py-2 text-left font-medium">Country</th>
-                    <th className="px-3 py-2 text-right font-medium">Rows</th>
-                    <th className="px-3 py-2 text-left font-medium">Suggested brand</th>
-                    <th className="px-3 py-2 text-left font-medium">Source</th>
-                    <th className="px-3 py-2 text-right font-medium">Confirm</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {suggestions.slice(0, 200).map((s) => {
-                    const key = `sug-${s.serialKey}`
-                    return (
-                      <tr key={key} className="border-t border-[var(--card-border)]">
-                        <td className="px-3 py-2 font-mono text-[var(--text-primary)]">{s.serialNo}</td>
-                        <td className="px-3 py-2 text-[var(--text-secondary)]">{s.country || 'N/A'}</td>
-                        <td className="px-3 py-2 text-right text-[var(--text-secondary)]">{s.rows}</td>
-                        <td className="px-3 py-2"><span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-300">{s.brand}</span></td>
-                        <td className="px-3 py-2 text-xs text-[var(--text-muted)]">{s.sourceLabel}</td>
-                        <td className="px-3 py-2 text-right">
-                          <button
-                            type="button"
-                            disabled={busyKey === key}
-                            onClick={() => applyConfirm({ matchType: 'serial', matchValue: s.serialNo, targetValue: s.brand, rowCountry: s.country, key })}
-                            className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-                          >
-                            <Check size={13} /> Confirm
-                          </button>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <EnterpriseTable
+              columns={suggestionColumns}
+              data={suggestions}
+              getRowId={(s) => `sug-${s.serialKey}`}
+              enableKeyboard={false}
+              initialPageSize={25}
+              emptyMessage="No suggestion matches this search"
+              searchPlaceholder="Search suggestions"
+              exportFileName={reportFileName('Tyre brand suggestions')}
+              reportMeta={{ title: 'Suggested brand fills' }}
+            />
           )}
         </div>
 
         {/* manual confirm */}
-        <div className="rounded-lg border border-[var(--card-border)] p-3">
+        <div className="rounded-lg border border-[var(--border-dim)] p-3">
           <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]"><Sparkles size={13} /> Teach it manually</p>
           <div className="grid gap-2 sm:grid-cols-4">
-            <select value={mType} onChange={(e) => setMType(e.target.value)} className="rounded-lg border border-[var(--card-border)] bg-[var(--input-bg)] px-3 py-2 text-sm text-[var(--text-primary)]">
+            <select value={mType} onChange={(e) => setMType(e.target.value)} aria-label="Match by" className="min-h-[44px] rounded-lg border border-[var(--border-dim)] bg-[var(--input-bg)] px-3 py-2 text-sm text-[var(--text-primary)]">
               {Object.entries(MATCH_TYPES).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select>
-            <input value={mValue} onChange={(e) => setMValue(e.target.value)} placeholder={mType === 'serial' ? 'Serial number' : 'Wrong spelling (e.g. TRAINGLE)'} className="rounded-lg border border-[var(--card-border)] bg-[var(--input-bg)] px-3 py-2 text-sm text-[var(--text-primary)]" />
-            <input value={mBrand} onChange={(e) => setMBrand(e.target.value)} list="tp-brand-suggestions" placeholder="Correct brand" className="rounded-lg border border-[var(--card-border)] bg-[var(--input-bg)] px-3 py-2 text-sm text-[var(--text-primary)]" />
-            <button type="button" disabled={busyKey === 'manual'} onClick={onManualConfirm} className="inline-flex items-center justify-center gap-1 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50">
+            <input value={mValue} onChange={(e) => setMValue(e.target.value)} placeholder={mType === 'serial' ? 'Serial number' : 'Wrong spelling (e.g. TRAINGLE)'} aria-label={mType === 'serial' ? 'Serial number' : 'Wrong spelling'} className="min-h-[44px] rounded-lg border border-[var(--border-dim)] bg-[var(--input-bg)] px-3 py-2 text-sm text-[var(--text-primary)]" />
+            <input value={mBrand} onChange={(e) => setMBrand(e.target.value)} list="tp-brand-suggestions" placeholder="Correct brand" aria-label="Correct brand" className="min-h-[44px] rounded-lg border border-[var(--border-dim)] bg-[var(--input-bg)] px-3 py-2 text-sm text-[var(--text-primary)]" />
+            <button type="button" disabled={busyKey === 'manual'} onClick={onManualConfirm} className="btn-primary inline-flex min-h-[44px] items-center justify-center gap-1 px-3 text-sm font-medium disabled:opacity-50">
               <Plus size={14} /> Confirm & learn
             </button>
           </div>
@@ -235,21 +264,17 @@ export default function TyreLearningSection({ activeCountry } = {}) {
           ) : facts.length === 0 ? (
             <p className="text-sm text-[var(--text-muted)]">No rules yet. Confirm a suggestion above to create one.</p>
           ) : (
-            <div className="space-y-1.5">
-              {facts.slice(0, 100).map((f) => (
-                <div key={f.id} className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm ${f.active ? 'border-[var(--card-border)]' : 'border-gray-700/40 opacity-60'}`}>
-                  <span className="text-[var(--text-secondary)]">
-                    <span className="text-[var(--text-muted)]">{f.match_type === 'serial' ? 'Serial' : 'Spelling'}</span>{' '}
-                    <span className="font-mono text-[var(--text-primary)]">{f.match_value}</span>{' -> '}
-                    <span className="font-medium text-[var(--text-primary)]">{f.target_value}</span>{' '}
-                    <span className="text-xs text-[var(--text-muted)]">({f.target_field}{f.country ? `, ${f.country}` : ''}{f.active ? '' : ', off'})</span>
-                  </span>
-                  <button type="button" disabled={busyKey === `fact-${f.id}`} onClick={() => toggleFact(f)} className="inline-flex items-center gap-1 rounded-md border border-[var(--card-border)] px-2 py-1 text-xs text-[var(--text-secondary)] hover:bg-gray-800/40 disabled:opacity-50">
-                    <Power size={12} /> {f.active ? 'Turn off' : 'Turn on'}
-                  </button>
-                </div>
-              ))}
-            </div>
+            <EnterpriseTable
+              columns={factColumns}
+              data={facts}
+              getRowId={(f) => String(f.id)}
+              enableKeyboard={false}
+              initialPageSize={25}
+              emptyMessage="No rule matches this search"
+              searchPlaceholder="Search rules"
+              exportFileName={reportFileName('Tyre learned rules')}
+              reportMeta={{ title: 'Learned tyre rules' }}
+            />
           )}
         </div>
       </div>
@@ -257,11 +282,11 @@ export default function TyreLearningSection({ activeCountry } = {}) {
   )
 }
 
-function Tile({ label, value }) {
+function Tile({ label, value, loading }) {
   return (
-    <div className="rounded-lg border border-[var(--card-border)] bg-gray-900/30 px-3 py-2">
+    <div className="rounded-lg border border-[var(--border-dim)] bg-[var(--surface-2)] px-3 py-2">
       <p className="text-xs text-[var(--text-muted)]">{label}</p>
-      <p className="mt-0.5 text-lg font-semibold text-[var(--text-primary)]">{Number(value || 0).toLocaleString()}</p>
+      <p className="mt-0.5 text-lg font-semibold text-[var(--text-primary)] tabular-nums">{loading ? '...' : value == null ? 'N/A' : Number(value).toLocaleString()}</p>
     </div>
   )
 }

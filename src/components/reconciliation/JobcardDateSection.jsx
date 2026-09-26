@@ -4,6 +4,7 @@ import { listJobcardMismatches, getJobcardMismatchSummary } from '../../lib/api/
 import { toUserMessage } from '../../lib/safeError'
 import { exportToExcel, reportFileName } from '../../lib/exportUtils'
 import { formatDate } from '../../lib/formatters'
+import EnterpriseTable from '../ui/EnterpriseTable'
 
 // Read-only review section for job card date mismatches. The Ramco work order
 // number encodes a month/year; when that disagrees with the actual opened_at,
@@ -94,6 +95,33 @@ export default function JobcardDateSection({ activeCountry }) {
     })
   }, [rows, country, query])
 
+  const columns = useMemo(() => {
+    const deltaOf = (r) => {
+      const jm = numOr(r, ['jobcard_month']); const jy = numOr(r, ['jobcard_year'])
+      const om = numOr(r, ['opened_month']); const oy = numOr(r, ['opened_year'])
+      if (jm == null || jy == null || om == null || oy == null) return null
+      return (jy * 12 + jm) - (oy * 12 + om)
+    }
+    return [
+      { id: 'wo', header: 'Work Order', accessorFn: (r) => pick(r, ['work_order_no']), size: 170,
+        cell: ({ row }) => <span className="font-mono font-medium text-[var(--text-primary)]">{pick(row.original, ['work_order_no'])}</span> },
+      { id: 'country', header: 'Country', accessorFn: (r) => pick(r, ['country']), size: 100 },
+      { id: 'site', header: 'Site', accessorFn: (r) => pick(r, ['site']), size: 130, meta: { filterVariant: 'select' } },
+      { id: 'encoded', header: 'Encoded', accessorFn: (r) => monthYear(numOr(r, ['jobcard_month']), numOr(r, ['jobcard_year'])), size: 110 },
+      { id: 'opened', header: 'Actual opened', accessorFn: (r) => pick(r, ['opened_at'], ''), size: 140,
+        meta: { exportValue: (r) => formatDate(pick(r, ['opened_at'], null), activeCountry || 'All') },
+        cell: ({ row }) => {
+          const opened = pick(row.original, ['opened_at'], null)
+          return <span className="tabular-nums">{opened && opened !== 'N/A' ? formatDate(opened, activeCountry || 'All') : 'N/A'}</span>
+        } },
+      { id: 'delta', header: 'Delta', accessorFn: (r) => deltaOf(r), size: 100, meta: { align: 'right' },
+        cell: ({ row }) => {
+          const d = deltaOf(row.original)
+          return <span className="tabular-nums text-amber-500">{d == null ? 'N/A' : d === 0 ? '0' : `${d > 0 ? '+' : ''}${d} mo`}</span>
+        } },
+    ]
+  }, [activeCountry])
+
   function exportRows() {
     const out = filtered.map((r) => ({
       work_order_no: pick(r, ['work_order_no']),
@@ -113,14 +141,14 @@ export default function JobcardDateSection({ activeCountry }) {
 
   return (
     <section className="card p-0 overflow-hidden">
-      <div className="flex flex-wrap items-center gap-3 px-5 py-4 border-b border-[var(--card-border)]">
-        <div className="w-9 h-9 rounded-lg bg-gray-800/60 border border-gray-700/40 flex items-center justify-center shrink-0">
-          <CalendarClock className="w-4.5 h-4.5 text-[var(--text-muted)]" />
+      <div className="flex flex-wrap items-center gap-3 px-5 py-4 border-b border-[var(--border-dim)]">
+        <div className="w-9 h-9 rounded-lg bg-[var(--surface-2)] border border-[var(--border-dim)] flex items-center justify-center shrink-0">
+          <CalendarClock className="w-4 h-4 text-[var(--text-muted)]" />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold text-[var(--text-primary)] truncate">Job card date mismatches</h2>
-            <span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-800/70 border border-gray-700/50 text-[var(--text-secondary)]">
+            <span className="text-[11px] px-2 py-0.5 rounded-full bg-[var(--surface-2)] border border-[var(--border-dim)] text-[var(--text-secondary)]">
               {loading ? '...' : total}
             </span>
           </div>
@@ -130,16 +158,18 @@ export default function JobcardDateSection({ activeCountry }) {
         </div>
         <div className="flex items-center gap-2">
           <button
+            type="button"
             onClick={load}
             disabled={loading}
-            className="btn-secondary text-xs flex items-center gap-1.5 disabled:opacity-40"
+            className="btn-secondary min-h-[44px] text-xs flex items-center gap-1.5 disabled:opacity-40"
           >
             <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Refresh
           </button>
           {!loading && !error && filtered.length > 0 && (
             <button
+              type="button"
               onClick={exportRows}
-              className="btn-secondary text-xs flex items-center gap-1.5"
+              className="btn-secondary min-h-[44px] text-xs flex items-center gap-1.5"
             >
               <Download size={13} /> Export
             </button>
@@ -149,13 +179,13 @@ export default function JobcardDateSection({ activeCountry }) {
 
       <div className="px-5 py-4">
         {error ? (
-          <div className="rounded-lg border border-red-800/50 bg-red-950/30 px-4 py-3 flex items-start gap-3">
+          <div role="alert" className="rounded-lg border border-red-800/50 bg-red-950/20 px-4 py-3 flex flex-wrap items-start gap-3">
             <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-red-200">Could not load this section</p>
-              <p className="text-xs text-red-300/80 mt-0.5 break-words">{error}</p>
+              <p className="text-sm font-medium text-[var(--text-primary)]">Could not load this section</p>
+              <p className="text-xs text-[var(--text-secondary)] mt-0.5 break-words">{error}</p>
             </div>
-            <button onClick={load} className="btn-secondary text-xs flex items-center gap-1.5 shrink-0">
+            <button type="button" onClick={load} className="btn-secondary min-h-[44px] text-xs flex items-center gap-1.5 shrink-0">
               <RefreshCw size={13} /> Retry
             </button>
           </div>
@@ -178,11 +208,13 @@ export default function JobcardDateSection({ activeCountry }) {
             {summary.length > 0 && (
               <div className="flex flex-wrap gap-2 mb-4">
                 <button
+                  type="button"
+                  aria-pressed={country === 'All'}
                   onClick={() => setCountry('All')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
+                  className={`flex items-center gap-1.5 px-3 min-h-[44px] rounded-lg text-sm font-medium border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${
                     country === 'All'
-                      ? 'bg-[var(--surface-3)] text-[var(--text-primary)] border-gray-500'
-                      : 'bg-gray-800/50 text-[var(--text-secondary)] border-gray-700/50 hover:text-[var(--text-primary)]'
+                      ? 'bg-[var(--surface-3)] text-[var(--text-primary)] border-[var(--text-muted)]'
+                      : 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-dim)] hover:text-[var(--text-primary)]'
                   }`}
                 >
                   <span className="text-base font-bold text-[var(--text-primary)]">{summaryTotal.toLocaleString()}</span>
@@ -195,11 +227,13 @@ export default function JobcardDateSection({ activeCountry }) {
                   return (
                     <button
                       key={c}
+                      type="button"
+                      aria-pressed={active}
                       onClick={() => setCountry(active ? 'All' : c)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
+                      className={`flex items-center gap-1.5 px-3 min-h-[44px] rounded-lg text-sm font-medium border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${
                         active
-                          ? 'bg-[var(--surface-3)] text-[var(--text-primary)] border-gray-500'
-                          : 'bg-gray-800/50 text-[var(--text-secondary)] border-gray-700/50 hover:text-[var(--text-primary)]'
+                          ? 'bg-[var(--surface-3)] text-[var(--text-primary)] border-[var(--text-muted)]'
+                          : 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-dim)] hover:text-[var(--text-primary)]'
                       }`}
                     >
                       <span className="text-base font-bold text-amber-400">{n.toLocaleString()}</span>
@@ -215,15 +249,17 @@ export default function JobcardDateSection({ activeCountry }) {
               <div className="relative">
                 <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
                 <input
-                  className="input text-sm pl-7 pr-3 py-1.5 w-56"
+                  className="input text-sm pl-7 pr-3 min-h-[44px] w-56 max-w-full"
                   placeholder="Filter by work order..."
+                  aria-label="Filter mismatches by work order"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                 />
               </div>
               {countries.length > 1 && (
                 <select
-                  className="input text-sm py-1.5"
+                  aria-label="Filter mismatches by country"
+                  className="input text-sm min-h-[44px]"
                   value={country}
                   onChange={(e) => setCountry(e.target.value)}
                 >
@@ -237,7 +273,7 @@ export default function JobcardDateSection({ activeCountry }) {
             </div>
 
             {hitLimit && (
-              <p className="text-[11px] text-amber-400/90 mb-3 flex items-center gap-1.5">
+              <p className="text-[11px] text-amber-500 mb-3 flex items-center gap-1.5">
                 <AlertTriangle size={12} /> Showing the first {ROW_LIMIT.toLocaleString()} of {summaryTotal.toLocaleString()} mismatches. Filter by country to narrow the list.
               </p>
             )}
@@ -246,62 +282,24 @@ export default function JobcardDateSection({ activeCountry }) {
               <div className="text-center py-10">
                 <p className="text-sm text-[var(--text-secondary)]">No mismatches match the current filter.</p>
                 <button
+                  type="button"
                   onClick={() => { setCountry('All'); setQuery('') }}
-                  className="text-xs text-[var(--text-muted)] hover:text-[var(--text-secondary)] underline mt-1"
+                  className="text-xs min-h-[44px] px-2 text-[var(--text-muted)] hover:text-[var(--text-secondary)] underline mt-1"
                 >
                   Clear filters
                 </button>
               </div>
             ) : (
-              <div className="overflow-x-auto rounded-lg border border-[var(--card-border)]">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-[11px] uppercase tracking-wide text-[var(--text-muted)] border-b border-[var(--card-border)] bg-white/[0.02]">
-                      <th className="px-4 py-3 font-medium">Work Order</th>
-                      <th className="px-4 py-3 font-medium">Country</th>
-                      <th className="px-4 py-3 font-medium">Site</th>
-                      <th className="px-4 py-3 font-medium">Encoded</th>
-                      <th className="px-4 py-3 font-medium">Actual opened</th>
-                      <th className="px-4 py-3 font-medium text-right">Delta</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.map((r, i) => {
-                      const wo = pick(r, ['work_order_no'])
-                      const c = pick(r, ['country'])
-                      const site = pick(r, ['site'])
-                      const jm = numOr(r, ['jobcard_month'])
-                      const jy = numOr(r, ['jobcard_year'])
-                      const om = numOr(r, ['opened_month'])
-                      const oy = numOr(r, ['opened_year'])
-                      const encoded = monthYear(jm, jy)
-                      const opened = pick(r, ['opened_at'], null)
-                      const openedLabel = opened && opened !== 'N/A'
-                        ? formatDate(opened, activeCountry || 'All')
-                        : 'N/A'
-                      // Delta hint: months between the encoded and actual period.
-                      let delta = 'N/A'
-                      if (jm != null && jy != null && om != null && oy != null) {
-                        const d = (jy * 12 + jm) - (oy * 12 + om)
-                        delta = d === 0 ? '0' : `${d > 0 ? '+' : ''}${d} mo`
-                      }
-                      return (
-                        <tr
-                          key={pick(r, ['id'], `r${i}`)}
-                          className="border-b border-[var(--card-border)]/60 hover:bg-white/[0.02]"
-                        >
-                          <td className="px-4 py-3 font-medium text-[var(--text-primary)] font-mono">{wo}</td>
-                          <td className="px-4 py-3 text-[var(--text-secondary)]">{c}</td>
-                          <td className="px-4 py-3 text-[var(--text-secondary)]">{site}</td>
-                          <td className="px-4 py-3 text-[var(--text-secondary)] tabular-nums">{encoded}</td>
-                          <td className="px-4 py-3 text-[var(--text-secondary)] tabular-nums">{openedLabel}</td>
-                          <td className="px-4 py-3 text-right text-amber-400 tabular-nums">{delta}</td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <EnterpriseTable
+                columns={columns}
+                data={filtered}
+                getRowId={(r, i) => String(pick(r, ['id'], `r${i}`))}
+                enableKeyboard={false}
+                enableGlobalFilter={false}
+                emptyMessage="No mismatches match the current filter."
+                exportFileName={reportFileName('TyrePulse Job Card Date Mismatches')}
+                reportMeta={{ title: 'Job card date mismatches' }}
+              />
             )}
           </>
         )}

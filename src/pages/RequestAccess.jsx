@@ -11,17 +11,22 @@
  * only explain a refusal before the round trip.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { KeyRound, Send, RefreshCcw, XCircle, Search, AlertTriangle, Check, Timer } from 'lucide-react'
+import { KeyRound, Send, RefreshCcw, XCircle, Search, AlertTriangle, Check, Timer, Download } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import { useAuth } from '../contexts/AuthContext'
 import { requestElevation, cancelElevation, listMyElevations } from '../lib/api/jitElevation'
 import {
   JIT_CAPABILITIES, DURATION_PRESETS, MIN_MINUTES, MAX_MINUTES, MIN_REASON,
-  validateRequest, formatMinutes, formatRemaining, remainingMs,
+  validateRequest, formatMinutes,
 } from '../lib/jitElevation'
 import {
-  moduleOptions, requesterStatus, REQUESTER_STATUS_META, canCancel, summarizeMine, ineligibleReason,
+  moduleOptions, requesterStatus, REQUESTER_STATUS_META, canCancel, ineligibleReason,
 } from '../lib/requestAccess'
+import {
+  requestKpis, formatDecisionTime, remainingLabel, filterRequests, statusCounts,
+  exportRows, EXPORT_COLUMNS, EXPORT_HEADERS, decisionMinutes,
+} from '../lib/requestAccessAnalytics'
+import { exportToExcel, reportFileName } from '../lib/exportUtils'
 import { REGISTRY_LABEL } from '../lib/moduleCatalog'
 import { toUserMessage } from '../lib/safeError'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
@@ -53,6 +58,8 @@ const STATUS_FILTERS = [
   { key: 'denied', label: 'Denied' },
   { key: 'expired', label: 'Expired' },
   { key: 'revoked', label: 'Revoked' },
+  { key: 'cancelled', label: 'Cancelled' },
+  { key: 'lapsed', label: 'Not decided in time' },
 ]
 
 function StatusPill({ status }) {
@@ -140,16 +147,40 @@ export default function RequestAccess() {
     }
   }
 
-  const summary = useMemo(() => summarizeMine(rows, now), [rows, now])
-  const visible = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return rows.filter((r) => {
-      if (statusFilter && requesterStatus(r, now) !== statusFilter) return false
-      if (!q) return true
-      return [r.module_key, moduleLabel(r.module_key), r.capability, r.reason, r.decision_note]
-        .some((v) => String(v || '').toLowerCase().includes(q))
-    })
-  }, [rows, search, statusFilter, now])
+  const labels = useMemo(() => ({ moduleLabel, capLabel }), [])
+  const kpis = useMemo(() => requestKpis(rows, now), [rows, now])
+  const counts = useMemo(() => statusCounts(rows, now), [rows, now])
+  const visible = useMemo(
+    () => filterRequests(rows, { status: statusFilter, search }, now, labels),
+    [rows, statusFilter, search, now, labels],
+  )
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState('')
+
+  async function exportExcel() {
+    if (!visible.length) return
+    setExporting(true); setExportError('')
+    try {
+      await exportToExcel(
+        exportRows(visible, now, labels), EXPORT_COLUMNS, EXPORT_HEADERS,
+        reportFileName('My access requests', new Date(now).toISOString().slice(0, 10)), 'Requests',
+      )
+    } catch (err) {
+      setExportError(toUserMessage(err, 'Could not export your requests.'))
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const kpiTiles = [
+    ['Waiting', kpis.pending, 'For a super admin to decide'],
+    ['Active now', kpis.active, 'Access currently running'],
+    ['Approved', kpis.approved, kpis.approvalRate === null ? 'No decisions yet' : `${kpis.approvalRate}% of decided requests`],
+    ['Denied', kpis.denied, 'Refused by a super admin'],
+    ['Expired', kpis.expired, 'Ran to the end of the window'],
+    ['Avg decision time', formatDecisionTime(kpis.avgDecisionMinutes),
+      kpis.decisionSample ? `Across ${kpis.decisionSample} decided request${kpis.decisionSample === 1 ? '' : 's'}` : 'Nothing decided to measure'],
+  ]
 
   const fieldErr = (k) => (touched && errors[k] ? <span className="text-[11px] text-amber-400">{errors[k]}</span> : null)
 
@@ -166,16 +197,14 @@ export default function RequestAccess() {
         )}
       />
 
-      <div className="grid gap-4 md:grid-cols-4">
-        {[
-          ['Waiting', summary.pending],
-          ['Active now', summary.active],
-          ['Denied', summary.denied],
-          ['Ended', summary.ended],
-        ].map(([label, value]) => (
+      <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        {kpiTiles.map(([label, value, hint]) => (
           <div key={label} className="card">
             <div className={labelCls}>{label}</div>
-            <div className="mt-1 text-2xl font-semibold text-[var(--text-primary)]">{loading ? 'N/A' : value}</div>
+            <div className="mt-1 text-2xl font-semibold text-[var(--text-primary)]">
+              {loading || loadError ? 'N/A' : value}
+            </div>
+            <div className="mt-0.5 text-[11px] text-[var(--text-tertiary)]">{loading ? 'Loading' : hint}</div>
           </div>
         ))}
       </div>
@@ -274,10 +303,24 @@ export default function RequestAccess() {
             </div>
             <select className={`${inputCls} w-36`} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
               aria-label="Filter by status">
-              {STATUS_FILTERS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+              {STATUS_FILTERS.map((s) => (
+                <option key={s.key} value={s.key}>
+                  {s.key ? `${s.label} (${counts[s.key] || 0})` : `${s.label} (${rows.length})`}
+                </option>
+              ))}
             </select>
+            <button type="button" className="btn-ghost" onClick={exportExcel}
+              disabled={loading || exporting || visible.length === 0}>
+              <Download size={14} /> {exporting ? 'Exporting' : 'Excel'}
+            </button>
           </div>
         </div>
+        {exportError && <div className="text-sm text-red-400">{exportError}</div>}
+        {!loading && !loadError && rows.length > 0 && (
+          <div className="text-[11px] text-[var(--text-tertiary)]">
+            Showing {visible.length} of {rows.length} request{rows.length === 1 ? '' : 's'}
+          </div>
+        )}
 
         {loading ? (
           <div className="py-8 text-center text-sm text-[var(--text-tertiary)]">Loading your requests</div>
@@ -291,7 +334,12 @@ export default function RequestAccess() {
             You have not requested temporary access yet.
           </div>
         ) : visible.length === 0 ? (
-          <div className="py-8 text-center text-sm text-[var(--text-tertiary)]">No requests match these filters.</div>
+          <div className="flex flex-col items-center gap-2 py-8 text-center text-sm text-[var(--text-tertiary)]">
+            No requests match these filters.
+            <button type="button" className="btn-ghost" onClick={() => { setSearch(''); setStatusFilter('') }}>
+              Clear filters
+            </button>
+          </div>
         ) : (
           <EnterpriseTable
             data={visible}
@@ -308,9 +356,9 @@ export default function RequestAccess() {
                   return (
                     <>
                       {formatMinutes(r.granted_minutes ?? r.requested_minutes)}
-                      {requesterStatus(r, now) === 'active' && (
+                      {remainingLabel(r, now) && (
                         <div className="mt-0.5 flex items-center gap-1 text-[11px] text-emerald-400">
-                          <Timer size={12} /> {formatRemaining(remainingMs(r, now))} left
+                          <Timer size={12} /> {remainingLabel(r, now)} left
                         </div>
                       )}
                     </>
@@ -320,6 +368,8 @@ export default function RequestAccess() {
                 cell: ({ getValue }) => <StatusPill status={getValue()} /> },
               { id: 'requested', header: 'Requested', accessorFn: (r) => r.created_at,
                 cell: ({ getValue }) => <span className="whitespace-nowrap">{fmtDate(getValue())}</span> },
+              { id: 'decision_time', header: 'Decision time', accessorFn: (r) => decisionMinutes(r) ?? -1,
+                cell: ({ row }) => <span className="whitespace-nowrap">{formatDecisionTime(decisionMinutes(row.original))}</span> },
               { id: 'reason', header: 'Reason / decision', accessorFn: (r) => r.reason, enableSorting: false,
                 cell: ({ row }) => {
                   const r = row.original

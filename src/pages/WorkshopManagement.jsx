@@ -1,24 +1,27 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { applyCountry } from '../lib/countryFilter'
 import { fetchAllPages } from '../lib/fetchAll'
 import { toUserMessage } from '../lib/safeError'
 import useLatestRequest from '../lib/useLatestRequest'
 import { useSettings } from '../contexts/SettingsContext'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { getMaintenanceSnapshot } from '../lib/api/maintenanceAnalytics'
-import { WO_STATUSES, normalizeWoStatus, isClosedWoStatus } from '../lib/workOrderStatus'
+import { WO_STATUSES, normalizeWoStatus } from '../lib/workOrderStatus'
+import {
+  WORK_TYPES, filterJobs, workshopKpis, sitePerformance, technicianPerformance,
+  workTypeCounts, monthlySeries, costSplit,
+} from '../lib/workshopManagementAnalytics'
+import { colorAt, withAlpha } from '../lib/reportColors'
 import { formatDate } from '../lib/formatters'
 import PageHeader from '../components/ui/PageHeader'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 import {
   Wrench, ClipboardList, Clock, CheckCircle, DollarSign, AlertTriangle,
-  TrendingUp, TrendingDown, Search, Filter, X, Download, RefreshCw,
-  FileSpreadsheet, FileText, ChevronDown,
-  Calendar, User, Building2, Zap, BarChart2, PieChart, Activity,
-  Package, Star, Award, Target, Maximize2, Loader2,
+  Search, Filter, X, RefreshCw, FileSpreadsheet, FileText,
+  Calendar, User, Building2, BarChart2, Package, Target,
 } from 'lucide-react'
 import { SkeletonTable } from '../components/ui/Skeleton'
 import {
@@ -32,48 +35,45 @@ ChartJS.register(
   ArcElement, Title, Tooltip, Legend, Filler,
 )
 
-// ── Palette ────────────────────────────────────────────────────────────────────
-const PALETTE = [
-  '#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6',
-  '#ec4899','#14b8a6','#f97316','#6366f1','#84cc16',
-]
-
+// Chart chrome reads theme tokens (resolved per theme by chartVarPlugin), so the
+// charts stay legible in light and dark mode. Series colours come from the
+// report palette (reportColors) so they follow the super-admin theme.
+const LEGEND = { labels: { color: 'var(--text-muted)', font: { size: 11 }, boxWidth: 12 } }
 const CHART_DEFAULTS = {
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
-    legend: { labels: { color: '#9ca3af', font: { size: 11 }, boxWidth: 12 } },
+    legend: LEGEND,
     tooltip: {
       backgroundColor: 'var(--panel-2)',
-      titleColor: '#f3f4f6',
-      bodyColor: '#9ca3af',
-      borderColor: 'rgba(59,130,246,0.3)',
+      titleColor: 'var(--text-primary)',
+      bodyColor: 'var(--text-secondary)',
+      borderColor: 'var(--border-subtle)',
       borderWidth: 1,
     },
   },
   scales: {
-    x: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color:'var(--text-muted)' } },
-    y: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color:'var(--text-muted)' } },
+    x: { ticks: { color: 'var(--text-muted)', font: { size: 11 } }, grid: { color: 'var(--panel-2)' } },
+    y: { beginAtZero: true, ticks: { color: 'var(--text-muted)', font: { size: 11 } }, grid: { color: 'var(--panel-2)' } },
   },
 }
-
+const STACKED = {
+  ...CHART_DEFAULTS,
+  scales: {
+    x: { ...CHART_DEFAULTS.scales.x, stacked: true },
+    y: { ...CHART_DEFAULTS.scales.y, stacked: true },
+  },
+}
 const NO_SCALE = {
   ...CHART_DEFAULTS,
   scales: undefined,
-  plugins: {
-    ...CHART_DEFAULTS.plugins,
-    legend: { position: 'right', labels: { color: '#9ca3af', font: { size: 11 }, boxWidth: 12, padding: 12 } },
-  },
+  plugins: { ...CHART_DEFAULTS.plugins, legend: { position: 'right', labels: { ...LEGEND.labels, padding: 12 } } },
 }
 
-const WORK_TYPES = ['Tyre Change','Inspection','Repair','Rotation','Balancing','Alignment','Retread','Other']
 // Status vocabulary comes from workOrderStatus.js (the single source of truth).
 // 'Overdue' is a derived display bucket, never a stored status, so the filter
 // omits it - same rule as the Work Orders page.
 const STATUSES   = WO_STATUSES.filter(s => s !== 'Overdue')
-// Canonical non-terminal statuses, derived so this can never drift from the
-// vocabulary. Blank / unrecognised values are not counted as open.
-const OPEN_STATUSES = new Set(WO_STATUSES.filter(s => !isClosedWoStatus(s)))
 const PRIORITIES = ['Critical','High','Medium','Low']
 
 // work_orders is one of the largest tables in the system (millions of rows at
@@ -84,7 +84,7 @@ const WORK_ORDER_CEILING = 20000
 const DEFAULT_WINDOW_MONTHS = 12
 
 // First day of the month DEFAULT_WINDOW_MONTHS-1 back, so the default window
-// lines up exactly with the last12Months() chart buckets (full coverage, no
+// lines up exactly with the 12-month chart buckets (full coverage, no
 // half-month at the edge). Returns a YYYY-MM-DD string.
 function defaultWindowFrom() {
   const d = new Date()
@@ -99,12 +99,9 @@ function windowFromLabel(iso) {
   return d.toLocaleDateString('en', { month: 'short', year: 'numeric' })
 }
 
-/** True when a job is in a canonical non-terminal (still open) state. */
-const isOpenJob = (o) => OPEN_STATUSES.has(normalizeWoStatus(o?.status))
-
-// ── Helpers ────────────────────────────────────────────────────────────────────
+// ── Formatters (honest: unmeasurable renders N/A, never a fabricated 0) ─────────
 function fmtCurrency(v, currency) {
-  if (v == null || !isFinite(v)) return `${currency} 0`
+  if (v == null || !isFinite(v)) return 'N/A'
   if (Math.abs(v) >= 1_000_000) return `${currency} ${(v / 1_000_000).toFixed(2)}M`
   if (Math.abs(v) >= 1_000) return `${currency} ${(v / 1_000).toFixed(1)}K`
   return `${currency} ${Math.round(v).toLocaleString()}`
@@ -117,96 +114,62 @@ function fmtHours(h) {
 }
 
 function fmtPct(v) {
-  if (v == null || !isFinite(v)) return '0.0%'
+  if (v == null || !isFinite(v)) return 'N/A'
   return `${v.toFixed(1)}%`
 }
 
-function monthKey(d) {
-  if (!d) return null
-  const dt = new Date(d)
-  if (isNaN(dt)) return null
-  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`
+const fmtDay = (v) => (v ? formatDate(v) : 'N/A')
+
+// Semantic tones. Status carries its label text as well, so colour is never the
+// only signal.
+const TONE = {
+  good:    'bg-green-500/15 text-green-400 border-green-500/30',
+  info:    'bg-blue-500/15 text-blue-400 border-blue-500/30',
+  warning: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
+  orange:  'bg-orange-500/15 text-orange-400 border-orange-500/30',
+  danger:  'bg-red-500/15 text-red-400 border-red-500/30',
+  purple:  'bg-purple-500/15 text-purple-400 border-purple-500/30',
+  quiet:   'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)]',
 }
 
-function monthLabel(key) {
-  if (!key) return ''
-  const [y, m] = key.split('-')
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-  return `${months[parseInt(m, 10) - 1]} ${y}`
+// Keyed on the canonical vocabulary so every stored status gets a meaningful tone.
+const STATUS_TONE = {
+  'New': 'info',
+  'Awaiting Assignment': 'info',
+  'Assigned': 'info',
+  'In Progress': 'warning',
+  'Waiting for Parts': 'orange',
+  'Waiting for Approval': 'warning',
+  'Quality Inspection': 'purple',
+  'Completed': 'good',
+  'Overdue': 'danger',
+  'Cancelled': 'quiet',
+  'On Hold': 'quiet',
+}
+const PRIORITY_TONE = { critical: 'danger', high: 'orange', medium: 'warning', low: 'quiet' }
+
+function Pill({ tone = 'quiet', children }) {
+  return <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium border whitespace-nowrap ${TONE[tone] || TONE.quiet}`}>{children}</span>
 }
 
-function last12Months() {
-  const keys = []
-  const now = new Date()
-  for (let i = 11; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-    keys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
-  }
-  return keys
+function scoreTone(s) {
+  if (s >= 80) return 'good'
+  if (s >= 60) return 'warning'
+  if (s >= 40) return 'orange'
+  return 'danger'
 }
 
-function turnaroundHours(row) {
-  if (!row.created_at || !row.completed_at) return null
-  const diff = new Date(row.completed_at) - new Date(row.created_at)
-  if (diff < 0) return null
-  return diff / 3_600_000
-}
-
-function isOnTime(row) {
-  if (!row.completed_at || !row.scheduled_date) return null
-  return new Date(row.completed_at) <= new Date(row.scheduled_date)
-}
-
-function scoreColor(s) {
-  if (s >= 80) return 'text-green-400'
-  if (s >= 60) return 'text-yellow-400'
-  if (s >= 40) return 'text-orange-400'
-  return 'text-red-400'
-}
-
-function scoreBg(s) {
-  if (s >= 80) return 'bg-green-500/20 border-green-500/30'
-  if (s >= 60) return 'bg-yellow-500/20 border-yellow-500/30'
-  if (s >= 40) return 'bg-orange-500/20 border-orange-500/30'
-  return 'bg-red-500/20 border-red-500/30'
-}
-
-// Keyed on the canonical vocabulary so every stored status gets a meaningful
-// colour instead of all the newer ones collapsing into the grey default.
-const STATUS_BADGE_CLASS = {
-  'New':                  'bg-blue-500/20 text-blue-400 border-blue-500/30',
-  'Awaiting Assignment':  'bg-sky-500/20 text-sky-400 border-sky-500/30',
-  'Assigned':             'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
-  'In Progress':          'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
-  'Waiting for Parts':    'bg-orange-500/20 text-orange-400 border-orange-500/30',
-  'Waiting for Approval': 'bg-amber-500/20 text-amber-400 border-amber-500/30',
-  'Quality Inspection':   'bg-purple-500/20 text-purple-400 border-purple-500/30',
-  'Completed':            'bg-green-500/20 text-green-400 border-green-500/30',
-  'Overdue':              'bg-red-500/20 text-red-400 border-red-500/30',
-  'Cancelled':            'bg-gray-500/20 text-[var(--text-muted)] border-gray-500/30',
-  'On Hold':              'bg-gray-500/20 text-[var(--text-muted)] border-gray-500/30',
-}
-
-function statusBadgeClass(status) {
-  return STATUS_BADGE_CLASS[normalizeWoStatus(status)]
-    || 'bg-gray-500/20 text-[var(--text-muted)] border-gray-500/30'
-}
-
-function priorityBadgeClass(priority) {
-  switch ((priority || '').toLowerCase()) {
-    case 'critical': return 'bg-red-500/20 text-red-400 border-red-500/30'
-    case 'high':     return 'bg-orange-500/20 text-orange-400 border-orange-500/30'
-    case 'medium':   return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
-    case 'low':      return 'bg-gray-500/20 text-[var(--text-muted)] border-gray-500/30'
-    default:         return 'bg-gray-500/20 text-[var(--text-muted)] border-gray-500/30'
-  }
-}
-
-function ratingBadge(rate) {
-  if (rate >= 95) return { label: 'Excellent', cls: 'bg-green-500/20 text-green-400 border-green-500/30' }
-  if (rate >= 85) return { label: 'Good',      cls: 'bg-blue-500/20 text-blue-400 border-blue-500/30' }
-  if (rate >= 70) return { label: 'Average',   cls: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' }
-  return               { label: 'Needs Improvement', cls: 'bg-red-500/20 text-red-400 border-red-500/30' }
+function RateBar({ value, good = 80, fair = 60 }) {
+  if (value == null) return <span className="text-[var(--text-muted)] text-xs">N/A</span>
+  const cls = value >= good ? 'bg-green-500' : value >= fair ? 'bg-yellow-500' : 'bg-red-500'
+  return (
+    <div className="flex items-center gap-2" role="img" aria-label={fmtPct(value)}>
+      <div className="flex-1 bg-[var(--input-bg)] rounded-full h-1.5 min-w-[60px]" aria-hidden="true">
+        <div className={`h-1.5 rounded-full ${cls}`} style={{ width: `${Math.min(value, 100)}%` }} />
+      </div>
+      <span className="text-[var(--text-secondary)] text-xs tabular-nums">{fmtPct(value)}</span>
+    </div>
+  )
 }
 
 function applyDatePreset(days) {
@@ -218,59 +181,54 @@ function applyDatePreset(days) {
 }
 
 // ── KPI Card ───────────────────────────────────────────────────────────────────
-function KpiCard({ icon: Icon, label, value, sub, color = 'blue', delta }) {
-  const colorMap = {
-    blue:   { ring: 'ring-blue-500/20',   bg: 'bg-blue-500/10',   text: 'text-blue-400'   },
-    green:  { ring: 'ring-green-500/20',  bg: 'bg-green-500/10',  text: 'text-green-400'  },
-    yellow: { ring: 'ring-yellow-500/20', bg: 'bg-yellow-500/10', text: 'text-yellow-400' },
-    orange: { ring: 'ring-orange-500/20', bg: 'bg-orange-500/10', text: 'text-orange-400' },
-    red:    { ring: 'ring-red-500/20',    bg: 'bg-red-500/10',    text: 'text-red-400'    },
-    purple: { ring: 'ring-purple-500/20', bg: 'bg-purple-500/10', text: 'text-purple-400' },
-  }
-  const c = colorMap[color] || colorMap.blue
+const KPI_ACCENT = {
+  blue: 'text-blue-400 bg-blue-500/10', green: 'text-green-400 bg-green-500/10',
+  yellow: 'text-yellow-400 bg-yellow-500/10', orange: 'text-orange-400 bg-orange-500/10',
+  red: 'text-red-400 bg-red-500/10', purple: 'text-purple-400 bg-purple-500/10',
+}
+function KpiCard({ icon: Icon, label, value, sub, color = 'blue' }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      className={`bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5 ring-1 ${c.ring} flex flex-col gap-3`}
-    >
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-[var(--text-muted)] uppercase tracking-wider font-medium">{label}</span>
-        <div className={`${c.bg} p-2 rounded-lg`}>
-          <Icon className={`w-4 h-4 ${c.text}`} />
-        </div>
+    <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4 flex flex-col gap-2 min-w-0">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs text-[var(--text-muted)] uppercase tracking-wider font-medium truncate">{label}</span>
+        <span className={`p-2 rounded-lg shrink-0 ${KPI_ACCENT[color] || KPI_ACCENT.blue}`} aria-hidden="true">
+          <Icon className="w-4 h-4" />
+        </span>
       </div>
-      <div className="text-2xl font-bold text-[var(--text-primary)]">{value}</div>
-      {(sub || delta != null) && (
-        <div className="flex items-center gap-2 text-xs">
-          {sub && <span className="text-[var(--text-muted)]">{sub}</span>}
-          {delta != null && (
-            <span className={delta >= 0 ? 'text-green-400 flex items-center gap-0.5' : 'text-red-400 flex items-center gap-0.5'}>
-              {delta >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-              {Math.abs(delta).toFixed(1)}%
-            </span>
-          )}
-        </div>
-      )}
-    </motion.div>
+      <div className="text-2xl font-bold text-[var(--text-primary)] tabular-nums">{value}</div>
+      {sub && <div className="text-xs text-[var(--text-muted)]">{sub}</div>}
+    </div>
   )
 }
 
 // ── Chart Card ─────────────────────────────────────────────────────────────────
-function ChartCard({ title, subtitle, children, height = 260, action }) {
+function ChartCard({ title, subtitle, children, height = 260, empty, emptyText = 'No data for the selected filters.', summary }) {
   return (
-    <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
-      <div className="flex items-start justify-between mb-4">
-        <div>
-          <h3 className="text-sm font-semibold text-[var(--text-primary)]">{title}</h3>
-          {subtitle && <p className="text-xs text-[var(--text-muted)] mt-0.5">{subtitle}</p>}
-        </div>
-        {action}
+    <section className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4 sm:p-5 min-w-0">
+      <div className="mb-4">
+        <h3 className="text-sm font-semibold text-[var(--text-primary)]">{title}</h3>
+        {subtitle && <p className="text-xs text-[var(--text-muted)] mt-0.5">{subtitle}</p>}
       </div>
-      <div style={{ height }}>{children}</div>
-    </div>
+      <div style={{ height }} role="img" aria-label={summary || title}>
+        {empty
+          ? <div className="h-full flex items-center justify-center text-[var(--text-muted)] text-sm text-center px-4">{emptyText}</div>
+          : children}
+      </div>
+    </section>
   )
 }
+
+const btnCls = 'inline-flex items-center gap-1.5 px-3 min-h-[44px] rounded-lg bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] text-[var(--text-secondary)] text-sm transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500'
+const fieldCls = 'w-full min-h-[44px] px-3 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500/40'
+const labelCls = 'block text-[11px] font-medium text-[var(--text-muted)] mb-1'
+
+const TABS = [
+  { id: 'overview', label: 'Overview', icon: BarChart2 },
+  { id: 'jobs', label: 'Jobs Table', icon: ClipboardList },
+  { id: 'sites', label: 'Site Performance', icon: Building2 },
+  { id: 'technicians', label: 'Technicians', icon: User },
+  { id: 'costs', label: 'Cost Analysis', icon: DollarSign },
+]
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function WorkshopManagement() {
@@ -398,234 +356,88 @@ export default function WorkshopManagement() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  // ── Derived data ─────────────────────────────────────────────────────────────
-  const now  = new Date()
-  const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 
+  // ── Derived data (all maths lives in workshopManagementAnalytics) ─────────────
   // Status filter, applied on the canonical value. Everything downstream reads
   // `orders`, so the filter narrows the KPIs, charts and tables exactly as the
   // server-side filter used to.
-  const orders = useMemo(
-    () => (status ? allOrders.filter(o => o.status === status) : allOrders),
-    [allOrders, status],
+  const orders = useMemo(() => filterJobs(allOrders, { status }), [allOrders, status])
+
+  const filteredOrders = useMemo(
+    () => filterJobs(orders, { techSearch, search }),
+    [orders, techSearch, search],
   )
 
-  const filteredOrders = useMemo(() => {
-    return orders.filter(o => {
-      if (techSearch && !(o.assigned_to || '').toLowerCase().includes(techSearch.toLowerCase())) return false
-      if (search) {
-        const q = search.toLowerCase()
-        return (
-          (o.work_order_no || '').toLowerCase().includes(q) ||
-          (o.asset_no || '').toLowerCase().includes(q) ||
-          (o.site || '').toLowerCase().includes(q) ||
-          (o.assigned_to || '').toLowerCase().includes(q)
-        )
-      }
-      return true
-    })
-  }, [orders, techSearch, search])
-
-  // KPIs
-  const kpis = useMemo(() => {
-    const thisMonthOrders = orders.filter(o => monthKey(o.created_at) === thisMonth)
-    const completed = orders.filter(o => o.status === 'Completed')
-    const openJobs  = orders.filter(isOpenJob)
-
-    const taTimes = completed.map(turnaroundHours).filter(h => h != null)
-    const avgTA   = taTimes.length ? taTimes.reduce((a, b) => a + b, 0) / taTimes.length : null
-
-    const completionRate = orders.length ? (completed.length / orders.length) * 100 : 0
-
-    const totalCost = orders.reduce((s, o) => s + (o.total_cost || 0), 0)
-
-    const withScheduled = completed.filter(o => o.scheduled_date)
-    const onTimeCount   = withScheduled.filter(isOnTime).length
-    const onTimePct     = withScheduled.length ? (onTimeCount / withScheduled.length) * 100 : null
-
-    return {
-      totalThisMonth: thisMonthOrders.length,
-      avgTA,
-      completionRate,
-      totalCost,
-      openJobs: openJobs.length,
-      onTimePct,
-    }
-  }, [orders, thisMonth])
+  const kpis = useMemo(() => workshopKpis(orders, new Date()), [orders])
 
   // Total Cost and Open Jobs are supplied identically by the server aggregate
   // (sum of total_cost, and the open-job count) over the full selection, so we
   // read them from the RPC instead of the capped client rows. The RPC cannot
   // apply the work-type / priority / status filters, so when any of those is
   // active we fall back to the (filter-respecting) client figures.
-  const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : null)
+  const num = (v) => (v != null && Number.isFinite(Number(v)) ? Number(v) : null)
   const rpcUsable = !workType && !priority && !status && snapshot && snapshot.ok !== false
   const rpcTotalSpend = rpcUsable ? num(snapshot?.kpis?.total_spend) : null
   const rpcOpenJobs   = rpcUsable ? num(snapshot?.kpis?.open_jobs) : null
   const kpiTotalCost  = rpcTotalSpend != null ? rpcTotalSpend : kpis.totalCost
   const kpiOpenJobs   = rpcOpenJobs != null ? rpcOpenJobs : kpis.openJobs
 
-  // Site performance
-  const sitePerf = useMemo(() => {
-    const map = {}
-    const thisMonthOrders = orders.filter(o => monthKey(o.created_at) === thisMonth)
+  const sitePerf = useMemo(() => sitePerformance(orders, new Date()), [orders])
+  const techPerf = useMemo(() => technicianPerformance(orders), [orders])
+  const series   = useMemo(() => monthlySeries(orders, { now: new Date() }), [orders])
+  const workTypes = useMemo(() => workTypeCounts(orders), [orders])
+  const split    = useMemo(() => costSplit(orders), [orders])
 
-    orders.forEach(o => {
-      const s = o.site || 'Unknown'
-      if (!map[s]) map[s] = { site: s, jobs: 0, thisMonth: 0, completed: 0, total: 0, taTimes: [], openJobs: 0, onTimePairs: [] }
-      map[s].total++
-      if (monthKey(o.created_at) === thisMonth) map[s].thisMonth++
-      if (o.status === 'Completed') {
-        map[s].completed++
-        const ta = turnaroundHours(o)
-        if (ta != null) map[s].taTimes.push(ta)
-        if (o.scheduled_date) map[s].onTimePairs.push(isOnTime(o))
-      }
-      if (isOpenJob(o)) map[s].openJobs++
-      map[s].jobs += o.total_cost || 0
-    })
+  const siteOptions = useMemo(() => [...new Set(allOrders.map(o => o.site).filter(Boolean))].sort(), [allOrders])
 
-    const rows = Object.values(map).map(s => {
-      const avgTA   = s.taTimes.length ? s.taTimes.reduce((a, b) => a + b, 0) / s.taTimes.length : null
-      const compRate = s.total ? (s.completed / s.total) * 100 : 0
-      const otRate  = s.onTimePairs.length ? (s.onTimePairs.filter(Boolean).length / s.onTimePairs.length) * 100 : 0
-      const maxTA   = Math.max(...(Object.values(map).map(x => x.taTimes.length ? x.taTimes.reduce((a,b)=>a+b,0)/x.taTimes.length : 0)), 1)
-      const taNorm  = avgTA != null ? Math.min(avgTA / maxTA, 1) : 0.5
-      const score   = compRate * 0.4 + (1 - taNorm) * 30 + otRate * 0.3
-      return { ...s, avgTA, compRate, otRate, totalCost: s.jobs, score: Math.round(score) }
-    })
+  // ── Chart data (palette-driven) ───────────────────────────────────────────────
+  const jobVolumeChart = useMemo(() => ({
+    labels: series.labels,
+    datasets: series.sites.map((s, i) => ({
+      label: s,
+      data: series.completedBySite[s],
+      backgroundColor: withAlpha(colorAt(i), 0.8),
+      borderColor: colorAt(i),
+      borderWidth: 1,
+      borderRadius: 4,
+    })),
+  }), [series])
 
-    return rows.sort((a, b) => b.score - a.score)
-  }, [orders, thisMonth])
+  const workTypeChart = useMemo(() => ({
+    labels: workTypes.map(w => w.type),
+    datasets: [{
+      data: workTypes.map(w => w.count),
+      backgroundColor: workTypes.map((_, i) => withAlpha(colorAt(i), 0.8)),
+      borderColor: workTypes.map((_, i) => colorAt(i)),
+      borderWidth: 1,
+    }],
+  }), [workTypes])
 
-  // Unique site/tech options
-  const siteOptions = useMemo(() => [...new Set(orders.map(o => o.site).filter(Boolean))].sort(), [orders])
-  const techOptions = useMemo(() => [...new Set(orders.map(o => o.assigned_to).filter(Boolean))].sort(), [orders])
-
-  // Technician performance
-  const techPerf = useMemo(() => {
-    const map = {}
-    orders.forEach(o => {
-      const t = o.assigned_to || 'Unassigned'
-      if (!map[t]) map[t] = { tech: t, total: 0, completed: 0, taTimes: [], labourCost: 0 }
-      map[t].total++
-      if (o.status === 'Completed') {
-        map[t].completed++
-        const ta = turnaroundHours(o)
-        if (ta != null) map[t].taTimes.push(ta)
-      }
-      map[t].labourCost += o.labour_cost || 0
-    })
-    return Object.values(map).map(t => {
-      const compRate = t.total ? (t.completed / t.total) * 100 : 0
-      const avgTA    = t.taTimes.length ? t.taTimes.reduce((a, b) => a + b, 0) / t.taTimes.length : null
-      return { ...t, compRate, avgTA, rating: ratingBadge(compRate) }
-    }).sort((a, b) => b.compRate - a.compRate)
-  }, [orders])
-
-  // Job volume chart (last 12 months, top 5 sites)
-  const jobVolumeChart = useMemo(() => {
-    const months = last12Months()
-    const top5Sites = [...siteOptions].slice(0, 5)
-    if (!top5Sites.length) return null
-
-    const datasets = top5Sites.map((s, i) => {
-      const data = months.map(mk =>
-        orders.filter(o => o.site === s && o.status === 'Completed' && monthKey(o.completed_at) === mk).length
-      )
-      return {
-        label: s,
-        data,
-        backgroundColor: PALETTE[i % PALETTE.length] + 'cc',
-        borderColor: PALETTE[i % PALETTE.length],
-        borderWidth: 1,
-        borderRadius: 4,
-      }
-    })
-
-    return {
-      labels: months.map(monthLabel),
-      datasets,
-    }
-  }, [orders, siteOptions])
-
-  // Work type distribution
-  const workTypeChart = useMemo(() => {
-    const counts = {}
-    WORK_TYPES.forEach(t => { counts[t] = 0 })
-    orders.forEach(o => {
-      const t = WORK_TYPES.includes(o.work_type) ? o.work_type : 'Other'
-      counts[t] = (counts[t] || 0) + 1
-    })
-    const labels = Object.keys(counts).filter(k => counts[k] > 0)
-    return {
-      labels,
-      datasets: [{
-        data: labels.map(l => counts[l]),
-        backgroundColor: labels.map((_, i) => PALETTE[i % PALETTE.length] + 'cc'),
-        borderColor: labels.map((_, i) => PALETTE[i % PALETTE.length]),
-        borderWidth: 1,
-      }],
-    }
-  }, [orders])
-
-  // Turnaround trend (12-month rolling avg)
   const taTrendChart = useMemo(() => {
-    const months = last12Months()
-    const data = months.map(mk => {
-      const completed = orders.filter(o => o.status === 'Completed' && monthKey(o.completed_at) === mk)
-      const times = completed.map(turnaroundHours).filter(h => h != null)
-      return times.length ? times.reduce((a, b) => a + b, 0) / times.length : null
-    })
+    const c = colorAt(0)
     return {
-      labels: months.map(monthLabel),
+      labels: series.labels,
       datasets: [{
         label: 'Avg Turnaround (hrs)',
-        data,
-        borderColor: '#3b82f6',
-        backgroundColor: 'rgba(59,130,246,0.1)',
+        data: series.avgTurnaround,
+        borderColor: c,
+        backgroundColor: withAlpha(c, 0.12),
         fill: true,
         tension: 0.4,
-        pointBackgroundColor: '#3b82f6',
+        pointBackgroundColor: c,
         pointRadius: 4,
         spanGaps: true,
       }],
     }
-  }, [orders])
+  }, [series])
 
-  // Cost stacked bar
-  const costChart = useMemo(() => {
-    const months = last12Months()
-    const labour = months.map(mk =>
-      orders.filter(o => monthKey(o.created_at) === mk).reduce((s, o) => s + (o.labour_cost || 0), 0)
-    )
-    const parts = months.map(mk =>
-      orders.filter(o => monthKey(o.created_at) === mk).reduce((s, o) => s + (o.parts_cost || 0), 0)
-    )
-    return {
-      labels: months.map(monthLabel),
-      datasets: [
-        {
-          label: 'Labour Cost',
-          data: labour,
-          backgroundColor: 'rgba(59,130,246,0.8)',
-          borderColor: '#3b82f6',
-          borderWidth: 1,
-          borderRadius: 4,
-          stack: 'stack',
-        },
-        {
-          label: 'Parts Cost',
-          data: parts,
-          backgroundColor: 'rgba(139,92,246,0.8)',
-          borderColor: '#8b5cf6',
-          borderWidth: 1,
-          borderRadius: 4,
-          stack: 'stack',
-        },
-      ],
-    }
-  }, [orders])
+  const costChart = useMemo(() => ({
+    labels: series.labels,
+    datasets: [
+      { label: 'Labour Cost', data: series.labour, backgroundColor: withAlpha(colorAt(0), 0.8), borderColor: colorAt(0), borderWidth: 1, borderRadius: 4, stack: 'stack' },
+      { label: 'Parts Cost', data: series.parts, backgroundColor: withAlpha(colorAt(4), 0.8), borderColor: colorAt(4), borderWidth: 1, borderRadius: 4, stack: 'stack' },
+    ],
+  }), [series])
 
   // Paged jobs - the shared pager, 50 a page, so this grid behaves like every
   // other register in the app. The read is still SERVER-bounded (20,000 rows in
@@ -636,50 +448,90 @@ export default function WorkshopManagement() {
   // and what the "N jobs" caption quotes - never `jobsPager.pageRows`.
   const jobsPager = usePagedRows(filteredOrders)
 
+  // ── Table columns ─────────────────────────────────────────────────────────────
+  const jobColumns = useMemo(() => [
+    { id: 'work_order_no', header: 'WO No', accessorFn: (j) => j.work_order_no || j.id?.slice(0, 8) || '', size: 130,
+      cell: ({ getValue }) => <span className="text-blue-400 font-mono text-xs whitespace-nowrap">{getValue()}</span> },
+    { id: 'asset_no', header: 'Asset', accessorFn: (j) => j.asset_no || 'N/A', size: 110 },
+    { id: 'site', header: 'Site', accessorFn: (j) => j.site || 'N/A', size: 120 },
+    { id: 'work_type', header: 'Type', accessorFn: (j) => j.work_type || 'N/A', size: 120 },
+    { id: 'priority', header: 'Priority', accessorFn: (j) => j.priority || '', size: 100,
+      cell: ({ row }) => (row.original.priority
+        ? <Pill tone={PRIORITY_TONE[String(row.original.priority).toLowerCase()]}>{row.original.priority}</Pill>
+        : <span className="text-[var(--text-muted)]">N/A</span>) },
+    { id: 'status', header: 'Status', accessorFn: (j) => normalizeWoStatus(j.status), size: 150,
+      cell: ({ getValue }) => (getValue() ? <Pill tone={STATUS_TONE[getValue()]}>{getValue()}</Pill> : <span className="text-[var(--text-muted)]">N/A</span>) },
+    { id: 'assigned_to', header: 'Assigned To', accessorFn: (j) => j.assigned_to || 'Unassigned', size: 140 },
+    { id: 'created_at', header: 'Created', accessorFn: (j) => j.created_at || '', size: 110, cell: ({ row }) => fmtDay(row.original.created_at) },
+    { id: 'scheduled_date', header: 'Scheduled', accessorFn: (j) => j.scheduled_date || '', size: 110, cell: ({ row }) => fmtDay(row.original.scheduled_date) },
+    { id: 'completed_at', header: 'Completed', accessorFn: (j) => j.completed_at || '', size: 110, cell: ({ row }) => fmtDay(row.original.completed_at) },
+    { id: 'total_cost', header: 'Cost', accessorFn: (j) => (j.total_cost == null ? null : Number(j.total_cost)), size: 110, meta: { align: 'right' },
+      cell: ({ row }) => <span className="tabular-nums">{fmtCurrency(row.original.total_cost == null ? null : Number(row.original.total_cost), activeCurrency)}</span> },
+  ], [activeCurrency])
+
+  const siteColumns = useMemo(() => [
+    { id: 'site', header: 'Site', accessorFn: (s) => s.site, size: 160,
+      cell: ({ getValue }) => <span className="inline-flex items-center gap-2 text-[var(--text-primary)] font-medium"><Building2 className="w-4 h-4 text-[var(--text-muted)]" aria-hidden="true" />{getValue()}</span> },
+    { id: 'thisMonth', header: 'Jobs (Month)', accessorFn: (s) => s.thisMonth, size: 110, meta: { align: 'right' } },
+    { id: 'total', header: 'Jobs (Window)', accessorFn: (s) => s.total, size: 120, meta: { align: 'right' } },
+    { id: 'avgTA', header: 'Avg Turnaround', accessorFn: (s) => s.avgTA ?? -1, size: 130, cell: ({ row }) => fmtHours(row.original.avgTA) },
+    { id: 'compRate', header: 'Completion %', accessorFn: (s) => s.compRate ?? -1, size: 160, cell: ({ row }) => <RateBar value={row.original.compRate} /> },
+    { id: 'totalCost', header: 'Total Cost', accessorFn: (s) => s.totalCost, size: 130, meta: { align: 'right' }, cell: ({ row }) => fmtCurrency(row.original.totalCost, activeCurrency) },
+    { id: 'openJobs', header: 'Open Jobs', accessorFn: (s) => s.openJobs, size: 100, meta: { align: 'right' },
+      cell: ({ getValue }) => <span className={`font-medium tabular-nums ${getValue() > 10 ? 'text-red-400' : getValue() > 5 ? 'text-yellow-400' : 'text-[var(--text-secondary)]'}`}>{getValue()}</span> },
+    { id: 'score', header: 'Score', accessorFn: (s) => s.score, size: 90, meta: { align: 'right' },
+      cell: ({ getValue }) => <Pill tone={scoreTone(getValue())}>{getValue()}</Pill> },
+  ], [activeCurrency])
+
+  const techColumns = useMemo(() => [
+    { id: 'tech', header: 'Technician', accessorFn: (t) => t.tech, size: 180,
+      cell: ({ getValue }) => (
+        <span className="inline-flex items-center gap-2">
+          <span className="w-7 h-7 rounded-full bg-[var(--input-bg)] flex items-center justify-center text-xs font-bold text-[var(--text-secondary)]" aria-hidden="true">{(getValue() || '?')[0].toUpperCase()}</span>
+          <span className="text-[var(--text-primary)] font-medium">{getValue()}</span>
+        </span>
+      ) },
+    { id: 'total', header: 'Jobs', accessorFn: (t) => t.total, size: 80, meta: { align: 'right' } },
+    { id: 'completed', header: 'Jobs Completed', accessorFn: (t) => t.completed, size: 130, meta: { align: 'right' } },
+    { id: 'avgTA', header: 'Avg Turnaround', accessorFn: (t) => t.avgTA ?? -1, size: 130, cell: ({ row }) => fmtHours(row.original.avgTA) },
+    { id: 'labourCost', header: 'Total Labour Cost', accessorFn: (t) => t.labourCost, size: 140, meta: { align: 'right' }, cell: ({ row }) => fmtCurrency(row.original.labourCost, activeCurrency) },
+    { id: 'compRate', header: 'Completion Rate', accessorFn: (t) => t.compRate ?? -1, size: 160, cell: ({ row }) => <RateBar value={row.original.compRate} good={85} fair={70} /> },
+    { id: 'rating', header: 'Rating', accessorFn: (t) => t.rating.label, size: 150, cell: ({ row }) => <Pill tone={row.original.rating.tone}>{row.original.rating.label}</Pill> },
+  ], [activeCurrency])
+
+  const siteCostColumns = useMemo(() => [
+    { id: 'site', header: 'Site', accessorFn: (s) => s.site, size: 160 },
+    { id: 'totalCost', header: 'Total Cost', accessorFn: (s) => s.totalCost, size: 130, meta: { align: 'right' }, cell: ({ row }) => fmtCurrency(row.original.totalCost, activeCurrency) },
+    { id: 'labourCost', header: 'Labour Cost', accessorFn: (s) => s.labourCost, size: 130, meta: { align: 'right' }, cell: ({ row }) => fmtCurrency(row.original.labourCost, activeCurrency) },
+    { id: 'partsCost', header: 'Parts Cost', accessorFn: (s) => s.partsCost, size: 130, meta: { align: 'right' }, cell: ({ row }) => fmtCurrency(row.original.partsCost, activeCurrency) },
+    { id: 'labourPct', header: 'Labour %', accessorFn: (s) => s.labourPct ?? -1, size: 100, meta: { align: 'right' }, cell: ({ row }) => fmtPct(row.original.labourPct) },
+    { id: 'avgPerJob', header: 'Avg Cost/Job', accessorFn: (s) => s.avgPerJob ?? -1, size: 130, meta: { align: 'right' }, cell: ({ row }) => fmtCurrency(row.original.avgPerJob, activeCurrency) },
+  ], [activeCurrency])
+
   // ── Export ────────────────────────────────────────────────────────────────────
   function handleExcelExport() {
     exportToExcel(
       filteredOrders,
       ['work_order_no','asset_no','site','work_type','priority','status','assigned_to','created_at','scheduled_date','completed_at','total_cost','labour_cost','parts_cost'],
       ['WO No','Asset','Site','Type','Priority','Status','Assigned To','Created','Scheduled','Completed','Total Cost','Labour Cost','Parts Cost'],
-      'workshop_jobs_export',
+      reportFileName('Workshop Jobs', activeCountry),
       'Work Orders',
     )
   }
 
   function handlePdfExport() {
-    const doc_data = [
-      { section: 'Workshop Performance by Site', rows: sitePerf, columns: [
-        { key: 'site', header: 'Site' },
-        { key: 'thisMonth', header: 'Jobs (Month)' },
-        { key: 'avgTA_fmt', header: 'Avg Turnaround' },
-        { key: 'compRate_fmt', header: 'Completion %' },
-        { key: 'totalCost_fmt', header: 'Total Cost' },
-        { key: 'openJobs', header: 'Open Jobs' },
-        { key: 'score', header: 'Score' },
-      ]},
-    ]
-
     const siteRows = sitePerf.map(s => ({
       ...s,
       avgTA_fmt: fmtHours(s.avgTA),
       compRate_fmt: fmtPct(s.compRate),
       totalCost_fmt: fmtCurrency(s.totalCost, activeCurrency),
     }))
-
-    const techRows = techPerf.map(t => ({
-      ...t,
-      compRate_fmt: fmtPct(t.compRate),
-      avgTA_fmt: fmtHours(t.avgTA),
-      labourCost_fmt: fmtCurrency(t.labourCost, activeCurrency),
-      rating_label: t.rating.label,
-    }))
-
     exportToPdf(
       siteRows,
       [
         { key: 'site', header: 'Site' },
         { key: 'thisMonth', header: 'Jobs (Month)' },
+        { key: 'total', header: 'Jobs (Window)' },
         { key: 'avgTA_fmt', header: 'Avg Turnaround' },
         { key: 'compRate_fmt', header: 'Completion %' },
         { key: 'totalCost_fmt', header: 'Total Cost' },
@@ -687,44 +539,39 @@ export default function WorkshopManagement() {
         { key: 'score', header: 'Score' },
       ],
       'Workshop Performance Report',
-      'workshop_performance',
+      reportFileName('Workshop Performance', activeCountry),
       'landscape',
     )
+  }
+
+  const hasFilters = !!(site || workType || status || priority || techSearch || dateFrom || dateTo || search)
+  function clearFilters() {
+    setSite(''); setWorkType(''); setStatus(''); setPriority(''); setTechSearch(''); setDateFrom(''); setDateTo(''); setSearch(''); jobsPager.setPage(0)
   }
 
   // ── Render ────────────────────────────────────────────────────────────────────
   if (!tableExists) {
     return (
-      <div className="min-h-screen bg-[var(--surface-1)] flex items-center justify-center p-8">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="max-w-lg w-full bg-[var(--surface-1)] border border-[var(--input-border)] rounded-2xl p-8 text-center"
-        >
+      <div className="flex items-center justify-center p-4 sm:p-8">
+        <div className="max-w-lg w-full bg-[var(--surface-1)] border border-[var(--input-border)] rounded-2xl p-6 sm:p-8 text-center">
           <div className="w-16 h-16 bg-orange-500/10 rounded-2xl flex items-center justify-center mx-auto mb-5">
-            <Wrench className="w-8 h-8 text-orange-400" />
+            <Wrench className="w-8 h-8 text-orange-400" aria-hidden="true" />
           </div>
           <h2 className="text-xl font-bold text-[var(--text-primary)] mb-3">Work Orders Module Not Configured</h2>
           <p className="text-[var(--text-muted)] text-sm leading-relaxed mb-6">
             The <code className="bg-[var(--input-bg)] px-1.5 py-0.5 rounded text-orange-400 text-xs">work_orders</code> table does not exist in your database.
             Apply <code className="bg-[var(--input-bg)] px-1.5 py-0.5 rounded text-blue-400 text-xs">MIGRATIONS_V16.sql</code> in your Supabase SQL Editor to enable this module.
           </p>
-          <div className="bg-[var(--input-bg)]/60 rounded-xl p-4 text-left text-xs text-[var(--text-muted)] font-mono space-y-1">
-            <p className="text-[var(--text-muted)]">-- Required table:</p>
-            <p className="text-green-400">CREATE TABLE work_orders (...</p>
-            <p className="text-[var(--text-muted)]">-- See MIGRATIONS_V16.sql</p>
-          </div>
-          <button
-            onClick={fetchData}
-            className="mt-6 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-medium transition-colors flex items-center gap-2 mx-auto"
-          >
-            <RefreshCw className="w-4 h-4" />
+          <button type="button" onClick={fetchData} className={`${btnCls} mx-auto`}>
+            <RefreshCw className="w-4 h-4" aria-hidden="true" />
             Retry Connection
           </button>
-        </motion.div>
+        </div>
       </div>
     )
   }
+
+  const onTimeColor = kpis.onTimePct == null ? 'blue' : kpis.onTimePct >= 80 ? 'green' : kpis.onTimePct >= 60 ? 'yellow' : 'red'
 
   return (
     <div className="space-y-6">
@@ -734,26 +581,16 @@ export default function WorkshopManagement() {
         icon={Wrench}
         actions={
           <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={fetchData}
-              disabled={loading}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] text-[var(--text-secondary)] text-sm transition-colors disabled:opacity-50"
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <button type="button" onClick={fetchData} disabled={loading} className={btnCls}>
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
               Refresh
             </button>
-            <button
-              onClick={handlePdfExport}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] text-[var(--text-secondary)] text-sm transition-colors"
-            >
-              <FileText className="w-4 h-4 text-red-400" />
+            <button type="button" onClick={handlePdfExport} disabled={loading || sitePerf.length === 0} className={btnCls}>
+              <FileText className="w-4 h-4 text-red-400" aria-hidden="true" />
               PDF
             </button>
-            <button
-              onClick={handleExcelExport}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] text-[var(--text-secondary)] text-sm transition-colors"
-            >
-              <FileSpreadsheet className="w-4 h-4 text-green-400" />
+            <button type="button" onClick={handleExcelExport} disabled={loading || filteredOrders.length === 0} className={btnCls}>
+              <FileSpreadsheet className="w-4 h-4 text-green-400" aria-hidden="true" />
               Excel
             </button>
           </div>
@@ -763,110 +600,102 @@ export default function WorkshopManagement() {
       <div className="space-y-6">
         {/* Filters */}
         <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
-          <div className="flex flex-wrap gap-3">
-            {/* Search */}
-            <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
-              <input
-                value={search}
-                onChange={e => { setSearch(e.target.value); jobsPager.setPage(0) }}
-                placeholder="Search WO#, Asset, Site..."
-                className="w-full pl-9 pr-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500"
-              />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-3">
+            <div className="sm:col-span-2 lg:col-span-2">
+              <label htmlFor="wm-search" className={labelCls}>Search</label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" aria-hidden="true" />
+                <input
+                  id="wm-search"
+                  type="search"
+                  value={search}
+                  onChange={e => { setSearch(e.target.value); jobsPager.setPage(0) }}
+                  placeholder="WO no, asset, site, technician"
+                  className={`${fieldCls} pl-9`}
+                />
+              </div>
             </div>
 
-            {/* Site */}
-            <select
-              value={site}
-              onChange={e => { setSite(e.target.value); jobsPager.setPage(0) }}
-              className="px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500 min-w-[130px]"
-            >
-              <option value="">All Sites</option>
-              {siteOptions.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-
-            {/* Work Type */}
-            <select
-              value={workType}
-              onChange={e => { setWorkType(e.target.value); jobsPager.setPage(0) }}
-              className="px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500 min-w-[140px]"
-            >
-              <option value="">All Types</option>
-              {WORK_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
-
-            {/* Status */}
-            <select
-              value={status}
-              onChange={e => { setStatus(e.target.value); jobsPager.setPage(0) }}
-              className="px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500 min-w-[140px]"
-            >
-              <option value="">All Statuses</option>
-              {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-
-            {/* Priority */}
-            <select
-              value={priority}
-              onChange={e => { setPriority(e.target.value); jobsPager.setPage(0) }}
-              className="px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500 min-w-[120px]"
-            >
-              <option value="">All Priorities</option>
-              {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
-            </select>
-
-            {/* Technician search */}
-            <div className="relative min-w-[160px]">
-              <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
-              <input
-                value={techSearch}
-                onChange={e => { setTechSearch(e.target.value); jobsPager.setPage(0) }}
-                placeholder="Technician..."
-                className="w-full pl-9 pr-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500"
-              />
+            <div>
+              <label htmlFor="wm-site" className={labelCls}>Site</label>
+              <select id="wm-site" value={site} onChange={e => { setSite(e.target.value); jobsPager.setPage(0) }} className={fieldCls}>
+                <option value="">All Sites</option>
+                {siteOptions.map(s => <option key={s} value={s}>{s}</option>)}
+                {site && !siteOptions.includes(site) && <option value={site}>{site}</option>}
+              </select>
             </div>
 
-            {/* Date range */}
-            <div className="flex items-center gap-1.5">
-              <Calendar className="w-4 h-4 text-[var(--text-muted)]" />
-              <input
-                type="date"
-                value={dateFrom}
-                onChange={e => { setDateFrom(e.target.value); jobsPager.setPage(0) }}
-                className="px-2 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500 w-36"
-              />
-              <span className="text-[var(--text-dim)] text-xs">to</span>
-              <input
-                type="date"
-                value={dateTo}
-                onChange={e => { setDateTo(e.target.value); jobsPager.setPage(0) }}
-                className="px-2 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500 w-36"
-              />
+            <div>
+              <label htmlFor="wm-type" className={labelCls}>Work type</label>
+              <select id="wm-type" value={workType} onChange={e => { setWorkType(e.target.value); jobsPager.setPage(0) }} className={fieldCls}>
+                <option value="">All Types</option>
+                {WORK_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
             </div>
 
-            {/* Presets */}
-            <div className="flex items-center gap-1">
-              {[{ label: '30d', days: 30 }, { label: '90d', days: 90 }, { label: '6m', days: 180 }, { label: '1yr', days: 365 }].map(p => (
-                <button
-                  key={p.label}
-                  onClick={() => { const r = applyDatePreset(p.days); setDateFrom(r.from); setDateTo(r.to); jobsPager.setPage(0) }}
-                  className="px-2.5 py-1.5 rounded-lg text-xs bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
-                >
-                  {p.label}
+            <div>
+              <label htmlFor="wm-status" className={labelCls}>Status</label>
+              <select id="wm-status" value={status} onChange={e => { setStatus(e.target.value); jobsPager.setPage(0) }} className={fieldCls}>
+                <option value="">All Statuses</option>
+                {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="wm-priority" className={labelCls}>Priority</label>
+              <select id="wm-priority" value={priority} onChange={e => { setPriority(e.target.value); jobsPager.setPage(0) }} className={fieldCls}>
+                <option value="">All Priorities</option>
+                {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="wm-tech" className={labelCls}>Technician</label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" aria-hidden="true" />
+                <input
+                  id="wm-tech"
+                  value={techSearch}
+                  onChange={e => { setTechSearch(e.target.value); jobsPager.setPage(0) }}
+                  placeholder="Technician name"
+                  className={`${fieldCls} pl-9`}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="wm-from" className={labelCls}>Created from</label>
+              <input id="wm-from" type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); jobsPager.setPage(0) }} className={fieldCls} />
+            </div>
+
+            <div>
+              <label htmlFor="wm-to" className={labelCls}>Created to</label>
+              <input id="wm-to" type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); jobsPager.setPage(0) }} className={fieldCls} />
+            </div>
+
+            <div className="sm:col-span-2 lg:col-span-2 flex flex-wrap items-end gap-2">
+              <span className="sr-only" id="wm-presets">Quick date ranges</span>
+              <div className="flex items-center gap-1 flex-wrap" role="group" aria-labelledby="wm-presets">
+                <Calendar className="w-4 h-4 text-[var(--text-muted)]" aria-hidden="true" />
+                {[{ label: '30d', days: 30, name: 'Last 30 days' }, { label: '90d', days: 90, name: 'Last 90 days' }, { label: '6m', days: 180, name: 'Last 6 months' }, { label: '1yr', days: 365, name: 'Last 12 months' }].map(p => (
+                  <button
+                    key={p.label}
+                    type="button"
+                    title={p.name}
+                    onClick={() => { const r = applyDatePreset(p.days); setDateFrom(r.from); setDateTo(r.to); jobsPager.setPage(0) }}
+                    className="px-3 min-h-[44px] rounded-lg text-xs bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500"
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+              {hasFilters && (
+                <button type="button" onClick={clearFilters} className="inline-flex items-center gap-1.5 px-3 min-h-[44px] rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500">
+                  <X className="w-4 h-4" aria-hidden="true" />
+                  Clear
                 </button>
-              ))}
+              )}
             </div>
-
-            {/* Clear filters */}
-            {(site || workType || status || priority || techSearch || dateFrom || dateTo || search) && (
-              <button
-                onClick={() => { setSite(''); setWorkType(''); setStatus(''); setPriority(''); setTechSearch(''); setDateFrom(''); setDateTo(''); setSearch(''); jobsPager.setPage(0) }}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 text-sm transition-colors"
-              >
-                <X className="w-4 h-4" />
-                Clear
-              </button>
-            )}
           </div>
         </div>
 
@@ -874,12 +703,15 @@ export default function WorkshopManagement() {
         {loading && <SkeletonTable rows={8} cols={6} />}
 
         {!loading && error && (
-          <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-5 text-red-400 text-sm flex items-center gap-3">
-            <AlertTriangle className="w-5 h-5 flex-shrink-0" />
-            <div>
-              <p className="font-semibold">Failed to load data</p>
-              <p className="text-xs text-red-400/70 mt-0.5">{error}</p>
+          <div role="alert" className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 sm:p-5 text-sm flex flex-wrap items-center gap-3">
+            <AlertTriangle className="w-5 h-5 flex-shrink-0 text-red-400" aria-hidden="true" />
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-red-400">Work orders could not be loaded</p>
+              <p className="text-xs text-[var(--text-secondary)] mt-0.5">{error}</p>
             </div>
+            <button type="button" onClick={fetchData} className={btnCls}>
+              <RefreshCw className="w-4 h-4" aria-hidden="true" /> Retry
+            </button>
           </div>
         )}
 
@@ -889,7 +721,7 @@ export default function WorkshopManagement() {
                 browser never pulls the whole work_orders table. */}
             {(loadMeta.windowDefault || loadMeta.truncated) && (
               <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-3 text-xs text-[var(--text-secondary)] flex items-start gap-2">
-                <Filter className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
+                <Filter className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" aria-hidden="true" />
                 <div className="space-y-1">
                   {loadMeta.windowDefault && (
                     <p>
@@ -910,540 +742,215 @@ export default function WorkshopManagement() {
             )}
 
             {/* KPI Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
-              <KpiCard
-                icon={ClipboardList}
-                label="Total Work Orders"
-                value={kpis.totalThisMonth.toLocaleString()}
-                sub="this month"
-                color="blue"
-              />
-              <KpiCard
-                icon={Clock}
-                label="Avg Turnaround"
-                value={fmtHours(kpis.avgTA)}
-                sub="created to completed"
-                color="purple"
-              />
-              <KpiCard
-                icon={CheckCircle}
-                label="Completion Rate"
-                value={fmtPct(kpis.completionRate)}
-                sub={`${orders.filter(o => o.status === 'Completed').length} completed`}
-                color="green"
-              />
-              <KpiCard
-                icon={DollarSign}
-                label="Total Cost"
-                value={fmtCurrency(kpiTotalCost, activeCurrency)}
-                sub="labour + parts"
-                color="yellow"
-              />
-              <KpiCard
-                icon={AlertTriangle}
-                label="Open Jobs"
-                value={kpiOpenJobs.toLocaleString()}
-                sub="not completed or cancelled"
-                color={kpiOpenJobs > 20 ? 'red' : kpiOpenJobs > 10 ? 'orange' : 'blue'}
-              />
-              <KpiCard
-                icon={Target}
-                label="On-Time Rate"
-                value={kpis.onTimePct != null ? fmtPct(kpis.onTimePct) : 'N/A'}
-                sub="completed ≤ scheduled"
-                color={kpis.onTimePct == null ? 'blue' : kpis.onTimePct >= 80 ? 'green' : kpis.onTimePct >= 60 ? 'yellow' : 'red'}
-              />
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
+              <KpiCard icon={ClipboardList} label="Work Orders" value={kpis.totalThisMonth.toLocaleString()} sub="created this month" color="blue" />
+              <KpiCard icon={Clock} label="Avg Turnaround" value={fmtHours(kpis.avgTA)} sub="created to completed" color="purple" />
+              <KpiCard icon={CheckCircle} label="Completion Rate" value={fmtPct(kpis.completionRate)} sub={`${kpis.completedCount.toLocaleString()} of ${kpis.total.toLocaleString()} completed`} color="green" />
+              <KpiCard icon={DollarSign} label="Total Cost" value={fmtCurrency(kpiTotalCost, activeCurrency)} sub="labour + parts" color="yellow" />
+              <KpiCard icon={AlertTriangle} label="Open Jobs" value={kpiOpenJobs.toLocaleString()} sub="not completed or cancelled" color={kpiOpenJobs > 20 ? 'red' : kpiOpenJobs > 10 ? 'orange' : 'blue'} />
+              <KpiCard icon={Target} label="On-Time Rate" value={fmtPct(kpis.onTimePct)} sub={kpis.onTimePct == null ? 'no completed job has a target date' : 'completed by target date'} color={onTimeColor} />
             </div>
 
             {/* Tab Navigation */}
-            <div className="flex gap-1 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-1 w-fit flex-wrap">
-              {[
-                { id: 'overview', label: 'Overview', icon: BarChart2 },
-                { id: 'jobs', label: 'Jobs Table', icon: ClipboardList },
-                { id: 'sites', label: 'Site Performance', icon: Building2 },
-                { id: 'technicians', label: 'Technicians', icon: User },
-                { id: 'costs', label: 'Cost Analysis', icon: DollarSign },
-              ].map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    activeTab === tab.id
-                      ? 'bg-blue-600 text-white'
-                      : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg)]'
-                  }`}
-                >
-                  <tab.icon className="w-4 h-4" />
-                  {tab.label}
-                </button>
-              ))}
+            <div className="flex gap-1 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-1 overflow-x-auto max-w-full" role="tablist" aria-label="Workshop views">
+              {TABS.map(tab => {
+                const on = activeTab === tab.id
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={on}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`flex items-center gap-1.5 px-4 min-h-[44px] rounded-lg text-sm font-medium whitespace-nowrap transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 ${
+                      on ? 'bg-blue-600 text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg)]'
+                    }`}
+                  >
+                    <tab.icon className="w-4 h-4" aria-hidden="true" />
+                    {tab.label}
+                  </button>
+                )
+              })}
             </div>
 
-            {/* Overview Tab */}
-            <AnimatePresence mode="wait">
-              {activeTab === 'overview' && (
-                <motion.div
-                  key="overview"
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -12 }}
-                  className="grid grid-cols-1 xl:grid-cols-2 gap-5"
+            {activeTab === 'overview' && (
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-5" role="tabpanel" aria-label="Overview">
+                <ChartCard
+                  title="Job Volume by Site"
+                  subtitle={`Completed jobs per month, top ${series.sites.length || 5} sites by volume`}
+                  height={280}
+                  empty={series.sites.length === 0}
+                  summary={`Completed jobs per month for ${series.sites.join(', ') || 'no sites'}`}
                 >
-                  {/* Job Volume Chart */}
-                  <ChartCard
-                    title="Job Volume by Site"
-                    subtitle="Completed jobs per site, last 12 months"
-                    height={280}
-                  >
-                    {jobVolumeChart && jobVolumeChart.datasets.length > 0 ? (
-                      <Bar
-                        data={jobVolumeChart}
-                        options={{
-                          ...CHART_DEFAULTS,
-                          plugins: {
-                            ...CHART_DEFAULTS.plugins,
-                            legend: { labels: { color: '#9ca3af', font: { size: 11 }, boxWidth: 12 } },
-                          },
-                        }}
-                      />
-                    ) : (
-                      <div className="h-full flex items-center justify-center text-[var(--text-dim)] text-sm">No data available</div>
-                    )}
-                  </ChartCard>
+                  <Bar data={jobVolumeChart} options={CHART_DEFAULTS} />
+                </ChartCard>
 
-                  {/* Work Type Distribution */}
-                  <ChartCard
-                    title="Work Type Distribution"
-                    subtitle="Breakdown by job category"
-                    height={280}
-                  >
-                    {workTypeChart && workTypeChart.labels.length > 0 ? (
-                      <Doughnut data={workTypeChart} options={NO_SCALE} />
-                    ) : (
-                      <div className="h-full flex items-center justify-center text-[var(--text-dim)] text-sm">No data available</div>
-                    )}
-                  </ChartCard>
-
-                  {/* Turnaround Trend */}
-                  <ChartCard
-                    title="Turnaround Time Trend"
-                    subtitle="12-month rolling average hours, lower is better"
-                    height={240}
-                  >
-                    {taTrendChart ? (
-                      <Line
-                        data={taTrendChart}
-                        options={{
-                          ...CHART_DEFAULTS,
-                          plugins: {
-                            ...CHART_DEFAULTS.plugins,
-                            legend: { display: false },
-                          },
-                        }}
-                      />
-                    ) : (
-                      <div className="h-full flex items-center justify-center text-[var(--text-dim)] text-sm">No data available</div>
-                    )}
-                  </ChartCard>
-
-                  {/* Cost Stacked Bar */}
-                  <ChartCard
-                    title="Monthly Cost Analysis"
-                    subtitle="Labour vs parts cost per month"
-                    height={240}
-                  >
-                    {costChart ? (
-                      <Bar
-                        data={costChart}
-                        options={{
-                          ...CHART_DEFAULTS,
-                          plugins: {
-                            ...CHART_DEFAULTS.plugins,
-                            legend: { labels: { color: '#9ca3af', font: { size: 11 }, boxWidth: 12 } },
-                          },
-                          scales: {
-                            ...CHART_DEFAULTS.scales,
-                            x: { ...CHART_DEFAULTS.scales.x, stacked: true },
-                            y: { ...CHART_DEFAULTS.scales.y, stacked: true },
-                          },
-                        }}
-                      />
-                    ) : (
-                      <div className="h-full flex items-center justify-center text-[var(--text-dim)] text-sm">No data available</div>
-                    )}
-                  </ChartCard>
-                </motion.div>
-              )}
-
-              {/* Jobs Table Tab */}
-              {activeTab === 'jobs' && (
-                <motion.div
-                  key="jobs"
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -12 }}
-                  className="space-y-4"
+                <ChartCard
+                  title="Work Type Distribution"
+                  subtitle="Breakdown by job category"
+                  height={280}
+                  empty={workTypes.length === 0}
+                  summary={workTypes.map(w => `${w.type} ${w.count}`).join(', ')}
                 >
-                  <div className="flex items-center justify-between flex-wrap gap-2">
-                    <p className="text-sm text-[var(--text-muted)]">
-                      {filteredOrders.length.toLocaleString()} job{filteredOrders.length === 1 ? '' : 's'}
-                      {filteredOrders.length !== allOrders.length ? ` of ${allOrders.length.toLocaleString()} loaded` : ''}
+                  <Doughnut data={workTypeChart} options={NO_SCALE} />
+                </ChartCard>
+
+                <ChartCard
+                  title="Turnaround Time Trend"
+                  subtitle="Monthly average hours, lower is better"
+                  height={240}
+                  empty={!series.hasTurnaround}
+                  emptyText="No completed job in the last 12 months has a measurable turnaround."
+                >
+                  <Line data={taTrendChart} options={{ ...CHART_DEFAULTS, plugins: { ...CHART_DEFAULTS.plugins, legend: { display: false } } }} />
+                </ChartCard>
+
+                <ChartCard
+                  title="Monthly Cost Analysis"
+                  subtitle="Labour vs parts cost per month"
+                  height={240}
+                  empty={!series.hasCost}
+                  emptyText="No labour or parts cost is recorded in the last 12 months."
+                >
+                  <Bar data={costChart} options={STACKED} />
+                </ChartCard>
+              </div>
+            )}
+
+            {activeTab === 'jobs' && (
+              <div className="space-y-4" role="tabpanel" aria-label="Jobs table">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <p className="text-sm text-[var(--text-muted)]">
+                    {filteredOrders.length.toLocaleString()} job{filteredOrders.length === 1 ? '' : 's'}
+                    {filteredOrders.length !== allOrders.length ? ` of ${allOrders.length.toLocaleString()} loaded` : ''}
+                  </p>
+                  {loadMeta.truncated && (
+                    <p className="text-xs text-blue-400">
+                      Most recent {allOrders.length.toLocaleString()}
+                      {loadMeta.totalCount != null ? ` of ${loadMeta.totalCount.toLocaleString()}` : ''} in this window
                     </p>
-                    {loadMeta.truncated && (
-                      <p className="text-xs text-blue-400">
-                        Most recent {allOrders.length.toLocaleString()}
-                        {loadMeta.totalCount != null ? ` of ${loadMeta.totalCount.toLocaleString()}` : ''} in this window
-                      </p>
+                  )}
+                </div>
+
+                {filteredOrders.length === 0 ? (
+                  <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl px-4 py-12 text-center text-sm text-[var(--text-muted)]">
+                    {allOrders.length === 0
+                      ? 'No work orders were recorded in this window.'
+                      : 'No work orders match the current filters.'}
+                    {hasFilters && (
+                      <div className="mt-3">
+                        <button type="button" onClick={clearFilters} className={`${btnCls} mx-auto`}>Clear filters</button>
+                      </div>
                     )}
                   </div>
-
-                  <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b border-[var(--input-border)] bg-[var(--input-bg)]/50">
-                            {['WO No','Asset','Site','Type','Priority','Status','Assigned To','Created','Scheduled','Completed','Cost'].map(h => (
-                              <th key={h} className="px-4 py-3 text-left text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider whitespace-nowrap">{h}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-[var(--input-border)]">
-                          {filteredOrders.length === 0 ? (
-                            <tr>
-                              <td colSpan={11} className="px-4 py-12 text-center text-[var(--text-dim)] text-sm">
-                                No work orders found matching current filters.
-                              </td>
-                            </tr>
-                          ) : (
-                            jobsPager.pageRows.map((job, i) => (
-                              <motion.tr
-                                key={job.id}
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                transition={{ delay: i * 0.02 }}
-                                onClick={() => navigate(`/workshop/${encodeURIComponent(job.id)}`)}
-                                className="hover:bg-[var(--input-bg)]/50 cursor-pointer transition-colors group"
-                              >
-                                <td className="px-4 py-3 text-blue-400 font-mono text-xs whitespace-nowrap group-hover:text-blue-300">
-                                  {job.work_order_no || job.id?.slice(0, 8)}
-                                </td>
-                                <td className="px-4 py-3 text-[var(--text-secondary)] font-medium whitespace-nowrap">{job.asset_no || '-'}</td>
-                                <td className="px-4 py-3 text-[var(--text-muted)] whitespace-nowrap">{job.site || '-'}</td>
-                                <td className="px-4 py-3 text-[var(--text-muted)] whitespace-nowrap">{job.work_type || '-'}</td>
-                                <td className="px-4 py-3 whitespace-nowrap">
-                                  {job.priority && (
-                                    <span className={`px-2 py-0.5 rounded text-xs font-medium border ${priorityBadgeClass(job.priority)}`}>
-                                      {job.priority}
-                                    </span>
-                                  )}
-                                </td>
-                                <td className="px-4 py-3 whitespace-nowrap">
-                                  {job.status && (
-                                    <span className={`px-2 py-0.5 rounded text-xs font-medium border ${statusBadgeClass(job.status)}`}>
-                                      {job.status}
-                                    </span>
-                                  )}
-                                </td>
-                                <td className="px-4 py-3 text-[var(--text-muted)] whitespace-nowrap">{job.assigned_to || '-'}</td>
-                                <td className="px-4 py-3 text-[var(--text-muted)] text-xs whitespace-nowrap">
-                                  {job.created_at ? formatDate(job.created_at) : '-'}
-                                </td>
-                                <td className="px-4 py-3 text-[var(--text-muted)] text-xs whitespace-nowrap">
-                                  {job.scheduled_date ? formatDate(job.scheduled_date) : '-'}
-                                </td>
-                                <td className="px-4 py-3 text-[var(--text-muted)] text-xs whitespace-nowrap">
-                                  {job.completed_at ? formatDate(job.completed_at) : '-'}
-                                </td>
-                                <td className="px-4 py-3 text-[var(--text-secondary)] whitespace-nowrap font-medium">
-                                  {fmtCurrency(job.total_cost, activeCurrency)}
-                                </td>
-                              </motion.tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-
+                ) : (
+                  <div className="space-y-2">
+                    <EnterpriseTable
+                      columns={jobColumns}
+                      data={jobsPager.pageRows}
+                      getRowId={(j) => String(j.id)}
+                      enableGlobalFilter={false}
+                      enableColumnFilters={false}
+                      enableExport={false}
+                      virtual
+                      maxHeight={640}
+                      viewKey="workshop-management-jobs"
+                      onRowClick={(job) => navigate(`/workshop/${encodeURIComponent(job.id)}`)}
+                      emptyMessage="No work orders on this page."
+                    />
                     {/* Pagination - the shared bar (50 a page by default). */}
                     <TablePagination {...jobsPager} />
                   </div>
-                </motion.div>
-              )}
+                )}
+              </div>
+            )}
 
-              {/* Site Performance Tab */}
-              {activeTab === 'sites' && (
-                <motion.div
-                  key="sites"
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -12 }}
+            {activeTab === 'sites' && (
+              <section className="space-y-2" role="tabpanel" aria-label="Site performance">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-[var(--text-primary)]">Workshop Performance by Site</h3>
+                  <span className="text-xs text-[var(--text-muted)]">{sitePerf.length} sites</span>
+                </div>
+                <EnterpriseTable
+                  columns={siteColumns}
+                  data={sitePerf}
+                  getRowId={(s) => s.site}
+                  enableColumnFilters={false}
+                  searchPlaceholder="Search sites"
+                  exportFileName={reportFileName('Workshop Site Performance', activeCountry)}
+                  initialPageSize={50}
+                  emptyMessage="No site data for the selected filters."
+                />
+                <p className="text-[11px] text-[var(--text-muted)]">Score out of 100: completion rate 40, turnaround speed 30, on-time rate 30.</p>
+              </section>
+            )}
+
+            {activeTab === 'technicians' && (
+              <section className="space-y-2" role="tabpanel" aria-label="Technicians">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-[var(--text-primary)]">Technician Performance</h3>
+                  <span className="text-xs text-[var(--text-muted)]">{techPerf.length} technicians</span>
+                </div>
+                <EnterpriseTable
+                  columns={techColumns}
+                  data={techPerf}
+                  getRowId={(t) => t.tech}
+                  enableColumnFilters={false}
+                  searchPlaceholder="Search technicians"
+                  exportFileName={reportFileName('Workshop Technician Performance', activeCountry)}
+                  initialPageSize={50}
+                  emptyMessage="No technician data for the selected filters."
+                />
+              </section>
+            )}
+
+            {activeTab === 'costs' && (
+              <div className="space-y-5" role="tabpanel" aria-label="Cost analysis">
+                <ChartCard
+                  title="Labour vs Parts Cost"
+                  subtitle="Monthly stacked breakdown, identify cost drivers"
+                  height={300}
+                  empty={!series.hasCost}
+                  emptyText="No labour or parts cost is recorded in the last 12 months."
                 >
-                  <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
-                    <div className="px-5 py-4 border-b border-[var(--input-border)] flex items-center justify-between">
-                      <h3 className="text-sm font-semibold text-[var(--text-primary)]">Workshop Performance by Site</h3>
-                      <span className="text-xs text-[var(--text-muted)]">{sitePerf.length} sites</span>
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b border-[var(--input-border)] bg-[var(--input-bg)]">
-                            {['Site','Jobs (Month)','Avg Turnaround','Completion %','Total Cost','Open Jobs','Score'].map(h => (
-                              <th key={h} className="px-4 py-3 text-left text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider whitespace-nowrap">{h}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-[var(--input-border)]">
-                          {sitePerf.length === 0 ? (
-                            <tr>
-                              <td colSpan={7} className="px-4 py-12 text-center text-[var(--text-dim)] text-sm">No site data available.</td>
-                            </tr>
-                          ) : (
-                            sitePerf.map((s, i) => (
-                              <motion.tr
-                                key={s.site}
-                                initial={{ opacity: 0, x: -10 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                transition={{ delay: i * 0.04 }}
-                                className="hover:bg-[var(--input-bg)] transition-colors"
-                              >
-                                <td className="px-4 py-3">
-                                  <div className="flex items-center gap-2">
-                                    <Building2 className="w-4 h-4 text-[var(--text-dim)]" />
-                                    <span className="text-[var(--text-primary)] font-medium">{s.site}</span>
-                                  </div>
-                                </td>
-                                <td className="px-4 py-3 text-[var(--text-secondary)]">{s.thisMonth}</td>
-                                <td className="px-4 py-3 text-[var(--text-muted)]">{fmtHours(s.avgTA)}</td>
-                                <td className="px-4 py-3">
-                                  <div className="flex items-center gap-2">
-                                    <div className="flex-1 bg-[var(--input-bg)] rounded-full h-1.5 min-w-[60px]">
-                                      <div
-                                        className={`h-1.5 rounded-full ${s.compRate >= 80 ? 'bg-green-500' : s.compRate >= 60 ? 'bg-yellow-500' : 'bg-red-500'}`}
-                                        style={{ width: `${Math.min(s.compRate, 100)}%` }}
-                                      />
-                                    </div>
-                                    <span className="text-[var(--text-secondary)] text-xs">{fmtPct(s.compRate)}</span>
-                                  </div>
-                                </td>
-                                <td className="px-4 py-3 text-[var(--text-secondary)]">{fmtCurrency(s.totalCost, activeCurrency)}</td>
-                                <td className="px-4 py-3">
-                                  <span className={`text-sm font-medium ${s.openJobs > 10 ? 'text-red-400' : s.openJobs > 5 ? 'text-yellow-400' : 'text-[var(--text-secondary)]'}`}>
-                                    {s.openJobs}
-                                  </span>
-                                </td>
-                                <td className="px-4 py-3">
-                                  <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold border ${scoreBg(s.score)} ${scoreColor(s.score)}`}>
-                                    {s.score}
-                                  </span>
-                                </td>
-                              </motion.tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
+                  <Bar data={costChart} options={STACKED} />
+                </ChartCard>
 
-              {/* Technicians Tab */}
-              {activeTab === 'technicians' && (
-                <motion.div
-                  key="technicians"
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -12 }}
-                >
-                  <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
-                    <div className="px-5 py-4 border-b border-[var(--input-border)] flex items-center justify-between">
-                      <h3 className="text-sm font-semibold text-[var(--text-primary)]">Technician Performance</h3>
-                      <span className="text-xs text-[var(--text-muted)]">{techPerf.length} technicians</span>
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b border-[var(--input-border)] bg-[var(--input-bg)]">
-                            {['Technician','Jobs Completed','Avg Turnaround','Total Labour Cost','Completion Rate','Rating'].map(h => (
-                              <th key={h} className="px-4 py-3 text-left text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider whitespace-nowrap">{h}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-[var(--input-border)]">
-                          {techPerf.length === 0 ? (
-                            <tr>
-                              <td colSpan={6} className="px-4 py-12 text-center text-[var(--text-dim)] text-sm">No technician data available.</td>
-                            </tr>
-                          ) : (
-                            techPerf.map((t, i) => (
-                              <motion.tr
-                                key={t.tech}
-                                initial={{ opacity: 0, x: -10 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                transition={{ delay: i * 0.04 }}
-                                className="hover:bg-[var(--input-bg)] transition-colors"
-                              >
-                                <td className="px-4 py-3">
-                                  <div className="flex items-center gap-2">
-                                    <div className="w-7 h-7 rounded-full bg-[var(--input-bg)] flex items-center justify-center text-xs font-bold text-[var(--text-secondary)]">
-                                      {(t.tech || '?')[0].toUpperCase()}
-                                    </div>
-                                    <span className="text-[var(--text-primary)] font-medium">{t.tech}</span>
-                                  </div>
-                                </td>
-                                <td className="px-4 py-3 text-[var(--text-secondary)]">{t.completed}</td>
-                                <td className="px-4 py-3 text-[var(--text-muted)]">{fmtHours(t.avgTA)}</td>
-                                <td className="px-4 py-3 text-[var(--text-secondary)]">{fmtCurrency(t.labourCost, activeCurrency)}</td>
-                                <td className="px-4 py-3">
-                                  <div className="flex items-center gap-2">
-                                    <div className="flex-1 bg-[var(--input-bg)] rounded-full h-1.5 min-w-[60px]">
-                                      <div
-                                        className={`h-1.5 rounded-full ${t.compRate >= 85 ? 'bg-green-500' : t.compRate >= 70 ? 'bg-yellow-500' : 'bg-red-500'}`}
-                                        style={{ width: `${Math.min(t.compRate, 100)}%` }}
-                                      />
-                                    </div>
-                                    <span className="text-[var(--text-secondary)] text-xs">{fmtPct(t.compRate)}</span>
-                                  </div>
-                                </td>
-                                <td className="px-4 py-3">
-                                  <span className={`px-2.5 py-1 rounded-lg text-xs font-medium border ${t.rating.cls}`}>
-                                    {t.rating.label}
-                                  </span>
-                                </td>
-                              </motion.tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-
-              {/* Cost Analysis Tab */}
-              {activeTab === 'costs' && (
-                <motion.div
-                  key="costs"
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -12 }}
-                  className="space-y-5"
-                >
-                  {/* Cost stacked bar */}
-                  <ChartCard
-                    title="Labour vs Parts Cost"
-                    subtitle="Monthly stacked breakdown, identify cost drivers"
-                    height={300}
-                  >
-                    {costChart ? (
-                      <Bar
-                        data={costChart}
-                        options={{
-                          ...CHART_DEFAULTS,
-                          plugins: {
-                            ...CHART_DEFAULTS.plugins,
-                            legend: { labels: { color: '#9ca3af', font: { size: 11 }, boxWidth: 12 } },
-                          },
-                          scales: {
-                            x: { ...CHART_DEFAULTS.scales.x, stacked: true },
-                            y: { ...CHART_DEFAULTS.scales.y, stacked: true },
-                          },
-                        }}
-                      />
-                    ) : (
-                      <div className="h-full flex items-center justify-center text-[var(--text-dim)] text-sm">No cost data available</div>
-                    )}
-                  </ChartCard>
-
-                  {/* Cost summary cards */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {[
-                      {
-                        label: 'Total Labour Cost',
-                        value: fmtCurrency(orders.reduce((s, o) => s + (o.labour_cost || 0), 0), activeCurrency),
-                        pct: orders.reduce((s, o) => s + (o.total_cost || 0), 0) > 0
-                          ? (orders.reduce((s, o) => s + (o.labour_cost || 0), 0) / orders.reduce((s, o) => s + (o.total_cost || 0), 0)) * 100
-                          : 0,
-                        color: 'bg-blue-500',
-                        icon: User,
-                        iconColor: 'text-blue-400',
-                      },
-                      {
-                        label: 'Total Parts Cost',
-                        value: fmtCurrency(orders.reduce((s, o) => s + (o.parts_cost || 0), 0), activeCurrency),
-                        pct: orders.reduce((s, o) => s + (o.total_cost || 0), 0) > 0
-                          ? (orders.reduce((s, o) => s + (o.parts_cost || 0), 0) / orders.reduce((s, o) => s + (o.total_cost || 0), 0)) * 100
-                          : 0,
-                        color: 'bg-purple-500',
-                        icon: Package,
-                        iconColor: 'text-purple-400',
-                      },
-                      {
-                        label: 'Total Workshop Cost',
-                        value: fmtCurrency(orders.reduce((s, o) => s + (o.total_cost || 0), 0), activeCurrency),
-                        pct: 100,
-                        color: 'bg-green-500',
-                        icon: DollarSign,
-                        iconColor: 'text-green-400',
-                      },
-                    ].map(c => (
-                      <div key={c.label} className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
-                        <div className="flex items-center justify-between mb-3">
-                          <span className="text-xs text-[var(--text-muted)] uppercase tracking-wider">{c.label}</span>
-                          <c.icon className={`w-4 h-4 ${c.iconColor}`} />
-                        </div>
-                        <div className="text-2xl font-bold text-[var(--text-primary)] mb-3">{c.value}</div>
-                        <div className="bg-[var(--input-bg)] rounded-full h-1.5">
-                          <div className={`h-1.5 rounded-full ${c.color}`} style={{ width: `${c.pct}%` }} />
-                        </div>
-                        <p className="text-xs text-[var(--text-muted)] mt-1.5">{c.pct.toFixed(1)}% of total</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {[
+                    { label: 'Total Labour Cost', value: split.labour, pct: split.labourPct, bar: 'bg-blue-500', icon: User, iconColor: 'text-blue-400' },
+                    { label: 'Total Parts Cost', value: split.parts, pct: split.partsPct, bar: 'bg-purple-500', icon: Package, iconColor: 'text-purple-400' },
+                    { label: 'Total Workshop Cost', value: split.total, pct: split.total > 0 ? 100 : null, bar: 'bg-green-500', icon: DollarSign, iconColor: 'text-green-400' },
+                  ].map(c => (
+                    <div key={c.label} className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs text-[var(--text-muted)] uppercase tracking-wider">{c.label}</span>
+                        <c.icon className={`w-4 h-4 ${c.iconColor}`} aria-hidden="true" />
                       </div>
-                    ))}
-                  </div>
+                      <div className="text-2xl font-bold text-[var(--text-primary)] mb-3 tabular-nums">{fmtCurrency(c.value, activeCurrency)}</div>
+                      <div className="bg-[var(--input-bg)] rounded-full h-1.5" aria-hidden="true">
+                        <div className={`h-1.5 rounded-full ${c.bar}`} style={{ width: `${c.pct ?? 0}%` }} />
+                      </div>
+                      <p className="text-xs text-[var(--text-muted)] mt-1.5">{c.pct == null ? 'Share N/A (no cost recorded)' : `${c.pct.toFixed(1)}% of total`}</p>
+                    </div>
+                  ))}
+                </div>
 
-                  {/* Per-site cost breakdown */}
-                  <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
-                    <div className="px-5 py-4 border-b border-[var(--input-border)]">
-                      <h3 className="text-sm font-semibold text-[var(--text-primary)]">Cost by Site</h3>
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b border-[var(--input-border)] bg-[var(--input-bg)]">
-                            {['Site','Total Cost','Labour Cost','Parts Cost','Labour %','Avg Cost/Job'].map(h => (
-                              <th key={h} className="px-4 py-3 text-left text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider whitespace-nowrap">{h}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-[var(--input-border)]">
-                          {sitePerf.length === 0 ? (
-                            <tr>
-                              <td colSpan={6} className="px-4 py-10 text-center text-[var(--text-dim)] text-sm">No data.</td>
-                            </tr>
-                          ) : (
-                            sitePerf.map((s, i) => {
-                              const labourCost = orders.filter(o => o.site === s.site).reduce((a, o) => a + (o.labour_cost || 0), 0)
-                              const partsCost  = orders.filter(o => o.site === s.site).reduce((a, o) => a + (o.parts_cost || 0), 0)
-                              const avgPerJob  = s.total > 0 ? s.totalCost / s.total : 0
-                              const labourPct  = s.totalCost > 0 ? (labourCost / s.totalCost) * 100 : 0
-                              return (
-                                <tr key={s.site} className="hover:bg-[var(--input-bg)] transition-colors">
-                                  <td className="px-4 py-3 text-[var(--text-primary)] font-medium">{s.site}</td>
-                                  <td className="px-4 py-3 text-[var(--text-secondary)] font-medium">{fmtCurrency(s.totalCost, activeCurrency)}</td>
-                                  <td className="px-4 py-3 text-blue-400">{fmtCurrency(labourCost, activeCurrency)}</td>
-                                  <td className="px-4 py-3 text-purple-400">{fmtCurrency(partsCost, activeCurrency)}</td>
-                                  <td className="px-4 py-3 text-[var(--text-muted)]">{fmtPct(labourPct)}</td>
-                                  <td className="px-4 py-3 text-[var(--text-secondary)]">{fmtCurrency(avgPerJob, activeCurrency)}</td>
-                                </tr>
-                              )
-                            })
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+                <section className="space-y-2">
+                  <h3 className="text-sm font-semibold text-[var(--text-primary)]">Cost by Site</h3>
+                  <EnterpriseTable
+                    columns={siteCostColumns}
+                    data={sitePerf}
+                    getRowId={(s) => s.site}
+                    enableColumnFilters={false}
+                    searchPlaceholder="Search sites"
+                    exportFileName={reportFileName('Workshop Cost by Site', activeCountry)}
+                    initialPageSize={50}
+                    emptyMessage="No cost data for the selected filters."
+                  />
+                </section>
+              </div>
+            )}
           </>
         )}
       </div>

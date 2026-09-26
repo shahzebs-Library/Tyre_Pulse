@@ -444,3 +444,42 @@ export function formatWashCost(value) {
   if (n === 0) return 'No charge'
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
+
+/**
+ * Wash compliance for the vehicles this record set knows about.
+ *
+ * Washing is reported on COMPLIANCE, never on money: the question is "are the
+ * vehicles being washed on their interval", not "what did it cost".
+ *
+ * Only vehicles with at least one completed wash can be judged. A vehicle that
+ * has never been washed here is unknown to this record set, not compliant, so
+ * the rate is over the tracked vehicles only and is null (N/A) when there are
+ * none - never a flattering 100% and never a 0% invented from no data.
+ *
+ * @param {object[]} rows wash records (any status)
+ * @param {{now?:Date|string, intervalDays?:number}} [opts]
+ * @returns {{tracked:number, onInterval:number, overdue:number,
+ *   compliancePct:number|null, worstDaysOverdue:number|null,
+ *   scheduledOverdue:number, scheduledUpcoming:number}}
+ */
+export function washCompliance(rows, opts = {}) {
+  const src = Array.isArray(rows) ? rows : []
+  const tracked = new Set()
+  for (const r of completedWashes(src)) {
+    const asset = String((r && r.asset_no) || '').trim()
+    if (asset && parseDay(r && r.wash_date)) tracked.add(asset)
+  }
+  const due = washDue(src, null, opts).filter((d) => d.basis === 'washed')
+  const overdue = due.length
+  const onInterval = Math.max(0, tracked.size - overdue)
+  const worst = due.length ? Math.max(...due.map((d) => d.days_overdue)) : null
+  return {
+    tracked: tracked.size,
+    onInterval,
+    overdue,
+    compliancePct: tracked.size > 0 ? (onInterval / tracked.size) * 100 : null,
+    worstDaysOverdue: worst,
+    scheduledOverdue: overdueSchedules(src, opts).length,
+    scheduledUpcoming: upcomingSchedules(src, opts).length,
+  }
+}

@@ -68,8 +68,9 @@ const CASES = [
   {
     file: 'pages/WorkshopManagement.jsx',
     what: 'the table body renders the page',
-    required: 'jobsPager.pageRows.map((job, i) => (',
-    forbidden: 'filteredOrders.map((job, i) => (',
+    // The grid is an EnterpriseTable now; it must be fed the page, not the set.
+    required: 'data={jobsPager.pageRows}',
+    forbidden: 'data={filteredOrders}',
   },
 
   // ── AssetManagement: the register, paged against a URL-borne page ─────────

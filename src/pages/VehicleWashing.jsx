@@ -41,7 +41,7 @@ import {
   MapPin, Layers, Car, TrendingUp, PieChart, BarChart3, CheckCircle2,
   AlertTriangle, Loader2, Save, FileSpreadsheet, FileText, Trash2, ExternalLink,
   ImagePlus, Image as ImageIcon, Pencil, CalendarClock, CalendarPlus, History,
-  ListChecks,
+  ListChecks, ShieldCheck, CalendarX, RefreshCw,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import DownloadNotice from '../components/ui/DownloadNotice'
@@ -63,7 +63,7 @@ import {
 import { getAssetByNo } from '../lib/api/assets'
 import {
   summarizeWashes, filterWashes, washDue, overdueSchedules, upcomingSchedules,
-  costBasis, formatWashCost, WASH_INTERVAL_DAYS,
+  costBasis, formatWashCost, washCompliance, WASH_INTERVAL_DAYS,
 } from '../lib/washAnalytics'
 import { colorAt, categorical, withAlpha } from '../lib/reportColors'
 import { applyExportPolicy, exportToExcel, reportFileName, reportDateLabel } from '../lib/exportUtils'
@@ -296,6 +296,10 @@ export default function VehicleWashing() {
   const dueList = useMemo(() => washDue(rows, null, {}), [rows])
   const overduePlans = useMemo(() => overdueSchedules(rows, {}), [rows])
   const upcomingPlans = useMemo(() => upcomingSchedules(rows, {}), [rows])
+  // Fleet compliance: washing is reported on whether vehicles are washed on
+  // their interval, never on money. Whole record set, same basis as dueList.
+  const compliance = useMemo(() => washCompliance(rows, {}), [rows])
+  const staffRows = useMemo(() => staffWashActivity(regRows), [regRows])
 
   // ── Chart data ────────────────────────────────────────────────────────────
   const trendData = useMemo(() => {
@@ -678,6 +682,43 @@ export default function VehicleWashing() {
     { label: 'Wash types used', value: fmtNum(summary.byType.length), icon: Layers },
   ]
 
+  const complianceTiles = [
+    {
+      label: 'Wash compliance',
+      value: compliance.compliancePct == null ? 'N/A' : `${compliance.compliancePct.toFixed(0)}%`,
+      icon: ShieldCheck,
+      hint: compliance.tracked
+        ? `${fmtNum(compliance.onInterval)} of ${fmtNum(compliance.tracked)} vehicles washed within ${WASH_INTERVAL_DAYS} days`
+        : 'No vehicle has a completed wash yet',
+    },
+    { label: 'Vehicles overdue', value: fmtNum(compliance.overdue), icon: CalendarClock,
+      hint: compliance.worstDaysOverdue == null ? 'None past their interval' : `Worst: ${fmtNum(compliance.worstDaysOverdue)} days overdue` },
+    { label: 'Planned and not done', value: fmtNum(compliance.scheduledOverdue), icon: CalendarX, hint: 'Scheduled washes whose date has passed' },
+    { label: 'Planned ahead', value: fmtNum(compliance.scheduledUpcoming), icon: CalendarPlus, hint: 'Scheduled for today or later' },
+  ]
+
+  const staffColumns = [
+    { id: 'name', header: 'Person', accessorFn: (p) => p.name || '', size: 180,
+      cell: ({ row }) => <button type="button" className="text-blue-400 underline hover:text-blue-300 text-left min-h-[32px]" onClick={() => { setRegFilter('enteredBy', row.original.id); setTab('register') }}>{row.original.name}</button> },
+    { id: 'entries', header: 'Entries submitted', accessorFn: (p) => p.entries, size: 130, meta: { align: 'right' } },
+    { id: 'vehicles', header: 'Distinct vehicles', accessorFn: (p) => p.vehicles, size: 130, meta: { align: 'right' } },
+    { id: 'completed', header: 'Completed records', accessorFn: (p) => p.completed, size: 140, meta: { align: 'right' } },
+    { id: 'scheduled', header: 'Scheduled records', accessorFn: (p) => p.scheduled, size: 140, meta: { align: 'right' } },
+    { id: 'last', header: 'Last received', accessorFn: (p) => p.last || '', size: 160, cell: ({ row }) => fmtStamp(row.original.last) },
+  ]
+
+  const dueColumns = [
+    { id: 'asset_no', header: 'Asset', accessorFn: (d) => d.asset_no, size: 130,
+      cell: ({ row }) => <Link to={`/asset-management/${encodeURIComponent(row.original.asset_no)}`} className="text-blue-400 hover:text-blue-300">{row.original.asset_no}</Link> },
+    { id: 'site', header: 'Site', accessorFn: (d) => d.site || 'N/A', size: 130 },
+    { id: 'last_wash_date', header: 'Last washed', accessorFn: (d) => d.last_wash_date || '', size: 140,
+      cell: ({ row }) => (row.original.basis === 'never' ? 'Never recorded' : fmtDate(row.original.last_wash_date)) },
+    { id: 'next_due_date', header: 'Due', accessorFn: (d) => d.next_due_date || '', size: 130,
+      cell: ({ row }) => (row.original.next_due_date ? fmtDate(row.original.next_due_date) : 'N/A') },
+    { id: 'days_overdue', header: 'Days overdue', accessorFn: (d) => (d.days_overdue == null ? -1 : d.days_overdue), size: 120, meta: { align: 'right' },
+      cell: ({ row }) => (row.original.days_overdue == null ? 'N/A' : fmtNum(row.original.days_overdue)) },
+  ]
+
   const inputCls = 'w-full rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500'
 
   return (
@@ -715,7 +756,10 @@ export default function VehicleWashing() {
       {error && (
         <Card tone="crit" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
           <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
-          <div><p className="text-red-300 font-medium">Something went wrong.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
+          <div className="flex-1 min-w-0"><p className="text-red-300 font-medium">Wash records could not be loaded.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
+          <button type="button" onClick={load} disabled={refreshing} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] shrink-0">
+            <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} /> Retry
+          </button>
         </Card>
       )}
 
@@ -731,15 +775,17 @@ export default function VehicleWashing() {
 
       <DownloadNotice message={pdfStatus} busy={pdfBusy} onDismiss={dismissDownload} />
       {/* Tabs */}
-      <div className="flex items-center gap-1 border-b border-[var(--input-border)]">
+      <div className="flex items-center gap-1 border-b border-[var(--input-border)] overflow-x-auto">
         {TABS.filter((t) => !WRITE_TABS.has(t.id) || canCreate).map((t) => {
           const on = tab === t.id
           const Icon = t.icon
           return (
             <button
               key={t.id}
+              type="button"
               onClick={() => setTab(t.id)}
-              className={`inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${on ? 'border-blue-500 text-[var(--text-primary)]' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}
+              aria-current={on ? 'page' : undefined}
+              className={`inline-flex items-center gap-1.5 px-4 min-h-[44px] whitespace-nowrap text-sm font-medium border-b-2 -mb-px transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 ${on ? 'border-blue-500 text-[var(--text-primary)]' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}
             >
               <Icon size={15} /> {t.label}
             </button>
@@ -766,8 +812,20 @@ export default function VehicleWashing() {
       {tab === 'staff' && <div className="card space-y-4">
         <h2 className="font-semibold">Entries by person</h2>
         <p className="text-sm text-[var(--text-muted)]">Each received record counts once. Edits and upload retries do not add entries. These filters are shared with the Log tab.</p>
-        <div><button className="btn-secondary" disabled={!regRows.length || pdfBusy} onClick={() => exportExcel(regRows,'Wash staff activity records')}>Export matching entries</button></div>
-        {loading ? <p>Loading…</p> : error ? <p role="alert">{error}</p> : <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr>{['Person','Entries submitted','Distinct vehicles','Completed records','Scheduled records','Last received'].map(label => <th className="text-start p-2" key={label}>{label}</th>)}</tr></thead><tbody>{staffWashActivity(regRows).map(p => <tr className="border-t border-[var(--input-border)]" key={p.id}><td className="p-2"><button className="text-blue-400 underline" onClick={() => { setRegFilter('enteredBy',p.id); setTab('register') }}>{p.name}</button></td><td className="p-2">{p.entries}</td><td className="p-2">{p.vehicles}</td><td className="p-2">{p.completed}</td><td className="p-2">{p.scheduled}</td><td className="p-2">{fmtStamp(p.last)}</td></tr>)}</tbody></table>{!regRows.length && <p>No entries match these filters.</p>}</div>}
+        <div><button type="button" className="btn-secondary min-h-[44px] inline-flex items-center gap-1.5" disabled={!regRows.length || pdfBusy} onClick={() => exportExcel(regRows,'Wash staff activity records')}><FileSpreadsheet size={14} /> Export matching entries</button></div>
+        <EnterpriseTable
+          columns={staffColumns}
+          data={staffRows}
+          getRowId={(p) => String(p.id)}
+          loading={loading}
+          error={error || null}
+          onRetry={load}
+          enableColumnFilters={false}
+          enableExport={false}
+          searchPlaceholder="Search people"
+          initialPageSize={50}
+          emptyMessage={rows.length === 0 ? 'No wash has been recorded yet.' : 'No entries match these filters.'}
+        />
       </div>}
 
       {tab === 'reporting' && (
@@ -783,7 +841,25 @@ export default function VehicleWashing() {
                     <Icon size={15} className="text-[var(--text-muted)]" />
                   </div>
                   <p className="text-xl font-bold text-[var(--text-primary)] mt-1">{loading ? '-' : k.value}</p>
-                  {k.hint && <p className="text-[10px] text-[var(--text-muted)] mt-1">{k.hint}</p>}
+                  {k.hint && <p className="text-[11px] text-[var(--text-muted)] mt-1">{k.hint}</p>}
+                </Card>
+              )
+            })}
+          </div>
+
+          {/* Compliance: are vehicles washed on their interval. Whole record
+              set, never money. N/A when no vehicle has a completed wash. */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3" aria-label="Wash compliance">
+            {complianceTiles.map((k) => {
+              const Icon = k.icon
+              return (
+                <Card key={k.label}>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
+                    <Icon size={15} className="text-[var(--text-muted)]" aria-hidden="true" />
+                  </div>
+                  <p className="text-xl font-bold text-[var(--text-primary)] mt-1 tabular-nums">{loading ? '-' : k.value}</p>
+                  {k.hint && <p className="text-[11px] text-[var(--text-muted)] mt-1">{k.hint}</p>}
                 </Card>
               )
             })}
@@ -846,41 +922,16 @@ export default function VehicleWashing() {
                   : 'No vehicle is past its wash interval.'}
               </p>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-[var(--text-muted)] border-b border-[var(--input-border)]">
-                      <th className="py-2 pr-3 font-medium">Asset</th>
-                      <th className="py-2 pr-3 font-medium">Site</th>
-                      <th className="py-2 pr-3 font-medium">Last washed</th>
-                      <th className="py-2 pr-3 font-medium">Due</th>
-                      <th className="py-2 pr-3 font-medium text-right">Days overdue</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {dueList.slice(0, 50).map((d) => (
-                      <tr key={d.asset_no} className="border-b border-[var(--input-border)]/60">
-                        <td className="py-2 pr-3">
-                          <Link to={`/asset-management/${encodeURIComponent(d.asset_no)}`} className="text-blue-400 hover:text-blue-300">{d.asset_no}</Link>
-                        </td>
-                        <td className="py-2 pr-3 text-[var(--text-secondary)]">{d.site || 'N/A'}</td>
-                        <td className="py-2 pr-3 text-[var(--text-secondary)]">
-                          {d.basis === 'never' ? 'Never recorded' : fmtDate(d.last_wash_date)}
-                        </td>
-                        <td className="py-2 pr-3 text-[var(--text-secondary)]">
-                          {d.next_due_date ? fmtDate(d.next_due_date) : 'N/A'}
-                        </td>
-                        <td className="py-2 pr-3 text-right text-[var(--text-secondary)]">
-                          {d.days_overdue == null ? 'N/A' : fmtNum(d.days_overdue)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {dueList.length > 50 && (
-                  <p className="text-[11px] text-[var(--text-muted)] mt-2">Showing the 50 most overdue of {dueList.length}.</p>
-                )}
-              </div>
+              <EnterpriseTable
+                columns={dueColumns}
+                data={dueList}
+                getRowId={(d) => String(d.asset_no)}
+                enableColumnFilters={false}
+                enableExport={false}
+                searchPlaceholder="Search overdue vehicles"
+                initialPageSize={50}
+                emptyMessage="No vehicle matches this search."
+              />
             )}
           </Card>
         </div>
@@ -892,8 +943,8 @@ export default function VehicleWashing() {
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs text-[var(--text-muted)]">Every matching record is exported, including plans.</span>
             <div className="ms-auto flex flex-wrap gap-2">
-              <button onClick={() => exportExcel(regRows, 'Vehicle Washing Log')} disabled={pdfBusy || regRows.length === 0} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-50"><FileSpreadsheet size={14} /> Excel</button>
-              <button onClick={() => exportPdf(regRows, 'Vehicle Washing Log')} disabled={pdfBusy || regRows.length === 0} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-50"><FileText size={14} /> PDF</button>
+              <button onClick={() => exportExcel(regRows, 'Vehicle Washing Log')} type="button" disabled={pdfBusy || regRows.length === 0} className="inline-flex items-center gap-1.5 px-3 min-h-[44px] text-xs rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-50"><FileSpreadsheet size={14} /> Excel</button>
+              <button onClick={() => exportPdf(regRows, 'Vehicle Washing Log')} type="button" disabled={pdfBusy || regRows.length === 0} className="inline-flex items-center gap-1.5 px-3 min-h-[44px] text-xs rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-50"><FileText size={14} /> PDF</button>
             </div>
           </div>
 
@@ -1291,30 +1342,18 @@ export default function VehicleWashing() {
               ) : corrections.length === 0 ? (
                 <p className="text-xs text-[var(--text-muted)]">This record has never been corrected.</p>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="text-left text-[var(--text-muted)] border-b border-[var(--input-border)]">
-                        <th className="py-1.5 pr-3 font-medium">Field</th>
-                        <th className="py-1.5 pr-3 font-medium">Was</th>
-                        <th className="py-1.5 pr-3 font-medium">Now</th>
-                        <th className="py-1.5 pr-3 font-medium">Reason</th>
-                        <th className="py-1.5 pr-3 font-medium">When</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {corrections.map((c) => (
-                        <tr key={c.id} className="border-b border-[var(--input-border)]/60">
-                          <td className="py-1.5 pr-3 text-[var(--text-secondary)]">{EDIT_LABEL[c.field] || c.field}</td>
-                          <td className="py-1.5 pr-3 text-[var(--text-muted)] line-through">{fmtWas(c.old_value)}</td>
-                          <td className="py-1.5 pr-3 text-[var(--text-primary)]">{fmtWas(c.new_value)}</td>
-                          <td className="py-1.5 pr-3 text-[var(--text-secondary)]">{c.reason || 'No reason given'}</td>
-                          <td className="py-1.5 pr-3 text-[var(--text-secondary)]">{fmtStamp(c.corrected_at)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <EnterpriseTable
+                  columns={CORRECTION_COLUMNS}
+                  data={corrections}
+                  getRowId={(c) => String(c.id)}
+                  enableGlobalFilter={false}
+                  enableColumnFilters={false}
+                  enableColumnVisibility={false}
+                  enableExport={false}
+                  initialPageSize={25}
+                  maxHeight={320}
+                  emptyMessage="This record has never been corrected."
+                />
               )}
             </div>
           </div>
@@ -1350,6 +1389,16 @@ export default function VehicleWashing() {
   )
 }
 
+const CORRECTION_COLUMNS = [
+  { id: 'field', header: 'Field', accessorFn: (c) => EDIT_LABEL[c.field] || c.field, size: 130 },
+  { id: 'old_value', header: 'Was', accessorFn: (c) => fmtWas(c.old_value), size: 140,
+    cell: ({ getValue }) => <span className="text-[var(--text-muted)] line-through">{getValue()}</span> },
+  { id: 'new_value', header: 'Now', accessorFn: (c) => fmtWas(c.new_value), size: 140,
+    cell: ({ getValue }) => <span className="text-[var(--text-primary)]">{getValue()}</span> },
+  { id: 'reason', header: 'Reason', accessorFn: (c) => c.reason || 'No reason given', size: 180 },
+  { id: 'corrected_at', header: 'When', accessorFn: (c) => c.corrected_at || '', size: 150, cell: ({ row }) => fmtStamp(row.original.corrected_at) },
+]
+
 /**
  * One list of scheduled washes. Used twice: what was scheduled and never done,
  * and what is still ahead. Marking one completed routes through the same
@@ -1358,6 +1407,35 @@ export default function VehicleWashing() {
 function SchedulePanel({ title, rows, emptyText, loading, lateColumn = false, canWrite, onComplete, onEdit, tone = 'default' }) {
   // Paged, not capped. This list used to render rows.slice(0, 200).
   const pager = usePagedRows(rows)
+  const columns = [
+    { id: 'wash_date', header: 'Planned date', accessorFn: (r) => r.wash_date || '', size: 130, cell: ({ row }) => fmtDate(row.original.wash_date) },
+    { id: 'asset_no', header: 'Asset', accessorFn: (r) => r.asset_no || '', size: 120,
+      cell: ({ row }) => (row.original.asset_no
+        ? <Link to={`/asset-management/${encodeURIComponent(row.original.asset_no)}`} className="text-blue-400 hover:text-blue-300">{row.original.asset_no}</Link>
+        : <span className="text-[var(--text-muted)]">N/A</span>) },
+    { id: 'wash_type', header: 'Type', accessorFn: (r) => r.wash_type || 'N/A', size: 120 },
+    { id: 'site', header: 'Site', accessorFn: (r) => r.site || 'N/A', size: 120 },
+    { id: 'bay', header: 'Bay', accessorFn: (r) => r.bay || 'N/A', size: 90 },
+    ...(lateColumn ? [{ id: 'days_late', header: 'Days late', accessorFn: (r) => r.days_late, size: 100, meta: { align: 'right' }, cell: ({ row }) => fmtNum(row.original.days_late) }] : []),
+    ...(canWrite ? [{
+      id: 'actions', header: 'Actions', size: 190, enableSorting: false, enableHiding: false, meta: { align: 'right', export: false },
+      cell: ({ row }) => (
+        <div className="flex items-center justify-end gap-1 whitespace-nowrap">
+          <button
+            type="button"
+            onClick={() => onComplete?.(row.original)}
+            className="px-2 py-1 text-[11px] rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] hover:text-emerald-300"
+            title="Record that this wash was carried out"
+          >
+            Mark completed
+          </button>
+          <button type="button" onClick={() => onEdit?.(row.original)} className="p-1.5 rounded hover:bg-blue-500/10 text-[var(--text-muted)] hover:text-blue-300" title="Edit or correct" aria-label={`Edit scheduled wash ${row.original.asset_no || ''}`.trim()}>
+            <Pencil size={14} />
+          </button>
+        </div>
+      ),
+    }] : []),
+  ]
   return (
     // `tone` used to be a border class the caller passed in. On Card that class is
     // dead - the border is set inline - so it is a Card tone token now, and the
@@ -1373,50 +1451,18 @@ function SchedulePanel({ title, rows, emptyText, loading, lateColumn = false, ca
       ) : rows.length === 0 ? (
         <p className="text-sm text-[var(--text-muted)] py-3">{emptyText}</p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-[var(--text-muted)] border-b border-[var(--input-border)]">
-                <th className="py-2 pr-3 font-medium">Planned date</th>
-                <th className="py-2 pr-3 font-medium">Asset</th>
-                <th className="py-2 pr-3 font-medium">Type</th>
-                <th className="py-2 pr-3 font-medium">Site</th>
-                <th className="py-2 pr-3 font-medium">Bay</th>
-                {lateColumn && <th className="py-2 pr-3 font-medium text-right">Days late</th>}
-                {canWrite && <th className="py-2 font-medium text-right">Actions</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {pager.pageRows.map((r) => (
-                <tr key={r.id} className="border-b border-[var(--input-border)]/60">
-                  <td className="py-2 pr-3 text-[var(--text-secondary)]">{fmtDate(r.wash_date)}</td>
-                  <td className="py-2 pr-3">
-                    {r.asset_no ? (
-                      <Link to={`/asset-management/${encodeURIComponent(r.asset_no)}`} className="text-blue-400 hover:text-blue-300">{r.asset_no}</Link>
-                    ) : <span className="text-[var(--text-muted)]">N/A</span>}
-                  </td>
-                  <td className="py-2 pr-3 text-[var(--text-secondary)]">{r.wash_type || 'N/A'}</td>
-                  <td className="py-2 pr-3 text-[var(--text-secondary)]">{r.site || 'N/A'}</td>
-                  <td className="py-2 pr-3 text-[var(--text-secondary)]">{r.bay || 'N/A'}</td>
-                  {lateColumn && <td className="py-2 pr-3 text-right text-[var(--text-secondary)]">{fmtNum(r.days_late)}</td>}
-                  {canWrite && (
-                    <td className="py-2 text-right whitespace-nowrap">
-                      <button
-                        onClick={() => onComplete?.(r)}
-                        className="px-2 py-1 text-[11px] rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] hover:text-emerald-300"
-                        title="Record that this wash was carried out"
-                      >
-                        Mark completed
-                      </button>
-                      <button onClick={() => onEdit?.(r)} className="p-1.5 rounded hover:bg-blue-500/10 text-[var(--text-muted)] hover:text-blue-300" title="Edit or correct">
-                        <Pencil size={14} />
-                      </button>
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="space-y-2">
+          <EnterpriseTable
+            columns={columns}
+            data={pager.pageRows}
+            getRowId={(r) => String(r.id)}
+            enableGlobalFilter={false}
+            enableColumnFilters={false}
+            enableExport={false}
+            virtual
+            maxHeight={480}
+            emptyMessage={emptyText}
+          />
           <TablePagination {...pager} />
         </div>
       )}

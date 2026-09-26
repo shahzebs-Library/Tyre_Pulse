@@ -95,8 +95,10 @@ class TyreDiagramPhotoSpec {
 /// The tyre controls remain native widgets and retain their canonical
 /// position ids; this asset replaces only the visual body layer.
 TyreDiagramPhotoSpec? tyreDiagramVehiclePhotoSpec(
-  TyreDiagramBodyKey bodyKey,
-) {
+  TyreDiagramBodyKey bodyKey, {
+  String? make,
+  String? model,
+}) {
   return switch (bodyKey) {
     TyreDiagramBodyKey.pickup =>
       const TyreDiagramPhotoSpec(asset: 'assets/vehicle_photos/pickup.png'),
@@ -115,12 +117,7 @@ TyreDiagramPhotoSpec? tyreDiagramVehiclePhotoSpec(
     TyreDiagramBodyKey.concretePump => const TyreDiagramPhotoSpec(
         asset: 'assets/vehicle_photos/concrete_pump_top_down.webp',
       ),
-    TyreDiagramBodyKey.bus => const TyreDiagramPhotoSpec(
-        asset:
-            'assets/vehicle_multiview_views/generic_staff_bus_five_view_v1_top.png',
-        fit: BoxFit.cover,
-        quarterTurns: 2,
-      ),
+    TyreDiagramBodyKey.bus => _busPhotoSpec(make: make, model: model),
     // The canter body key is also shared by Truck 6x4, Tanker and Trailer.
     // No truthful top-down photograph exists for that group. The available
     // Tata and Ashok Leyland top views are staff buses, while these two body
@@ -133,19 +130,106 @@ TyreDiagramPhotoSpec? tyreDiagramVehiclePhotoSpec(
   };
 }
 
-String? tyreDiagramVehiclePhotoAsset(TyreDiagramBodyKey bodyKey) =>
-    tyreDiagramVehiclePhotoSpec(bodyKey)?.asset;
+String? tyreDiagramVehiclePhotoAsset(
+  TyreDiagramBodyKey bodyKey, {
+  String? make,
+  String? model,
+}) =>
+    tyreDiagramVehiclePhotoSpec(bodyKey, make: make, model: model)?.asset;
+
+const TyreDiagramPhotoSpec _genericBusPhoto = TyreDiagramPhotoSpec(
+  asset:
+      'assets/vehicle_multiview_views/generic_staff_bus_five_view_v1_top.png',
+  fit: BoxFit.cover,
+  quarterTurns: 2,
+);
+const TyreDiagramPhotoSpec _tataBusPhoto = TyreDiagramPhotoSpec(
+  asset: 'assets/vehicle_multiview_views/tata_staff_bus_five_view_v1_top.png',
+  fit: BoxFit.cover,
+  quarterTurns: 2,
+);
+const TyreDiagramPhotoSpec _ashokLeylandBusPhoto = TyreDiagramPhotoSpec(
+  asset:
+      'assets/vehicle_multiview_views/ashok_leyland_bus_five_view_v1_top.png',
+  fit: BoxFit.cover,
+  quarterTurns: 2,
+);
+const TyreDiagramPhotoSpec _hiaceBusPhoto = TyreDiagramPhotoSpec(
+  asset: 'assets/vehicle_multiview_views/toyota_hiace_five_view_v1_top.png',
+  fit: BoxFit.cover,
+  quarterTurns: 2,
+);
+
+TyreDiagramPhotoSpec? _busPhotoSpec({String? make, String? model}) {
+  final String normalisedMake = _normaliseIdentity(make);
+  final String normalisedModel = _normaliseIdentity(model);
+  final String identity = '$normalisedMake $normalisedModel'.trim();
+
+  // A pickup model on a Bus layout is contradictory master data. It must not
+  // be hidden by a plausible-looking bus photograph; preserve the exact Bus
+  // SVG until the fleet row is corrected instead.
+  if (_containsPickupModel(identity)) return null;
+
+  final bool makeIsMissing = _identityIsMissing(normalisedMake);
+  if (!makeIsMissing) {
+    if (normalisedMake.contains('hiace') ||
+        (normalisedMake.contains('toyota') &&
+            (normalisedModel.contains('hiace') ||
+                normalisedModel.contains('hi ace')))) {
+      return _hiaceBusPhoto;
+    }
+    if (normalisedMake.contains('ashok') ||
+        normalisedMake.contains('leyland')) {
+      return _ashokLeylandBusPhoto;
+    }
+    if (normalisedMake.contains('tata')) return _tataBusPhoto;
+    return null;
+  }
+
+  if (normalisedModel.contains('hiace') || normalisedModel.contains('hi ace')) {
+    return _hiaceBusPhoto;
+  }
+  if (normalisedModel.contains('ashok') ||
+      normalisedModel.contains('leyland')) {
+    return _ashokLeylandBusPhoto;
+  }
+  if (normalisedModel.contains('tata')) return _tataBusPhoto;
+
+  // Fully unspecified identity is the one honest use of the neutral staff-bus
+  // body. Any real but unsupported make OR model must fall back to the
+  // production Bus SVG, rather than borrowing an unverified photograph.
+  return _identityIsMissing(normalisedModel) ? _genericBusPhoto : null;
+}
+
+bool _containsPickupModel(String identity) {
+  final String compact = identity.replaceAll(' ', '');
+  return identity.contains('triton') ||
+      identity.contains('xenon') ||
+      compact.contains('l200') ||
+      compact.contains('maxust60');
+}
+
+bool _identityIsMissing(String value) =>
+    value.isEmpty || value == 'n a' || value == 'na' || value == 'unknown';
+
+String _normaliseIdentity(String? value) => (value ?? '')
+    .toLowerCase()
+    .replaceAll(RegExp(r'[-_/]+'), ' ')
+    .replaceAll(RegExp(r'\s+'), ' ')
+    .trim();
 
 /// Renders [bodyKey]'s real artwork, sized to exactly fill [viewport].
 class TyreDiagramBody extends StatefulWidget {
   const TyreDiagramBody({
     required this.bodyKey,
     required this.viewport,
+    required this.photo,
     super.key,
   });
 
   final TyreDiagramBodyKey bodyKey;
   final TyreDiagramViewport viewport;
+  final TyreDiagramPhotoSpec? photo;
 
   @override
   State<TyreDiagramBody> createState() => _TyreDiagramBodyState();
@@ -167,9 +251,7 @@ class _TyreDiagramBodyState extends State<TyreDiagramBody>
   @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
-    final TyreDiagramPhotoSpec? photo = tyreDiagramVehiclePhotoSpec(
-      widget.bodyKey,
-    );
+    final TyreDiagramPhotoSpec? photo = widget.photo;
     return SizedBox(
       width: widget.viewport.width,
       height: widget.viewport.height,

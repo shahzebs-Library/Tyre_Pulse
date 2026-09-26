@@ -12,6 +12,8 @@ Future<void> _pumpPicker(
   required String assetNo,
   required String selectedCode,
   required ValueChanged<String> onSelected,
+  String? make,
+  String? model,
 }) async {
   tester.view.physicalSize = const Size(390, 1400);
   tester.view.devicePixelRatio = 1;
@@ -30,6 +32,8 @@ Future<void> _pumpPicker(
           child: TyreReplacementPositionPicker(
             vehicleType: vehicleType,
             assetNo: assetNo,
+            make: make,
+            model: model,
             options: tyreReplacementPositions(vehicleType, assetNo),
             selectedCode: selectedCode,
             onSelected: onSelected,
@@ -42,6 +46,35 @@ Future<void> _pumpPicker(
 }
 
 void main() {
+  testWidgets('picker forwards the resolved fleet master identity', (
+    WidgetTester tester,
+  ) async {
+    await _pumpPicker(
+      tester,
+      vehicleType: 'Bus',
+      assetNo: 'BH021',
+      make: 'Ashok Leyland',
+      model: '62 seater',
+      selectedCode: '',
+      onSelected: (_) {},
+    );
+
+    final VehicleTyreDiagram diagram = tester.widget<VehicleTyreDiagram>(
+      find.byType(VehicleTyreDiagram),
+    );
+    expect(diagram.make, 'Ashok Leyland');
+    expect(diagram.model, '62 seater');
+    expect(
+      find.byKey(
+        const ValueKey<String>(
+          'assets/vehicle_multiview_views/'
+          'ashok_leyland_bus_five_view_v1_top.png',
+        ),
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets(
     'five-axle concrete pump reuses the full 14-slot capture diagram',
     (WidgetTester tester) async {

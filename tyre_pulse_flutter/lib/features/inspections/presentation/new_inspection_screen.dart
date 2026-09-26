@@ -964,6 +964,10 @@ class _TyresStepState extends ConsumerState<_TyresStep> {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final TpPalette palette = TpPalette.of(context);
     final controller = ref.read(inspectionWizardControllerProvider.notifier);
+    final VehicleAsset? asset = _findFleetAsset(
+      ref.watch(vehicleFleetListProvider),
+      state.selectedAssetNo,
+    );
     final String resolvedClass = resolveVehicleType(
       state.selectedVehicleType,
       state.selectedAssetNo,
@@ -1019,6 +1023,8 @@ class _TyresStepState extends ConsumerState<_TyresStep> {
             key: NewInspectionScreenKeys.tyreDiagramBoard,
             vehicleType: resolvedClass,
             assetNo: state.selectedAssetNo,
+            make: asset?.make,
+            model: asset?.model,
             positions: state.positions,
             tyreData: <String, Map<String, Object?>>{
               for (final String position in state.positions)

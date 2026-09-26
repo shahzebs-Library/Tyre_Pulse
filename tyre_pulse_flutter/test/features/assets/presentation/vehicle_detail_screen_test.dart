@@ -40,6 +40,7 @@ import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_detail_screen.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_fleet_providers.dart';
+import 'package:tyre_pulse/features/tyre_diagram/presentation/vehicle_tyre_diagram.dart';
 
 const String _assetNo = 'TM514';
 
@@ -176,6 +177,44 @@ void main() {
       findsNothing,
     );
     _expectNoStateWidget();
+  });
+
+  testWidgets('vehicle detail passes authoritative make and model to tyre art',
+      (
+    WidgetTester tester,
+  ) async {
+    const String busAssetNo = 'BH021';
+    const VehicleAsset asset = VehicleAsset(
+      id: 'bus-1',
+      assetNo: busAssetNo,
+      make: 'Tata',
+      model: '32 seater',
+      vehicleType: 'Bus',
+    );
+    await _pump(
+      tester,
+      <Override>[
+        _resolved(const VehicleDetailLoaded(asset), assetNo: busAssetNo),
+        _canStartInspection(false),
+      ],
+      assetNo: busAssetNo,
+    );
+    await _pumpLoadedFrame(tester);
+
+    final VehicleTyreDiagram diagram = tester.widget<VehicleTyreDiagram>(
+      find.byType(VehicleTyreDiagram),
+    );
+    expect(diagram.make, 'Tata');
+    expect(diagram.model, '32 seater');
+    expect(
+      find.byKey(
+        const ValueKey<String>(
+          'diagram.body.assets/vehicle_multiview_views/'
+          'tata_staff_bus_five_view_v1_top.png',
+        ),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets(

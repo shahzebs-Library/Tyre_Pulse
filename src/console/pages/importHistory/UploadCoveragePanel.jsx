@@ -22,7 +22,7 @@ import {
   MapPin, FileUp, Globe, Clock,
 } from 'lucide-react'
 import {
-  getUploadCoverageDetail, feedCadenceLabel, feedProblem, problemAreas, sortCountries,
+  getUploadCoverageDetail, listUploadFeeds, feedCadenceLabel, feedProblem, problemAreas, sortCountries,
   feedBasisNote,
 } from '../../../lib/api/uploadCoverage'
 import FeedFileHelp from './FeedFileHelp'
@@ -196,6 +196,23 @@ function FeedCard({ src, today, country }) {
   )
 }
 
+/**
+ * Watched modules with nothing in this country for six months. They are not
+ * gaps (a module a country does not use is not "missing"), so they are named in
+ * one quiet line rather than drawn as empty cards.
+ */
+function NoDataModules({ feeds, sources }) {
+  const seen = new Set((sources || []).map((s) => s.src))
+  const idle = (feeds || []).filter((f) => !seen.has(f.src))
+  if (idle.length === 0) return null
+  return (
+    <p className="text-[11px] text-gray-400">
+      <span className="text-gray-500">No data in the last 6 months ({idle.length}):</span>{' '}
+      {idle.map((f) => f.label).join(', ')}
+    </p>
+  )
+}
+
 export default function UploadCoveragePanel() {
   const [cov, setCov] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -204,6 +221,9 @@ export default function UploadCoveragePanel() {
   const [fromDate, setFromDate] = useState('')
   const [tooFarBack, setTooFarBack] = useState(false)
   const [country, setCountry] = useState('')
+  // Every watched module, so a module with no data in a country is still named
+  // instead of silently missing from the list.
+  const [feeds, setFeeds] = useState([])
 
   // A preset and a start date are two ways of saying the same thing, so picking
   // one clears the other rather than leaving both on screen disagreeing.
@@ -222,7 +242,12 @@ export default function UploadCoveragePanel() {
   const load = useCallback(async () => {
     setLoading(true); setError('')
     try {
-      setCov(await getUploadCoverageDetail({ days }))
+      const [detail, feedList] = await Promise.all([
+        getUploadCoverageDetail({ days }),
+        listUploadFeeds().catch(() => null),
+      ])
+      setCov(detail)
+      setFeeds(Array.isArray(feedList) ? feedList.filter((f) => f.active) : [])
     } catch (e) {
       setError(toUserMessage(e, 'Could not load upload coverage.'))
     } finally { setLoading(false) }
@@ -328,6 +353,7 @@ export default function UploadCoveragePanel() {
               <FeedCard key={`${c.country}-${s.src}`} src={s} today={cov.today} country={c.country} />
             ))}
           </div>
+          <NoDataModules feeds={feeds} sources={c.sources} />
         </div>
       ))}
 

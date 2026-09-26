@@ -23,6 +23,46 @@ export const SOURCE_FEEDS = Object.freeze({
   job_cards: 'work_orders',
   tyre_records: 'tyre_records',
   production_m3: 'production_logs',
+  wo_line_items: 'work_order_line_items',
+  open_work_orders: 'open_work_orders',
+  odometer: 'odometer_logs (and vehicle_fleet.current_km)',
+})
+
+/**
+ * Where a module's rows come from when there is NO upload file for it: the
+ * screen (web or phone) where people record them. A gap on one of these means
+ * nobody recorded anything on those days, not that a file was forgotten.
+ */
+export const ENTERED_IN = Object.freeze({
+  production_m3: 'Production (m3) page, or the Production tab in Data Intake',
+  sco_costs: 'SCO Costs page, or the SCO Cost tab in Data Intake',
+  sany_invoices: 'SANY Invoices page (Excel or PDF proforma), or the SANY tab in Data Intake',
+  inspections: 'Inspections, on the web or the phone app',
+  engine_hours: 'Meter Log on the phone app, or the Engine Hours page',
+  wash_records: 'Vehicle Washing, on the web or the phone app',
+  accidents: 'Accidents register, on the web or the phone app',
+  checklists: 'Checklists, filled on the phone app or the web',
+  asset_breakdowns: 'Breakdown Register page',
+  telematics: 'Telematics export loaded into asset utilization (GPS provider file, loaded by the admin)',
+  asset_disposals: 'Asset Disposals page',
+  insurance_claims: 'Insurance Policies page, Claims register tab (from the insurer file)',
+  gate_passes: 'Gate Pass page',
+  corrective_actions: 'Corrective Actions page (also raised from inspections)',
+  pm_services: 'Preventive Maintenance, Record service (web or phone)',
+  tyre_service_events: 'Tyre Bay on the asset page, or Tyre Service Events',
+  material_issues: 'Store Material Issue / Return page',
+  repair_requests: 'Repair Requests page',
+  parts_requests: 'Parts Requests page',
+  incident_reports: 'Incident Reports page',
+  breakdown_callouts: 'Breakdown callouts (service requests)',
+  dvir_reports: 'Driver vehicle checks on the phone app',
+  driver_expenses: 'Driver Expenses page',
+  fuel_deliveries: 'Fuel Delivery page',
+  warranty_claims: 'Warranty Tracker page',
+  purchase_orders: 'Procurement, Purchase orders',
+  goods_receipts: 'Goods Receipt page',
+  tpms_readings: 'TPMS page (sensor readings)',
+  journeys: 'Journeys page',
 })
 
 /** Plain-language name for a coverage source. */
@@ -31,6 +71,9 @@ export const SOURCE_LABEL = Object.freeze({
   job_cards: 'Job cards',
   tyre_records: 'Tyre records',
   production_m3: 'Production (m3)',
+  wo_line_items: 'Job card line items',
+  open_work_orders: 'Open job cards snapshot',
+  odometer: 'Meter readings (km)',
 })
 
 /**
@@ -81,9 +124,9 @@ export function howToFill(src, country) {
     return {
       available: false,
       label,
-      reason: src === 'production_m3'
-        ? 'Production volume has no upload file. It is entered in the app under Cost Intelligence, '
-          + 'so a gap here means nobody recorded the m3 for those days.'
+      reason: ENTERED_IN[src]
+        ? `No upload file for this one. It is recorded in: ${ENTERED_IN[src]}. `
+          + 'A gap here means nobody recorded anything on those days.'
         : 'No import file is registered for this feed.',
     }
   }

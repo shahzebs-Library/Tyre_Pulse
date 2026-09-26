@@ -55,6 +55,18 @@ batching stops them being started at all.
 
 ---
 
+# ⚑ SESSION 2026-09-26 (part 3) — DAILY COVERAGE NOW WATCHES EVERY MODULE (35 feeds).
+- Migration `20260926093000_upload_feeds_every_module` APPLIED: +23 upload_feeds (checklists, breakdowns,
+  telematics, disposals, insurer claims, gate passes, corrective actions, PM, tyre service, store issues, repair/
+  parts requests, incidents, callouts, DVIR, driver expenses, fuel, warranty, POs, GRNs, open-WO snapshot, TPMS,
+  journeys). Business date column where one exists, created_at ('arrival') otherwise; none site-day policed.
+- The view only emits a module for a country with data in the last 180 days, so empty modules add no cards.
+  Panel now names them in one line per country ("No data in the last 6 months"). ~2.2 s for 35 feeds.
+- `coverageSources.ENTERED_IN` = where each app-entered module is recorded; "What fills this?" now answers for
+  every module (test pins all 35 live feeds). RULE: new feed -> add a file target or an ENTERED_IN line.
+
+---
+
 # ⚑ SESSION 2026-09-26 (part 2) — SUPER-ADMIN LOCKOUT = CAPTCHA; CONSOLE CRASH = CHART PLUGIN; TURNSTILE WIRED.
 - **Login outage cause:** Supabase Auth CAPTCHA protection was switched on while NO client sent a captcha_token
   (grant_type=password -> captcha_failed). Owner turned it off; login restored.

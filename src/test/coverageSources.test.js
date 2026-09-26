@@ -1,15 +1,37 @@
 import { describe, it, expect } from 'vitest'
 import {
-  SOURCE_FEEDS, targetForSource, tablesFor, tableForCountry, howToFill,
+  SOURCE_FEEDS, ENTERED_IN, targetForSource, tablesFor, tableForCountry, howToFill,
   reimportWarning, uploadableSources,
 } from '../lib/coverageSources'
 import { IMPORT_TARGETS } from '../lib/importTargets'
 
 describe('every coverage source is tied to something real', () => {
-  it('names the four sources the coverage view actually reports', () => {
-    // Measured from get_upload_coverage_detail on the live database.
-    expect(Object.keys(SOURCE_FEEDS).sort())
-      .toEqual(['expenses', 'job_cards', 'production_m3', 'tyre_records'])
+  it('maps the file-backed sources the coverage view reports', () => {
+    expect(Object.keys(SOURCE_FEEDS).sort()).toEqual([
+      'expenses', 'job_cards', 'odometer', 'open_work_orders', 'production_m3',
+      'tyre_records', 'wo_line_items',
+    ])
+  })
+
+  it('every registered coverage module has an answer: a file or a screen', () => {
+    // The live upload_feeds registry (migration 20260926093000). A module with
+    // neither would render "no import file is registered", which tells the
+    // owner nothing about where the missing data should have come from.
+    const LIVE_FEEDS = [
+      'job_cards', 'expenses', 'tyre_records', 'production_m3', 'wo_line_items',
+      'sco_costs', 'sany_invoices', 'inspections', 'odometer', 'engine_hours',
+      'wash_records', 'accidents', 'checklists', 'asset_breakdowns', 'telematics',
+      'asset_disposals', 'insurance_claims', 'gate_passes', 'corrective_actions',
+      'pm_services', 'tyre_service_events', 'material_issues', 'repair_requests',
+      'parts_requests', 'incident_reports', 'breakdown_callouts', 'dvir_reports',
+      'driver_expenses', 'fuel_deliveries', 'warranty_claims', 'purchase_orders',
+      'goods_receipts', 'open_work_orders', 'tpms_readings', 'journeys',
+    ]
+    const unanswered = LIVE_FEEDS.filter((src) => {
+      const h = howToFill(src, 'KSA')
+      return !h.available && !ENTERED_IN[src]
+    })
+    expect(unanswered).toEqual([])
   })
 
   it('resolves each file-backed source to a registered import target', () => {
@@ -82,7 +104,7 @@ describe('howToFill answers the question the gap raises', () => {
   it('explains rather than shrugs when there is no file', () => {
     const h = howToFill('production_m3', 'KSA')
     expect(h.available).toBe(false)
-    expect(h.reason).toMatch(/entered in the app/i)
+    expect(h.reason).toMatch(/recorded in/i)
   })
 
   it('distinguishes no-file from unknown-source', () => {

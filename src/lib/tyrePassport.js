@@ -522,3 +522,53 @@ export function buildPassport(records, aux = {}) {
     statusMarks,
   }
 }
+
+// ── View helpers (pure) ─────────────────────────────────────────────────────
+// The page reads these instead of deriving figures inline, so the header, the
+// tables and the exports cannot disagree. Every missing figure is null (N/A),
+// never a fabricated 0.
+
+/** Headline KPI values for a passport; null where not measurable. */
+export function passportKpiValues(p) {
+  if (!p) return null
+  const pos = (v) => (v != null && Number(v) > 0 ? Number(v) : null)
+  return {
+    lifetimeKm: pos(p.totals?.km),
+    lifetimeCost: p.costBreakdown?.lifetime ?? null,
+    cpk: p.totals?.cpk ?? null,
+    vehicles: pos(p.distinctVehicles),
+    retreads: p.retreadCount ?? 0,
+    records: p.recordCount ?? 0,
+  }
+}
+
+/**
+ * Journey stints enriched with days on the vehicle. An open stint (no removal)
+ * runs to `now` (injectable); a stint with no fitment date has days null.
+ */
+export function journeyWithDays(journey = [], now = new Date()) {
+  const parse = (d) => { const t = d ? new Date(d).getTime() : NaN; return Number.isFinite(t) ? t : NaN }
+  const end = new Date(now).getTime()
+  return (Array.isArray(journey) ? journey : []).map((s) => {
+    const from = parse(s.fitted)
+    const to = s.removed ? parse(s.removed) : end
+    const days = Number.isFinite(from) && Number.isFinite(to) && to >= from
+      ? Math.round((to - from) / DAY_MS)
+      : null
+    return { ...s, current: !s.removed, days }
+  })
+}
+
+/** Summary of the journey for the header strip. */
+export function journeySummary(journey = []) {
+  const list = Array.isArray(journey) ? journey : []
+  const measured = list.filter((s) => s.km_run != null && s.km_run > 0)
+  const longest = measured.reduce((best, s) => (best == null || s.km_run > best.km_run ? s : best), null)
+  return {
+    stints: list.length,
+    measuredStints: measured.length,
+    avgKmPerStint: measured.length ? Math.round(measured.reduce((a, s) => a + s.km_run, 0) / measured.length) : null,
+    longestStint: longest ? { asset_no: longest.asset_no, km_run: longest.km_run } : null,
+    removalReasons: [...new Set(list.map((s) => s.reason).filter(Boolean))],
+  }
+}

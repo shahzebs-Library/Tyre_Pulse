@@ -308,8 +308,8 @@ describe('KPI tiles are computed over the filtered rows, not the raw ones', () =
     must(s, 'const trendScrapped = useMemo(() => (', 'the trend reads its own filtered base')
     must(s, "if (filterSite !== 'All' && t.site !== filterSite) return false", 'site narrows the trend')
     must(s, "if (filterBrand !== 'All' && t.brand !== filterBrand) return false", 'brand narrows the trend')
-    must(s, 'trendScrapped.forEach(t => {', 'the trend buckets the filtered base')
-    must(s, '}, [trendScrapped, dataAnchor])', 'the trend memo depends on the filtered base')
+    must(s, 'monthlyScrapTrend(trendScrapped, dataAnchor', 'the trend buckets the filtered base (via the pure engine)')
+    must(s, '[trendScrapped, dataAnchor]', 'the trend memo depends on the filtered base')
 
     // RULE 1: the chart reports on time, so the period filter is held out - and
     // RULE 2: the caption names that hold-out rather than leaving it inferred.

@@ -29,11 +29,11 @@ import {
 } from 'chart.js'
 import PageHeader from '../components/ui/PageHeader'
 import Card, { CardHeader } from '../components/ui/Card'
-import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { useSettings } from '../contexts/SettingsContext'
 import { formatCurrencyCompact, formatCurrency, formatDate } from '../lib/formatters'
 import { getPassportBundle, searchSerials } from '../lib/api/tyrePassport'
-import { buildPassport } from '../lib/tyrePassport'
+import { buildPassport, passportKpiValues, journeyWithDays, journeySummary } from '../lib/tyrePassport'
 import { toUserMessage } from '../lib/safeError'
 import { colorAt, withAlpha } from '../lib/reportColors'
 
@@ -135,7 +135,7 @@ function SearchBox({ country, onPick }) {
     timer.current = setTimeout(async () => {
       setLoading(true)
       try { setResults(await searchSerials(q, { country })); setOpen(true) }
-      catch { setResults([]) }
+      catch { setResults([]); setOpen(false) }
       finally { setLoading(false) }
     }, 250)
     return () => timer.current && clearTimeout(timer.current)
@@ -144,25 +144,38 @@ function SearchBox({ country, onPick }) {
   return (
     <div className="relative max-w-xl">
       <div className="relative">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
         <input
-          className="input pl-9 w-full"
+          aria-label="Search a tyre serial number"
+          role="combobox"
+          aria-expanded={open && results.length > 0}
+          aria-controls="tyre-passport-serial-results"
+          aria-autocomplete="list"
+          className="input pl-9 w-full min-h-[44px]"
           placeholder="Search a tyre serial number"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onFocus={() => results.length && setOpen(true)}
-          onKeyDown={(e) => { if (e.key === 'Enter' && q.trim()) onPick(q.trim()) }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && q.trim()) onPick(q.trim())
+            if (e.key === 'Escape') setOpen(false)
+          }}
         />
-        {loading && <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-[var(--text-muted)]" />}
+        {loading && <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-[var(--text-muted)]" aria-label="Searching" />}
       </div>
+      {open && q.trim().length >= 2 && !loading && results.length === 0 && (
+        <p role="status" className="mt-1 text-xs text-[var(--text-muted)]">No serial starts with that text. Press Enter to open it anyway.</p>
+      )}
       {open && results.length > 0 && (
-        <div className="absolute z-30 mt-1 w-full max-h-72 overflow-auto rounded-lg border border-[var(--input-border)] bg-[var(--surface-2)] shadow-xl py-1">
+        <div id="tyre-passport-serial-results" role="listbox" aria-label="Matching serials" className="absolute z-30 mt-1 w-full max-h-72 overflow-auto rounded-lg border border-[var(--input-border)] bg-[var(--surface-2)] shadow-xl py-1">
           {results.map((r) => (
             <button
               key={r.serial}
               type="button"
+              role="option"
+              aria-selected="false"
               onClick={() => { setOpen(false); onPick(r.serial) }}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-[var(--surface-1)]"
+              className="flex w-full items-center gap-2 px-3 min-h-[44px] text-left text-sm hover:bg-[var(--surface-1)] focus:outline-none focus-visible:bg-[var(--surface-1)]"
             >
               <CircleDot size={14} className="text-[var(--text-muted)] shrink-0" />
               <span className="font-mono text-[var(--text-primary)]">{r.serial}</span>
@@ -230,10 +243,8 @@ export default function TyrePassport() {
       retreadClaims: bundle.retreadClaims,
     })
   }, [bundle])
-  const journeyPager = usePagedRows(passport?.journey)
-  const servicePager = usePagedRows(passport?.serviceEvents)
-  const warrantyPager = usePagedRows(passport?.warranty)
-  const retreadPager = usePagedRows(passport?.retreadClaims)
+  const journeyRows = useMemo(() => journeyWithDays(passport?.journey || []), [passport])
+  const journeyStats = useMemo(() => journeySummary(passport?.journey || []), [passport])
 
   const money = (v) => (v == null ? NA : formatCurrencyCompact(v, activeCurrency))
   const moneyFull = useCallback(
@@ -316,13 +327,78 @@ export default function TyrePassport() {
     })
   }, [passport, activeCurrency])
 
-  const kpis = passport ? [
-    { label: 'Lifetime km', value: passport.totals.km ? passport.totals.km.toLocaleString() : NA, icon: Gauge },
-    { label: 'Lifetime cost', value: money(passport.costBreakdown.lifetime), icon: DollarSign },
-    { label: 'CPK', value: passport.totals.cpk == null ? NA : String(passport.totals.cpk), icon: Activity },
-    { label: 'Vehicles', value: passport.distinctVehicles || NA, icon: Truck },
-    { label: 'Retreads', value: passport.retreadCount, icon: Recycle },
-    { label: 'Records', value: passport.recordCount, icon: Package },
+  const pill = (cls, text) => <span className={`text-[11px] px-2 py-0.5 rounded ${cls}`}>{text}</span>
+  const assetLink = (a) => (a
+    ? <Link to={`/asset-management/${encodeURIComponent(a)}`} className="font-mono text-[var(--brand-bright)] hover:underline">{a}</Link>
+    : <span className="text-[var(--text-muted)]">{NA}</span>)
+
+  const journeyColumns = useMemo(() => [
+    { accessorKey: 'asset_no', header: 'Asset', cell: ({ getValue }) => assetLink(getValue()) },
+    { accessorKey: 'position', header: 'Position', cell: ({ getValue }) => getValue() || NA },
+    { accessorKey: 'site', header: 'Site', cell: ({ getValue }) => getValue() || NA },
+    { accessorKey: 'fitted', header: 'Fitted', cell: ({ getValue }) => dateTxt(getValue()) },
+    { accessorKey: 'removed', header: 'Removed',
+      meta: { exportValue: (r) => (r.removed || 'Current') },
+      cell: ({ getValue }) => (getValue() ? dateTxt(getValue()) : <span className="text-emerald-400 font-medium">Current</span>) },
+    { accessorKey: 'days', header: 'Days on', meta: { align: 'right' },
+      cell: ({ getValue }) => (getValue() == null ? NA : <span className="tabular-nums">{getValue().toLocaleString()}</span>) },
+    { accessorKey: 'km_run', header: 'Km run', meta: { align: 'right' },
+      cell: ({ getValue }) => <span className="tabular-nums">{kmTxt(getValue())}</span> },
+    { accessorKey: 'cost', header: 'Cost', meta: { align: 'right' },
+      cell: ({ getValue }) => <span className="tabular-nums">{getValue() == null ? NA : money(getValue())}</span> },
+    { accessorKey: 'cpk', header: 'CPK', meta: { align: 'right' },
+      cell: ({ getValue }) => (getValue() == null ? NA : getValue()) },
+    { accessorKey: 'reason', header: 'Removal reason', cell: ({ getValue }) => getValue() || NA },
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- formatters close over activeCurrency only
+  ], [activeCurrency])
+
+  const serviceColumns = useMemo(() => [
+    { accessorKey: 'date', header: 'Date', cell: ({ getValue }) => <span className="whitespace-nowrap">{dateTxt(getValue())}</span> },
+    { accessorKey: 'type', header: 'Type', cell: ({ getValue }) => pill(EVENT_TONE(getValue()), getValue() || NA) },
+    { accessorKey: 'asset_no', header: 'Asset', cell: ({ getValue }) => <span className="font-mono">{getValue() || NA}</span> },
+    { accessorKey: 'position', header: 'Position', cell: ({ getValue }) => getValue() || NA },
+    { accessorKey: 'tread', header: 'Tread', meta: { align: 'right' }, cell: ({ getValue }) => (getValue() == null ? NA : `${getValue()} mm`) },
+    { accessorKey: 'pressure', header: 'Pressure', meta: { align: 'right' }, cell: ({ getValue }) => (getValue() == null ? NA : `${getValue()} psi`) },
+    { accessorKey: 'cost', header: 'Cost', meta: { align: 'right' }, cell: ({ getValue }) => (getValue() == null ? NA : money(getValue())) },
+    { accessorKey: 'technician', header: 'Technician', cell: ({ getValue }) => getValue() || NA },
+    { accessorKey: 'notes', header: 'Notes',
+      cell: ({ getValue }) => <span className="block max-w-[220px] truncate text-[var(--text-muted)]" title={getValue() || ''}>{getValue() || NA}</span> },
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- formatters close over activeCurrency only
+  ], [activeCurrency])
+
+  const warrantyColumns = useMemo(() => [
+    { accessorKey: 'claim_no', header: 'Claim no', cell: ({ getValue }) => <span className="font-mono">{getValue() || NA}</span> },
+    { accessorKey: 'status', header: 'Status', cell: ({ getValue }) => pill(STATUS_TONE(getValue()), getValue() || NA) },
+    { accessorKey: 'failure_type', header: 'Failure type', cell: ({ getValue }) => getValue() || NA },
+    { accessorKey: 'supplier', header: 'Supplier', cell: ({ getValue }) => getValue() || NA },
+    { accessorKey: 'km_run', header: 'Km run', meta: { align: 'right' }, cell: ({ getValue }) => kmTxt(getValue()) },
+    { accessorKey: 'credit_amount', header: 'Credit', meta: { align: 'right' },
+      cell: ({ getValue }) => (getValue() == null ? NA : <span className="text-emerald-400">{money(getValue())}</span>) },
+    { accessorKey: 'credit_date', header: 'Credit date', cell: ({ getValue }) => dateTxt(getValue()) },
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- formatters close over activeCurrency only
+  ], [activeCurrency])
+
+  const retreadColumns = useMemo(() => [
+    { accessorKey: 'claim_no', header: 'Claim no', cell: ({ getValue }) => <span className="font-mono">{getValue() || NA}</span> },
+    { accessorKey: 'vendor', header: 'Vendor', cell: ({ getValue }) => getValue() || NA },
+    { accessorKey: 'status', header: 'Status', cell: ({ getValue }) => pill(STATUS_TONE(getValue()), getValue() || NA) },
+    { accessorKey: 'reason', header: 'Reason',
+      cell: ({ getValue }) => <span className="block max-w-[220px] truncate" title={getValue() || ''}>{getValue() || NA}</span> },
+    { accessorKey: 'cost', header: 'Cost', meta: { align: 'right' }, cell: ({ getValue }) => (getValue() == null ? NA : money(getValue())) },
+    { accessorKey: 'amount_recovered', header: 'Recovered', meta: { align: 'right' },
+      cell: ({ getValue }) => (getValue() == null ? NA : <span className="text-emerald-400">{money(getValue())}</span>) },
+    { accessorKey: 'claim_date', header: 'Date', cell: ({ getValue }) => dateTxt(getValue()) },
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- formatters close over activeCurrency only
+  ], [activeCurrency])
+
+  const kv = passportKpiValues(passport)
+  const kpis = kv ? [
+    { label: 'Lifetime km', value: kv.lifetimeKm == null ? NA : kv.lifetimeKm.toLocaleString(), icon: Gauge },
+    { label: 'Lifetime cost', value: money(kv.lifetimeCost), icon: DollarSign },
+    { label: 'CPK', value: kv.cpk == null ? NA : String(kv.cpk), icon: Activity },
+    { label: 'Vehicles', value: kv.vehicles ?? NA, icon: Truck },
+    { label: 'Retreads', value: kv.retreads, icon: Recycle },
+    { label: 'Records', value: kv.records, icon: Package },
   ] : []
 
   return (
@@ -335,12 +411,12 @@ export default function TyrePassport() {
           <div className="flex items-center gap-2">
             {passport && (
               <>
-                <button onClick={exportPdf} className="btn-secondary text-sm inline-flex items-center gap-1.5"><FileDown size={14} /> PDF</button>
-                <button onClick={exportExcel} className="btn-secondary text-sm inline-flex items-center gap-1.5"><Sheet size={14} /> Excel</button>
-                <button onClick={() => load(serial)} className="btn-secondary text-sm inline-flex items-center gap-1.5" title="Refresh"><RefreshCw size={14} /></button>
+                <button onClick={exportPdf} className="btn-secondary text-sm min-h-[44px] inline-flex items-center gap-1.5"><FileDown size={14} aria-hidden="true" /> PDF</button>
+                <button onClick={exportExcel} className="btn-secondary text-sm min-h-[44px] inline-flex items-center gap-1.5"><Sheet size={14} aria-hidden="true" /> Excel</button>
+                <button onClick={() => load(serial)} disabled={loading} className="btn-secondary text-sm min-h-[44px] min-w-[44px] inline-flex items-center justify-center gap-1.5 disabled:opacity-50" aria-label="Refresh this passport" title="Refresh"><RefreshCw size={14} className={loading ? 'animate-spin' : ''} /></button>
               </>
             )}
-            <button onClick={() => navigate('/tyre-passport')} className="btn-secondary text-sm inline-flex items-center gap-1.5"><ArrowLeft size={14} /> New search</button>
+            <button onClick={() => navigate('/tyre-passport')} className="btn-secondary text-sm min-h-[44px] inline-flex items-center gap-1.5"><ArrowLeft size={14} aria-hidden="true" /> New search</button>
           </div>
         ) : null}
       />
@@ -361,12 +437,16 @@ export default function TyrePassport() {
           <Card><SearchBox country={activeCountry} onPick={(sn) => navigate(`/tyre-passport/${encodeURIComponent(sn)}`)} /></Card>
 
           {loading ? (
-            <Card className="animate-pulse h-40" />
+            <Card className="animate-pulse h-40" role="status" aria-label="Loading the tyre passport" />
           ) : error ? (
             <Card tone="crit">
               <div className="flex items-start gap-[var(--space-3)]">
                 <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
-                <div><p className="text-red-300 font-medium">Could not load this tyre.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
+                <div className="flex-1">
+                  <p className="text-red-300 font-medium" role="alert">Could not load this tyre.</p>
+                  <p className="text-[var(--text-muted)] text-sm mt-1">{error} Nothing is shown until it loads, so a failed read is never mistaken for a tyre with no history.</p>
+                  <button onClick={() => load(serial)} className="btn-secondary text-sm min-h-[44px] inline-flex items-center gap-1.5 mt-3"><RefreshCw size={14} aria-hidden="true" /> Retry</button>
+                </div>
               </div>
             </Card>
           ) : !passport ? (
@@ -434,7 +514,7 @@ export default function TyrePassport() {
               </Card>
 
               {/* Tabs */}
-              <div className="flex items-center gap-1 border-b border-[var(--input-border)] overflow-x-auto">
+              <div role="tablist" aria-label="Passport sections" className="flex items-center gap-1 border-b border-[var(--input-border)] overflow-x-auto">
                 {TABS.map((t) => {
                   const Icon = t.icon
                   const active = tab === t.key
@@ -444,11 +524,13 @@ export default function TyrePassport() {
                   return (
                     <button
                       key={t.key}
+                      role="tab"
+                      aria-selected={active}
                       onClick={() => setTab(t.key)}
-                      className={`inline-flex items-center gap-1.5 px-3 py-2 text-sm border-b-2 -mb-px whitespace-nowrap ${active ? 'border-[var(--brand-bright)] text-[var(--text-primary)]' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}
+                      className={`inline-flex items-center gap-1.5 px-3 min-h-[44px] text-sm border-b-2 -mb-px whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-bright)] rounded-t ${active ? 'border-[var(--brand-bright)] text-[var(--text-primary)]' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}
                     >
-                      <Icon size={14} /> {t.label}
-                      {badge > 0 && <span className={`ml-0.5 text-[10px] px-1.5 py-0.5 rounded-full ${t.key === 'quality' ? 'bg-amber-500/20 text-amber-300' : 'bg-[var(--input-bg)] text-[var(--text-muted)]'}`}>{badge}</span>}
+                      <Icon size={14} aria-hidden="true" /> {t.label}
+                      {badge > 0 && <span aria-label={`${badge} items`} className={`ml-0.5 text-[10px] px-1.5 py-0.5 rounded-full ${t.key === 'quality' ? 'bg-amber-500/20 text-amber-300' : 'bg-[var(--input-bg)] text-[var(--text-muted)]'}`}>{badge}</span>}
                     </button>
                   )
                 })}
@@ -567,43 +649,22 @@ export default function TyrePassport() {
               {/* Journey. `pad="none"` for the edge-to-edge table, but NO `clip`:
                   TablePagination carries a native rows-per-page <select>. */}
               {tab === 'journey' && (
-                <Card pad="none">
+                <Card>
                   <CardHeader
                     level={2}
                     icon={Milestone}
                     title="Cross-vehicle journey"
-                    description={`${passport.journey.length} stint(s) across ${passport.distinctVehicles} vehicle(s)`}
-                    className="!mb-0 px-[var(--space-4)] py-[var(--space-3)] border-b border-[var(--border-dim)]"
+                    description={`${journeyStats.stints} stint(s) across ${passport.distinctVehicles} vehicle(s). Average ${journeyStats.avgKmPerStint == null ? NA : `${journeyStats.avgKmPerStint.toLocaleString()} km`} per measured stint (${journeyStats.measuredStints} of ${journeyStats.stints} have distance).`}
                   />
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                          {['Asset', 'Position', 'Site', 'Fitted', 'Removed', 'Km run', 'Cost', 'CPK', 'Removal reason'].map((h, i) => <th key={i} className="px-4 py-3 font-semibold whitespace-nowrap">{h}</th>)}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {passport.journey.length === 0 ? (
-                          <tr><td colSpan={9} className="px-4 py-10 text-center text-[var(--text-muted)]">No stint history on record.</td></tr>
-                        ) : journeyPager.pageRows.map((e, i) => (
-                          <tr key={e.id ?? i} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                            <td className="px-4 py-2.5 font-mono">
-                              {e.asset_no ? <Link to={`/asset-management/${encodeURIComponent(e.asset_no)}`} className="text-[var(--brand-bright)] hover:underline">{e.asset_no}</Link> : <span className="text-[var(--text-muted)]">{NA}</span>}
-                            </td>
-                            <td className="px-4 py-2.5 text-[var(--text-secondary)]">{e.position || NA}</td>
-                            <td className="px-4 py-2.5 text-[var(--text-secondary)]">{e.site || NA}</td>
-                            <td className="px-4 py-2.5 text-[var(--text-secondary)]">{dateTxt(e.fitted)}</td>
-                            <td className="px-4 py-2.5 text-[var(--text-secondary)]">{e.removed ? dateTxt(e.removed) : <span className="text-emerald-400">Current</span>}</td>
-                            <td className="px-4 py-2.5 text-[var(--text-secondary)]">{kmTxt(e.km_run)}</td>
-                            <td className="px-4 py-2.5 text-[var(--text-secondary)]">{e.cost == null ? NA : money(e.cost)}</td>
-                            <td className="px-4 py-2.5 text-[var(--text-secondary)]">{e.cpk == null ? NA : e.cpk}</td>
-                            <td className="px-4 py-2.5 text-[var(--text-secondary)]">{e.reason || NA}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <TablePagination {...journeyPager} />
+                  <EnterpriseTable
+                    columns={journeyColumns}
+                    data={journeyRows}
+                    getRowId={(r, i) => String(r.id ?? i)}
+                    enableColumnFilters={false}
+                    searchPlaceholder="Search asset, site or reason"
+                    exportFileName={`Tyre Passport ${passport.serial} journey`}
+                    emptyMessage="No stint history on record."
+                  />
                 </Card>
               )}
 
@@ -625,107 +686,50 @@ export default function TyrePassport() {
                 </Card>
               )}
 
-              {/* Service & repairs — no `clip`, TablePagination holds a <select>. */}
+              {/* Service & repairs */}
               {tab === 'service' && (
-                <Card pad="none">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                          {['Date', 'Type', 'Asset', 'Position', 'Tread', 'Pressure', 'Cost', 'Technician', 'Notes'].map((h, i) => <th key={i} className="px-4 py-3 font-semibold whitespace-nowrap">{h}</th>)}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {passport.serviceEvents.length === 0 ? (
-                          <tr><td colSpan={9} className="px-4 py-10 text-center text-[var(--text-muted)]">No service or repair events recorded for this tyre.</td></tr>
-                        ) : servicePager.pageRows.map((e, i) => (
-                          <tr key={e.id ?? i} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                            <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{dateTxt(e.date)}</td>
-                            <td className="px-4 py-2.5"><span className={`text-[11px] px-2 py-0.5 rounded ${EVENT_TONE(e.type)}`}>{e.type}</span></td>
-                            <td className="px-4 py-2.5 font-mono text-[var(--text-secondary)]">{e.asset_no || NA}</td>
-                            <td className="px-4 py-2.5 text-[var(--text-secondary)]">{e.position || NA}</td>
-                            <td className="px-4 py-2.5 text-[var(--text-secondary)]">{e.tread == null ? NA : `${e.tread} mm`}</td>
-                            <td className="px-4 py-2.5 text-[var(--text-secondary)]">{e.pressure == null ? NA : `${e.pressure} psi`}</td>
-                            <td className="px-4 py-2.5 text-[var(--text-secondary)]">{e.cost == null ? NA : money(e.cost)}</td>
-                            <td className="px-4 py-2.5 text-[var(--text-secondary)]">{e.technician || NA}</td>
-                            <td className="px-4 py-2.5 text-[var(--text-muted)] max-w-[220px] truncate" title={e.notes || ''}>{e.notes || NA}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <TablePagination {...servicePager} />
+                <Card>
+                  <CardHeader level={2} icon={Wrench} title="Service and repair history" description={`${passport.serviceEvents.length} event(s) recorded against this serial.`} />
+                  <EnterpriseTable
+                    columns={serviceColumns}
+                    data={passport.serviceEvents}
+                    getRowId={(r, i) => String(r.id ?? i)}
+                    enableColumnFilters={false}
+                    searchPlaceholder="Search type, asset or technician"
+                    exportFileName={`Tyre Passport ${passport.serial} service`}
+                    emptyMessage="No service or repair events recorded for this tyre."
+                  />
                 </Card>
               )}
 
-              {/* Warranty — both tables keep their pagination, so neither is clipped. */}
+              {/* Warranty */}
               {tab === 'warranty' && (
                 <div className="space-y-6">
-                  <Card pad="none">
-                    <CardHeader
-                      level={2}
-                      icon={ShieldCheck}
-                      title="Warranty claims"
-                      className="!mb-0 px-[var(--space-4)] py-[var(--space-3)] border-b border-[var(--border-dim)]"
+                  <Card>
+                    <CardHeader level={2} icon={ShieldCheck} title="Warranty claims" />
+                    <EnterpriseTable
+                      columns={warrantyColumns}
+                      data={passport.warranty}
+                      getRowId={(r, i) => String(r.id ?? i)}
+                      enableColumnFilters={false}
+                      enableGlobalFilter={passport.warranty.length > 10}
+                      exportFileName={`Tyre Passport ${passport.serial} warranty`}
+                      emptyMessage="No warranty claims recorded for this tyre."
                     />
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                            {['Claim no', 'Status', 'Failure type', 'Supplier', 'Km run', 'Credit', 'Credit date'].map((h, i) => <th key={i} className="px-4 py-3 font-semibold whitespace-nowrap">{h}</th>)}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {passport.warranty.length === 0 ? (
-                            <tr><td colSpan={7} className="px-4 py-10 text-center text-[var(--text-muted)]">No warranty claims recorded for this tyre.</td></tr>
-                          ) : warrantyPager.pageRows.map((c, i) => (
-                            <tr key={c.id ?? i} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                              <td className="px-4 py-2.5 font-mono text-[var(--text-secondary)]">{c.claim_no || NA}</td>
-                              <td className="px-4 py-2.5"><span className={`text-[11px] px-2 py-0.5 rounded ${STATUS_TONE(c.status)}`}>{c.status || NA}</span></td>
-                              <td className="px-4 py-2.5 text-[var(--text-secondary)]">{c.failure_type || NA}</td>
-                              <td className="px-4 py-2.5 text-[var(--text-secondary)]">{c.supplier || NA}</td>
-                              <td className="px-4 py-2.5 text-[var(--text-secondary)]">{kmTxt(c.km_run)}</td>
-                              <td className="px-4 py-2.5 text-emerald-400">{c.credit_amount == null ? NA : money(c.credit_amount)}</td>
-                              <td className="px-4 py-2.5 text-[var(--text-secondary)]">{dateTxt(c.credit_date)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                    <TablePagination {...warrantyPager} />
                   </Card>
 
                   {passport.retreadClaims.length > 0 && (
-                    <Card pad="none">
-                      <CardHeader
-                        level={2}
-                        icon={Recycle}
-                        title="Retread claims"
-                        className="!mb-0 px-[var(--space-4)] py-[var(--space-3)] border-b border-[var(--border-dim)]"
+                    <Card>
+                      <CardHeader level={2} icon={Recycle} title="Retread claims" />
+                      <EnterpriseTable
+                        columns={retreadColumns}
+                        data={passport.retreadClaims}
+                        getRowId={(r, i) => String(r.id ?? i)}
+                        enableColumnFilters={false}
+                        enableGlobalFilter={passport.retreadClaims.length > 10}
+                        exportFileName={`Tyre Passport ${passport.serial} retread`}
+                        emptyMessage="No retread claims."
                       />
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                              {['Claim no', 'Vendor', 'Status', 'Reason', 'Cost', 'Recovered', 'Date'].map((h, i) => <th key={i} className="px-4 py-3 font-semibold whitespace-nowrap">{h}</th>)}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {retreadPager.pageRows.map((c, i) => (
-                              <tr key={c.id ?? i} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                                <td className="px-4 py-2.5 font-mono text-[var(--text-secondary)]">{c.claim_no || NA}</td>
-                                <td className="px-4 py-2.5 text-[var(--text-secondary)]">{c.vendor || NA}</td>
-                                <td className="px-4 py-2.5"><span className={`text-[11px] px-2 py-0.5 rounded ${STATUS_TONE(c.status)}`}>{c.status || NA}</span></td>
-                                <td className="px-4 py-2.5 text-[var(--text-secondary)] max-w-[220px] truncate" title={c.reason || ''}>{c.reason || NA}</td>
-                                <td className="px-4 py-2.5 text-[var(--text-secondary)]">{c.cost == null ? NA : money(c.cost)}</td>
-                                <td className="px-4 py-2.5 text-emerald-400">{c.amount_recovered == null ? NA : money(c.amount_recovered)}</td>
-                                <td className="px-4 py-2.5 text-[var(--text-secondary)]">{dateTxt(c.claim_date)}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                      <TablePagination {...retreadPager} />
                     </Card>
                   )}
                 </div>

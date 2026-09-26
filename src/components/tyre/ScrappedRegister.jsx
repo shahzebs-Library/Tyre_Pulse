@@ -31,6 +31,8 @@ import {
 import { exportToExcel, reportFileName } from '../../lib/exportUtils'
 import { toUserMessage } from '../../lib/safeError'
 import EmptyState from '../EmptyState'
+import EnterpriseTable from '../ui/EnterpriseTable'
+import Modal from '../ui/Modal'
 
 const fmtDate = (v) => {
   if (!v) return 'N/A'
@@ -176,77 +178,197 @@ export default function ScrappedRegister({ country, currency }) {
     marked: r.marked ? 'Scrap button' : 'Bulk status change (no record)',
   })), [rows])
 
+  const columns = useMemo(() => [
+    { accessorKey: 'serial', header: 'Serial', meta: { exportHeader: 'Serial' },
+      cell: ({ row }) => (
+        <Link to={`/tyre-passport/${encodeURIComponent(row.original.serial)}`}
+          className="font-mono text-[var(--text-primary)] hover:text-[var(--accent)] underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] rounded">
+          {row.original.serial}
+        </Link>
+      ) },
+    { accessorKey: 'asset_no', header: 'Vehicle',
+      cell: ({ row }) => {
+        const r = row.original
+        return (
+          <span className="block">
+            {r.asset_no ? (
+              <Link to={`/asset-management/${encodeURIComponent(r.asset_no)}`}
+                className="text-[var(--text-secondary)] hover:text-[var(--accent)] hover:underline">{r.asset_no}</Link>
+            ) : <span className="text-[var(--text-dim)]">N/A</span>}
+            <span className="block text-[11px] text-[var(--text-dim)]">
+              {[r.vehicle_type, r.make, r.site].filter(Boolean).join(' · ') || 'No vehicle detail'}
+            </span>
+          </span>
+        )
+      } },
+    { accessorKey: 'brand', header: 'Tyre',
+      cell: ({ row }) => {
+        const r = row.original
+        return (
+          <span className="block text-[var(--text-secondary)]">
+            {r.brand || 'N/A'}{r.size ? <span className="text-[var(--text-dim)]"> {r.size}</span> : null}
+            <span className="block text-[11px] text-[var(--text-dim)]">
+              {r.tyre_position || 'No position'}
+              {r.tread_depth != null ? ` · ${r.tread_depth} mm` : ''}
+            </span>
+          </span>
+        )
+      } },
+    // The job card is on every scrapped tyre and matches a real work order, so
+    // it can show what the vehicle was in for.
+    { accessorKey: 'job_card', header: 'Job card',
+      cell: ({ row }) => {
+        const r = row.original
+        if (!r.job_card) return <span className="text-[var(--text-dim)]">N/A</span>
+        return (
+          <span className="block">
+            <span className="text-[var(--text-secondary)] font-mono text-xs">{r.job_card}</span>
+            <span className="block text-[11px] text-[var(--text-dim)] max-w-[190px] truncate"
+              title={[r.job_card_type, r.job_card_status, r.job_card_complaint].filter(Boolean).join(' · ')}>
+              {[r.job_card_type, r.job_card_complaint].filter(Boolean).join(' · ') || 'No detail'}
+            </span>
+          </span>
+        )
+      } },
+    { accessorKey: 'reason', header: 'Reason',
+      cell: ({ row }) => {
+        const r = row.original
+        if (editing === r.serial) {
+          return (
+            <span className="flex items-center gap-1 min-w-[200px]">
+              <label htmlFor={`scrap-reason-${r.serial}`} className="sr-only">Scrap reason for {r.serial}</label>
+              <input id={`scrap-reason-${r.serial}`} value={editText} onChange={(e) => setEditText(e.target.value)}
+                className="input text-xs py-1 flex-1 min-h-[36px]" autoFocus
+                onKeyDown={(e) => { if (e.key === 'Enter') saveReason(); if (e.key === 'Escape') setEditing(null) }} />
+              <button onClick={saveReason} disabled={busy === r.serial}
+                className="inline-flex items-center justify-center min-h-[36px] min-w-[36px] rounded text-emerald-400 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+                aria-label={`Save reason for ${r.serial}`}><Check size={14} /></button>
+              <button onClick={() => setEditing(null)}
+                className="inline-flex items-center justify-center min-h-[36px] min-w-[36px] rounded text-[var(--text-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+                aria-label="Cancel editing the reason"><X size={14} /></button>
+            </span>
+          )
+        }
+        return <span className="text-[var(--text-tertiary)] block max-w-[220px]" title={r.reason || ''}>{r.reason || <span className="text-[var(--text-dim)]">Not given</span>}</span>
+      } },
+    { id: 'scrapped_by', header: 'Scrapped by', accessorFn: (r) => (r.marked ? (r.scrapped_by_name || 'Unknown user') : 'Not recorded'),
+      cell: ({ row }) => {
+        const r = row.original
+        return r.marked ? (
+          <span className="block">
+            <span className="text-[var(--text-secondary)]">{r.scrapped_by_name || 'Unknown user'}</span>
+            <span className="block text-[11px] text-[var(--text-dim)]">{fmtDate(r.scrapped_at)}</span>
+          </span>
+        ) : (
+          <span className="text-[11px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400"
+            title="This tyre's status was changed in bulk from the tyre grid, which does not save who did it.">
+            Not recorded
+          </span>
+        )
+      } },
+    // Km and cost are frequently missing on these records, so both read N/A
+    // rather than 0 - a scrapped tyre showing "0 km" or "0" cost would be
+    // taken as fact.
+    { accessorKey: 'km_run', header: 'Km run', meta: { align: 'right' },
+      cell: ({ getValue }) => (getValue() == null ? <span className="text-[var(--text-dim)]">N/A</span>
+        : <span className="tabular-nums">{Number(getValue()).toLocaleString('en-US')}</span>) },
+    { accessorKey: 'cost_per_tyre', header: 'Cost', meta: { align: 'right' },
+      cell: ({ getValue }) => <span className="tabular-nums">{money(getValue(), currency)}</span> },
+    { accessorKey: 'disposal_status', header: 'Disposal',
+      cell: ({ getValue }) => (getValue()
+        ? <span className="text-[11px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400">{getValue()}</span>
+        : <span className="text-[11px] text-[var(--text-dim)]">Not started</span>) },
+    { id: 'actions', header: 'Actions', meta: { align: 'right', export: false },
+      cell: ({ row }) => {
+        const r = row.original
+        // Editing a reason and undoing are separate rights, so they are shown separately.
+        return (
+          <span className="inline-flex items-center justify-end gap-1 whitespace-nowrap">
+            {perms.canScrap && r.marked ? (
+              <button onClick={() => { setEditing(r.serial); setEditText(r.reason || '') }}
+                disabled={busy === r.serial}
+                className="inline-flex items-center justify-center min-h-[44px] min-w-[44px] rounded text-[var(--text-muted)] hover:text-[var(--accent)] disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+                aria-label={`Edit scrap reason for ${r.serial}`}><Pencil size={14} /></button>
+            ) : null}
+            {perms.canUndo && r.marked ? (
+              <button onClick={() => undo(r.serial)} disabled={busy === r.serial}
+                className="inline-flex items-center gap-1 min-h-[44px] px-2 rounded text-xs text-amber-400 hover:text-amber-300 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
+                <Undo2 size={14} aria-hidden="true" /> Undo
+              </button>
+            ) : !r.marked ? (
+              <span className="text-[11px] text-[var(--text-dim)]">No mark to undo</span>
+            ) : null}
+          </span>
+        )
+      } },
+  ], [editing, editText, busy, perms, currency, saveReason, undo])
+
   return (
     <div className="space-y-4">
       {/* ── Mark a tyre as scrap ─────────────────────────────────────────── */}
-      {markOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
-          onClick={(e) => { if (e.target === e.currentTarget) setMarkOpen(false) }}>
-          <div className="card w-full max-w-md space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2">
-                <Trash2 size={16} className="text-red-400" /> Mark a tyre as scrap
-              </h3>
-              <button onClick={() => setMarkOpen(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">
-                <X size={16} />
-              </button>
-            </div>
-
-            <div>
-              <label className="text-xs text-[var(--text-muted)]">Serial number</label>
-              <div className="flex gap-2 mt-1">
-                <input value={markSerial}
-                  onChange={(e) => { setMarkSerial(e.target.value); setMarkFound(null); setMarkErr('') }}
-                  onKeyDown={(e) => { if (e.key === 'Enter') lookup() }}
-                  placeholder="Type or scan the serial" autoFocus
-                  className="input flex-1 text-sm font-mono" />
-                <button onClick={lookup} disabled={!markSerial.trim() || markLooking}
-                  className="btn-secondary text-sm px-3 disabled:opacity-50">
-                  {markLooking ? 'Finding...' : 'Find'}
-                </button>
-              </div>
-            </div>
-
-            {/* The tyre is shown before the action so the operator confirms the
-                right one, not just the right-looking number. */}
-            {markFound && (
-              <div className="rounded-md border border-[var(--hairline)] bg-[var(--surface-1)] p-2.5 text-xs space-y-1">
-                <p className="text-[var(--text-primary)] font-medium">{markFound.serial_no}</p>
-                <p className="text-[var(--text-secondary)]">
-                  {markFound.asset_no || 'No asset'}{markFound.tyre_position ? ` · ${markFound.tyre_position}` : ''}
-                  {markFound.brand ? ` · ${markFound.brand}` : ''}{markFound.size ? ` ${markFound.size}` : ''}
-                </p>
-                <p className="text-[var(--text-dim)]">
-                  {markFound.site || 'No site'}{markFound.country ? ` · ${markFound.country}` : ''} · currently {markFound.status || 'Active'}
-                </p>
-                {String(markFound.status || '') === 'Scrapped' && (
-                  <p className="text-amber-400">This tyre already reads as scrapped.</p>
-                )}
-              </div>
-            )}
-
-            <div>
-              <label className="text-xs text-[var(--text-muted)]">Reason</label>
-              <textarea value={markReason} onChange={(e) => setMarkReason(e.target.value)}
-                placeholder="Why is it being scrapped? For example: sidewall cut, tread separation"
-                className="input w-full text-sm mt-1 min-h-[64px]" />
-            </div>
-
-            {markErr ? <p className="text-xs text-red-400">{markErr}</p> : null}
-
-            <div className="flex justify-end gap-2 pt-1">
-              <button onClick={() => setMarkOpen(false)} className="btn-secondary text-sm">Cancel</button>
-              <button onClick={confirmMark} disabled={!markFound || busy === markSerial.trim()}
-                className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md font-medium border border-red-700/50 bg-red-900/30 text-red-200 hover:bg-red-900/50 transition-colors disabled:opacity-40">
-                <Trash2 size={14} /> {busy === markSerial.trim() ? 'Marking...' : 'Mark as scrap'}
-              </button>
-            </div>
-            <p className="text-[11px] text-[var(--text-dim)]">
-              Your name and the time are recorded against this scrap. Undoing it is an administrator action.
-            </p>
+      <Modal
+        open={markOpen}
+        onClose={() => setMarkOpen(false)}
+        size="sm"
+        title="Mark a tyre as scrap"
+        footer={(
+          <div className="flex justify-end gap-2">
+            <button onClick={() => setMarkOpen(false)} className="btn-secondary text-sm min-h-[44px]">Cancel</button>
+            <button onClick={confirmMark} disabled={!markFound || busy === markSerial.trim()}
+              className="flex items-center gap-1.5 text-sm min-h-[44px] px-3 rounded-md font-medium border border-red-700/50 bg-red-900/30 text-red-200 hover:bg-red-900/50 transition-colors disabled:opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500">
+              <Trash2 size={14} aria-hidden="true" /> {busy === markSerial.trim() ? 'Marking...' : 'Mark as scrap'}
+            </button>
           </div>
+        )}
+      >
+        <div className="space-y-3">
+          <div>
+            <label htmlFor="scrap-mark-serial" className="text-xs text-[var(--text-muted)]">Serial number</label>
+            <div className="flex gap-2 mt-1">
+              <input id="scrap-mark-serial" value={markSerial}
+                onChange={(e) => { setMarkSerial(e.target.value); setMarkFound(null); setMarkErr('') }}
+                onKeyDown={(e) => { if (e.key === 'Enter') lookup() }}
+                placeholder="Type or scan the serial" autoFocus
+                className="input flex-1 text-sm font-mono min-h-[44px]" />
+              <button onClick={lookup} disabled={!markSerial.trim() || markLooking}
+                className="btn-secondary text-sm px-3 min-h-[44px] disabled:opacity-50">
+                {markLooking ? 'Finding...' : 'Find'}
+              </button>
+            </div>
+          </div>
+
+          {/* The tyre is shown before the action so the operator confirms the
+              right one, not just the right-looking number. */}
+          {markFound && (
+            <div className="rounded-md border border-[var(--hairline)] bg-[var(--surface-1)] p-2.5 text-xs space-y-1">
+              <p className="text-[var(--text-primary)] font-medium">{markFound.serial_no}</p>
+              <p className="text-[var(--text-secondary)]">
+                {markFound.asset_no || 'No asset'}{markFound.tyre_position ? ` · ${markFound.tyre_position}` : ''}
+                {markFound.brand ? ` · ${markFound.brand}` : ''}{markFound.size ? ` ${markFound.size}` : ''}
+              </p>
+              <p className="text-[var(--text-dim)]">
+                {markFound.site || 'No site'}{markFound.country ? ` · ${markFound.country}` : ''} · currently {markFound.status || 'Active'}
+              </p>
+              {String(markFound.status || '') === 'Scrapped' && (
+                <p className="text-amber-400">This tyre already reads as scrapped.</p>
+              )}
+            </div>
+          )}
+
+          <div>
+            <label htmlFor="scrap-mark-reason" className="text-xs text-[var(--text-muted)]">Reason</label>
+            <textarea id="scrap-mark-reason" value={markReason} onChange={(e) => setMarkReason(e.target.value)}
+              placeholder="Why is it being scrapped? For example: sidewall cut, tread separation"
+              className="input w-full text-sm mt-1 min-h-[64px]" />
+          </div>
+
+          {markErr ? <p role="alert" className="text-xs text-red-400">{markErr}</p> : null}
+
+          <p className="text-[11px] text-[var(--text-dim)]">
+            Your name and the time are recorded against this scrap. Undoing it is an administrator action.
+          </p>
         </div>
-      )}
+      </Modal>
 
       {/* ── Counts. The unattributed figure is the honest one: it is how much
              scrapped stock has nobody's name against it. ── */}
@@ -272,30 +394,32 @@ export default function ScrappedRegister({ country, currency }) {
       <div className="card space-y-3">
         <div className="flex items-center gap-2 flex-wrap">
           <div className="relative flex-1 min-w-[220px]">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+            <label htmlFor="scrapped-register-search" className="sr-only">Search the scrapped register</label>
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
             <input
+              id="scrapped-register-search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search serial, asset, brand or reason"
-              className="input w-full pl-9 text-sm"
+              className="input w-full pl-9 text-sm min-h-[44px]"
             />
           </div>
           {perms.canScrap && (
             <button
               onClick={() => { setMarkOpen(true); setMarkSerial(''); setMarkReason(''); setMarkFound(null); setMarkErr('') }}
-              className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md font-medium border border-red-700/50 bg-red-900/20 text-red-300 hover:bg-red-900/40 transition-colors">
+              className="flex items-center gap-1.5 text-sm min-h-[44px] px-3 rounded-md font-medium border border-red-700/50 bg-red-900/20 text-red-300 hover:bg-red-900/40 transition-colors">
               <Trash2 size={14} /> Mark a tyre as scrap
             </button>
           )}
           <button onClick={load} disabled={loading}
-            className="btn-secondary text-sm inline-flex items-center gap-1.5 disabled:opacity-50">
+            className="btn-secondary text-sm min-h-[44px] inline-flex items-center gap-1.5 disabled:opacity-50">
             <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Refresh
           </button>
           <button
             onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS,
               reportFileName('TyrePulse Scrapped Register'))}
             disabled={!rows.length}
-            className="btn-secondary text-sm inline-flex items-center gap-1.5 disabled:opacity-50">
+            className="btn-secondary text-sm min-h-[44px] inline-flex items-center gap-1.5 disabled:opacity-50">
             <FileSpreadsheet size={13} /> Excel
           </button>
         </div>
@@ -328,138 +452,37 @@ export default function ScrappedRegister({ country, currency }) {
             Showing the {rows.length.toLocaleString('en-US')} most recent of {totals.total.toLocaleString('en-US')}. Narrow the search to see the rest.
           </p>
         )}
-        {notice ? <div className="text-xs text-emerald-400 bg-emerald-500/10 rounded px-2 py-1.5">{notice}</div> : null}
-        {error ? <div className="text-sm text-red-400">{error}</div> : null}
+        {notice ? <div role="status" className="text-xs text-emerald-400 bg-emerald-500/10 rounded px-2 py-1.5">{notice}</div> : null}
+        {error && rows.length ? <div role="alert" className="text-sm text-red-400">{error}</div> : null}
 
-        {loading ? (
-          <p className="text-sm text-[var(--text-muted)] py-6 text-center">Loading the scrapped register.</p>
-        ) : !rows.length ? (
+        {error && !rows.length ? (
+          // A failed read is a failure, never "no tyres have been scrapped".
+          <div role="alert" className="py-8 flex flex-col items-center gap-3 text-center">
+            <AlertTriangle size={24} className="text-red-400" aria-hidden="true" />
+            <p className="text-sm text-[var(--text-secondary)]">The scrapped register could not be loaded.</p>
+            <button onClick={load} className="btn-secondary text-sm min-h-[44px] inline-flex items-center gap-1.5">
+              <RefreshCw size={13} aria-hidden="true" /> Retry
+            </button>
+          </div>
+        ) : !loading && !rows.length ? (
           <EmptyState
             icon={Trash2}
             title={query ? 'Nothing matches that search' : 'No tyres have been scrapped'}
-            message={query
+            description={query
               ? 'Try a different serial, asset or brand.'
               : 'When someone marks a tyre as scrap from Serial Tracker or the phone, it appears here with their name against it.'}
           />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-[var(--text-muted)] border-b border-[var(--hairline)]">
-                  <th className="py-2 pr-3 font-semibold">Serial</th>
-                  <th className="py-2 px-3 font-semibold">Vehicle</th>
-                  <th className="py-2 px-3 font-semibold">Tyre</th>
-                  <th className="py-2 px-3 font-semibold">Job card</th>
-                  <th className="py-2 px-3 font-semibold">Reason</th>
-                  <th className="py-2 px-3 font-semibold">Scrapped by</th>
-                  <th className="py-2 px-3 font-semibold text-right">Km run</th>
-                  <th className="py-2 px-3 font-semibold text-right">Cost</th>
-                  <th className="py-2 px-3 font-semibold">Disposal</th>
-                  <th className="py-2 pl-3 font-semibold text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr key={r.serial} className="border-b border-[var(--hairline)]/60 align-top">
-                    <td className="py-2 pr-3">
-                      <Link to={`/tyre-passport/${encodeURIComponent(r.serial)}`}
-                        className="font-mono text-[var(--text-primary)] hover:text-[var(--accent)]">
-                        {r.serial}
-                      </Link>
-                    </td>
-                    <td className="py-2 px-3">
-                      {r.asset_no ? (
-                        <Link to={`/asset-management/${encodeURIComponent(r.asset_no)}`}
-                          className="text-[var(--text-secondary)] hover:text-[var(--accent)]">{r.asset_no}</Link>
-                      ) : <span className="text-[var(--text-dim)]">N/A</span>}
-                      <span className="block text-[11px] text-[var(--text-dim)]">
-                        {[r.vehicle_type, r.make, r.site].filter(Boolean).join(' · ') || 'No vehicle detail'}
-                      </span>
-                    </td>
-                    <td className="py-2 px-3 text-[var(--text-secondary)]">
-                      {r.brand || 'N/A'}{r.size ? <span className="text-[var(--text-dim)]"> {r.size}</span> : null}
-                      <span className="block text-[11px] text-[var(--text-dim)]">
-                        {r.tyre_position || 'No position'}
-                        {r.tread_depth != null ? ` · ${r.tread_depth} mm` : ''}
-                      </span>
-                    </td>
-                    {/* The job card is on every scrapped tyre and matches a real
-                        work order, so it can show what the vehicle was in for. */}
-                    <td className="py-2 px-3">
-                      {r.job_card ? (
-                        <>
-                          <span className="text-[var(--text-secondary)] font-mono text-xs">{r.job_card}</span>
-                          <span className="block text-[11px] text-[var(--text-dim)] max-w-[190px] truncate"
-                            title={[r.job_card_type, r.job_card_status, r.job_card_complaint].filter(Boolean).join(' · ')}>
-                            {[r.job_card_type, r.job_card_complaint].filter(Boolean).join(' · ') || 'No detail'}
-                          </span>
-                        </>
-                      ) : <span className="text-[var(--text-dim)]">N/A</span>}
-                    </td>
-                    <td className="py-2 px-3 text-[var(--text-tertiary)] max-w-[220px]">
-                      {editing === r.serial ? (
-                        <div className="flex items-center gap-1">
-                          <input value={editText} onChange={(e) => setEditText(e.target.value)}
-                            className="input text-xs py-1 flex-1" autoFocus
-                            onKeyDown={(e) => { if (e.key === 'Enter') saveReason(); if (e.key === 'Escape') setEditing(null) }} />
-                          <button onClick={saveReason} disabled={busy === r.serial}
-                            className="text-emerald-400 disabled:opacity-50" title="Save"><Check size={14} /></button>
-                          <button onClick={() => setEditing(null)} className="text-[var(--text-muted)]" title="Cancel"><X size={14} /></button>
-                        </div>
-                      ) : (
-                        <span title={r.reason || ''}>{r.reason || <span className="text-[var(--text-dim)]">Not given</span>}</span>
-                      )}
-                    </td>
-                    <td className="py-2 px-3">
-                      {r.marked ? (
-                        <>
-                          <span className="text-[var(--text-secondary)]">{r.scrapped_by_name || 'Unknown user'}</span>
-                          <span className="block text-[11px] text-[var(--text-dim)]">{fmtDate(r.scrapped_at)}</span>
-                        </>
-                      ) : (
-                        <span className="text-[11px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400"
-                          title="This tyre's status was changed in bulk from the tyre grid, which does not save who did it.">
-                          Not recorded
-                        </span>
-                      )}
-                    </td>
-                    {/* Km and cost are frequently missing on these records, so
-                        both read N/A rather than 0 - a scrapped tyre showing
-                        "0 km" or "0" cost would be taken as fact. */}
-                    <td className="py-2 px-3 text-right text-[var(--text-secondary)]">
-                      {r.km_run == null ? <span className="text-[var(--text-dim)]">N/A</span>
-                        : Number(r.km_run).toLocaleString('en-US')}
-                    </td>
-                    <td className="py-2 px-3 text-right text-[var(--text-secondary)]">{money(r.cost_per_tyre, currency)}</td>
-                    <td className="py-2 px-3">
-                      {r.disposal_status ? (
-                        <span className="text-[11px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400">{r.disposal_status}</span>
-                      ) : (
-                        <span className="text-[11px] text-[var(--text-dim)]">Not started</span>
-                      )}
-                    </td>
-                    <td className="py-2 pl-3 text-right whitespace-nowrap">
-                      {/* Editing a reason and undoing are separate rights, so
-                          they are shown separately. */}
-                      {perms.canScrap && r.marked ? (
-                        <button onClick={() => { setEditing(r.serial); setEditText(r.reason || '') }}
-                          disabled={busy === r.serial}
-                          className="text-[var(--text-muted)] hover:text-[var(--accent)] mr-2 disabled:opacity-50"
-                          title="Edit reason"><Pencil size={14} /></button>
-                      ) : null}
-                      {perms.canUndo && r.marked ? (
-                        <button onClick={() => undo(r.serial)} disabled={busy === r.serial}
-                          className="text-amber-400 hover:text-amber-300 disabled:opacity-50 inline-flex items-center gap-1 text-xs"
-                          title="Undo scrap"><Undo2 size={14} /> Undo</button>
-                      ) : !r.marked ? (
-                        <span className="text-[11px] text-[var(--text-dim)]">No mark to undo</span>
-                      ) : null}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <EnterpriseTable
+            columns={columns}
+            data={rows}
+            getRowId={(r) => String(r.serial)}
+            loading={loading}
+            enableGlobalFilter={false}
+            enableExport={false}
+            initialPageSize={25}
+            emptyMessage="No scrapped tyres"
+          />
         )}
       </div>
     </div>

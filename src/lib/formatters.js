@@ -56,38 +56,48 @@ export function formatDateTime(d, country = 'All') {
 // ── Currency formatting ────────────────────────────────────────────────────
 
 /**
+ * Prefix a formatted amount with its currency code. When no currency is known
+ * the amount is shown bare: silently labelling it SAR (the old default) put a
+ * riyal sign on AED and EGP figures whenever a caller forgot to pass one.
+ */
+function withCurrency(currency, body) {
+  const c = currency == null ? '' : String(currency).trim()
+  return c ? `${c} ${body}` : body
+}
+
+/**
  * Format a number as currency.
  * @param {number|string} v
- * @param {string} currency - ISO 4217 code (SAR, AED, EGP)
+ * @param {string} [currency] - ISO 4217 code (SAR, AED, EGP). Omitted = no label.
  * @param {number} [decimals=2]
  */
-export function formatCurrency(v, currency = 'SAR', decimals = 2) {
+export function formatCurrency(v, currency = '', decimals = 2) {
   const n = parseFloat(v)
   if (isNaN(n)) return '-'
-  return `${currency} ${n.toLocaleString('en-US', {
+  return withCurrency(currency, n.toLocaleString('en-US', {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
-  })}`
+  }))
 }
 
 /**
  * Format a number as compact currency (e.g. "SAR 1.2k", "SAR 3.4M").
  */
-export function formatCurrencyCompact(v, currency = 'SAR') {
+export function formatCurrencyCompact(v, currency = '') {
   const n = parseFloat(v)
   if (isNaN(n)) return '-'
-  if (Math.abs(n) >= 1_000_000) return `${currency} ${(n / 1_000_000).toFixed(2)}M`
-  if (Math.abs(n) >= 1_000)     return `${currency} ${(n / 1_000).toFixed(1)}k`
-  return `${currency} ${n.toFixed(0)}`
+  if (Math.abs(n) >= 1_000_000) return withCurrency(currency, `${(n / 1_000_000).toFixed(2)}M`)
+  if (Math.abs(n) >= 1_000)     return withCurrency(currency, `${(n / 1_000).toFixed(1)}k`)
+  return withCurrency(currency, n.toFixed(0))
 }
 
 /**
  * Format a number in thousands (e.g. "SAR 1.2k").
  */
-export function formatCurrencyK(v, currency = 'SAR') {
+export function formatCurrencyK(v, currency = '') {
   const n = parseFloat(v)
   if (isNaN(n)) return '-'
-  return `${currency} ${(n / 1_000).toFixed(1)}k`
+  return withCurrency(currency, `${(n / 1_000).toFixed(1)}k`)
 }
 
 // ── Number utilities ───────────────────────────────────────────────────────

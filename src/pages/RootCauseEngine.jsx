@@ -236,9 +236,10 @@ function applyDatePreset(preset) {
   return d.toISOString().slice(0, 10)
 }
 
-function fmtCost(n, currency = 'ZAR') {
-  if (isNaN(n) || n === 0) return `${currency} 0`
-  return `${currency} ${Math.round(n).toLocaleString()}`
+function fmtCost(n, currency = '') {
+  const c = currency ? `${currency} ` : ''
+  if (n == null || isNaN(n)) return 'N/A'
+  return `${c}${Math.round(n).toLocaleString()}`
 }
 
 function fmtNum(n) {
@@ -296,7 +297,8 @@ function StatCard({ icon: Icon, label, value, sub, color = 'text-blue-400' }) {
 
 export default function RootCauseEngine() {
   const { activeCurrency, activeCountry } = useSettings()
-  const currency = activeCurrency || 'ZAR'
+  // Currency comes from the active country/settings; never a hard-coded code.
+  const currency = activeCurrency || ''
 
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
@@ -593,7 +595,7 @@ export default function RootCauseEngine() {
     exportToExcel(
       rows,
       ['asset_no', 'site', 'brand', 'issue_date', 'risk_level', 'root_causes', 'cost_per_tyre', 'findings'],
-      ['Asset No', 'Site', 'Brand', 'Date', 'Risk Level', 'Root Causes', `Cost (${currency})`, 'Findings'],
+      ['Asset No', 'Site', 'Brand', 'Date', 'Risk Level', 'Root Causes', (currency ? `Cost (${currency})` : 'Cost'), 'Findings'],
       'TyrePulse_RootCause_Export',
       'Root Causes'
     )
@@ -613,7 +615,7 @@ export default function RootCauseEngine() {
         { key: 'cause', header: 'Root Cause' },
         { key: 'count', header: 'Records' },
         { key: 'pct', header: '% of Total' },
-        { key: 'total_cost', header: `Cost (${currency})` },
+        { key: 'total_cost', header: (currency ? `Cost (${currency})` : 'Cost') },
         { key: 'top_asset', header: 'Top Asset' },
       ],
       'Root Cause Intelligence Summary',
@@ -866,7 +868,7 @@ export default function RootCauseEngine() {
           <div className="flex items-center gap-2 mb-4">
             <DollarSign size={16} className="text-amber-400" />
             <h2 className="text-sm font-semibold text-[var(--text-primary)]">Financial Impact by Root Cause</h2>
-            <span className="text-xs text-[var(--text-dim)] ml-1">({currency})</span>
+            {currency && <span className="text-xs text-[var(--text-dim)] ml-1">({currency})</span>}
           </div>
           {sortedCauses.length === 0 ? (
             <div className="flex items-center justify-center h-48 text-[var(--text-dim)] text-sm">
@@ -884,7 +886,7 @@ export default function RootCauseEngine() {
                     tooltip: {
                       ...CHART_DARK.plugins.tooltip,
                       callbacks: {
-                        label: ctx => ` ${currency} ${Math.round(ctx.parsed.x).toLocaleString()}`,
+                        label: ctx => ` ${fmtCost(ctx.parsed.x, currency)}`,
                       },
                     },
                   },
@@ -894,7 +896,7 @@ export default function RootCauseEngine() {
                       ticks: {
                         color: '#9ca3af',
                         font: { size: 11 },
-                        callback: v => `${currency} ${(v / 1000).toFixed(0)}K`,
+                        callback: v => `${currency ? currency + ' ' : ''}${(v / 1000).toFixed(0)}K`,
                       },
                     },
                     y: {
@@ -1031,7 +1033,7 @@ export default function RootCauseEngine() {
                 <p className="text-xs text-[var(--text-muted)] mb-1">Avg CPK</p>
                 <p className="text-lg font-bold text-indigo-400">
                   {deepDiveData.avgCPK != null
-                    ? `${currency} ${deepDiveData.avgCPK.toFixed(4)}`
+                    ? `${currency ? currency + ' ' : ''}${deepDiveData.avgCPK.toFixed(4)}`
                     : '-'}
                 </p>
                 <p className="text-xs text-[var(--text-dim)]">Cost per km</p>
@@ -1252,7 +1254,7 @@ export default function RootCauseEngine() {
                       {fmtCost(v.totalCost, currency)}
                     </td>
                     <td className="py-2 px-3 text-right text-[var(--text-muted)]">
-                      {v.avgCPK != null ? `${currency} ${v.avgCPK.toFixed(4)}` : '-'}
+                      {v.avgCPK != null ? `${currency ? currency + ' ' : ''}${v.avgCPK.toFixed(4)}` : '-'}
                     </td>
                     <td className="py-2 px-3 text-center">
                       <a

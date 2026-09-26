@@ -10,6 +10,7 @@
  * age-derived exceptions are reproducible in tests. Banding for tyre age reuses
  * the single source of truth in `./tyreAge`.
  */
+import { cleanRemovalReason } from './removalReason'
 import { tyreAgeBand, tyreAgeYears } from './tyreAge'
 
 // ── Category / severity vocabularies ───────────────────────────────────────────
@@ -55,7 +56,7 @@ const serialOf = (r) =>
   r?.serial_no || r?.serial_number || r?.tyre_serial || null
 
 const removalReasonOf = (r) =>
-  (r?.reason_for_removal || r?.removal_reason || '').toString().trim()
+  cleanRemovalReason(r?.reason_for_removal || r?.removal_reason) || ''
 
 const isInService = (r) => !r?.removal_date
 

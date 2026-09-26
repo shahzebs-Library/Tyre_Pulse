@@ -9,6 +9,7 @@
  * exactly. Explicit column list on the corpus (no SELECT *). Additive only.
  */
 import { supabase, fetchAllPages } from './_client'
+import { escapeLike } from '../searchFilter'
 
 /** Shared return / write-off marks (serial + mark_type). */
 export function listTyreStatusMarks() {
@@ -171,7 +172,10 @@ export async function findTyreBySerial(serial) {
   if (!s) return null
   const { data, error } = await supabase.from('tyre_records')
     .select('serial_no,asset_no,tyre_position,brand,size,site,country,status,cost_per_tyre,issue_date')
-    .ilike('serial_no', s)
+    // Case-insensitive EXACT match: escaped so a typed % or _ cannot turn one
+    // tyre's lookup into a match-all scan. Split-case serials (k507.. vs K507..)
+    // resolve to the same tyre, matching scrap_tyre_by_serial (V604).
+    .ilike('serial_no', escapeLike(s))
     .order('issue_date', { ascending: false, nullsFirst: false })
     .limit(1)
   if (error) throw error

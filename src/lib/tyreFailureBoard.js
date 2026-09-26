@@ -7,6 +7,7 @@
  * stylize). Everything is honest: empty arrays / null when there is no data.
  * No em/en dashes in any string (ASCII only, "N/A" for missing).
  */
+import { cleanRemovalReason } from './removalReason'
 import {
   computeCpkFleet, computeCpkByBrand, computeCpkBySite, computeCpkByAsset,
   computeAvgTyreLife,
@@ -89,7 +90,8 @@ export function buildTyreFailureBoard(records = []) {
   const statusSplit = chartData(['Active', 'Removed'], [activeCount, removedCount], 'Tyres')
 
   // Failure reasons over removed tyres, sorted desc.
-  const reasonRows = countBy(removed, (r) => r.removal_reason)
+  // A brand stored in removal_reason is not a reason; it counts as Unknown.
+  const reasonRows = countBy(removed, (r) => cleanRemovalReason(r.removal_reason))
   const failureReasons = chartData(
     reasonRows.map((x) => x.label),
     reasonRows.map((x) => x.count),

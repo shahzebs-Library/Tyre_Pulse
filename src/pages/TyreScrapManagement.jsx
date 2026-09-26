@@ -29,6 +29,7 @@ import EmptyState from '../components/EmptyState'
 import { toUserMessage } from '../lib/safeError'
 import { loadAutoTable } from '../lib/pdfEngine'
 import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
+import { cleanRemovalReason } from '../lib/removalReason'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -386,7 +387,8 @@ export default function TyreScrapManagement() {
   const reasonDonut = useMemo(() => {
     const map = {}
     scrapped.forEach(t => {
-      const r = t.removal_reason?.trim() || 'Unknown'
+      // A brand stored in removal_reason is not a reason (UAE import misalignment).
+      const r = cleanRemovalReason(t.removal_reason) || 'Unknown'
       map[r] = (map[r] || 0) + 1
     })
     const labels = Object.keys(map)

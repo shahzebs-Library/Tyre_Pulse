@@ -22,17 +22,25 @@ export interface TyreLookupRecord {
 
 /** PostgREST or() filters break on commas/parens - keep only safe serial chars. */
 export function sanitizeSerial(code: string): string {
-  return code.trim().replace(/[(),]/g, '').slice(0, 64)
+  return code.trim().replace(/[(),*]/g, '').slice(0, 64)
+}
+
+/** Escape LIKE wildcards so an ilike match stays an EXACT (case-insensitive) match. */
+export function escapeLike(s: string): string {
+  return s.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_')
 }
 
 /** Resolve a tyre by serial across the known serial columns. Returns null if none. */
 export async function lookupTyreBySerial(raw: string): Promise<TyreLookupRecord | null> {
   const code = sanitizeSerial(raw)
   if (!code) return null
+  const pat = escapeLike(code)
   const { data, error } = await supabase
     .from('tyre_records')
     .select('id, brand, size, position, tyre_position, asset_no, site, tread_depth, pressure_reading')
-    .or(`serial_no.eq.${code},serial_number.eq.${code},tyre_serial.eq.${code}`)
+    // Case-insensitive exact match: the register holds the same tyre under
+    // k507B403590 AND K507B403590, and a scan must find it either way.
+    .or(`serial_no.ilike.${pat},serial_number.ilike.${pat},tyre_serial.ilike.${pat}`)
     .limit(1)
   if (error || !data || data.length === 0) return null
   return data[0] as TyreLookupRecord

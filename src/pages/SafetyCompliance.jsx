@@ -142,7 +142,10 @@ export default function SafetyCompliance() {
     // Critical risk tyres
     const criticalCount = tyreRecords.filter(r => r.risk_level === 'Critical').length
     const highRiskCount = tyreRecords.filter(r => r.risk_level === 'High').length
-    const criticalPct = (criticalCount / total) * 100
+    // risk_level is unpopulated on most records; rate only the tyres that carry
+    // one, and report N/A (null) rather than a perfect 0% critical when none do.
+    const ratedCount = tyreRecords.filter(r => r.risk_level != null && String(r.risk_level).trim() !== '').length
+    const criticalPct = ratedCount ? (criticalCount / ratedCount) * 100 : null
 
     // Inspection frequency compliance (vehicles inspected at least once in period)
     const uniqueAssets = new Set(tyreRecords.map(r => r.asset_number || r.asset_no)).size
@@ -157,16 +160,19 @@ export default function SafetyCompliance() {
     const bySite = {}
     tyreRecords.forEach(r => {
       const site = r.site || 'Unknown'
-      if (!bySite[site]) bySite[site] = { total: 0, fails: 0 }
+      if (!bySite[site]) bySite[site] = { total: 0, measured: 0, fails: 0 }
       bySite[site].total++
       if (r.tread_depth != null) {
+        bySite[site].measured++
         const pos = getPosition(r.tyre_position || r.position)
         if (parseFloat(r.tread_depth) < (LEGAL_TREAD[pos] || LEGAL_TREAD.default)) bySite[site].fails++
       }
     })
     const siteTread = Object.entries(bySite)
-      .map(([site, d]) => ({ site, compliance: d.total ? ((d.total - d.fails) / d.total) * 100 : 100, fails: d.fails, total: d.total }))
-      .sort((a, b) => a.compliance - b.compliance)
+      // Compliance is over MEASURED tyres only; a site with no tread reading is
+      // N/A (null), never a flattering 100%.
+      .map(([site, d]) => ({ site, compliance: d.measured ? ((d.measured - d.fails) / d.measured) * 100 : null, fails: d.fails, total: d.total, measured: d.measured }))
+      .sort((a, b) => (a.compliance == null) - (b.compliance == null) || (a.compliance ?? 0) - (b.compliance ?? 0))
 
     // Monthly trend (last 6 months)
     const monthlyTrend = []
@@ -176,7 +182,8 @@ export default function SafetyCompliance() {
       const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
       const monthRecords = tyreRecords.filter(r => (r.created_at || '').startsWith(monthKey))
       const monthInspections = inspections.filter(r => (r.inspection_date || '').startsWith(monthKey))
-      const critPct = monthRecords.length ? (monthRecords.filter(r => r.risk_level === 'Critical').length / monthRecords.length) * 100 : 0
+      const monthRated = monthRecords.filter(r => r.risk_level != null && String(r.risk_level).trim() !== '')
+      const critPct = monthRated.length ? (monthRated.filter(r => r.risk_level === 'Critical').length / monthRated.length) * 100 : null
       const inspPct = monthInspections.length > 0 ? 100 : 0
       monthlyTrend.push({ month, critPct, inspPct })
     }
@@ -195,7 +202,7 @@ export default function SafetyCompliance() {
       { value: treadCompliance, weight: 0.35 },
       { value: pressureCompliance, weight: 0.25 },
       { value: inspectionCompliance, weight: 0.30 },
-      { value: Math.max(0, 100 - criticalPct * 5), weight: 0.10 },
+      { value: criticalPct == null ? null : Math.max(0, 100 - criticalPct * 5), weight: 0.10 },
     ].filter(p => p.value != null)
     const scoreWeight = scoreParts.reduce((s, p) => s + p.weight, 0)
     const overallScore = scoreWeight > 0
@@ -245,7 +252,7 @@ export default function SafetyCompliance() {
 
   const siteChartData = useMemo(() => {
     if (!compliance) return null
-    const top10 = compliance.siteTread.slice(0, 10)
+    const top10 = compliance.siteTread.filter(s => s.compliance != null).slice(0, 10)
     return {
       labels: top10.map(s => s.site),
       datasets: [{
@@ -266,7 +273,7 @@ export default function SafetyCompliance() {
           compliance.treadCompliance,
           compliance.pressureCompliance,
           compliance.inspectionCompliance,
-          Math.max(0, 100 - compliance.criticalPct * 10),
+          compliance.criticalPct == null ? null : Math.max(0, 100 - compliance.criticalPct * 10),
           Math.max(0, 100 - compliance.accidentCorrelation),
         ],
         borderColor: '#3b82f6',
@@ -295,7 +302,7 @@ export default function SafetyCompliance() {
         ['Tread Depth Compliance', fmtPct(compliance.treadCompliance), compliance.treadCompliance == null ? 'N/A' : compliance.treadCompliance >= 90 ? 'PASS' : compliance.treadCompliance >= 75 ? 'WARNING' : 'FAIL'],
         ['Pressure Compliance', fmtPct(compliance.pressureCompliance), compliance.pressureCompliance == null ? 'N/A' : compliance.pressureCompliance >= 90 ? 'PASS' : 'WARNING'],
         ['Inspection Compliance', fmtPct(compliance.inspectionCompliance), compliance.inspectionCompliance == null ? 'N/A' : compliance.inspectionCompliance >= 80 ? 'PASS' : 'WARNING'],
-        ['Critical Risk Tyres', compliance.criticalCount + ' tyres (' + fmtPct(compliance.criticalPct) + ')', compliance.criticalCount === 0 ? 'PASS' : 'ACTION REQUIRED'],
+        ['Critical Risk Tyres', compliance.criticalCount + ' tyres (' + fmtPct(compliance.criticalPct) + ')', compliance.criticalPct == null ? 'N/A' : compliance.criticalCount === 0 ? 'PASS' : 'ACTION REQUIRED'],
         ['Accident-Tyre Correlation', fmtPct(compliance.accidentCorrelation), compliance.accidents === 0 ? 'N/A' : compliance.accidentCorrelation < 30 ? 'LOW' : 'REVIEW'],
         ['Overall Score', fmtPct(compliance.overallScore), compliance.overallScore == null ? 'N/A' : compliance.overallScore >= 90 ? 'EXCELLENT' : compliance.overallScore >= 75 ? 'GOOD' : 'NEEDS ATTENTION'],
       ],
@@ -309,7 +316,7 @@ export default function SafetyCompliance() {
         head: [['Site', 'Tread Compliance %', 'Total Tyres', 'Failures', 'Status']],
         body: compliance.siteTread.map(s => [
           s.site, fmtPct(s.compliance), s.total, s.fails,
-          s.compliance >= 90 ? 'COMPLIANT' : s.compliance >= 75 ? 'WARNING' : 'NON-COMPLIANT',
+          s.compliance == null ? 'N/A' : s.compliance >= 90 ? 'COMPLIANT' : s.compliance >= 75 ? 'WARNING' : 'NON-COMPLIANT',
         ]),
       })
     }
@@ -338,7 +345,7 @@ export default function SafetyCompliance() {
     if (compliance.siteTread.length > 0) {
       const ws2 = XLSX.utils.json_to_sheet(compliance.siteTread.map(s => ({
         Site: s.site,
-        'Tread Compliance %': s.compliance.toFixed(1),
+        'Tread Compliance %': s.compliance == null ? 'N/A' : s.compliance.toFixed(1),
         'Total Tyres': s.total,
         Failures: s.fails,
       })))
@@ -429,7 +436,7 @@ export default function SafetyCompliance() {
                   { label: 'Tread Depth', value: compliance.treadCompliance, icon: CircleDot, detail: `${compliance.treadFails.length} below legal limit` },
                   { label: 'Pressure', value: compliance.pressureCompliance, icon: BarChart2, detail: `${compliance.pressureFails} non-compliant readings` },
                   { label: 'Inspections', value: compliance.inspectionCompliance, icon: ShieldCheck, detail: `${inspections.length} completed` },
-                  { label: 'Risk Level', value: Math.max(0, 100 - compliance.criticalPct * 10), icon: AlertOctagon, detail: `${compliance.criticalCount} critical tyres` },
+                  { label: 'Risk Level', value: compliance.criticalPct == null ? null : Math.max(0, 100 - compliance.criticalPct * 10), icon: AlertOctagon, detail: `${compliance.criticalCount} critical tyres` },
                 ].map(({ label, value, icon: Icon, detail }) => {
                   const sl = scoreLabel(value)
                   return (
@@ -711,9 +718,9 @@ export default function SafetyCompliance() {
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-2">
                                 <div className="w-24 h-1.5 bg-[var(--input-border)] rounded-full overflow-hidden">
-                                  <div className={`h-full rounded-full ${s.compliance >= 90 ? 'bg-green-500' : s.compliance >= 75 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ width: `${s.compliance}%` }} />
+                                  <div className={`h-full rounded-full ${s.compliance == null ? 'bg-[var(--input-border)]' : s.compliance >= 90 ? 'bg-green-500' : s.compliance >= 75 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ width: `${s.compliance ?? 0}%` }} />
                                 </div>
-                                <span className={`${scoreColor(s.compliance)} font-medium`}>{s.compliance.toFixed(1)}%</span>
+                                <span className={`${scoreColor(s.compliance)} font-medium`}>{fmtPct(s.compliance)}</span>
                               </div>
                             </td>
                             <td className="px-4 py-3">

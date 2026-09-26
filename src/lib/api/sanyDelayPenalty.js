@@ -8,10 +8,11 @@
  * job-card candidates (repairs over N days), confirm the ones sent to SANY, and save
  * a penalty row (downtime hours x 43). penalty_amount is a generated column.
  *
- * Every read degrades to an empty-but-shaped value on a missing relation / RPC error
- * so a not-yet-migrated org shows an honest empty state, never a throw.
+ * The ledger read throws on a real error and degrades to [] only when the table is
+ * not provisioned; the candidate RPC still degrades to an empty-but-shaped value.
  */
-import { supabase } from './_client'
+import { supabase, fetchAllPages, isNotProvisioned, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 
 export const DEFAULT_RATE_PER_HOUR = 43
 export const DEFAULT_MIN_DAYS = 5
@@ -37,17 +38,22 @@ function monthOf(v) {
  * @param {{country?:string, from?:string, to?:string}} [opts]
  */
 export async function listDelayPenalties({ country, from, to } = {}) {
-  try {
-    let q = supabase.from('sany_delay_penalties').select(COLS).order('period_date', { ascending: false }).order('created_at', { ascending: false })
+  // Honest read: a real error (permission, network) throws so the page can say
+  // so; only a not-yet-provisioned table degrades to an empty ledger. Paged with
+  // a unique id tiebreak so a ledger past the 1,000-row server cap is complete.
+  const { data, error } = await fetchAllPages((a, b) => {
+    let q = supabase.from('sany_delay_penalties').select(COLS)
+      .order('period_date', { ascending: false }).order('created_at', { ascending: false }).order('id', { ascending: true })
     if (country && country !== 'All') q = q.eq('country', country)
     if (from) q = q.gte('period_date', from)
     if (to) q = q.lte('period_date', to)
-    const { data, error } = await q
-    if (error) return []
-    return Array.isArray(data) ? data : []
-  } catch {
-    return []
+    return q.range(a, b)
+  }, { max: 50000 })
+  if (error) {
+    if (isNotProvisioned(error)) return []
+    throw new ServiceError(toUserMessage(error), error.code, error)
   }
+  return Array.isArray(data) ? data : []
 }
 
 /** Job-card candidates: repairs whose downtime exceeded p_min_days (RPC, DEFINER). */

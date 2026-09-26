@@ -80,9 +80,12 @@ const PAGES_DIR = resolve(process.cwd(), 'src/pages')
  * usePagedRows + TablePagination + export pipeline, and EnterpriseTable would
  * bring a second search box and a competing export. A refusal is the right
  * outcome here, not an outstanding task - do not read this number as debt.
+ *
+ * 194 -> 191 (2026-09-26): RecallDetail, SanyDelayPenalty and CostScenarioPlanner
+ * moved onto EnterpriseTable when they were deepened.
  */
 const BASELINE = {
-  rawTable: 194,
+  rawTable: 191,
   rawOverlay: 103,
 }
 

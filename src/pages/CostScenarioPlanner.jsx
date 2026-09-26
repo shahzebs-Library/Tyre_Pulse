@@ -1,20 +1,30 @@
 /**
- * CostScenarioPlanner (route /cost-scenario-planner) — an executive what-if tool
+ * CostScenarioPlanner (route /cost-scenario-planner): an executive what-if tool
  * that compares several tyre-strategy scenarios (e.g. Premium new, Budget new,
  * Retread-heavy mix) side by side over a planning horizon: annual cost, CPK and
  * savings vs a baseline. Pure client-side model (`src/lib/costScenario.js`);
- * money is shown in the active currency. No new data required — the user supplies
+ * money is shown in the active currency. No new data required: the user supplies
  * the shared fleet scope on the left and edits scenarios on the right.
+ *
+ * Ranking, input validation, sensitivity and break-even analysis come from the
+ * pure engine src/lib/costScenarioAnalytics.js, which calls the SAME
+ * computeScenarios model, so every view on this page agrees.
  */
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, PointElement, LineElement, Tooltip, Legend,
 } from 'chart.js'
 import { Bar, Line } from 'react-chartjs-2'
 import {
   SlidersHorizontal, Plus, Trash2, RotateCcw, TrendingDown, Trophy, Gauge, Layers,
+  AlertTriangle, FileSpreadsheet, FileText, Info, Target,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
+import {
+  validateInputs, rankScenarios, withPerVehicle, sensitivity, breakEvenRetreadPct, scenarioExportRows,
+} from '../lib/costScenarioAnalytics'
 import { useSettings } from '../contexts/SettingsContext'
 import { formatCurrencyCompact } from '../lib/formatters'
 import {
@@ -58,7 +68,70 @@ export default function CostScenarioPlanner() {
   }
 
   const r = useMemo(() => computeScenarios(shared, scenarios), [shared, scenarios])
-  const money = (v) => formatCurrencyCompact(v, activeCurrency)
+  const money = (v) => (v == null || !Number.isFinite(Number(v)) ? 'N/A' : formatCurrencyCompact(v, activeCurrency))
+  const warnings = useMemo(() => validateInputs(shared, scenarios), [shared, scenarios])
+  const ranked = useMemo(() => withPerVehicle(rankScenarios(r), shared), [r, shared])
+  const [cheaperOnly, setCheaperOnly] = useState(false)
+  const tableRows = useMemo(
+    () => (cheaperOnly ? ranked.filter((x) => x.isBaseline || x.savingsVsBaselineHorizon > 0) : ranked),
+    [ranked, cheaperOnly],
+  )
+  const [sensIndex, setSensIndex] = useState(0)
+  const [sensPct, setSensPct] = useState(20)
+  useEffect(() => { if (sensIndex >= scenarios.length) setSensIndex(0) }, [scenarios.length, sensIndex])
+  const sens = useMemo(
+    () => sensitivity(shared, scenarios[sensIndex] || scenarios[0] || {}, { pct: sensPct }),
+    [shared, scenarios, sensIndex, sensPct],
+  )
+  const maxSwing = Math.max(1, ...sens.drivers.map((d) => Math.max(Math.abs(d.low ?? 0), Math.abs(d.high ?? 0))))
+  const breakEvens = useMemo(
+    () => scenarios.slice(1).map((sc) => ({
+      name: String(sc?.name || '').trim() || 'Scenario',
+      pct: breakEvenRetreadPct(shared, scenarios[0] || {}, sc),
+    })),
+    [shared, scenarios],
+  )
+  const blockingWarnings = warnings.filter((w) => w.level === 'error')
+
+  function exportComparison(kind) {
+    if (!ranked.length) return
+    const rows = scenarioExportRows(ranked, r.horizonYears)
+    const keys = ['rank', 'name', 'role', 'tyres_per_year', 'effective_cost_per_tyre', 'annual_tyre_cost', 'annual_maintenance', 'annual_cost', 'horizon_cost', 'cpk', 'delta_to_best', 'savings_vs_baseline']
+    const headers = ['Rank', 'Scenario', 'Role', 'Tyres per year', `Eff. cost per tyre (${activeCurrency || 'currency'})`, 'Annual tyre cost', 'Annual maintenance', 'Annual cost', `Cost over ${r.horizonYears} years`, 'CPK', 'Above best (annual)', 'Savings vs baseline (horizon)']
+    const fname = reportFileName('TyrePulse', 'Cost scenario comparison')
+    if (kind === 'excel') exportToExcel(rows, keys, headers, fname, 'Scenarios')
+    else exportToPdf(rows, keys.map((k, i) => ({ key: k, header: headers[i] })), 'Cost Scenario Comparison', fname, 'landscape')
+  }
+
+  const columns = useMemo(() => [
+    { id: 'rank', header: 'Rank', accessorFn: (x) => x.rank, meta: { align: 'right' }, size: 60 },
+    {
+      id: 'name', header: 'Scenario', accessorFn: (x) => x.name,
+      cell: ({ row }) => (
+        <span className="inline-flex items-center gap-2">
+          <span className="inline-block w-2.5 h-2.5 rounded-full shrink-0" style={{ background: SERIES[row.original.index % SERIES.length] }} />
+          <span className="font-medium text-[var(--text-secondary)]">{row.original.name}</span>
+          {row.original.isBest && <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-green-500/15 text-green-400">Best</span>}
+          {row.original.isBaseline && <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-slate-500/15 text-[var(--text-muted)]">Baseline</span>}
+        </span>
+      ),
+    },
+    { id: 'tyres', header: 'Tyres / yr', accessorFn: (x) => x.tyresPerYear, meta: { align: 'right' } },
+    { id: 'eff', header: 'Eff. cost / tyre', accessorFn: (x) => x.effectiveCostPerTyre, meta: { align: 'right' }, cell: ({ getValue }) => money(getValue()) },
+    { id: 'annual', header: 'Annual cost', accessorFn: (x) => x.annualCost, meta: { align: 'right' }, cell: ({ getValue }) => <span className="font-semibold">{money(getValue())}</span> },
+    { id: 'mix', header: 'Tyre share', accessorFn: (x) => x.tyreSharePct ?? -1, meta: { align: 'right' }, cell: ({ getValue }) => (getValue() < 0 ? 'N/A' : `${getValue()}%`) },
+    { id: 'perVeh', header: 'Per vehicle / yr', accessorFn: (x) => x.costPerVehicleYear ?? -1, meta: { align: 'right' }, cell: ({ getValue }) => (getValue() < 0 ? 'N/A' : money(getValue())) },
+    { id: 'cpk', header: 'CPK', accessorFn: (x) => x.cpk, meta: { align: 'right' }, cell: ({ getValue }) => Number(getValue()).toFixed(4) },
+    { id: 'delta', header: 'Above best', accessorFn: (x) => x.deltaToBest, meta: { align: 'right' }, cell: ({ row }) => (row.original.deltaToBest === 0 ? 'Best' : `${money(row.original.deltaToBest)} (${row.original.deltaToBestPct ?? 'N/A'}%)`) },
+    {
+      id: 'savings', header: `Savings vs baseline (${r.horizonYears}y)`, accessorFn: (x) => (x.isBaseline ? 0 : x.savingsVsBaselineHorizon), meta: { align: 'right' },
+      cell: ({ row }) => {
+        const v = row.original.savingsVsBaselineHorizon
+        if (row.original.isBaseline) return <span className="text-[var(--text-muted)]">N/A</span>
+        return <span className={v > 0 ? 'text-green-400' : v < 0 ? 'text-red-400' : 'text-[var(--text-muted)]'}>{money(v)}</span>
+      },
+    },
+  ], [r.horizonYears, activeCurrency]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const chartText =
     getComputedStyle(document.documentElement).getPropertyValue('--text-muted') || '#9ca3af'
@@ -128,7 +201,7 @@ export default function CostScenarioPlanner() {
       value: money(r.savingsVsBaseline),
       icon: TrendingDown,
       tone: r.savingsVsBaseline >= 0 ? 'text-green-400' : 'text-red-400',
-      sub: `${r.savingsVsBaselinePct >= 0 ? '−' : '+'}${Math.abs(r.savingsVsBaselinePct)}% annual`,
+      sub: `${r.savingsVsBaselinePct >= 0 ? '-' : '+'}${Math.abs(r.savingsVsBaselinePct)}% annual`,
     },
     {
       label: 'Best CPK',
@@ -151,14 +224,43 @@ export default function CostScenarioPlanner() {
         subtitle="Compare tyre strategies side by side: annual cost, CPK and savings vs a baseline over your planning horizon."
         icon={SlidersHorizontal}
         actions={
-          <button
-            onClick={reset}
-            className="btn-secondary text-sm inline-flex items-center gap-1.5"
-          >
-            <RotateCcw size={14} /> Reset
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => exportComparison('excel')} disabled={!ranked.length} className="btn-secondary text-sm inline-flex items-center gap-1.5 disabled:opacity-40">
+              <FileSpreadsheet size={14} /> Excel
+            </button>
+            <button onClick={() => exportComparison('pdf')} disabled={!ranked.length} className="btn-secondary text-sm inline-flex items-center gap-1.5 disabled:opacity-40">
+              <FileText size={14} /> PDF
+            </button>
+            <button
+              onClick={reset}
+              className="btn-secondary text-sm inline-flex items-center gap-1.5"
+            >
+              <RotateCcw size={14} /> Reset
+            </button>
+          </div>
         }
       />
+
+      <p className="text-xs text-[var(--text-muted)] flex items-start gap-2">
+        <Info size={14} className="mt-0.5 shrink-0" />
+        A planning model, not a report of your fleet. Figures are in the unit you type and are labelled {activeCurrency || 'with no currency'}; nothing is converted or drawn from recorded tyre spend. For measured cost per km use CPK Intelligence.
+      </p>
+
+      {warnings.length > 0 && (
+        <div className={`card border ${blockingWarnings.length ? 'border-red-500/40' : 'border-amber-500/40'}`}>
+          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-2 flex items-center gap-2">
+            <AlertTriangle size={15} className={blockingWarnings.length ? 'text-red-400' : 'text-amber-400'} />
+            Input checks ({warnings.length})
+          </h3>
+          <ul className="space-y-1 text-xs">
+            {warnings.map((w, i) => (
+              <li key={i} className={w.level === 'error' ? 'text-red-400' : 'text-amber-400'}>
+                <span className="font-semibold">{w.name}:</span> {w.message}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Shared fleet inputs */}
@@ -293,63 +395,23 @@ export default function CostScenarioPlanner() {
           </div>
 
           {/* Comparison table */}
-          <div className="card overflow-x-auto">
-            <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Comparison</h3>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-xs text-[var(--text-muted)] uppercase border-b border-[var(--border-dim)]">
-                  <th className="text-left py-2 pr-3 font-medium">Scenario</th>
-                  <th className="text-right py-2 px-3 font-medium">Tyres / yr</th>
-                  <th className="text-right py-2 px-3 font-medium">Eff. cost / tyre</th>
-                  <th className="text-right py-2 px-3 font-medium">Annual cost</th>
-                  <th className="text-right py-2 px-3 font-medium">CPK</th>
-                  <th className="text-right py-2 pl-3 font-medium">Savings vs baseline ({r.horizonYears}y)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {r.rows.map((row, i) => (
-                  <tr
-                    key={row.name + i}
-                    className={`border-b border-[var(--border-dim)] ${row.isBest ? 'bg-green-500/5' : ''}`}
-                  >
-                    <td className="py-2 pr-3">
-                      <span className="inline-flex items-center gap-2">
-                        <span
-                          className="inline-block w-2.5 h-2.5 rounded-full shrink-0"
-                          style={{ background: SERIES[i % SERIES.length] }}
-                        />
-                        <span className="font-medium text-[var(--text-secondary)]">{row.name}</span>
-                        {row.isBest && (
-                          <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-green-500/15 text-green-400">
-                            Best
-                          </span>
-                        )}
-                        {row.isBaseline && (
-                          <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-slate-500/15 text-[var(--text-muted)]">
-                            Baseline
-                          </span>
-                        )}
-                      </span>
-                    </td>
-                    <td className="py-2 px-3 text-right font-mono text-[var(--text-secondary)]">{row.tyresPerYear}</td>
-                    <td className="py-2 px-3 text-right font-mono text-[var(--text-secondary)]">{money(row.effectiveCostPerTyre)}</td>
-                    <td className="py-2 px-3 text-right font-mono font-semibold text-[var(--text-primary)]">{money(row.annualCost)}</td>
-                    <td className="py-2 px-3 text-right font-mono text-[var(--text-secondary)]">{row.cpk.toFixed(4)}</td>
-                    <td
-                      className={`py-2 pl-3 text-right font-mono ${
-                        row.savingsVsBaselineHorizon > 0
-                          ? 'text-green-400'
-                          : row.savingsVsBaselineHorizon < 0
-                          ? 'text-red-400'
-                          : 'text-[var(--text-muted)]'
-                      }`}
-                    >
-                      {row.isBaseline ? 'N/A' : money(row.savingsVsBaselineHorizon)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="card">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+              <h3 className="text-sm font-semibold text-[var(--text-primary)]">Comparison (cheapest first)</h3>
+              <label className="inline-flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
+                <input type="checkbox" checked={cheaperOnly} onChange={(e) => setCheaperOnly(e.target.checked)} />
+                Only scenarios cheaper than the baseline
+              </label>
+            </div>
+            <EnterpriseTable
+              columns={columns}
+              data={tableRows}
+              getRowId={(x) => `${x.index}`}
+              enableExport={false}
+              searchPlaceholder="Search scenarios"
+              emptyMessage={cheaperOnly ? 'No scenario is cheaper than the baseline.' : 'Add a scenario to compare.'}
+              initialPageSize={25}
+            />
             {baselineRow && (
               <p className="text-[11px] text-[var(--text-muted)] mt-4">
                 Baseline is the first scenario ({r.baselineName}). Savings are the difference in total spend over the {r.horizonYears}-year
@@ -357,6 +419,70 @@ export default function CostScenarioPlanner() {
                 actuals vary by fleet, region and procurement terms.
               </p>
             )}
+          </div>
+
+          {/* Sensitivity + break-even */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="card">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+                <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-1.5"><Gauge size={15} /> Sensitivity</h3>
+                <div className="flex items-center gap-2">
+                  <select aria-label="Scenario for sensitivity" className="input text-xs py-1" value={sensIndex} onChange={(e) => setSensIndex(Number(e.target.value))}>
+                    {scenarios.map((sc, i) => <option key={i} value={i}>{sc.name || `Scenario ${i + 1}`}</option>)}
+                  </select>
+                  <select aria-label="Sensitivity range" className="input text-xs py-1" value={sensPct} onChange={(e) => setSensPct(Number(e.target.value))}>
+                    {[10, 20, 30].map((p) => <option key={p} value={p}>plus or minus {p}%</option>)}
+                  </select>
+                </div>
+              </div>
+              <p className="text-xs text-[var(--text-muted)] mb-3">
+                Change in annual cost when one input moves by {sensPct}% and everything else stays put. Base {money(sens.base)}.
+              </p>
+              <div className="space-y-2">
+                {sens.drivers.map((d) => (
+                  <div key={d.key}>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-[var(--text-secondary)]">{d.label}</span>
+                      <span className="font-mono text-[var(--text-muted)]">
+                        {d.swing == null ? d.note || 'N/A' : `${money(d.low)} / ${money(d.high)}`}
+                      </span>
+                    </div>
+                    {d.swing != null && (
+                      <div className="mt-1 flex h-1.5">
+                        <div className="w-1/2 flex justify-end">
+                          <div className="h-1.5 rounded-l bg-green-500/70" style={{ width: `${Math.round((Math.abs(Math.min(d.low, d.high)) / maxSwing) * 100)}%` }} />
+                        </div>
+                        <div className="w-1/2">
+                          <div className="h-1.5 rounded-r bg-red-500/70" style={{ width: `${Math.round((Math.abs(Math.max(d.low, d.high)) / maxSwing) * 100)}%` }} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="card">
+              <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-1 flex items-center gap-1.5"><Target size={15} /> Retread break-even</h3>
+              <p className="text-xs text-[var(--text-muted)] mb-3">
+                The retread share at which each scenario matches the baseline ({r.baselineName ?? 'N/A'}) on annual cost, keeping its own retread cost factor.
+              </p>
+              {breakEvens.length === 0 ? (
+                <p className="text-sm text-[var(--text-muted)]">Add a second scenario to compare against the baseline.</p>
+              ) : (
+                <ul className="space-y-2 text-sm">
+                  {breakEvens.map((b, i) => (
+                    <li key={i} className="flex items-center justify-between gap-2">
+                      <span className="text-[var(--text-secondary)] truncate">{b.name}</span>
+                      <span className="font-mono text-xs">
+                        {b.pct == null ? <span className="text-red-400">Cannot reach the baseline</span>
+                          : b.pct === 0 ? <span className="text-green-400">Already cheaper with no retreads</span>
+                          : <span className="text-amber-400">{b.pct}% retread</span>}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
         </div>
       </div>

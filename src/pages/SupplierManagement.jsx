@@ -5,7 +5,6 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { contractFormSchema } from '../lib/validation/schemas'
 import { FormField, FormDate, FormActions } from '../components/forms'
 import * as supplierApi from '../lib/api/supplierManagementApi'
-import { recordCost } from '../lib/analyticsEngine'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -14,6 +13,15 @@ import { computeSupplierScorecard } from '../lib/analytics/supplierScorecard'
 import { useLanguage } from '../contexts/LanguageContext'
 import PageHeader from '../components/ui/PageHeader'
 import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import {
+  CPK_BENCHMARK, FAILURE_THRESHOLD, RATINGS, CONTRACT_STATUSES,
+  contractStatus, daysToExpiry, contractValue, filterContracts, summarizeContracts,
+  buildSupplierMetrics, filterRecords, filterSuppliers, supplierKpis, sortByCpk,
+  vsBenchmark, radarScores, yoySpend, monthlySpend, dataAnchorDate, last12Months,
+  recommendationFacts, supplierExportRows, SUPPLIER_EXPORT_COLUMNS,
+  contractExportRows, CONTRACT_EXPORT_COLUMNS,
+} from '../lib/supplierManagementAnalytics'
 import NotInUseNotice from '../components/ui/NotInUseNotice'
 import EmptyState from '../components/EmptyState'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
@@ -44,10 +52,7 @@ ChartJS.register(
 )
 
 // ── Constants ──────────────────────────────────────────────────────────────────
-const CPK_BENCHMARK = 1.20
-const FAILURE_THRESHOLD = 0.15
 const TABS = ['Directory', 'Performance', 'Spend Analysis', 'Contracts', 'Recommendations', 'Scorecard']
-const RATINGS = ['Preferred', 'Approved', 'Under Review', 'Probation']
 // i18n key lookup for RATINGS/CONTRACT_STATUSES labels (constants stay stable for logic/equality checks)
 const RATING_I18N_KEYS = { Preferred: 'preferred', Approved: 'approved', 'Under Review': 'underReview', Probation: 'probation' }
 const TAB_I18N_KEYS = ['directory', 'performance', 'spendAnalysis', 'contracts', 'recommendations', 'scorecard']
@@ -69,7 +74,6 @@ const RATING_CONFIG = {
   'Under Review':{ color: 'text-amber-400',   bg: 'bg-amber-900/40',   border: 'border-amber-700',   icon: AlertTriangle },
   Probation:     { color: 'text-red-400',     bg: 'bg-red-900/40',     border: 'border-red-700',     icon: ShieldCheck },
 }
-const CONTRACT_STATUSES = ['Active', 'Expiring Soon', 'Expired']
 const CONTRACT_STATUS_I18N_KEYS = { Active: 'active', 'Expiring Soon': 'expiringSoon', Expired: 'expired' }
 const CHART_DEFAULTS = {
   responsive: true,
@@ -91,14 +95,10 @@ const CHART_DEFAULTS = {
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
-function calcCpk(cost, kmFit, kmRem) {
-  const km = (kmRem ?? 0) - (kmFit ?? 0)
-  if (!km || km <= 0 || !cost || cost <= 0) return null
-  return cost / km
-}
-
+// Calculation lives in ../lib/supplierManagementAnalytics (pure, tested). These
+// are display formatters only.
 function fmtCurrency(v, currency) {
-  if (v == null || !isFinite(v)) return `${currency} 0`
+  if (v == null || !isFinite(v)) return 'N/A'
   if (Math.abs(v) >= 1_000_000) return `${currency} ${(v / 1_000_000).toFixed(2)}M`
   if (Math.abs(v) >= 1_000) return `${currency} ${(v / 1_000).toFixed(1)}K`
   return `${currency} ${Math.round(v).toLocaleString()}`
@@ -120,84 +120,29 @@ function fmtPct(v) {
   return `${(v * 100).toFixed(1)}%`
 }
 
-// Anchor time windows to the data's latest issue_date (fallback: today) so
-// historic imports still populate "last 12 months" and YoY views.
-function dataAnchorDate(recs) {
-  let max = null
-  for (const r of recs || []) { if (r.issue_date && (!max || r.issue_date > max)) max = r.issue_date }
-  return max ? new Date(max.slice(0, 10) + 'T00:00:00') : new Date()
+/** EnterpriseTable over the page's shared pager: the pager owns paging, the table owns the rest. */
+function PagedTable({ columns, pager, emptyMessage, getRowId, maxHeight = 600 }) {
+  return (
+    <div className="space-y-2">
+      <EnterpriseTable
+        columns={columns}
+        data={pager ? pager.pageRows : []}
+        getRowId={getRowId}
+        className="border-0 rounded-none shadow-none"
+        enableGlobalFilter={false}
+        enableColumnFilters={false}
+        enableSorting={false}
+        enableExport={false}
+        enableColumnVisibility={false}
+        enableKeyboard={false}
+        virtual
+        maxHeight={maxHeight}
+        emptyMessage={emptyMessage}
+      />
+      {pager && <TablePagination {...pager} />}
+    </div>
+  )
 }
-
-function getLast12Months(anchor = new Date()) {
-  const months = []
-  const now = anchor
-  for (let i = 11; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-    months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
-  }
-  return months
-}
-
-function toMonthKey(dateStr) {
-  if (!dateStr) return null
-  const d = new Date(dateStr)
-  if (isNaN(d.getTime())) return null
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-}
-
-function getContractStatus(contract) {
-  if (!contract.contract_end) return 'Active'
-  const end = new Date(contract.contract_end)
-  const now = new Date()
-  const diffDays = (end - now) / (1000 * 60 * 60 * 24)
-  if (diffDays < 0) return 'Expired'
-  if (diffDays <= 30) return 'Expiring Soon'
-  return 'Active'
-}
-
-function computeSupplierMetrics(records, brand, anchorYear = new Date().getFullYear()) {
-  const recs = records.filter(r => r.brand === brand)
-  const validRecs = recs.filter(r => {
-    const fit = Number(r.km_at_fitment), rem = Number(r.km_at_removal), cost = Number(r.cost_per_tyre)
-    return isFinite(fit) && fit > 0 && isFinite(rem) && rem > fit && isFinite(cost) && cost > 0
-  })
-  const cpks = validRecs.map(r => calcCpk(Number(r.cost_per_tyre), Number(r.km_at_fitment), Number(r.km_at_removal))).filter(Boolean)
-  const avgCpk = cpks.length ? cpks.reduce((s, v) => s + v, 0) / cpks.length : null
-  const kms = validRecs.map(r => Number(r.km_at_removal) - Number(r.km_at_fitment))
-  const avgLife = kms.length ? kms.reduce((s, v) => s + v, 0) / kms.length : 0
-  const failures = recs.filter(r => r.risk_level === 'High' || r.risk_level === 'Critical')
-  const failureRate = recs.length > 0 ? failures.length / recs.length : 0
-  const totalSpend = recs.reduce((s, r) => s + recordCost(r), 0)
-  const thisYear = anchorYear
-  const yearRecs = recs.filter(r => r.issue_date && new Date(r.issue_date).getFullYear() === thisYear)
-  const spendThisYear = yearRecs.reduce((s, r) => s + recordCost(r), 0)
-  const sites = [...new Set(recs.map(r => r.site).filter(Boolean))]
-  const sizes = [...new Set(recs.map(r => r.size).filter(Boolean))]
-  const countries = [...new Set(recs.map(r => r.country).filter(Boolean))]
-  return { brand, recs, validRecs, avgCpk, avgLife, failureRate, totalSpend, spendThisYear, sites, sizes, countries, count: recs.length }
-}
-
-function computeRadarScores(metrics, allMetrics) {
-  const allCpks = allMetrics.map(m => m.avgCpk).filter(Boolean)
-  const allLives = allMetrics.map(m => m.avgLife).filter(v => v > 0)
-  const maxCpk = allCpks.length ? Math.max(...allCpks) : 1
-  const maxLife = allLives.length ? Math.max(...allLives) : 1
-  const fleetAvgCpk = allCpks.length ? allCpks.reduce((s, v) => s + v, 0) / allCpks.length : CPK_BENCHMARK
-  const totalCount = allMetrics.reduce((s, m) => s + m.count, 0)
-  const cpkScore = metrics.avgCpk != null ? Math.max(0, 100 - (metrics.avgCpk / maxCpk) * 100) : 0
-  const lifeScore = maxLife > 0 ? (metrics.avgLife / maxLife) * 100 : 0
-  const reliabilityScore = Math.max(0, 100 - metrics.failureRate * 100 * 4)
-  const valueScore = metrics.avgCpk != null && fleetAvgCpk > 0 ? Math.min(100, (fleetAvgCpk / metrics.avgCpk) * 50 + 50) : 50
-  const coverageScore = totalCount > 0 ? (metrics.count / totalCount) * 100 * 3 : 0
-  return {
-    cpkScore: Math.min(100, cpkScore),
-    lifeScore: Math.min(100, lifeScore),
-    reliabilityScore: Math.min(100, reliabilityScore),
-    valueScore: Math.min(100, valueScore),
-    coverageScore: Math.min(100, coverageScore),
-  }
-}
-
 // ── Supabase persistence helpers ─────────────────────────────────────────────
 function pick(obj, cols) {
   const out = {}
@@ -429,7 +374,7 @@ function ContractModal({ contract, onSave, onClose, onLockChange }) {
                 price_per_unit: contract.price_per_unit != null ? Number(contract.price_per_unit) : null,
                 min_order: contract.min_order != null ? Number(contract.min_order) : null,
                 payment_terms: contract.payment_terms || null,
-                status: getContractStatus(contract),
+                status: contractStatus(contract),
                 country: contract.country || null,
               }}
               onStateChange={({ isActive, isLocked }) => {
@@ -474,12 +419,14 @@ export default function SupplierManagement() {
   // its row-level edit/delete controls are blocked while it is in approval.
   const [lockedContractId, setLockedContractId] = useState(null)
   const [contractSearch, setContractSearch] = useState('')
+  const [contractStatusFilter, setContractStatusFilter] = useState('All')
   const [contractDeleteTarget, setContractDeleteTarget] = useState(null)
   const [contractDeleteError, setContractDeleteError] = useState(null)
   const [contractDeleting, setContractDeleting] = useState(false)
   // Scorecard source data (warranty claims + purchase orders); tyres come from `records`.
   const [scWarranty, setScWarranty] = useState([])
   const [scPos, setScPos] = useState([])
+  const [scError, setScError] = useState(null)
 
   // Load tyre records
   const fetchData = useCallback(async () => {
@@ -519,12 +466,18 @@ export default function SupplierManagement() {
 
   // Load warranty claims + purchase orders for the supplier scorecard.
   const fetchScorecardSources = useCallback(async () => {
-    const [{ data: w }, { data: p }] = await Promise.all([
-      supplierApi.listScorecardWarrantyClaims({ country: activeCountry }),
-      supplierApi.listScorecardPurchaseOrders({ country: activeCountry }),
-    ])
-    setScWarranty(w || [])
-    setScPos(p || [])
+    setScError(null)
+    try {
+      const [{ data: w, error: we }, { data: p, error: pe }] = await Promise.all([
+        supplierApi.listScorecardWarrantyClaims({ country: activeCountry }),
+        supplierApi.listScorecardPurchaseOrders({ country: activeCountry }),
+      ])
+      if (we || pe) setScError(toUserMessage(we || pe, 'Could not load warranty claims or purchase orders.'))
+      setScWarranty(w || [])
+      setScPos(p || [])
+    } catch (err) {
+      setScError(toUserMessage(err, 'Could not load warranty claims or purchase orders.'))
+    }
   }, [activeCountry])
 
   useEffect(() => { fetchData() }, [fetchData])
@@ -545,56 +498,23 @@ export default function SupplierManagement() {
   const sites = useMemo(() => ['All', ...new Set(records.map(r => r.site).filter(Boolean))], [records])
 
   // Filter records by country/site
-  const filteredRecords = useMemo(() => {
-    return records.filter(r => {
-      if (filterCountry !== 'All' && r.country !== filterCountry) return false
-      if (filterSite !== 'All' && r.site !== filterSite) return false
-      return true
-    })
-  }, [records, filterCountry, filterSite])
+  const filteredRecords = useMemo(
+    () => filterRecords(records, { country: filterCountry, site: filterSite }),
+    [records, filterCountry, filterSite],
+  )
 
-  // All supplier metrics
-  const allMetrics = useMemo(() => {
-    const brands = [...new Set(filteredRecords.map(r => r.brand).filter(Boolean))]
-    const anchorYear = dataAnchorDate(filteredRecords).getFullYear()
-    return brands.map(brand => {
-      const m = computeSupplierMetrics(filteredRecords, brand, anchorYear)
-      const entry = ratings[brand]
-      const rating = entry?.label || autoRate(m)
-      return { ...m, rating, notes: entry?.notes || '' }
-    })
-  }, [filteredRecords, ratings])
-
-  function autoRate(m) {
-    if (m.avgCpk != null && m.avgCpk <= CPK_BENCHMARK * 0.9 && m.failureRate < 0.1) return 'Preferred'
-    if (m.failureRate > FAILURE_THRESHOLD * 1.5) return 'Probation'
-    if (m.failureRate > FAILURE_THRESHOLD || (m.avgCpk != null && m.avgCpk > CPK_BENCHMARK * 1.3)) return 'Under Review'
-    return 'Approved'
-  }
+  // All supplier metrics (pure engine: CPK via kpiEngine, honest nulls)
+  const allMetrics = useMemo(() => buildSupplierMetrics(filteredRecords, ratings), [filteredRecords, ratings])
 
   // Filtered suppliers for directory
-  const filteredSuppliers = useMemo(() => {
-    return allMetrics.filter(s => {
-      if (search && !s.brand.toLowerCase().includes(search.toLowerCase())) return false
-      if (filterRating !== 'All' && s.rating !== filterRating) return false
-      return true
-    })
-  }, [allMetrics, search, filterRating])
+  const filteredSuppliers = useMemo(
+    () => filterSuppliers(allMetrics, { search, rating: filterRating }),
+    [allMetrics, search, filterRating],
+  )
 
-  // KPI summary
-  const kpiSummary = useMemo(() => {
-    const cpks = allMetrics.map(m => m.avgCpk).filter(Boolean)
-    const preferred = allMetrics.filter(m => m.rating === 'Preferred')
-    const sortedByCpk = allMetrics.filter(m => m.avgCpk != null).sort((a, b) => a.avgCpk - b.avgCpk)
-    return {
-      total: allMetrics.length,
-      preferredCount: preferred.length,
-      cpkMin: cpks.length ? Math.min(...cpks) : null,
-      cpkMax: cpks.length ? Math.max(...cpks) : null,
-      best: sortedByCpk[0] || null,
-      worst: sortedByCpk[sortedByCpk.length - 1] || null,
-    }
-  }, [allMetrics])
+  // KPI summary follows every filter on screen (country, site, rating, search).
+  const kpiSummary = useMemo(() => supplierKpis(filteredSuppliers), [filteredSuppliers])
+
 
   const scopedCountry = activeCountry && activeCountry !== 'All' ? activeCountry : null
 
@@ -648,126 +568,59 @@ export default function SupplierManagement() {
     await fetchContracts()
   }
 
-  // Export
+  // Export: exactly the suppliers on screen (country, site, rating and search filters).
   async function handleExcelExport() {
-    const { exportToExcel } = await loadExportUtils()
-    const rows = allMetrics.map(m => ({
-      brand: m.brand,
-      rating: m.rating,
-      count: m.count,
-      avg_cpk: m.avgCpk != null ? m.avgCpk.toFixed(4) : 'N/A',
-      avg_life_km: m.avgLife ? Math.round(m.avgLife) : 'N/A',
-      failure_rate: m.failureRate != null ? (m.failureRate * 100).toFixed(1) + '%' : 'N/A',
-      spend_this_year: Math.round(m.spendThisYear),
-      total_spend: Math.round(m.totalSpend),
-      sites: m.sites.join(', '),
-      countries: m.countries.join(', '),
-    }))
-    exportToExcel(rows,
-      ['brand','rating','count','avg_cpk','avg_life_km','failure_rate','spend_this_year','total_spend','sites','countries'],
-      ['Supplier','Rating','Tyres','Avg CPK','Avg Life (km)','Failure Rate','Spend YTD','Total Spend','Sites','Countries'],
-      'supplier_management', 'Suppliers')
+    const { exportToExcel, reportFileName } = await loadExportUtils()
+    exportToExcel(supplierExportRows(filteredSuppliers),
+      SUPPLIER_EXPORT_COLUMNS.map(c => c.key),
+      SUPPLIER_EXPORT_COLUMNS.map(c => c.header),
+      reportFileName('Supplier Performance', scopedCountry), 'Suppliers', { currency: activeCurrency })
   }
 
   async function handlePdfExport() {
-    const { exportToPdf } = await loadExportUtils()
-    const rows = allMetrics.map(m => ({
-      brand: m.brand,
-      rating: m.rating,
-      count: m.count,
-      avg_cpk: m.avgCpk != null ? m.avgCpk.toFixed(4) : 'N/A',
-      avg_life_km: m.avgLife ? Math.round(m.avgLife).toLocaleString() : 'N/A',
-      failure_rate: m.failureRate != null ? (m.failureRate * 100).toFixed(1) + '%' : 'N/A',
-      spend_ytd: fmtCurrency(m.spendThisYear, activeCurrency),
-    }))
-    exportToPdf(rows,
-      [
-        { key: 'brand', header: 'Supplier' },
-        { key: 'rating', header: 'Rating' },
-        { key: 'count', header: 'Tyres' },
-        { key: 'avg_cpk', header: 'Avg CPK' },
-        { key: 'avg_life_km', header: 'Avg Life' },
-        { key: 'failure_rate', header: 'Failure %' },
-        { key: 'spend_ytd', header: 'Spend YTD' },
-      ],
-      'Supplier Performance Report', 'supplier_performance_report', 'landscape')
+    const { exportToPdf, reportFileName } = await loadExportUtils()
+    exportToPdf(supplierExportRows(filteredSuppliers), SUPPLIER_EXPORT_COLUMNS,
+      'Supplier Performance Report', reportFileName('Supplier Performance', scopedCountry),
+      'landscape', '', { currency: activeCurrency })
   }
 
+  async function handleContractsExcel() {
+    const { exportToExcel, reportFileName } = await loadExportUtils()
+    exportToExcel(contractExportRows(filteredContracts),
+      CONTRACT_EXPORT_COLUMNS.map(c => c.key),
+      CONTRACT_EXPORT_COLUMNS.map(c => c.header),
+      reportFileName('Supplier Contracts', scopedCountry), 'Contracts', { currency: activeCurrency })
+  }
+
+  async function handleContractsPdf() {
+    const { exportToPdf, reportFileName } = await loadExportUtils()
+    exportToPdf(contractExportRows(filteredContracts), CONTRACT_EXPORT_COLUMNS,
+      'Supplier Contracts', reportFileName('Supplier Contracts', scopedCountry),
+      'landscape', '', { currency: activeCurrency })
+  }
+
+
   // ── Procurement Recommendations ────────────────────────────────────────────
-  const recommendations = useMemo(() => {
-    const recs = []
-    if (allMetrics.length === 0) return recs
-    const fleetAvgCpk = (() => {
-      const cpks = allMetrics.map(m => m.avgCpk).filter(Boolean)
-      return cpks.length ? cpks.reduce((s, v) => s + v, 0) / cpks.length : CPK_BENCHMARK
-    })()
-    const sorted = [...allMetrics].filter(m => m.avgCpk != null).sort((a, b) => a.avgCpk - b.avgCpk)
-    const best = sorted[0]
-    const worst = sorted[sorted.length - 1]
-    if (best && fleetAvgCpk > 0) {
-      const pct = ((fleetAvgCpk - best.avgCpk) / fleetAvgCpk * 100).toFixed(1)
-      if (parseFloat(pct) > 5) {
-        recs.push({ type: 'increase', brand: best.brand, msg: t('suppliers.recommendations.messages.increase', { brand: best.brand, cpk: fmtCpk(best.avgCpk, activeCurrency), pct }), impact: 'High' })
-      }
-    }
-    allMetrics.filter(m => m.failureRate > FAILURE_THRESHOLD).forEach(m => {
-      recs.push({ type: 'review', brand: m.brand, msg: t('suppliers.recommendations.messages.review', { brand: m.brand, rate: (m.failureRate * 100).toFixed(1), threshold: (FAILURE_THRESHOLD * 100).toFixed(0) }), impact: 'Critical' })
-    })
-    if (worst && best && worst.brand !== best.brand && worst.avgCpk != null && best.avgCpk != null) {
-      const annualRecs = worst.recs.length
-      const saving = (worst.avgCpk - best.avgCpk) * worst.recs.reduce((s, r) => {
-        const km = Number(r.km_at_removal || 0) - Number(r.km_at_fitment || 0)
-        return s + (km > 0 ? km : 80000)
-      }, 0)
-      if (saving > 1000) {
-        recs.push({ type: 'saving', brand: worst.brand, msg: t('suppliers.recommendations.messages.saving', { worstBrand: worst.brand, bestBrand: best.brand, amount: fmtCurrency(saving, activeCurrency) }), impact: 'High' })
-      }
-    }
-    // Size consolidation
-    const sizeMap = {}
-    allMetrics.forEach(m => {
-      m.sizes.forEach(sz => {
-        const recs2 = m.recs.filter(r => r.size === sz)
-        const cpks2 = recs2.map(r => calcCpk(Number(r.cost_per_tyre), Number(r.km_at_fitment), Number(r.km_at_removal))).filter(Boolean)
-        const avgCpk2 = cpks2.length ? cpks2.reduce((s, v) => s + v, 0) / cpks2.length : null
-        if (!sizeMap[sz] || (avgCpk2 != null && avgCpk2 < (sizeMap[sz].cpk ?? Infinity))) {
-          sizeMap[sz] = { brand: m.brand, cpk: avgCpk2 }
-        }
-      })
-    })
-    const topSizes = Object.entries(sizeMap).slice(0, 2)
-    topSizes.forEach(([sz, info]) => {
-      if (info.cpk != null) {
-        recs.push({ type: 'consolidate', brand: info.brand, msg: t('suppliers.recommendations.messages.consolidate', { size: sz, brand: info.brand, cpk: fmtCpk(info.cpk, activeCurrency) }), impact: 'Medium' })
-      }
-    })
-    return recs.slice(0, 8)
-  }, [allMetrics, activeCurrency, t])
+  const recommendations = useMemo(() => recommendationFacts(allMetrics).map((f) => {
+    const msg = {
+      increase: () => t('suppliers.recommendations.messages.increase', { brand: f.brand, cpk: fmtCpk(f.cpk, activeCurrency), pct: f.pct?.toFixed(1) }),
+      review: () => t('suppliers.recommendations.messages.review', { brand: f.brand, rate: (f.rate * 100).toFixed(1), threshold: (FAILURE_THRESHOLD * 100).toFixed(0) }),
+      saving: () => t('suppliers.recommendations.messages.saving', { worstBrand: f.brand, bestBrand: f.bestBrand, amount: fmtCurrency(f.amount, activeCurrency) }),
+      consolidate: () => t('suppliers.recommendations.messages.consolidate', { size: f.size, brand: f.brand, cpk: fmtCpk(f.cpk, activeCurrency) }),
+    }[f.type]
+    return { ...f, msg: msg ? msg() : '' }
+  }), [allMetrics, activeCurrency, t])
 
   // ── Spend Analysis ─────────────────────────────────────────────────────────
   const spendAnalysis = useMemo(() => {
     const anchor = dataAnchorDate(filteredRecords)
-    const months12 = getLast12Months(anchor)
+    const months12 = last12Months(anchor)
     const top5 = [...allMetrics].sort((a, b) => b.spendThisYear - a.spendThisYear).slice(0, 5)
-    const top5Brands = top5.map(m => m.brand)
-
-    const monthlyByBrand = top5Brands.map(brand => {
-      const m = allMetrics.find(x => x.brand === brand)
-      return months12.map(mo => {
-        const recs = (m?.recs || []).filter(r => toMonthKey(r.issue_date) === mo)
-        return recs.reduce((s, r) => s + recordCost(r), 0)
-      })
-    })
-
-    const otherMonthly = months12.map((mo, idx) => {
-      const topTotal = top5Brands.reduce((s, brand, bi) => s + (monthlyByBrand[bi][idx] || 0), 0)
-      const totalMo = allMetrics.reduce((s, m) => {
-        const recs = m.recs.filter(r => toMonthKey(r.issue_date) === mo)
-        return s + recs.reduce((ss, r) => ss + recordCost(r), 0)
-      }, 0)
-      return Math.max(0, totalMo - topTotal)
-    })
-
+    const monthlyByBrand = top5.map(m => monthlySpend(m.recs, months12))
+    const allRecs = allMetrics.flatMap(m => m.recs)
+    const totalByMonth = monthlySpend(allRecs, months12)
+    const otherMonthly = months12.map((_, idx) =>
+      Math.max(0, totalByMonth[idx] - monthlyByBrand.reduce((s, series) => s + (series[idx] || 0), 0)))
     const totalSpend = allMetrics.reduce((s, m) => s + m.totalSpend, 0)
 
     const doughnutData = {
@@ -782,25 +635,15 @@ export default function SupplierManagement() {
     const stackedData = {
       labels: months12.map(m => { const [, mo] = m.split('-'); return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(mo)-1] }),
       datasets: [
-        ...top5Brands.map((brand, i) => ({
-          label: brand, data: monthlyByBrand[i],
+        ...top5.map((m, i) => ({
+          label: m.brand, data: monthlyByBrand[i],
           backgroundColor: PALETTE[i % PALETTE.length], borderWidth: 0, stack: 'a',
         })),
         { label: 'Other', data: otherMonthly, backgroundColor: '#6b7280', borderWidth: 0, stack: 'a' },
       ],
     }
 
-    // YoY change (latest data year vs prior year)
-    const thisYear = anchor.getFullYear()
-    const lastYear = thisYear - 1
-    const yoy = allMetrics.map(m => {
-      const tySpend = m.recs.filter(r => r.issue_date && new Date(r.issue_date).getFullYear() === thisYear).reduce((s, r) => s + recordCost(r), 0)
-      const lySpend = m.recs.filter(r => r.issue_date && new Date(r.issue_date).getFullYear() === lastYear).reduce((s, r) => s + recordCost(r), 0)
-      const change = lySpend > 0 ? ((tySpend - lySpend) / lySpend) * 100 : null
-      return { brand: m.brand, thisYear: tySpend, lastYear: lySpend, change }
-    }).filter(y => y.thisYear > 0 || y.lastYear > 0).sort((a, b) => b.thisYear - a.thisYear)
-
-    return { doughnutData, stackedData, yoy, top5, totalSpend }
+    return { doughnutData, stackedData, yoy: yoySpend(allMetrics, anchor.getFullYear()), top5, totalSpend }
   }, [allMetrics, filteredRecords])
 
   // ── Performance Comparison ─────────────────────────────────────────────────
@@ -811,7 +654,7 @@ export default function SupplierManagement() {
     return {
       labels: ['CPK Score', 'Life Score', 'Reliability', 'Value', 'Coverage'],
       datasets: selected.map((m, i) => {
-        const scores = computeRadarScores(m, allMetrics)
+        const scores = radarScores(m, allMetrics)
         return {
           label: m.brand,
           data: [scores.cpkScore, scores.lifeScore, scores.reliabilityScore, scores.valueScore, scores.coverageScore],
@@ -828,18 +671,196 @@ export default function SupplierManagement() {
     return allMetrics.filter(m => compareList.includes(m.brand))
   }, [compareList, allMetrics])
 
-  // ── Filtered contracts ─────────────────────────────────────────────────────
-  const filteredContracts = useMemo(() => {
-    return contracts.filter(c => !contractSearch || c.supplier_name?.toLowerCase().includes(contractSearch.toLowerCase()))
-  }, [contracts, contractSearch])
-  const sortedMetrics = useMemo(
-    () => [...allMetrics].sort((a, b) => (a.avgCpk ?? Infinity) - (b.avgCpk ?? Infinity)),
-    [allMetrics],
+  // ── Contracts: filter, summary, table columns ─────────────────────────────
+  const filteredContracts = useMemo(
+    () => filterContracts(contracts, { search: contractSearch, status: contractStatusFilter }),
+    [contracts, contractSearch, contractStatusFilter],
   )
+  const contractSummary = useMemo(() => summarizeContracts(contracts), [contracts])
+  const sortedMetrics = useMemo(() => sortByCpk(allMetrics), [allMetrics])
   const metricsPager = usePagedRows(sortedMetrics)
   const contractsPager = usePagedRows(filteredContracts)
   const scorecardPager = usePagedRows(scorecard.suppliers)
   const yoyPager = usePagedRows(spendAnalysis.yoy)
+
+  const compareRows = useMemo(() => [
+    { label: t('suppliers.performance.rows.avgCpk'), key: 'avgCpk', fmt: v => fmtCpk(v, activeCurrency), lowerBetter: true },
+    { label: t('suppliers.performance.rows.avgLifeKm'), key: 'avgLife', fmt: v => fmtKm(v), lowerBetter: false },
+    { label: t('suppliers.performance.rows.failureRate'), key: 'failureRate', fmt: v => fmtPct(v), lowerBetter: true },
+    { label: t('suppliers.performance.rows.tyreCount'), key: 'count', fmt: v => v, lowerBetter: false },
+    { label: t('suppliers.performance.rows.spendYtd'), key: 'spendThisYear', fmt: v => fmtCurrency(v, activeCurrency), lowerBetter: false },
+    { label: t('suppliers.performance.rows.totalSpend'), key: 'totalSpend', fmt: v => fmtCurrency(v, activeCurrency), lowerBetter: false },
+    { label: t('suppliers.performance.rows.rating'), key: 'rating', fmt: v => (RATING_I18N_KEYS[v] ? t(`suppliers.ratings.${RATING_I18N_KEYS[v]}`) : v), lowerBetter: null },
+  ], [t, activeCurrency])
+
+  const compareColumns = useMemo(() => [
+    { id: 'metric', header: t('suppliers.performance.metric'), cell: ({ row }) => <span className="text-[var(--text-muted)]">{row.original.label}</span> },
+    ...compareStats.map(m => ({
+      id: `b_${m.brand}`,
+      header: m.brand,
+      meta: { align: 'right' },
+      cell: ({ row }) => {
+        const r = row.original
+        const nums = compareStats.map(x => x[r.key]).filter(v => typeof v === 'number' && isFinite(v))
+        const best = nums.length && r.lowerBetter != null ? (r.lowerBetter ? Math.min(...nums) : Math.max(...nums)) : null
+        const v = m[r.key]
+        const isWinner = typeof v === 'number' && isFinite(v) && v === best
+        return <span className={`block text-right font-mono ${isWinner ? 'text-emerald-400 font-semibold' : 'text-[var(--text-secondary)]'}`}>{r.fmt(v)}</span>
+      },
+    })),
+  ], [compareStats, t])
+
+  const yoyColumns = useMemo(() => [
+    { id: 'brand', header: t('suppliers.spend.columns.supplier'), cell: ({ row }) => <span className="text-[var(--text-primary)] font-medium">{row.original.brand}</span> },
+    { id: 'thisYear', header: t('suppliers.spend.columns.thisYear'), meta: { align: 'right' }, cell: ({ row }) => <span className="block text-right text-[var(--text-secondary)]">{fmtCurrency(row.original.thisYear, activeCurrency)}</span> },
+    { id: 'lastYear', header: t('suppliers.spend.columns.lastYear'), meta: { align: 'right' }, cell: ({ row }) => <span className="block text-right text-[var(--text-muted)]">{fmtCurrency(row.original.lastYear, activeCurrency)}</span> },
+    {
+      id: 'change', header: t('suppliers.spend.columns.change'), meta: { align: 'right' },
+      cell: ({ row }) => {
+        const c = row.original.change
+        if (c == null) return <span className="block text-right text-[var(--text-dim)] text-xs">{t('suppliers.spend.na')}</span>
+        return (
+          <span className={`flex items-center justify-end gap-1 font-semibold ${c > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+            {c > 0 ? <ArrowUpRight size={13} /> : <ArrowDownRight size={13} />}
+            {Math.abs(c).toFixed(1)}%
+          </span>
+        )
+      },
+    },
+  ], [t, activeCurrency])
+
+  const contractColumns = useMemo(() => {
+    const statusStyle = {
+      Active: { color: 'text-emerald-400', bg: 'bg-emerald-900/30', border: 'border-emerald-700' },
+      'Expiring Soon': { color: 'text-amber-400', bg: 'bg-amber-900/30', border: 'border-amber-700' },
+      Expired: { color: 'text-red-400', bg: 'bg-red-900/30', border: 'border-red-700' },
+    }
+    return [
+      { id: 'supplier', header: t('suppliers.contracts.columns.supplier'), cell: ({ row }) => <span className="text-[var(--text-primary)] font-medium">{row.original.supplier_name}</span> },
+      { id: 'start', header: t('suppliers.contracts.columns.start'), cell: ({ row }) => <span className="text-[var(--text-muted)] text-xs">{row.original.contract_start || 'N/A'}</span> },
+      {
+        id: 'end', header: t('suppliers.contracts.columns.end'),
+        cell: ({ row }) => {
+          const days = daysToExpiry(row.original)
+          return (
+            <div className="text-xs">
+              <span className="text-[var(--text-muted)]">{row.original.contract_end || 'N/A'}</span>
+              {days != null && days >= 0 && <span className="block text-[var(--text-dim)]">{days} days left</span>}
+            </div>
+          )
+        },
+      },
+      { id: 'terms', header: t('suppliers.contracts.columns.paymentTerms'), cell: ({ row }) => <span className="text-[var(--text-secondary)]">{row.original.payment_terms || 'N/A'}</span> },
+      { id: 'price', header: t('suppliers.contracts.columns.pricePerUnit'), cell: ({ row }) => <span className="text-[var(--text-secondary)]">{row.original.price_per_unit != null && row.original.price_per_unit !== '' ? fmtCurrency(Number(row.original.price_per_unit), activeCurrency) : 'N/A'}</span> },
+      { id: 'min', header: t('suppliers.contracts.columns.minOrder'), cell: ({ row }) => <span className="text-[var(--text-secondary)]">{row.original.min_order ?? 'N/A'}</span> },
+      { id: 'value', header: 'Committed Value', cell: ({ row }) => <span className="text-[var(--text-secondary)]">{fmtCurrency(contractValue(row.original), activeCurrency)}</span> },
+      {
+        id: 'status', header: t('suppliers.contracts.columns.status'),
+        cell: ({ row }) => {
+          const status = contractStatus(row.original)
+          const cfg = statusStyle[status]
+          return (
+            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${cfg.bg} ${cfg.color} ${cfg.border}`}>
+              {status === 'Expiring Soon' && <AlertTriangle size={9} />}
+              {t(`suppliers.contracts.statuses.${CONTRACT_STATUS_I18N_KEYS[status]}`)}
+            </span>
+          )
+        },
+      },
+      {
+        id: 'actions', header: t('suppliers.contracts.columns.actions'),
+        cell: ({ row }) => {
+          const c = row.original
+          return (
+            <div className="flex items-center gap-1">
+              {lockedContractId === c.id && (
+                <span title="Locked, in approval" className="inline-flex items-center gap-1 text-xs text-[var(--accent)] mr-1">
+                  <Lock size={11} /> Locked
+                </span>
+              )}
+              <button onClick={() => setContractModal(c)} aria-label="Edit contract" className="p-1.5 text-[var(--text-muted)] hover:text-blue-400 hover:bg-[var(--input-bg)] rounded">
+                <Edit3 size={13} />
+              </button>
+              <button
+                onClick={() => { if (lockedContractId === c.id) return; setContractDeleteError(null); setContractDeleteTarget(c) }}
+                disabled={lockedContractId === c.id}
+                title={lockedContractId === c.id ? 'Locked, in approval' : undefined}
+                aria-label="Delete contract"
+                className="p-1.5 text-[var(--text-muted)] hover:text-red-400 hover:bg-[var(--input-bg)] rounded disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-[var(--text-muted)]"
+              >
+                <X size={13} />
+              </button>
+            </div>
+          )
+        },
+      },
+    ]
+  }, [t, activeCurrency, lockedContractId])
+
+  const summaryColumns = useMemo(() => [
+    { id: 'brand', header: t('suppliers.recommendations.columns.supplier'), cell: ({ row }) => <span className="text-[var(--text-primary)] font-medium">{row.original.brand}</span> },
+    { id: 'rating', header: t('suppliers.recommendations.columns.rating'), cell: ({ row }) => <RatingBadge rating={row.original.rating} /> },
+    { id: 'count', header: t('suppliers.recommendations.columns.tyres'), cell: ({ row }) => <span className="text-[var(--text-secondary)]">{row.original.count}</span> },
+    { id: 'cpk', header: t('suppliers.recommendations.columns.avgCpk'), cell: ({ row }) => <CpkBadge cpk={row.original.avgCpk} currency={activeCurrency} /> },
+    { id: 'life', header: t('suppliers.recommendations.columns.avgLife'), cell: ({ row }) => <span className="text-[var(--text-secondary)]">{fmtKm(row.original.avgLife)}</span> },
+    {
+      id: 'failure', header: t('suppliers.recommendations.columns.failurePct'),
+      cell: ({ row }) => {
+        const fr = row.original.failureRate
+        return <span className={`font-semibold ${fr != null && fr > FAILURE_THRESHOLD ? 'text-red-400' : 'text-emerald-400'}`}>{fmtPct(fr)}</span>
+      },
+    },
+    {
+      id: 'vsb', header: t('suppliers.recommendations.columns.vsBenchmark'),
+      cell: ({ row }) => {
+        const vsB = vsBenchmark(row.original.avgCpk)
+        if (vsB == null) return <span className="text-[var(--text-dim)]">{t('suppliers.recommendations.na')}</span>
+        return (
+          <span className={`flex items-center gap-1 font-semibold ${vsB <= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+            {vsB <= 0 ? <ArrowDownRight size={11} /> : <ArrowUpRight size={11} />}
+            {Math.abs(vsB).toFixed(1)}%
+          </span>
+        )
+      },
+    },
+  ], [t, activeCurrency])
+
+  const scorecardColumns = useMemo(() => [
+    { id: 'rank', header: t('suppliers.scorecard.columns.rank'), cell: ({ row }) => <span className="text-[var(--text-muted)]">{row.original.rank}</span> },
+    {
+      id: 'supplier', header: t('suppliers.scorecard.columns.supplier'),
+      cell: ({ row }) => (
+        <div className="flex flex-col gap-1">
+          <span className="font-medium text-[var(--text-primary)]">{row.original.supplier}</span>
+          <BandPill band={row.original.band} />
+        </div>
+      ),
+    },
+    { id: 'grade', header: 'Grade', cell: ({ row }) => <GradeBadge grade={row.original.grade} /> },
+    {
+      id: 'score', header: t('suppliers.scorecard.columns.score'),
+      cell: ({ row }) => { const s = row.original.score; return <span className={`px-2 py-0.5 rounded font-semibold ${s >= 70 ? 'bg-green-900/30 text-green-400' : s >= 40 ? 'bg-amber-900/30 text-amber-400' : 'bg-red-900/30 text-red-400'}`}>{s}</span> },
+    },
+    { id: 'tyres', header: t('suppliers.scorecard.columns.tyres'), cell: ({ row }) => <span className="text-[var(--text-muted)]">{row.original.tyreCount}</span> },
+    { id: 'spend', header: t('suppliers.scorecard.columns.spend'), cell: ({ row }) => <span className="text-[var(--text-secondary)]">{fmtCurrency(row.original.totalSpend, activeCurrency)}</span> },
+    { id: 'cpk', header: t('suppliers.scorecard.columns.avgCpk'), cell: ({ row }) => <span className="text-[var(--text-secondary)]">{row.original.avgCpk == null ? 'N/A' : row.original.avgCpk.toFixed(3)}</span> },
+    { id: 'failure', header: t('suppliers.scorecard.columns.failurePct'), cell: ({ row }) => <span className="text-[var(--text-secondary)]">{row.original.failureRate == null ? 'N/A' : `${(row.original.failureRate * 100).toFixed(1)}%`}</span> },
+    {
+      id: 'acceptance', header: 'Acceptance',
+      cell: ({ row }) => {
+        const s = row.original
+        return (
+          <span className={`font-medium ${s.warrantyClaims === 0 ? 'text-[var(--text-muted)]' : s.warrantyAcceptanceRate * 100 < 80 ? 'text-red-400' : 'text-emerald-400'}`}>
+            {s.warrantyClaims === 0 ? 'N/A' : `${(s.warrantyAcceptanceRate * 100).toFixed(0)}%`}
+          </span>
+        )
+      },
+    },
+    { id: 'price', header: 'Price', cell: ({ row }) => <span className={`font-medium ${row.original.priceCompetitiveness >= 50 ? 'text-emerald-400' : 'text-amber-400'}`}>{row.original.priceCompetitiveness}</span> },
+    { id: 'ontime', header: t('suppliers.scorecard.columns.onTimePct'), cell: ({ row }) => <span className="text-[var(--text-secondary)]">{row.original.onTimeRate == null ? 'N/A' : `${(row.original.onTimeRate * 100).toFixed(0)}%`}</span> },
+    { id: 'trend', header: 'Trend', cell: ({ row }) => <TrendCell trend={row.original.trend} delta={row.original.trendDelta} /> },
+  ], [t, activeCurrency])
+
 
   // ── Render ─────────────────────────────────────────────────────────────────
   if (loading) return (
@@ -884,15 +905,19 @@ export default function SupplierManagement() {
         hint="Suppliers appear once they are added here or arrive with a purchase order import." />
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
         <KpiCard icon={Building2} label={t('suppliers.kpi.totalSuppliers')} value={kpiSummary.total} sub={t('suppliers.kpi.uniqueBrands')} color="text-blue-400" />
         <KpiCard icon={Star} label={t('suppliers.kpi.preferred')} value={kpiSummary.preferredCount} sub={t('suppliers.kpi.ofTotalSuppliers', { total: kpiSummary.total })} color="text-emerald-400" />
         <KpiCard icon={Target} label={t('suppliers.kpi.cpkRange')}
           value={kpiSummary.cpkMin != null ? `${fmtCpk(kpiSummary.cpkMin, activeCurrency).split(' ')[1]}` : t('suppliers.recommendations.na')}
-          sub={kpiSummary.cpkMax != null ? t('suppliers.kpi.toValue', { value: fmtCpk(kpiSummary.cpkMax, activeCurrency) }) : '-'}
+          sub={kpiSummary.cpkMax != null ? t('suppliers.kpi.toValue', { value: fmtCpk(kpiSummary.cpkMax, activeCurrency) }) : 'N/A'}
           color="text-purple-400" />
-        <KpiCard icon={Award} label={t('suppliers.kpi.bestCpk')} value={kpiSummary.best?.brand || t('suppliers.recommendations.na')} sub={kpiSummary.best ? fmtCpk(kpiSummary.best.avgCpk, activeCurrency) : '-'} color="text-emerald-400" />
-        <KpiCard icon={AlertTriangle} label={t('suppliers.kpi.worstCpk')} value={kpiSummary.worst?.brand || t('suppliers.recommendations.na')} sub={kpiSummary.worst ? fmtCpk(kpiSummary.worst.avgCpk, activeCurrency) : '-'} color="text-red-400" />
+        <KpiCard icon={Award} label={t('suppliers.kpi.bestCpk')} value={kpiSummary.best?.brand || t('suppliers.recommendations.na')} sub={kpiSummary.best ? fmtCpk(kpiSummary.best.avgCpk, activeCurrency) : 'N/A'} color="text-emerald-400" />
+        <KpiCard icon={AlertTriangle} label={t('suppliers.kpi.worstCpk')} value={kpiSummary.worst?.brand || t('suppliers.recommendations.na')} sub={kpiSummary.worst ? fmtCpk(kpiSummary.worst.avgCpk, activeCurrency) : 'N/A'} color="text-red-400" />
+        <KpiCard icon={DollarSign} label="Total spend" value={fmtCurrency(kpiSummary.totalSpend, activeCurrency)}
+          sub={kpiSummary.cpkCoverage == null ? 'N/A' : `CPK measurable for ${Math.round(kpiSummary.cpkCoverage * 100)}% of suppliers`} color="text-[var(--text-primary)]" />
+        <KpiCard icon={Flag} label="Failure above 15%" value={kpiSummary.atRiskCount}
+          sub={`of ${kpiSummary.total} suppliers on screen`} color={kpiSummary.atRiskCount > 0 ? 'text-orange-400' : 'text-emerald-400'} />
       </div>
 
       {/* Ratings persistence error banner */}
@@ -1012,7 +1037,7 @@ export default function SupplierManagement() {
                         </div>
                         <div className="bg-[var(--input-bg)]/60 rounded-lg px-2.5 py-1.5">
                           <div className="text-xs text-[var(--text-muted)]">{t('suppliers.directory.failurePct')}</div>
-                          <div className={`text-sm font-semibold ${supplier.failureRate > FAILURE_THRESHOLD ? 'text-red-400' : 'text-emerald-400'}`}>
+                          <div className={`text-sm font-semibold ${supplier.failureRate != null && supplier.failureRate > FAILURE_THRESHOLD ? 'text-red-400' : 'text-emerald-400'}`}>
                             {fmtPct(supplier.failureRate)}
                           </div>
                         </div>
@@ -1108,47 +1133,19 @@ export default function SupplierManagement() {
                     <div className="px-4 py-3 border-b border-[var(--input-border)]">
                       <h4 className="text-sm font-semibold text-[var(--text-primary)]">{t('suppliers.performance.sideBySide')}</h4>
                     </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="border-b border-[var(--input-border)]">
-                            <th className="px-3 py-2.5 text-left text-[var(--text-muted)] font-medium">{t('suppliers.performance.metric')}</th>
-                            {compareStats.map(m => (
-                              <th key={m.brand} className="px-3 py-2.5 text-right text-[var(--text-muted)] font-semibold">{m.brand}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {[
-                            { label: t('suppliers.performance.rows.avgCpk'), key: 'avgCpk', fmt: v => fmtCpk(v, activeCurrency), lowerBetter: true },
-                            { label: t('suppliers.performance.rows.avgLifeKm'), key: 'avgLife', fmt: v => fmtKm(v), lowerBetter: false },
-                            { label: t('suppliers.performance.rows.failureRate'), key: 'failureRate', fmt: v => fmtPct(v), lowerBetter: true },
-                            { label: t('suppliers.performance.rows.tyreCount'), key: 'count', fmt: v => v, lowerBetter: false },
-                            { label: t('suppliers.performance.rows.spendYtd'), key: 'spendThisYear', fmt: v => fmtCurrency(v, activeCurrency), lowerBetter: false },
-                            { label: t('suppliers.performance.rows.totalSpend'), key: 'totalSpend', fmt: v => fmtCurrency(v, activeCurrency), lowerBetter: false },
-                            { label: t('suppliers.performance.rows.rating'), key: 'rating', fmt: v => (RATING_I18N_KEYS[v] ? t(`suppliers.ratings.${RATING_I18N_KEYS[v]}`) : v), lowerBetter: null },
-                          ].map(row => {
-                            const vals = compareStats.map(m => m[row.key])
-                            const numVals = vals.filter(v => typeof v === 'number' && isFinite(v))
-                            const best = numVals.length ? (row.lowerBetter ? Math.min(...numVals) : Math.max(...numVals)) : null
-                            return (
-                              <tr key={row.label} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/20">
-                                <td className="px-3 py-2.5 text-[var(--text-muted)]">{row.label}</td>
-                                {compareStats.map(m => {
-                                  const v = m[row.key]
-                                  const isWinner = typeof v === 'number' && isFinite(v) && v === best
-                                  return (
-                                    <td key={m.brand} className={`px-3 py-2.5 text-right font-mono ${isWinner ? 'text-emerald-400 font-semibold' : 'text-[var(--text-secondary)]'}`}>
-                                      {row.fmt(v)}
-                                    </td>
-                                  )
-                                })}
-                              </tr>
-                            )
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
+                      <EnterpriseTable
+                        columns={compareColumns}
+                        data={compareRows}
+                        getRowId={(r) => r.key}
+                        enableGlobalFilter={false}
+                        enableColumnFilters={false}
+                        enableSorting={false}
+                        enableExport={false}
+                        enableColumnVisibility={false}
+                        enableKeyboard={false}
+                        virtual
+                        maxHeight={420}
+                      />
                   </div>
                 </div>
               </>
@@ -1201,41 +1198,7 @@ export default function SupplierManagement() {
               <div className="px-4 py-3 border-b border-[var(--input-border)]">
                 <h4 className="text-sm font-semibold text-[var(--text-primary)]">{t('suppliers.spend.yoyTitle')}</h4>
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-[var(--input-border)]">
-                      <th className="px-4 py-3 text-left text-[var(--text-muted)] font-medium text-xs">{t('suppliers.spend.columns.supplier')}</th>
-                      <th className="px-4 py-3 text-right text-[var(--text-muted)] font-medium text-xs">{t('suppliers.spend.columns.thisYear')}</th>
-                      <th className="px-4 py-3 text-right text-[var(--text-muted)] font-medium text-xs">{t('suppliers.spend.columns.lastYear')}</th>
-                      <th className="px-4 py-3 text-right text-[var(--text-muted)] font-medium text-xs">{t('suppliers.spend.columns.change')}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {spendAnalysis.yoy.length === 0 && (
-                      <tr><td colSpan={4} className="px-4 py-6 text-center text-[var(--text-dim)]">{t('suppliers.spend.noYoyData')}</td></tr>
-                    )}
-                    {yoyPager.pageRows.map(row => (
-                      <tr key={row.brand} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/20">
-                        <td className="px-4 py-2.5 text-[var(--text-primary)] font-medium">{row.brand}</td>
-                        <td className="px-4 py-2.5 text-right text-[var(--text-secondary)]">{fmtCurrency(row.thisYear, activeCurrency)}</td>
-                        <td className="px-4 py-2.5 text-right text-[var(--text-muted)]">{fmtCurrency(row.lastYear, activeCurrency)}</td>
-                        <td className="px-4 py-2.5 text-right">
-                          {row.change == null ? (
-                            <span className="text-[var(--text-dim)] text-xs">{t('suppliers.spend.na')}</span>
-                          ) : (
-                            <span className={`flex items-center justify-end gap-1 font-semibold ${row.change > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
-                              {row.change > 0 ? <ArrowUpRight size={13} /> : <ArrowDownRight size={13} />}
-                              {Math.abs(row.change).toFixed(1)}%
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                <TablePagination {...yoyPager} />
-              </div>
+              <PagedTable columns={yoyColumns} pager={yoyPager} getRowId={(r) => r.brand} emptyMessage={t('suppliers.spend.noYoyData')} />
             </div>
           </motion.div>
         )}
@@ -1243,17 +1206,76 @@ export default function SupplierManagement() {
         {/* Tab 3: Contracts */}
         {activeTab === 3 && (
           <motion.div key="contracts" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
-            <div className="flex items-center justify-between gap-3">
-              <div className="relative">
-                <Search size={13} className="absolute left-2.5 top-2.5 text-[var(--text-muted)]" />
-                <input value={contractSearch} onChange={e => setContractSearch(e.target.value)}
-                  placeholder={t('suppliers.contracts.searchPlaceholder')}
-                  className="pl-7 pr-3 py-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500 w-52" />
+            {/* Contract KPIs: computed over every contract loaded for this country */}
+            {!contractsLoading && !contractsError && (
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                {[
+                  { label: 'Contracts', value: contractSummary.total, color: 'text-blue-400', status: 'All' },
+                  { label: 'Active', value: contractSummary.active, color: 'text-emerald-400', status: 'Active' },
+                  { label: 'Expiring in 30 days', value: contractSummary.expiringSoon, color: 'text-amber-400', status: 'Expiring Soon' },
+                  { label: 'Expired', value: contractSummary.expired, color: 'text-red-400', status: 'Expired' },
+                ].map(k => (
+                  <button key={k.label} type="button" onClick={() => setContractStatusFilter(k.status)}
+                    aria-pressed={contractStatusFilter === k.status}
+                    className={`text-left bg-[var(--surface-1)] border rounded-xl p-3 transition-colors ${contractStatusFilter === k.status ? 'border-blue-500' : 'border-[var(--input-border)] hover:border-blue-500/50'}`}>
+                    <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
+                    <p className={`text-xl font-bold ${k.color}`}>{k.value}</p>
+                  </button>
+                ))}
+                <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-3">
+                  <p className="text-xs text-[var(--text-muted)]">Committed value (live)</p>
+                  <p className="text-xl font-bold text-[var(--text-primary)]">{fmtCurrency(contractSummary.committedValue, activeCurrency)}</p>
+                  <p className="text-[11px] text-[var(--text-dim)]">
+                    {contractSummary.committedValue == null
+                      ? 'No live contract records both price and minimum order'
+                      : `From ${contractSummary.valuedCount} contract(s) with price and minimum order`}
+                  </p>
+                </div>
               </div>
-              <button onClick={() => setContractModal({})}
-                className="btn-primary gap-1.5">
-                <Plus size={13} /> {t('suppliers.contracts.add')}
-              </button>
+            )}
+
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative">
+                  <Search size={13} className="absolute left-2.5 top-2.5 text-[var(--text-muted)]" />
+                  <input value={contractSearch} onChange={e => setContractSearch(e.target.value)}
+                    placeholder={t('suppliers.contracts.searchPlaceholder')}
+                    aria-label={t('suppliers.contracts.searchPlaceholder')}
+                    className="pl-7 pr-3 py-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500 w-52" />
+                </div>
+                <div className="relative">
+                  <select value={contractStatusFilter} onChange={e => setContractStatusFilter(e.target.value)}
+                    aria-label="Contract status"
+                    className="appearance-none bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] px-3 py-2 pr-7 focus:outline-none focus:border-blue-500">
+                    <option value="All">All statuses</option>
+                    {CONTRACT_STATUSES.map(st => (
+                      <option key={st} value={st}>{t(`suppliers.contracts.statuses.${CONTRACT_STATUS_I18N_KEYS[st]}`)}</option>
+                    ))}
+                  </select>
+                  <ChevronDown size={12} className="absolute right-2 top-3 text-[var(--text-muted)] pointer-events-none" />
+                </div>
+                {(contractSearch || contractStatusFilter !== 'All') && (
+                  <button onClick={() => { setContractSearch(''); setContractStatusFilter('All') }}
+                    className="flex items-center gap-1 px-2 py-2 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] bg-[var(--input-bg)] rounded-lg">
+                    <X size={12} /> {t('suppliers.filters.clear')}
+                  </button>
+                )}
+                <span className="text-xs text-[var(--text-dim)]">{filteredContracts.length} of {contracts.length}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={handleContractsExcel} disabled={filteredContracts.length === 0}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] border border-[var(--input-border)] text-[var(--text-secondary)] text-sm rounded-lg disabled:opacity-40">
+                  <FileSpreadsheet size={13} /> Excel
+                </button>
+                <button onClick={handleContractsPdf} disabled={filteredContracts.length === 0}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] border border-[var(--input-border)] text-[var(--text-secondary)] text-sm rounded-lg disabled:opacity-40">
+                  <FileText size={13} /> PDF
+                </button>
+                <button onClick={() => setContractModal({})}
+                  className="btn-primary gap-1.5">
+                  <Plus size={13} /> {t('suppliers.contracts.add')}
+                </button>
+              </div>
             </div>
 
             {contractsLoading ? (
@@ -1275,79 +1297,18 @@ export default function SupplierManagement() {
               />
             ) : (
               <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-[var(--input-border)]">
-                        {[
-                          t('suppliers.contracts.columns.supplier'), t('suppliers.contracts.columns.start'), t('suppliers.contracts.columns.end'),
-                          t('suppliers.contracts.columns.paymentTerms'), t('suppliers.contracts.columns.pricePerUnit'), t('suppliers.contracts.columns.minOrder'),
-                          t('suppliers.contracts.columns.status'), t('suppliers.contracts.columns.actions'),
-                        ].map(h => (
-                          <th key={h} className="px-4 py-3 text-left text-[var(--text-muted)] font-medium text-xs">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {contractsPager.pageRows.map(c => {
-                        const status = getContractStatus(c)
-                        const statusConfig = {
-                          Active: { color: 'text-emerald-400', bg: 'bg-emerald-900/30', border: 'border-emerald-700' },
-                          'Expiring Soon': { color: 'text-amber-400', bg: 'bg-amber-900/30', border: 'border-amber-700' },
-                          Expired: { color: 'text-red-400', bg: 'bg-red-900/30', border: 'border-red-700' },
-                        }[status]
-                        return (
-                          <tr key={c.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/20">
-                            <td className="px-4 py-3 text-[var(--text-primary)] font-medium">{c.supplier_name}</td>
-                            <td className="px-4 py-3 text-[var(--text-muted)] text-xs">{c.contract_start || '-'}</td>
-                            <td className="px-4 py-3 text-[var(--text-muted)] text-xs">{c.contract_end || '-'}</td>
-                            <td className="px-4 py-3 text-[var(--text-secondary)]">{c.payment_terms || '-'}</td>
-                            <td className="px-4 py-3 text-[var(--text-secondary)]">{c.price_per_unit ? fmtCurrency(Number(c.price_per_unit), activeCurrency) : '-'}</td>
-                            <td className="px-4 py-3 text-[var(--text-secondary)]">{c.min_order || '-'}</td>
-                            <td className="px-4 py-3">
-                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${statusConfig.bg} ${statusConfig.color} ${statusConfig.border}`}>
-                                {status === 'Expiring Soon' && <AlertTriangle size={9} />}
-                                {t(`suppliers.contracts.statuses.${CONTRACT_STATUS_I18N_KEYS[status]}`)}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3">
-                              <div className="flex items-center gap-1">
-                                {lockedContractId === c.id && (
-                                  <span title="Locked, in approval" className="inline-flex items-center gap-1 text-xs text-[var(--accent)] mr-1">
-                                    <Lock size={11} /> Locked
-                                  </span>
-                                )}
-                                <button onClick={() => setContractModal(c)} className="p-1.5 text-[var(--text-muted)] hover:text-blue-400 hover:bg-[var(--input-bg)] rounded">
-                                  <Edit3 size={13} />
-                                </button>
-                                <button
-                                  onClick={() => { if (lockedContractId === c.id) return; setContractDeleteError(null); setContractDeleteTarget(c) }}
-                                  disabled={lockedContractId === c.id}
-                                  title={lockedContractId === c.id ? 'Locked, in approval' : undefined}
-                                  className="p-1.5 text-[var(--text-muted)] hover:text-red-400 hover:bg-[var(--input-bg)] rounded disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-[var(--text-muted)]"
-                                >
-                                  <X size={13} />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                  <TablePagination {...contractsPager} />
-                </div>
+                <PagedTable columns={contractColumns} pager={contractsPager} getRowId={(r) => String(r.id)} emptyMessage={t('suppliers.contracts.emptyTitle')} />
               </div>
             )}
 
             {/* Expiring Soon alerts */}
-            {contracts.filter(c => getContractStatus(c) === 'Expiring Soon').length > 0 && (
+            {contractSummary.expiringSoon > 0 && (
               <div className="bg-amber-900/20 border border-amber-700 rounded-xl p-4 flex items-start gap-3">
                 <AlertTriangle size={16} className="text-amber-400 flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="text-amber-400 font-medium text-sm">{t('suppliers.contracts.expiringBannerTitle')}</p>
                   <p className="text-amber-300/70 text-xs mt-1">
-                    {t('suppliers.contracts.expiringBannerDesc', { names: contracts.filter(c => getContractStatus(c) === 'Expiring Soon').map(c => c.supplier_name).join(', ') })}
+                    {t('suppliers.contracts.expiringBannerDesc', { names: contractSummary.expiring.map(c => c.supplier_name).join(', ') })}
                   </p>
                 </div>
               </div>
@@ -1410,45 +1371,7 @@ export default function SupplierManagement() {
               <div className="px-4 py-3 border-b border-[var(--input-border)]">
                 <h4 className="text-sm font-semibold text-[var(--text-primary)]">{t('suppliers.recommendations.summaryTitle')}</h4>
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="border-b border-[var(--input-border)]">
-                      {[
-                        t('suppliers.recommendations.columns.supplier'), t('suppliers.recommendations.columns.rating'), t('suppliers.recommendations.columns.tyres'),
-                        t('suppliers.recommendations.columns.avgCpk'), t('suppliers.recommendations.columns.avgLife'), t('suppliers.recommendations.columns.failurePct'),
-                        t('suppliers.recommendations.columns.vsBenchmark'),
-                      ].map(h => (
-                        <th key={h} className="px-3 py-2.5 text-left text-[var(--text-muted)] font-medium">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {metricsPager.pageRows.map(m => {
-                      const vsB = m.avgCpk != null ? ((m.avgCpk - CPK_BENCHMARK) / CPK_BENCHMARK) * 100 : null
-                      return (
-                        <tr key={m.brand} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/20">
-                          <td className="px-3 py-2.5 text-[var(--text-primary)] font-medium">{m.brand}</td>
-                          <td className="px-3 py-2.5"><RatingBadge rating={m.rating} /></td>
-                          <td className="px-3 py-2.5 text-[var(--text-secondary)]">{m.count}</td>
-                          <td className="px-3 py-2.5"><CpkBadge cpk={m.avgCpk} currency={activeCurrency} /></td>
-                          <td className="px-3 py-2.5 text-[var(--text-secondary)]">{fmtKm(m.avgLife)}</td>
-                          <td className={`px-3 py-2.5 font-semibold ${m.failureRate > FAILURE_THRESHOLD ? 'text-red-400' : 'text-emerald-400'}`}>{fmtPct(m.failureRate)}</td>
-                          <td className="px-3 py-2.5">
-                            {vsB == null ? <span className="text-[var(--text-dim)]">{t('suppliers.recommendations.na')}</span> : (
-                              <span className={`flex items-center gap-1 font-semibold ${vsB <= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                {vsB <= 0 ? <ArrowDownRight size={11} /> : <ArrowUpRight size={11} />}
-                                {Math.abs(vsB).toFixed(1)}%
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-                <TablePagination {...metricsPager} />
-              </div>
+              <PagedTable columns={summaryColumns} pager={metricsPager} getRowId={(r) => r.brand} emptyMessage={t('suppliers.directory.emptyTitle')} />
             </div>
           </motion.div>
         )}
@@ -1456,6 +1379,15 @@ export default function SupplierManagement() {
         {/* Tab 5: Scorecard */}
         {activeTab === 5 && (
           <motion.div key="scorecard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
+            {scError && (
+              <div className="flex items-center justify-between gap-3 bg-red-900/20 border border-red-800 rounded-xl px-4 py-2.5">
+                <div className="flex items-center gap-2 text-sm text-red-400">
+                  <AlertTriangle size={15} className="flex-shrink-0" />
+                  <span>{scError} Warranty and delivery scores below may be incomplete.</span>
+                </div>
+                <button onClick={fetchScorecardSources} className="px-3 py-1.5 bg-red-800/40 hover:bg-red-800/60 text-red-200 text-xs rounded-lg flex-shrink-0">{t('suppliers.retry')}</button>
+              </div>
+            )}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {[
                 [t('suppliers.scorecard.cards.suppliers'), scorecard.totals.supplierCount],
@@ -1483,49 +1415,8 @@ export default function SupplierManagement() {
             <p className="text-xs text-[var(--text-muted)]">
               {t('suppliers.scorecard.description')} Grade, lifecycle band, warranty acceptance, price competitiveness and period-over-period trend are derived from actual tyre, warranty and purchase-order data. Invoice accuracy and returns-processing time are omitted (no source data).
             </p>
-            <div className="border border-[var(--input-border)] rounded-xl overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-[var(--input-bg)]/60 text-[var(--text-muted)] text-xs">
-                  <tr>
-                    <th className="text-left px-3 py-2">{t('suppliers.scorecard.columns.rank')}</th><th className="text-left px-3 py-2">{t('suppliers.scorecard.columns.supplier')}</th>
-                    <th className="text-center px-3 py-2">Grade</th>
-                    <th className="text-right px-3 py-2">{t('suppliers.scorecard.columns.score')}</th><th className="text-right px-3 py-2">{t('suppliers.scorecard.columns.tyres')}</th>
-                    <th className="text-right px-3 py-2">{t('suppliers.scorecard.columns.spend')}</th><th className="text-right px-3 py-2">{t('suppliers.scorecard.columns.avgCpk')}</th>
-                    <th className="text-right px-3 py-2">{t('suppliers.scorecard.columns.failurePct')}</th>
-                    <th className="text-right px-3 py-2">Acceptance</th>
-                    <th className="text-right px-3 py-2"><span className="inline-flex items-center gap-1"><Gauge size={11} /> Price</span></th>
-                    <th className="text-right px-3 py-2">{t('suppliers.scorecard.columns.onTimePct')}</th>
-                    <th className="text-center px-3 py-2">Trend</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {scorecard.suppliers.length === 0 && <tr><td colSpan={12} className="px-3 py-6 text-center text-[var(--text-dim)]">{t('suppliers.scorecard.empty')}</td></tr>}
-                  {scorecardPager.pageRows.map((s) => (
-                    <tr key={s.supplier} className="border-t border-[var(--input-border)]">
-                      <td className="px-3 py-2 text-[var(--text-muted)]">{s.rank}</td>
-                      <td className="px-3 py-2">
-                        <div className="flex flex-col gap-1">
-                          <span className="font-medium text-[var(--text-primary)]">{s.supplier}</span>
-                          <BandPill band={s.band} />
-                        </div>
-                      </td>
-                      <td className="px-3 py-2 text-center"><GradeBadge grade={s.grade} /></td>
-                      <td className="px-3 py-2 text-right"><span className={`px-2 py-0.5 rounded font-semibold ${s.score >= 70 ? 'bg-green-900/30 text-green-400' : s.score >= 40 ? 'bg-amber-900/30 text-amber-400' : 'bg-red-900/30 text-red-400'}`}>{s.score}</span></td>
-                      <td className="px-3 py-2 text-right text-[var(--text-muted)]">{s.tyreCount}</td>
-                      <td className="px-3 py-2 text-right text-[var(--text-secondary)]">{fmtCurrency(s.totalSpend, activeCurrency)}</td>
-                      <td className="px-3 py-2 text-right text-[var(--text-secondary)]">{s.avgCpk == null ? '-' : s.avgCpk.toFixed(3)}</td>
-                      <td className="px-3 py-2 text-right text-[var(--text-secondary)]">{s.failureRate == null ? '-' : `${(s.failureRate * 100).toFixed(1)}%`}</td>
-                      <td className={`px-3 py-2 text-right font-medium ${s.warrantyClaims === 0 ? 'text-[var(--text-muted)]' : s.warrantyAcceptanceRate * 100 < 80 ? 'text-red-400' : 'text-emerald-400'}`}>
-                        {s.warrantyClaims === 0 ? 'N/A' : `${(s.warrantyAcceptanceRate * 100).toFixed(0)}%`}
-                      </td>
-                      <td className={`px-3 py-2 text-right font-medium ${s.priceCompetitiveness >= 50 ? 'text-emerald-400' : 'text-amber-400'}`}>{s.priceCompetitiveness}</td>
-                      <td className="px-3 py-2 text-right text-[var(--text-secondary)]">{s.onTimeRate == null ? '-' : `${(s.onTimeRate * 100).toFixed(0)}%`}</td>
-                      <td className="px-3 py-2 text-center"><TrendCell trend={s.trend} delta={s.trendDelta} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <TablePagination {...scorecardPager} />
+            <div className="border border-[var(--input-border)] rounded-xl overflow-hidden">
+              <PagedTable columns={scorecardColumns} pager={scorecardPager} getRowId={(r) => r.supplier} emptyMessage={t('suppliers.scorecard.empty')} />
             </div>
 
             {/* Flagged issues — threshold-driven, actionable */}

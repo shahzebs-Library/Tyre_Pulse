@@ -18,6 +18,7 @@ import PageHeader from '../components/ui/PageHeader'
 import Card from '../components/ui/Card'
 import Modal from '../components/ui/Modal'
 import EmptyState from '../components/EmptyState'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 const uuidv4 = () => crypto.randomUUID()
 import * as tyreSpecsApi from '../lib/api/tyreSpecs'
 import {
@@ -889,6 +890,228 @@ function DeleteQuoteConfirmModal({ quote, onClose, onConfirm }) {
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 
+// ── Shared table shell ─────────────────────────────────────────────────────────
+// Every grid on this page keeps its OWN controls: the compliance grid has four
+// filters and its own pager, the size inventory its own search and export, the
+// advisor ranking and the audit trail carry an order that IS the record. So the
+// shared EnterpriseTable runs here with search, sorting, column filters, export
+// and keyboard nav switched OFF - it contributes the header contract, empty
+// state and row rendering only, and can never re-order or re-scope a grid.
+function SpecTable({ columns, data, getRowId, emptyMessage = 'No records', maxHeight = 640, onRowClick }) {
+  return (
+    <EnterpriseTable
+      columns={columns}
+      data={data}
+      getRowId={getRowId}
+      className="border-0 rounded-none shadow-none"
+      enableGlobalFilter={false}
+      enableColumnFilters={false}
+      enableSorting={false}
+      enableExport={false}
+      enableColumnVisibility={false}
+      enableKeyboard={false}
+      virtual
+      maxHeight={maxHeight}
+      emptyMessage={emptyMessage}
+      onRowClick={onRowClick}
+    />
+  )
+}
+
+const dash = (v) => (v == null || v === '' ? 'N/A' : v)
+
+function complianceColumns({ isAdmin, onRaiseWo }) {
+  return [
+    { id: 'asset', header: 'Asset No', cell: ({ row }) => <span className="text-[var(--text-primary)] text-sm font-mono">{dash(row.original.asset_no)}</span> },
+    { id: 'type', header: 'Vehicle Type', cell: ({ row }) => row.original.vehicleType ? <span className="text-[var(--text-secondary)] text-sm">{row.original.vehicleType}</span> : <span className="text-[var(--text-dim)] text-sm">Unknown</span> },
+    { id: 'position', header: 'Position', cell: ({ row }) => <span className="text-[var(--text-secondary)] text-sm">{dash(normalizePosition(row.original.position))}</span> },
+    { id: 'size', header: 'Fitted Size', cell: ({ row }) => <span className="text-[var(--text-secondary)] text-sm font-mono">{dash(row.original.size)}</span> },
+    { id: 'brand', header: 'Fitted Brand', cell: ({ row }) => <span className="text-[var(--text-secondary)] text-sm">{dash(row.original.brand)}</span> },
+    { id: 'site', header: 'Site', cell: ({ row }) => <span className="text-[var(--text-muted)] text-sm">{dash(row.original.site)}</span> },
+    {
+      id: 'status', header: 'Spec Status',
+      cell: ({ row }) => {
+        const cfg = STATUS_CONFIG[row.original.specStatus] || STATUS_CONFIG['No Spec Defined']
+        const Icon = cfg.icon
+        return (
+          <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${cfg.bg} ${cfg.color}`}>
+            <Icon size={10} /> {cfg.label}
+          </span>
+        )
+      },
+    },
+    {
+      id: 'action', header: 'Action',
+      cell: ({ row }) => {
+        const r = row.original
+        if (r.specStatus === 'Approved' || r.specStatus === 'No Spec Defined' || !isAdmin) return null
+        return (
+          <button
+            onClick={() => onRaiseWo({ asset_no: r.asset_no, site: r.site, violations: r.violations })}
+            className="text-xs text-orange-400 hover:text-orange-300 underline whitespace-nowrap"
+          >
+            Raise WO
+          </button>
+        )
+      },
+    },
+  ]
+}
+
+function nonConformanceColumns({ isAdmin, onRaiseWo }) {
+  return [
+    {
+      id: 'rank', header: 'Rank',
+      cell: ({ row }) => (
+        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${row.original.rank <= 3 ? 'bg-red-900 text-red-300' : 'bg-[var(--input-bg)] text-[var(--text-muted)]'}`}>{row.original.rank}</span>
+      ),
+    },
+    { id: 'asset', header: 'Asset No', cell: ({ row }) => <span className="text-[var(--text-primary)] font-mono text-sm">{row.original.asset_no}</span> },
+    { id: 'site', header: 'Site', cell: ({ row }) => <span className="text-[var(--text-muted)] text-sm">{dash(row.original.site)}</span> },
+    { id: 'type', header: 'Vehicle Type', cell: ({ row }) => <span className="text-[var(--text-secondary)] text-sm">{row.original.vehicleType || 'Unknown'}</span> },
+    {
+      id: 'count', header: 'Violations',
+      cell: ({ row }) => <span className={`text-sm font-bold ${row.original.violations.length >= 3 ? 'text-red-400' : 'text-orange-400'}`}>{row.original.violations.length}</span>,
+    },
+    {
+      id: 'types', header: 'Violation Types',
+      cell: ({ row }) => (
+        <div className="flex flex-wrap gap-1">
+          {row.original.violationTypes.map(v => (
+            <span key={v} className="text-xs bg-red-900/30 text-red-300 border border-red-800 px-2 py-0.5 rounded-full">{v}</span>
+          ))}
+        </div>
+      ),
+    },
+    {
+      id: 'recommend', header: 'Recommended Action',
+      cell: () => <span className="block text-[var(--text-muted)] text-xs max-w-[180px] whitespace-normal">Replace non-approved fitments with spec-compliant tyres during next scheduled change</span>,
+    },
+    {
+      id: 'action', header: 'Action',
+      cell: ({ row }) => {
+        const a = row.original
+        if (!isAdmin) return null
+        return (
+          <button
+            onClick={() => onRaiseWo({ asset_no: a.asset_no, site: a.site, violations: a.violations })}
+            className="flex items-center gap-1 bg-orange-900/30 hover:bg-orange-900/50 text-orange-400 text-xs px-3 py-1.5 rounded-lg border border-orange-800 transition-colors"
+          >
+            <Wrench size={11} /> Raise WO
+          </button>
+        )
+      },
+    },
+  ]
+}
+
+const textCell = (key, cls = 'text-[var(--text-secondary)] text-xs whitespace-nowrap') =>
+  ({ row }) => <span className={cls}>{dash(row.original[key])}</span>
+
+const SIZE_INVENTORY_COLUMNS = [
+  { id: 'size', header: 'Tyre Size', cell: textCell('size', 'text-[var(--text-primary)] text-xs font-semibold whitespace-nowrap') },
+  { id: 'count', header: 'Fitted Qty', cell: textCell('count') },
+  { id: 'brands', header: 'Brands In Use', cell: ({ row }) => <span className="block text-[var(--text-secondary)] text-xs max-w-[220px] whitespace-normal" title={row.original.brandsLabel}>{dash(row.original.brandsLabel)}</span> },
+  { id: 'approved', header: 'Approved Brands', cell: ({ row }) => <span className="block text-[var(--text-secondary)] text-xs max-w-[220px] whitespace-normal" title={row.original.approvedBrandsLabel}>{dash(row.original.approvedBrandsLabel)}</span> },
+  { id: 'ply', header: 'Ply Rating', cell: textCell('plyRating') },
+  { id: 'tread', header: 'Min Tread (mm)', cell: textCell('minTreadDepth') },
+  { id: 'load', header: 'Load Idx', cell: textCell('minLoadIndex') },
+  { id: 'speed', header: 'Speed', cell: textCell('minSpeedIndex') },
+  { id: 'pressure', header: 'Pressure (PSI)', cell: textCell('recommendedPressure') },
+  { id: 'types', header: 'Vehicle Types', cell: ({ row }) => <span className="block text-[var(--text-secondary)] text-xs max-w-[200px] whitespace-normal" title={row.original.vehicleTypesLabel}>{dash(row.original.vehicleTypesLabel)}</span> },
+  {
+    id: 'nonConforming', header: 'Non-Conforming',
+    cell: ({ row }) => row.original.nonConformingCount > 0
+      ? <span className="text-orange-400 font-medium text-xs">{row.original.nonConformingCount}</span>
+      : <span className="text-green-400 text-xs">0</span>,
+  },
+]
+
+/**
+ * A policy section's table arrives in one of three shapes (head / columns / an
+ * array-of-arrays). Normalise it to string-indexed cells and generate the column
+ * defs from however many cells the widest row carries.
+ */
+function policyTableModel(table) {
+  const head = Array.isArray(table?.head) ? table.head
+    : Array.isArray(table?.columns) ? table.columns
+    : (Array.isArray(table) && Array.isArray(table[0]) ? table[0] : [])
+  const raw = Array.isArray(table?.rows) ? table.rows
+    : (Array.isArray(table) ? table.slice(head.length ? 1 : 0) : [])
+  const rows = raw.map((r, ri) => {
+    const cells = Array.isArray(r) ? r : Object.values(r || {})
+    return { __key: String(ri), cells }
+  })
+  const width = Math.max(head.length, ...rows.map(r => r.cells.length), 0)
+  const columns = Array.from({ length: width }, (_, ci) => ({
+    id: `c${ci}`,
+    header: head[ci] != null ? String(head[ci]) : '',
+    cell: ({ row }) => {
+      const v = row.original.cells[ci]
+      return <span className="text-[var(--text-secondary)] text-xs">{v == null || v === '' ? 'N/A' : String(v)}</span>
+    },
+  }))
+  return { columns, rows }
+}
+
+function advisorColumns(rec, cur) {
+  return [
+    {
+      id: 'brand', header: 'Brand',
+      cell: ({ row }) => {
+        const e = row.original
+        return (
+          <div className="text-[var(--text-primary)] text-sm font-medium whitespace-nowrap">
+            <span className="flex items-center gap-1.5">
+              {e === rec.pick && <CheckCircle size={12} className="text-emerald-400 shrink-0" />}
+              {e.brand || 'N/A'}
+            </span>
+            {!e.valid && <span className="block text-[10px] text-amber-400">incomplete (needs price + life)</span>}
+          </div>
+        )
+      },
+    },
+    { id: 'supplier', header: 'Supplier', cell: ({ row }) => <span className="text-[var(--text-secondary)] text-sm whitespace-nowrap">{row.original.supplier || 'N/A'}</span> },
+    { id: 'price', header: 'Price', cell: ({ row }) => <span className="text-[var(--text-secondary)] text-sm whitespace-nowrap">{fmtMoney(row.original.unit_price, cur)}</span> },
+    { id: 'life', header: 'Exp Life (km)', cell: ({ row }) => <span className="text-[var(--text-secondary)] text-sm whitespace-nowrap">{fmtVal(row.original.expected_life_km != null ? Number(row.original.expected_life_km).toLocaleString('en-US') : null)}</span> },
+    { id: 'cpk', header: 'Lifecycle CPK', cell: ({ row }) => <span className="text-sm whitespace-nowrap font-semibold text-[var(--text-primary)]">{fmtVal(row.original.lifecycleCpk)}</span> },
+    { id: 'per1000', header: 'Cost/1000km', cell: ({ row }) => <span className="text-[var(--text-secondary)] text-sm whitespace-nowrap">{fmtVal(row.original.costPer1000Km)}</span> },
+    { id: 'warranty', header: 'Warranty %', cell: ({ row }) => <span className="text-[var(--text-secondary)] text-sm whitespace-nowrap">{fmtVal(row.original.warrantyCoverPct, '%')}</span> },
+    { id: 'realized', header: 'Realized CPK', cell: ({ row }) => <span className="text-[var(--text-secondary)] text-sm whitespace-nowrap">{fmtVal(row.original.realizedCpk)}</span> },
+    {
+      id: 'confidence', header: 'Confidence',
+      cell: ({ row }) => {
+        const cm = CONFIDENCE_META[row.original.confidence] || CONFIDENCE_META.guidance
+        return <span className={`inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full border ${cm.bg} ${cm.color}`}>{cm.label}</span>
+      },
+    },
+    { id: 'badges', header: 'Badges', cell: ({ row }) => <EconBadges e={row.original} /> },
+  ]
+}
+
+function historyActionColor(action) {
+  if (action === 'Add' || action === 'Quick Setup Import' || action === 'Import') return 'text-green-400'
+  if (action === 'Edit') return 'text-blue-400'
+  return 'text-red-400'
+}
+
+const HISTORY_COLUMNS = [
+  {
+    id: 'date', header: 'Date',
+    cell: ({ row }) => {
+      const d = new Date(row.original.date)
+      return <span className="text-[var(--text-muted)] text-xs whitespace-nowrap">{Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+    },
+  },
+  { id: 'action', header: 'Action', cell: ({ row }) => <span className={`text-xs font-medium ${historyActionColor(row.original.action)}`}>{row.original.action}</span> },
+  { id: 'user', header: 'User', cell: ({ row }) => <span className="block text-[var(--text-muted)] text-xs max-w-[120px] truncate">{dash(row.original.user)}</span> },
+  { id: 'type', header: 'Vehicle Type', cell: ({ row }) => <span className="text-[var(--text-secondary)] text-xs">{dash(row.original.vehicle_type)}</span> },
+  { id: 'position', header: 'Position', cell: ({ row }) => <span className="text-[var(--text-muted)] text-xs">{dash(row.original.position)}</span> },
+  { id: 'field', header: 'Changed Field', cell: ({ row }) => <span className="text-[var(--text-muted)] text-xs">{dash(row.original.changed_field)}</span> },
+  { id: 'old', header: 'Old Value', cell: ({ row }) => <span className="block text-[var(--text-dim)] text-xs max-w-[120px] truncate">{dash(row.original.old_value)}</span> },
+  { id: 'new', header: 'New Value', cell: ({ row }) => <span className="block text-[var(--text-muted)] text-xs max-w-[120px] truncate">{dash(row.original.new_value)}</span> },
+]
+
 export default function TyreSpecifications() {
   const { profile, user } = useAuth()
   const { appSettings, activeCountry } = useSettings()
@@ -1558,6 +1781,12 @@ export default function TyreSpecifications() {
     { id: 'history',     label: 'Audit Trail',           icon: History },
   ]
 
+  // ── Table column models (shared EnterpriseTable shell) ──────────────────────
+  const complianceCols = complianceColumns({ isAdmin, onRaiseWo: setWorkOrderAsset })
+  const nonConformanceCols = nonConformanceColumns({ isAdmin, onRaiseWo: setWorkOrderAsset })
+  const nonConformanceRanked = nonConformanceByAsset.map((a, i) => ({ ...a, rank: i + 1 }))
+  const historyNewestFirst = [...history].reverse()
+
   // ── Render ─────────────────────────────────────────────────────────────────────
 
   return (
@@ -1884,68 +2113,16 @@ export default function TyreSpecifications() {
                   <p className="text-[var(--text-muted)] text-sm">Loading fleet data...</p>
                 </div>
               ) : (
-                /* EnterpriseTable REFUSED: this grid runs its own compSearch /
-                   site / type / status filter bar and its own PAGE_SIZE pager,
-                   and `exportCompliancePdf` above walks the full
-                   `filteredCompliance` set those controls produce.
-                   EnterpriseTable would add a second search box beside the
-                   existing four filters and a competing export beside the two
-                   already in the page header. */
+                /* Shared table shell with search/sort/export OFF: the four filters
+                   above and the PAGE_SIZE pager below stay the only controls, and
+                   `exportCompliancePdf` still walks the full `filteredCompliance`. */
                 <>
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b border-[var(--input-border)]">
-                          {['Asset No', 'Vehicle Type', 'Position', 'Fitted Size', 'Fitted Brand', 'Site', 'Spec Status', 'Action'].map(h => (
-                            <th key={h} className="px-4 py-3 text-left text-xs text-[var(--text-muted)] font-medium">{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {compliancePage.length === 0 ? (
-                          <tr>
-                            <td colSpan={8} className="px-4 py-12 text-center text-[var(--text-muted)] text-sm">No records match filters</td>
-                          </tr>
-                        ) : (
-                          compliancePage.map((row, i) => {
-                            const cfg = STATUS_CONFIG[row.specStatus]
-                            const Icon = cfg.icon
-                            return (
-                              <motion.tr
-                                key={`${row.id}-${i}`}
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                transition={{ delay: i * 0.01 }}
-                                className="border-b border-[var(--input-border)] hover:bg-gray-800/40 transition-colors"
-                              >
-                                <td className="px-4 py-3 text-[var(--text-primary)] text-sm font-mono">{row.asset_no || '-'}</td>
-                                <td className="px-4 py-3 text-[var(--text-secondary)] text-sm">{row.vehicleType || <span className="text-[var(--text-dim)]">Unknown</span>}</td>
-                                <td className="px-4 py-3 text-[var(--text-secondary)] text-sm">{normalizePosition(row.position) || '-'}</td>
-                                <td className="px-4 py-3 text-[var(--text-secondary)] text-sm font-mono">{row.size || '-'}</td>
-                                <td className="px-4 py-3 text-[var(--text-secondary)] text-sm">{row.brand || '-'}</td>
-                                <td className="px-4 py-3 text-[var(--text-muted)] text-sm">{row.site || '-'}</td>
-                                <td className="px-4 py-3">
-                                  <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${cfg.bg} ${cfg.color}`}>
-                                    <Icon size={10} /> {cfg.label}
-                                  </span>
-                                </td>
-                                <td className="px-4 py-3">
-                                  {(row.specStatus !== 'Approved' && row.specStatus !== 'No Spec Defined') && isAdmin && (
-                                    <button
-                                      onClick={() => setWorkOrderAsset({ asset_no: row.asset_no, site: row.site, violations: row.violations })}
-                                      className="text-xs text-orange-400 hover:text-orange-300 underline whitespace-nowrap"
-                                    >
-                                      Raise WO
-                                    </button>
-                                  )}
-                                </td>
-                              </motion.tr>
-                            )
-                          })
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
+                    <SpecTable
+                      columns={complianceCols}
+                      data={compliancePage}
+                      getRowId={(r, i) => `${r.id}-${i}`}
+                      emptyMessage="No records match filters"
+                    />
 
                   {/* Pagination */}
                   {complianceTotalPages > 1 && (
@@ -2001,61 +2178,12 @@ export default function TyreSpecifications() {
                   description="No non-conforming fitments detected across the fleet."
                 />
               ) : (
-                /* EnterpriseTable REFUSED: composite cells throughout - a
-                   ranked badge, a set of violation-type pills, a recommended
-                   action and a Raise WO button gated on `isAdmin`. */
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-[var(--input-border)]">
-                        {['Rank', 'Asset No', 'Site', 'Vehicle Type', 'Violations', 'Violation Types', 'Recommended Action', 'Action'].map(h => (
-                          <th key={h} className="px-4 py-3 text-left text-xs text-[var(--text-muted)] font-medium">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {nonConformanceByAsset.map((a, i) => (
-                        <motion.tr
-                          key={a.asset_no}
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          transition={{ delay: i * 0.02 }}
-                          className="border-b border-[var(--input-border)] hover:bg-gray-800/40 transition-colors"
-                        >
-                          <td className="px-4 py-3">
-                            <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${i < 3 ? 'bg-red-900 text-red-300' : 'bg-[var(--input-bg)] text-[var(--text-muted)]'}`}>{i + 1}</span>
-                          </td>
-                          <td className="px-4 py-3 text-[var(--text-primary)] font-mono text-sm">{a.asset_no}</td>
-                          <td className="px-4 py-3 text-[var(--text-muted)] text-sm">{a.site || '-'}</td>
-                          <td className="px-4 py-3 text-[var(--text-secondary)] text-sm">{a.vehicleType || 'Unknown'}</td>
-                          <td className="px-4 py-3">
-                            <span className={`text-sm font-bold ${a.violations.length >= 3 ? 'text-red-400' : 'text-orange-400'}`}>{a.violations.length}</span>
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="flex flex-wrap gap-1">
-                              {a.violationTypes.map(v => (
-                                <span key={v} className="text-xs bg-red-900/30 text-red-300 border border-red-800 px-2 py-0.5 rounded-full">{v}</span>
-                              ))}
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 text-[var(--text-muted)] text-xs max-w-[180px]">
-                            Replace non-approved fitments with spec-compliant tyres during next scheduled change
-                          </td>
-                          <td className="px-4 py-3">
-                            {isAdmin && (
-                              <button
-                                onClick={() => setWorkOrderAsset({ asset_no: a.asset_no, site: a.site, violations: a.violations })}
-                                className="flex items-center gap-1 bg-orange-900/30 hover:bg-orange-900/50 text-orange-400 text-xs px-3 py-1.5 rounded-lg border border-orange-800 transition-colors"
-                              >
-                                <Wrench size={11} /> Raise WO
-                              </button>
-                            )}
-                          </td>
-                        </motion.tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <SpecTable
+                  columns={nonConformanceCols}
+                  data={nonConformanceRanked}
+                  getRowId={(r) => String(r.asset_no)}
+                  emptyMessage="No non-conforming fitments"
+                />
               )}
             </div>
           </motion.div>
@@ -2239,41 +2367,14 @@ export default function TyreSpecifications() {
                     : 'No sizes match your search.'}
                 </div>
               ) : (
-                /* EnterpriseTable REFUSED: this panel already carries its own
-                   `sizeSearch` box and its own Excel export in the header
-                   directly above, both scoped to `filteredSizeInventory`. */
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-[var(--input-border)]">
-                        {['Tyre Size', 'Fitted Qty', 'Brands In Use', 'Approved Brands', 'Ply Rating', 'Min Tread (mm)', 'Load Idx', 'Speed', 'Pressure (PSI)', 'Vehicle Types', 'Non-Conforming'].map(h => (
-                          <th key={h} className="px-3 py-2 text-left text-[10px] uppercase tracking-wide text-[var(--text-muted)] font-medium whitespace-nowrap">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredSizeInventory.map(r => (
-                        <tr key={r.size} className="border-b border-[var(--input-border)] last:border-0 hover:bg-[var(--input-bg)]/40">
-                          <td className="px-3 py-2 text-[var(--text-primary)] text-xs font-semibold whitespace-nowrap">{r.size}</td>
-                          <td className="px-3 py-2 text-[var(--text-secondary)] text-xs">{r.count}</td>
-                          <td className="px-3 py-2 text-[var(--text-secondary)] text-xs max-w-[220px]" title={r.brandsLabel}>{r.brandsLabel}</td>
-                          <td className="px-3 py-2 text-[var(--text-secondary)] text-xs max-w-[220px]" title={r.approvedBrandsLabel}>{r.approvedBrandsLabel}</td>
-                          <td className="px-3 py-2 text-[var(--text-secondary)] text-xs whitespace-nowrap">{r.plyRating}</td>
-                          <td className="px-3 py-2 text-[var(--text-secondary)] text-xs whitespace-nowrap">{r.minTreadDepth}</td>
-                          <td className="px-3 py-2 text-[var(--text-secondary)] text-xs whitespace-nowrap">{r.minLoadIndex}</td>
-                          <td className="px-3 py-2 text-[var(--text-secondary)] text-xs whitespace-nowrap">{r.minSpeedIndex}</td>
-                          <td className="px-3 py-2 text-[var(--text-secondary)] text-xs whitespace-nowrap">{r.recommendedPressure}</td>
-                          <td className="px-3 py-2 text-[var(--text-secondary)] text-xs max-w-[200px]" title={r.vehicleTypesLabel}>{r.vehicleTypesLabel}</td>
-                          <td className="px-3 py-2 text-xs whitespace-nowrap">
-                            {r.nonConformingCount > 0
-                              ? <span className="text-orange-400 font-medium">{r.nonConformingCount}</span>
-                              : <span className="text-green-400">0</span>}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                /* Search and Excel export stay the panel header controls above;
+                   the table shell has its own search and export switched off. */
+                <SpecTable
+                  columns={SIZE_INVENTORY_COLUMNS}
+                  data={filteredSizeInventory}
+                  getRowId={(r) => String(r.size)}
+                  emptyMessage="No sizes match your search."
+                />
               )}
             </div>
 
@@ -2300,41 +2401,13 @@ export default function TyreSpecifications() {
                           <p className="text-[var(--text-muted)] text-xs whitespace-pre-line">{section.body}</p>
                         )}
                         {section.table && (() => {
-                          const t = section.table
-                          const head = Array.isArray(t.head) ? t.head
-                            : Array.isArray(t.columns) ? t.columns
-                            : (Array.isArray(t) && Array.isArray(t[0]) ? t[0] : [])
-                          const rows = Array.isArray(t.rows) ? t.rows
-                            : (Array.isArray(t) ? t.slice(head.length ? 1 : 0) : [])
-                          if (rows.length === 0) {
+                          const { columns: policyCols, rows: policyRows } = policyTableModel(section.table)
+                          if (policyRows.length === 0) {
                             return <p className="text-[var(--text-dim)] text-xs">No approved standards recorded yet.</p>
                           }
-                          /* EnterpriseTable REFUSED: the columns are generated
-                             at RUNTIME from whatever shape each policy section
-                             carries (head / columns / an array-of-arrays), so
-                             there is no static column definition to hand it. */
                           return (
-                            <div className="overflow-x-auto mt-2 border border-[var(--input-border)] rounded-lg">
-                              <table className="w-full">
-                                {head.length > 0 && (
-                                  <thead>
-                                    <tr className="border-b border-[var(--input-border)]">
-                                      {head.map((h, hi) => (
-                                        <th key={hi} className="px-3 py-2 text-left text-xs text-[var(--text-muted)] font-medium whitespace-nowrap">{h}</th>
-                                      ))}
-                                    </tr>
-                                  </thead>
-                                )}
-                                <tbody>
-                                  {rows.map((r, ri) => (
-                                    <tr key={ri} className="border-b border-[var(--input-border)] last:border-0">
-                                      {(Array.isArray(r) ? r : Object.values(r)).map((cell, ci) => (
-                                        <td key={ci} className="px-3 py-2 text-[var(--text-secondary)] text-xs">{cell == null || cell === '' ? 'N/A' : String(cell)}</td>
-                                      ))}
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
+                            <div className="mt-2 border border-[var(--input-border)] rounded-lg overflow-hidden">
+                              <SpecTable columns={policyCols} data={policyRows} getRowId={(r) => r.__key} maxHeight={420} />
                             </div>
                           )
                         })()}
@@ -2476,51 +2549,11 @@ export default function TyreSpecifications() {
                         </div>
                       )}
 
-                      {/* Ranked comparison table. EnterpriseTable REFUSED: the
-                          row ORDER is the recommendation itself (the engine
-                          ranks by lifecycle CPK), so a sortable header would
-                          let a reader destroy the very thing being shown; and
-                          the cells are composite - an incomplete-quote caveat
-                          under the brand, a confidence pill, a badge cluster. */}
+                      {/* Ranked comparison. The row ORDER is the recommendation (the engine
+                          ranks by lifecycle CPK), so the table shell runs with sorting OFF. */}
                       {valids.length > 0 ? (
-                        <div className="overflow-x-auto border border-[var(--input-border)] rounded-lg">
-                          <table className="w-full">
-                            <thead>
-                              <tr className="border-b border-[var(--input-border)]">
-                                {['Brand', 'Supplier', 'Price', 'Exp Life (km)', 'Lifecycle CPK', 'Cost/1000km', 'Warranty %', 'Realized CPK', 'Confidence', 'Badges'].map(h => (
-                                  <th key={h} className="px-3 py-2 text-left text-xs text-[var(--text-muted)] font-medium whitespace-nowrap">{h}</th>
-                                ))}
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {rec.ranked.map((e, i) => {
-                                const cm = CONFIDENCE_META[e.confidence] || CONFIDENCE_META.guidance
-                                const isPick = e === rec.pick
-                                return (
-                                  <tr key={e.id ?? `${e.brand}-${i}`} className={`border-b border-[var(--input-border)] last:border-0 transition-colors ${isPick ? 'bg-emerald-900/10' : 'hover:bg-gray-800/30'}`}>
-                                    <td className="px-3 py-2 text-[var(--text-primary)] text-sm font-medium whitespace-nowrap">
-                                      <span className="flex items-center gap-1.5">
-                                        {isPick && <CheckCircle size={12} className="text-emerald-400 shrink-0" />}
-                                        {e.brand || 'N/A'}
-                                      </span>
-                                      {!e.valid && <span className="block text-[10px] text-amber-400">incomplete (needs price + life)</span>}
-                                    </td>
-                                    <td className="px-3 py-2 text-[var(--text-secondary)] text-sm whitespace-nowrap">{e.supplier || 'N/A'}</td>
-                                    <td className="px-3 py-2 text-[var(--text-secondary)] text-sm whitespace-nowrap">{fmtMoney(e.unit_price, cur)}</td>
-                                    <td className="px-3 py-2 text-[var(--text-secondary)] text-sm whitespace-nowrap">{fmtVal(e.expected_life_km != null ? Number(e.expected_life_km).toLocaleString('en-US') : null)}</td>
-                                    <td className="px-3 py-2 text-sm whitespace-nowrap font-semibold text-[var(--text-primary)]">{fmtVal(e.lifecycleCpk)}</td>
-                                    <td className="px-3 py-2 text-[var(--text-secondary)] text-sm whitespace-nowrap">{fmtVal(e.costPer1000Km)}</td>
-                                    <td className="px-3 py-2 text-[var(--text-secondary)] text-sm whitespace-nowrap">{fmtVal(e.warrantyCoverPct, '%')}</td>
-                                    <td className="px-3 py-2 text-[var(--text-secondary)] text-sm whitespace-nowrap">{fmtVal(e.realizedCpk)}</td>
-                                    <td className="px-3 py-2 whitespace-nowrap">
-                                      <span className={`inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full border ${cm.bg} ${cm.color}`}>{cm.label}</span>
-                                    </td>
-                                    <td className="px-3 py-2"><EconBadges e={e} /></td>
-                                  </tr>
-                                )
-                              })}
-                            </tbody>
-                          </table>
+                        <div className="border border-[var(--input-border)] rounded-lg overflow-hidden">
+                          <SpecTable columns={advisorColumns(rec, cur)} data={rec.ranked} getRowId={(r, i) => String(r.id ?? `${r.brand}-${i}`)} maxHeight={480} />
                         </div>
                       ) : (
                         <p className="text-[var(--text-dim)] text-sm">No quote in this fitment has both a unit price and an expected life yet.</p>
@@ -2583,39 +2616,14 @@ export default function TyreSpecifications() {
                   description="Changes to specifications will be tracked here."
                 />
               ) : (
-                /* EnterpriseTable REFUSED: an append-only audit trail read
-                   newest-first. Its order is the record, so offering sortable
-                   headers would misrepresent it, and it has no filter or export
-                   of its own for EnterpriseTable to replace. */
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-[var(--input-border)]">
-                        {['Date', 'Action', 'User', 'Vehicle Type', 'Position', 'Changed Field', 'Old Value', 'New Value'].map(h => (
-                          <th key={h} className="px-4 py-3 text-left text-xs text-[var(--text-muted)] font-medium">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {[...history].reverse().map((event, i) => {
-                        const actionColor = event.action === 'Add' || event.action === 'Quick Setup Import' || event.action === 'Import' ? 'text-green-400' :
-                          event.action === 'Edit' ? 'text-blue-400' : 'text-red-400'
-                        return (
-                          <tr key={event.id} className="border-b border-[var(--input-border)] hover:bg-gray-800/30 transition-colors">
-                            <td className="px-4 py-2.5 text-[var(--text-muted)] text-xs whitespace-nowrap">{new Date(event.date).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
-                            <td className="px-4 py-2.5"><span className={`text-xs font-medium ${actionColor}`}>{event.action}</span></td>
-                            <td className="px-4 py-2.5 text-[var(--text-muted)] text-xs max-w-[120px] truncate">{event.user}</td>
-                            <td className="px-4 py-2.5 text-[var(--text-secondary)] text-xs">{event.vehicle_type}</td>
-                            <td className="px-4 py-2.5 text-[var(--text-muted)] text-xs">{event.position}</td>
-                            <td className="px-4 py-2.5 text-[var(--text-muted)] text-xs">{event.changed_field || '-'}</td>
-                            <td className="px-4 py-2.5 text-[var(--text-dim)] text-xs max-w-[120px] truncate">{event.old_value || '-'}</td>
-                            <td className="px-4 py-2.5 text-[var(--text-muted)] text-xs max-w-[120px] truncate">{event.new_value || '-'}</td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                /* Append-only audit trail read newest-first: its order is the record,
+                   so the table shell runs with sorting OFF. */
+                <SpecTable
+                  columns={HISTORY_COLUMNS}
+                  data={historyNewestFirst}
+                  getRowId={(r, i) => String(r.id ?? i)}
+                  emptyMessage="No history yet"
+                />
               )}
             </div>
           </motion.div>

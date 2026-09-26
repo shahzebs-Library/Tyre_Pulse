@@ -23,6 +23,10 @@ const CODE_MESSAGES = {
   '23503': 'This action references a record that no longer exists.',
   '23514': 'Some values are not valid.',
   '42501': 'You do not have permission to do that.',
+  // Deliberate "someone else changed this" refusals. PT409 is what the server
+  // raises now; 40001 is kept for any older function or client still in flight.
+  '40001': 'This record changed since you opened it. Refresh and try again.',
+  PT409: 'This record changed since you opened it. Refresh and try again.',
   PGRST116: 'Not found.',
 }
 

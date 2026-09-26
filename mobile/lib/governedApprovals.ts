@@ -71,7 +71,7 @@ export async function submitApprovalIntent(intent: ApprovalIntent) {
   return data
 }
 export function isDefinitiveApprovalRejection(error: any): boolean {
-  return ['22023', '42501', '40001', '23514'].includes(error?.code)
+  return ['22023', '42501', '40001', 'PT409', '23514'].includes(error?.code)
 }
 export async function executeStoredApprovalIntent(storage: { setItem(key: string, value: string): Promise<void>; removeItem(key: string): Promise<void> }, key: string, intent: ApprovalIntent, isCurrent = () => true) {
   await storage.setItem(key, JSON.stringify(intent))

@@ -177,7 +177,7 @@ export default function ExpenseImport() {
       setPhase('done')
       refreshStored()
     } catch (err) {
-      if (err?.code === '40001') {
+      if (err?.code === '40001' || err?.code === 'PT409') {
         requestRef.current = null
         await refreshStored()
         setError('Stored expense data changed during upload. Review the refreshed replacement count before retrying.')

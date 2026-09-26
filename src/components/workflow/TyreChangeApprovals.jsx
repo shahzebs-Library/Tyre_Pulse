@@ -16,7 +16,7 @@ const copy = {
 const input = 'w-full min-h-11 rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2'
 const button = 'min-h-11 rounded-lg border border-[var(--input-border)] px-3 py-2 disabled:opacity-40'
 const blank = () => ({ action: 'replace', tyreId: '', position: '', targetAsset: '', serial: '', brand: '', km: '', cost: '', date: new Date().toISOString().slice(0, 10), reason: '' })
-const rejectedTransaction = error => ['22023', '22004', '23514', '23505', '42501', '40001', 'P0002'].includes(error?.code)
+const rejectedTransaction = error => ['22023', '22004', '23514', '23505', '42501', '40001', 'PT409', 'P0002'].includes(error?.code)
 function Field({ label, children }) { return <label className="flex flex-col gap-1 text-sm"><span>{label}</span>{children}</label> }
 
 export default function TyreChangeApprovals(props) {

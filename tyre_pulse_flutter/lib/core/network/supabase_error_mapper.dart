@@ -437,6 +437,7 @@ SupabaseFailure _fromPostgrest(PostgrestException error) {
       );
 
     case '40001': // serialization_failure
+    case 'PT409': // deliberate stale-data refusal (HTTP 409 via PostgREST)
     case '40P01': // deadlock_detected
       return _failure(
         error: error,

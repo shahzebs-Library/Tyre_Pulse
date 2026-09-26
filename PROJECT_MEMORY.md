@@ -55,6 +55,36 @@ batching stops them being started at all.
 
 ---
 
+# ⚑ SESSION 2026-09-26 — POSTGRES "MANY ERRORS" = A WEEK-LONG POSTGREST RETRY LOOP. 3 migrations APPLIED LIVE.
+- **8.6M ERROR lines/day were ONE bug**: "Meter changed; refresh before saving" at a flat ~100/s, 24/7, since
+  2026-09-19. `save_vehicle_meter_readings` raised its optimistic-concurrency refusal with ERRCODE **40001**
+  (serialization_failure). **PostgREST (hasql-transaction) AUTO-RETRIES 40001 WITH NO LIMIT**, and a
+  deterministic refusal fails identically forever: 3 requests looped for a week (59,113 distinct txns / 10 min
+  from 3 sessions while the API gateway logged ~220 requests). Invisible in edge logs + pg_stat_statements
+  (errored statements are not counted) - only the Postgres log shows it.
+- **`20260926090000_stop_postgrest_40001_retry_loop`**: all 19 functions raising ERRCODE '40001' rewritten from
+  live pg_get_functiondef to **'PT409'** (PostgREST -> HTTP 409, never retried); the one handler
+  (`tyre_change_approval_context` WHEN SQLSTATE '40001') now also catches PT409. Loop ended 07:36:17 with exactly
+  3 final PT409s. Clients accept both codes (vehicleMeters, ExpenseImport, TyreChangeApprovals,
+  WorkOrderApprovalGate, safeError CODE_MESSAGES, mobile governedApprovals, Flutter error mapper).
+  **RULE: never RAISE 40001/40P01 on purpose in a PostgREST-reachable function. Use PT409.**
+- **`20260926091000_inspections_document_no`**: the INSTALLED mobile app selects `inspections.document_no` for its
+  "last inspected N days ago" notice; the column never existed (39 errors/day, notice dead). Plain column +
+  BEFORE INSERT stamp `INS-<8 hex of id>` (same number as the web PDF), 1,451/1,451 backfilled, NOT generated
+  (lock/approval guards compare OLD/NEW). Index (asset_no, inspection_date desc).
+- **`20260926092000_wash_insert_role_case`**: wash_records_insert compared get_my_role() to lowercase 'driver'
+  while profiles.role is 'Driver' -> **every one of 674 drivers was refused**; Inspector + Tyre Man (offered the
+  module on mobile) were missing too. Now case-insensitive: admin/manager/director/driver/inspector/tyre man/
+  fleet supervisor. Verified by impersonation: Driver allowed, Reporter refused.
+- Statement timeouts (reference_site_options, get_daily_job_cards...) clustered while the loop saturated the DB;
+  reference_site_options measures 2.1 s cold / 130 ms warm. Re-check before optimising.
+- Leaked-password protection: **ON** (advisor lint gone). Security advisors: 0 ERROR; remaining = known set
+  (anon DEFINER 10 = V500 allowlist, inspection_plan_state deliberately unpinned, 2 extensions in public).
+- Dependabot/npm audit: web root 0, marketing 0. Mobile only: image-size (Metro build-time, no 1.x fix) +
+  query-string/decode-uri-component via expo-router (needs an Expo major) - deferred while mobile builds frozen.
+
+---
+
 # ⚑ SESSION 2026-09-25 (part 5) — CONSOLE UI/UX PASS (ui-ux-pro-max, 4 agents). No migration. Branch only.
 - Every console page + kit audited: aria-labels on icon buttons, focus-visible orange rings, labelled inputs,
   keyboard rows, confirm dialogs on destructive actions, responsive grids, gray-600 body text raised to gray-400.

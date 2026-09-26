@@ -79,7 +79,7 @@ function ScopedWorkOrderApprovalGate({ orderId, legacy, onGateChange, storageKey
       setState(data); setRetry(false); operation.current = null; setReason('')
     } catch (err) {
       if (token === generation.current) {
-        const rejected = ['22023', '22004', '23514', '23505', '42501', '40001', 'P0002'].includes(err?.code)
+        const rejected = ['22023', '22004', '23514', '23505', '42501', '40001', 'PT409', 'P0002'].includes(err?.code)
         if (rejected) {
           try { localStorage.removeItem(storageKey); operation.current = null; setRetry(false) }
           catch { setStorageError(true); setRetry(true) }

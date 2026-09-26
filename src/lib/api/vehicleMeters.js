@@ -18,7 +18,7 @@ export async function loadVehicleMeters(country) {
 }
 function rpcResult(result) {
   if (result.error?.code === '42501') throw new Error('Meter Logs access is required to add or correct readings for vehicles in your assigned scope.')
-  if (result.error?.code === '40001') throw new Error('Another reading was saved since you opened this row. Refresh, check the latest value, and try again.')
+  if (result.error?.code === '40001' || result.error?.code === 'PT409') throw new Error('Another reading was saved since you opened this row. Refresh, check the latest value, and try again.')
   return unwrap(result)
 }
 export async function saveVehicleMeters(vehicle, draft) {

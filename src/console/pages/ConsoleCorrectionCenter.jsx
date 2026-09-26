@@ -7,14 +7,17 @@
  * close, with every step and note kept as history. The case is the audit trail
  * and the rollback record; it does not itself mutate business tables - the
  * actual fix is applied through the linked data tool.
+ *
+ * Layout: header, four KPI tiles, what needs attention, then tabs
+ * (?tab=cases|insights). A case opens in a modal; the list is paged.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  ClipboardList, Plus, RefreshCw, ArrowRight, Check, AlertTriangle, Download, FileText,
-  FolderOpen, Hourglass, CheckCircle2, Flame,
+  ClipboardList, Plus, ArrowRight, Check, AlertTriangle,
+  FolderOpen, Hourglass, CheckCircle2, Flame, BarChart3,
 } from 'lucide-react'
 import {
-  Panel, PanelHeader, Note, Badge, Btn, Select, Toolbar, SearchInput, StatTile,
+  Panel, PanelHeader, Note, Badge, Btn, Select, Toolbar, SearchInput, StatTile, Segmented,
   Table, THead, Th, Tr, Td, Modal,
   LoadingState, EmptyState, ErrorState,
 } from '../components/ui'
@@ -28,8 +31,10 @@ import {
 } from '../../lib/dataTrustOps'
 import { COUNTRIES } from '../../contexts/SettingsContext'
 import { toUserMessage } from '../../lib/safeError'
-import { exportToExcel, exportToPdf, reportFileName } from '../../lib/exportUtils'
-import { useTableSort } from '../../lib/useTableSort'
+import { sortRows, searchRows, useTableSort } from '../../lib/consoleTable'
+import { BarsChart } from '../components/ui/charts'
+import ExportButtons from './shared/ExportButtons'
+import { PageHeader, useUrlTab, usePaged, Pager, AttentionList } from './dataTrust/kit'
 
 function when(ts) {
   if (!ts) return 'N/A'
@@ -42,6 +47,7 @@ const show = (v) => (v === null || v === undefined || v === '' ? 'N/A' : String(
 const COUNTRY_OPTS = [{ value: 'All', label: 'All countries' }, ...COUNTRIES.map((x) => ({ value: x, label: x }))]
 const STATUS_FILTER_OPTS = [{ value: 'all', label: 'All statuses' }, ...CASE_STATUSES.map((s) => ({ value: s, label: CASE_STATUS_LABEL[s] || s }))]
 const SEVERITY_OPTS = CASE_SEVERITIES.map((s) => ({ value: s, label: s.charAt(0).toUpperCase() + s.slice(1) }))
+const SEVERITY_FILTER_OPTS = [...SEVERITY_OPTS, { value: 'urgent', label: 'Critical or high, open' }]
 const ROOT_CAUSE_OPTS = ROOT_CAUSE_CATEGORIES.map((r) => ({ value: r, label: r }))
 
 const TERMINAL = new Set(['closed', 'reconciled', 'rejected'])
@@ -50,18 +56,33 @@ const ACCESSORS = {
   status: (r) => CASE_STATUSES.indexOf(r.status),
   severity: (r) => SEVERITY_RANK[String(r.severity || '').toLowerCase()] ?? 4,
 }
-const EXPORT_COLS = [
-  ['case_no', 'Case no'], ['title', 'Title'], ['metric', 'Metric'], ['country', 'Country'], ['status', 'Status'],
-  ['severity', 'Severity'], ['original_value', 'Original value'], ['corrected_value', 'Corrected value'],
-  ['root_cause', 'Root cause'], ['created', 'Created'],
+const EXPORT_COLUMNS = [
+  { key: 'case_no', header: 'Case no', value: (r) => r.case_no || 'N/A' },
+  { key: 'title', header: 'Title', value: (r) => r.title || 'Untitled' },
+  { key: 'metric', header: 'Metric', value: (r) => show(r.metric_id) },
+  { key: 'country', header: 'Country', value: (r) => show(r.country) },
+  { key: 'status', header: 'Status', value: (r) => CASE_STATUS_LABEL[r.status] || show(r.status) },
+  { key: 'severity', header: 'Severity', value: (r) => show(r.severity) },
+  { key: 'original_value', header: 'Original value', value: (r) => show(r.original_value) },
+  { key: 'corrected_value', header: 'Corrected value', value: (r) => show(r.corrected_value) },
+  { key: 'root_cause', header: 'Root cause', value: (r) => show(r.root_cause_category) },
+  { key: 'created', header: 'Created', value: (r) => when(r.created_at) },
 ]
+const TABS = ['cases', 'insights']
+const STALE_DAYS = 14
+const DAY = 86400000
+function ageDays(ts, now = Date.now()) {
+  const t = Date.parse(ts || '')
+  return Number.isFinite(t) ? Math.floor((now - t) / DAY) : null
+}
 
 const EMPTY_NEW = { title: '', metricId: '', suspectedCause: '', severity: 'medium', originalValue: '' }
 
 export default function ConsoleCorrectionCenter() {
   const [country, setCountry] = useState('All')
   const [status, setStatus] = useState('all')
-  const [state, setState] = useState({ loading: true, error: null, cases: [] })
+  const [state, setState] = useState({ loading: true, error: null, cases: [], at: null })
+  const [tab, setTab] = useUrlTab(TABS, 'cases')
   const [flash, setFlash] = useState(null)
 
   // Create modal
@@ -82,9 +103,9 @@ export default function ConsoleCorrectionCenter() {
     setState((s) => ({ ...s, loading: true, error: null }))
     try {
       const cases = await listCorrectionCases({ country, status })
-      setState({ loading: false, error: null, cases })
+      setState({ loading: false, error: null, cases: cases || [], at: new Date() })
     } catch (e) {
-      setState({ loading: false, error: toUserMessage(e), cases: [] })
+      setState({ loading: false, error: toUserMessage(e), cases: [], at: null })
     }
   }, [country, status])
 
@@ -102,26 +123,60 @@ export default function ConsoleCorrectionCenter() {
     }
   }, [cases])
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return cases.filter((c) => {
-      if (severityFilter && String(c.severity || '').toLowerCase() !== severityFilter) return false
-      if (!q) return true
-      return [c.case_no, c.title, c.metric_id, c.suspected_cause].some((v) => String(v || '').toLowerCase().includes(q))
-    })
+    const sevOf = (c) => String(c.severity || '').toLowerCase()
+    const bySev = !severityFilter ? cases
+      : severityFilter === 'urgent' ? cases.filter((c) => !TERMINAL.has(c.status) && ['critical', 'high'].includes(sevOf(c)))
+        : cases.filter((c) => sevOf(c) === severityFilter)
+    return searchRows(bySev, search, ['case_no', 'title', 'metric_id', 'suspected_cause'])
   }, [cases, search, severityFilter])
-  const { sort, onSort, sorted } = useTableSort(filtered, { key: 'created_at', dir: 'desc' }, ACCESSORS)
+  const { sort, onSort } = useTableSort({ key: 'created_at', dir: 'desc' })
+  const sorted = useMemo(() => sortRows(filtered, sort, ACCESSORS), [filtered, sort])
+  const paged = usePaged(sorted, 25)
 
-  function exportRows(kind) {
-    const out = sorted.map((r) => ({
-      case_no: r.case_no || 'N/A', title: r.title || 'Untitled', metric: show(r.metric_id), country: show(r.country),
-      status: CASE_STATUS_LABEL[r.status] || show(r.status), severity: show(r.severity),
-      original_value: show(r.original_value), corrected_value: show(r.corrected_value),
-      root_cause: show(r.root_cause_category), created: when(r.created_at),
-    }))
-    const file = reportFileName('TyrePulse Correction Cases', country)
-    if (kind === 'pdf') exportToPdf(out, EXPORT_COLS.map(([key, header]) => ({ key, header })), 'Correction Cases', file, 'landscape')
-    else exportToExcel(out, EXPORT_COLS.map(([k]) => k), EXPORT_COLS.map(([, h]) => h), file)
-  }
+  // ── insights ──
+  const openCases = useMemo(() => cases.filter((c) => !TERMINAL.has(c.status)), [cases])
+  const stale = useMemo(() => openCases.filter((c) => (ageDays(c.created_at) ?? 0) > STALE_DAYS), [openCases])
+  const byStatus = useMemo(() => CASE_STATUSES
+    .map((s) => ({ label: CASE_STATUS_LABEL[s] || s, value: cases.filter((c) => c.status === s).length }))
+    .filter((b) => b.value > 0), [cases])
+  const byRootCause = useMemo(() => {
+    const m = new Map()
+    for (const c of cases) {
+      const k = c.root_cause_category || 'Not yet identified'
+      m.set(k, (m.get(k) || 0) + 1)
+    }
+    return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10).map(([label, value]) => ({ label, value }))
+  }, [cases])
+  const byMetric = useMemo(() => {
+    const m = new Map()
+    for (const c of openCases) {
+      if (!c.metric_id) continue
+      m.set(c.metric_id, (m.get(c.metric_id) || 0) + 1)
+    }
+    return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([label, value]) => ({ label, value }))
+  }, [openCases])
+  const attention = useMemo(() => {
+    const out = []
+    const urgent = openCases.filter((c) => ['critical', 'high'].includes(String(c.severity || '').toLowerCase()))
+      .sort((a, b) => String(a.created_at || '').localeCompare(String(b.created_at || '')))
+    if (urgent.length) {
+      const c = urgent[0]
+      out.push({ key: 'urgent', tone: 'danger', title: `${urgent.length} critical or high case${urgent.length === 1 ? '' : 's'} open`,
+        detail: `Oldest: ${c.case_no || ''} ${c.title || ''}`.trim(), action: { label: 'Open oldest', onClick: () => { setFlash(null); openDetail(c) } } })
+    }
+    if (stats.awaiting) {
+      out.push({ key: 'awaiting', tone: 'warning', title: `${stats.awaiting} proposed fix${stats.awaiting === 1 ? '' : 'es'} awaiting approval`,
+        detail: 'A proposal nobody approves blocks the fix.', action: { label: 'Show them', onClick: () => { setStatus('proposed'); setTab('cases') } } })
+    }
+    if (stale.length) {
+      out.push({ key: 'stale', tone: 'warning', title: `${stale.length} open case${stale.length === 1 ? '' : 's'} older than ${STALE_DAYS} days`,
+        detail: 'Open the oldest and move it forward or reject it.', action: { label: 'Open oldest', onClick: () => {
+          const c = [...stale].sort((a, b) => String(a.created_at || '').localeCompare(String(b.created_at || '')))[0]
+          setFlash(null); openDetail(c)
+        } } })
+    }
+    return out
+  }, [openCases, stale, stats.awaiting]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const submitNew = async () => {
     if (!form.title.trim()) return
@@ -206,23 +261,19 @@ export default function ConsoleCorrectionCenter() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div className="min-w-0">
-          <h1 className="text-lg font-semibold text-white flex items-center gap-2">
-            <ClipboardList size={18} className="text-orange-400" aria-hidden="true" /> Correction and Investigation Center
-          </h1>
-          <p className="text-xs text-gray-400 mt-1 max-w-3xl">
-            Do not edit a dashboard total directly. Open a case: freeze the value, investigate, propose, approve,
-            apply, reconcile and close, with full history and rollback.
-          </p>
-        </div>
-        <Toolbar>
+      <PageHeader
+        icon={ClipboardList}
+        title="Correction and Investigation Center"
+        purpose="Do not edit a dashboard total directly. Open a case: freeze the value, investigate, propose, approve, apply, reconcile and close, with full history and rollback."
+        refreshedAt={state.at}
+        onRefresh={load}
+        refreshing={state.loading}
+        actions={<>
           <Select ariaLabel="Country" value={country} onChange={setCountry} options={COUNTRY_OPTS} className="w-40" />
           <Select ariaLabel="Case status" value={status} onChange={setStatus} options={STATUS_FILTER_OPTS} className="w-44" />
-          <Btn icon={RefreshCw} onClick={load} busy={state.loading}>Refresh</Btn>
           <Btn variant="primary" icon={Plus} onClick={() => { setForm(EMPTY_NEW); setFlash(null); setCreating(true) }}>New case</Btn>
-        </Toolbar>
-      </div>
+        </>}
+      />
 
       {flash && (
         <div role="status">
@@ -235,33 +286,63 @@ export default function ConsoleCorrectionCenter() {
       {!state.loading && !state.error && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <StatTile label="Open cases" value={stats.open.toLocaleString()} icon={FolderOpen} tone={stats.open ? 'accent' : 'default'}
-            sub={`${stats.total.toLocaleString()} cases in view`} />
+            sub={`${stats.total.toLocaleString()} cases in view`}
+            onClick={() => { setStatus('all'); setSeverityFilter(''); setTab('cases') }} active={status === 'all' && !severityFilter && tab === 'cases'} />
           <StatTile label="Awaiting approval" value={stats.awaiting.toLocaleString()} icon={Hourglass} tone={stats.awaiting ? 'warning' : 'default'}
             onClick={() => setStatus((v) => (v === 'proposed' ? 'all' : 'proposed'))} active={status === 'proposed'} />
-          <StatTile label="Critical or high, open" value={stats.urgent.toLocaleString()} icon={Flame} tone={stats.urgent ? 'danger' : 'default'} />
-          <StatTile label="Closed or reconciled" value={stats.closed.toLocaleString()} icon={CheckCircle2} tone={stats.closed ? 'good' : 'default'} />
+          <StatTile label="Critical or high, open" value={stats.urgent.toLocaleString()} icon={Flame} tone={stats.urgent ? 'danger' : 'default'}
+            onClick={() => { setSeverityFilter((v) => (v === 'urgent' ? '' : 'urgent')); setTab('cases') }} active={severityFilter === 'urgent'} />
+          <StatTile label="Closed or reconciled" value={stats.closed.toLocaleString()} icon={CheckCircle2} tone={stats.closed ? 'good' : 'default'}
+            onClick={() => { setStatus((v) => (v === 'closed' ? 'all' : 'closed')); setTab('cases') }} active={status === 'closed'} />
         </div>
       )}
 
-      <Note>
-        A case is governance and audit: it records the decision and the original value. It does not itself mutate
-        business tables; apply the actual fix through the linked data tool, then reconcile and close the case here.
-      </Note>
+      {!state.loading && !state.error && cases.length > 0 && <AttentionList items={attention} />}
 
       {state.error && <Panel><ErrorState message={state.error} onRetry={load} /></Panel>}
 
+      <Segmented ariaLabel="Correction center views" value={tab} onChange={setTab} options={[
+        { key: 'cases', label: 'Cases', count: state.loading || state.error ? undefined : cases.length },
+        { key: 'insights', label: 'Insights' },
+      ]} />
+
+      {tab === 'insights' && (
+        state.loading ? <LoadingState label="Reading correction cases" rows={3} /> : state.error ? null : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <Panel>
+              <PanelHeader icon={BarChart3} title="Cases by status" subtitle="Where the cases in view sit in the flow." />
+              <BarsChart bars={byStatus} summary={byStatus.length ? `${stats.open} open of ${stats.total} cases.` : undefined} emptyText="No cases in view." />
+            </Panel>
+            <Panel>
+              <PanelHeader icon={AlertTriangle} title="Root causes" subtitle="What investigations concluded. Repeats point at a process to fix, not a number." />
+              <BarsChart bars={byRootCause} summary={byRootCause.length ? `Most common: ${byRootCause[0].label}.` : undefined} emptyText="No cases in view." />
+            </Panel>
+            <Panel className="lg:col-span-2">
+              <PanelHeader icon={ClipboardList} title="Open cases by metric" subtitle="A metric with several open cases deserves a look at its definition in the Metric Catalogue." />
+              <BarsChart bars={byMetric} emptyText="No open case names a metric." />
+              <p className="text-[11px] text-gray-500 mt-2">
+                <a href="/console/metric-catalogue" className="text-orange-300 hover:text-orange-200 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">Open the Metric Catalogue</a>
+              </p>
+            </Panel>
+          </div>
+        )
+      )}
+
+      {tab === 'cases' && (
       <Panel>
         <PanelHeader icon={ClipboardList} title="Correction cases"
           subtitle={`Newest first, ${filtered.length.toLocaleString()} of ${cases.length.toLocaleString()} shown. Click a case to investigate and move it forward.`}
-          actions={<>
-            <Btn icon={Download} onClick={() => exportRows('xlsx')} disabled={!sorted.length}>Excel</Btn>
-            <Btn icon={FileText} onClick={() => exportRows('pdf')} disabled={!sorted.length}>PDF</Btn>
-          </>} />
+          actions={<ExportButtons rows={sorted} columns={EXPORT_COLUMNS} title={`TyrePulse Correction Cases ${country}`} />} />
+        <Note>
+          A case is governance and audit: it records the decision and the original value. It does not itself mutate
+          business tables; apply the actual fix through the linked data tool, then reconcile and close the case here.
+        </Note>
+        <div className="mb-3" />
         {!state.loading && !state.error && cases.length > 0 && (
           <Toolbar className="mb-3">
             <SearchInput value={search} onChange={setSearch} placeholder="Search case no, title or metric" className="w-full sm:w-72" />
             <Select ariaLabel="Filter by severity" value={severityFilter} onChange={setSeverityFilter} placeholder="All severities"
-              options={SEVERITY_OPTS} className="w-36" />
+              options={SEVERITY_FILTER_OPTS} className="w-36" />
             {(search || severityFilter) && <Btn variant="quiet" onClick={() => { setSearch(''); setSeverityFilter('') }}>Clear filters</Btn>}
           </Toolbar>
         )}
@@ -288,7 +369,7 @@ export default function ConsoleCorrectionCenter() {
               <Th sortKey="created_at" sort={sort} onSort={onSort}>Created</Th>
             </THead>
             <tbody>
-              {sorted.map((r) => (
+              {paged.pageRows.map((r) => (
                 <Tr key={r.id} onClick={() => { setFlash(null); openDetail(r) }}>
                   <Td nowrap><button type="button" onClick={(e) => { e.stopPropagation(); setFlash(null); openDetail(r) }} aria-label={`Open case ${r.case_no || r.title || ''}`} className="font-mono text-gray-300 hover:text-orange-300 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 rounded">{r.case_no || 'N/A'}</button></Td>
                   <Td><span className="text-gray-100">{r.title || 'Untitled'}</span></Td>
@@ -301,7 +382,9 @@ export default function ConsoleCorrectionCenter() {
             </tbody>
           </Table>
         )}
+        {!state.loading && !state.error && sorted.length > 0 && <Pager {...paged} label="cases" />}
       </Panel>
+      )}
 
       {/* ── New case ─────────────────────────────────────────────────────────── */}
       <Modal

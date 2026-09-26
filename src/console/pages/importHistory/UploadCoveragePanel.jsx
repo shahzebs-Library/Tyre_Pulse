@@ -27,6 +27,7 @@ import {
 } from '../../../lib/api/uploadCoverage'
 import FeedFileHelp from './FeedFileHelp'
 import UploadFeedManager from './UploadFeedManager'
+import { Collapsible } from '../dataTrust/kit'
 import { toUserMessage } from '../../../lib/safeError'
 import {
   Panel, Note, Badge, Btn, Segmented, Toolbar, LoadingState, EmptyState, ErrorState,
@@ -348,20 +349,31 @@ export default function UploadCoveragePanel() {
               <Badge tone="warning" icon={Clock}>{num(c.quiet_count)} gone quiet</Badge>
             )}
           </div>
+          {/* Feeds with a gap stay open; healthy ones fold away so a country
+              with thirty feeds is a short list of what needs a look, not a wall. */}
           <div className="space-y-3">
-            {(c.sources || []).map((s) => (
+            {(c.sources || []).filter((s) => feedProblem(s)).map((s) => (
               <FeedCard key={`${c.country}-${s.src}`} src={s} today={cov.today} country={c.country} />
             ))}
           </div>
+          {(c.sources || []).some((s) => !feedProblem(s)) && (
+            <Collapsible icon={CheckCircle2} title="Feeds with no gap"
+              count={(c.sources || []).filter((s) => !feedProblem(s)).length}
+              subtitle="Up to date in this window. Open to see their day squares."
+              defaultOpen={!(c.sources || []).some((s) => feedProblem(s))}>
+              <div className="space-y-3">
+                {(c.sources || []).filter((s) => !feedProblem(s)).map((s) => (
+                  <FeedCard key={`${c.country}-${s.src}`} src={s} today={cov.today} country={c.country} />
+                ))}
+              </div>
+            </Collapsible>
+          )}
           <NoDataModules feeds={feeds} sources={c.sources} />
         </div>
       ))}
 
       {/* Files. Deliberately honest about how few of these there are. */}
-      <Panel>
-        <p className="text-xs font-semibold text-gray-300 flex items-center gap-1.5 mb-1">
-          <FileUp size={13} className="text-gray-500" /> Files uploaded through the app in this window
-        </p>
+      <Collapsible icon={FileUp} title="Files uploaded through the app in this window" count={(cov.files || []).length}>
         {(cov.files || []).length === 0 ? (
           <p className="text-[11px] text-gray-400">
             None. Loads made straight into the database do not record a file name, so most
@@ -380,12 +392,14 @@ export default function UploadCoveragePanel() {
             ))}
           </ul>
         )}
-      </Panel>
+      </Collapsible>
 
       {/* The feed list is data, not code, so this is where a new upload becomes
-          watched. It sits under the results because reading the gaps is the
-          daily job and changing what is watched is occasional. */}
-      <UploadFeedManager />
+          watched. It sits under the results, closed, because reading the gaps is
+          the daily job and changing what is watched is occasional. */}
+      <Collapsible icon={Info} title="Which tables are watched" subtitle="Add, pause or re-point a watched upload feed.">
+        <UploadFeedManager />
+      </Collapsible>
 
       <Note icon={Info}>
         Days are counted by the date the work happened, not the date you uploaded, so a file

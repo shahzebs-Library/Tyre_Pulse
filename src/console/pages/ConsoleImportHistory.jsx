@@ -25,10 +25,13 @@
  * change a category, and it writes through the material master rather than
  * touching transactions directly. No raw SQL, no em/en dashes. Super-admin only
  * (the whole /console is gated).
+ *
+ * The active tab lives in ?tab= so a link can open a view directly. The two
+ * tables here are paged; an upload opens its full record in a modal.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  History, RefreshCw, AlertTriangle, FileUp, Info, Activity, Download, CopyX,
+  History, AlertTriangle, FileUp, Info, Activity, CopyX,
   CalendarDays, Shuffle, FileText, CheckCircle2, XCircle,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
@@ -37,14 +40,15 @@ import {
   importRowOutcome, OUTCOME_META,
 } from '../../lib/api/importHistory'
 import { listDuplicateTargets } from '../../lib/api/duplicateControl'
-import { exportToExcel, exportToPdf, reportFileName } from '../../lib/exportUtils'
 import { toUserMessage } from '../../lib/safeError'
-import { useTableSort } from '../../lib/useTableSort'
+import { sortRows, searchRows, useTableSort } from '../../lib/consoleTable'
+import ExportButtons from './shared/ExportButtons'
+import { PageHeader, useUrlTab, usePaged, Pager, DetailGrid } from './dataTrust/kit'
 import UploadCoveragePanel from './importHistory/UploadCoveragePanel'
 import DecisionsPanel from './importHistory/DecisionsPanel'
 import {
   Btn, ErrorState, Badge, LoadingState, EmptyState, Panel, PanelHeader, Note, StatTile,
-  SearchInput, Select, Toolbar, Segmented, Table, THead, Th, Tr, Td,
+  SearchInput, Select, Toolbar, Segmented, Table, THead, Th, Tr, Td, Modal,
 } from '../components/ui'
 
 const fmtNum = (n) => (Number.isFinite(Number(n)) ? Number(n).toLocaleString() : 'N/A')
@@ -67,14 +71,32 @@ const UPLOAD_ACCESSORS = {
   repeat: (r) => (r.reupload_of ? 1 : 0),
 }
 
-const UPLOAD_COLS = [
-  ['file', 'File'], ['module', 'Module'], ['country', 'Country'], ['uploaded_at', 'Uploaded at'],
-  ['size', 'Size'], ['outcome', 'Outcome'], ['rows_read', 'Rows read'], ['rows_imported', 'Rows imported'],
-  ['duplicates_flagged', 'Duplicates flagged'], ['errors', 'Errors'], ['same_file_imported_before', 'Same file imported before'],
+const UPLOAD_EXPORT = [
+  { key: 'file', header: 'File', value: (r) => r.filename || 'N/A' },
+  { key: 'module', header: 'Module', value: (r) => r.module || 'N/A' },
+  { key: 'country', header: 'Country', value: (r) => r.country || 'N/A' },
+  { key: 'uploaded_at', header: 'Uploaded at', value: (r) => fmtTime(r.uploaded_at) },
+  { key: 'size', header: 'Size', value: (r) => fmtBytes(r.size_bytes) },
+  { key: 'outcome', header: 'Outcome', value: (r) => OUTCOME_META[importRowOutcome(r)].label },
+  { key: 'rows_read', header: 'Rows read', value: (r) => r.total_rows ?? 0 },
+  { key: 'rows_imported', header: 'Rows imported', value: (r) => r.imported_rows ?? 0 },
+  { key: 'duplicates_flagged', header: 'Duplicates flagged', value: (r) => r.duplicate_rows ?? 0 },
+  { key: 'errors', header: 'Errors', value: (r) => r.error_rows ?? 0 },
+  { key: 'same_file_imported_before', header: 'Same file imported before', value: (r) => (r.reupload_of ? fmtTime(r.reupload_first_seen) : 'No') },
 ]
+const ACTIVITY_EXPORT = [
+  { key: 'landed', header: 'Landed', value: (c) => fmtTime(c.inserted_at) },
+  { key: 'country', header: 'Country', value: (c) => c.country || 'N/A' },
+  { key: 'rows', header: 'Rows', value: (c) => c.rows ?? 0 },
+  { key: 'note', header: 'Note', value: (c) => (c.suspicious ? `Same size as ${fmtTime(c.pairedWith)}` : 'Looks normal') },
+]
+const TABS = ['uploads', 'activity', 'coverage', 'decisions']
 
 export default function ConsoleImportHistory() {
-  const [tab, setTab] = useState('uploads')
+  const [tab, setTab] = useUrlTab(TABS, 'uploads')
+  const [detail, setDetail] = useState(null)
+  const [loadedAt, setLoadedAt] = useState(null)
+  const [clustersAt, setClustersAt] = useState(null)
   const [rows, setRows] = useState([])
   const [targets, setTargets] = useState([])
   const [targetKey, setTargetKey] = useState('parts_expense')
@@ -93,6 +115,7 @@ export default function ConsoleImportHistory() {
     try {
       const [h, t] = await Promise.all([listImportHistory(200), listDuplicateTargets()])
       setRows(Array.isArray(h) ? h : []); setTargets(Array.isArray(t) ? t : [])
+      setLoadedAt(new Date())
     } catch (e) {
       setError(toUserMessage(e, 'Could not load import history.'))
     } finally {
@@ -105,6 +128,7 @@ export default function ConsoleImportHistory() {
     try {
       const c = await listUnloggedImports(key, 80)
       setClusters(Array.isArray(c) ? c : [])
+      setClustersAt(new Date())
     } catch (e) {
       setClusterError(toUserMessage(e, 'Could not load import activity.'))
       setClusters([])
@@ -136,56 +160,22 @@ export default function ConsoleImportHistory() {
   }, [rows])
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return rows.filter((r) => {
+    const narrowed = rows.filter((r) => {
       if (moduleFilter && r.module !== moduleFilter) return false
       if (outcomeFilter && importRowOutcome(r) !== outcomeFilter) return false
       if (onlyRepeats && !r.reupload_of) return false
-      if (!q) return true
-      return [r.filename, r.module, r.country].some((v) => String(v || '').toLowerCase().includes(q))
+      return true
     })
+    return searchRows(narrowed, search, ['filename', 'module', 'country'])
   }, [rows, search, moduleFilter, outcomeFilter, onlyRepeats])
 
-  const uploadsSort = useTableSort(filtered, { key: 'uploaded_at', dir: 'desc' }, UPLOAD_ACCESSORS)
-  const activitySort = useTableSort(flagged, { key: 'inserted_at', dir: 'desc' })
-
-  function uploadExportRows() {
-    return uploadsSort.sorted.map((r) => ({
-      file: r.filename || 'N/A',
-      module: r.module || 'N/A',
-      country: r.country || 'N/A',
-      uploaded_at: fmtTime(r.uploaded_at),
-      size: fmtBytes(r.size_bytes),
-      outcome: OUTCOME_META[importRowOutcome(r)].label,
-      rows_read: r.total_rows ?? 0,
-      rows_imported: r.imported_rows ?? 0,
-      duplicates_flagged: r.duplicate_rows ?? 0,
-      errors: r.error_rows ?? 0,
-      same_file_imported_before: r.reupload_of ? fmtTime(r.reupload_first_seen) : 'No',
-    }))
-  }
-  function downloadUploads(kind) {
-    const out = uploadExportRows()
-    const keys = UPLOAD_COLS.map(([k]) => k)
-    const heads = UPLOAD_COLS.map(([, h]) => h)
-    if (kind === 'pdf') {
-      exportToPdf(out, UPLOAD_COLS.map(([key, header]) => ({ key, header })), 'Import History',
-        reportFileName('TyrePulse Import History'), 'landscape')
-    } else {
-      exportToExcel(out, keys, heads, reportFileName('TyrePulse Import History'))
-    }
-  }
-  function downloadActivity() {
-    const target = targets.find((t) => t.key === targetKey)
-    const out = activitySort.sorted.map((c) => ({
-      landed: fmtTime(c.inserted_at),
-      country: c.country || 'N/A',
-      rows: c.rows ?? 0,
-      note: c.suspicious ? `Same size as ${fmtTime(c.pairedWith)}` : 'Looks normal',
-    }))
-    exportToExcel(out, ['landed', 'country', 'rows', 'note'], ['Landed', 'Country', 'Rows', 'Note'],
-      reportFileName('TyrePulse Load Activity', target?.label || targetKey))
-  }
+  const uploadsSort = useTableSort({ key: 'uploaded_at', dir: 'desc' })
+  const uploadsSorted = useMemo(() => sortRows(filtered, uploadsSort.sort, UPLOAD_ACCESSORS), [filtered, uploadsSort.sort])
+  const uploadsPaged = usePaged(uploadsSorted, 25)
+  const activitySort = useTableSort({ key: 'inserted_at', dir: 'desc' })
+  const activitySorted = useMemo(() => sortRows(flagged, activitySort.sort), [flagged, activitySort.sort])
+  const activityPaged = usePaged(activitySorted, 25)
+  const activityTarget = targets.find((t) => t.key === targetKey)
 
   const tabs = [
     { key: 'uploads', label: <><FileUp size={13} aria-hidden="true" /> Uploads</>, count: loading || error ? null : rows.length, hint: 'Files loaded through the app, and repeats of the same file' },
@@ -197,23 +187,17 @@ export default function ConsoleImportHistory() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-lg font-semibold text-white flex items-center gap-2">
-            <History size={18} className="text-orange-400" aria-hidden="true" /> Import History
-          </h1>
-          <p className="text-xs text-gray-400 mt-1">
-            Every data load, who did it, and whether the same file has been imported before.
-          </p>
-        </div>
-        {/* Coverage and decisions load their own data and carry their own
-            refresh, so a second one here would be a button that does nothing
-            on two of the four tabs. */}
-        {(tab === 'uploads' || tab === 'activity') && (
-          <Btn icon={RefreshCw} onClick={() => (tab === 'activity' ? loadClusters(targetKey) : load())}
-            busy={tab === 'activity' ? clusterLoading : loading}>Refresh</Btn>
-        )}
-      </div>
+      {/* Coverage and decisions load their own data and carry their own
+          refresh, so a second one here would be a button that does nothing
+          on two of the four tabs. */}
+      <PageHeader
+        icon={History}
+        title="Import History"
+        purpose="Every data load, who did it, and whether the same file has been imported before."
+        refreshedAt={tab === 'activity' ? clustersAt : loadedAt}
+        onRefresh={tab === 'uploads' || tab === 'activity' ? () => (tab === 'activity' ? loadClusters(targetKey) : load()) : undefined}
+        refreshing={tab === 'activity' ? clusterLoading : loading}
+      />
 
       <Segmented ariaLabel="Import history views" options={tabs} value={tab} onChange={setTab} />
 
@@ -258,10 +242,7 @@ export default function ConsoleImportHistory() {
               <Panel>
                 <PanelHeader icon={FileUp} title="Uploaded files"
                   subtitle={`${fmtNum(filtered.length)} of ${fmtNum(rows.length)} shown`}
-                  actions={<>
-                    <Btn icon={Download} onClick={() => downloadUploads('xlsx')} disabled={!filtered.length}>Excel</Btn>
-                    <Btn icon={FileText} onClick={() => downloadUploads('pdf')} disabled={!filtered.length}>PDF</Btn>
-                  </>} />
+                  actions={<ExportButtons rows={uploadsSorted} columns={UPLOAD_EXPORT} title="TyrePulse Import History" />} />
                 <Toolbar className="mb-3">
                   <SearchInput value={search} onChange={setSearch} placeholder="Search file, module or country" className="w-full sm:w-72" />
                   <Select value={moduleFilter} onChange={setModuleFilter} placeholder="All modules" options={moduleOptions} ariaLabel="Filter by module" className="w-40" />
@@ -274,6 +255,7 @@ export default function ConsoleImportHistory() {
                 {filtered.length === 0 ? (
                   <EmptyState title="No uploads match these filters" reason="Clear the filters to see every recorded upload." />
                 ) : (
+                  <>
                   <Table>
                     <THead>
                         <Th sortKey="filename" sort={uploadsSort.sort} onSort={uploadsSort.onSort}>File</Th>
@@ -284,10 +266,11 @@ export default function ConsoleImportHistory() {
                         <Th sortKey="repeat" sort={uploadsSort.sort} onSort={uploadsSort.onSort}>Repeat upload</Th>
                       </THead>
                     <tbody>
-                      {uploadsSort.sorted.map((r, i) => {
+                      {uploadsPaged.pageRows.map((r, i) => {
                         const meta = OUTCOME_META[importRowOutcome(r)]
                         return (
-                          <Tr key={`${r.file_id}-${r.batch_id || i}`} tone={r.reupload_of ? 'warning' : undefined}>
+                          <Tr key={`${r.file_id}-${r.batch_id || i}`} tone={r.reupload_of ? 'warning' : undefined}
+                            onClick={() => setDetail(r)} ariaLabel={`Details for ${r.filename || 'upload'}`}>
                             <Td>
                               <p className="text-gray-200 truncate max-w-[260px]" title={r.filename}>{r.filename || 'N/A'}</p>
                               <p className="text-[10px] text-gray-400">{fmtBytes(r.size_bytes)}</p>
@@ -322,6 +305,8 @@ export default function ConsoleImportHistory() {
                       })}
                     </tbody>
                   </Table>
+                  <Pager {...uploadsPaged} label="uploads" />
+                  </>
                 )}
               </Panel>
             )}
@@ -364,8 +349,8 @@ export default function ConsoleImportHistory() {
             <Panel>
               <PanelHeader icon={Activity} title="Reconstructed loads"
                 subtitle={`${fmtNum(flagged.length)} loads, ${fmtNum(suspiciousCount)} look like a resent chunk`}
-                actions={<Btn icon={Download} onClick={downloadActivity}>Excel</Btn>} />
-              <div className="max-h-[520px] overflow-auto">
+                actions={<ExportButtons rows={activitySorted} columns={ACTIVITY_EXPORT} title={`TyrePulse Load Activity ${activityTarget?.label || targetKey}`} />} />
+              <div>
                 <Table>
                   <THead>
                       <Th sortKey="inserted_at" sort={activitySort.sort} onSort={activitySort.onSort}>Landed</Th>
@@ -374,7 +359,7 @@ export default function ConsoleImportHistory() {
                       <Th>Note</Th>
                     </THead>
                   <tbody>
-                    {activitySort.sorted.map((c, i) => (
+                    {activityPaged.pageRows.map((c, i) => (
                       <Tr key={`${c.inserted_at}-${i}`} tone={c.suspicious ? 'warning' : undefined}>
                         <Td className="text-gray-300 tabular-nums" nowrap>{fmtTime(c.inserted_at)}</Td>
                         <Td className="text-gray-400">{c.country || 'N/A'}</Td>
@@ -392,11 +377,51 @@ export default function ConsoleImportHistory() {
                     ))}
                   </tbody>
                 </Table>
+                <Pager {...activityPaged} label="loads" />
               </div>
             </Panel>
           )}
         </>
       )}
+
+      <Modal open={!!detail} onClose={() => setDetail(null)} title={detail?.filename || 'Upload'}
+        subtitle={detail ? `${detail.module || 'Unknown module'} | ${detail.country || 'No country'}` : undefined}
+        footer={<Btn onClick={() => setDetail(null)}>Close</Btn>}>
+        {detail && (() => {
+          const meta = OUTCOME_META[importRowOutcome(detail)]
+          return (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge tone={meta.tone}>{meta.label}</Badge>
+                <span className="text-xs text-gray-400">{importRowSummary(detail)}</span>
+              </div>
+              <DetailGrid items={[
+                ['Uploaded at', fmtTime(detail.uploaded_at)],
+                ['Size', fmtBytes(detail.size_bytes)],
+                ['Rows read', fmtNum(detail.total_rows ?? 0)],
+                ['Rows imported', fmtNum(detail.imported_rows ?? 0)],
+                ['Flagged as duplicate', fmtNum(detail.duplicate_rows ?? 0)],
+                ['Errors', fmtNum(detail.error_rows ?? 0)],
+                ['File id', detail.file_id],
+                ['Batch id', detail.batch_id],
+                ['Same file first seen', detail.reupload_of ? fmtTime(detail.reupload_first_seen) : 'First time'],
+              ]} />
+              {detail.reupload_of && (
+                <Note icon={AlertTriangle} tone="warning">
+                  This file has the same content as one imported on {fmtTime(detail.reupload_first_seen)}.{' '}
+                  <Link to="/console/duplicates" className="underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">Check Duplicate Control</Link>{' '}
+                  for rows it may have added twice.
+                </Note>
+              )}
+              {Number(detail.error_rows) > 0 && (
+                <Note icon={AlertTriangle} tone="danger">
+                  {fmtNum(detail.error_rows)} rows were rejected when this file was imported.
+                </Note>
+              )}
+            </div>
+          )
+        })()}
+      </Modal>
     </div>
   )
 }

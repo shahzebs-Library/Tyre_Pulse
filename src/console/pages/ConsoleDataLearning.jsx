@@ -15,14 +15,18 @@
  * This page never shows money - the learning layer deliberately never touches
  * cost. ASCII only; honest empty states (a missing value is "N/A", never a
  * fabricated zero).
+ *
+ * Layout: header, the gap tiles (click one to see its suggestions), what needs
+ * attention, then tabs (?tab=suggestions|teach|rules|master). The teach form
+ * stays usable when the reads fail; read-derived tabs say they could not load.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  GraduationCap, RefreshCw, Sparkles, Check, X, AlertTriangle, BookOpen,
-  Wand2, ListChecks, FileSpreadsheet, Undo2, Download,
+  GraduationCap, Sparkles, Check, X, AlertTriangle, BookOpen,
+  Wand2, ListChecks, FileSpreadsheet, Undo2,
 } from 'lucide-react'
 import {
-  Panel, PanelHeader, StatTile, Badge, Btn, Select, SearchInput, Note,
+  Panel, PanelHeader, StatTile, Badge, Btn, Select, SearchInput, Note, Segmented,
   Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState,
 } from '../components/ui'
 import {
@@ -35,8 +39,9 @@ import {
 } from '../../lib/tyreLearning'
 import { toUserMessage } from '../../lib/safeError'
 import { COUNTRIES } from '../../contexts/SettingsContext'
-import { exportToExcel, reportFileName } from '../../lib/exportUtils'
-import { useTableSort } from '../../lib/useTableSort'
+import { sortRows, searchRows, useTableSort } from '../../lib/consoleTable'
+import ExportButtons from './shared/ExportButtons'
+import { PageHeader, useUrlTab, usePaged, Pager, AttentionList } from './dataTrust/kit'
 
 const nf = new Intl.NumberFormat('en-US')
 const num = (v) => (v === null || v === undefined ? 'N/A' : nf.format(Number(v)))
@@ -60,12 +65,27 @@ function pctTone(p) {
 
 const matchTypeLabel = (t) => (t === 'serial' ? 'Serial' : 'Spelling')
 const FACT_ACCESSORS = { field: (f) => TARGET_FIELDS[f.target_field] || f.target_field, state: (f) => (f.active ? 1 : 0) }
+const TABS = ['suggestions', 'teach', 'rules', 'master']
+const FACT_EXPORT = [
+  { key: 'match', header: 'Rule', value: (f) => `${matchTypeLabel(f.match_type)} ${f.match_value}` },
+  { key: 'value', header: 'Fills with', value: (f) => f.target_value },
+  { key: 'field', header: 'Field', value: (f) => TARGET_FIELDS[f.target_field] || f.target_field },
+  { key: 'country', header: 'Country', value: (f) => f.country || 'All' },
+  { key: 'state', header: 'State', value: (f) => (f.active ? 'On' : 'Off') },
+]
+const COLUMN_EXPORT = [
+  { key: 'column', header: 'Column' },
+  { key: 'filled', header: 'Filled' },
+  { key: 'blank', header: 'Blank' },
+  { key: 'pct', header: '% filled', value: (c) => c.pct ?? 'N/A' },
+]
 
 export default function ConsoleDataLearning() {
   const [country, setCountry] = useState('All')
   const [field, setField] = useState(SUGGESTABLE_FIELDS[0] || 'brand')
 
-  const [state, setState] = useState({ loading: true, error: null })
+  const [state, setState] = useState({ loading: true, error: null, at: null })
+  const [tab, setTab] = useUrlTab(TABS, 'suggestions')
   const [gap, setGap] = useState([])
   const [suggestions, setSuggestions] = useState([])
   const [facts, setFacts] = useState([])
@@ -84,7 +104,7 @@ export default function ConsoleDataLearning() {
   })
 
   const load = useCallback(async () => {
-    setState({ loading: true, error: null })
+    setState((s) => ({ ...s, loading: true, error: null }))
     try {
       const [gapJson, sugRaw, factRaw, masterJson] = await Promise.all([
         getTyreGapOverview({ country }),
@@ -96,53 +116,58 @@ export default function ConsoleDataLearning() {
       setSuggestions(shapeSuggestions(sugRaw))
       setFacts(Array.isArray(factRaw) ? factRaw : [])
       setMaster(shapeMasterCompleteness(masterJson))
-      setState({ loading: false, error: null })
+      setState({ loading: false, error: null, at: new Date() })
     } catch (e) {
-      setState({ loading: false, error: toUserMessage(e) })
+      setState({ loading: false, error: toUserMessage(e), at: null })
     }
   }, [country, field])
 
   useEffect(() => { load() }, [load])
 
   const sugSummary = useMemo(() => suggestionSummary(suggestions), [suggestions])
-  const shownSuggestions = useMemo(() => {
-    const q = suggestSearch.trim().toUpperCase()
-    if (!q) return suggestions
-    return suggestions.filter(
-      (r) => String(r.serialNo).toUpperCase().includes(q) || String(r.value).toUpperCase().includes(q),
-    )
-  }, [suggestions, suggestSearch])
+  const shownSuggestions = useMemo(() => searchRows(suggestions, suggestSearch, ['serialNo', 'value']), [suggestions, suggestSearch])
 
   const fieldLabel = TARGET_FIELDS[field] || field
 
-  const sugSort = useTableSort(shownSuggestions, { key: 'rows', dir: 'desc' })
-  const shownFacts = useMemo(() => {
-    const q = factSearch.trim().toUpperCase()
-    if (!q) return facts
-    return facts.filter((f) => [f.match_value, f.target_value, f.country].some((v) => String(v || '').toUpperCase().includes(q)))
-  }, [facts, factSearch])
-  const factSort = useTableSort(shownFacts, { key: 'match_value', dir: 'asc' }, FACT_ACCESSORS)
+  const sugSort = useTableSort({ key: 'rows', dir: 'desc' })
+  const sugSorted = useMemo(() => sortRows(shownSuggestions, sugSort.sort), [shownSuggestions, sugSort.sort])
+  const sugPaged = usePaged(sugSorted, 25)
+  const shownFacts = useMemo(() => searchRows(facts, factSearch, ['match_value', 'target_value', 'country']), [facts, factSearch])
+  const factSort = useTableSort({ key: 'match_value', dir: 'asc' })
+  const factSorted = useMemo(() => sortRows(shownFacts, factSort.sort, FACT_ACCESSORS), [shownFacts, factSort.sort])
+  const factPaged = usePaged(factSorted, 25)
   const shownColumns = useMemo(() => (lowFillOnly
     ? master.columns.filter((c) => c.pct != null && c.pct < LOW_FILL_PCT)
     : master.columns), [master.columns, lowFillOnly])
-  const colSort = useTableSort(shownColumns, { key: 'pct', dir: 'asc' })
+  const colSort = useTableSort({ key: 'pct', dir: 'asc' })
+  const colSorted = useMemo(() => sortRows(shownColumns, colSort.sort), [shownColumns, colSort.sort])
+  const colPaged = usePaged(colSorted, 20)
   const lowFillCount = useMemo(() => master.columns.filter((c) => c.pct != null && c.pct < LOW_FILL_PCT).length, [master.columns])
+  const offRules = useMemo(() => facts.filter((f) => !f.active).length, [facts])
 
-  const exportSuggestions = () => exportToExcel(
-    sugSort.sorted.map((r) => ({ serial: r.serialNo, country: r.country || 'All', rows: r.rows, value: r.value, source: r.source === 'self' ? 'Same serial' : 'Master' })),
-    ['serial', 'country', 'rows', 'value', 'source'], ['Serial', 'Country', 'Rows', `Suggested ${fieldLabel}`, 'Source'],
-    reportFileName('TyrePulse Learning Suggestions', fieldLabel, country),
-  )
-  const exportFacts = () => exportToExcel(
-    factSort.sorted.map((f) => ({ match: `${matchTypeLabel(f.match_type)} ${f.match_value}`, value: f.target_value, field: TARGET_FIELDS[f.target_field] || f.target_field, country: f.country || 'All', state: f.active ? 'On' : 'Off' })),
-    ['match', 'value', 'field', 'country', 'state'], ['Rule', 'Fills with', 'Field', 'Country', 'State'],
-    reportFileName('TyrePulse Learned Rules', country),
-  )
-  const exportColumns = () => exportToExcel(
-    colSort.sorted.map((c) => ({ column: c.column, filled: c.filled, blank: c.blank, pct: c.pct ?? 'N/A' })),
-    ['column', 'filled', 'blank', 'pct'], ['Column', 'Filled', 'Blank', '% filled'],
-    reportFileName('TyrePulse Master File Completeness'),
-  )
+  const suggestionExport = useMemo(() => [
+    { key: 'serial', header: 'Serial', value: (r) => r.serialNo },
+    { key: 'country', header: 'Country', value: (r) => r.country || 'All' },
+    { key: 'rows', header: 'Rows' },
+    { key: 'value', header: `Suggested ${fieldLabel}` },
+    { key: 'source', header: 'Source', value: (r) => (r.source === 'self' ? 'Same serial' : 'Master') },
+  ], [fieldLabel])
+
+  const attention = useMemo(() => {
+    const out = []
+    const recoverable = gap.filter((g) => g.recoverable > 0).sort((a, b) => b.recoverable - a.recoverable)
+    if (recoverable[0]) {
+      const g = recoverable[0]
+      out.push({ key: `rec:${g.field}`, tone: 'warning', title: `${num(g.recoverable)} blank ${String(g.label).toLowerCase()} values can be recovered`,
+        detail: 'Confirm the suggestions to fill them now and on future imports.',
+        action: SUGGESTABLE_FIELDS.includes(g.field)
+          ? { label: 'Review', onClick: () => { setField(g.field); setTab('suggestions') } }
+          : { label: 'Teach it', onClick: () => setTab('teach') } })
+    }
+    if (lowFillCount) out.push({ key: 'low', tone: 'info', title: `${lowFillCount} master-file column${lowFillCount === 1 ? '' : 's'} filled below ${LOW_FILL_PCT}%`,
+      detail: 'Learn from those columns with care.', action: { label: 'Show them', onClick: () => { setLowFillOnly(true); setTab('master') } } })
+    return out
+  }, [gap, lowFillCount, setTab])
 
   /* ── confirm a serial suggestion ──────────────────────────────────────── */
   const confirmSuggestion = async (row) => {
@@ -245,23 +270,22 @@ export default function ConsoleDataLearning() {
 
 
   const header = (
-    <div className="flex items-start justify-between gap-3 flex-wrap">
-      <div>
-        <h1 className="text-lg font-semibold text-white flex items-center gap-2">
-          <GraduationCap size={18} className="text-orange-400" aria-hidden="true" /> Data Learning
-        </h1>
-        <p className="text-xs text-gray-400 mt-1">
-          Confirm once: fix every matching row now and auto-apply to future imports. Never touches cost.
-        </p>
-      </div>
-      <div className="flex items-center gap-2">
-        <Select ariaLabel="Country" value={country} onChange={setCountry} options={COUNTRY_OPTS} className="w-40" />
-        <Btn icon={RefreshCw} onClick={load} busy={state.loading}>Refresh</Btn>
-      </div>
-    </div>
+    <PageHeader
+      icon={GraduationCap}
+      title="Data Learning"
+      purpose="Confirm once: fix every matching row now and auto-apply to future imports. Never touches cost."
+      refreshedAt={state.at}
+      onRefresh={load}
+      refreshing={state.loading}
+      actions={<Select ariaLabel="Country" value={country} onChange={setCountry} options={COUNTRY_OPTS} className="w-40" />}
+    />
   )
 
-  if (state.loading) return <div className="space-y-4">{header}<LoadingState label="Reading tyre data gaps and learned facts" rows={6} /></div>
+  const readFailed = (
+    <Panel><Note icon={AlertTriangle} tone="danger">This view could not be loaded, so it is not shown rather than shown empty. Use Retry above.</Note></Panel>
+  )
+
+  if (state.loading && !state.at) return <div className="space-y-4">{header}<LoadingState label="Reading tyre data gaps and learned facts" rows={6} /></div>
 
   return (
     <div className="space-y-4">
@@ -278,41 +302,50 @@ export default function ConsoleDataLearning() {
       {/* A failed read hides the read-derived panels: an empty gap list or
           suggestion list would claim "nothing to fix". The error + Retry above
           says what happened; the manual teach form stays usable. */}
-      {!state.error && (<>
-      {/* ── gap overview ─────────────────────────────────────────────────── */}
-      <Panel flush>
-        <div className="p-4 pb-0">
-          <PanelHeader
-            icon={ListChecks}
-            title="Where the gaps are"
-            subtitle="Blank values per field and how many can be recovered from another row of the same serial or the master upload."
-          />
-        </div>
-        {gap.length === 0 ? (
-          <EmptyState
-            icon={ListChecks}
-            title="No gap data"
-            reason="There are no learnable fields for this country, or the gap overview function is not deployed in this workspace yet."
-          />
+      {!state.error && (
+        gap.length === 0 ? (
+          <Panel>
+            <EmptyState
+              icon={ListChecks}
+              title="No gap data"
+              reason="There are no learnable fields for this country, or the gap overview function is not deployed in this workspace yet."
+            />
+          </Panel>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 p-4">
-            {gap.map((g) => (
-              <StatTile
-                key={g.field}
-                label={`${g.label}: blank`}
-                value={num(g.blank)}
-                sub={
-                  (g.recoverable != null ? `${num(g.recoverable)} recoverable` : 'recoverable N/A')
-                  + ` | ${pct(g.pct)} filled of ${num(g.total)}`
-                }
-                tone={g.blank > 0 ? (g.recoverable ? 'warning' : 'default') : 'good'}
-              />
-            ))}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {gap.map((g) => {
+              const suggestable = SUGGESTABLE_FIELDS.includes(g.field)
+              return (
+                <StatTile
+                  key={g.field}
+                  label={`${g.label}: blank`}
+                  value={num(g.blank)}
+                  icon={ListChecks}
+                  sub={
+                    (g.recoverable != null ? `${num(g.recoverable)} recoverable` : 'recoverable N/A')
+                    + ` | ${pct(g.pct)} filled of ${num(g.total)}`
+                  }
+                  tone={g.blank > 0 ? (g.recoverable ? 'warning' : 'default') : 'good'}
+                  onClick={suggestable ? () => { setField(g.field); setTab('suggestions') } : undefined}
+                  active={suggestable && field === g.field && tab === 'suggestions'}
+                />
+              )
+            })}
           </div>
-        )}
-      </Panel>
+        )
+      )}
+
+      {!state.error && <AttentionList items={attention} />}
+
+      <Segmented ariaLabel="Data learning views" value={tab} onChange={setTab} options={[
+        { key: 'suggestions', label: 'Suggestions', count: state.error ? undefined : suggestions.length },
+        { key: 'teach', label: 'Teach it directly' },
+        { key: 'rules', label: 'What it has learned', count: state.error ? undefined : facts.length },
+        { key: 'master', label: 'Master file completeness', count: state.error ? undefined : master.columns.length },
+      ]} />
 
       {/* ── suggestions ──────────────────────────────────────────────────── */}
+      {tab === 'suggestions' && (state.error ? readFailed : (
       <Panel flush>
         <div className="p-4 pb-3">
           <PanelHeader
@@ -325,7 +358,7 @@ export default function ConsoleDataLearning() {
                 {lastBatch && (
                   <Btn icon={Undo2} onClick={undoLast} busy={busy === 'undo'}>Undo last</Btn>
                 )}
-                <Btn icon={Download} onClick={exportSuggestions} disabled={!sugSort.sorted.length}>Excel</Btn>
+                <ExportButtons rows={sugSorted} columns={suggestionExport} title={`TyrePulse Learning Suggestions ${fieldLabel} ${country}`} />
               </div>
             )}
           />
@@ -357,6 +390,7 @@ export default function ConsoleDataLearning() {
             }
           />
         ) : (
+          <div className="px-4 pb-4">
           <Table>
             <THead>
               <Th sortKey="serialNo" sort={sugSort.sort} onSort={sugSort.onSort}>Serial</Th>
@@ -367,7 +401,7 @@ export default function ConsoleDataLearning() {
               <Th align="right">Confirm</Th>
             </THead>
             <tbody>
-              {sugSort.sorted.map((r) => {
+              {sugPaged.pageRows.map((r) => {
                 const key = `sug:${r.serialNo}:${r.country}`
                 return (
                   <Tr key={key}>
@@ -395,11 +429,14 @@ export default function ConsoleDataLearning() {
               })}
             </tbody>
           </Table>
+          <Pager {...sugPaged} label="serials" />
+          </div>
         )}
       </Panel>
-      </>)}
+      ))}
 
       {/* ── manual teach ─────────────────────────────────────────────────── */}
+      {tab === 'teach' && (
       <Panel>
         <PanelHeader
           icon={Wand2}
@@ -455,18 +492,19 @@ export default function ConsoleDataLearning() {
           </Btn>
         </div>
       </Panel>
+      )}
 
-      {!state.error && (<>
       {/* ── learned rules ────────────────────────────────────────────────── */}
+      {tab === 'rules' && (state.error ? readFailed : (
       <Panel flush>
         <div className="p-4 pb-0">
           <PanelHeader
             icon={BookOpen}
             title="What it has learned"
-            subtitle="Confirmed rules that fill new rows automatically. Turn one off to stop future auto-fill; past fills stay."
+            subtitle={`Confirmed rules that fill new rows automatically. Turn one off to stop future auto-fill; past fills stay.${offRules ? ` ${offRules} turned off.` : ''}`}
             actions={<>
               <SearchInput value={factSearch} onChange={setFactSearch} placeholder="Search rules" className="w-48" />
-              <Btn icon={Download} onClick={exportFacts} disabled={!factSort.sorted.length}>Excel</Btn>
+              <ExportButtons rows={factSorted} columns={FACT_EXPORT} title={`TyrePulse Learned Rules ${country}`} />
             </>}
           />
         </div>
@@ -476,9 +514,10 @@ export default function ConsoleDataLearning() {
             title="Nothing learned yet"
             reason="Confirm a suggestion or teach a fact above and it will be recorded here."
           />
-        ) : factSort.sorted.length === 0 ? (
+        ) : factSorted.length === 0 ? (
           <EmptyState icon={BookOpen} title="No rules match your search" reason="Clear the search to see every learned rule." />
         ) : (
+          <div className="px-4 pb-4">
           <Table>
             <THead>
               <Th sortKey="match_value" sort={factSort.sort} onSort={factSort.onSort}>Rule</Th>
@@ -488,7 +527,7 @@ export default function ConsoleDataLearning() {
               <Th align="right">Action</Th>
             </THead>
             <tbody>
-              {factSort.sorted.map((f) => (
+              {factPaged.pageRows.map((f) => (
                 <Tr key={f.id}>
                   <Td>
                     <span className="text-gray-400">{matchTypeLabel(f.match_type)}</span>{' '}
@@ -516,10 +555,14 @@ export default function ConsoleDataLearning() {
               ))}
             </tbody>
           </Table>
+          <Pager {...factPaged} label="rules" />
+          </div>
         )}
       </Panel>
+      ))}
 
       {/* ── master file completeness ─────────────────────────────────────── */}
+      {tab === 'master' && (state.error ? readFailed : (
       <Panel flush>
         <div className="p-4 pb-3">
           <PanelHeader
@@ -532,7 +575,7 @@ export default function ConsoleDataLearning() {
                   {lowFillOnly ? 'Show all columns' : `Only low fill (${lowFillCount})`}
                 </Btn>
               )}
-              <Btn icon={Download} onClick={exportColumns} disabled={!colSort.sorted.length}>Excel</Btn>
+              <ExportButtons rows={colSorted} columns={COLUMN_EXPORT} title="TyrePulse Master File Completeness" />
             </>}
           />
           <Note icon={AlertTriangle} tone="warning">
@@ -546,7 +589,7 @@ export default function ConsoleDataLearning() {
             reason="The master upload staging table holds no rows, or its completeness function is not deployed in this workspace yet."
           />
         ) : (
-          <div className="max-h-96 overflow-y-auto">
+          <div className="px-4 pb-4">
             <Table>
               <THead>
                 <Th sortKey="column" sort={colSort.sort} onSort={colSort.onSort}>Column</Th>
@@ -555,7 +598,7 @@ export default function ConsoleDataLearning() {
                 <Th sortKey="pct" sort={colSort.sort} onSort={colSort.onSort} align="right">% filled</Th>
               </THead>
               <tbody>
-                {colSort.sorted.map((c) => (
+                {colPaged.pageRows.map((c) => (
                   <Tr key={c.column}>
                     <Td><span className="font-mono text-[11px] text-gray-300">{c.column}</span></Td>
                     <Td align="right">{num(c.filled)}</Td>
@@ -567,10 +610,11 @@ export default function ConsoleDataLearning() {
                 ))}
               </tbody>
             </Table>
+            <Pager {...colPaged} label="columns" />
           </div>
         )}
       </Panel>
-      </>)}
+      ))}
     </div>
   )
 }

@@ -23,10 +23,13 @@
  * first build saved the moment the dropdown moved, so a mis-click silently
  * rewrote a category and there was no list of what you had touched. Now choices
  * collect in a tray you can review, undo individually, and save together.
+ *
+ * The item list is paged, and the evidence behind an item opens in a modal
+ * rather than expanding the table row.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  Shuffle, RefreshCw, AlertTriangle, Check, Undo2, Download, Info, ArrowRight,
+  Shuffle, RefreshCw, AlertTriangle, Check, Undo2, Info, ArrowRight,
   ListChecks, Inbox, ChevronRight, Layers, Trash2, Sparkles,
 } from 'lucide-react'
 import {
@@ -38,10 +41,11 @@ import {
   summariseCountries, OVERRIDE_CATEGORIES, overrideMovesMoney, decisionKey,
   sortDecisions, SORTS,
 } from '../../../lib/classificationDecisions'
-import { exportToExcel, reportFileName } from '../../../lib/exportUtils'
+import ExportButtons from '../shared/ExportButtons'
+import { usePaged, Pager } from '../dataTrust/kit'
 import { toUserMessage } from '../../../lib/safeError'
 import {
-  Panel, PanelHeader, Note, StatTile, ProportionBar, Badge, Code, Btn, Segmented,
+  Panel, PanelHeader, Note, ProportionBar, Badge, Code, Btn, Segmented,
   SearchInput, Select, Toolbar, Table, THead, Th, Tr, Td, LoadingState, EmptyState,
   ErrorState, Modal,
 } from '../../components/ui'
@@ -58,6 +62,22 @@ const money = (v, ccy) => (Number.isFinite(Number(v))
   : 'N/A')
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v).toLocaleString() : 'N/A')
 const pct = (v) => (Number.isFinite(Number(v)) ? `${(Number(v) * 100).toFixed(1)}%` : 'N/A')
+
+const DECISION_EXPORT = [
+  { key: 'country', header: 'Country' },
+  { key: 'item_code', header: 'Item code' },
+  { key: 'item_name', header: 'Item' },
+  { key: 'your_file_said', header: 'Your file said', value: (r) => bucketLabel(r.erp_said) },
+  { key: 'we_filed_it_as', header: 'We filed it as', value: (r) => bucketLabel(r.we_said) },
+  { key: 'what_happened', header: 'What happened', value: (r) => movementSentence(r) },
+  { key: 'why', header: 'Why', value: (r) => reasonLabel(r.decided_by) },
+  { key: 'confidence', header: 'Confidence' },
+  { key: 'lines', header: 'Lines', value: (r) => r.rows },
+  { key: 'value', header: 'Value' },
+  { key: 'currency', header: 'Currency' },
+  { key: 'reviewed', header: 'Reviewed', value: (r) => (r.reviewed ? 'yes' : 'no') },
+  { key: 'needs_a_look', header: 'Needs a look', value: (r) => (needsAttention(r) ? attentionReason(r) : '') },
+]
 
 const BUCKET_TONE = { tyre: 'info', oil: 'warning', spare: 'default', 'not stated': 'quiet' }
 const Bucket = ({ b }) => <Badge tone={BUCKET_TONE[b] || 'default'}>{bucketLabel(b)}</Badge>
@@ -106,7 +126,7 @@ export default function DecisionsPanel() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
-  const [expanded, setExpanded] = useState(null)   // decisionKey with evidence open
+  const [expanded, setExpanded] = useState(null)   // row whose evidence is open in the modal
 
   // Staged changes: {decisionKey: {row, category}}. Nothing is written until save.
   const [staged, setStaged] = useState({})
@@ -140,6 +160,7 @@ export default function DecisionsPanel() {
     const base = onlyFlagged ? allItems.filter(needsAttention) : allItems
     return sortDecisions(base, sort)
   }, [allItems, onlyFlagged, sort])
+  const paged = usePaged(items, 25)
 
   const stagedList = Object.values(staged)
   const stagedThatMove = stagedList.filter((s) => overrideMovesMoney(s.row, s.category)).length
@@ -220,24 +241,6 @@ export default function DecisionsPanel() {
     } finally { setApplying(false) }
   }
 
-  function exportRows() {
-    exportToExcel(
-      items.map((r) => ({
-        country: r.country, item_code: r.item_code, item_name: r.item_name,
-        your_file_said: bucketLabel(r.erp_said), we_filed_it_as: bucketLabel(r.we_said),
-        what_happened: movementSentence(r), why: reasonLabel(r.decided_by),
-        confidence: r.confidence, lines: r.rows, value: r.value, currency: r.currency,
-        reviewed: r.reviewed ? 'yes' : 'no',
-        needs_a_look: needsAttention(r) ? attentionReason(r) : '',
-      })),
-      ['country', 'item_code', 'item_name', 'your_file_said', 'we_filed_it_as', 'what_happened',
-        'why', 'confidence', 'lines', 'value', 'currency', 'reviewed', 'needs_a_look'],
-      ['Country', 'Item code', 'Item', 'Your file said', 'We filed it as', 'What happened',
-        'Why', 'Confidence', 'Lines', 'Value', 'Currency', 'Reviewed', 'Needs a look'],
-      reportFileName('Classification decisions', VIEWS.find((v) => v.key === view)?.label || ''),
-    )
-  }
-
   return (
     <div className="space-y-4">
       <Note icon={Info} tone="accent">
@@ -305,7 +308,8 @@ export default function DecisionsPanel() {
         />
         <SearchInput value={search} onChange={setSearch} placeholder="Item code or description" className="w-56" />
         <Btn icon={RefreshCw} onClick={load} busy={loading}>Refresh</Btn>
-        <Btn icon={Download} onClick={exportRows} disabled={!items.length}>Excel</Btn>
+        <ExportButtons rows={items} columns={DECISION_EXPORT}
+          title={`Classification decisions ${VIEWS.find((v) => v.key === view)?.label || ''}`} />
       </Toolbar>
 
       {flaggedCount > 0 && (
@@ -421,7 +425,7 @@ export default function DecisionsPanel() {
 
       {loading ? (
         <LoadingState label="Reading the decisions behind your data" rows={6} />
-      ) : !data || data.ok === false ? (
+      ) : error && !data ? null : !data || data.ok === false ? (
         <EmptyState
           icon={Inbox}
           title="This view is not available yet"
@@ -445,6 +449,7 @@ export default function DecisionsPanel() {
           action={onlyFlagged ? <Btn onClick={() => setOnlyFlagged(false)}>Show everything</Btn> : undefined}
         />
       ) : (
+        <>
         <Table>
           <THead>
             <Th>Item</Th>
@@ -456,18 +461,17 @@ export default function DecisionsPanel() {
             <Th>Change it to</Th>
           </THead>
           <tbody>
-            {items.map((r) => {
+            {paged.pageRows.map((r) => {
               const key = decisionKey(r)
               const flag = needsAttention(r)
               const chosen = staged[key]?.category ?? (r.reviewed_category || '')
-              const isOpen = expanded === key
-              return [
+              return (
                 <Tr key={key} tone={flag ? 'warning' : undefined}>
                   <Td>
-                    <button onClick={() => setExpanded(isOpen ? null : key)} aria-expanded={isOpen}
-                      className="flex items-start gap-1.5 text-left group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
-                      <ChevronRight size={12}
-                        className={`mt-1 text-gray-600 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
+                    <button type="button" onClick={() => setExpanded(r)} aria-haspopup="dialog"
+                      title="Show the lines behind this item"
+                      className="flex items-start gap-1.5 text-left group rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
+                      <ChevronRight size={12} className="mt-1 text-gray-600" aria-hidden="true" />
                       <span className="min-w-0">
                         <span className="block font-mono text-gray-200 group-hover:text-orange-300">{r.item_code}</span>
                         <span className="block text-gray-500 max-w-[300px] truncate" title={r.item_name}>{r.item_name}</span>
@@ -504,22 +508,33 @@ export default function DecisionsPanel() {
                     />
                     {staged[key] && <p className="text-[10px] text-orange-400 mt-1">Staged, not saved</p>}
                   </Td>
-                </Tr>,
-                isOpen && (
-                  <tr key={`${key}-ev`} className="border-t border-gray-800/40 bg-gray-950/60">
-                    <Td colSpan={7}>
-                      <div className="pl-5 py-1 space-y-2">
-                        <p className="text-xs text-gray-400">{movementSentence(r)}</p>
-                        <LineEvidence country={r.country} itemCode={r.item_code} />
-                      </div>
-                    </Td>
-                  </tr>
-                ),
-              ]
+                </Tr>
+              )
             })}
           </tbody>
         </Table>
+        <Pager {...paged} label="items" />
+        </>
       )}
+
+      <Modal open={!!expanded} onClose={() => setExpanded(null)} width="max-w-2xl"
+        title={expanded ? `${expanded.item_code} ${expanded.item_name || ''}`.trim() : ''}
+        subtitle={expanded ? `${expanded.country} | ${num(expanded.rows)} lines | ${money(expanded.value, expanded.currency)}` : undefined}
+        footer={<Btn onClick={() => setExpanded(null)}>Close</Btn>}>
+        {expanded && (
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Bucket b={expanded.erp_said} />
+              <ArrowRight size={12} className="text-gray-600" aria-hidden="true" />
+              <Bucket b={expanded.we_said} />
+              <span className="text-xs text-gray-400">{reasonLabel(expanded.decided_by)}</span>
+            </div>
+            <p className="text-xs text-gray-400">{movementSentence(expanded)}</p>
+            {needsAttention(expanded) && <Note icon={AlertTriangle} tone="warning">{attentionReason(expanded)}</Note>}
+            <LineEvidence country={expanded.country} itemCode={expanded.item_code} />
+          </div>
+        )}
+      </Modal>
 
       {allItems.length >= (data?.limit || 300) && (
         <p className="text-[11px] text-gray-500">

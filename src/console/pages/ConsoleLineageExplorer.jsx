@@ -9,14 +9,21 @@
  *
  * Honest by construction: an asset with no recorded lineage says so rather than
  * looking broken, and nothing is inferred that the graph does not carry.
+ *
+ * Layout: header, kind tiles, a paged asset picker and the lineage of the
+ * selected asset split into views (diagram / upstream / downstream / edges).
+ * The selected asset lives in ?asset=<asset_id> so another console page (the
+ * Metric Catalogue) can deep-link straight to a trace. Clicking a source or an
+ * affected asset re-centres the trace on it.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   GitBranch, ArrowUp, ArrowDown, ArrowRight, Database, BarChart3,
-  LayoutDashboard, RefreshCw, AlertTriangle, Download,
+  LayoutDashboard, AlertTriangle, Network,
 } from 'lucide-react'
 import {
-  Panel, PanelHeader, Note, StatTile, Badge, Btn, Select, SearchInput,
+  Panel, PanelHeader, Note, StatTile, Badge, Select, SearchInput, Segmented,
   Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, Toolbar,
 } from '../components/ui'
 import { useChartTheme } from '../components/ui/charts'
@@ -26,7 +33,9 @@ import {
 } from '../../lib/lineageOps'
 import EChart from '../../components/charts/EChart'
 import { toUserMessage } from '../../lib/safeError'
-import { exportToExcel, reportFileName } from '../../lib/exportUtils'
+import { sortRows, searchRows, useTableSort } from '../../lib/consoleTable'
+import ExportButtons from './shared/ExportButtons'
+import { PageHeader, usePaged, Pager } from './dataTrust/kit'
 
 const nf = new Intl.NumberFormat('en-US')
 
@@ -123,6 +132,13 @@ const KIND_FILTERS = [
   { value: 'dashboard', label: 'Dashboards' },
 ]
 
+const LINEAGE_EXPORT = [
+  { key: 'direction', header: 'Direction' },
+  { key: 'name', header: 'Asset' },
+  { key: 'kind', header: 'Kind', value: (r) => assetKindLabel(r.kind) },
+  { key: 'module', header: 'Module', value: (r) => r.module || 'Not set' },
+]
+
 function AssetBadge({ kind }) {
   return (
     <Badge tone={kindTone(kind)} icon={kindIcon(kind)}>{assetKindLabel(kind)}</Badge>
@@ -130,12 +146,13 @@ function AssetBadge({ kind }) {
 }
 
 export default function ConsoleLineageExplorer() {
-  const [assets, setAssets] = useState({ loading: true, error: null, rows: [] })
+  const [assets, setAssets] = useState({ loading: true, error: null, rows: [], at: null })
   const [kind, setKind] = useState('')
   const [search, setSearch] = useState('')
-  const [selected, setSelected] = useState(null)   // asset row
+  const [params, setParams] = useSearchParams()
+  const selectedId = params.get('asset') || null
   const [detail, setDetail] = useState(null)        // { graph, impact, loading, error }
-  const [showEdges, setShowEdges] = useState(false)
+  const [view, setView] = useState('diagram')
 
   const loadAssets = useCallback(async () => {
     setAssets((s) => ({ ...s, loading: true, error: null }))
@@ -143,9 +160,9 @@ export default function ConsoleLineageExplorer() {
       // Read every kind once and filter locally, so the per-kind tiles stay
       // true while one kind is selected.
       const rows = await listDataAssets({ kind: null })
-      setAssets({ loading: false, error: null, rows: Array.isArray(rows) ? rows : [] })
+      setAssets({ loading: false, error: null, rows: Array.isArray(rows) ? rows : [], at: new Date() })
     } catch (e) {
-      setAssets({ loading: false, error: toUserMessage(e), rows: [] })
+      setAssets({ loading: false, error: toUserMessage(e), rows: [], at: null })
     }
   }, [])
 
@@ -158,53 +175,55 @@ export default function ConsoleLineageExplorer() {
   }, [assets.rows])
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
     const rows = (assets.rows || []).filter((a) => !kind || a.kind === kind)
-    if (!q) return rows
-    return rows.filter((a) =>
-      String(a.name || '').toLowerCase().includes(q)
-      || String(a.module || '').toLowerCase().includes(q)
-      || String(a.asset_id || '').toLowerCase().includes(q))
+    return searchRows(rows, search, ['name', 'module', 'asset_id'])
   }, [assets.rows, search, kind])
+  const picker = usePaged(filtered, 20)
+
+  // An asset named in the URL but not registered still traces: the graph RPC
+  // is keyed on the id, so a deep link from another page is never a dead end.
+  const selected = useMemo(() => {
+    if (!selectedId) return null
+    return (assets.rows || []).find((a) => a.asset_id === selectedId)
+      || { asset_id: selectedId, kind: selectedId.split(':')[0] || null, name: assetShortName(selectedId), module: null }
+  }, [selectedId, assets.rows])
 
   const loadDetail = useCallback(async (asset) => {
     if (!asset) return
     setDetail({ graph: null, impact: null, loading: true, error: null })
-    setShowEdges(false)
     try {
       const [graphJson, impactJson] = await Promise.all([
         getLineageGraph(asset.asset_id, { direction: 'both', depth: 4 }),
         getDownstreamImpact(asset.asset_id),
       ])
-      setDetail({
-        graph: shapeGraph(graphJson),
-        impact: shapeImpact(impactJson),
-        loading: false,
-        error: null,
-      })
+      setDetail({ graph: shapeGraph(graphJson), impact: shapeImpact(impactJson), loading: false, error: null })
     } catch (e) {
       setDetail({ graph: null, impact: null, loading: false, error: toUserMessage(e) })
     }
   }, [])
 
-  const selectAsset = (asset) => {
-    setSelected(asset)
-    loadDetail(asset)
-  }
+  useEffect(() => {
+    if (selectedId) loadDetail({ asset_id: selectedId })
+    else setDetail(null)
+  }, [selectedId, loadDetail])
+
+  const selectAsset = useCallback((assetOrId) => {
+    const id = typeof assetOrId === 'string' ? assetOrId : assetOrId?.asset_id
+    if (!id) return
+    setView('diagram')
+    setParams((prev) => { const p = new URLSearchParams(prev); p.set('asset', id); return p }, { replace: false })
+  }, [setParams])
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-lg font-semibold text-white flex items-center gap-2">
-            <GitBranch size={18} className="text-orange-400" aria-hidden="true" /> Data Lineage Explorer
-          </h1>
-          <p className="text-xs text-gray-400 mt-1">
-            Trace any table, metric or dashboard upstream to its sources and downstream to everything it affects.
-          </p>
-        </div>
-        <Btn icon={RefreshCw} onClick={loadAssets} busy={assets.loading}>Refresh</Btn>
-      </div>
+      <PageHeader
+        icon={GitBranch}
+        title="Data Lineage Explorer"
+        purpose="Trace any table, metric or dashboard upstream to its sources and downstream to everything it affects."
+        refreshedAt={assets.at}
+        onRefresh={loadAssets}
+        refreshing={assets.loading}
+      />
 
       {!assets.loading && !assets.error && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -224,18 +243,8 @@ export default function ConsoleLineageExplorer() {
         <Panel className="lg:col-span-1">
           <PanelHeader icon={Database} title="Assets" subtitle="Pick one to trace its lineage." />
           <Toolbar className="mb-3">
-            <Select ariaLabel="Asset kind"
-              value={kind}
-              onChange={setKind}
-              options={KIND_FILTERS}
-              className="w-40"
-            />
-            <SearchInput
-              value={search}
-              onChange={setSearch}
-              placeholder="Search name or module"
-              className="flex-1 min-w-[10rem]"
-            />
+            <Select ariaLabel="Asset kind" value={kind} onChange={setKind} options={KIND_FILTERS} className="w-40" />
+            <SearchInput value={search} onChange={setSearch} placeholder="Search name or module" className="flex-1 min-w-[10rem]" />
           </Toolbar>
 
           {assets.loading ? (
@@ -253,29 +262,33 @@ export default function ConsoleLineageExplorer() {
               }
             />
           ) : (
-            <div className="max-h-[32rem] overflow-y-auto space-y-1 pr-1">
-              {filtered.map((a) => {
-                const on = selected?.asset_id === a.asset_id
-                return (
-                  <button
-                    key={a.asset_id}
-                    onClick={() => selectAsset(a)}
-                    aria-pressed={on}
-                    className={`w-full text-left rounded-lg border px-3 py-2 transition-colors ${
-                      on
-                        ? 'border-orange-600/60 bg-orange-950/20'
-                        : 'border-gray-800 bg-gray-900/40 hover:border-gray-700 hover:bg-gray-900'
-                    } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-medium text-gray-100 truncate" title={a.name || a.asset_id}>{a.name || assetShortName(a.asset_id)}</span>
-                      <AssetBadge kind={a.kind} />
-                    </div>
-                    {a.module && <p className="text-[11px] text-gray-400 mt-0.5 truncate">{a.module}</p>}
-                  </button>
-                )
-              })}
-            </div>
+            <>
+              <div className="space-y-1">
+                {picker.pageRows.map((a) => {
+                  const on = selectedId === a.asset_id
+                  return (
+                    <button
+                      key={a.asset_id}
+                      type="button"
+                      onClick={() => selectAsset(a)}
+                      aria-pressed={on}
+                      className={`w-full text-left rounded-lg border px-3 py-2 transition-colors ${
+                        on
+                          ? 'border-orange-600/60 bg-orange-950/20'
+                          : 'border-gray-800 bg-gray-900/40 hover:border-gray-700 hover:bg-gray-900'
+                      } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-medium text-gray-100 truncate" title={a.name || a.asset_id}>{a.name || assetShortName(a.asset_id)}</span>
+                        <AssetBadge kind={a.kind} />
+                      </div>
+                      {a.module && <p className="text-[11px] text-gray-400 mt-0.5 truncate">{a.module}</p>}
+                    </button>
+                  )
+                })}
+              </div>
+              <Pager {...picker} label="assets" />
+            </>
           )}
         </Panel>
 
@@ -296,8 +309,9 @@ export default function ConsoleLineageExplorer() {
               asset={selected}
               graph={detail?.graph}
               impact={detail?.impact}
-              showEdges={showEdges}
-              onToggleEdges={() => setShowEdges((v) => !v)}
+              view={view}
+              onView={setView}
+              onSelect={selectAsset}
             />
           )}
         </Panel>
@@ -306,10 +320,39 @@ export default function ConsoleLineageExplorer() {
   )
 }
 
-function LineageDetail({ asset, graph, impact, showEdges, onToggleEdges }) {
-  const upstream = graph?.upstream || []
-  const downstream = graph?.downstream || []
-  const impacted = impact?.impacted || []
+function NodeTable({ rows, label, onSelect, emptyNote, withModule = true }) {
+  const { sort, onSort } = useTableSort({ key: 'name', dir: 'asc' })
+  const sorted = useMemo(() => sortRows(rows, sort), [rows, sort])
+  const paged = usePaged(sorted, 15)
+  if (!rows.length) return <Note>{emptyNote}</Note>
+  return (
+    <>
+      <Table>
+        <THead>
+          <Th sortKey="name" sort={sort} onSort={onSort}>{label}</Th>
+          <Th sortKey="kind" sort={sort} onSort={onSort}>Kind</Th>
+          {withModule && <Th sortKey="module" sort={sort} onSort={onSort}>Module</Th>}
+        </THead>
+        <tbody>
+          {paged.pageRows.map((n) => (
+            <Tr key={n.assetId} onClick={() => onSelect(n.assetId)} ariaLabel={`Trace ${n.name}`}>
+              <Td><span className="font-medium text-gray-100">{n.name}</span></Td>
+              <Td><AssetBadge kind={n.kind} /></Td>
+              {withModule && <Td>{n.module || 'Not set'}</Td>}
+            </Tr>
+          ))}
+        </tbody>
+      </Table>
+      <Pager {...paged} label="assets" />
+      <p className="text-[11px] text-gray-500 mt-1">Click an asset to re-centre the trace on it.</p>
+    </>
+  )
+}
+
+function LineageDetail({ asset, graph, impact, view, onView, onSelect }) {
+  const upstream = useMemo(() => graph?.upstream || [], [graph])
+  const downstream = useMemo(() => graph?.downstream || [], [graph])
+  const impacted = useMemo(() => impact?.impacted || [], [impact])
   const edges = graph?.edges || []
   const impactTotal = impact?.total || 0
   const nameById = useMemo(() => {
@@ -324,17 +367,13 @@ function LineageDetail({ asset, graph, impact, showEdges, onToggleEdges }) {
     () => (nothing ? null : buildLineageOption(asset, graph, impact, theme)),
     [nothing, asset, graph, impact, theme],
   )
-  const capped = upstream.length > GRAPH_CAP
-    || (impacted.length ? impacted.length : downstream.length) > GRAPH_CAP
+  const affected = useMemo(() => (impacted.length ? impacted : downstream), [impacted, downstream])
+  const capped = upstream.length > GRAPH_CAP || affected.length > GRAPH_CAP
 
-  function exportLineage() {
-    const out = [
-      ...upstream.map((n) => ({ direction: 'Upstream source', name: n.name, kind: assetKindLabel(n.kind), module: n.module || 'Not set' })),
-      ...(impacted.length ? impacted : downstream).map((n) => ({ direction: 'Downstream affected', name: n.name, kind: assetKindLabel(n.kind), module: n.module || 'Not set' })),
-    ]
-    exportToExcel(out, ['direction', 'name', 'kind', 'module'], ['Direction', 'Asset', 'Kind', 'Module'],
-      reportFileName('TyrePulse Lineage', asset.name || assetShortName(asset.asset_id)))
-  }
+  const exportRows = useMemo(() => [
+    ...upstream.map((n) => ({ ...n, direction: 'Upstream source' })),
+    ...affected.map((n) => ({ ...n, direction: 'Downstream affected' })),
+  ], [upstream, affected])
 
   return (
     <div className="space-y-4">
@@ -344,17 +383,19 @@ function LineageDetail({ asset, graph, impact, showEdges, onToggleEdges }) {
         subtitle={asset.module || 'Selected asset'}
         actions={<>
           <AssetBadge kind={asset.kind} />
-          <Btn icon={Download} onClick={exportLineage} disabled={nothing}>Excel</Btn>
+          <ExportButtons rows={exportRows} columns={LINEAGE_EXPORT} title={`TyrePulse Lineage ${asset.name || assetShortName(asset.asset_id)}`} />
         </>}
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatTile
           label="Upstream sources"
           value={nf.format(upstream.length)}
           sub={upstream.length ? 'feed this asset' : 'no recorded sources'}
           icon={ArrowUp}
           tone={upstream.length ? 'accent' : 'muted'}
+          onClick={upstream.length ? () => onView('upstream') : undefined}
+          active={view === 'upstream'}
         />
         <StatTile
           label="Downstream affected"
@@ -362,6 +403,8 @@ function LineageDetail({ asset, graph, impact, showEdges, onToggleEdges }) {
           sub={impactTotal ? 'items a change would touch' : 'nothing depends on it'}
           icon={ArrowDown}
           tone={impactTotal ? 'warning' : 'muted'}
+          onClick={affected.length ? () => onView('downstream') : undefined}
+          active={view === 'downstream'}
         />
         {impact?.counts?.metric != null && (
           <StatTile label="Metrics affected" value={nf.format(impact.counts.metric)} icon={BarChart3} />
@@ -379,117 +422,91 @@ function LineageDetail({ asset, graph, impact, showEdges, onToggleEdges }) {
         />
       ) : (
         <>
-          {/* visualization */}
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <GitBranch size={14} className="text-orange-400" aria-hidden="true" />
-              <h4 className="text-sm font-semibold text-gray-200">Visualization</h4>
-            </div>
-            <div className="rounded-lg border border-gray-800 bg-gray-950/40 p-2">
-              <EChart option={lineageOption} style={{ height: 360 }} ariaLabel="Lineage diagram" />
-            </div>
-            <p className="text-[11px] text-gray-400 mt-1">
-              Sources on the left feed this asset; arrows point to what a change affects. Drag to pan, scroll to zoom.
-              {capped ? ` Showing the first ${GRAPH_CAP} on each side; the tables below list every one.` : ''}
-            </p>
-          </div>
+          {impactTotal > 0 && (
+            <Note icon={AlertTriangle} tone="warning">
+              Changing this asset affects {nf.format(impactTotal)} item{impactTotal === 1 ? '' : 's'} downstream.
+            </Note>
+          )}
+          <Segmented ariaLabel="Lineage views" value={view} onChange={onView} options={[
+            { key: 'diagram', label: 'Diagram' },
+            { key: 'upstream', label: 'Upstream', count: upstream.length },
+            { key: 'downstream', label: 'Downstream', count: affected.length },
+            ...(edges.length ? [{ key: 'edges', label: 'Edges', count: edges.length }] : []),
+          ]} />
 
-          {/* upstream */}
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <ArrowUp size={14} className="text-orange-400" aria-hidden="true" />
-              <h4 className="text-sm font-semibold text-gray-200">Upstream: where the data comes from</h4>
-            </div>
-            {upstream.length === 0 ? (
-              <Note>No upstream sources are recorded for this asset, so it is treated as an origin.</Note>
-            ) : (
-              <Table>
-                <THead>
-                  <Th>Source</Th>
-                  <Th>Kind</Th>
-                  <Th>Module</Th>
-                </THead>
-                <tbody>
-                  {upstream.map((n) => (
-                    <Tr key={n.assetId}>
-                      <Td><span className="font-medium text-gray-100">{n.name}</span></Td>
-                      <Td><AssetBadge kind={n.kind} /></Td>
-                      <Td>{n.module || 'Not set'}</Td>
-                    </Tr>
-                  ))}
-                </tbody>
-              </Table>
-            )}
-          </div>
-
-          {/* downstream */}
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <ArrowDown size={14} className="text-amber-400" aria-hidden="true" />
-              <h4 className="text-sm font-semibold text-gray-200">Downstream: what a change to this affects</h4>
-            </div>
-            {impacted.length === 0 ? (
-              <Note>Nothing depends on this asset, so changing it affects no downstream metric or dashboard.</Note>
-            ) : (
-              <>
-                <Table>
-                  <THead>
-                    <Th>Affected asset</Th>
-                    <Th>Kind</Th>
-                  </THead>
-                  <tbody>
-                    {impacted.map((n) => (
-                      <Tr key={n.assetId}>
-                        <Td><span className="font-medium text-gray-100">{n.name}</span></Td>
-                        <Td><AssetBadge kind={n.kind} /></Td>
-                      </Tr>
-                    ))}
-                  </tbody>
-                </Table>
-                <div className="mt-2">
-                  <Note icon={AlertTriangle} tone="warning">
-                    Changing this asset affects the {nf.format(impactTotal)} item{impactTotal === 1 ? '' : 's'} above.
-                  </Note>
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* edges (raw graph) */}
-          {edges.length > 0 && (
+          {view === 'diagram' && (
             <div>
-              <Toolbar className="mb-2">
-                <Btn icon={GitBranch} onClick={onToggleEdges} aria-expanded={showEdges}>
-                  {showEdges ? 'Hide' : 'Show'} edges ({nf.format(edges.length)})
-                </Btn>
-              </Toolbar>
-              {showEdges && (
-                <Table>
-                  <THead>
-                    <Th>From</Th>
-                    <Th>Relationship</Th>
-                    <Th>To</Th>
-                  </THead>
-                  <tbody>
-                    {edges.map((e, i) => (
-                      <Tr key={`${e.from}:${e.to}:${i}`}>
-                        <Td nowrap>{nameById.get(e.from) || assetShortName(e.from)}</Td>
-                        <Td>
-                          <span className="inline-flex items-center gap-1 text-gray-400">
-                            <ArrowRight size={12} aria-hidden="true" />
-                            {e.type || 'feeds'}
-                          </span>
-                        </Td>
-                        <Td nowrap>{nameById.get(e.to) || assetShortName(e.to)}</Td>
-                      </Tr>
-                    ))}
-                  </tbody>
-                </Table>
-              )}
+              <div className="rounded-lg border border-gray-800 bg-gray-950/40 p-2">
+                <EChart option={lineageOption} style={{ height: 360 }} ariaLabel="Lineage diagram" />
+              </div>
+              <p className="text-[11px] text-gray-400 mt-1">
+                Sources on the left feed this asset; arrows point to what a change affects. Drag to pan, scroll to zoom.
+                {capped ? ` Showing the first ${GRAPH_CAP} on each side; the Upstream and Downstream views list every one.` : ''}
+              </p>
             </div>
+          )}
+
+          {view === 'upstream' && (
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <ArrowUp size={14} className="text-orange-400" aria-hidden="true" />
+                <h4 className="text-sm font-semibold text-gray-200">Upstream: where the data comes from</h4>
+              </div>
+              <NodeTable rows={upstream} label="Source" onSelect={onSelect}
+                emptyNote="No upstream sources are recorded for this asset, so it is treated as an origin." />
+            </div>
+          )}
+
+          {view === 'downstream' && (
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <ArrowDown size={14} className="text-amber-400" aria-hidden="true" />
+                <h4 className="text-sm font-semibold text-gray-200">Downstream: what a change to this affects</h4>
+              </div>
+              <NodeTable rows={affected} label="Affected asset" onSelect={onSelect} withModule={false}
+                emptyNote="Nothing depends on this asset, so changing it affects no downstream metric or dashboard." />
+            </div>
+          )}
+
+          {view === 'edges' && edges.length > 0 && (
+            <EdgeTable edges={edges} nameById={nameById} />
           )}
         </>
       )}
+    </div>
+  )
+}
+
+function EdgeTable({ edges, nameById }) {
+  const paged = usePaged(edges, 20)
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-2">
+        <Network size={14} className="text-orange-400" aria-hidden="true" />
+        <h4 className="text-sm font-semibold text-gray-200">Raw graph edges</h4>
+      </div>
+      <Table>
+        <THead>
+          <Th>From</Th>
+          <Th>Relationship</Th>
+          <Th>To</Th>
+        </THead>
+        <tbody>
+          {paged.pageRows.map((e, i) => (
+            <Tr key={`${e.from}:${e.to}:${i}`}>
+              <Td nowrap>{nameById.get(e.from) || assetShortName(e.from)}</Td>
+              <Td>
+                <span className="inline-flex items-center gap-1 text-gray-400">
+                  <ArrowRight size={12} aria-hidden="true" />
+                  {e.type || 'feeds'}
+                </span>
+              </Td>
+              <Td nowrap>{nameById.get(e.to) || assetShortName(e.to)}</Td>
+            </Tr>
+          ))}
+        </tbody>
+      </Table>
+      <Pager {...paged} label="edges" />
     </div>
   )
 }

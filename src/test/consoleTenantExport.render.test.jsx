@@ -30,11 +30,15 @@ import ConsoleTenantExport from '../console/pages/ConsoleTenantExport'
 describe('ConsoleTenantExport', () => {
   it('shows history, loads a manifest and requires a reason before exporting', async () => {
     render(<ConsoleTenantExport />)
+    // History and retention now live on their own tabs (the page was one long wall).
+    fireEvent.click(await screen.findByRole('tab', { name: /Export history/ }))
     expect(await screen.findByText('legal hold ticket 9')).toBeTruthy()
-    expect(screen.getByText('Partial')).toBeTruthy()
-    expect(screen.getByText('Expired')).toBeTruthy()
+    expect(screen.getAllByText('Partial').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Expired').length).toBeGreaterThan(0)
     expect(screen.getByText('Deleted')).toBeTruthy()
+    fireEvent.click(screen.getByRole('tab', { name: /Retention/ }))
     expect(await screen.findByText('Export retention')).toBeTruthy()
+    fireEvent.click(screen.getByRole('tab', { name: /New export/ }))
     expect(screen.getByText('No organisation chosen')).toBeTruthy()
 
     fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: 'o1' } })

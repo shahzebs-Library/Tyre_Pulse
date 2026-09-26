@@ -12,12 +12,12 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  PackageOpen, Building2, FileSpreadsheet, FileJson, History, RefreshCw, CheckCircle2,
+  PackageOpen, Building2, FileSpreadsheet, FileJson, History, CheckCircle2, Timer,
   AlertTriangle, XCircle, CheckSquare, Square, ShieldAlert, Database, Server, Download, Play, Link2,
 } from 'lucide-react'
 import {
   Panel, PanelHeader, Note, StatTile, Badge, Btn, Select, Table, THead, Th, Tr, Td,
-  Modal, LoadingState, EmptyState, ErrorState,
+  Modal, LoadingState, EmptyState, ErrorState, SearchInput, Segmented, Toolbar,
 } from '../components/ui'
 import { BarsChart } from '../components/ui/charts'
 import {
@@ -30,8 +30,10 @@ import {
   shapeServerJob, formatBytes, serverFileName,
 } from '../../lib/tenantExport'
 import { configNum } from '../../lib/api/systemConfig'
-import { exportSheetsToExcel, exportToExcel, reportFileName } from '../../lib/exportUtils'
-import { useTableSort } from '../../lib/useTableSort'
+import { exportSheetsToExcel } from '../../lib/exportUtils'
+import { searchRows, sortRows, useTableSort } from '../../lib/consoleTable'
+import ExportButtons from './shared/ExportButtons'
+import { PageHeader, TabBar, useUrlTab, usePager, Pager, AttentionList } from './dataKit'
 import { toUserMessage } from '../../lib/safeError'
 import RetentionPanel from './tenantExport/RetentionPanel'
 
@@ -48,6 +50,7 @@ const JOB_ACCESSORS = {
   rows: jobRows,
   tables: (j) => (Array.isArray(j.tables) ? j.tables.length : 0),
 }
+const TAB_KEYS = ['export', 'history', 'retention']
 const OUTCOME = {
   complete: { tone: 'good', text: 'Complete', icon: CheckCircle2 },
   truncated: { tone: 'warning', text: 'Truncated', icon: AlertTriangle },
@@ -79,6 +82,10 @@ export default function ConsoleTenantExport() {
   const [jobs, setJobs] = useState([])
   const [jobsLoading, setJobsLoading] = useState(true)
   const [jobsErr, setJobsErr] = useState('')
+  const [tab, setTab] = useUrlTab(TAB_KEYS, 'export')
+  const [refreshedAt, setRefreshedAt] = useState(null)
+  const [jobQuery, setJobQuery] = useState('')
+  const [jobStatus, setJobStatus] = useState('')
 
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [format, setFormat] = useState('xlsx')
@@ -108,7 +115,7 @@ export default function ConsoleTenantExport() {
   }, [])
   const loadJobs = useCallback(async () => {
     setJobsLoading(true); setJobsErr('')
-    try { setJobs(await listExportJobs(25)) } catch (e) { setJobsErr(toUserMessage(e, 'Could not load export history.')) } finally { setJobsLoading(false) }
+    try { setJobs(await listExportJobs(25)); setRefreshedAt(Date.now()) } catch (e) { setJobsErr(toUserMessage(e, 'Could not load export history.')) } finally { setJobsLoading(false) }
   }, [])
   const loadManifest = useCallback(async (id) => {
     if (!id) { setManifest(null); return }
@@ -241,33 +248,75 @@ export default function ConsoleTenantExport() {
 
   const orgOptions = orgs.map((o) => ({ value: o.id, label: `${o.name}${o.active === false ? ' (inactive)' : ''}` }))
   const orgNameById = useMemo(() => Object.fromEntries(orgs.map((o) => [o.id, o.name])), [orgs])
-  const jobSort = useTableSort(jobs, { key: 'created_at', dir: 'desc' }, JOB_ACCESSORS)
-  const tableSort = useTableSort(manifest?.tables || [], { key: null, dir: 'desc' })
-  const exportHistory = () => exportToExcel(
-    jobSort.sorted.map((j) => ({
-      when: fmtWhen(j.created_at), organisation: orgNameById[j.org_id] || j.org_id, reason: j.reason || 'N/A',
-      tables: JOB_ACCESSORS.tables(j), rows: jobRows(j), status: STATUS_TEXT[j.status] || j.status,
-      path: j.mode === 'server' ? 'Server' : 'Browser',
-    })),
-    ['when', 'organisation', 'reason', 'tables', 'rows', 'status', 'path'],
-    ['When', 'Organisation', 'Reason', 'Tables', 'Rows', 'Status', 'Path'],
-    reportFileName('TyrePulse Tenant Export History'),
-  )
+  const jobSort = useTableSort({ key: 'created_at', dir: 'desc' })
+  const shownJobs = useMemo(() => {
+    const base = searchRows(jobs, jobQuery, ['reason', (j) => orgNameById[j.org_id] || j.org_id])
+      .filter((j) => !jobStatus || j.status === jobStatus)
+    return sortRows(base, jobSort.sort, JOB_ACCESSORS)
+  }, [jobs, jobQuery, jobStatus, jobSort.sort, orgNameById])
+  const jobPager = usePager(shownJobs, 25)
+  const tableSort = useTableSort(null)
+  const sortedTables = useMemo(() => {
+    const t = manifest?.tables || []
+    return tableSort.sort ? sortRows(t, tableSort.sort) : t
+  }, [manifest, tableSort.sort])
+  const jobColumns = useMemo(() => [
+    { key: 'created_at', header: 'When', value: (j) => fmtWhen(j.created_at) },
+    { key: 'org', header: 'Organisation', value: (j) => orgNameById[j.org_id] || j.org_id },
+    { key: 'reason', header: 'Reason', value: (j) => j.reason || 'N/A' },
+    { key: 'tables', header: 'Tables', value: (j) => JOB_ACCESSORS.tables(j) },
+    { key: 'rows', header: 'Rows', value: (j) => jobRows(j) },
+    { key: 'status', header: 'Status', value: (j) => STATUS_TEXT[j.status] || j.status },
+    { key: 'mode', header: 'Path', value: (j) => (j.mode === 'server' ? 'Server' : 'Browser') },
+  ], [orgNameById])
+  const jobCounts = useMemo(() => jobs.reduce((a, j) => { a[j.status] = (a[j.status] || 0) + 1; return a }, {}), [jobs])
+  const trackJob = (id) => { setSrvJob(null); setSrvJobId(id); setTab('export') }
+  const runningJob = jobs.find((j) => j.status === 'running' && j.mode === 'server' && j.id !== srvJobId)
+  const attention = [
+    runningJob && {
+      key: 'running', tone: 'info',
+      title: 'A server export is still running',
+      detail: `Started ${fmtWhen(runningJob.created_at)} for ${orgNameById[runningJob.org_id] || 'an organisation'}. Track it to see progress or resume a stalled run.`,
+      action: () => trackJob(runningJob.id), actionLabel: 'Track', actionIcon: Server,
+    },
+    (jobCounts.failed || 0) + (jobCounts.partial || 0) > 0 && {
+      key: 'partial', tone: 'warning',
+      title: `${fmt((jobCounts.failed || 0) + (jobCounts.partial || 0))} recent export(s) are partial or failed`,
+      detail: 'Those files do not hold the whole dataset. Check which tables were cut before relying on them.',
+      action: () => { setJobStatus(jobCounts.failed ? 'failed' : 'partial'); setTab('history') }, actionLabel: 'Show them', actionIcon: History,
+    },
+  ]
 
   return (
     <div className="space-y-5 max-w-7xl">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-lg font-semibold text-white flex items-center gap-2">
-            <PackageOpen size={18} className="text-orange-400" aria-hidden="true" /> Tenant Data Export
-          </h1>
-          <p className="text-xs text-gray-400 mt-1">
-            Export one organisation&apos;s full dataset for portability, offboarding or legal hold. Every export is recorded with its reason.
-          </p>
-        </div>
-        <Btn icon={RefreshCw} onClick={() => { loadOrgs(); loadJobs(); if (orgId) loadManifest(orgId) }}>Refresh</Btn>
-      </header>
+      <PageHeader icon={PackageOpen} title="Tenant Data Export"
+        purpose="Export one organisation's full dataset for portability, offboarding or legal hold. Every export is recorded with its reason."
+        refreshedAt={refreshedAt} onRefresh={() => { loadOrgs(); loadJobs(); if (orgId) loadManifest(orgId) }} refreshing={jobsLoading} />
 
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <StatTile label="Exports recorded" icon={History} value={jobsErr ? 'N/A' : jobsLoading && !jobs.length ? 'N/A' : fmt(jobs.length)}
+          sub={jobsErr ? 'History could not be read' : 'The last 25 kept here'}
+          onClick={() => { setJobStatus(''); setTab('history') }} active={tab === 'history' && !jobStatus} />
+        <StatTile label="Partial or failed" icon={AlertTriangle}
+          value={jobsErr ? 'N/A' : fmt((jobCounts.partial || 0) + (jobCounts.failed || 0))}
+          tone={(jobCounts.partial || 0) + (jobCounts.failed || 0) ? 'warning' : 'default'}
+          onClick={() => { setJobStatus(jobCounts.failed ? 'failed' : 'partial'); setTab('history') }} />
+        <StatTile label="Running on the server" icon={Server} value={jobsErr ? 'N/A' : fmt(jobCounts.running || 0)}
+          tone={jobCounts.running ? 'accent' : 'default'} />
+        <StatTile label="Newest export" icon={Timer} value={jobs[0] ? fmtWhen(jobs[0].created_at) : 'N/A'}
+          sub={jobs[0] ? (orgNameById[jobs[0].org_id] || 'Organisation') : 'Nothing exported yet'} />
+      </div>
+
+      <AttentionList items={attention} />
+
+      <TabBar ariaLabel="Tenant export view" value={tab} onChange={setTab} tabs={[
+        { key: 'export', label: 'New export', icon: PackageOpen },
+        { key: 'history', label: 'Export history', icon: History, count: jobsErr ? undefined : jobs.length },
+        { key: 'retention', label: 'Retention', icon: Timer },
+      ]} />
+
+      {tab === 'export' && (
+        <>
       <ErrorState message={orgsErr} onRetry={loadOrgs} />
 
       <Panel>
@@ -330,7 +379,7 @@ export default function ConsoleTenantExport() {
                     <Th align="right">Progress</Th>
                   </THead>
                   <tbody>
-                    {tableSort.sorted.map((t) => {
+                    {sortedTables.map((t) => {
                       const on = selected.has(t.table)
                       const planned = plan.items.find((i) => i.table === t.table)
                       const pr = progress[t.table]
@@ -451,18 +500,31 @@ export default function ConsoleTenantExport() {
         </>
       )}
 
-      <RetentionPanel onPurged={loadJobs} />
+        </>
+      )}
 
+      {tab === 'retention' && <RetentionPanel onPurged={loadJobs} />}
+
+      {tab === 'history' && (
       <Panel flush>
         <div className="p-4 pb-2">
           <PanelHeader icon={History} title="Recent exports" subtitle="The last 25 tenant exports, newest first."
-            actions={<Btn icon={Download} onClick={exportHistory} disabled={!jobs.length || !!jobsErr}>Excel</Btn>} />
+            actions={<ExportButtons rows={shownJobs} columns={jobColumns} title="TyrePulse Tenant Export History" disabled={!!jobsErr} />} />
+          <Toolbar>
+            <SearchInput value={jobQuery} onChange={setJobQuery} placeholder="Search reason or organisation" className="w-full sm:w-64" />
+            <Segmented role="group" ariaLabel="Export status" value={jobStatus} onChange={setJobStatus} options={[
+              { key: '', label: 'All', count: jobs.length },
+              ...['completed', 'partial', 'failed', 'running', 'expired'].filter((k) => jobCounts[k]).map((k) => ({ key: k, label: STATUS_TEXT[k], count: jobCounts[k] })),
+            ]} />
+          </Toolbar>
         </div>
         <div className="px-4 pb-4">
           <ErrorState message={jobsErr} onRetry={loadJobs} />
           {jobsLoading ? <LoadingState label="Loading export history" rows={3} />
             : !jobsErr && !jobs.length ? <EmptyState icon={History} title="No exports yet" reason="Nothing has been exported from this console." />
+              : !jobsErr && !shownJobs.length ? <EmptyState title="No export matches these filters" reason="Clear the search or the status filter." />
               : !jobsErr && (
+                <>
                 <Table>
                   <THead>
                     <Th sortKey="created_at" sort={jobSort.sort} onSort={jobSort.onSort}>When</Th>
@@ -475,7 +537,7 @@ export default function ConsoleTenantExport() {
                     <Th align="right">Files</Th>
                   </THead>
                   <tbody>
-                    {jobSort.sorted.map((j) => {
+                    {jobPager.pageRows.map((j) => {
                       const rows = jobRows(j)
                       return (
                         <Tr key={j.id}>
@@ -491,7 +553,7 @@ export default function ConsoleTenantExport() {
                               : j.status === 'expired'
                                 ? <span className="text-gray-400" title={j.expired_at ? `Files deleted ${fmtWhen(j.expired_at)}` : 'Files deleted'}>Deleted</span>
                               : j.status === 'running'
-                                ? <Btn size="xs" onClick={() => { setSrvJob(null); setSrvJobId(j.id) }}>Track</Btn>
+                                ? <Btn size="xs" onClick={() => trackJob(j.id)}>Track</Btn>
                                 : (Array.isArray(j.files) && j.files.length > 0)
                                   ? <Btn size="xs" icon={Download} busy={linksBusy === j.id} onClick={() => openLinks(j.id)}>Download</Btn>
                                   : <span className="text-gray-400">None</span>}
@@ -501,9 +563,12 @@ export default function ConsoleTenantExport() {
                     })}
                   </tbody>
                 </Table>
+                <Pager pager={jobPager} label="exports" />
+                </>
               )}
         </div>
       </Panel>
+      )}
 
       <Modal open={confirmOpen} onClose={() => { if (!running) setConfirmOpen(false); else cancelRef.current = true }}
         title={`Export ${manifest?.orgName || orgName} as ${format === 'json' ? 'JSON' : 'Excel'}`}

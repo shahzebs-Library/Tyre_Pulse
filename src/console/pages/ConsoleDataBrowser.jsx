@@ -21,7 +21,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Database, Sparkles, Play, Download, RefreshCw,
+  Database, Sparkles, Play,
   Table2, Filter, AlertTriangle, Info, X, Pencil, Trash2, Undo2, Lock, CheckCircle2, BarChart3,
 } from 'lucide-react'
 import { useConsoleAuth } from '../ConsoleAuthContext'
@@ -38,12 +38,20 @@ import { askDataToFilter } from '../../lib/api/askData'
 import {
   QUERY_OPERATORS, operatorLabel, normalizeFilter, describeFilter, isValidOperator,
 } from '../../lib/queryBuilder'
-import { exportToExcel } from '../../lib/exportUtils'
 import { toUserMessage } from '../../lib/safeError'
-import { useTableSort } from '../../lib/useTableSort'
+import { searchRows, sortRows, useTableSort } from '../../lib/consoleTable'
+import ExportButtons from './shared/ExportButtons'
+import { PageHeader, TabBar, useUrlTab, usePager, Pager } from './dataKit'
 
 const LIMIT_OPTIONS = [50, 100, 500]
 const EMPTY_FILTER = { column: '', op: 'eq', value: '' }
+const TAB_KEYS = ['browse', 'changes', 'overview']
+const CHANGE_COLUMNS = [
+  { key: 'created_at', header: 'When', value: (c) => fmtStamp(c.created_at) },
+  { key: 'action', header: 'Change', value: (c) => (c.action === 'delete' ? 'Deleted' : 'Edited') },
+  { key: 'tbl', header: 'Table' },
+  { key: 'state', header: 'State', value: (c) => (c.reverted_at ? 'Undone' : 'Undoable') },
+]
 
 export default function ConsoleDataBrowser() {
   const { admin } = useConsoleAuth()
@@ -84,9 +92,20 @@ export default function ConsoleDataBrowser() {
     () => (rows.length ? Object.keys(rows[0]) : columns.map(c => c.column_name)),
     [rows, columns],
   )
-  // Sorting reorders the rows already loaded; it never re-queries the table.
-  const { sort, onSort, sorted: sortedRows, setSort } = useTableSort(rows, { key: null, dir: 'desc' })
-  useEffect(() => { setSort({ key: null, dir: 'desc' }) }, [selected, setSort])
+  const [tab, setTab] = useUrlTab(TAB_KEYS, 'browse')
+  const [refreshedAt, setRefreshedAt] = useState(null)
+  const [rowQuery, setRowQuery] = useState('')
+  const [changeQuery, setChangeQuery] = useState('')
+  // Sorting and the in-page search reorder and narrow the rows already loaded;
+  // neither re-queries the table.
+  const { sort, onSort, setSort } = useTableSort(null)
+  useEffect(() => { setSort(null); setRowQuery('') }, [selected, setSort])
+  const sortedRows = useMemo(() => {
+    const base = searchRows(rows, rowQuery, rowKeys.map((k) => (r) => cellText(r[k])))
+    return sort ? sortRows(base, sort) : base
+  }, [rows, rowQuery, rowKeys, sort])
+  const rowPager = usePager(sortedRows, 25)
+  const rowColumns = useMemo(() => rowKeys.map((k) => ({ key: k, header: k, value: (r) => cellText(r[k]) })), [rowKeys])
 
   // ── Initial load: the safelisted tables with row counts ──
   // Show any prior edits/deletes so the undo list survives a page reload.
@@ -103,6 +122,7 @@ export default function ConsoleDataBrowser() {
     setTablesLoading(true)
     try {
       setTables(await listTables())
+      setRefreshedAt(Date.now())
     } catch (err) {
       setError(toUserMessage(err, 'Could not refresh the table list.'))
     } finally {
@@ -118,6 +138,7 @@ export default function ConsoleDataBrowser() {
         const data = await listTables()
         if (!active) return
         setTables(data)
+        setRefreshedAt(Date.now())
         if (!data.length) return
         const name = data[0].table_name
         setSelected(name)
@@ -244,24 +265,6 @@ export default function ConsoleDataBrowser() {
     }
   }
 
-  // ── Excel export of the current result rows ──
-  async function handleExport() {
-    if (!rows.length) return
-    const keys = rowKeys
-    try {
-      await exportToExcel(
-        sortedRows,
-        keys,
-        keys,
-        `TyrePulse ${selected} Data`,
-        'Data',
-        { title: `${selected} data browser export` },
-      )
-    } catch (err) {
-      setError(toUserMessage(err, 'Could not export. Please try again.'))
-    }
-  }
-
   // ── Row editing (V364) ──────────────────────────────────────────────────
   // The undo list is only fetched once a change exists, so an untouched console
   // makes no extra request.
@@ -294,7 +297,7 @@ export default function ConsoleDataBrowser() {
     try {
       await updateRow(selected, editRow.id, patch)
       const changed = Object.keys(patch)
-      setNotice(`Saved ${changed.length} change(s) to ${changed.join(', ')}. You can undo this below.`)
+      setNotice(`Saved ${changed.length} change(s) to ${changed.join(', ')}. You can undo this from the Recent changes tab.`)
       setEditRow(null); setEditDraft({})
       await Promise.all([run(selected, filter, limit), refreshChanges()])
     } catch (err) {
@@ -309,7 +312,7 @@ export default function ConsoleDataBrowser() {
     setBusy(true); setError(null)
     try {
       await deleteRow(selected, confirmDelete.id)
-      setNotice('Row deleted. It is kept in full and can be brought back below.')
+      setNotice('Row deleted. It is kept in full and can be brought back from the Recent changes tab.')
       setConfirmDelete(null)
       await Promise.all([run(selected, filter, limit), refreshChanges()])
     } catch (err) {
@@ -333,7 +336,6 @@ export default function ConsoleDataBrowser() {
   }
 
   const filterSummary = describeFilter({ table: selected, ...filter }, { columns: columnLabels })
-  const canExport = rows.length > 0 && !running
   // Editing needs a row id to target; a projection without one stays read-only.
   const canEditRows = rows.length > 0 && Object.prototype.hasOwnProperty.call(rows[0] || {}, 'id')
   const patchCount = editRow ? Object.keys(draftPatch()).length : 0
@@ -350,25 +352,23 @@ export default function ConsoleDataBrowser() {
     .sort((a, b) => b.value - a.value), [tables])
   const totalRows = tableBars.reduce((a, b) => a + b.value, 0)
   const openChanges = changes.filter((c) => !c.reverted_at).length
+  const changeSort = useTableSort({ key: 'created_at', dir: 'desc' })
+  const shownChanges = useMemo(() => sortRows(searchRows(changes, changeQuery, ['tbl', 'action']), changeSort.sort,
+    { state: (c) => (c.reverted_at ? 1 : 0) }), [changes, changeQuery, changeSort.sort])
+  const changePager = usePager(shownChanges, 25)
 
   const columnOptions = columns.map((c) => ({ value: c.column_name, label: c.column_name }))
   const opOptions = QUERY_OPERATORS.map((o) => ({ value: o.key, label: operatorLabel(o.key) }))
 
   return (
     <div className="space-y-5 max-w-7xl">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2"><Database size={18} className="text-orange-400" aria-hidden="true" /> Data Browser</h1>
-          <p className="text-xs text-gray-400 mt-1">
-            {admin?.full_name ? `${admin.full_name} | ` : ''}Browse, filter and export operational data with no SQL, and correct or remove a single row.
-          </p>
-        </div>
-        <Btn icon={RefreshCw} onClick={loadTables} busy={tablesLoading}>Refresh tables</Btn>
-      </header>
+      <PageHeader icon={Database} title="Data Browser"
+        purpose={`${admin?.full_name ? `${admin.full_name} | ` : ''}Browse, filter and export operational data with no SQL, and correct or remove a single row.`}
+        refreshedAt={refreshedAt} onRefresh={loadTables} refreshing={tablesLoading} refreshLabel="Refresh tables" />
 
       <Note icon={Info} tone="accent">
         Browse, filter and export any of these tables, and correct or remove a single row.
-        Every edit and delete keeps the original and can be undone below. The row id, the owning
+        Every edit and delete keeps the original and can be undone from the Recent changes tab. The row id, the owning
         company and any value the database calculates itself cannot be changed here.
       </Note>
 
@@ -381,40 +381,79 @@ export default function ConsoleDataBrowser() {
         <StatTile label="Showing" value={ran ? fmtNum(rows.length) : 'N/A'}
           sub={ran && rows.length === limit ? `Capped at ${limit} rows` : selected || 'No table selected'} />
         <StatTile label="Changes undoable" value={changesError ? 'N/A' : fmtNum(openChanges)} icon={Undo2}
-          tone={openChanges ? 'accent' : 'default'} sub={changesError ? 'Could not be read' : `${fmtNum(changes.length)} recent change(s)`} />
+          tone={openChanges ? 'accent' : 'default'} sub={changesError ? 'Could not be read' : `${fmtNum(changes.length)} recent change(s)`}
+          onClick={() => setTab('changes')} active={tab === 'changes'} />
       </div>
 
       <ErrorState message={changesError} onRetry={loadChanges} />
 
-      {changes.length > 0 && (
+      <TabBar ariaLabel="Data browser view" value={tab} onChange={setTab} tabs={[
+        { key: 'browse', label: 'Browse', icon: Table2 },
+        { key: 'changes', label: 'Recent changes', icon: Undo2, count: changesError ? undefined : openChanges },
+        { key: 'overview', label: 'Rows per table', icon: BarChart3, count: tables.length || undefined },
+      ]} />
+
+      {tab === 'changes' && (
         <Panel flush>
-          <div className="px-4 pt-4"><PanelHeader icon={Undo2} title="Recent changes" subtitle="Every one can be undone." /></div>
-          <div className="max-h-56 overflow-y-auto px-4 pb-4">
-            <Table>
-              <THead><Th>When</Th><Th>Change</Th><Th align="right">Action</Th></THead>
-              <tbody>
-                {changes.map((c) => (
-                  <Tr key={c.id}>
-                    <Td nowrap><span className="text-gray-500">{fmtStamp(c.created_at)}</span></Td>
-                    <Td>
-                      <span className="inline-flex items-center gap-2">
-                        <Badge tone={c.action === 'delete' ? 'danger' : 'info'}>{c.action === 'delete' ? 'Deleted' : 'Edited'}</Badge>
-                        <Code>{c.tbl}</Code>
-                      </span>
-                    </Td>
-                    <Td align="right">
-                      {c.reverted_at
-                        ? <Badge tone="good" icon={CheckCircle2}>Undone</Badge>
-                        : <Btn size="xs" icon={Undo2} onClick={() => doRevert(c.id)} disabled={busy}>Undo</Btn>}
-                    </Td>
-                  </Tr>
-                ))}
-              </tbody>
-            </Table>
+          <div className="px-4 pt-4">
+            <PanelHeader icon={Undo2} title="Recent changes" subtitle="The last 20 edits and deletes. Every one can be undone, including bringing a deleted row back."
+              actions={<ExportButtons rows={shownChanges} columns={CHANGE_COLUMNS} title="TyrePulse Data Browser Changes" disabled={!!changesError} />} />
+            <SearchInput value={changeQuery} onChange={setChangeQuery} placeholder="Search by table" className="mb-3 w-full sm:w-56" />
+          </div>
+          <div className="px-4 pb-4">
+            {changesError ? (
+              <p className="text-xs text-gray-400 py-4">The change list could not be read, so it is not shown. Use Retry above.</p>
+            ) : changes.length === 0 ? (
+              <EmptyState icon={Undo2} title="No changes yet" reason="Edits and deletes made on the Browse tab are listed here with an undo button." />
+            ) : shownChanges.length === 0 ? (
+              <EmptyState title="No change matches that search" reason="Clear the search to see every recent change." />
+            ) : (
+              <>
+                <Table>
+                  <THead>
+                    <Th sortKey="created_at" sort={changeSort.sort} onSort={changeSort.onSort}>When</Th>
+                    <Th sortKey="tbl" sort={changeSort.sort} onSort={changeSort.onSort}>Change</Th>
+                    <Th sortKey="state" sort={changeSort.sort} onSort={changeSort.onSort} align="right">Action</Th>
+                  </THead>
+                  <tbody>
+                    {changePager.pageRows.map((c) => (
+                      <Tr key={c.id}>
+                        <Td nowrap><span className="text-gray-500">{fmtStamp(c.created_at)}</span></Td>
+                        <Td>
+                          <span className="inline-flex items-center gap-2">
+                            <Badge tone={c.action === 'delete' ? 'danger' : 'info'}>{c.action === 'delete' ? 'Deleted' : 'Edited'}</Badge>
+                            <Code>{c.tbl}</Code>
+                          </span>
+                        </Td>
+                        <Td align="right">
+                          {c.reverted_at
+                            ? <Badge tone="good" icon={CheckCircle2}>Undone</Badge>
+                            : <Btn size="xs" icon={Undo2} onClick={() => doRevert(c.id)} disabled={busy}>Undo</Btn>}
+                        </Td>
+                      </Tr>
+                    ))}
+                  </tbody>
+                </Table>
+                <Pager pager={changePager} label="changes" />
+              </>
+            )}
           </div>
         </Panel>
       )}
 
+      {tab === 'overview' && (
+        <Panel>
+          <PanelHeader icon={BarChart3} title="Rows per table"
+            subtitle="The server's own count for every safelisted table. Helps you see where the data actually lives before you filter." />
+          {tables.length === 0
+            ? <EmptyState icon={Table2} title="No table counts" reason={tablesLoading ? 'Loading.' : 'The safelist returned nothing, or it could not be read.'} />
+            : <BarsChart bars={tableBars} valueFormat={(v) => `${fmtNum(v)} rows`}
+                summary={tableBars.map((b) => `${b.label}: ${b.value}`).join(', ')} emptyText="Every safelisted table is empty." />}
+        </Panel>
+      )}
+
+      {tab === 'browse' && (
+      <>
       <Panel>
         <PanelHeader icon={Sparkles} title="Ask your data"
           subtitle="The assistant reads your question into a filter. Your data is never sent for computation. It only picks a column, an operator and a value, then the query runs on the server." />
@@ -500,13 +539,15 @@ export default function ConsoleDataBrowser() {
           <Panel>
             <PanelHeader title="Results"
               subtitle={ran && !running
-                ? `${rows.length} row${rows.length === 1 ? '' : 's'}${rows.length === limit ? `, showing first ${limit}` : ''}. Click a column to sort the rows shown.`
+                ? `${rows.length} row${rows.length === 1 ? '' : 's'}${rows.length === limit ? `, showing first ${limit}` : ''}${rowQuery ? `, ${sortedRows.length} match the search` : ''}. Click a column to sort the rows loaded.`
                 : undefined}
               actions={(
-                <Btn icon={Download} onClick={handleExport} disabled={!canExport}
-                  title={canExport ? 'Download these rows as an Excel workbook.' : 'Run a query with results to export.'}>
-                  Export Excel
-                </Btn>
+                <>
+                  {rows.length > 0 && !running && (
+                    <SearchInput value={rowQuery} onChange={setRowQuery} placeholder="Search these rows" className="w-full sm:w-48" />
+                  )}
+                  <ExportButtons rows={sortedRows} columns={rowColumns} title={`TyrePulse ${selected || 'table'} Data`} disabled={running} />
+                </>
               )} />
 
             {running
@@ -516,15 +557,17 @@ export default function ConsoleDataBrowser() {
                 : rows.length === 0
                   ? <EmptyState title={ran ? 'No rows match' : 'Nothing run yet'}
                       reason={ran ? 'The query ran and returned no rows. Loosen or clear the filter.' : 'Pick a table to preview its rows.'} />
+                  : sortedRows.length === 0
+                    ? <EmptyState title="No loaded row matches that search" reason="The search only looks at the rows already loaded. Clear it, or change the filter above." />
                   : (
-                    <div className="max-h-[540px] overflow-auto">
+                    <div>
                       <Table>
                         <THead>
                           {canEditRows && <Th className="w-20">Actions</Th>}
                           {rowKeys.map((k) => <Th key={k} sortKey={k} sort={sort} onSort={onSort} className="whitespace-nowrap">{k}</Th>)}
                         </THead>
                         <tbody>
-                          {sortedRows.map((r, i) => (
+                          {rowPager.pageRows.map((r, i) => (
                             <Tr key={r.id || i}>
                               {canEditRows && (
                                 <Td nowrap>
@@ -551,19 +594,14 @@ export default function ConsoleDataBrowser() {
                           ))}
                         </tbody>
                       </Table>
+                      <Pager pager={rowPager} label="rows" />
                     </div>
                   )}
           </Panel>
         </div>
       </div>
 
-      {tableBars.length > 0 && (
-        <Panel>
-          <PanelHeader icon={BarChart3} title="Rows per table"
-            subtitle="The server's own count for every safelisted table. Helps you see where the data actually lives before you filter." />
-          <BarsChart bars={tableBars} valueFormat={(v) => `${fmtNum(v)} rows`}
-            summary={tableBars.map((b) => `${b.label}: ${b.value}`).join(', ')} emptyText="Every safelisted table is empty." />
-        </Panel>
+      </>
       )}
 
       <Modal open={!!editRow} onClose={() => { if (!busy) setEditRow(null) }} width="max-w-2xl"
@@ -610,7 +648,7 @@ export default function ConsoleDataBrowser() {
 
       <Modal open={!!confirmDelete} onClose={() => { if (!busy) setConfirmDelete(null) }} width="max-w-md"
         title="Delete this row"
-        subtitle={`This removes one row from ${selected}. The complete row is kept, so you can bring it back from Recent changes straight afterwards.`}
+        subtitle={`This removes one row from ${selected}. The complete row is kept, so you can bring it back from the Recent changes tab straight afterwards.`}
         footer={(
           <>
             <Btn onClick={() => setConfirmDelete(null)} disabled={busy}>Cancel</Btn>

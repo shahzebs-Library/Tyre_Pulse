@@ -23,12 +23,12 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import {
   UploadCloud, Wand2, FileSpreadsheet, CheckCircle2, AlertTriangle,
-  Database, ArrowRight, RefreshCw, ShieldCheck, Info, PieChart,
+  Database, ArrowRight, RefreshCw, ShieldCheck, Info, PieChart, TableProperties,
 } from 'lucide-react'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import {
   Panel, PanelHeader, Note, StatTile, Badge, Code, Btn, Select, Table, THead, Th, Tr, Td,
-  LoadingState, ErrorState,
+  LoadingState, ErrorState, SearchInput, Segmented, Toolbar,
 } from '../components/ui'
 import { ShareChart, STATUS, useChartTheme } from '../components/ui/charts'
 import {
@@ -39,6 +39,17 @@ import * as imports from '../../lib/api/imports'
 import { checkImportFingerprint, fileSha256 } from '../../lib/api/importHistory'
 import { toUserMessage } from '../../lib/safeError'
 import { COUNTRIES } from '../../contexts/SettingsContext'
+import { searchRows, sortRows, useTableSort } from '../../lib/consoleTable'
+import ExportButtons from './shared/ExportButtons'
+import { PageHeader, TabBar, useUrlTab, usePager, Pager } from './dataKit'
+
+const STEP_KEYS = ['mapping', 'preview']
+const WIZARD = [
+  { key: 'upload', label: 'Upload a file' },
+  { key: 'map', label: 'Check the mapping' },
+  { key: 'preview', label: 'Preview the rows' },
+  { key: 'import', label: 'Import' },
+]
 
 const MODULE_LABELS = {
   fleet: 'Vehicles / Fleet', tyre: 'Tyres', stock: 'Stock / Inventory',
@@ -103,6 +114,9 @@ export default function ConsoleSmartImport() {
   const [country, setCountry] = useState('')
   const [result, setResult] = useState(null)  // { inserted, skipped, failed, ... }
   const [progress, setProgress] = useState(null)
+  const [step, setStep] = useUrlTab(STEP_KEYS, 'mapping', 'step')
+  const [mapQuery, setMapQuery] = useState('')
+  const [mapFilter, setMapFilter] = useState('')   // '' | unmapped | review
 
   const sheet = parsed?.sheets?.[sheetIdx] || null
   const fields = useMemo(() => (module ? (MODULE_FIELDS[module] || []) : []), [module])
@@ -286,6 +300,7 @@ export default function ConsoleSmartImport() {
     setResult(null); setProgress(null); setError(''); setFileName('')
     // A repeat warning belongs to the file it was raised for.
     setFingerprint(null); setRepeatAck(false)
+    setMapQuery(''); setMapFilter(''); setStep('mapping')
   }
 
 
@@ -293,6 +308,23 @@ export default function ConsoleSmartImport() {
   const fieldOptions = fields.map((f) => ({ value: f.key, label: `${f.label}${f.required ? ' *' : ''}` }))
   const canCommit = phase !== 'committing' && previewInfo && previewInfo.ready + previewInfo.warning > 0 && (!fingerprint || repeatAck)
   const mappedCount = mapping.filter((m) => m.target).length
+  const mapSort = useTableSort(null)
+  const shownMapping = useMemo(() => {
+    const fieldLabel = (k) => (fields.find((f) => f.key === k) || {}).label || k || ''
+    const base = searchRows(mapping, mapQuery, ['sourceHeader', (m) => fieldLabel(m.target)])
+      .filter((m) => !mapFilter || (mapFilter === 'unmapped' ? !m.target : (m.target && m.confidence < 90)))
+    return mapSort.sort ? sortRows(base, mapSort.sort, { target: (m) => fieldLabel(m.target), confidence: (m) => Number(m.confidence) || 0 }) : base
+  }, [mapping, mapQuery, mapFilter, mapSort.sort, fields])
+  const mapPager = usePager(shownMapping, 25)
+  const mapColumns = useMemo(() => [
+    { key: 'sourceHeader', header: 'File column' },
+    { key: 'target', header: 'Maps to', value: (m) => (m.target ? ((fields.find((f) => f.key === m.target) || {}).label || m.target) : 'Kept as-is (not imported)') },
+    { key: 'confidence', header: 'Match', value: (m) => confBadge(m.confidence).text },
+  ], [fields])
+  const reviewCount = mapping.filter((m) => m.target && m.confidence < 90).length
+  const wizardAt = phase === 'idle' || phase === 'parsing' ? 'upload'
+    : phase === 'done' || phase === 'committing' ? 'import'
+      : step === 'preview' ? 'preview' : 'map'
 
   const commitLabel = phase === 'committing'
     ? (progress?.phase === 'preparing'
@@ -304,15 +336,28 @@ export default function ConsoleSmartImport() {
 
   return (
     <div className="space-y-5 max-w-7xl">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2"><Wand2 size={18} className="text-orange-400" aria-hidden="true" /> Smart Import</h1>
-          <p className="text-xs text-gray-400 mt-1">Upload any Excel or CSV file. The console detects what it is, maps the columns, and loads it.</p>
-        </div>
-        {phase !== 'idle' && (
+      <PageHeader icon={Wand2} title="Smart Import"
+        purpose="Upload any Excel or CSV file. The console detects what it is, maps the columns, and loads it."
+        actions={phase !== 'idle' ? (
           <Btn icon={RefreshCw} onClick={reset} disabled={phase === 'committing' || phase === 'parsing'}>Start over</Btn>
-        )}
-      </header>
+        ) : null} />
+
+      <ol className="flex flex-wrap items-center gap-2" aria-label="Import steps">
+        {WIZARD.map((w, i) => {
+          const at = WIZARD.findIndex((x) => x.key === wizardAt)
+          const state = i < at ? 'done' : i === at ? 'current' : 'todo'
+          return (
+            <li key={w.key} aria-current={state === 'current' ? 'step' : undefined}
+              className={`inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full border ${
+                state === 'current' ? 'border-orange-600/60 bg-orange-950/30 text-orange-200'
+                  : state === 'done' ? 'border-gray-800 text-gray-300' : 'border-gray-800 text-gray-500'}`}>
+              <span className="tabular-nums">{state === 'done' ? <CheckCircle2 size={11} aria-hidden="true" /> : i + 1}</span>
+              {w.label}
+              {state === 'done' && <span className="sr-only">(done)</span>}
+            </li>
+          )
+        })}
+      </ol>
 
       <ErrorState message={error} />
 
@@ -377,16 +422,50 @@ export default function ConsoleSmartImport() {
             </Note>
           )}
 
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <StatTile label="Rows in sheet" value={fmtNum(sheet.rows.length)} icon={FileSpreadsheet} sub={`${sheet.columns.length} columns`} />
+            <StatTile label="Columns mapped" value={`${fmtNum(mappedCount)} of ${fmtNum(mapping.length)}`} icon={TableProperties}
+              onClick={() => { setMapFilter(''); setStep('mapping') }} active={step === 'mapping' && !mapFilter} />
+            <StatTile label="Matches to check" value={fmtNum(reviewCount)} icon={Info} tone={reviewCount ? 'warning' : 'default'}
+              sub="Mapped below 90% confidence" onClick={() => { setMapFilter('review'); setStep('mapping') }} active={step === 'mapping' && mapFilter === 'review'} />
+            <StatTile label="Required fields missing" value={fmtNum(requiredMissing.length)} icon={AlertTriangle}
+              tone={requiredMissing.length ? 'danger' : 'good'} onClick={() => setStep('preview')} active={step === 'preview'}
+              sub={requiredMissing.length ? requiredMissing.slice(0, 2).join(', ') : 'Every required field is mapped'} />
+          </div>
+
+          <TabBar ariaLabel="Import step" value={step} onChange={setStep} tabs={[
+            { key: 'mapping', label: 'Column mapping', icon: Wand2, count: mapping.length },
+            { key: 'preview', label: 'Preview', icon: PieChart, count: previewInfo ? previewInfo.errorRows || undefined : undefined, hint: 'Rows that would fail' },
+          ]} />
+
+          {step === 'mapping' && (
           <Panel flush>
             <div className="px-4 pt-4">
               <PanelHeader icon={Wand2} title="Column mapping"
-                subtitle={`Auto-filled. ${fmtNum(mappedCount)} of ${fmtNum(mapping.length)} columns mapped; adjust any row.`} />
+                subtitle={`Auto-filled. ${fmtNum(mappedCount)} of ${fmtNum(mapping.length)} columns mapped; adjust any row.`}
+                actions={<ExportButtons rows={shownMapping} columns={mapColumns} title={`TyrePulse Import Mapping ${fileName || ''}`.trim()} />} />
+              <Toolbar className="mb-3">
+                <SearchInput value={mapQuery} onChange={setMapQuery} placeholder="Search columns or fields" className="w-full sm:w-56" />
+                <Segmented role="group" ariaLabel="Mapping filter" value={mapFilter} onChange={setMapFilter} options={[
+                  { key: '', label: 'All', count: mapping.length },
+                  { key: 'unmapped', label: 'Not imported', count: mapping.length - mappedCount },
+                  { key: 'review', label: 'To check', count: reviewCount },
+                ]} />
+              </Toolbar>
             </div>
-            <div className="max-h-80 overflow-auto px-4 pb-4">
+            <div className="px-4 pb-4">
+              {shownMapping.length === 0 ? (
+                <p className="text-xs text-gray-400 py-4">No column matches this search or filter.</p>
+              ) : (
+              <>
               <Table>
-                <THead><Th>File column</Th><Th>Maps to</Th><Th>Match</Th></THead>
+                <THead>
+                  <Th sortKey="sourceHeader" sort={mapSort.sort} onSort={mapSort.onSort}>File column</Th>
+                  <Th sortKey="target" sort={mapSort.sort} onSort={mapSort.onSort}>Maps to</Th>
+                  <Th sortKey="confidence" sort={mapSort.sort} onSort={mapSort.onSort}>Match</Th>
+                </THead>
                 <tbody>
-                  {mapping.map((m) => {
+                  {mapPager.pageRows.map((m) => {
                     const b = confBadge(m.confidence)
                     return (
                       <Tr key={m.sourceHeader}>
@@ -401,10 +480,18 @@ export default function ConsoleSmartImport() {
                   })}
                 </tbody>
               </Table>
+              <Pager pager={mapPager} label="columns" />
+              </>
+              )}
             </div>
           </Panel>
+          )}
 
-          {previewInfo && (
+          {step === 'preview' && !previewInfo && (
+            <Panel><Note icon={Info}>Map at least one column to see a preview of the rows.</Note></Panel>
+          )}
+
+          {step === 'preview' && previewInfo && (
             <Panel>
               <PanelHeader icon={PieChart} title="Preview"
                 subtitle={previewInfo.isEstimate

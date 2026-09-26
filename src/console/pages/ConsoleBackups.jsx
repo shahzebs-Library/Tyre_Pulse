@@ -16,10 +16,10 @@
  * plain-English tooltip. No raw SQL is ever shown. Strings avoid em/en dashes,
  * arrows, curly quotes and middle dots.
  */
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Archive, RefreshCw, ShieldAlert, Info, Plus, Download, ChevronRight,
-  ChevronDown, Database, RotateCcw, CheckCircle2, AlertTriangle, ShieldCheck,
+  Archive, RefreshCw, ShieldAlert, Info, Plus, ChevronRight,
+  Database, RotateCcw, CheckCircle2, AlertTriangle, ShieldCheck,
   Clock, BarChart3, History,
 } from 'lucide-react'
 import { useConsoleAuth } from '../ConsoleAuthContext'
@@ -31,11 +31,23 @@ import { TrendChart, BarsChart } from '../components/ui/charts'
 import {
   createBackupSnapshot, listBackupSnapshots, restorePreview, restoreMissing,
 } from '../../lib/api/backups'
-import { exportToExcel } from '../../lib/exportUtils'
+import { sortRows, useTableSort } from '../../lib/consoleTable'
+import ExportButtons from './shared/ExportButtons'
+import { PageHeader, TabBar, useUrlTab, usePager, Pager, AttentionList } from './dataKit'
 import { toUserMessage } from '../../lib/safeError'
 
 const REFRESH_MS = 120_000
 const CONFIRM_WORD = 'RESTORE'
+const TAB_KEYS = ['backups', 'trends']
+const SNAPSHOT_COLUMNS = [
+  { key: 'taken_at', header: 'Taken at', value: (s) => fmtDateTime(s.taken_at) },
+  { key: 'kind', header: 'Kind', value: (s) => (isNightly(s.reason) ? 'Nightly (automatic)' : 'Manual') },
+  { key: 'reason', header: 'Reason' },
+  { key: 'taken_by', header: 'Taken by' },
+  { key: 'table_count', header: 'Tables', value: (s) => s.table_count ?? 0 },
+  { key: 'total_rows', header: 'Total rows', value: (s) => s.total_rows ?? 0 },
+]
+const SNAP_ACCESSORS = { kind: (s) => (isNightly(s.reason) ? 1 : 0), total_rows: (s) => Number(s.total_rows) || 0, table_count: (s) => Number(s.table_count) || 0 }
 
 // ── Small building blocks ─────────────────────────────────────────────────────
 
@@ -97,7 +109,12 @@ export default function ConsoleBackups() {
   const [backingUp, setBackingUp] = useState(false)
   const [notice, setNotice]       = useState(null)   // { message, tone }
 
-  const [expanded, setExpanded]   = useState(() => new Set())   // snapshot ids
+  // The snapshot whose per-table detail is open in the side panel.
+  const [detailId, setDetailId]   = useState(null)
+  // Where to return after the typed confirmation closes (the detail it came from).
+  const returnToRef = useRef(null)
+  const [refreshedAt, setRefreshedAt] = useState(null)
+  const [tab, setTab] = useUrlTab(TAB_KEYS, 'backups')
 
   // Restore preview state: { snapshotId, table } -> loading / delta / error.
   const [previewKey, setPreviewKey] = useState(null)   // `${snapshotId}:${table}`
@@ -125,7 +142,7 @@ export default function ConsoleBackups() {
     setError(null)
     try {
       const rows = await listBackupSnapshots(60)
-      if (mountedRef.current) setSnapshots(Array.isArray(rows) ? rows : [])
+      if (mountedRef.current) { setSnapshots(Array.isArray(rows) ? rows : []); setRefreshedAt(Date.now()) }
     } catch (err) {
       if (mountedRef.current) setError(toUserMessage(err, 'Could not load your backups'))
     } finally {
@@ -161,13 +178,9 @@ export default function ConsoleBackups() {
     }
   }
 
-  function toggleExpand(id) {
-    setExpanded(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
+  function openDetail(id) {
+    closePreview()
+    setDetailId(id)
   }
 
   async function handlePreview(snapshotId, table) {
@@ -192,7 +205,11 @@ export default function ConsoleBackups() {
     setPreviewError(null)
   }
 
+  // The detail panel closes while the typed confirmation is open, so only one
+  // dialog ever holds focus; it re-opens on the same snapshot afterwards.
   function openConfirm(snapshotId, table, taken_at, missing) {
+    returnToRef.current = snapshotId
+    setDetailId(null)
     setConfirmTarget({ snapshotId, table, taken_at, missing })
     setConfirmText('')
   }
@@ -200,6 +217,7 @@ export default function ConsoleBackups() {
   function closeConfirm() {
     if (restoring) return
     setConfirmTarget(null)
+    if (returnToRef.current) { setDetailId(returnToRef.current); returnToRef.current = null }
   }
 
   async function handleRestore() {
@@ -213,6 +231,8 @@ export default function ConsoleBackups() {
       flash(`Recovered ${fmtNum(res?.restored)} missing row${Number(res?.restored) === 1 ? '' : 's'} into ${target.table}.`)
       setConfirmTarget(null)
       setConfirmText('')
+      returnToRef.current = null
+      setDetailId(target.snapshotId)
       // Refresh the preview so the counts reflect the recovery.
       handlePreview(target.snapshotId, target.table)
       load()
@@ -220,29 +240,6 @@ export default function ConsoleBackups() {
       flash(toUserMessage(err, 'The recovery did not complete. No data was changed.'), 'error')
     } finally {
       if (mountedRef.current) setRestoring(false)
-    }
-  }
-
-  async function handleExport() {
-    const rows = snapshots.map(s => ({
-      taken_at: fmtDateTime(s.taken_at),
-      kind: isNightly(s.reason) ? 'Nightly (automatic)' : 'Manual',
-      reason: s.reason ?? '',
-      taken_by: s.taken_by ?? '',
-      table_count: s.table_count ?? 0,
-      total_rows: s.total_rows ?? 0,
-    }))
-    try {
-      await exportToExcel(
-        rows,
-        ['taken_at', 'kind', 'reason', 'taken_by', 'table_count', 'total_rows'],
-        ['Taken at', 'Kind', 'Reason', 'Taken by', 'Tables', 'Total rows'],
-        'TyrePulse Backups',
-        'Backups',
-        { title: 'TyrePulse Backups' },
-      )
-    } catch (err) {
-      flash(toUserMessage(err, 'Could not export. Please try again.'), 'error')
     }
   }
 
@@ -275,6 +272,25 @@ export default function ConsoleBackups() {
   const shownSnapshots = useMemo(() => (kindView === 'all' ? snapshots
     : snapshots.filter((s) => (kindView === 'nightly' ? isNightly(s.reason) : !isNightly(s.reason)))), [snapshots, kindView])
 
+  const { sort, onSort } = useTableSort(null)
+  const sortedSnapshots = useMemo(() => (sort ? sortRows(shownSnapshots, sort, SNAP_ACCESSORS) : shownSnapshots), [shownSnapshots, sort])
+  const pager = usePager(sortedSnapshots, 25)
+  const detail = useMemo(() => snapshots.find((x) => x.id === detailId) || null, [snapshots, detailId])
+
+  // Day-over-day change in rows saved: a sharp fall between consecutive backups
+  // means a table shrank before it was saved, which is worth a look.
+  const drops = useMemo(() => {
+    const out = []
+    for (let i = 0; i < snapshots.length - 1; i++) {
+      const cur = Number(snapshots[i].total_rows)
+      const prev = Number(snapshots[i + 1].total_rows)
+      if (Number.isFinite(cur) && Number.isFinite(prev) && prev > 0 && cur < prev * 0.9) {
+        out.push({ snap: snapshots[i], lost: prev - cur, pct: Math.round(((prev - cur) / prev) * 100) })
+      }
+    }
+    return out
+  }, [snapshots])
+
   const tableBars = useMemo(() => (Array.isArray(newest?.tables) ? newest.tables : [])
     .map(t => ({ label: t.table_name, value: Number(t.row_count) || 0 }))
     .sort((a, b) => b.value - a.value), [newest])
@@ -290,27 +306,36 @@ export default function ConsoleBackups() {
     )
   }
 
+  const attention = [
+    stale && {
+      key: 'stale', tone: 'warning',
+      title: `The newest backup is ${fmtRelative(newest.taken_at)}`,
+      detail: `Taken ${fmtDateTime(newest.taken_at)}. The nightly backup should have run since then; check Automation Health for the backup job.`,
+      action: handleBackupNow, actionLabel: 'Back up now', actionIcon: Plus,
+    },
+    drops[0] && {
+      key: 'drop', tone: 'warning',
+      title: `Rows saved fell ${drops[0].pct}% on ${fmtShortDate(drops[0].snap.taken_at)}`,
+      detail: `${fmtNum(drops[0].lost)} fewer rows than the backup before it. A table may have shrunk before it was saved; preview it to see what can be recovered.`,
+      action: () => { setTab('backups'); openDetail(drops[0].snap.id) }, actionLabel: 'Open backup', actionIcon: ChevronRight,
+    },
+  ]
+
   return (
     <div className="space-y-5 max-w-7xl">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2"><Archive size={18} className="text-orange-400" aria-hidden="true" /> Automated Backups</h1>
-          <p className="text-xs text-gray-400 mt-1 max-w-2xl">
-            Automatic nightly backups of your core data. Kept 30 days.
-            <InfoDot text="Retention: how long a backup is stored before it is automatically deleted. Backups older than 30 days are removed to save space." />
-            {' '}You can also make a backup now.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Btn icon={RefreshCw} onClick={refresh} busy={refreshing} disabled={loading}>Refresh</Btn>
-          <Btn icon={Download} onClick={handleExport} disabled={snapshots.length === 0}
-            title="Download the list of backups as an Excel spreadsheet">Export</Btn>
+      <PageHeader icon={Archive} title="Automated Backups"
+        purpose={<>
+          Automatic nightly backups of your core data. Kept 30 days.
+          <InfoDot text="Retention: how long a backup is stored before it is automatically deleted. Backups older than 30 days are removed to save space." />
+          {' '}You can also make a backup now.
+        </>}
+        refreshedAt={refreshedAt} onRefresh={refresh} refreshing={refreshing} refreshDisabled={loading}
+        actions={(
           <Btn variant="primary" icon={Plus} onClick={handleBackupNow} busy={backingUp}
             title="Take a snapshot of your core data right now, in addition to the automatic nightly one">
             {backingUp ? 'Backing up...' : 'Back up now'}
           </Btn>
-        </div>
-      </header>
+        )} />
 
       {notice && (
         <Note icon={notice.tone === 'error' ? AlertTriangle : CheckCircle2} tone={notice.tone === 'error' ? 'danger' : 'accent'}>
@@ -320,159 +345,176 @@ export default function ConsoleBackups() {
 
       <ErrorState message={error} onRetry={refresh} />
 
-      {!loading && stale && (
-        <Note icon={AlertTriangle} tone="warning">
-          The newest backup was taken {fmtRelative(newest.taken_at)} ({fmtDateTime(newest.taken_at)}). The nightly backup should have run since then;
-          check Automation Health for the backup job, or make a backup now.
-        </Note>
-      )}
-
       {!loading && snapshots.length > 0 && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <StatTile label="Backups kept" value={fmtNum(snapshots.length)} icon={Archive}
-            sub={`${fmtNum(stats.nightly)} nightly, ${fmtNum(stats.manual)} manual`} />
+            sub={`${fmtNum(stats.nightly)} nightly, ${fmtNum(stats.manual)} manual`}
+            onClick={() => { setTab('backups'); setKindView('all') }} active={tab === 'backups' && kindView === 'all'} />
           <StatTile label="Newest backup" value={fmtRelative(newest?.taken_at)} icon={Clock}
-            sub={fmtDateTime(newest?.taken_at)} tone="accent" />
+            sub={fmtDateTime(newest?.taken_at)} tone={stale ? 'warning' : 'accent'}
+            onClick={() => { setTab('backups'); openDetail(newest.id) }} />
           <StatTile label="Rows in newest" value={fmtNum(newest?.total_rows)} icon={Database}
             sub="What a recovery can draw on today" />
           <StatTile label="Tables covered" value={fmtNum(newest?.table_count)}
-            sub="In the newest backup" />
+            sub="In the newest backup" onClick={() => setTab('trends')} active={tab === 'trends'} />
         </div>
       )}
 
-      {!loading && snapshots.length > 0 && (
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Panel>
-            <PanelHeader icon={History} title="Rows saved per backup"
-              subtitle="One point per stored backup, oldest to newest. A sudden drop means a table shrank before it was saved." />
-            <TrendChart labels={trend.labels} series={[{ label: 'Rows saved', values: trend.values }]}
-              summary={`Rows saved across ${trend.values.length} backups`} emptyText="No dated backups to plot." />
-          </Panel>
-          <Panel>
-            <PanelHeader icon={BarChart3} title="Rows per table in the newest backup"
-              subtitle={newest ? `Taken ${fmtDateTime(newest.taken_at)}.` : undefined} />
-            <BarsChart bars={tableBars} valueFormat={(v) => `${fmtNum(v)} rows`}
-              summary={tableBars.map(b => `${b.label}: ${b.value}`).join(', ')}
-              emptyText="No per-table detail was recorded for the newest backup." />
-          </Panel>
-        </div>
-      )}
+      {!loading && <AttentionList items={attention} />}
 
-      <Panel flush>
-        <div className="px-4 pt-4">
-          <PanelHeader icon={Archive} title={(
-            <span className="inline-flex items-center">
-              Stored backups
-              <InfoDot text="Each row is one snapshot: a complete saved copy of your core tables taken at a point in time. Expand a snapshot to see how many rows were saved per table." />
-            </span>
-          )} subtitle="Expand a backup to preview what it could recover, table by table."
-            actions={snapshots.length > 0 ? (
-              <Segmented role="group" ariaLabel="Backup type" value={kindView} onChange={setKindView} options={[
-                { key: 'all', label: 'All', count: snapshots.length },
-                { key: 'nightly', label: 'Nightly', count: stats.nightly },
-                { key: 'manual', label: 'Manual', count: stats.manual },
-              ]} />
-            ) : null} />
-        </div>
+      <TabBar ariaLabel="Backups view" value={tab} onChange={setTab} tabs={[
+        { key: 'backups', label: 'Stored backups', icon: Archive, count: snapshots.length },
+        { key: 'trends', label: 'Trends', icon: BarChart3 },
+      ]} />
 
-        {loading ? (
-          <div className="px-4 pb-4"><LoadingState label="Loading your backups" /></div>
-        ) : snapshots.length === 0 ? (
-          !error && (
-            <EmptyState icon={Clock} title="No backups yet"
-              reason="The first nightly backup runs tonight, or you can make one now."
-              action={<Btn variant="primary" icon={Plus} onClick={handleBackupNow} busy={backingUp}>Back up now</Btn>} />
-          )
+      {tab === 'trends' ? (
+        loading ? <LoadingState label="Loading your backups" /> : snapshots.length === 0 ? (
+          <Panel><EmptyState icon={BarChart3} title="Nothing to chart yet" reason={error ? 'The backup list could not be read.' : 'Charts appear once the first backup exists.'} /></Panel>
         ) : (
-          <div className="divide-y divide-gray-800/70 border-t border-gray-800">
-            {shownSnapshots.length === 0 && (
-              <EmptyState icon={Archive} title="No backups of this type" reason="Switch to All to see every stored backup." />
-            )}
-            {shownSnapshots.map(snap => {
-              const isOpen = expanded.has(snap.id)
-              const nightly = isNightly(snap.reason)
-              return (
-                <div key={snap.id}>
-                  <button onClick={() => toggleExpand(snap.id)} aria-expanded={isOpen}
-                    className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-900/60 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-orange-500">
-                    <span className="text-gray-500" aria-hidden="true">
-                      {isOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-medium text-gray-200">{fmtDateTime(snap.taken_at)}</span>
-                        <Badge tone={nightly ? 'info' : 'accent'}>{nightly ? 'Nightly' : 'Manual'}</Badge>
-                        <span className="text-[10px] text-gray-400">{fmtRelative(snap.taken_at)}</span>
-                      </div>
-                      <p className="text-[11px] text-gray-400 mt-0.5 truncate">
-                        {fmtNum(snap.table_count)} tables, {fmtNum(snap.total_rows)} rows saved
-                        {snap.taken_by ? ` | by ${snap.taken_by}` : ''}
-                      </p>
-                    </div>
-                  </button>
-
-                  {isOpen && (
-                    <div className="px-4 pb-4">
-                      {Array.isArray(snap.tables) && snap.tables.length > 0 ? (
-                        <Table>
-                          <THead>
-                            <Th>Table</Th>
-                            <Th align="right">Rows saved</Th>
-                            <Th align="right">Recovery</Th>
-                          </THead>
-                          <tbody>
-                            {snap.tables.map(t => {
-                              const key = `${snap.id}:${t.table_name}`
-                              const active = previewKey === key
-                              return (
-                                <Fragment key={key}>
-                                  <Tr>
-                                    <Td><span className="inline-flex items-center gap-2"><Database size={11} className="text-gray-600" aria-hidden="true" /><Code>{t.table_name}</Code></span></Td>
-                                    <Td align="right"><span className="tabular-nums text-gray-400">{fmtNum(t.row_count)}</span></Td>
-                                    <Td align="right">
-                                      <Btn size="xs" variant="quiet" icon={RotateCcw}
-                                        onClick={() => (active ? closePreview() : handlePreview(snap.id, t.table_name))}
-                                        title="Check what could be safely recovered from this backup, without changing anything">
-                                        {active ? 'Hide' : 'Preview restore'}
-                                      </Btn>
-                                    </Td>
-                                  </Tr>
-                                  {active && (
-                                    <tr>
-                                      <td colSpan={3} className="px-3 py-3 bg-gray-900/30">
-                                        <SafetyPanel
-                                          loading={previewLoading}
-                                          error={previewError}
-                                          preview={preview}
-                                          onRetry={() => handlePreview(snap.id, t.table_name)}
-                                          onRecover={() => openConfirm(snap.id, t.table_name, snap.taken_at, preview?.missing_rows)}
-                                        />
-                                      </td>
-                                    </tr>
-                                  )}
-                                </Fragment>
-                              )
-                            })}
-                          </tbody>
-                        </Table>
-                      ) : (
-                        <p className="text-[11px] text-gray-500 py-2">
-                          No per-table detail was recorded for this snapshot.
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Panel>
+              <PanelHeader icon={History} title="Rows saved per backup"
+                subtitle="One point per stored backup, oldest to newest. A sudden drop means a table shrank before it was saved." />
+              <TrendChart labels={trend.labels} series={[{ label: 'Rows saved', values: trend.values }]}
+                summary={`Rows saved across ${trend.values.length} backups`} emptyText="No dated backups to plot." />
+            </Panel>
+            <Panel>
+              <PanelHeader icon={BarChart3} title="Rows per table in the newest backup"
+                subtitle={newest ? `Taken ${fmtDateTime(newest.taken_at)}.` : undefined} />
+              <BarsChart bars={tableBars} valueFormat={(v) => `${fmtNum(v)} rows`}
+                summary={tableBars.map(b => `${b.label}: ${b.value}`).join(', ')}
+                emptyText="No per-table detail was recorded for the newest backup." />
+            </Panel>
           </div>
-        )}
-      </Panel>
+        )
+      ) : (
+        <Panel flush>
+          <div className="px-4 pt-4">
+            <PanelHeader icon={Archive} title={(
+              <span className="inline-flex items-center">
+                Stored backups
+                <InfoDot text="Each row is one snapshot: a complete saved copy of your core tables taken at a point in time. Open a snapshot to see how many rows were saved per table." />
+              </span>
+            )} subtitle="Open a backup to preview what it could recover, table by table."
+              actions={snapshots.length > 0 ? (
+                <>
+                  <Segmented role="group" ariaLabel="Backup type" value={kindView} onChange={setKindView} options={[
+                    { key: 'all', label: 'All', count: snapshots.length },
+                    { key: 'nightly', label: 'Nightly', count: stats.nightly },
+                    { key: 'manual', label: 'Manual', count: stats.manual },
+                  ]} />
+                  <ExportButtons rows={sortedSnapshots} columns={SNAPSHOT_COLUMNS} title="TyrePulse Backups" />
+                </>
+              ) : null} />
+          </div>
+
+          {loading ? (
+            <div className="px-4 pb-4"><LoadingState label="Loading your backups" /></div>
+          ) : snapshots.length === 0 ? (
+            !error && (
+              <EmptyState icon={Clock} title="No backups yet"
+                reason="The first nightly backup runs tonight, or you can make one now."
+                action={<Btn variant="primary" icon={Plus} onClick={handleBackupNow} busy={backingUp}>Back up now</Btn>} />
+            )
+          ) : shownSnapshots.length === 0 ? (
+            <EmptyState icon={Archive} title="No backups of this type" reason="Switch to All to see every stored backup." />
+          ) : (
+            <div className="px-4 pb-4">
+              <Table>
+                <THead>
+                  <Th sortKey="taken_at" sort={sort} onSort={onSort}>Taken</Th>
+                  <Th sortKey="kind" sort={sort} onSort={onSort}>Kind</Th>
+                  <Th sortKey="table_count" sort={sort} onSort={onSort} align="right">Tables</Th>
+                  <Th sortKey="total_rows" sort={sort} onSort={onSort} align="right">Rows</Th>
+                  <Th>By</Th>
+                  <Th align="right">Detail</Th>
+                </THead>
+                <tbody>
+                  {pager.pageRows.map(snap => {
+                    const nightly = isNightly(snap.reason)
+                    return (
+                      <Tr key={snap.id} onClick={() => openDetail(snap.id)} ariaLabel={`Open backup taken ${fmtDateTime(snap.taken_at)}`}>
+                        <Td nowrap>
+                          <span className="text-sm text-gray-200">{fmtDateTime(snap.taken_at)}</span>
+                          <span className="block text-[10px] text-gray-400">{fmtRelative(snap.taken_at)}</span>
+                        </Td>
+                        <Td><Badge tone={nightly ? 'info' : 'accent'}>{nightly ? 'Nightly' : 'Manual'}</Badge></Td>
+                        <Td align="right" nowrap><span className="tabular-nums text-gray-300">{fmtNum(snap.table_count)}</span></Td>
+                        <Td align="right" nowrap>
+                          <span className="tabular-nums text-gray-300">{fmtNum(snap.total_rows)}</span>
+                          <span className="sr-only">{fmtNum(snap.table_count)} tables, {fmtNum(snap.total_rows)} rows saved</span>
+                        </Td>
+                        <Td><span className="text-gray-400">{snap.taken_by || 'System'}</span></Td>
+                        <Td align="right">
+                          <Btn size="xs" variant="quiet" icon={ChevronRight} onClick={(e) => { e.stopPropagation(); openDetail(snap.id) }}>
+                            {fmtNum(snap.table_count)} tables, {fmtNum(snap.total_rows)} rows saved
+                          </Btn>
+                        </Td>
+                      </Tr>
+                    )
+                  })}
+                </tbody>
+              </Table>
+              <Pager pager={pager} label="backups" />
+            </div>
+          )}
+        </Panel>
+      )}
 
       <Note icon={ShieldCheck}>
         Backups are read-only safety copies. Recovering rows only re-adds records that were deleted after a backup was
         taken. It never overwrites, edits or removes anything that is currently in your live data.
       </Note>
+
+      <Modal open={!!detail} onClose={() => { setDetailId(null); closePreview() }} width="max-w-3xl"
+        title={detail ? `Backup taken ${fmtDateTime(detail.taken_at)}` : ''}
+        subtitle={detail ? `${isNightly(detail.reason) ? 'Nightly' : 'Manual'} | ${fmtNum(detail.table_count)} tables | ${fmtNum(detail.total_rows)} rows${detail.taken_by ? ` | by ${detail.taken_by}` : ''}` : undefined}
+        footer={<Btn onClick={() => { setDetailId(null); closePreview() }}>Close</Btn>}>
+        {detail && (Array.isArray(detail.tables) && detail.tables.length > 0 ? (
+          <div className="space-y-3">
+            <Table>
+              <THead>
+                <Th>Table</Th>
+                <Th align="right">Rows saved</Th>
+                <Th align="right">Recovery</Th>
+              </THead>
+              <tbody>
+                {detail.tables.map(t => {
+                  const key = `${detail.id}:${t.table_name}`
+                  const active = previewKey === key
+                  return (
+                    <Tr key={key} className={active ? 'bg-orange-950/20' : ''}>
+                      <Td><span className="inline-flex items-center gap-2"><Database size={11} className="text-gray-600" aria-hidden="true" /><Code>{t.table_name}</Code></span></Td>
+                      <Td align="right"><span className="tabular-nums text-gray-400">{fmtNum(t.row_count)}</span></Td>
+                      <Td align="right">
+                        <Btn size="xs" variant="quiet" icon={RotateCcw}
+                          onClick={() => (active ? closePreview() : handlePreview(detail.id, t.table_name))}
+                          title="Check what could be safely recovered from this backup, without changing anything">
+                          {active ? 'Hide' : 'Preview restore'}
+                        </Btn>
+                      </Td>
+                    </Tr>
+                  )
+                })}
+              </tbody>
+            </Table>
+            {previewKey && previewKey.startsWith(`${detail.id}:`) && (
+              <div className="rounded-lg border border-gray-800 bg-gray-900/30 p-3">
+                <p className="text-[11px] text-gray-500 mb-2">Restore preview for <Code>{previewKey.slice(detail.id.length + 1)}</Code></p>
+                <SafetyPanel
+                  loading={previewLoading}
+                  error={previewError}
+                  preview={preview}
+                  onRetry={() => handlePreview(detail.id, previewKey.slice(detail.id.length + 1))}
+                  onRecover={() => openConfirm(detail.id, previewKey.slice(detail.id.length + 1), detail.taken_at, preview?.missing_rows)}
+                />
+              </div>
+            )}
+          </div>
+        ) : (
+          <p className="text-[11px] text-gray-500 py-2">No per-table detail was recorded for this snapshot.</p>
+        ))}
+      </Modal>
 
       <Modal open={!!confirmTarget} onClose={closeConfirm} width="max-w-lg"
         title="Recover missing rows" subtitle={confirmTarget?.table}

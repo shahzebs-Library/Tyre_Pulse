@@ -15,7 +15,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  Trash2, RefreshCw, AlertTriangle, Info, Database, ShieldCheck, Eye, CheckCircle2, BarChart3, Download,
+  Trash2, AlertTriangle, Info, Database, ShieldCheck, Eye, CheckCircle2, BarChart3, ArrowRight,
 } from 'lucide-react'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import {
@@ -27,8 +27,9 @@ import {
   listCleanupTargets, previewCleanup, runCleanup, monthsAgoISO, AGE_PRESETS,
 } from '../../lib/api/dataCleanup'
 import { toUserMessage } from '../../lib/safeError'
-import { useTableSort } from '../../lib/useTableSort'
-import { exportToExcel, reportFileName } from '../../lib/exportUtils'
+import { sortRows, useTableSort } from '../../lib/consoleTable'
+import ExportButtons from './shared/ExportButtons'
+import { PageHeader, TabBar, useUrlTab, usePager, Pager, AttentionList } from './dataKit'
 
 const fmtDate = (v) => {
   if (!v) return 'N/A'
@@ -37,6 +38,20 @@ const fmtDate = (v) => {
 }
 const fmtNum = (n) => (n !== null && n !== undefined && Number.isFinite(Number(n)) ? Number(n).toLocaleString() : 'N/A')
 const CONFIRM_WORD = 'CLEAN'
+const TAB_KEYS = ['targets', 'overview']
+const TARGET_COLUMNS = [
+  { key: 'label', header: 'Target' },
+  { key: 'kind', header: 'Kind', value: (t) => (t.kind === 'business' ? 'Business data' : 'Logs') },
+  { key: 'total', header: 'Rows', value: (t) => Number(t.total) || 0 },
+  { key: 'oldest', header: 'Oldest', value: (t) => fmtDate(t.oldest) },
+  { key: 'newest', header: 'Newest', value: (t) => fmtDate(t.newest) },
+]
+// A log target whose oldest record is older than this is a cleanup candidate.
+const STALE_LOG_DAYS = 365
+const daysSince = (v) => {
+  const t = v ? new Date(v).getTime() : NaN
+  return Number.isFinite(t) ? Math.floor((Date.now() - t) / 86400000) : null
+}
 
 export default function ConsoleDataCleanup() {
   const { logAction } = useConsoleAuth()
@@ -54,12 +69,15 @@ export default function ConsoleDataCleanup() {
   const [confirmText, setConfirmText] = useState('')
   const [running, setRunning] = useState(false)
   const [result, setResult] = useState(null)        // { deleted, snapshot } | null
+  const [refreshedAt, setRefreshedAt] = useState(null)
+  const [tab, setTab] = useUrlTab(TAB_KEYS, 'targets')
 
   const load = useCallback(async () => {
     setLoading(true); setLoadError('')
     try {
       const rows = await listCleanupTargets()
       setTargets(rows)
+      setRefreshedAt(Date.now())
       // Keep the selected target's totals current after a refresh or a run.
       setSelected((cur) => (cur ? rows.find((t) => t.key === cur.key) || cur : cur))
     } catch (e) {
@@ -146,25 +164,30 @@ export default function ConsoleDataCleanup() {
       return !q || String(t.label || '').toLowerCase().includes(q)
     })
   }, [targets, kindFilter, search])
-  const { sort, onSort, sorted } = useTableSort(shownTargets, { key: 'total', dir: 'desc' })
-  const exportTargets = () => exportToExcel(
-    sorted.map((t) => ({ target: t.label, kind: t.kind === 'business' ? 'Business data' : 'Logs', rows: Number(t.total) || 0, oldest: fmtDate(t.oldest), newest: fmtDate(t.newest) })),
-    ['target', 'kind', 'rows', 'oldest', 'newest'], ['Target', 'Kind', 'Rows', 'Oldest', 'Newest'],
-    reportFileName('TyrePulse Cleanup Targets'),
-  )
+  const { sort, onSort } = useTableSort({ key: 'total', dir: 'desc' })
+  const sorted = useMemo(() => sortRows(shownTargets, sort, { total: (t) => Number(t.total) || 0 }), [shownTargets, sort])
+  const pager = usePager(sorted, 25)
+
+  // Log targets holding records older than a year: the obvious, safe cleanups.
+  const attention = useMemo(() => targets
+    .filter((t) => t.kind !== 'business' && Number(t.total) > 0 && (daysSince(t.oldest) ?? 0) > STALE_LOG_DAYS)
+    .sort((a, b) => (Number(b.total) || 0) - (Number(a.total) || 0))
+    .slice(0, 4)
+    .map((t) => ({
+      key: t.key, tone: 'warning',
+      title: `${t.label} keeps records from ${fmtDate(t.oldest)}`,
+      detail: `${fmtNum(t.total)} rows held, the oldest ${fmtNum(daysSince(t.oldest))} days old. Logs are the safe cleanup.`,
+      action: () => { setTab('targets'); selectTarget(t) }, actionLabel: 'Review', actionIcon: ArrowRight,
+    })), [targets, setTab])
 
   const confirmOk = confirmText.trim().toUpperCase() === CONFIRM_WORD
   const presetOptions = AGE_PRESETS.map((p) => ({ key: monthsAgoISO(p.months), label: p.label }))
 
   return (
     <div className="space-y-5 max-w-7xl">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2"><Trash2 size={18} className="text-orange-400" aria-hidden="true" /> Data Cleanup</h1>
-          <p className="text-xs text-gray-400 mt-1">Delete old records you no longer need. A recovery snapshot is taken automatically before anything is removed.</p>
-        </div>
-        <Btn icon={RefreshCw} onClick={load} busy={loading}>Refresh</Btn>
-      </header>
+      <PageHeader icon={Trash2} title="Data Cleanup"
+        purpose="Delete old records you no longer need. A recovery snapshot is taken automatically before anything is removed."
+        refreshedAt={refreshedAt} onRefresh={load} refreshing={loading} />
 
       <Note icon={ShieldCheck} tone="accent">
         Safe by design: pick a target, preview the exact number of old records, then confirm. The system snapshots the data first so a cleanup can be recovered from Backups, and every run is logged.
@@ -182,14 +205,22 @@ export default function ConsoleDataCleanup() {
       ) : targets.length > 0 && (
         <>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <StatTile label="Log targets" value={fmtNum(summary.logs)} sub={`${fmtNum(summary.logRows)} rows held`} icon={Database} />
-            <StatTile label="Business targets" value={fmtNum(summary.biz)} sub={`${fmtNum(summary.bizRows)} rows held`} tone={summary.biz ? 'warning' : 'default'} icon={AlertTriangle} />
+            <StatTile label="Log targets" value={fmtNum(summary.logs)} sub={`${fmtNum(summary.logRows)} rows held`} icon={Database}
+              onClick={() => { setTab('targets'); setKindFilter(kindFilter === 'logs' ? '' : 'logs') }} active={kindFilter === 'logs'} />
+            <StatTile label="Business targets" value={fmtNum(summary.biz)} sub={`${fmtNum(summary.bizRows)} rows held`} tone={summary.biz ? 'warning' : 'default'} icon={AlertTriangle}
+              onClick={() => { setTab('targets'); setKindFilter(kindFilter === 'business' ? '' : 'business') }} active={kindFilter === 'business'} />
             <StatTile label="Oldest record" value={fmtDate(summary.oldest)} sub="Across every target" />
             <StatTile label="Last run" value={result ? fmtNum(result.deleted) : 'N/A'}
               sub={result ? 'Records deleted this session' : 'No cleanup run this session'} tone={result ? 'good' : 'muted'} />
           </div>
 
-          <Panel>
+          <TabBar ariaLabel="Data cleanup view" value={tab} onChange={setTab} tabs={[
+            { key: 'targets', label: 'Targets', icon: Database, count: targets.length },
+            { key: 'overview', label: 'Overview', icon: BarChart3 },
+          ]} />
+
+          {tab === 'overview' && (
+            <Panel>
             <PanelHeader icon={BarChart3} title="Rows held per target"
               subtitle="Everything a cleanup of each target could ever touch. Business targets are marked. The preview below gives the exact count for a cutoff." />
             <BarsChart bars={bars} valueFormat={(v) => `${fmtNum(v)} rows`}
@@ -197,11 +228,16 @@ export default function ConsoleDataCleanup() {
               emptyText="Every target is empty." />
           </Panel>
 
+          )}
+
+          {tab === 'targets' && <AttentionList items={attention} title="Safe cleanups to consider" />}
+
+          {tab === 'targets' && (
           <div className="grid gap-4 lg:grid-cols-2">
             <Panel flush>
               <div className="px-4 pt-4">
                 <PanelHeader icon={Database} title="Targets" subtitle={`Select one to clean up. ${sorted.length} of ${targets.length} shown.`}
-                  actions={<Btn icon={Download} onClick={exportTargets} disabled={!sorted.length}>Excel</Btn>} />
+                  actions={<ExportButtons rows={sorted} columns={TARGET_COLUMNS} title="TyrePulse Cleanup Targets" />} />
                 <Toolbar className="mb-3">
                   <SearchInput value={search} onChange={setSearch} placeholder="Search targets" className="w-full sm:w-52" />
                   <Segmented role="group" ariaLabel="Target kind" value={kindFilter} onChange={setKindFilter} options={[
@@ -209,7 +245,7 @@ export default function ConsoleDataCleanup() {
                   ]} />
                 </Toolbar>
               </div>
-              <div className="max-h-[520px] overflow-y-auto px-4 pb-4">
+              <div className="px-4 pb-4">
                 <Table>
                   <THead>
                     <Th sortKey="label" sort={sort} onSort={onSort}>Target</Th>
@@ -221,7 +257,7 @@ export default function ConsoleDataCleanup() {
                     {sorted.length === 0 && (
                       <tr><Td colSpan={4}><span className="text-gray-400">No target matches these filters.</span></Td></tr>
                     )}
-                    {sorted.map((t) => {
+                    {pager.pageRows.map((t) => {
                       const active = selected?.key === t.key
                       return (
                         <Tr key={t.key} onClick={() => selectTarget(t)} className={active ? 'bg-orange-950/20' : ''}>
@@ -234,6 +270,7 @@ export default function ConsoleDataCleanup() {
                     })}
                   </tbody>
                 </Table>
+                <Pager pager={pager} label="targets" />
               </div>
             </Panel>
 
@@ -292,6 +329,7 @@ export default function ConsoleDataCleanup() {
               )}
             </Panel>
           </div>
+          )}
         </>
       )}
 

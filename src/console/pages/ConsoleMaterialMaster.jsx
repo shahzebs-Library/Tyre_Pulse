@@ -26,7 +26,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Boxes, RefreshCw, Check, Info, Download,
+  Boxes, RefreshCw, Check, Info, ArrowRight,
   ListFilter, CheckCheck, CheckCircle2, HelpCircle, Ban, PieChart, BarChart3,
 } from 'lucide-react'
 import {
@@ -42,9 +42,10 @@ import {
   MATERIAL_CATEGORIES, MATERIAL_SUBCATEGORIES, costBucketFor,
   descriptionAgreement, transactionBucketSplit,
 } from '../../lib/materialMaster'
-import { exportToExcel, reportFileName } from '../../lib/exportUtils'
 import { toUserMessage } from '../../lib/safeError'
-import { useTableSort } from '../../lib/useTableSort'
+import { sortRows, useTableSort } from '../../lib/consoleTable'
+import ExportButtons from './shared/ExportButtons'
+import { PageHeader, TabBar, useUrlTab, usePager, Pager, AttentionList } from './dataKit'
 
 const COUNTRIES = ['KSA', 'UAE', 'Egypt']
 const CURRENCY = Object.freeze({ KSA: 'SAR', UAE: 'AED', Egypt: 'EGP' })
@@ -56,6 +57,22 @@ const MM_ACCESSORS = {
   status: (r) => (r.conflicting && !r.reviewed ? 0 : r.reviewed ? 2 : 1),
 }
 
+const TAB_KEYS = ['review', 'coverage']
+const EXPORT_COLUMNS = [
+  { key: 'country', header: 'Country' },
+  { key: 'item_code', header: 'Item code' },
+  { key: 'item_name', header: 'Item name', value: (r) => r.item_name || '' },
+  { key: 'category', header: 'Category', value: (r) => labelFor(r.category) },
+  { key: 'cost_bucket', header: 'Cost bucket', value: (r) => costBucketFor(r.category) },
+  { key: 'description_agrees', header: 'Description agrees', value: (r) => descriptionAgreement(r) },
+  { key: 'subcategory', header: 'Subcategory', value: (r) => r.subcategory || '' },
+  { key: 'brand', header: 'Brand', value: (r) => r.brand || '' },
+  { key: 'uom', header: 'UOM', value: (r) => r.uom || '' },
+  { key: 'reviewed', header: 'Reviewed', value: (r) => (r.reviewed ? 'Yes' : 'No') },
+  { key: 'needs_decision', header: 'Needs decision', value: (r) => (r.conflicting ? 'Yes' : 'No') },
+  { key: 'txn_rows', header: 'Transactions' },
+  { key: 'txn_value', header: 'Value' },
+]
 const fmtNum = (n) => (Number.isFinite(Number(n)) ? Number(n).toLocaleString() : 'N/A')
 const fmtMoney = (n) => (Number.isFinite(Number(n))
   ? Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 }) : 'N/A')
@@ -76,6 +93,8 @@ export default function ConsoleMaterialMaster() {
   const [view, setView] = useState('all')      // all | unreviewed | reviewed | conflicting
   const [agree, setAgree] = useState('any')     // any | agree | differ
   const [selected, setSelected] = useState(() => new Set())
+  const [tab, setTab] = useUrlTab(TAB_KEYS, 'review')
+  const [refreshedAt, setRefreshedAt] = useState(null)
 
   const [detail, setDetail] = useState(null)      // the item being reviewed
   const [detailTxns, setDetailTxns] = useState([])
@@ -100,6 +119,7 @@ export default function ConsoleMaterialMaster() {
         materialCoverage(),
       ])
       setRows(list); setCoverage(cov)
+      setRefreshedAt(Date.now())
       setSelected(new Set())   // a fresh list invalidates any prior selection
     } catch (e) {
       setError(toUserMessage(e, 'Could not load the material master.'))
@@ -119,7 +139,9 @@ export default function ConsoleMaterialMaster() {
     return rows.filter((r) => descriptionAgreement(r) === agree)
   }, [rows, agree])
 
-  const { sort, onSort, sorted } = useTableSort(visible, { key: null, dir: 'desc' }, MM_ACCESSORS)
+  const { sort, onSort } = useTableSort(null)
+  const sorted = useMemo(() => (sort ? sortRows(visible, sort, MM_ACCESSORS) : visible), [visible, sort])
+  const pager = usePager(sorted, 50)
 
   const selectableIds = useMemo(
     () => visible.filter((r) => !r.reviewed).map((r) => r.id),
@@ -254,63 +276,61 @@ export default function ConsoleMaterialMaster() {
     }
   }
 
-  async function download() {
-    if (!rows.length) return
-    const out = rows.map((r) => ({
-      country: r.country,
-      item_code: r.item_code,
-      item_name: r.item_name || '',
-      category: labelFor(r.category),
-      cost_bucket: costBucketFor(r.category),
-      description_agrees: descriptionAgreement(r),
-      subcategory: r.subcategory || '',
-      brand: r.brand || '',
-      uom: r.uom || '',
-      reviewed: r.reviewed ? 'Yes' : 'No',
-      needs_decision: r.conflicting ? 'Yes' : 'No',
-      transactions: r.txn_rows,
-      value: r.txn_value,
-    }))
-    const keys = Object.keys(out[0])
-    try {
-      await exportToExcel(out, keys, keys.map((k) => k.replace(/_/g, ' ')),
-        reportFileName('TyrePulse Material Master', country))
-    } catch (e) {
-      setError(toUserMessage(e, 'Could not export the list.'))
-    }
-  }
-
   const reviewedShare = coverage?.reviewed_value_share
   const unreviewedCount = useMemo(() => visible.filter((r) => !r.reviewed).length, [visible])
+  const differUnreviewed = useMemo(() => rows.filter((r) => !r.reviewed && descriptionAgreement(r) === 'differ'), [rows])
+  const agreeUnreviewed = useMemo(() => rows.filter((r) => !r.reviewed && descriptionAgreement(r) === 'agree').length, [rows])
+  const attention = [
+    Number(coverage?.codes_conflicting) > 0 && view !== 'conflicting' && {
+      key: 'conflicting', tone: 'warning',
+      title: `${fmtNum(coverage.codes_conflicting)} item code(s) need a decision`,
+      detail: 'Their transactions disagree about what the item is. Each one needs a person to choose.',
+      action: () => { setTab('review'); setView('conflicting'); setAgree('any') }, actionLabel: 'Show them', actionIcon: ArrowRight,
+    },
+    differUnreviewed.length > 0 && agree !== 'differ' && {
+      key: 'differ', tone: 'warning',
+      title: `${fmtNum(differUnreviewed.length)} loaded ${country} item(s) differ from their description`,
+      detail: 'Open these before confirming: the description points to a different cost bucket.',
+      action: () => { setTab('review'); setView('unreviewed'); setAgree('differ') }, actionLabel: 'Review', actionIcon: ArrowRight,
+    },
+    agreeUnreviewed > 0 && agree !== 'agree' && {
+      key: 'agree', tone: 'info',
+      title: `${fmtNum(agreeUnreviewed)} loaded ${country} item(s) are safe to confirm quickly`,
+      detail: 'The description agrees with the category, so a bulk confirm keeps every figure as it is.',
+      action: () => { setTab('review'); setView('unreviewed'); setAgree('agree') }, actionLabel: 'Show them', actionIcon: ArrowRight,
+    },
+  ]
 
   return (
     <div className="space-y-5 max-w-7xl pb-24">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2"><Boxes size={18} className="text-orange-400" aria-hidden="true" /> Material Master</h1>
-          <p className="text-xs text-gray-400 mt-1">
-            Decide what each item actually is. Your decision overrides whatever the
-            description says, so a spare part can never be counted as a tyre.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {rows.length > 0 && <Btn icon={Download} onClick={download}>Excel</Btn>}
-          <Btn icon={RefreshCw} onClick={refresh} busy={busy}>Refresh from transactions</Btn>
-        </div>
-      </header>
+      <PageHeader icon={Boxes} title="Material Master"
+        purpose="Decide what each item actually is. Your decision overrides whatever the description says, so a spare part can never be counted as a tyre."
+        refreshedAt={refreshedAt} onRefresh={load} refreshing={loading} refreshLabel="Reload list"
+        actions={<Btn variant="primary" icon={RefreshCw} onClick={refresh} busy={busy}
+          title="Rebuild the master from your expense transactions. Items you already reviewed are left untouched.">Refresh from transactions</Btn>} />
 
       {/* Coverage: money reviewed, not rows reviewed. Whole scope, every country. */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatTile label="Item codes" value={fmtNum(coverage?.codes_total)} icon={Boxes} sub="All countries in your scope" />
-        <StatTile label="Reviewed by a person" value={fmtNum(coverage?.codes_reviewed)} tone="good" icon={CheckCircle2} />
+        <StatTile label="Item codes" value={fmtNum(coverage?.codes_total)} icon={Boxes} sub="All countries in your scope"
+          onClick={() => { setTab('review'); setView('all') }} active={tab === 'review' && view === 'all'} />
+        <StatTile label="Reviewed by a person" value={fmtNum(coverage?.codes_reviewed)} tone="good" icon={CheckCircle2}
+          onClick={() => { setTab('review'); setView('reviewed') }} active={tab === 'review' && view === 'reviewed'} />
         <StatTile label="Need a decision" value={fmtNum(coverage?.codes_conflicting)} icon={ListFilter}
-          tone={Number(coverage?.codes_conflicting) > 0 ? 'warning' : 'default'} />
+          tone={Number(coverage?.codes_conflicting) > 0 ? 'warning' : 'default'}
+          onClick={() => { setTab('review'); setView('conflicting') }} active={tab === 'review' && view === 'conflicting'} />
         <StatTile label="Share of spend reviewed"
           value={reviewedShare == null ? 'N/A' : `${reviewedShare}%`}
           sub="A share, so it does not add currencies"
           tone={reviewedShare != null && reviewedShare > 0 ? 'good' : 'default'} />
       </div>
 
+      <TabBar ariaLabel="Material master view" value={tab} onChange={setTab} tabs={[
+        { key: 'review', label: 'Review items', icon: ListFilter, count: loading ? undefined : visible.length },
+        { key: 'coverage', label: 'Coverage and spend', icon: PieChart },
+      ]} />
+
+      {tab === 'coverage' && (
+        <>
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel>
           <PanelHeader icon={PieChart} title="Review coverage"
@@ -324,6 +344,13 @@ export default function ConsoleMaterialMaster() {
         </Panel>
       </div>
 
+        </>
+      )}
+
+      {tab === 'review' && <AttentionList items={attention} title="Where to start" />}
+
+      {tab === 'review' && (
+      <>
       <Note icon={Info} tone="accent">
         Confirming an item accepts the category it already has, so no spend is
         re-bucketed. It only records the decision with your name on it. The green
@@ -351,6 +378,7 @@ export default function ConsoleMaterialMaster() {
             { key: 'differ', label: <span className="inline-flex items-center gap-1"><HelpCircle size={10} /> Differs</span> },
           ]} />
           <SearchInput value={search} onChange={setSearch} placeholder="Search item code or name" className="flex-1 min-w-[200px]" />
+          <ExportButtons rows={sorted} columns={EXPORT_COLUMNS} title={`TyrePulse Material Master ${country}`} disabled={loading} />
         </div>
       </Panel>
 
@@ -379,13 +407,13 @@ export default function ConsoleMaterialMaster() {
               )}
             </p>
           )}
-          <div className="max-h-[560px] overflow-auto">
+          <div>
             <Table>
               <THead>
                 <Th className="w-8">
                   <input type="checkbox" checked={allSelected} onChange={toggleAll}
-                    disabled={selectableIds.length === 0} aria-label="Select all unreviewed on this page"
-                    className="accent-orange-500 disabled:opacity-30" title="Select all unreviewed on this page" />
+                    disabled={selectableIds.length === 0} aria-label="Select all unreviewed items in this list"
+                    className="accent-orange-500 disabled:opacity-30" title="Select all unreviewed items in this list, across every page" />
                 </Th>
                 <Th sortKey="item_code" sort={sort} onSort={onSort}>Item</Th>
                 <Th sortKey="category" sort={sort} onSort={onSort}>Counted as</Th>
@@ -395,7 +423,7 @@ export default function ConsoleMaterialMaster() {
                 <Th align="right">Action</Th>
               </THead>
               <tbody>
-                {sorted.map((r) => {
+                {pager.pageRows.map((r) => {
                   const ag = descriptionAgreement(r)
                   const isSel = selected.has(r.id)
                   return (
@@ -446,8 +474,12 @@ export default function ConsoleMaterialMaster() {
                 })}
               </tbody>
             </Table>
+            <Pager pager={pager} label="items" />
           </div>
         </>
+      )}
+
+      </>
       )}
 
       {/* Multi-confirm action bar, shown only when something is selected. */}

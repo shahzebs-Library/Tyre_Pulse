@@ -4,7 +4,7 @@ import {
   ShieldCheck, ListTree, CopyX, Brain,
   DollarSign, TrendingUp, Boxes, Archive, Table2, Activity,
   UploadCloud, History, Wand2, Layers,
-  Database, AlertTriangle, RefreshCw,
+  Database, AlertTriangle, BarChart3,
   LayoutList, Scale, ClipboardList, GitBranch, BellRing, Rocket, Sparkles, ArrowRight,
 } from 'lucide-react'
 import {
@@ -13,9 +13,13 @@ import {
 import { openConsoleRoute, isConsoleRoute } from '../lib/openRoute'
 import { toUserMessage } from '../../lib/safeError'
 import {
-  Panel, PanelHeader, StatTile, Btn, Badge, Note, SearchInput,
-  LoadingState, EmptyState, ErrorState,
+  Panel, PanelHeader, StatTile, Btn, Badge, Note, SearchInput, Segmented, Toolbar,
+  Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState,
 } from '../components/ui'
+import { BarsChart } from '../components/ui/charts'
+import { searchRows, sortRows, useTableSort } from '../../lib/consoleTable'
+import ExportButtons from './shared/ExportButtons'
+import { PageHeader, TabBar, useUrlTab, usePager, Pager, AttentionList } from './dataKit'
 
 /**
  * Data Operations hub.
@@ -110,12 +114,30 @@ const GROUPS = [
   },
 ]
 
+const TABS = [
+  { key: 'overview', label: 'Overview', icon: AlertTriangle },
+  ...GROUPS.map((g) => ({ key: g.key, label: g.title, icon: g.icon, count: g.cards.length })),
+]
+const TAB_KEYS = TABS.map((t) => t.key)
+const ISSUE_COLUMNS = [
+  { key: 'severity', header: 'Severity', value: (r) => r.severity || 'info' },
+  { key: 'label', header: 'Issue', value: (r) => r.label || r.key },
+  { key: 'count', header: 'Rows affected' },
+  { key: 'route', header: 'Fix on', value: (r) => ISSUE_ROUTE[r.action] || '' },
+]
+const SEV_RANK = { critical: 0, warning: 1, info: 2 }
+const ISSUE_ACCESSORS = { severity: (r) => SEV_RANK[r.severity] ?? 9, label: (r) => r.label || r.key, count: (r) => Number(r.count) || 0 }
+
 export default function ConsoleDataOps() {
   const navigate = useNavigate()
   const [summary, setSummary] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
+  const [refreshedAt, setRefreshedAt] = useState(null)
+  const [tab, setTab] = useUrlTab(TAB_KEYS, 'overview')
+  const [issueQuery, setIssueQuery] = useState('')
+  const [sevFilter, setSevFilter] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
@@ -126,6 +148,7 @@ export default function ConsoleDataOps() {
         setError('The diagnostics summary is not available right now.')
       } else {
         setSummary(data)
+        setRefreshedAt(Date.now())
       }
     } catch (e) {
       setSummary(null)
@@ -137,118 +160,174 @@ export default function ConsoleDataOps() {
 
   useEffect(() => { load() }, [load])
 
-  const groups = useMemo(() => {
+  // A search looks across every group, whatever tab is open: a tool you are
+  // hunting for should not hide because it lives on another tab.
+  const matches = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return GROUPS
+    if (!q) return null
     return GROUPS
       .map((g) => ({ ...g, cards: g.cards.filter((c) => `${c.title} ${c.desc} ${c.route}`.toLowerCase().includes(q)) }))
       .filter((g) => g.cards.length > 0)
   }, [search])
-  const topIssues = useMemo(() => rankIssues(summary?.issues || []).filter((i) => Number(i.count) > 0).slice(0, 6), [summary])
 
   const openIssues = summary ? openIssueCount(summary.issues) : 0
-  const vol = summary?.volumes || {}
+  const vol = useMemo(() => summary?.volumes || {}, [summary])
+  const issues = useMemo(() => rankIssues(summary?.issues || []).filter((i) => Number(i.count) > 0), [summary])
+  const sevCounts = useMemo(() => issues.reduce((a, i) => { const k = i.severity || 'info'; a[k] = (a[k] || 0) + 1; return a }, {}), [issues])
+  const { sort, onSort } = useTableSort(null)
+  const shownIssues = useMemo(() => {
+    const base = searchRows(issues, issueQuery, ['label', 'key', 'severity'])
+      .filter((i) => !sevFilter || (i.severity || 'info') === sevFilter)
+    return sort ? sortRows(base, sort, ISSUE_ACCESSORS) : base
+  }, [issues, issueQuery, sevFilter, sort])
+  const pager = usePager(shownIssues, 25)
+  const volumeBars = useMemo(() => [
+    { label: 'Expense rows', value: Number(vol.expense_rows) },
+    { label: 'Tyre rows', value: Number(vol.tyre_rows) },
+    { label: 'Fleet rows', value: Number(vol.fleet_rows) },
+    { label: 'Work orders', value: Number(vol.work_orders) },
+  ].filter((b) => Number.isFinite(b.value)), [vol])
+
+  const attention = useMemo(() => issues
+    .filter((i) => i.severity === 'critical' && ISSUE_ROUTE[i.action])
+    .slice(0, 4)
+    .map((i) => ({
+      key: i.key, tone: 'danger', title: i.label || i.key,
+      detail: `${fmtInt(i.count)} rows affected.`,
+      action: () => openConsoleRoute(ISSUE_ROUTE[i.action], navigate), actionLabel: 'Fix', actionIcon: ArrowRight,
+    })), [issues, navigate])
+
+  const group = GROUPS.find((g) => g.key === tab)
 
   return (
-    <div className="space-y-6 max-w-7xl">
-      {/* ── header ── */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-lg font-semibold text-white flex items-center gap-2">
-            <Layers size={18} className="text-orange-400" aria-hidden="true" /> Data Operations
-          </h1>
-          <p className="text-xs text-gray-400 mt-1">
-            One launchpad for every data-management surface.
-          </p>
+    <div className="space-y-5 max-w-7xl">
+      <PageHeader icon={Layers} title="Data Operations"
+        purpose="One launchpad for every data-management surface, with the open data-quality issues that need a fix."
+        refreshedAt={refreshedAt} onRefresh={load} refreshing={loading}
+        actions={<Btn variant="primary" icon={ShieldCheck} onClick={() => navigate('/console/control-center')}>Open Control Center</Btn>} />
+
+      {/* ── KPI row ── */}
+      {loading && !summary ? (
+        <LoadingState label="Loading diagnostics" rows={1} />
+      ) : error ? (
+        <>
+          <ErrorState message={error} onRetry={load} />
+          <Note icon={AlertTriangle} tone="default">
+            The launchpad below still works. Only the headline figures could not be read.
+          </Note>
+        </>
+      ) : !summary ? (
+        <EmptyState title="No diagnostics yet" reason="No summary was returned for the current data set." />
+      ) : (
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+          <StatTile label="Open issues" value={fmtInt(openIssues)} tone={openIssues > 0 ? 'warning' : 'good'}
+            icon={AlertTriangle} onClick={() => { setSevFilter(''); setTab('overview') }} active={tab === 'overview' && !sevFilter}
+            sub={sevCounts.critical ? `${fmtInt(sevCounts.critical)} critical` : 'tap to review'} />
+          <StatTile label="Expense rows" value={fmtInt(vol.expense_rows)} icon={Database} />
+          <StatTile label="Tyre rows" value={fmtInt(vol.tyre_rows)} icon={Database} />
+          <StatTile label="Fleet rows" value={fmtInt(vol.fleet_rows)} icon={Database} />
+          <StatTile label="Work orders" value={fmtInt(vol.work_orders)} icon={Database} />
         </div>
-        <Btn icon={RefreshCw} onClick={load} busy={loading}>Refresh</Btn>
-      </div>
-
-      {/* ── headline strip ── */}
-      <Panel>
-        <PanelHeader
-          icon={Database}
-          title="Data at a glance"
-          subtitle="Open data-quality issues and total record volumes across all data."
-          actions={summary ? (
-            <Badge tone={openIssues > 0 ? 'warning' : 'good'} icon={AlertTriangle}>
-              {fmtInt(openIssues)} open {openIssues === 1 ? 'issue' : 'issues'}
-            </Badge>
-          ) : null}
-        />
-        {loading ? (
-          <LoadingState label="Loading diagnostics" rows={2} />
-        ) : error ? (
-          <>
-            <ErrorState message={error} onRetry={load} />
-            <Note icon={AlertTriangle} tone="default">
-              The launchpad below still works. Only the headline figures could not be read.
-            </Note>
-          </>
-        ) : !summary ? (
-          <EmptyState
-            title="No diagnostics yet"
-            reason="No summary was returned for the current data set."
-          />
-        ) : (
-          <>
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-            <StatTile
-              label="Open issues"
-              value={fmtInt(openIssues)}
-              tone={openIssues > 0 ? 'warning' : 'good'}
-              icon={AlertTriangle}
-              onClick={() => navigate('/console/control-center')}
-              sub="tap to review"
-            />
-            <StatTile label="Expense rows" value={fmtInt(vol.expense_rows)} icon={Database} />
-            <StatTile label="Tyre rows" value={fmtInt(vol.tyre_rows)} icon={Database} />
-            <StatTile label="Fleet rows" value={fmtInt(vol.fleet_rows)} icon={Database} />
-            <StatTile label="Work orders" value={fmtInt(vol.work_orders)} icon={Database} />
-          </div>
-          {topIssues.length > 0 && (
-            <div className="mt-4">
-              <p className="text-[11px] uppercase tracking-wide text-gray-500 mb-2">Worst open issues</p>
-              <ul className="divide-y divide-gray-800/70 border border-gray-800 rounded-xl">
-                {topIssues.map((issue) => {
-                  const route = ISSUE_ROUTE[issue.action]
-                  return (
-                    <li key={issue.key} className="flex items-center gap-3 px-3 py-2">
-                      <Badge tone={ISSUE_SEVERITY_TONE[issue.severity] || 'info'}>{issue.severity || 'info'}</Badge>
-                      <span className="flex-1 min-w-0 text-xs text-gray-300 truncate" title={issue.label}>{issue.label || issue.key}</span>
-                      <span className="text-xs tabular-nums text-gray-200">{fmtInt(issue.count)}</span>
-                      {route ? (
-                        <Btn size="xs" icon={ArrowRight} onClick={() => openConsoleRoute(route, navigate)}>Fix</Btn>
-                      ) : null}
-                    </li>
-                  )
-                })}
-              </ul>
-            </div>
-          )}
-          </>
-        )}
-      </Panel>
-
-      {/* ── launchpad groups ── */}
-      <div className="flex flex-wrap items-center gap-2">
-        <SearchInput value={search} onChange={setSearch} placeholder="Find a data tool" className="w-full sm:w-80" />
-        {search && <span className="text-xs text-gray-400">{groups.reduce((n, g) => n + g.cards.length, 0)} tools match</span>}
-      </div>
-      {groups.length === 0 && (
-        <EmptyState title="No data tool matches that search" reason="Try a module name such as Import, Cost or Lineage." />
       )}
-      {groups.map((g) => (
-        <Panel key={g.key}>
-          <PanelHeader icon={g.icon} title={g.title} subtitle={g.subtitle} />
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-            {g.cards.map((c) => (
-              <LinkCard key={c.route} card={c} onOpen={() => openConsoleRoute(c.route, navigate)} />
-            ))}
+
+      <div className="flex flex-wrap items-center gap-2">
+        <TabBar ariaLabel="Data operations view" tabs={TABS.map((t) => (t.key === 'overview' ? { ...t, count: summary ? openIssues : undefined } : t))}
+          value={tab} onChange={(k) => { setSearch(''); setTab(k) }} />
+        <SearchInput value={search} onChange={setSearch} placeholder="Find a data tool" className="w-full sm:w-64 sm:ml-auto" />
+      </div>
+
+      {matches ? (
+        <>
+          <p className="text-xs text-gray-400" aria-live="polite">{matches.reduce((n, g) => n + g.cards.length, 0)} tools match &quot;{search.trim()}&quot; across every group</p>
+          {matches.length === 0 && (
+            <EmptyState title="No data tool matches that search" reason="Try a module name such as Import, Cost or Lineage." />
+          )}
+          {matches.map((g) => <ToolGroup key={g.key} group={g} navigate={navigate} />)}
+        </>
+      ) : tab === 'overview' ? (
+        <div className="space-y-4">
+          <AttentionList items={attention} title="Critical issues with a fix" />
+          <div className="grid gap-4 lg:grid-cols-3">
+            <Panel className="lg:col-span-2" flush>
+              <div className="p-4 pb-2">
+                <PanelHeader icon={AlertTriangle} title="Open data-quality issues"
+                  subtitle="Worst first. Each fix opens the page that resolves it."
+                  actions={<ExportButtons rows={shownIssues} columns={ISSUE_COLUMNS} title="TyrePulse Open Data Issues" disabled={!summary} />} />
+                <Toolbar>
+                  <SearchInput value={issueQuery} onChange={setIssueQuery} placeholder="Search issues" className="w-full sm:w-56" />
+                  <Segmented role="group" ariaLabel="Severity" value={sevFilter} onChange={setSevFilter} options={[
+                    { key: '', label: 'All', count: issues.length },
+                    { key: 'critical', label: 'Critical', count: sevCounts.critical || 0 },
+                    { key: 'warning', label: 'Warning', count: sevCounts.warning || 0 },
+                    { key: 'info', label: 'Info', count: sevCounts.info || 0 },
+                  ]} />
+                </Toolbar>
+              </div>
+              <div className="px-4 pb-4">
+                {loading && !summary ? <LoadingState label="Loading issues" rows={3} />
+                  : error ? <p className="text-xs text-gray-400 py-4">Issues could not be read, so none are listed. Use Retry above.</p>
+                    : shownIssues.length === 0 ? (
+                      <EmptyState icon={ShieldCheck}
+                        title={issues.length ? 'No issue matches these filters' : 'No open data-quality issues'}
+                        reason={issues.length ? 'Clear the search or severity filter.' : 'Every diagnostic check returned zero affected rows.'} />
+                    ) : (
+                      <>
+                        <Table>
+                          <THead>
+                            <Th sortKey="severity" sort={sort} onSort={onSort}>Severity</Th>
+                            <Th sortKey="label" sort={sort} onSort={onSort}>Issue</Th>
+                            <Th sortKey="count" sort={sort} onSort={onSort} align="right">Rows</Th>
+                            <Th align="right">Action</Th>
+                          </THead>
+                          <tbody>
+                            {pager.pageRows.map((issue) => {
+                              const route = ISSUE_ROUTE[issue.action]
+                              return (
+                                <Tr key={issue.key}>
+                                  <Td><Badge tone={ISSUE_SEVERITY_TONE[issue.severity] || 'info'}>{issue.severity || 'info'}</Badge></Td>
+                                  <Td><span className="text-gray-300">{issue.label || issue.key}</span></Td>
+                                  <Td align="right"><span className="tabular-nums text-gray-200">{fmtInt(issue.count)}</span></Td>
+                                  <Td align="right">
+                                    {route ? <Btn size="xs" icon={ArrowRight} onClick={() => openConsoleRoute(route, navigate)}>Fix</Btn>
+                                      : <span className="text-gray-500">Review in Control Center</span>}
+                                  </Td>
+                                </Tr>
+                              )
+                            })}
+                          </tbody>
+                        </Table>
+                        <Pager pager={pager} label="issues" />
+                      </>
+                    )}
+              </div>
+            </Panel>
+            <Panel>
+              <PanelHeader icon={BarChart3} title="Where the data lives" subtitle="Record volumes in the core tables." />
+              {summary ? (
+                <BarsChart bars={volumeBars} valueFormat={(v) => `${fmtInt(v)} rows`}
+                  summary={volumeBars.map((b) => `${b.label}: ${b.value}`).join(', ')}
+                  emptyText="No volumes were returned." />
+              ) : <EmptyState title="Volumes not available" reason={error ? 'The diagnostics summary could not be read.' : 'Loading.'} />}
+            </Panel>
           </div>
-        </Panel>
-      ))}
+        </div>
+      ) : group ? (
+        <ToolGroup group={group} navigate={navigate} />
+      ) : null}
     </div>
+  )
+}
+
+function ToolGroup({ group, navigate }) {
+  return (
+    <Panel>
+      <PanelHeader icon={group.icon} title={group.title} subtitle={group.subtitle} />
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+        {group.cards.map((c) => (
+          <LinkCard key={c.route} card={c} onOpen={() => openConsoleRoute(c.route, navigate)} />
+        ))}
+      </div>
+    </Panel>
   )
 }
 
@@ -256,6 +335,7 @@ function LinkCard({ card, onOpen }) {
   const { icon: Icon, title, desc, route } = card
   return (
     <button
+      type="button"
       onClick={onOpen}
       className="text-left bg-gray-900/50 border border-gray-800 rounded-xl p-4 transition-colors hover:border-orange-700/50 hover:bg-gray-900 flex flex-col gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
     >

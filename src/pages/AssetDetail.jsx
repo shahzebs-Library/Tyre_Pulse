@@ -33,15 +33,24 @@ import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { formatCurrencyCompact, formatDate, formatMonthYear } from '../lib/formatters'
 import LoadingState from '../components/LoadingState'
-import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import EmptyState from '../components/EmptyState'
+import Modal from '../components/ui/Modal'
 import CustomFieldsPanel from '../components/CustomFieldsPanel'
 import TyreBay from '../components/TyreBay'
 import AssetInsurancePanel from '../components/insurance/AssetInsurancePanel'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import { Illustration } from '../components/illustrations'
 import { vehicleArt } from '../lib/brand/vehicleArt'
-import { severityRank } from '../lib/severity'
+import { fetchAllPages } from '../lib/fetchAll'
+import { applyCountry } from '../lib/api/_client'
+import { colorAt, withAlpha } from '../lib/reportColors'
+import { reportFileName, reportDateLabel } from '../lib/exportUtils'
+import {
+  worstRisk, activeTyresOf, tyreRecordCost, countOpenWorkOrders, workOrderSpend, workOrderStatusLabel,
+  currentKmOf, monthlyTyreCost, tyreRecommendations, severityTone, inspectionDateOf, accidentCostOf,
+  serviceMeterUnit, pmDueSummary, crossCountryRows as buildCrossCountryRows,
+} from '../lib/assetDetailAnalytics'
 
 ChartJS.register(
   CategoryScale, LinearScale,
@@ -81,35 +90,60 @@ const CHART_OPTS = {
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
-    legend: { labels: { color: '#9ca3af', font: { size: 11 }, boxWidth: 12 } },
+    legend: { labels: { color: 'var(--text-secondary)', font: { size: 11 }, boxWidth: 12 } },
     tooltip: {
       backgroundColor: 'var(--panel-2)',
-      titleColor: '#f3f4f6',
-      bodyColor: '#9ca3af',
-      borderColor: 'rgba(59,130,246,0.3)',
+      titleColor: 'var(--text-primary)',
+      bodyColor: 'var(--text-secondary)',
+      borderColor: 'var(--border-bright)',
       borderWidth: 1,
     },
   },
   scales: {
-    x: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color: 'var(--text-muted)' } },
-    y: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color: 'var(--text-muted)' } },
+    x: { ticks: { color: 'var(--text-muted)', font: { size: 11 } }, grid: { color: 'var(--panel-2)' } },
+    y: { ticks: { color: 'var(--text-muted)', font: { size: 11 } }, grid: { color: 'var(--panel-2)' } },
   },
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────────
 const fmtCurrency = (n, cur) => formatCurrencyCompact(n, cur)
 const fmtDate = (d) => formatDate(d)
-function daysSince(d) {
-  if (!d) return null
-  const ms = Date.now() - new Date(d).getTime()
-  return Math.floor(ms / 86_400_000)
+// Undefined (not null) marks a missing number so it always sorts last.
+const numOrUndef = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? undefined : Number(v))
+const NUM = { sortUndefined: 'last', sortingFn: 'basic', meta: { align: 'right' } }
+const fmtNum = (n) => (n == null || n === '' || !Number.isFinite(Number(n)) ? 'N/A' : Number(n).toLocaleString('en-US'))
+const SEV_TEXT = { danger: 'text-red-400', warning: 'text-yellow-400', good: 'text-green-400', none: 'text-[var(--text-dim)]' }
+const WO_BADGE = {
+  Completed: 'bg-green-900/50 text-green-300',
+  Cancelled: 'bg-[var(--surface-3)] text-[var(--text-secondary)]',
+  New: 'bg-blue-900/50 text-blue-300',
 }
-function worstRisk(tyres) {
-  if (!tyres?.length) return null
-  return tyres.reduce((best, t) => {
-    if (t.risk_level && (best === null || severityRank(t.risk_level) > severityRank(best))) return t.risk_level
-    return best
-  }, null)
+
+/**
+ * This machine's job cards only: asset AND country (V376 - the same code in
+ * another country is a different vehicle). Paged so a busy machine is never
+ * cut at the server's 1,000-row cap, ordered with an id tiebreak.
+ */
+function listThisAssetWorkOrders(assetNo, country) {
+  return fetchAllPages((from, to) => applyCountry(
+    supabase.from('work_orders')
+      .select('id,asset_no,country,status,total_cost,created_at,opened_at,work_type,work_order_no,priority,labour_cost,parts_cost,completed_at')
+      .eq('asset_no', assetNo),
+    country,
+  ).order('created_at', { ascending: false }).order('id', { ascending: true }).range(from, to), { max: 20000 })
+}
+
+/** A section whose read failed: says so and offers Retry, never an empty list. */
+function ReadFailed({ what, onRetry }) {
+  return (
+    <div role="alert" className="p-6 flex flex-col items-center gap-3 text-center">
+      <AlertTriangle className="w-6 h-6 text-red-400" aria-hidden="true" />
+      <p className="text-sm text-[var(--text-secondary)]">The {what} for this asset could not be read. This is not the same as there being none.</p>
+      <button type="button" onClick={onRetry} className="inline-flex items-center gap-2 px-3 py-2 min-h-11 rounded-lg bg-[var(--surface-1)] border border-[var(--border-bright)] text-sm text-[var(--text-primary)] hover:bg-[var(--surface-3)] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+        <RefreshCw className="w-4 h-4" aria-hidden="true" /> Retry
+      </button>
+    </div>
+  )
 }
 
 // ── Tyre Position SVG Diagram ─────────────────────────────────────────────────
@@ -126,22 +160,23 @@ function TyrePositionDiagram({ tyres = [] }) {
   tyres.forEach(t => { if (t.position) byPos[t.position] = t })
 
   return (
-    <svg viewBox="0 0 280 260" className="w-full max-w-xs mx-auto">
-      <rect x={95} y={30} width={90} height={200} rx={8} fill="#1f2937" stroke="#374151" strokeWidth="2" />
-      <text x={140} y={58} textAnchor="middle" fontSize="22">🚛</text>
+    <svg viewBox="0 0 280 260" className="w-full max-w-xs mx-auto" role="img"
+      aria-label={`Tyre position map: ${tyres.length} fitted tyre${tyres.length === 1 ? '' : 's'}${positions.filter(p => byPos[p.id]).map(p => `, ${p.label} ${byPos[p.id].risk_level || 'unrated'}`).join('')}`}>
+      <rect x={95} y={30} width={90} height={200} rx={8} strokeWidth="2" style={{ fill: 'var(--panel-2)', stroke: 'var(--border-bright)' }} />
+      <rect x={110} y={40} width={60} height={28} rx={5} strokeWidth="1.5" style={{ fill: 'var(--surface-3)', stroke: 'var(--border-bright)' }} />
       {[90, 190].map((y, i) => (
-        <line key={i} x1={95} x2={185} y1={y} y2={y} stroke="#4b5563" strokeWidth="1" strokeDasharray="4 4" />
+        <line key={i} x1={95} x2={185} y1={y} y2={y} strokeWidth="1" strokeDasharray="4 4" style={{ stroke: 'var(--border-bright)' }} />
       ))}
       {positions.map(p => {
         const t = byPos[p.id]
-        const col = t ? (RISK_COLOR[t.risk_level]?.hex ?? '#374151') : '#374151'
+        const col = t ? (RISK_COLOR[t.risk_level]?.hex ?? '#9ca3af') : '#9ca3af'
         const opacity = t ? 1 : 0.35
         return (
           <g key={p.id}>
             <circle cx={p.cx} cy={p.cy} r={13} fill={col} opacity={opacity} stroke={col} strokeWidth="1.5" />
             <text x={p.cx} y={p.cy + 4} textAnchor="middle" fill="#fff" fontSize="7" fontFamily="monospace" fontWeight="600">{p.label}</text>
             {t && (
-              <text x={p.cx} y={p.cy + 26} textAnchor="middle" fill="#9ca3af" fontSize="6">{t.brand ?? ''}</text>
+              <text x={p.cx} y={p.cy + 26} textAnchor="middle" fontSize="6" style={{ fill: 'var(--text-muted)' }}>{t.brand ?? ''}</text>
             )}
           </g>
         )
@@ -192,71 +227,70 @@ function EditPanel({ asset, sites, countries, onSaved, onClose, locked = false }
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <motion.div
-        initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-        className="bg-[var(--surface-1)] rounded-2xl border border-[var(--border-dim)] w-full max-w-lg shadow-2xl"
-      >
-        <div className="flex items-center justify-between p-5 border-b border-[var(--border-dim)]">
-          <h2 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
-            <Edit2 className="w-5 h-5 text-yellow-400" />
-            {t('assetmgmt.modal.editTitle')}
-          </h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--surface-2)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors">
-            <X className="w-5 h-5" />
+    <Modal
+      open
+      onClose={onClose}
+      size="md"
+      title={<span className="flex items-center gap-2"><Edit2 className="w-5 h-5 text-yellow-400" aria-hidden="true" />{t('assetmgmt.modal.editTitle')}</span>}
+      footer={(
+        <div className="flex justify-end gap-3">
+          <button type="button" onClick={onClose} className="px-4 py-2 min-h-11 rounded-lg bg-[var(--surface-2)] text-[var(--text-secondary)] text-sm hover:bg-[var(--surface-3)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">{t('assetmgmt.modal.cancel')}</button>
+          <button type="button" onClick={handleSave} disabled={saving || locked}
+            title={locked ? 'Locked: in approval' : undefined}
+            className="px-5 py-2 min-h-11 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+            {locked ? <Lock className="w-4 h-4" aria-hidden="true" /> : saving ? <RefreshCw className="w-4 h-4 animate-spin" aria-hidden="true" /> : <Save className="w-4 h-4" aria-hidden="true" />}
+            {saving ? t('assetmgmt.modal.saving') : t('assetmgmt.modal.save')}
           </button>
         </div>
-        <div className="p-5 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+      )}
+    >
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="text-xs text-[var(--text-secondary)] mb-1 block">{t('assetmgmt.modal.assetNo')}</label>
-              <input value={form.asset_no ?? ''} onChange={e => set('asset_no', e.target.value.toUpperCase())}
-                className="w-full bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500" />
+              <label htmlFor="ad-edit-assetNo" className="text-xs text-[var(--text-secondary)] mb-1 block">{t('assetmgmt.modal.assetNo')}</label>
+              <input id="ad-edit-assetNo" value={form.asset_no ?? ''} onChange={e => set('asset_no', e.target.value.toUpperCase())}
+                className="w-full bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] min-h-11 focus:outline-none focus:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500/40" />
             </div>
             <div>
-              <label className="text-xs text-[var(--text-secondary)] mb-1 block">{t('assetmgmt.modal.vehicleType')}</label>
-              <select value={form.vehicle_type ?? ''} onChange={e => set('vehicle_type', e.target.value)}
+              <label htmlFor="ad-edit-vehicleType" className="text-xs text-[var(--text-secondary)] mb-1 block">{t('assetmgmt.modal.vehicleType')}</label>
+              <select id="ad-edit-vehicleType" value={form.vehicle_type ?? ''} onChange={e => set('vehicle_type', e.target.value)}
                 className="w-full bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500">
                 <option value="">{t('assetmgmt.modal.selectType')}</option>
                 {VEHICLE_TYPES.map(vt => <option key={vt}>{vt}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-xs text-[var(--text-secondary)] mb-1 block">{t('assetmgmt.modal.make')}</label>
-              <input value={form.make ?? ''} onChange={e => set('make', e.target.value)}
-                className="w-full bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500" />
+              <label htmlFor="ad-edit-make" className="text-xs text-[var(--text-secondary)] mb-1 block">{t('assetmgmt.modal.make')}</label>
+              <input id="ad-edit-make" value={form.make ?? ''} onChange={e => set('make', e.target.value)}
+                className="w-full bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] min-h-11 focus:outline-none focus:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500/40" />
             </div>
             <div>
-              <label className="text-xs text-[var(--text-secondary)] mb-1 block">{t('assetmgmt.modal.model')}</label>
-              <input value={form.model ?? ''} onChange={e => set('model', e.target.value)}
-                className="w-full bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500" />
+              <label htmlFor="ad-edit-model" className="text-xs text-[var(--text-secondary)] mb-1 block">{t('assetmgmt.modal.model')}</label>
+              <input id="ad-edit-model" value={form.model ?? ''} onChange={e => set('model', e.target.value)}
+                className="w-full bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] min-h-11 focus:outline-none focus:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500/40" />
             </div>
             <div>
-              <label className="text-xs text-[var(--text-secondary)] mb-1 block">{t('assetmgmt.modal.year')}</label>
-              <input type="number" min="1990" max="2030" value={form.year ?? ''} onChange={e => set('year', e.target.value)}
-                className="w-full bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500" />
+              <label htmlFor="ad-edit-year" className="text-xs text-[var(--text-secondary)] mb-1 block">{t('assetmgmt.modal.year')}</label>
+              <input id="ad-edit-year" type="number" min="1990" max="2030" value={form.year ?? ''} onChange={e => set('year', e.target.value)}
+                className="w-full bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] min-h-11 focus:outline-none focus:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500/40" />
             </div>
             <div>
-              <label className="text-xs text-[var(--text-secondary)] mb-1 block">{t('assetmgmt.modal.site')}</label>
-              <input value={form.site ?? ''} onChange={e => set('site', e.target.value)} list="ad-sites-list"
-                className="w-full bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500" />
+              <label htmlFor="ad-edit-site" className="text-xs text-[var(--text-secondary)] mb-1 block">{t('assetmgmt.modal.site')}</label>
+              <input id="ad-edit-site" value={form.site ?? ''} onChange={e => set('site', e.target.value)} list="ad-sites-list"
+                className="w-full bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] min-h-11 focus:outline-none focus:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500/40" />
               <datalist id="ad-sites-list">{sites.map(s => <option key={s} value={s} />)}</datalist>
             </div>
             <div>
-              <label className="text-xs text-[var(--text-secondary)] mb-1 block">{t('assetmgmt.modal.country')}</label>
-              <select value={form.country ?? ''} onChange={e => set('country', e.target.value)}
+              <label htmlFor="ad-edit-country" className="text-xs text-[var(--text-secondary)] mb-1 block">{t('assetmgmt.modal.country')}</label>
+              <select id="ad-edit-country" value={form.country ?? ''} onChange={e => set('country', e.target.value)}
                 className="w-full bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500">
                 <option value="">{t('assetmgmt.modal.select')}</option>
                 {(countries.length ? countries : ['KSA','UAE','Egypt']).map(c => <option key={c}>{c}</option>)}
               </select>
             </div>
             <div className="flex items-center gap-3 mt-1">
-              <label className="text-xs text-[var(--text-secondary)]">{t('assetmgmt.modal.activeStatus')}</label>
-              <button onClick={() => set('active', !form.active)} className="flex items-center gap-2">
+              <span className="text-xs text-[var(--text-secondary)]">{t('assetmgmt.modal.activeStatus')}</span>
+              <button type="button" onClick={() => set('active', !form.active)} aria-pressed={!!form.active} className="flex items-center gap-2 min-h-11 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
                 {form.active
                   ? <ToggleRight className="w-8 h-8 text-green-400" />
                   : <ToggleLeft className="w-8 h-8 text-[var(--text-dim)]" />}
@@ -266,19 +300,9 @@ function EditPanel({ asset, sites, countries, onSaved, onClose, locked = false }
               </button>
             </div>
           </div>
-          {error && <p className="text-red-400 text-xs bg-red-900/20 rounded-lg px-3 py-2">{error}</p>}
+          {error && <p role="alert" className="text-red-400 text-xs bg-red-900/20 rounded-lg px-3 py-2">{error}</p>}
         </div>
-        <div className="flex justify-end gap-3 px-5 pb-5">
-          <button onClick={onClose} className="px-4 py-2 rounded-lg bg-[var(--surface-2)] text-[var(--text-secondary)] text-sm hover:bg-[var(--surface-3)] transition-colors">{t('assetmgmt.modal.cancel')}</button>
-          <button onClick={handleSave} disabled={saving || locked}
-            title={locked ? 'Locked: in approval' : undefined}
-            className="px-5 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2">
-            {locked ? <Lock className="w-4 h-4" /> : saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            {saving ? t('assetmgmt.modal.saving') : t('assetmgmt.modal.save')}
-          </button>
-        </div>
-      </motion.div>
-    </motion.div>
+    </Modal>
   )
 }
 
@@ -287,11 +311,15 @@ export default function AssetDetail() {
   const { assetNo } = useParams()
   const navigate = useNavigate()
   const { profile } = useAuth()
-  const { activeCurrency, activeCountry } = useSettings()
+  const { activeCurrency: settingsCurrency, activeCountry } = useSettings()
   const { t } = useLanguage()
   const isAdmin = profile?.role === 'Admin'
 
   const [asset, setAsset] = useState(null)
+  // This machine belongs to ONE country; its money is shown in that country's
+  // currency, not the header selector's (on "All" that is the org default and
+  // would label AED or EGP figures as riyals).
+  const activeCurrency = COUNTRY_CURRENCY[asset?.country] || settingsCurrency
   const [tyres, setTyres] = useState([])
   const [workOrders, setWorkOrders] = useState([])
   const [inspections, setInspections] = useState([])
@@ -318,6 +346,7 @@ export default function AssetDetail() {
   const [matches, setMatches] = useState({ rows: [], countries: [], shown: null, missingInCountry: false, requested: null })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [readFailed, setReadFailed] = useState({})
   const [refreshKey, setRefreshKey] = useState(0)
 
   const [tab, setTab] = useState('overview') // overview | tyres | costs | workorders | approvals
@@ -361,7 +390,7 @@ export default function AssetDetail() {
 
       const [tyreRes, woRes, ovRes, inspRes, accRes, odoRes, ehRes, pmRes, pmSvcRes, utilRes] = await Promise.allSettled([
         assetApi.listAssetTyres(assetNo, dataCountry),
-        assetApi.listAssetWorkOrders(),
+        listThisAssetWorkOrders(assetNo, dataCountry),
         assetApi.reportAssetOverview({ country: dataCountry || 'All' }),
         assetApi.listAssetInspections(assetNo, dataCountry),
         assetApi.listAssetAccidents(assetNo, dataCountry),
@@ -385,6 +414,13 @@ export default function AssetDetail() {
       const pmRows   = pmRes.status === 'fulfilled' ? (pmRes.value ?? []) : []
       const pmSvcRows = pmSvcRes.status === 'fulfilled' ? (pmSvcRes.value ?? []) : []
       setAssetUtil(utilRes.status === 'fulfilled' ? (utilRes.value ?? null) : null)
+      // A read that failed (rejected, or resolved with an error) is recorded so
+      // its tab says "could not be read" instead of "none recorded".
+      const failed = (r) => r.status === 'rejected' || !!r.value?.error
+      setReadFailed({
+        tyres: failed(tyreRes), workOrders: failed(woRes), inspections: failed(inspRes),
+        accidents: failed(accRes), pm: pmRes.status === 'rejected', pmServices: pmSvcRes.status === 'rejected',
+      })
       const ov       = ovRows.find(o => o.asset_no === assetNo) ?? null
 
       // Fall back to a synthesized record from the overview when vehicle_fleet
@@ -403,7 +439,7 @@ export default function AssetDetail() {
 
       setAsset(record)
       setTyres(tyreRows)
-      setWorkOrders(woRows.filter(w => w.asset_no === assetNo))
+      setWorkOrders(woRows)
       setInspections(inspRows)
       setAccidents(accRows)
       setMeter({ odometer: odoRow, engineHours: ehRow })
@@ -471,59 +507,23 @@ export default function AssetDetail() {
   // (tyres / work orders / tyre expense, V356) with the ownership view (total
   // cost borne + who owns it, V376). Either source may be missing; a country
   // appearing in only one of them is still shown, with N/A for the other side.
-  const crossCountryRows = useMemo(() => {
-    const byCountry = new Map()
-    for (const bc of Array.isArray(masterRow?.by_country) ? masterRow.by_country : []) {
-      const key = String(bc?.country ?? '')
-      if (!key) continue
-      byCountry.set(key, {
-        country: key,
-        tyres: bc.tyres, workOrders: bc.work_orders, tyreExpense: bc.tyre_expense,
-        borne: null, currency: COUNTRY_CURRENCY[key] || null, role: null,
-      })
-    }
-    for (const c of Array.isArray(ownership?.countries) ? ownership.countries : []) {
-      const key = c.country
-      if (!key) continue
-      const prev = byCountry.get(key) || {
-        country: key, tyres: null, workOrders: null, tyreExpense: null,
-        borne: null, currency: null, role: null,
-      }
-      prev.borne = c.cost
-      prev.currency = c.currency || prev.currency
-      prev.role = !ownership?.owningCountry ? 'contested' : c.isOwner ? 'owner' : 'bears'
-      byCountry.set(key, prev)
-    }
-    return [...byCountry.values()].sort((a, b) => a.country.localeCompare(b.country))
-  }, [masterRow, ownership])
-  const countryPager = usePagedRows(crossCountryRows)
-  const workOrderPager = usePagedRows(workOrders)
-  const inspectionPager = usePagedRows(inspections)
-  const servicePager = usePagedRows(pmServices)
-  const accidentPager = usePagedRows(accidents)
+  const crossCountryRows = useMemo(() => buildCrossCountryRows(masterRow, ownership, COUNTRY_CURRENCY), [masterRow, ownership])
 
-  const activeTyres = useMemo(() => tyres.filter(t => !t.km_at_removal), [tyres])
+  const activeTyres = useMemo(() => activeTyresOf(tyres), [tyres])
   // Total lifetime tyre cost: authoritative expense-grid amount for this asset
-  // when available, else the tyre_records cost_per_tyre sum (honest fallback).
-  const legacyTotalCost = useMemo(
-    () => tyres.reduce((s, t) => s + (parseFloat(t.cost_per_tyre) || 0) * (Number(t.qty) || 1), 0),
-    [tyres],
-  )
-  const totalCost = gridAssetCost != null ? gridAssetCost : legacyTotalCost
+  // when available, else the tyre_records cost_per_tyre sum (honest fallback,
+  // null when no tyre carries a price at all).
+  const recordCost = useMemo(() => tyreRecordCost(tyres), [tyres])
+  const totalCost = gridAssetCost != null ? gridAssetCost : recordCost.total
   const derivedWorstRisk = useMemo(() => overview?.worst_risk ?? worstRisk(activeTyres), [overview, activeTyres])
-  const ytdCost = Number(overview?.ytd_cost) || 0
-  const openWorkOrders = useMemo(
-    () => workOrders.filter(w => !['completed', 'closed', 'cancelled'].includes(String(w.status ?? '').toLowerCase())).length,
-    [workOrders],
-  )
+  // Year-to-date cost from the overview RPC; null when the RPC has no row, so
+  // it reads N/A rather than a spend of zero.
+  const ytdCost = overview?.ytd_cost != null && Number.isFinite(Number(overview.ytd_cost)) ? Number(overview.ytd_cost) : null
+  const openWorkOrders = useMemo(() => countOpenWorkOrders(workOrders), [workOrders])
+  const woSpend = useMemo(() => workOrderSpend(workOrders), [workOrders])
   // current_km is advanced by the odometer sync trigger; fall back to the latest
   // logged reading when the denormalised column is empty.
-  const currentKm = useMemo(() => {
-    const fromAsset = asset?.current_km != null && asset.current_km !== '' ? Number(asset.current_km) : null
-    const fromLog = meter.odometer?.odometer_km != null ? Number(meter.odometer.odometer_km) : null
-    return fromAsset ?? fromLog
-  }, [asset, meter])
-  const fmtNum = (n) => (n == null || isNaN(n) ? '-' : Number(n).toLocaleString('en-US'))
+  const currentKm = useMemo(() => currentKmOf(asset, meter), [asset, meter])
 
   // Current engine hours for meter-based PM bands (date-only when absent).
   const currentHours = useMemo(
@@ -533,50 +533,102 @@ export default function AssetDetail() {
   // Each PM plan for this asset paired with its combined date + meter due band.
   const pmDueRows = useMemo(() => {
     const now = Date.now()
-    return pmPlans.map(plan => ({ plan, due: pmAssetDueStatus(plan, { now, currentKm, currentHours }) }))
+    return pmPlans.map(plan => ({ id: plan.id, plan, due: pmAssetDueStatus(plan, { now, currentKm, currentHours }) }))
   }, [pmPlans, currentKm, currentHours])
+  const pmSummary = useMemo(() => pmDueSummary(pmDueRows), [pmDueRows])
 
-  const monthlyData = useMemo(() => {
-    const now = new Date()
-    const labels = []; const costs = []
-    for (let i = 11; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-      labels.push(formatMonthYear(d))
-      const mo = d.getMonth(); const yr = d.getFullYear()
-      const sum = tyres.filter(t => {
-        if (!t.issue_date) return false
-        const td = new Date(t.issue_date)
-        return td.getMonth() === mo && td.getFullYear() === yr
-      }).reduce((s, t) => s + (parseFloat(t.cost_per_tyre) || 0) * (Number(t.qty) || 1), 0)
-      costs.push(sum)
-    }
-    return { labels, costs }
-  }, [tyres])
-
+  const monthly = useMemo(() => monthlyTyreCost(tyres), [tyres])
   const chartData = {
-    labels: monthlyData.labels,
+    labels: monthly.months.map(m => formatMonthYear(m.date)),
     datasets: [{
       label: t('assetmgmt.drawer.monthlyCostSeriesLabel'),
-      data: monthlyData.costs,
-      borderColor: '#3b82f6',
-      backgroundColor: 'rgba(59,130,246,0.1)',
+      data: monthly.months.map(m => m.cost),
+      borderColor: colorAt(0),
+      backgroundColor: withAlpha(colorAt(0), 0.12),
       fill: true, tension: 0.4, pointRadius: 3,
     }],
   }
 
-  const recommendations = useMemo(() => {
-    const out = []
-    const criticalTyres = activeTyres.filter(t => t.risk_level === 'Critical')
-    const highTyres = activeTyres.filter(t => t.risk_level === 'High')
-    const lowTread = activeTyres.filter(t => parseFloat(t.tread_depth) < 3)
-    if (criticalTyres.length) out.push({ level: 'Critical', msg: t('assetmgmt.drawer.recCriticalRisk', { count: criticalTyres.length }) })
-    if (highTyres.length) out.push({ level: 'High', msg: t('assetmgmt.drawer.recHighRisk', { count: highTyres.length }) })
-    if (lowTread.length) out.push({ level: 'High', msg: t('assetmgmt.drawer.recLowTread', { count: lowTread.length }) })
-    if (!activeTyres.length) out.push({ level: 'Medium', msg: t('assetmgmt.drawer.recNoActive') })
-    if (out.length === 0) out.push({ level: 'Low', msg: t('assetmgmt.drawer.recAllGood') })
-    return out
-  }, [activeTyres, t])
+  const recommendations = useMemo(
+    () => tyreRecommendations(activeTyres).map(r => ({ level: r.level, msg: t(`assetmgmt.drawer.${r.key}`, { count: r.count }) })),
+    [activeTyres, t],
+  )
 
+
+  // ── tables ────────────────────────────────────────────────────────────────
+  const money = useCallback((v, cur) => (v == null ? 'N/A' : fmtCurrency(v, cur || activeCurrency)), [activeCurrency])
+  const countryColumns = useMemo(() => [
+    { id: 'country', header: 'Country', accessorFn: r => r.country || 'N/A', cell: ({ getValue }) => <span className="font-medium text-[var(--text-primary)]">{getValue()}</span> },
+    {
+      id: 'role', header: 'Role',
+      accessorFn: r => (r.role === 'owner' ? 'Owner' : r.role === 'bears' ? `Bears cost for ${ownership?.owningCountry || ''}`.trim() : r.role === 'contested' ? 'Contested' : 'N/A'),
+      cell: ({ row, getValue }) => {
+        const r = row.original
+        const cls = r.role === 'owner' ? 'bg-emerald-900/30 text-emerald-300' : r.role === 'bears' ? 'bg-blue-900/30 text-blue-300' : r.role === 'contested' ? 'bg-amber-900/30 text-amber-300' : null
+        return cls ? <span className={`px-2 py-0.5 rounded-full text-[11px] ${cls}`}>{getValue()}</span> : <span className="text-[var(--text-muted)]">N/A</span>
+      },
+    },
+    { id: 'tyres', header: 'Tyres', accessorFn: r => numOrUndef(r.tyres), ...NUM, cell: ({ row }) => fmtNum(row.original.tyres) },
+    { id: 'workOrders', header: 'Work Orders', accessorFn: r => numOrUndef(r.workOrders), ...NUM, cell: ({ row }) => fmtNum(row.original.workOrders) },
+    // Each country in its OWN currency; deliberately no total row.
+    { id: 'tyreExpense', header: 'Tyre Expense', accessorFn: r => numOrUndef(r.tyreExpense), ...NUM, cell: ({ row }) => money(row.original.tyreExpense, row.original.currency || COUNTRY_CURRENCY[row.original.country]) },
+    { id: 'borne', header: 'Total Cost Borne', accessorFn: r => numOrUndef(r.borne), ...NUM, cell: ({ row }) => money(row.original.borne, row.original.currency || COUNTRY_CURRENCY[row.original.country]) },
+  ], [ownership, money])
+
+  const workOrderColumns = useMemo(() => [
+    { id: 'no', header: 'Work order', accessorFn: w => w.work_order_no || 'N/A', cell: ({ getValue }) => <span className="font-medium text-[var(--text-primary)] whitespace-nowrap">{getValue()}</span> },
+    { id: 'type', header: 'Type', accessorFn: w => w.work_type || t('assetmgmt.drawer.workOrderFallback') },
+    { id: 'opened', header: 'Opened', accessorFn: w => w.opened_at || w.created_at || undefined, sortUndefined: 'last', cell: ({ row }) => <span className="whitespace-nowrap">{fmtDate(row.original.opened_at || row.original.created_at)}</span> },
+    { id: 'completed', header: 'Completed', accessorFn: w => w.completed_at || undefined, sortUndefined: 'last', cell: ({ row }) => (row.original.completed_at ? fmtDate(row.original.completed_at) : 'N/A') },
+    { id: 'priority', header: 'Priority', accessorFn: w => w.priority || 'N/A' },
+    {
+      id: 'status', header: 'Status', accessorFn: w => workOrderStatusLabel(w.status) || 'N/A',
+      meta: { filterVariant: 'select' },
+      cell: ({ getValue }) => { const v = getValue(); return <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${WO_BADGE[v] || 'bg-yellow-900/50 text-yellow-300'}`}>{v}</span> },
+    },
+    { id: 'cost', header: 'Total cost', accessorFn: w => numOrUndef(w.total_cost), ...NUM, cell: ({ row }) => money(numOrUndef(row.original.total_cost) ?? null) },
+  ], [t, money])
+
+  const inspectionColumns = useMemo(() => [
+    { id: 'date', header: 'Date', accessorFn: i => inspectionDateOf(i) || undefined, sortUndefined: 'last', cell: ({ row }) => <span className="whitespace-nowrap">{fmtDate(inspectionDateOf(row.original))}</span> },
+    { id: 'type', header: 'Type', accessorFn: i => i.inspection_type ?? i.title ?? 'N/A' },
+    { id: 'inspector', header: 'Inspector', accessorFn: i => i.inspector ?? 'N/A' },
+    { id: 'odometer', header: 'Odometer', accessorFn: i => numOrUndef(i.odometer_km), ...NUM, cell: ({ row }) => (row.original.odometer_km != null ? `${fmtNum(row.original.odometer_km)} km` : 'N/A') },
+    { id: 'severity', header: 'Severity', accessorFn: i => i.severity ?? 'N/A', meta: { filterVariant: 'select' }, cell: ({ row }) => <span className={`font-medium ${SEV_TEXT[severityTone(row.original.severity)]}`}>{row.original.severity ?? 'N/A'}</span> },
+    { id: 'status', header: 'Status', accessorFn: i => i.approval_status ?? i.status ?? 'N/A', meta: { filterVariant: 'select' } },
+    { id: 'findings', header: 'Findings', accessorFn: i => i.findings ?? i.notes ?? 'N/A', cell: ({ getValue }) => <span className="block max-w-[240px] truncate" title={getValue()}>{getValue()}</span> },
+  ], [])
+
+  const pmPlanColumns = useMemo(() => [
+    { id: 'name', header: 'Plan', accessorFn: r => r.plan.name ?? 'Untitled plan', cell: ({ getValue }) => <span className="font-medium text-[var(--text-primary)]">{getValue()}</span> },
+    { id: 'due', header: 'Due status', accessorFn: r => (PM_DUE_META[r.due.band] ?? PM_DUE_META.none).label, meta: { filterVariant: 'select' }, cell: ({ row, getValue }) => <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${PM_DUE_BADGE[row.original.due.band] ?? PM_DUE_BADGE.none}`}>{getValue()}</span> },
+    { id: 'nextDue', header: 'Next due date', accessorFn: r => r.plan.next_due || undefined, sortUndefined: 'last', cell: ({ row }) => (row.original.plan.next_due ? fmtDate(row.original.plan.next_due) : 'No date') },
+    { id: 'days', header: 'Days to due', accessorFn: r => numOrUndef(r.due.daysToDue), ...NUM, cell: ({ row }) => (row.original.due.daysToDue != null ? `${row.original.due.daysToDue}d` : 'N/A') },
+    { id: 'meterDue', header: 'Due at meter', accessorFn: r => numOrUndef(r.plan.next_due_meter), ...NUM, cell: ({ row }) => (row.original.plan.next_due_meter != null ? `${fmtNum(row.original.plan.next_due_meter)}${row.original.due.unit ? ` ${row.original.due.unit}` : ''}` : 'N/A') },
+    { id: 'left', header: 'Meter left', accessorFn: r => numOrUndef(r.due.meterRemaining), ...NUM, cell: ({ row }) => (row.original.due.meterRemaining != null ? `${fmtNum(row.original.due.meterRemaining)}${row.original.due.unit ? ` ${row.original.due.unit}` : ''}` : 'N/A') },
+    { id: 'priority', header: 'Priority', accessorFn: r => String(r.plan.priority ?? '').toLowerCase() || 'N/A', cell: ({ getValue }) => { const v = getValue(); return v === 'N/A' ? v : <span className={`px-2 py-0.5 rounded-full text-xs font-semibold capitalize ${PM_PRIORITY_BADGE[v] ?? PM_PRIORITY_BADGE.low}`}>{v}</span> } },
+    { id: 'status', header: 'Status', accessorFn: r => String(r.plan.status ?? '').toLowerCase() || 'N/A', cell: ({ getValue }) => { const v = getValue(); return v === 'N/A' ? v : <span className={`px-2 py-0.5 rounded-full text-xs font-semibold capitalize ${PM_STATUS_BADGE[v] ?? PM_STATUS_BADGE.completed}`}>{v}</span> } },
+  ], [])
+
+  const serviceColumns = useMemo(() => [
+    { id: 'date', header: 'Date', accessorFn: sv => sv.service_date || undefined, sortUndefined: 'last', cell: ({ row }) => <span className="whitespace-nowrap">{row.original.service_date ? fmtDate(row.original.service_date) : 'N/A'}</span> },
+    { id: 'meter', header: 'Meter', accessorFn: sv => numOrUndef(sv.meter_reading), ...NUM, cell: ({ row }) => { const sv = row.original; const u = serviceMeterUnit(sv); return sv.meter_reading != null ? `${fmtNum(sv.meter_reading)}${u ? ` ${u}` : ''}` : 'N/A' } },
+    { id: 'outcome', header: 'Outcome', accessorFn: sv => sv.outcome ?? 'N/A', meta: { filterVariant: 'select' }, cell: ({ getValue }) => { const v = String(getValue()); const lo = v.toLowerCase(); return <span className={`font-medium capitalize ${lo === 'completed' ? 'text-green-400' : lo === 'deferred' ? 'text-yellow-400' : 'text-[var(--text-secondary)]'}`}>{v}</span> } },
+    { id: 'by', header: 'Performed By', accessorFn: sv => sv.performed_by ?? 'N/A' },
+    { id: 'cost', header: 'Total Cost', accessorFn: sv => numOrUndef(sv.total_cost), ...NUM, cell: ({ row }) => money(numOrUndef(row.original.total_cost) ?? null) },
+  ], [money])
+
+  const accidentColumns = useMemo(() => [
+    { id: 'date', header: 'Date', accessorFn: a => a.incident_date ?? a.created_at ?? undefined, sortUndefined: 'last', cell: ({ row }) => <span className="whitespace-nowrap">{fmtDate(row.original.incident_date ?? row.original.created_at)}</span> },
+    { id: 'type', header: 'Type', accessorFn: a => a.accident_type ?? 'N/A' },
+    { id: 'severity', header: 'Severity', accessorFn: a => a.severity ?? 'N/A', meta: { filterVariant: 'select' }, cell: ({ row }) => <span className={`font-medium ${SEV_TEXT[severityTone(row.original.severity)]}`}>{row.original.severity ?? 'N/A'}</span> },
+    { id: 'location', header: 'Location', accessorFn: a => a.location ?? 'N/A', cell: ({ getValue }) => <span className="block max-w-[160px] truncate" title={getValue()}>{getValue()}</span> },
+    { id: 'driver', header: 'Driver', accessorFn: a => a.driver_name ?? 'N/A' },
+    { id: 'status', header: 'Status', accessorFn: a => a.status ?? 'N/A', meta: { filterVariant: 'select' } },
+    { id: 'claim', header: 'Claim', accessorFn: a => a.claim_status ?? 'N/A' },
+    { id: 'cost', header: 'Est. Damage', accessorFn: a => accidentCostOf(a) ?? undefined, ...NUM, cell: ({ row }) => money(accidentCostOf(row.original)) },
+  ], [money])
+  const tableFile = (what) => reportFileName(`${assetNo} ${what}`, reportDateLabel())
   const siteOptions = useMemo(() => [asset?.site].filter(Boolean), [asset])
   const countryOptions = useMemo(() => [asset?.country].filter(Boolean), [asset])
 
@@ -689,9 +741,9 @@ export default function AssetDetail() {
               <p className="text-xs text-[var(--text-muted)] uppercase tracking-widest mb-1">{t('assetmgmt.drawer.assetProfile')}</p>
               <h1 className="text-2xl font-bold text-[var(--text-primary)]">{asset.asset_no}</h1>
               <p className="text-sm text-[var(--text-secondary)]">
-                {[asset.vehicle_type, [asset.make, asset.model, asset.year].filter(Boolean).join(' ')].filter(Boolean).join(' · ')}
+                {[asset.vehicle_type, [asset.make, asset.model, asset.year].filter(Boolean).join(' ')].filter(Boolean).join(' | ') || 'Type not recorded'}
               </p>
-              <p className="text-xs text-[var(--text-muted)] mt-0.5"><MapPin className="inline w-3 h-3 mr-1" />{asset.site ?? '-'} · {asset.country ?? '-'}</p>
+              <p className="text-xs text-[var(--text-muted)] mt-0.5"><MapPin className="inline w-3 h-3 mr-1" />{asset.site ?? 'N/A'} | {asset.country ?? 'N/A'}</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -732,10 +784,10 @@ export default function AssetDetail() {
 
         {/* Live stat strip — real counts pulled for this asset */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          <StatTile icon={Gauge} label="Current KM" value={currentKm != null ? fmtNum(currentKm) : '-'}
+          <StatTile icon={Gauge} label="Current KM" value={fmtNum(currentKm)}
             sub={meter.odometer?.reading_date ? `as of ${fmtDate(meter.odometer.reading_date)}` : null} color="blue" />
           <StatTile icon={Fuel} label="Engine Hours"
-            value={meter.engineHours?.engine_hours != null ? fmtNum(meter.engineHours.engine_hours) : '-'}
+            value={fmtNum(meter.engineHours?.engine_hours)}
             sub={meter.engineHours?.reading_date ? fmtDate(meter.engineHours.reading_date) : null} color="teal" />
           {assetUtil && assetUtil.utilization_pct != null && (
             <StatTile icon={Activity} label="Utilization"
@@ -747,14 +799,16 @@ export default function AssetDetail() {
             <StatTile icon={Gauge} label="Distance (period)" value={`${Number(assetUtil.distance_km).toLocaleString()} km`}
               sub={assetUtil.working_seconds != null ? `${utilHours(assetUtil.working_seconds)} h worked` : 'telematics'} color="blue" />
           )}
-          <StatTile icon={Activity} label="Active Tyres" value={activeTyres.length}
-            sub={`${tyres.length} on record`} color="green" />
-          <StatTile icon={Wrench} label="Open Work Orders" value={openWorkOrders}
-            sub={`${workOrders.length} total`} color="yellow" />
-          <StatTile icon={ClipboardCheck} label="Inspections" value={inspections.length}
-            sub={inspections[0]?.inspection_date ? `last ${fmtDate(inspections[0].inspection_date)}` : 'none logged'} color="purple" />
-          <StatTile icon={ShieldAlert} label="Incidents" value={accidents.length}
-            sub={accidents.length ? 'recorded' : 'none recorded'} color={accidents.length ? 'red' : 'green'} />
+          <StatTile icon={Activity} label="Active Tyres" value={readFailed.tyres ? 'N/A' : activeTyres.length}
+            sub={readFailed.tyres ? 'could not be read' : `${tyres.length} on record`} color="green" />
+          <StatTile icon={Wrench} label="Open Work Orders" value={readFailed.workOrders ? 'N/A' : openWorkOrders}
+            sub={readFailed.workOrders ? 'could not be read' : `${workOrders.length} total`} color="yellow" />
+          <StatTile icon={ClipboardCheck} label="Inspections" value={readFailed.inspections ? 'N/A' : inspections.length}
+            sub={readFailed.inspections ? 'could not be read' : inspections[0]?.inspection_date ? `last ${fmtDate(inspections[0].inspection_date)}` : 'none logged'} color="purple" />
+          <StatTile icon={CalendarClock} label="PM Overdue" value={readFailed.pm ? 'N/A' : pmSummary.overdue}
+            sub={readFailed.pm ? 'could not be read' : pmSummary.total ? `${pmSummary.dueSoon} due soon of ${pmSummary.total} plans` : 'no plans'} color={pmSummary.overdue ? 'red' : 'green'} />
+          <StatTile icon={ShieldAlert} label="Incidents" value={readFailed.accidents ? 'N/A' : accidents.length}
+            sub={readFailed.accidents ? 'could not be read' : accidents.length ? 'recorded' : 'none recorded'} color={accidents.length ? 'red' : 'green'} />
         </div>
 
         {/* This vehicle across countries — cross-country "one vehicle" rollup.
@@ -827,51 +881,18 @@ export default function AssetDetail() {
             </div>
 
             {/* Per-country activity + expense (each in its own currency) */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-[var(--border-dim)]">
-                    {['Country', 'Role', 'Tyres', 'Work Orders', 'Tyre Expense', 'Total Cost Borne'].map(h => (
-                      <th key={h} className="px-3 py-2 text-left text-[var(--text-muted)] font-medium whitespace-nowrap">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {countryPager.pageRows.map((r, i) => (
-                    <tr key={r.country ?? i} className="border-b border-[var(--border-dim)]">
-                      <td className="px-3 py-2 text-[var(--text-primary)] font-medium whitespace-nowrap">{r.country || 'N/A'}</td>
-                      <td className="px-3 py-2 whitespace-nowrap">
-                        {r.role === 'owner' ? (
-                          <span className="px-2 py-0.5 rounded-full text-[11px] bg-emerald-900/30 text-emerald-300">Owner</span>
-                        ) : r.role === 'bears' ? (
-                          <span className="px-2 py-0.5 rounded-full text-[11px] bg-blue-900/30 text-blue-300">
-                            Bears cost for {ownership?.owningCountry}
-                          </span>
-                        ) : r.role === 'contested' ? (
-                          <span className="px-2 py-0.5 rounded-full text-[11px] bg-amber-900/30 text-amber-300">Contested</span>
-                        ) : (
-                          <span className="text-[var(--text-muted)]">N/A</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-[var(--text-secondary)]">{r.tyres == null ? 'N/A' : fmtNum(r.tyres)}</td>
-                      <td className="px-3 py-2 text-[var(--text-secondary)]">{r.workOrders == null ? 'N/A' : fmtNum(r.workOrders)}</td>
-                      <td className="px-3 py-2 text-[var(--text-secondary)] whitespace-nowrap">
-                        {r.tyreExpense == null
-                          ? 'N/A'
-                          : formatCurrencyCompact(r.tyreExpense || 0, r.currency || COUNTRY_CURRENCY[r.country] || 'SAR')}
-                      </td>
-                      {/* each country in its OWN currency; deliberately no total row */}
-                      <td className="px-3 py-2 text-[var(--text-primary)] whitespace-nowrap">
-                        {r.borne == null
-                          ? 'N/A'
-                          : formatCurrencyCompact(r.borne, r.currency || COUNTRY_CURRENCY[r.country] || 'SAR')}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <TablePagination {...countryPager} />
-            </div>
+            <EnterpriseTable
+              columns={countryColumns}
+              data={crossCountryRows}
+              getRowId={r => String(r.country)}
+              enableColumnFilters={false}
+              enableGlobalFilter={false}
+              enableColumnVisibility={false}
+              initialPageSize={25}
+              exportFileName={tableFile('across countries')}
+              reportMeta={{ title: `${asset.asset_no} across countries` }}
+              emptyMessage="No country rollup for this asset."
+            />
 
             {crossCountryRows.length > 1 && (
               <p className="text-[11px] text-[var(--text-muted)] mt-3 leading-relaxed">
@@ -883,13 +904,13 @@ export default function AssetDetail() {
         )}
 
         {/* Tabs */}
-        <div className="flex flex-wrap gap-1 bg-[var(--surface-1)] rounded-xl p-1 border border-[var(--border-dim)] w-fit">
+        <div role="tablist" aria-label="Asset sections" className="flex flex-wrap gap-1 bg-[var(--surface-1)] rounded-xl p-1 border border-[var(--border-dim)] max-w-full">
           {TABS.map(tb => (
-            <button key={tb.id} onClick={() => setTab(tb.id)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                tab === tb.id ? 'bg-blue-600 text-white' : 'text-[var(--text-secondary)] hover:text-white hover:bg-[var(--surface-2)]'
+            <button key={tb.id} type="button" role="tab" aria-selected={tab === tb.id} onClick={() => setTab(tb.id)}
+              className={`flex items-center gap-2 px-4 py-2 min-h-11 rounded-lg text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                tab === tb.id ? 'bg-blue-600 text-white' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)]'
               }`}>
-              <tb.icon className="w-4 h-4" />
+              <tb.icon className="w-4 h-4" aria-hidden="true" />
               {tb.label}
             </button>
           ))}
@@ -1005,21 +1026,20 @@ export default function AssetDetail() {
                 <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-3 flex items-center gap-2">
                   <TrendingUp className="w-4 h-4 text-blue-400" /> {t('assetmgmt.drawer.monthlyCostChartTitle')}
                 </h3>
-                <div className="h-56">
+                <div className="h-56" role="img" aria-label={`Monthly tyre spend, last 12 months: ${monthly.months.map(m => `${formatMonthYear(m.date)} ${Math.round(m.cost)}`).join(', ')}`}>
                   <Line data={chartData} options={{ ...CHART_OPTS, plugins: { ...CHART_OPTS.plugins, legend: { display: false } } }} />
                 </div>
-                {gridAssetCost != null && (
-                  <p className="text-[11px] text-[var(--text-muted)] mt-2">
-                    Monthly breakdown from tyre records; authoritative lifetime total from the expense grid.
-                  </p>
-                )}
+                <p className="text-[11px] text-[var(--text-muted)] mt-2">
+                  {gridAssetCost != null ? 'Monthly breakdown from tyre records; authoritative lifetime total from the expense grid. ' : ''}
+                  {monthly.priced} of {monthly.months.reduce((n, m) => n + m.fitments, 0)} fitments in the last 12 months carry a price.
+                </p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="bg-gradient-to-br from-blue-900/20 to-blue-800/10 rounded-xl border border-blue-800/30 p-4 flex items-center justify-between">
                   <div>
                     <p className="text-xs text-[var(--text-muted)] uppercase tracking-widest">{t('assetmgmt.drawer.totalLifetimeCost')}</p>
-                    <p className="text-2xl font-bold text-[var(--text-primary)] mt-1">{fmtCurrency(totalCost, activeCurrency)}</p>
+                    <p className="text-2xl font-bold text-[var(--text-primary)] mt-1">{totalCost == null ? 'N/A' : fmtCurrency(totalCost, activeCurrency)}</p>
                     <p className="text-xs text-[var(--text-muted)] mt-1">{t('assetmgmt.drawer.tyreRecordsTotal', { count: tyres.length })}</p>
                   </div>
                   <DollarSign className="w-10 h-10 text-blue-500 opacity-40" />
@@ -1027,7 +1047,7 @@ export default function AssetDetail() {
                 <div className="bg-gradient-to-br from-purple-900/20 to-purple-800/10 rounded-xl border border-purple-800/30 p-4 flex items-center justify-between">
                   <div>
                     <p className="text-xs text-[var(--text-muted)] uppercase tracking-widest">{t('assetmgmt.detail.ytdCost')}</p>
-                    <p className="text-2xl font-bold text-[var(--text-primary)] mt-1">{fmtCurrency(ytdCost, activeCurrency)}</p>
+                    <p className="text-2xl font-bold text-[var(--text-primary)] mt-1">{ytdCost == null ? 'N/A' : fmtCurrency(ytdCost, activeCurrency)}</p>
                     <p className="text-xs text-[var(--text-muted)] mt-1">{t('assetmgmt.detail.ytdCostSub')}</p>
                   </div>
                   <DollarSign className="w-10 h-10 text-purple-500 opacity-40" />
@@ -1047,29 +1067,26 @@ export default function AssetDetail() {
                   <button onClick={() => navigate(`/work-orders?asset=${encodeURIComponent(asset.asset_no)}`)}
                     className="text-xs text-blue-400 hover:text-blue-300 transition-colors">{t('assetmgmt.detail.viewAll')}</button>
                 </div>
-                {workOrders.length ? (
-                  <div className="divide-y divide-[var(--border-bright)]">
-                    {workOrderPager.pageRows.map((wo, i) => (
-                      <div key={wo.id ?? i} className="px-4 py-3 flex items-center justify-between">
-                        <div>
-                          <p className="text-sm text-[var(--text-secondary)]">{wo.work_type ?? t('assetmgmt.drawer.workOrderFallback')}</p>
-                          <p className="text-xs text-[var(--text-muted)]">{fmtDate(wo.created_at)}</p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          {wo.total_cost && <span className="text-xs text-[var(--text-secondary)]">{fmtCurrency(wo.total_cost, activeCurrency)}</span>}
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-                            wo.status === 'Completed' ? 'bg-green-900/50 text-green-300' :
-                            wo.status === 'Open' ? 'bg-blue-900/50 text-blue-300' :
-                            'bg-yellow-900/50 text-yellow-300'
-                          }`}>{wo.status ?? '-'}</span>
-                        </div>
-                      </div>
-                    ))}
+                {readFailed.workOrders ? <ReadFailed what="work orders" onRetry={() => setRefreshKey(k => k + 1)} /> : (
+                  <div className="p-3 space-y-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <MiniStat label="Work orders" value={fmtNum(workOrders.length)} />
+                      <MiniStat label="Open" value={fmtNum(openWorkOrders)} />
+                      <MiniStat label="Recorded spend" value={woSpend.total == null ? 'N/A' : fmtCurrency(woSpend.total, activeCurrency)} sub={woSpend.total == null ? 'No work order carries a cost' : `${woSpend.priced} of ${workOrders.length} priced`} />
+                      <MiniStat label="Last opened" value={workOrders[0] ? fmtDate(workOrders[0].opened_at || workOrders[0].created_at) : 'N/A'} />
+                    </div>
+                    <EnterpriseTable
+                      columns={workOrderColumns}
+                      data={workOrders}
+                      getRowId={w => String(w.id)}
+                      searchPlaceholder="Search work orders"
+                      initialPageSize={25}
+                      exportFileName={tableFile('work orders')}
+                      reportMeta={{ title: `${asset.asset_no} work orders`, currency: activeCurrency }}
+                      emptyMessage={t('assetmgmt.detail.noWorkOrders')}
+                    />
                   </div>
-                ) : (
-                  <div className="p-6 text-center text-[var(--text-muted)] text-sm">{t('assetmgmt.detail.noWorkOrders')}</div>
                 )}
-                <TablePagination {...workOrderPager} />
               </div>
             </motion.div>
           )}
@@ -1085,40 +1102,20 @@ export default function AssetDetail() {
                   <button onClick={() => navigate(`/inspections?asset=${encodeURIComponent(asset.asset_no)}`)}
                     className="text-xs text-blue-400 hover:text-blue-300 transition-colors">{t('assetmgmt.detail.viewAll')}</button>
                 </div>
-                {inspections.length ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="border-b border-[var(--border-bright)]">
-                          {['Date', 'Type', 'Inspector', 'Odometer', 'Severity', 'Status', 'Findings'].map(h => (
-                            <th key={h} className="px-3 py-2 text-left text-[var(--text-muted)] font-medium whitespace-nowrap">{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {inspectionPager.pageRows.map((ins, i) => {
-                          const sev = String(ins.severity ?? '').toLowerCase()
-                          const sevColor = sev === 'critical' || sev === 'high' ? 'text-red-400'
-                            : sev === 'medium' ? 'text-yellow-400' : sev ? 'text-green-400' : 'text-[var(--text-dim)]'
-                          return (
-                            <tr key={ins.id ?? i} className="border-b border-[var(--border-bright)] hover:bg-[var(--surface-3)] transition-colors">
-                              <td className="px-3 py-2 text-[var(--text-secondary)] whitespace-nowrap">{fmtDate(ins.inspection_date ?? ins.completed_date ?? ins.scheduled_date ?? ins.created_at)}</td>
-                              <td className="px-3 py-2 text-[var(--text-secondary)]">{ins.inspection_type ?? ins.title ?? '-'}</td>
-                              <td className="px-3 py-2 text-[var(--text-secondary)]">{ins.inspector ?? '-'}</td>
-                              <td className="px-3 py-2 text-[var(--text-secondary)]">{ins.odometer_km != null ? `${fmtNum(ins.odometer_km)} km` : '-'}</td>
-                              <td className={`px-3 py-2 font-medium ${sevColor}`}>{ins.severity ?? '-'}</td>
-                              <td className="px-3 py-2 text-[var(--text-secondary)]">{ins.approval_status ?? ins.status ?? '-'}</td>
-                              <td className="px-3 py-2 text-[var(--text-secondary)] max-w-[240px] truncate" title={ins.findings ?? ''}>{ins.findings ?? ins.notes ?? '-'}</td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
+                {readFailed.inspections ? <ReadFailed what="inspections" onRetry={() => setRefreshKey(k => k + 1)} /> : (
+                  <div className="p-3">
+                    <EnterpriseTable
+                      columns={inspectionColumns}
+                      data={inspections}
+                      getRowId={(i) => String(i.id)}
+                      searchPlaceholder="Search inspections"
+                      initialPageSize={25}
+                      exportFileName={tableFile('inspections')}
+                      reportMeta={{ title: `${asset.asset_no} inspections` }}
+                      emptyMessage="No inspections recorded for this asset."
+                    />
                   </div>
-                ) : (
-                  <div className="p-6 text-center text-[var(--text-muted)] text-sm">No inspections recorded for this asset.</div>
                 )}
-                <TablePagination {...inspectionPager} />
               </div>
             </motion.div>
           )}
@@ -1137,42 +1134,26 @@ export default function AssetDetail() {
                     <ExternalLink className="w-3.5 h-3.5" /> Manage plans
                   </button>
                 </div>
-                {pmDueRows.length ? (
-                  <div className="divide-y divide-[var(--border-bright)]">
-                    {pmDueRows.map(({ plan, due }, i) => {
-                      const meta = PM_DUE_META[due.band] ?? PM_DUE_META.none
-                      const priority = String(plan.priority ?? '').toLowerCase()
-                      const status = String(plan.status ?? '').toLowerCase()
-                      const meterDue = plan.next_due_meter != null
-                        ? `${fmtNum(plan.next_due_meter)}${due.unit ? ` ${due.unit}` : ''}`
-                        : null
-                      return (
-                        <div key={plan.id ?? i} className="px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-[var(--text-primary)] truncate">{plan.name ?? 'Untitled plan'}</p>
-                            <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                              {'Next due: '}
-                              {plan.next_due ? fmtDate(plan.next_due) : 'no date'}
-                              {meterDue ? ` | at ${meterDue}` : ''}
-                              {due.daysToDue != null ? ` | ${due.daysToDue}d` : ''}
-                              {due.meterRemaining != null ? ` | ${fmtNum(due.meterRemaining)}${due.unit ? ` ${due.unit}` : ''} left` : ''}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${PM_DUE_BADGE[due.band] ?? PM_DUE_BADGE.none}`}>{meta.label}</span>
-                            {priority && (
-                              <span className={`px-2 py-0.5 rounded-full text-xs font-semibold capitalize ${PM_PRIORITY_BADGE[priority] ?? PM_PRIORITY_BADGE.low}`}>{priority}</span>
-                            )}
-                            {status && (
-                              <span className={`px-2 py-0.5 rounded-full text-xs font-semibold capitalize ${PM_STATUS_BADGE[status] ?? PM_STATUS_BADGE.completed}`}>{status}</span>
-                            )}
-                          </div>
-                        </div>
-                      )
-                    })}
+                {readFailed.pm ? <ReadFailed what="preventive maintenance plans" onRetry={() => setRefreshKey(k => k + 1)} /> : (
+                  <div className="p-3 space-y-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <MiniStat label="Plans" value={fmtNum(pmSummary.total)} />
+                      <MiniStat label="Overdue" value={fmtNum(pmSummary.overdue)} tone={pmSummary.overdue ? 'text-red-400' : undefined} />
+                      <MiniStat label="Due soon" value={fmtNum(pmSummary.dueSoon)} tone={pmSummary.dueSoon ? 'text-yellow-400' : undefined} />
+                      <MiniStat label="No due date" value={fmtNum(pmSummary.undated)} />
+                    </div>
+                    <EnterpriseTable
+                      columns={pmPlanColumns}
+                      data={pmDueRows}
+                      getRowId={(r, i) => String(r.id ?? i)}
+                      enableColumnFilters={false}
+                      searchPlaceholder="Search plans"
+                      initialPageSize={25}
+                      exportFileName={tableFile('PM plans')}
+                      reportMeta={{ title: `${asset.asset_no} preventive maintenance plans` }}
+                      emptyMessage="No preventive maintenance plans for this asset."
+                    />
                   </div>
-                ) : (
-                  <div className="p-6 text-center text-[var(--text-muted)] text-sm">No preventive maintenance plans for this asset.</div>
                 )}
               </div>
 
@@ -1183,40 +1164,20 @@ export default function AssetDetail() {
                     <Wrench className="w-4 h-4 text-yellow-400" /> Service History ({pmServices.length})
                   </h3>
                 </div>
-                {pmServices.length ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="border-b border-[var(--border-bright)]">
-                          {['Date', 'Meter', 'Outcome', 'Performed By', 'Total Cost'].map(h => (
-                            <th key={h} className="px-3 py-2 text-left text-[var(--text-muted)] font-medium whitespace-nowrap">{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {servicePager.pageRows.map((sv, i) => {
-                          const outcome = String(sv.outcome ?? '').toLowerCase()
-                          const outcomeColor = outcome === 'completed' ? 'text-green-400'
-                            : outcome === 'deferred' ? 'text-yellow-400'
-                            : outcome ? 'text-[var(--text-secondary)]' : 'text-[var(--text-dim)]'
-                          const meterUnit = sv.meter_type === 'engine_hours' ? 'h' : sv.meter_type === 'odometer' ? 'km' : ''
-                          return (
-                            <tr key={sv.id ?? i} className="border-b border-[var(--border-bright)] hover:bg-[var(--surface-3)] transition-colors">
-                              <td className="px-3 py-2 text-[var(--text-secondary)] whitespace-nowrap">{sv.service_date ? fmtDate(sv.service_date) : '-'}</td>
-                              <td className="px-3 py-2 text-[var(--text-secondary)] whitespace-nowrap">{sv.meter_reading != null ? `${fmtNum(sv.meter_reading)}${meterUnit ? ` ${meterUnit}` : ''}` : '-'}</td>
-                              <td className={`px-3 py-2 font-medium capitalize ${outcomeColor}`}>{sv.outcome ?? '-'}</td>
-                              <td className="px-3 py-2 text-[var(--text-secondary)]">{sv.performed_by ?? '-'}</td>
-                              <td className="px-3 py-2 text-[var(--text-secondary)] whitespace-nowrap">{sv.total_cost != null ? fmtCurrency(sv.total_cost, activeCurrency) : '-'}</td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
+                {readFailed.pmServices ? <ReadFailed what="service history" onRetry={() => setRefreshKey(k => k + 1)} /> : (
+                  <div className="p-3">
+                    <EnterpriseTable
+                      columns={serviceColumns}
+                      data={pmServices}
+                      getRowId={(sv, i) => String(sv.id ?? i)}
+                      searchPlaceholder="Search service history"
+                      initialPageSize={25}
+                      exportFileName={tableFile('PM service history')}
+                      reportMeta={{ title: `${asset.asset_no} service history`, currency: activeCurrency }}
+                      emptyMessage="No preventive maintenance service history for this asset."
+                    />
                   </div>
-                ) : (
-                  <div className="p-6 text-center text-[var(--text-muted)] text-sm">No preventive maintenance service history for this asset.</div>
                 )}
-                <TablePagination {...servicePager} />
               </div>
             </motion.div>
           )}
@@ -1232,42 +1193,20 @@ export default function AssetDetail() {
                   <button onClick={() => navigate(`/accidents?asset=${encodeURIComponent(asset.asset_no)}`)}
                     className="text-xs text-blue-400 hover:text-blue-300 transition-colors">{t('assetmgmt.detail.viewAll')}</button>
                 </div>
-                {accidents.length ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="border-b border-[var(--border-bright)]">
-                          {['Date', 'Type', 'Severity', 'Location', 'Driver', 'Status', 'Claim', 'Est. Damage'].map(h => (
-                            <th key={h} className="px-3 py-2 text-left text-[var(--text-muted)] font-medium whitespace-nowrap">{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {accidentPager.pageRows.map((ac, i) => {
-                          const sev = String(ac.severity ?? '').toLowerCase()
-                          const sevColor = sev === 'critical' || sev === 'major' || sev === 'high' ? 'text-red-400'
-                            : sev === 'moderate' || sev === 'medium' ? 'text-yellow-400' : sev ? 'text-green-400' : 'text-[var(--text-dim)]'
-                          const cost = (parseFloat(ac.repair_cost) || 0) || (parseFloat(ac.estimated_damage_cost) || 0)
-                          return (
-                            <tr key={ac.id ?? i} className="border-b border-[var(--border-bright)] hover:bg-[var(--surface-3)] transition-colors">
-                              <td className="px-3 py-2 text-[var(--text-secondary)] whitespace-nowrap">{fmtDate(ac.incident_date ?? ac.created_at)}</td>
-                              <td className="px-3 py-2 text-[var(--text-secondary)]">{ac.accident_type ?? '-'}</td>
-                              <td className={`px-3 py-2 font-medium ${sevColor}`}>{ac.severity ?? '-'}</td>
-                              <td className="px-3 py-2 text-[var(--text-secondary)] max-w-[160px] truncate" title={ac.location ?? ''}>{ac.location ?? '-'}</td>
-                              <td className="px-3 py-2 text-[var(--text-secondary)]">{ac.driver_name ?? '-'}</td>
-                              <td className="px-3 py-2 text-[var(--text-secondary)]">{ac.status ?? '-'}</td>
-                              <td className="px-3 py-2 text-[var(--text-secondary)]">{ac.claim_status ?? '-'}</td>
-                              <td className="px-3 py-2 text-[var(--text-secondary)]">{cost > 0 ? fmtCurrency(cost, activeCurrency) : '-'}</td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
+                {readFailed.accidents ? <ReadFailed what="incidents" onRetry={() => setRefreshKey(k => k + 1)} /> : (
+                  <div className="p-3">
+                    <EnterpriseTable
+                      columns={accidentColumns}
+                      data={accidents}
+                      getRowId={(a, i) => String(a.id ?? i)}
+                      searchPlaceholder="Search incidents"
+                      initialPageSize={25}
+                      exportFileName={tableFile('incidents')}
+                      reportMeta={{ title: `${asset.asset_no} incidents`, currency: activeCurrency }}
+                      emptyMessage="No incidents recorded for this asset."
+                    />
                   </div>
-                ) : (
-                  <div className="p-6 text-center text-[var(--text-muted)] text-sm">No incidents recorded for this asset.</div>
                 )}
-                <TablePagination {...accidentPager} />
               </div>
             </motion.div>
           )}
@@ -1302,7 +1241,7 @@ export default function AssetDetail() {
             entityId={asset.id ?? asset.asset_no}
             entityLabel={asset.asset_no || asset.id}
             context={{
-              book_value: ytdCost,
+              book_value: ytdCost ?? 0,
               disposal_reason: asset.active === false ? 'inactive' : null,
               asset_type: asset.vehicle_type || null,
               site: asset.site || null,
@@ -1335,8 +1274,8 @@ export default function AssetDetail() {
 // ── Small building blocks ───────────────────────────────────────────────────────
 function BackButton({ onClick, label }) {
   return (
-    <button onClick={onClick}
-      className="inline-flex items-center gap-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors mb-4">
+    <button type="button" onClick={onClick}
+      className="inline-flex items-center gap-2 min-h-11 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors mb-4 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
       <ArrowLeft className="w-4 h-4" /> {label}
     </button>
   )
@@ -1357,28 +1296,38 @@ function StatTile({ icon: Icon, label, value, sub, color = 'blue' }) {
         <span className="text-[11px] text-[var(--text-muted)] uppercase tracking-widest font-medium">{label}</span>
         <Icon className={`w-4 h-4 ${STAT_COLORS[color] ?? STAT_COLORS.blue}`} />
       </div>
-      <p className="text-xl font-bold text-[var(--text-primary)] leading-tight">{value ?? '-'}</p>
+      <p className="text-xl font-bold text-[var(--text-primary)] leading-tight tabular-nums">{value ?? 'N/A'}</p>
+      {sub && <p className="text-[11px] text-[var(--text-muted)] truncate">{sub}</p>}
+    </div>
+  )
+}
+
+function MiniStat({ label, value, sub, tone }) {
+  return (
+    <div className="rounded-lg border border-[var(--border-dim)] bg-[var(--surface-1)] px-3 py-2 min-w-0">
+      <p className="text-[11px] text-[var(--text-muted)] uppercase tracking-wider">{label}</p>
+      <p className={`text-lg font-bold tabular-nums ${tone || 'text-[var(--text-primary)]'}`}>{value}</p>
       {sub && <p className="text-[11px] text-[var(--text-muted)] truncate">{sub}</p>}
     </div>
   )
 }
 
 function ProfileField({ icon: Icon, label, value }) {
-  const shown = value == null || value === '' ? '-' : value
+  const shown = value == null || value === '' ? 'Not recorded' : value
   return (
     <div>
       <p className="text-[11px] text-[var(--text-muted)] uppercase tracking-wider mb-1 flex items-center gap-1.5">
         {Icon && <Icon className="w-3 h-3" />}{label}
       </p>
-      <p className={`text-sm font-medium ${shown === '-' ? 'text-[var(--text-dim)]' : 'text-[var(--text-primary)]'} break-words`}>{shown}</p>
+      <p className={`text-sm font-medium ${shown === 'Not recorded' ? 'text-[var(--text-dim)]' : 'text-[var(--text-primary)]'} break-words`}>{shown}</p>
     </div>
   )
 }
 
 function QuickLink({ icon: Icon, label, onClick }) {
   return (
-    <button onClick={onClick}
-      className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--border-bright)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-sm font-medium transition-colors">
+    <button type="button" onClick={onClick}
+      className="flex items-center gap-2 px-3 py-2 min-h-11 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--border-bright)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-sm font-medium transition-colors">
       <Icon className="w-4 h-4" /> {label}
     </button>
   )

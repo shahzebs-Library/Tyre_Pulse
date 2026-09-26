@@ -25,9 +25,12 @@ vi.mock('../contexts/SettingsContext', () => ({
   useSettings: () => ({ activeCountry: 'KSA', activeCurrency: 'SAR' }),
   COUNTRIES: ['KSA', 'UAE', 'Egypt'],
 }))
-vi.mock('../contexts/LanguageContext', () => ({
-  useLanguage: () => ({ t: (k, d) => (typeof d === 'string' ? d : k), language: 'en', dir: 'ltr' }),
-}))
+// A STABLE t, as the real LanguageContext provides: a fresh function per render
+// would change the page loader's identity and reload it on every render.
+vi.mock('../contexts/LanguageContext', () => {
+  const t = (k, d) => (typeof d === 'string' ? d : k)
+  return { useLanguage: () => ({ t, language: 'en', dir: 'ltr' }) }
+})
 vi.mock('../contexts/AuthContext', () => ({
   useAuth: () => ({ profile: { role: 'Admin' }, isSuperAdmin: true }),
 }))
@@ -41,8 +44,10 @@ const FLEET_ROW = {
 }
 vi.mock('../lib/supabase', () => {
   const builder = {
-    select() { return this }, eq() { return this }, order() { return this },
+    select() { return this }, eq() { return this }, order() { return this }, or() { return this },
     limit() { return Promise.resolve({ data: [FLEET_ROW], error: null }) },
+    // The page's own asset+country scoped work-order read pages with range().
+    range() { return Promise.resolve({ data: [], error: null }) },
   }
   return { supabase: { from: () => ({ ...builder }) } }
 })
@@ -147,7 +152,9 @@ const renderPage = () => render(
  * have" renders an unreadable-source count beside it), so an exact-equality
  * match silently finds nothing.
  */
-const button = (label) => screen.getAllByRole('button')
+// The page's section switcher is a role="tablist" of role="tab" buttons, so a
+// tab is looked up alongside ordinary buttons.
+const button = (label) => [...screen.queryAllByRole('button'), ...screen.queryAllByRole('tab')]
   .find((b) => (b.textContent || '').trim().startsWith(label))
 
 /**
@@ -225,5 +232,31 @@ describe('AssetDetail: the Full history tab', () => {
     // smoothed away. A naive last-minus-first would report -800.
     await waitFor(() => expect(rendered()).toMatch(/1 meter reset/i))
     expect(rendered()).toMatch(/500 km/)
+  })
+
+  it('opens every section tab and each renders its table or state without throwing', async () => {
+    renderPage()
+    await waitFor(() => expect(button('Full history')).toBeTruthy())
+    // Tabs are looked up fresh each time: a reload re-mounts the switcher.
+    const labels = screen.getAllByRole('tab').map(t => (t.textContent || '').trim())
+    expect(labels.length).toBeGreaterThanOrEqual(8)
+    for (const label of labels) {
+      if (label.startsWith('Full history')) continue
+      fireEvent.click(button(label))
+      await waitFor(() => expect(button(label)).toHaveAttribute('aria-selected', 'true'))
+    }
+    // The empty work-order read renders the honest empty state, not a failure.
+    fireEvent.click(button(labels.find(l => l.includes('workOrders'))))
+    await waitFor(() => expect(rendered()).toContain('assetmgmt.detail.noWorkOrders'))
+    expect(rendered()).not.toMatch(/work orders for this asset could not be read/i)
+  })
+
+  it('opens the asset editor as an accessible dialog with labelled fields', async () => {
+    renderPage()
+    await waitFor(() => expect(button('assetmgmt.actions.editAsset')).toBeTruthy())
+    fireEvent.click(button('assetmgmt.actions.editAsset'))
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog).toBeTruthy()
+    expect(screen.getByLabelText('assetmgmt.modal.assetNo')).toHaveValue('TM514')
   })
 })

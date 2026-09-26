@@ -66,12 +66,21 @@ describe('production-risk registers remediated in this paging wave', () => {
     'StockReplenishment', 'SupplierManagement', 'UserManagement',
   ]
 
+  const ENTERPRISE_PAGES = new Set(['AssetDisposals'])
+
   for (const page of pages) {
     it(`${page} renders through the shared pager`, () => {
       const source = read(`src/pages/${page}.jsx`)
+      expect(source).not.toMatch(/exportTo(?:Excel|Pdf)\([\s\S]{0,160}?\.pageRows/)
+      // Registers moved onto EnterpriseTable page the WHOLE set inside the
+      // table (and sort across it); they must not clip rows before handing in.
+      if (ENTERPRISE_PAGES.has(page)) {
+        expect(source).toContain('<EnterpriseTable')
+        expect(source).not.toMatch(/\.slice\(0,\s*\d+\)\.map/)
+        return
+      }
       expect(source).toContain('usePagedRows')
       expect(source).toContain('<TablePagination')
-      expect(source).not.toMatch(/exportTo(?:Excel|Pdf)\([\s\S]{0,160}?\.pageRows/)
     })
   }
 

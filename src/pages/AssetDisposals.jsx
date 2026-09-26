@@ -29,7 +29,7 @@ import {
   Banknote, RefreshCw, Activity, History, Tag,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
-import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import Card, { CardHeader, CardBody } from '../components/ui/Card'
 import Modal from '../components/ui/Modal'
 import StudioBoundary from '../components/present/StudioBoundary'
@@ -61,6 +61,10 @@ import { colorAt, categorical, withAlpha } from '../lib/reportColors'
 import { exportToExcel, exportSheetsToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
 import { disposalWorkbookSheets, workbookNotes } from '../lib/assetDisposalWorkbook'
 import { toUserMessage } from '../lib/safeError'
+import {
+  disposalFilterOptions, countActiveFilters, mergeExportModel, uploadPreviewCounts,
+  downtimeSortValue, stillActiveShare, findingDotClass,
+} from '../lib/assetDisposalsAnalytics'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
 
@@ -157,7 +161,9 @@ function Tile({ label, value, sub, tone = 'quiet', onClick, active, icon: Icon }
       as={Cmp}
       onClick={onClick}
       interactive={!!onClick}
-      className="text-left w-full"
+      type={onClick ? 'button' : undefined}
+      aria-pressed={onClick ? !!active : undefined}
+      className="text-left w-full min-h-11 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
       style={active ? { borderColor: '#3b82f6' } : undefined}
     >
       <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-[var(--text-muted)]">
@@ -171,7 +177,7 @@ function Tile({ label, value, sub, tone = 'quiet', onClick, active, icon: Icon }
   )
 }
 
-const inputCls = 'w-full rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500'
+const inputCls = 'w-full rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500/40 min-h-11'
 
 const chartOpts = (extra = {}) => ({
   responsive: true,
@@ -283,8 +289,6 @@ export default function AssetDisposals() {
     () => disposalCandidatesFromBreakdowns(breakdownRows, baseRows, { now: Date.now() }),
     [breakdownRows, baseRows],
   )
-  const disposalsPager = usePagedRows(filtered)
-  const candidatesPager = usePagedRows(missingCandidates)
   // Totals follow the FILTERED rows: a filtered table under register-wide
   // headlines is how a reader ends up quoting a number that is not on screen.
   const totals = useMemo(() => disposalSummary(filtered), [filtered])
@@ -295,19 +299,9 @@ export default function AssetDisposals() {
   const benchmarks = useMemo(() => shapeBenchmarks(benchmarkRows, { now: Date.now() }), [benchmarkRows])
 
 
-  const options = useMemo(() => {
-    const uniq = (key) => [...new Set(rows.map((r) => r?.[key]).filter(Boolean))].sort()
-    return {
-      assetTypes: uniq('asset_type'),
-      regions: uniq('region'),
-      sites: uniq('site'),
-    }
-  }, [rows])
-
-  const activeFilterCount = useMemo(
-    () => Object.entries(filters).filter(([k, v]) => (k === 'inRegister' ? v !== 'all' : !!v)).length,
-    [filters],
-  )
+  const options = useMemo(() => disposalFilterOptions(rows), [rows])
+  const activeFilterCount = useMemo(() => countActiveFilters(filters), [filters])
+  const activeShare = useMemo(() => stillActiveShare(totals), [totals])
   const setFilter = (k, v) => setFilters((f) => ({ ...f, [k]: v }))
 
   const currency = totals.mixedCurrency ? '' : (totals.currency || '')
@@ -368,6 +362,45 @@ export default function AssetDisposals() {
     }],
   }), [byCondition])
 
+  // ── tables ─────────────────────────────────────────────────────────────────
+  // Economics computed once per row so sort keys and cells read the same numbers.
+  const registerRows = useMemo(
+    () => filtered.map((r) => ({ row: r, e: assetEconomics(r, { peerSpendPerYear: baselines[r?.asset_type] }) })),
+    [filtered, baselines],
+  )
+  const registerColumns = useMemo(() => [
+    { id: 'asset', header: 'Asset', accessorFn: (x) => x.row.asset_no, cell: ({ row }) => <span className="font-medium text-[var(--text-primary)] whitespace-nowrap">{row.original.row.asset_no}</span> },
+    { id: 'type', header: 'Type', accessorFn: (x) => x.row.asset_type || 'N/A' },
+    { id: 'where', header: 'Region / Site', accessorFn: (x) => `${regionMeta(x.row.region).label} / ${x.row.site || 'N/A'}`, cell: ({ row }) => <span className="whitespace-nowrap text-[var(--text-secondary)]">{regionMeta(row.original.row.region).label}<span className="text-[var(--text-muted)]"> / {row.original.row.site || 'N/A'}</span></span> },
+    { id: 'disposition', header: 'Disposition', accessorFn: (x) => dispositionMeta(x.row.disposition).label, cell: ({ row }) => <Badge meta={dispositionMeta(row.original.row.disposition)} /> },
+    { id: 'condition', header: 'Condition', accessorFn: (x) => conditionMeta(x.row.condition).label, cell: ({ row }) => <Badge meta={conditionMeta(row.original.row.condition)} /> },
+    { id: 'register', header: 'Fleet register', accessorFn: (x) => (x.e.inRegister ? (x.e.fleetStatus || 'Listed') : 'Not in register'), cell: ({ row }) => (row.original.e.inRegister ? <span className="text-[var(--text-secondary)]">{row.original.e.fleetStatus || 'Listed'}</span> : <Badge meta={{ label: 'Not in register', tone: 'warning' }} />) },
+    { id: 'downtime', header: 'Downtime', accessorFn: (x) => downtimeSortValue(x.row.breakdown) ?? undefined, sortUndefined: 'last', sortingFn: 'basic', meta: { exportValue: (x) => (x.row.breakdown ? downtimeNote(x.row.breakdown) || 'Back in service' : 'Not recorded') }, cell: ({ row }) => <DowntimeCell entry={row.original.row.breakdown} /> },
+    { id: 'jobCards', header: 'Job cards', accessorFn: (x) => x.e.jobCards ?? undefined, sortUndefined: 'last', sortingFn: 'basic', meta: { align: 'right' }, cell: ({ row }) => <span className="tabular-nums">{fmtNum(row.original.e.jobCards)}</span> },
+    { id: 'spend', header: 'Spend', accessorFn: (x) => (x.e.spend == null ? undefined : Number(x.e.spend)), sortUndefined: 'last', sortingFn: 'basic', meta: { align: 'right' }, cell: ({ row }) => <span className="tabular-nums whitespace-nowrap">{fmtMoney(row.original.e.spend, row.original.e.currency)}</span> },
+    { id: 'tyres', header: 'Tyres fitted', accessorFn: (x) => x.e.tyresActive ?? 0, meta: { align: 'right' }, cell: ({ row }) => <span className="tabular-nums">{row.original.e.tyresActive || ''}</span> },
+    { id: 'status', header: 'Status', accessorFn: (x) => disposalStatusMeta(x.row.status).label, cell: ({ row }) => <Badge meta={disposalStatusMeta(row.original.row.status)} /> },
+    {
+      id: 'history', header: 'History', enableSorting: false, meta: { export: false },
+      cell: ({ row }) => (
+        <button
+          type="button"
+          onClick={(ev) => { ev.stopPropagation(); setHistory(row.original.row) }}
+          className="text-blue-400 hover:underline inline-flex items-center gap-1 text-xs min-h-11 px-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
+          aria-label={`Open the history of ${row.original.row.asset_no}`}
+        >
+          <History size={13} aria-hidden="true" /> History
+        </button>
+      ),
+    },
+  ], [])
+  const candidateColumns = useMemo(() => [
+    { id: 'asset', header: 'Asset', accessorFn: (c) => c.asset_no, cell: ({ row }) => <Link to={`/asset-management/${encodeURIComponent(row.original.asset_no)}`} className="text-blue-400 hover:underline font-medium whitespace-nowrap">{row.original.asset_no}</Link> },
+    { id: 'days', header: 'Days down', accessorFn: (c) => (c.currentDays != null && Number.isFinite(Number(c.currentDays)) ? Number(c.currentDays) : undefined), sortUndefined: 'last', sortingFn: 'basic', meta: { align: 'right' }, cell: ({ row }) => <span className="tabular-nums text-amber-300">{fmtNum(row.original.currentDays)}</span> },
+    { id: 'fault', header: 'Fault', accessorFn: (c) => c.fault || 'Not recorded' },
+    { id: 'repair', header: 'Repaired at', accessorFn: (c) => repairLabel(c.repairLocation) },
+  ], [])
+
   // ── exports ────────────────────────────────────────────────────────────────
   /**
    * One export, both halves. The committee columns and the reliability columns
@@ -378,23 +411,15 @@ export default function AssetDisposals() {
    */
   const exportModel = useCallback(() => {
     const base = disposalExportRows(filtered)
-    if (!reliability?.ok) return base
-    const rel = reliabilityExportRows(filtered)
-    if (!rel || !Array.isArray(rel.columns) || !Array.isArray(rel.rows)) return base
-    const extra = rel.columns
-      .map((k, i) => ({ key: k, head: (rel.head || [])[i] || k }))
-      .filter((c) => !base.columns.includes(c.key))
-    return {
-      columns: [...base.columns, ...extra.map((c) => c.key)],
-      head: [...base.head, ...extra.map((c) => c.head)],
-      rows: base.rows.map((o, i) => {
-        const src = rel.rows[i] || {}
-        const add = {}
-        for (const c of extra) add[c.key] = src[c.key]
-        return { ...o, ...add }
-      }),
-    }
+    return reliability?.ok ? mergeExportModel(base, reliabilityExportRows(filtered)) : base
   }, [filtered, reliability])
+  const [exportError, setExportError] = useState('')
+  // Every export goes through here so a failed file says so instead of the
+  // button appearing to do nothing.
+  const runExport = async (fn) => {
+    setExportError('')
+    try { await fn() } catch (e) { setExportError(toUserMessage(e, 'The export could not be created.')) }
+  }
 
   const doExportExcel = async () => {
     const { columns, rows: objects, head } = exportModel()
@@ -500,22 +525,30 @@ export default function AssetDisposals() {
                 export rather than replacing it: somebody who wants only the
                 register should not have to open a six-sheet file to find it. */}
             <button
-              onClick={doExportWorkbook}
+              onClick={() => runExport(doExportWorkbook)}
               className="btn-secondary text-sm inline-flex items-center gap-1.5"
               disabled={!filtered.length}
               title="Register, reliability, replacement prices, quotations, board points and the fleet comparison, in one workbook"
             >
               <FileSpreadsheet size={14} /> Download everything
             </button>
-            <button onClick={doExportExcel} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={() => runExport(doExportExcel)} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileSpreadsheet size={14} /> Register only
             </button>
-            <button onClick={doExportPdf} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button onClick={() => runExport(doExportPdf)} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileText size={14} /> PDF
             </button>
           </div>
         )}
       />
+
+      {exportError && (
+        <Card tone="crit" role="alert" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
+          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
+          <p className="text-sm text-red-300 flex-1">{exportError}</p>
+          <button type="button" onClick={() => setExportError('')} className="btn-secondary text-sm min-h-11" aria-label="Dismiss export error"><X size={14} aria-hidden="true" /></button>
+        </Card>
+      )}
 
       {notProvisioned && (
         // The amber tint comes from `tone`, not `border border-amber-800/50`:
@@ -576,7 +609,7 @@ export default function AssetDisposals() {
               label="Still Active in the register"
               value={fmtNum(totals.stillActive)}
               tone={totals.stillActive > 0 ? 'danger' : 'quiet'}
-              sub="Counted as available fleet"
+              sub={activeShare == null ? 'Counted as available fleet' : `${activeShare}% of this list, counted as available fleet`}
               icon={Truck}
               onClick={() => setFilter('inRegister', filters.inRegister === 'yes' ? 'all' : 'yes')}
               active={filters.inRegister === 'yes'}
@@ -602,7 +635,7 @@ export default function AssetDisposals() {
               <ul className="space-y-1.5">
                 {findings.map((f) => (
                   <li key={f.key} className="flex items-start gap-2 text-sm">
-                    <span className={`mt-1.5 h-1.5 w-1.5 rounded-full shrink-0 ${f.tone === 'danger' ? 'bg-red-400' : f.tone === 'warning' ? 'bg-amber-400' : f.tone === 'info' ? 'bg-sky-400' : 'bg-slate-400'}`} />
+                    <span aria-hidden="true" className={`mt-1.5 h-1.5 w-1.5 rounded-full shrink-0 ${findingDotClass(f.tone)}`} />
                     <span className="text-[var(--text-secondary)]">{f.text}</span>
                   </li>
                 ))}
@@ -627,7 +660,7 @@ export default function AssetDisposals() {
                   aria-label="Search the disposal register"
                 />
               </div>
-              <button onClick={() => setShowFilters((s) => !s)} className="btn-secondary text-sm inline-flex items-center gap-1.5">
+              <button type="button" onClick={() => setShowFilters((s) => !s)} aria-expanded={showFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-11">
                 <Filter size={14} /> Filters{activeFilterCount ? ` (${activeFilterCount})` : ''}
               </button>
               {activeFilterCount > 0 && (
@@ -704,7 +737,7 @@ export default function AssetDisposals() {
           </Card>
 
           {/* ── Tabs ─────────────────────────────────────────────────────── */}
-          <div className="flex items-center gap-2 border-b border-[var(--input-border)]">
+          <div role="tablist" aria-label="Disposal views" className="flex flex-wrap items-center gap-2 border-b border-[var(--input-border)]">
             {[
               { key: 'register', label: 'Register', icon: Recycle },
               { key: 'reliability', label: 'Reliability and board view', icon: Activity },
@@ -712,8 +745,11 @@ export default function AssetDisposals() {
             ].map((t) => (
               <button
                 key={t.key}
+                type="button"
+                role="tab"
+                aria-selected={tab === t.key}
                 onClick={() => setTab(t.key)}
-                className={`inline-flex items-center gap-1.5 px-3 py-2 text-sm border-b-2 -mb-px ${tab === t.key ? 'border-blue-500 text-[var(--text-primary)]' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}
+                className={`inline-flex items-center gap-1.5 px-3 py-2 min-h-11 text-sm border-b-2 -mb-px focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-t ${tab === t.key ? 'border-blue-500 text-[var(--text-primary)]' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}
               >
                 <t.icon size={14} /> {t.label}
               </button>
@@ -816,7 +852,7 @@ export default function AssetDisposals() {
             // the literal, it also compresses under compact density; the tint
             // comes from `tone`.
             //
-            // Not `clip`: the TablePagination below holds a native <select>.
+            // Not `clip`: the table's page-size control is a native <select>.
             <Card pad="tight" tone="warn">
               <div className="flex items-center gap-2 mb-1">
                 <Wrench size={15} className="text-amber-300 shrink-0" />
@@ -832,100 +868,40 @@ export default function AssetDisposals() {
                 register. That is not a recommendation to scrap them - it is the list the committee has
                 not seen.
               </p>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="text-[var(--text-muted)]">
-                    <tr>
-                      {['Asset', 'Days down', 'Fault', 'Repaired at'].map((h) => (
-                        <th key={h} className="text-left font-medium px-3 py-1.5 whitespace-nowrap">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {candidatesPager.pageRows.map((c) => (
-                      <tr key={c.asset_no} className="border-t border-[var(--input-border)]">
-                        <td className="px-3 py-1.5 font-medium whitespace-nowrap">
-                          <Link to={`/asset-management/${encodeURIComponent(c.asset_no)}`} className="text-blue-400 hover:underline">
-                            {c.asset_no}
-                          </Link>
-                        </td>
-                        <td className="px-3 py-1.5 tabular-nums text-amber-300">{c.currentDays}</td>
-                        <td className="px-3 py-1.5 text-[var(--text-secondary)]">{c.fault || 'Not recorded'}</td>
-                        <td className="px-3 py-1.5 text-[var(--text-muted)] whitespace-nowrap">{repairLabel(c.repairLocation)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                <TablePagination {...candidatesPager} />
-              </div>
+              <EnterpriseTable
+                columns={candidateColumns}
+                data={missingCandidates}
+                getRowId={(c) => String(c.asset_no)}
+                enableColumnFilters={false}
+                searchPlaceholder="Search these machines"
+                initialPageSize={25}
+                exportFileName={reportFileName('Disposal candidates from breakdowns', reportDateLabel())}
+                reportMeta={{ title: 'Down long enough to consider', company }}
+                emptyMessage="No machine has been down long enough to consider."
+              />
             </Card>
           )}
 
           {/* ── Register table ─────────────────────────────────────────────
-              KEPT as raw markup on purpose: it already owns usePagedRows +
-              TablePagination and the page's own Excel / workbook / PDF exports
-              above, and nearly every cell is composite - Badge pills for
-              disposition, condition and status, a region/site pair in one
-              cell, the DowntimeCell whose "Not recorded" is a deliberate
-              distinction from zero days, and a per-row History button beside a
-              whole-row click target. EnterpriseTable would flatten those and
-              add a second search box beside the page's own. */}
+              EnterpriseTable over the FULL filtered list, so a sort orders every
+              machine, not just the page on screen. Its own search and export are
+              off: the page's search box above drives both tabs, and the page's
+              three exports carry the reliability columns the table does not.
+              Composite cells keep their Badge pills and the DowntimeCell, whose
+              "Not recorded" is a deliberate distinction from zero days (it sorts
+              last, never as 0). Enter on a focused row opens the detail. */}
           <Card pad="none" clip>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-[var(--input-bg)] text-[var(--text-muted)]">
-                  <tr>
-                    {['Asset', 'Type', 'Region / Site', 'Disposition', 'Condition', 'Fleet register', 'Downtime', 'Job cards', 'Spend', 'Tyres fitted', 'Status', 'History'].map((h) => (
-                      <th key={h} className="text-left font-medium px-3 py-2 whitespace-nowrap">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.length === 0 && (
-                    <tr><td colSpan={12} className="px-3 py-6 text-center text-[var(--text-muted)]">No machines match these filters.</td></tr>
-                  )}
-                  {disposalsPager.pageRows.map((r) => {
-                    const e = assetEconomics(r, { peerSpendPerYear: baselines[r?.asset_type] })
-                    return (
-                      <tr
-                        key={r.id || r.asset_no}
-                        onClick={() => setDetail(r)}
-                        className="border-t border-[var(--input-border)] hover:bg-[var(--input-bg)] cursor-pointer"
-                      >
-                        <td className="px-3 py-2 font-medium text-[var(--text-primary)] whitespace-nowrap">{r.asset_no}</td>
-                        <td className="px-3 py-2 text-[var(--text-secondary)] whitespace-nowrap">{r.asset_type || 'N/A'}</td>
-                        <td className="px-3 py-2 text-[var(--text-secondary)] whitespace-nowrap">
-                          {regionMeta(r.region).label}
-                          <span className="text-[var(--text-muted)]"> / {r.site || 'N/A'}</span>
-                        </td>
-                        <td className="px-3 py-2"><Badge meta={dispositionMeta(r.disposition)} /></td>
-                        <td className="px-3 py-2"><Badge meta={conditionMeta(r.condition)} /></td>
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          {e.inRegister
-                            ? <span className="text-[var(--text-secondary)]">{e.fleetStatus || 'Listed'}</span>
-                            : <Badge meta={{ label: 'Not in register', tone: 'warning' }} />}
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap"><DowntimeCell entry={r.breakdown} /></td>
-                        <td className="px-3 py-2 tabular-nums text-[var(--text-secondary)]">{fmtNum(e.jobCards)}</td>
-                        <td className="px-3 py-2 tabular-nums text-[var(--text-secondary)] whitespace-nowrap">{fmtMoney(e.spend, e.currency)}</td>
-                        <td className="px-3 py-2 tabular-nums text-[var(--text-secondary)]">{e.tyresActive || ''}</td>
-                        <td className="px-3 py-2"><Badge meta={disposalStatusMeta(r.status)} /></td>
-                        <td className="px-3 py-2">
-                          <button
-                            type="button"
-                            onClick={(ev) => { ev.stopPropagation(); setHistory(r) }}
-                            className="text-blue-400 hover:underline inline-flex items-center gap-1 text-xs"
-                          >
-                            <History size={13} /> History
-                          </button>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-              <TablePagination {...disposalsPager} />
-            </div>
+            <EnterpriseTable
+              columns={registerColumns}
+              data={registerRows}
+              getRowId={(r) => String(r.row.id || r.row.asset_no)}
+              enableGlobalFilter={false}
+              enableColumnFilters={false}
+              enableExport={false}
+              initialPageSize={25}
+              onRowClick={(r) => setDetail(r.row)}
+              emptyMessage="No machines match these filters."
+            />
           </Card>
           </>
           )}
@@ -1030,6 +1006,29 @@ function Field({ label, children }) {
     </div>
   )
 }
+
+// Serial first: that is what somebody carries to the yard to find the tyre.
+const TYRE_COLUMNS = [
+  {
+    id: 'serial', header: 'Serial', accessorFn: (t) => t?.serial || 'Not recorded',
+    cell: ({ row }) => (row.original?.serial
+      ? <Link to={`/tyre-passport/${encodeURIComponent(row.original.serial)}`} className="text-blue-400 hover:underline">{row.original.serial}</Link>
+      : <span className="text-[var(--text-muted)]">Not recorded</span>),
+  },
+  { id: 'position', header: 'Position', accessorFn: (t) => t?.position || 'N/A' },
+  { id: 'brand', header: 'Brand', accessorFn: (t) => t?.brand || 'N/A' },
+  { id: 'size', header: 'Size', accessorFn: (t) => t?.size || 'N/A' },
+  { id: 'fitted', header: 'Fitted', accessorFn: (t) => t?.fitted || undefined, sortUndefined: 'last', cell: ({ row }) => fmtDate(row.original?.fitted) },
+  { id: 'km', header: 'Km', accessorFn: (t) => (t?.km != null && Number.isFinite(Number(t.km)) ? Number(t.km) : undefined), sortUndefined: 'last', sortingFn: 'basic', meta: { align: 'right' }, cell: ({ row }) => <span className="tabular-nums">{fmtNum(row.original?.km)}</span> },
+]
+
+const UPLOAD_COLUMNS = [
+  { id: 'asset', header: 'Asset', accessorFn: (r) => r.asset_no },
+  { id: 'type', header: 'Type', accessorFn: (r) => r.asset_type || 'N/A' },
+  { id: 'disposition', header: 'Disposition', accessorFn: (r) => dispositionMeta(r.disposition).label },
+  { id: 'site', header: 'Site', accessorFn: (r) => r.site || 'N/A' },
+  { id: 'remarks', header: 'Remarks', accessorFn: (r) => r.remarks || '', cell: ({ getValue }) => <span className="block truncate max-w-xs text-[var(--text-muted)]" title={getValue()}>{getValue()}</span> },
+]
 
 function DisposalDetail({ row, baselines }) {
   const e = assetEconomics(row, { peerSpendPerYear: baselines?.[row?.asset_type] })
@@ -1140,33 +1139,18 @@ function DisposalDetail({ row, baselines }) {
             No tyre is recorded as fitted to this machine. That means none is on record here, which is not the same as none being on the axles.
           </p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="text-[var(--text-muted)]">
-                <tr>
-                  {['Serial', 'Position', 'Brand', 'Size', 'Fitted', 'Km'].map((h) => (
-                    <th key={h} className="text-left font-medium px-2 py-1.5 whitespace-nowrap">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {e.serials.map((s, i) => (
-                  <tr key={`${s?.serial || 'n'}-${i}`} className="border-t border-[var(--input-border)]">
-                    <td className="px-2 py-1.5">
-                      {s?.serial
-                        ? <Link to={`/tyre-passport/${encodeURIComponent(s.serial)}`} className="text-blue-400 hover:underline">{s.serial}</Link>
-                        : <span className="text-[var(--text-muted)]">Not recorded</span>}
-                    </td>
-                    <td className="px-2 py-1.5 text-[var(--text-secondary)]">{s?.position || 'N/A'}</td>
-                    <td className="px-2 py-1.5 text-[var(--text-secondary)]">{s?.brand || 'N/A'}</td>
-                    <td className="px-2 py-1.5 text-[var(--text-secondary)]">{s?.size || 'N/A'}</td>
-                    <td className="px-2 py-1.5 text-[var(--text-secondary)]">{fmtDate(s?.fitted)}</td>
-                    <td className="px-2 py-1.5 tabular-nums text-[var(--text-secondary)]">{fmtNum(s?.km)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <EnterpriseTable
+            columns={TYRE_COLUMNS}
+            data={e.serials.map((t, i) => ({ ...t, _key: `${t?.serial || 'n'}-${i}` }))}
+            getRowId={(t) => t._key}
+            enableColumnFilters={false}
+            enableColumnVisibility={false}
+            searchPlaceholder="Search serial, brand or size"
+            initialPageSize={25}
+            exportFileName={reportFileName(`Tyres still fitted ${row.asset_no}`, reportDateLabel())}
+            reportMeta={{ title: `Tyres still fitted to ${row.asset_no}` }}
+            emptyMessage="No tyre is recorded as fitted to this machine."
+          />
         )}
       </section>
     </div>
@@ -1308,7 +1292,6 @@ function DecisionModal({ row, busy, onClose, onSave }) {
 function UploadModal({ country, existing, onClose, onDone }) {
   const [state, setState] = useState({ phase: 'pick', rows: [], fileName: '', error: '', progress: null, result: null })
 
-  const known = useMemo(() => new Set((existing || []).map((r) => String(r?.asset_no || '').toUpperCase())), [existing])
 
   const pick = async (file) => {
     if (!file) return
@@ -1342,8 +1325,7 @@ function UploadModal({ country, existing, onClose, onDone }) {
     }
   }
 
-  const added = state.rows.filter((r) => !known.has(String(r.asset_no).toUpperCase())).length
-  const refreshed = state.rows.length - added
+  const { added, refreshed } = useMemo(() => uploadPreviewCounts(state.rows, existing), [state.rows, existing])
 
   return (
     <Modal
@@ -1363,17 +1345,18 @@ function UploadModal({ country, existing, onClose, onDone }) {
     >
       <div className="space-y-3">
         {state.error && (
-          <div className="text-sm text-red-300 flex items-start gap-2">
+          <div role="alert" className="text-sm text-red-300 flex items-start gap-2">
             <AlertTriangle size={15} className="mt-0.5 shrink-0" /> {state.error}
           </div>
         )}
 
         {(state.phase === 'pick' || state.phase === 'reading') && (
-          <label className="block rounded-lg border border-dashed border-[var(--input-border)] px-4 py-8 text-center cursor-pointer hover:border-blue-600/50">
+          <label className="block rounded-lg border border-dashed border-[var(--input-border)] px-4 py-8 text-center cursor-pointer hover:border-blue-600/50 focus-within:ring-2 focus-within:ring-blue-500">
             <input
               type="file"
               accept=".xlsx,.xls,.csv"
-              className="hidden"
+              aria-label="Choose a committee sheet to upload"
+              className="sr-only"
               onChange={(e) => pick(e.target.files?.[0])}
             />
             {state.phase === 'reading'
@@ -1401,24 +1384,17 @@ function UploadModal({ country, existing, onClose, onDone }) {
             <p className="text-xs text-[var(--text-muted)]">
               Nothing has been written yet. Every row is stamped country {country || 'from your scope'} and keyed on its asset code.
             </p>
-            <div className="max-h-64 overflow-auto border border-[var(--input-border)] rounded-lg">
-              <table className="w-full text-sm">
-                <thead className="bg-[var(--input-bg)] text-[var(--text-muted)] sticky top-0">
-                  <tr>{['Asset', 'Type', 'Disposition', 'Site', 'Remarks'].map((h) => <th key={h} className="text-left font-medium px-2 py-1.5">{h}</th>)}</tr>
-                </thead>
-                <tbody>
-                  {state.rows.slice(0, 200).map((r, i) => (
-                    <tr key={`${r.asset_no}-${i}`} className="border-t border-[var(--input-border)]">
-                      <td className="px-2 py-1.5 text-[var(--text-primary)]">{r.asset_no}</td>
-                      <td className="px-2 py-1.5 text-[var(--text-secondary)]">{r.asset_type || 'N/A'}</td>
-                      <td className="px-2 py-1.5 text-[var(--text-secondary)]">{dispositionMeta(r.disposition).label}</td>
-                      <td className="px-2 py-1.5 text-[var(--text-secondary)]">{r.site || 'N/A'}</td>
-                      <td className="px-2 py-1.5 text-[var(--text-muted)] truncate max-w-xs">{r.remarks || ''}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <EnterpriseTable
+              columns={UPLOAD_COLUMNS}
+              data={state.rows.map((r, i) => ({ ...r, _key: `${r.asset_no}-${i}` }))}
+              getRowId={(r) => r._key}
+              enableColumnFilters={false}
+              enableExport={false}
+              enableColumnVisibility={false}
+              searchPlaceholder="Search the rows read"
+              initialPageSize={25}
+              emptyMessage="No rows were read from the file."
+            />
           </>
         )}
 

@@ -14,15 +14,16 @@
  * it does NOT revoke the user's auth session. True session revocation needs a
  * service-role edge function and is NOT built here - the banner says so.
  *
- * Both reads degrade to an empty list on any error (the service swallows it),
- * so an empty table says "nothing came back" rather than claiming there are no
- * users. The Admin column used to print a raw uuid; it now resolves the admin's
+ * Both reads throw on failure and are loaded independently, so a failed read
+ * shows its own error with Retry and never renders as "no users" or "no
+ * activity"; the headline tiles read N/A until the user list has loaded. The
+ * Admin column used to print a raw uuid; it now resolves the admin's
  * name from the same profiles read and falls back to the id.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   MonitorSmartphone, RefreshCw, ShieldAlert, Lock, Unlock, Smartphone, BellOff,
-  Download, History, CheckCircle2, Users, Clock,
+  FileSpreadsheet, FileText, History, CheckCircle2, Users, Clock,
 } from 'lucide-react'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import {
@@ -36,7 +37,7 @@ import {
 } from '../../lib/api/consoleSessions'
 import { toUserMessage } from '../../lib/safeError'
 import KnownConsoleDevices from './sessions/KnownConsoleDevices'
-import { exportToExcel } from '../../lib/exportUtils'
+import { exportConsoleRows, sortRows, useTableSort } from '../../lib/consoleTable'
 
 const ACTIVITY_LIMIT = 200
 const TREND_DAYS = 30
@@ -53,9 +54,16 @@ function fmtDateTime(v) {
   })
 }
 
-function countryLabel(c) {
-  if (Array.isArray(c)) return c.length ? c.join(', ') : 'All'
-  return c || 'All'
+/**
+ * Country reach as the database enforces it (V309): Admin sees every country,
+ * an ALL or * entry grants every country, and for anyone else an empty scope
+ * means no country access, not all of them.
+ */
+export function countryLabel(c, role) {
+  if (role === 'Admin') return 'All countries'
+  const arr = (Array.isArray(c) ? c : [c]).map((x) => String(x ?? '').trim()).filter(Boolean)
+  if (arr.some((x) => ['ALL', '*'].includes(x.toUpperCase()))) return 'All countries'
+  return arr.length ? arr.join(', ') : 'No country access'
 }
 
 /**
@@ -91,8 +99,13 @@ export default function ConsoleSessions() {
   const [devices, setDevices] = useState([])
   const [sessions, setSessions] = useState([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const [error, setError] = useState(null)          // users and devices could not be read
+  const [activityError, setActivityError] = useState(null) // console activity could not be read
+  const [actionError, setActionError] = useState(null)     // lock, clear or export failed
   const [busyId, setBusyId] = useState(null)
+  const [confirmLock, setConfirmLock] = useState(null)
+  const [exporting, setExporting] = useState('')
+  const { sort, onSort } = useTableSort({ key: 'last_login_at', dir: 'desc' })
 
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState('all')
@@ -104,16 +117,14 @@ export default function ConsoleSessions() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    setError(null)
-    try {
-      const [d, s] = await Promise.all([listUserDevices(), listConsoleSessions({ limit: ACTIVITY_LIMIT })])
-      setDevices(d)
-      setSessions(s)
-    } catch (err) {
-      setError(toUserMessage(err))
-    } finally {
-      setLoading(false)
-    }
+    setError(null); setActivityError(null)
+    // Independent reads: one failing must not blank the other.
+    const [d, s] = await Promise.allSettled([listUserDevices(), listConsoleSessions({ limit: ACTIVITY_LIMIT })])
+    if (d.status === 'fulfilled') setDevices(d.value)
+    else { setDevices([]); setError(toUserMessage(d.reason, 'Could not load users and devices.')) }
+    if (s.status === 'fulfilled') setSessions(s.value)
+    else { setSessions([]); setActivityError(toUserMessage(s.reason, 'Could not load console activity.')) }
+    setLoading(false)
   }, [])
 
   useEffect(() => { load() }, [load])
@@ -139,6 +150,12 @@ export default function ConsoleSessions() {
       )
     })
   }, [devices, search, roleFilter, lockedFilter, deviceFilter])
+  const sorted = useMemo(() => sortRows(filtered, sort, {
+    name: (d) => d.full_name || d.username,
+    country: (d) => countryLabel(d.country, d.role),
+    status: (d) => (d.locked ? 1 : 0),
+    device: (d) => (d.has_device ? d.push_token_updated_at || '1' : null),
+  }), [filtered, sort])
 
   const counts = useMemo(() => ({
     total: devices.length,
@@ -165,14 +182,14 @@ export default function ConsoleSessions() {
   // ── Actions ───────────────────────────────────────────────────────────────────
 
   async function handleLock(row, locked) {
-    if (locked && typeof window !== 'undefined' && window.confirm && !window.confirm(`Lock ${row.full_name || row.username || 'this user'}? They are signed out of the app until unlocked.`)) return
     setBusyId(row.id)
-    setError(null)
+    setActionError(null)
     try {
       await lockUser(row.id, locked)
       setDevices((prev) => prev.map((d) => (d.id === row.id ? { ...d, locked } : d)))
+      setConfirmLock(null)
     } catch (err) {
-      setError(toUserMessage(err))
+      setActionError(toUserMessage(err, 'Could not change the account lock.'))
     } finally {
       setBusyId(null)
     }
@@ -183,50 +200,55 @@ export default function ConsoleSessions() {
     if (!row) return
     setConfirmClear(null)
     setBusyId(row.id)
-    setError(null)
+    setActionError(null)
     try {
       await clearPushToken(row.id)
       setDevices((prev) => prev.map((d) => (
         d.id === row.id ? { ...d, has_device: false, push_token_updated_at: new Date().toISOString() } : d
       )))
     } catch (err) {
-      setError(toUserMessage(err))
+      setActionError(toUserMessage(err, 'Could not clear the device.'))
     } finally {
       setBusyId(null)
     }
   }
 
-  async function handleExport() {
-    const rows = filtered.map((d) => ({
-      full_name: d.full_name || '',
-      username: d.username || '',
-      role: d.role || '',
-      country: countryLabel(d.country),
-      locked: d.locked ? 'Locked' : 'Active',
-      has_device: d.has_device ? 'Yes' : 'No',
-      push_token_updated_at: fmtDateTime(d.push_token_updated_at),
-      last_login_at: fmtDateTime(d.last_login_at),
-      login_count: d.login_count ?? 0,
-    }))
-    const colKeys = ['full_name', 'username', 'role', 'country', 'locked', 'has_device', 'push_token_updated_at', 'last_login_at', 'login_count']
-    const headers = ['Name', 'Username', 'Role', 'Country', 'Status', 'Has device', 'Device updated', 'Last login', 'Login count']
+  async function handleExport(format) {
+    setExporting(format); setActionError(null)
     try {
-      await exportToExcel(rows, colKeys, headers, 'TyrePulse Users and Devices', 'Users')
+      await exportConsoleRows({
+        rows: sorted,
+        title: 'Users and Devices',
+        format,
+        columns: [
+          { key: 'full_name', header: 'Name' },
+          { key: 'username', header: 'Username' },
+          { key: 'role', header: 'Role' },
+          { key: 'country', header: 'Country', value: (d) => countryLabel(d.country, d.role) },
+          { key: 'locked', header: 'Status', value: (d) => (d.locked ? 'Locked' : 'Active') },
+          { key: 'has_device', header: 'Has device', value: (d) => (d.has_device ? 'Yes' : 'No') },
+          { key: 'push_token_updated_at', header: 'Device updated', value: (d) => (d.has_device ? fmtDateTime(d.push_token_updated_at) : '') },
+          { key: 'last_login_at', header: 'Last login', value: (d) => fmtDateTime(d.last_login_at) },
+          { key: 'login_count', header: 'Login count', value: (d) => d.login_count ?? 0 },
+        ],
+      })
     } catch (err) {
-      setError(toUserMessage(err, 'Could not export. Please try again.'))
+      setActionError(toUserMessage(err, 'Could not export. Please try again.'))
+    } finally {
+      setExporting('')
     }
   }
 
   // ── Render ─────────────────────────────────────────────────────────────────────
 
-  const val = (n) => (loading ? 'N/A' : n)
+  const val = (n) => (loading || error ? 'N/A' : n)
 
   return (
     <div className="space-y-5 max-w-7xl">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2"><MonitorSmartphone size={18} className="text-orange-400" /> Sessions &amp; Devices</h1>
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-gray-400 mt-1">
             {admin?.full_name ? `Signed in as ${admin.full_name}. ` : ''}
             Review who is signing in, which devices carry a push token, and lock accounts or clear devices.
           </p>
@@ -241,11 +263,12 @@ export default function ConsoleSessions() {
       </Note>
 
       {error && !loading && <ErrorState message={error} onRetry={load} />}
+      {actionError && <ErrorState message={actionError} />}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatTile label="Users" value={val(counts.total)} icon={Users} />
         <StatTile label="Signed in, last 7 days" value={val(counts.active7)} tone="good" icon={Clock}
-          sub={loading || !counts.total ? undefined : `${Math.round((counts.active7 / counts.total) * 100)}% of users`} />
+          sub={loading || error || !counts.total ? undefined : `${Math.round((counts.active7 / counts.total) * 100)}% of users`} />
         <StatTile label="With a device" value={val(counts.withDevice)} icon={Smartphone}
           onClick={() => setDeviceFilter(deviceFilter === 'with' ? 'all' : 'with')} active={deviceFilter === 'with'}
           sub="Carry a push token" />
@@ -257,14 +280,16 @@ export default function ConsoleSessions() {
         <Panel>
           <PanelHeader icon={Clock} title="Last sign-in recency"
             subtitle="When each user last signed in. Profiles record only the latest sign-in, not every one." />
-          {loading ? <LoadingState rows={3} /> : (
+          {loading ? <LoadingState rows={3} /> : error ? (
+            <p className="text-xs text-gray-400">Unavailable because the user list could not be read.</p>
+          ) : (
             <>
               <BarsChart bars={recency.map((r) => ({ label: r.label, value: r.value }))}
                 summary={recency.map((r) => `${r.label} ${r.value}`).join(', ')}
                 emptyText="No users to show." />
               {counts.total > 0 && (
                 <div className="mt-3 space-y-1.5">
-                  <p className="text-[11px] text-gray-500">Device coverage: {counts.withDevice} of {counts.total} users carry a push token</p>
+                  <p className="text-[11px] text-gray-400">Device coverage: {counts.withDevice} of {counts.total} users carry a push token</p>
                   <ProportionBar total={counts.total} segments={[
                     { label: 'With a device', value: counts.withDevice, tone: 'good' },
                     { label: 'No device', value: counts.total - counts.withDevice, tone: 'muted' },
@@ -279,7 +304,9 @@ export default function ConsoleSessions() {
             subtitle={activityCapped
               ? `Last ${TREND_DAYS} days, drawn from the latest ${ACTIVITY_LIMIT} console actions only`
               : `Last ${TREND_DAYS} days, ${activity.total} console action${activity.total === 1 ? '' : 's'}`} />
-          {loading ? <LoadingState rows={3} /> : (
+          {loading ? <LoadingState rows={3} /> : activityError ? (
+            <ErrorState message={activityError} onRetry={load} />
+          ) : (
             <TrendChart labels={activity.labels} series={[{ label: 'Actions', values: activity.values }]} height={200}
               summary={`${activity.total} console actions in the last ${TREND_DAYS} days`}
               emptyText="No console activity in the last 30 days." />
@@ -291,18 +318,23 @@ export default function ConsoleSessions() {
 
       <Panel flush>
         <div className="p-4 pb-3 space-y-3">
-          <PanelHeader icon={Users} title="Users & Devices" subtitle={`${filtered.length} of ${counts.total} users shown`}
-            actions={<Btn icon={Download} onClick={handleExport} disabled={filtered.length === 0}>Export Excel</Btn>} />
+          <PanelHeader icon={Users} title="Users & Devices" subtitle={loading || error ? undefined : `${filtered.length} of ${counts.total} users shown`}
+            actions={(
+              <>
+                <Btn icon={FileSpreadsheet} onClick={() => handleExport('excel')} busy={exporting === 'excel'} disabled={loading || !!error || filtered.length === 0}>Export Excel</Btn>
+                <Btn icon={FileText} onClick={() => handleExport('pdf')} busy={exporting === 'pdf'} disabled={loading || !!error || filtered.length === 0}>PDF</Btn>
+              </>
+            )} />
           <Toolbar>
             <SearchInput value={search} onChange={setSearch} placeholder="Search by name or username" className="flex-1 min-w-[180px]" />
-            <Select value={roleFilter} onChange={setRoleFilter} className="w-40"
+            <Select value={roleFilter} onChange={setRoleFilter} ariaLabel="Filter by role" className="w-40"
               options={[{ value: 'all', label: 'All roles' }, ...roles.map((r) => ({ value: r, label: r }))]} />
-            <Select value={lockedFilter} onChange={setLockedFilter} className="w-36" options={[
+            <Select value={lockedFilter} onChange={setLockedFilter} ariaLabel="Filter by status" className="w-36" options={[
               { value: 'all', label: 'Any status' },
               { value: 'active', label: 'Active only' },
               { value: 'locked', label: 'Locked only' },
             ]} />
-            <Select value={deviceFilter} onChange={setDeviceFilter} className="w-36" options={[
+            <Select value={deviceFilter} onChange={setDeviceFilter} ariaLabel="Filter by device" className="w-36" options={[
               { value: 'all', label: 'Any device' },
               { value: 'with', label: 'Has device' },
               { value: 'without', label: 'No device' },
@@ -313,36 +345,36 @@ export default function ConsoleSessions() {
 
         {loading ? (
           <div className="px-4"><LoadingState label="Loading users" rows={6} /></div>
+        ) : error ? (
+          <EmptyState icon={Users} title="Users unavailable" reason="The user list could not be read. Use Retry above." />
         ) : devices.length === 0 ? (
-          <EmptyState icon={Users} title="No users to show"
-            reason="Nothing came back from the user list. It may be empty or could not be read; refresh to try again."
-            action={<Btn icon={RefreshCw} onClick={load}>Refresh</Btn>} />
+          <EmptyState icon={Users} title="No users to show" reason="The user list returned no accounts." />
         ) : filtered.length === 0 ? (
           <EmptyState title="No users match your filters" reason="Every user is hidden by the current search or filters."
             action={<Btn onClick={clearFilters}>Clear filters</Btn>} />
         ) : (
           <Table className="border-0 rounded-none">
             <THead>
-              <Th>User</Th>
-              <Th>Role</Th>
-              <Th>Country</Th>
-              <Th>Status</Th>
-              <Th>Device</Th>
-              <Th>Last login</Th>
-              <Th align="right">Logins</Th>
+              <Th sortKey="name" sort={sort} onSort={onSort}>User</Th>
+              <Th sortKey="role" sort={sort} onSort={onSort}>Role</Th>
+              <Th sortKey="country" sort={sort} onSort={onSort}>Country</Th>
+              <Th sortKey="status" sort={sort} onSort={onSort}>Status</Th>
+              <Th sortKey="device" sort={sort} onSort={onSort}>Device</Th>
+              <Th sortKey="last_login_at" sort={sort} onSort={onSort}>Last login</Th>
+              <Th align="right" sortKey="login_count" sort={sort} onSort={onSort}>Logins</Th>
               <Th align="right">Actions</Th>
             </THead>
             <tbody>
-              {filtered.map((d) => {
+              {sorted.map((d) => {
                 const busy = busyId === d.id
                 return (
                   <Tr key={d.id}>
                     <Td>
                       <p className="text-gray-100 font-medium">{d.full_name || 'Unnamed'}</p>
-                      <p className="text-[11px] text-gray-500">{d.username || 'No username'}</p>
+                      <p className="text-[11px] text-gray-400">{d.username || 'No username'}</p>
                     </Td>
                     <Td className="text-gray-300">{d.role || 'N/A'}</Td>
-                    <Td className="text-gray-400">{countryLabel(d.country)}</Td>
+                    <Td className="text-gray-300">{countryLabel(d.country, d.role)}</Td>
                     <Td>{d.locked ? <Badge tone="danger" icon={Lock}>Locked</Badge> : <Badge tone="good">Active</Badge>}</Td>
                     <Td nowrap>
                       {d.has_device
@@ -356,7 +388,7 @@ export default function ConsoleSessions() {
                         {d.locked ? (
                           <Btn size="xs" variant="good" icon={Unlock} busy={busy} onClick={() => handleLock(d, false)}>Unlock</Btn>
                         ) : (
-                          <Btn size="xs" variant="danger" icon={Lock} busy={busy} onClick={() => handleLock(d, true)}>Lock</Btn>
+                          <Btn size="xs" variant="danger" icon={Lock} busy={busy} onClick={() => { setActionError(null); setConfirmLock(d) }}>Lock</Btn>
                         )}
                         <Btn size="xs" icon={BellOff} disabled={busy || !d.has_device}
                           title={d.has_device ? 'Clear push token' : 'No device to clear'}
@@ -378,9 +410,11 @@ export default function ConsoleSessions() {
         </div>
         {loading ? (
           <div className="px-4"><LoadingState label="Loading activity" /></div>
+        ) : activityError ? (
+          <div className="px-4 pb-4"><ErrorState message={activityError} onRetry={load} /></div>
         ) : sessions.length === 0 ? (
           <EmptyState icon={History} title="No console activity recorded"
-            reason="Actions taken in the console appear here. An empty list can also mean the trail could not be read." />
+            reason="Actions taken in the console appear here as they happen." />
         ) : (
           <Table className="border-0 rounded-none">
             <THead>
@@ -426,9 +460,28 @@ export default function ConsoleSessions() {
               <span className="font-semibold text-gray-100">{confirmClear.full_name || confirmClear.username || 'this user'}</span>?
               Their device will stop receiving server-sent notifications until they sign in again on that device.
             </p>
-            <p className="text-[11px] text-gray-500">This does not lock the account or end an open session.</p>
+            <p className="text-[11px] text-gray-400">This does not lock the account or end an open session.</p>
           </div>
         )}
+      </Modal>
+
+      <Modal
+        open={!!confirmLock}
+        width="max-w-md"
+        title="Lock this account?"
+        subtitle={confirmLock ? (confirmLock.full_name || confirmLock.username || 'This user') : undefined}
+        onClose={() => { if (!busyId) setConfirmLock(null) }}
+        footer={(
+          <>
+            <Btn onClick={() => setConfirmLock(null)} disabled={!!busyId}>Cancel</Btn>
+            <Btn variant="danger" icon={Lock} busy={!!busyId} onClick={() => handleLock(confirmLock, true)}>Lock account</Btn>
+          </>
+        )}
+      >
+        {actionError && <div className="mb-3"><ErrorState message={actionError} /></div>}
+        <p className="text-xs text-gray-300 leading-relaxed">
+          They cannot sign in to the app until the account is unlocked. The change is recorded in the audit trail.
+        </p>
       </Modal>
     </div>
   )

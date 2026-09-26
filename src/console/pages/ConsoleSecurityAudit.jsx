@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ShieldCheck, ShieldAlert, Play, RefreshCw, CheckCircle2, AlertTriangle, XCircle,
-  Info, Hand, ChevronDown, ChevronRight, LogIn, History, Download,
+  Info, Hand, ChevronDown, ChevronRight, LogIn, History, FileSpreadsheet, FileText,
 } from 'lucide-react'
 import {
   Panel, PanelHeader, Note, StatTile, Badge, Btn, Segmented, SearchInput, Toolbar,
@@ -26,11 +26,17 @@ import {
   postureSummary, scanTrend, SEVERITIES, SEVERITY_LABEL, STATUS_LABEL,
 } from '../../lib/securityAudit'
 import { toUserMessage } from '../../lib/safeError'
-import { exportToExcel, reportFileName } from '../../lib/exportUtils'
+import { exportConsoleRows, sortRows, useTableSort } from '../../lib/consoleTable'
 
 const STATUS_TONE = { pass: 'good', fail: 'danger', warn: 'warning', info: 'quiet', manual: 'info' }
 const STATUS_ICON = { pass: CheckCircle2, fail: XCircle, warn: AlertTriangle, info: Info, manual: Hand }
 const SEV_TONE = { critical: 'danger', high: 'warning', medium: 'accent', low: 'quiet' }
+const SEV_RANK = { critical: 4, high: 3, medium: 2, low: 1 }
+const STATUS_RANK = { fail: 5, warn: 4, manual: 3, info: 2, pass: 1 }
+const CHECK_SORT = {
+  severity: (c) => SEV_RANK[c.severity] ?? 0,
+  status: (c) => STATUS_RANK[c.status] ?? 0,
+}
 
 function fmtWhen(v) {
   if (!v) return 'N/A'
@@ -44,7 +50,8 @@ function CheckRow({ check, open, onToggle }) {
       <Tr onClick={onToggle}>
         <Td>
           <span className="inline-flex items-center gap-2">
-            {open ? <ChevronDown size={13} className="text-gray-500" /> : <ChevronRight size={13} className="text-gray-500" />}
+            {open ? <ChevronDown size={13} className="text-gray-400" aria-hidden="true" /> : <ChevronRight size={13} className="text-gray-400" aria-hidden="true" />}
+            <span className="sr-only">{open ? 'Hide details for' : 'Show details for'}</span>
             <span className="text-gray-200">{check.title}</span>
           </span>
         </Td>
@@ -58,17 +65,17 @@ function CheckRow({ check, open, onToggle }) {
           <td colSpan={5} className="px-4 pb-4 pt-1 bg-gray-900/30">
             <div className="grid gap-3 md:grid-cols-2 text-xs">
               <div>
-                <p className="text-gray-500 uppercase tracking-wide text-[10px] mb-1">Why it matters</p>
+                <p className="text-gray-400 uppercase tracking-wide text-[10px] mb-1">Why it matters</p>
                 <p className="text-gray-300 leading-relaxed">{check.explain}</p>
               </div>
               <div>
-                <p className="text-gray-500 uppercase tracking-wide text-[10px] mb-1">How to fix</p>
+                <p className="text-gray-400 uppercase tracking-wide text-[10px] mb-1">How to fix</p>
                 <p className="text-gray-300 leading-relaxed">{check.fix}</p>
               </div>
             </div>
             {check.items.length > 0 && (
               <div className="mt-3">
-                <p className="text-gray-500 uppercase tracking-wide text-[10px] mb-1">Affected ({check.items.length})</p>
+                <p className="text-gray-400 uppercase tracking-wide text-[10px] mb-1">Affected ({check.items.length})</p>
                 <div className="flex flex-wrap gap-1.5 max-h-32 overflow-auto">
                   {check.items.map((it) => (
                     <span key={String(it)} className="px-1.5 py-0.5 rounded bg-gray-800/80 font-mono text-[11px] text-gray-300">{String(it)}</span>
@@ -91,6 +98,9 @@ export default function ConsoleSecurityAudit() {
   const [filter, setFilter] = useState('attention')
   const [search, setSearch] = useState('')
   const [openId, setOpenId] = useState(null)
+  const [exporting, setExporting] = useState('')
+  const [exportError, setExportError] = useState('')
+  const { sort, onSort } = useTableSort({ key: 'severity', dir: 'desc' })
 
   const load = useCallback(async () => {
     setState((s) => ({ ...s, loading: true, error: null }))
@@ -142,6 +152,7 @@ export default function ConsoleSecurityAudit() {
       return [c.title, c.category, c.explain, ...c.items.map(String)].join(' ').toLowerCase().includes(q)
     })
   }, [posture, filter, search])
+  const sortedChecks = useMemo(() => sortRows(visible, sort, CHECK_SORT), [visible, sort])
 
   const severityBars = SEVERITIES.map((s) => ({
     label: SEVERITY_LABEL[s],
@@ -149,15 +160,30 @@ export default function ConsoleSecurityAudit() {
     color: STATUS[theme][s],
   }))
 
-  const exportChecks = () => {
-    const rows = (posture?.checks || []).map((c) => ({
-      title: c.title, category: c.category, severity: SEVERITY_LABEL[c.severity],
-      status: STATUS_LABEL[c.status] || c.status, count: c.count === null ? 'N/A' : c.count,
-      affected: c.items.join(', '), fix: c.fix,
-    }))
-    exportToExcel(rows, ['title', 'category', 'severity', 'status', 'count', 'affected', 'fix'],
-      ['Check', 'Category', 'Severity', 'Status', 'Count', 'Affected', 'How to fix'],
-      reportFileName('Security Audit', new Date().toISOString().slice(0, 10)))
+  // Exports every check (not just the filtered view): an audit file that
+  // silently omitted the passing checks would read as a partial audit.
+  const exportChecks = async (format) => {
+    setExporting(format); setExportError('')
+    try {
+      await exportConsoleRows({
+        rows: sortRows(posture?.checks || [], sort, CHECK_SORT),
+        title: 'Security Audit',
+        format,
+        columns: [
+          { key: 'title', header: 'Check' },
+          { key: 'category', header: 'Category' },
+          { key: 'severity', header: 'Severity', value: (c) => SEVERITY_LABEL[c.severity] },
+          { key: 'status', header: 'Status', value: (c) => STATUS_LABEL[c.status] || c.status },
+          { key: 'count', header: 'Count', value: (c) => (c.count === null ? 'N/A' : c.count) },
+          { key: 'affected', header: 'Affected', value: (c) => c.items.join(', ') },
+          { key: 'fix', header: 'How to fix' },
+        ],
+      })
+    } catch (e) {
+      setExportError(toUserMessage(e, 'Could not create the export file.'))
+    } finally {
+      setExporting('')
+    }
   }
 
   if (state.loading && !posture) return <div><LoadingState label="Running security checks" rows={6} /></div>
@@ -179,17 +205,20 @@ export default function ConsoleSecurityAudit() {
           <h1>
             <ShieldCheck size={18} className="text-orange-400" /> Security Audit
           </h1>
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-gray-400 mt-1">
             Live checks against the database, last read {fmtWhen(posture?.generatedAt)}. A scan runs every Sunday and alerts you to anything new.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Btn icon={Download} onClick={exportChecks} disabled={!posture}>Export</Btn>
+        <div className="flex flex-wrap items-center gap-2">
+          <Btn icon={FileSpreadsheet} onClick={() => exportChecks('excel')} busy={exporting === 'excel'} disabled={!posture}>Excel</Btn>
+          <Btn icon={FileText} onClick={() => exportChecks('pdf')} busy={exporting === 'pdf'} disabled={!posture}>PDF</Btn>
           <Btn icon={RefreshCw} onClick={load} busy={state.loading}>Refresh</Btn>
           <Btn variant="primary" icon={Play} onClick={runScan} busy={scanning}>Run scan now</Btn>
         </div>
       </header>
 
+      {exportError && <ErrorState message={exportError} />}
+      {state.error && posture && <ErrorState message={`${state.error} Showing the last successful read.`} onRetry={load} />}
       {notice && <Note tone={notice.tone} icon={notice.tone === 'danger' ? ShieldAlert : Info}>{notice.text}</Note>}
 
       <div className="grid gap-4 lg:grid-cols-3">
@@ -220,7 +249,7 @@ export default function ConsoleSecurityAudit() {
         <PanelHeader icon={ShieldCheck} title="Checks" subtitle="Click a row to see why it matters, what is affected and how to fix it."
           actions={
             <Toolbar>
-              <Segmented value={filter} onChange={setFilter} options={[
+              <Segmented ariaLabel="Filter checks" value={filter} onChange={setFilter} options={[
                 { key: 'attention', label: `Needs attention (${summary.open + summary.manual})` },
                 { key: 'pass', label: `Passing (${summary.passing})` },
                 { key: 'all', label: `All (${summary.total})` },
@@ -235,10 +264,14 @@ export default function ConsoleSecurityAudit() {
         ) : (
           <Table>
             <THead>
-              <Th>Check</Th><Th>Category</Th><Th>Severity</Th><Th>Status</Th><Th align="right">Count</Th>
+              <Th sortKey="title" sort={sort} onSort={onSort}>Check</Th>
+              <Th sortKey="category" sort={sort} onSort={onSort}>Category</Th>
+              <Th sortKey="severity" sort={sort} onSort={onSort}>Severity</Th>
+              <Th sortKey="status" sort={sort} onSort={onSort}>Status</Th>
+              <Th align="right" sortKey="count" sort={sort} onSort={onSort}>Count</Th>
             </THead>
             <tbody>
-              {visible.map((c) => (
+              {sortedChecks.map((c) => (
                 <CheckRow key={c.id} check={c} open={openId === c.id} onToggle={() => setOpenId(openId === c.id ? null : c.id)} />
               ))}
             </tbody>
@@ -272,7 +305,7 @@ export default function ConsoleSecurityAudit() {
                 <tbody>
                   {events.map((e) => (
                     <Tr key={e.id}>
-                      <Td nowrap><span className="text-gray-500 tabular-nums">{fmtWhen(e.created_at)}</span></Td>
+                      <Td nowrap><span className="text-gray-400 tabular-nums">{fmtWhen(e.created_at)}</span></Td>
                       <Td>
                         <span className="inline-flex items-center gap-2">
                           <Badge tone={e.severity === 'critical' ? 'danger' : e.severity === 'warning' ? 'warning' : 'quiet'}>

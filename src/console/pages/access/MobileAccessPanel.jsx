@@ -21,10 +21,7 @@
  * with admin / super-admin never lockable. So this panel's writes are authoritative.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  Smartphone, Save, Loader2, RotateCcw, AlertTriangle, RefreshCw,
-  Info, Check, X, Crown,
-} from 'lucide-react'
+import { Smartphone, Save, RotateCcw, RefreshCw, Check, X, Crown } from 'lucide-react'
 import {
   MOBILE_MODULES, MOBILE_MODULES_BY_GROUP, mobileModuleDefaultAllows,
 } from '../../../lib/mobileModules'
@@ -33,6 +30,7 @@ import {
   listUserGrants, revokeUserAccessGrant, setUserAccessGrantScoped, mobileGrantKey,
 } from '../../../lib/api/accessGrants'
 import { toUserMessage } from '../../../lib/safeError'
+import { Badge, Btn, ErrorState, LoadingState, Note, Panel, PanelHeader } from '../../components/ui'
 
 const ALL_KEYS = MOBILE_MODULES.map((m) => m.key)
 
@@ -66,11 +64,14 @@ export default function MobileAccessPanel({ mode, role, user, canWriteRole, canW
   const [notice, setNotice] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
 
+  // A success note fades; an error stays until the next action so it cannot be
+  // missed while the edits it refers to are still on screen.
   const flashTimer = useRef(null)
   const flash = useCallback((msg, isError = false) => {
-    if (isError) { setErrorMsg(msg); setNotice('') } else { setNotice(msg); setErrorMsg('') }
     if (flashTimer.current) clearTimeout(flashTimer.current)
-    flashTimer.current = setTimeout(() => { setNotice(''); setErrorMsg('') }, 6000)
+    if (isError) { setErrorMsg(msg); setNotice(''); return }
+    setNotice(msg); setErrorMsg('')
+    flashTimer.current = setTimeout(() => setNotice(''), 6000)
   }, [])
   useEffect(() => () => { if (flashTimer.current) clearTimeout(flashTimer.current) }, [])
 
@@ -215,72 +216,62 @@ export default function MobileAccessPanel({ mode, role, user, canWriteRole, canW
   const enabledCount = ALL_KEYS.filter((k) => draft[k]).length
 
   return (
-    <div className="card !p-0 overflow-hidden">
-      <div className="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-[var(--input-border)] bg-[var(--surface-1)]">
-        <Smartphone size={16} className="text-[var(--brand-bright)]" />
-        <h3 className="text-sm font-semibold text-[var(--text-primary)]">Mobile app access</h3>
-        {!loading && !alwaysAllowed && (
-          <span className="text-[11px] text-[var(--text-muted)]">
-            {enabledCount} of {ALL_KEYS.length} on
-          </span>
-        )}
-        <div className="ml-auto flex items-center gap-1.5">
-          {!readOnly && !alwaysAllowed && (
+    <Panel flush className="overflow-hidden">
+      <div className="px-4 pt-3 border-b border-gray-800">
+        <PanelHeader icon={Smartphone} title="Mobile app access"
+          subtitle={loading || loadError || alwaysAllowed ? 'Phone app only, separate from web access' : `${enabledCount} of ${ALL_KEYS.length} modules on`}
+          actions={(
             <>
-              <button onClick={() => setAll(true)} disabled={saving} className="btn-secondary text-[11px] px-2 py-1 disabled:opacity-40" title="Turn every mobile module on">All on</button>
-              <button onClick={() => setAll(false)} disabled={saving} className="btn-secondary text-[11px] px-2 py-1 disabled:opacity-40" title="Turn every mobile module off">All off</button>
-              <button onClick={resetToRoleDefault} disabled={saving} className="btn-secondary text-[11px] px-2 py-1 inline-flex items-center gap-1 disabled:opacity-40" title="Reset to the role default"><RotateCcw size={11} /> Default</button>
+              {!readOnly && !alwaysAllowed && !loading && !loadError && (
+                <>
+                  <Btn size="xs" onClick={() => setAll(true)} disabled={saving} title="Turn every mobile module on">All on</Btn>
+                  <Btn size="xs" onClick={() => setAll(false)} disabled={saving} title="Turn every mobile module off">All off</Btn>
+                  <Btn size="xs" icon={RotateCcw} onClick={resetToRoleDefault} disabled={saving} title="Reset to the role default">Default</Btn>
+                </>
+              )}
+              <Btn size="xs" icon={RefreshCw} onClick={load} disabled={saving} busy={loading} title="Reload" ariaLabel="Reload mobile access" />
             </>
-          )}
-          <button onClick={load} disabled={saving} className="btn-secondary text-[11px] px-2 py-1 inline-flex items-center gap-1 disabled:opacity-40" title="Reload" aria-label="Reload"><RefreshCw size={11} /></button>
-        </div>
+          )} />
       </div>
 
-      <div className="flex items-start gap-2 px-4 py-2.5 text-[11px] text-[var(--text-muted)] border-b border-[var(--input-border)]">
-        <Info size={12} className="mt-0.5 shrink-0" />
-        <p>
-          Controls what {isUser ? 'this person' : `the ${subjectRole || 'role'}`} sees in the phone app only, separate from web access.
-          Turning a module off hides it in the mobile app on the user's next load. Web access is unchanged.
+      <div className="px-4 py-2.5 border-b border-gray-800">
+        <p className="text-[11px] text-gray-400">
+          Controls what {isUser ? 'this person' : `the ${subjectRole || 'role'}`} sees in the phone app only. Turning a module
+          off hides it in the mobile app on the user's next load. Web access is unchanged.
         </p>
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center py-12 text-[var(--text-muted)]">
-          <Loader2 size={18} className="animate-spin mr-2 text-[var(--brand-bright)]" /> Loading mobile access...
-        </div>
+        <div className="px-4"><LoadingState label="Loading mobile access" rows={4} /></div>
       ) : loadError ? (
-        <div className="flex flex-col items-center justify-center py-10 text-center gap-3">
-          <AlertTriangle size={22} className="text-red-400" />
-          <p className="text-sm text-red-300">{loadError}</p>
-          <button onClick={load} className="btn-secondary text-sm inline-flex items-center gap-1.5"><RefreshCw size={14} /> Retry</button>
-        </div>
+        <div className="p-4"><ErrorState message={loadError} onRetry={load} /></div>
       ) : alwaysAllowed ? (
-        <div className="flex items-start gap-2 px-4 py-4 text-xs text-amber-200">
-          <Crown size={14} className="mt-0.5 shrink-0 text-amber-400" />
-          {isSuperSubject
-            ? 'This user is a Super Admin and always has full mobile access. It cannot be limited here.'
-            : 'Admin always has full mobile access. Edits here do not apply to Admin.'}
+        <div className="p-4">
+          <Note tone="warning" icon={Crown}>
+            {isSuperSubject
+              ? 'This user is a Super Admin and always has full mobile access. It cannot be limited here.'
+              : 'Admin always has full mobile access. Edits here do not apply to Admin.'}
+          </Note>
         </div>
       ) : (
-        <div className="divide-y divide-[var(--input-border)]/60">
+        <div className="divide-y divide-gray-800/60">
           {MOBILE_MODULES_BY_GROUP.map(({ group, modules }) => (
-            <div key={group}>
-              <div className="px-4 py-1.5 bg-[var(--surface-1)]/60 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">{group}</div>
+            <div key={group} role="group" aria-label={group}>
+              <div className="px-4 py-1.5 bg-gray-900/60 text-[10px] font-semibold uppercase tracking-wider text-gray-400">{group}</div>
               {modules.map((m) => {
                 const on = draft[m.key] === true
                 const changed = dirtyKeys.has(m.key)
                 const roleDef = roleDefaults[m.key] === true
                 const overridesRole = isUser && on !== roleDef
                 return (
-                  <div key={m.key} className={`flex items-center gap-3 px-4 py-2 ${changed ? 'bg-[var(--brand-subtle,rgba(34,197,94,0.08))]' : ''}`}>
+                  <div key={m.key} className={`flex items-center gap-3 px-4 py-2 ${changed ? 'bg-orange-950/20' : ''}`}>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm text-[var(--text-primary)] truncate">
+                      <p className="text-sm text-gray-100 truncate flex items-center gap-2">
                         {m.label}
-                        {overridesRole && <span className="ml-2 text-[10px] text-amber-300">overrides role</span>}
+                        {overridesRole && <Badge tone="warning">Overrides role</Badge>}
+                        {changed && <Badge tone="accent">Unsaved</Badge>}
                       </p>
-                      <p className="text-[11px] text-[var(--text-muted)]">
-                        Role default: {roleDef ? 'On' : 'Off'}
-                      </p>
+                      <p className="text-[11px] text-gray-400">Role default: {roleDef ? 'On' : 'Off'}</p>
                     </div>
                     <button
                       type="button"
@@ -289,8 +280,8 @@ export default function MobileAccessPanel({ mode, role, user, canWriteRole, canW
                       aria-label={`${m.label} mobile access`}
                       disabled={readOnly || saving}
                       onClick={() => toggle(m.key)}
-                      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
-                        on ? 'bg-[var(--brand,#16a34a)]' : 'bg-[var(--input-border)]'
+                      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 ${
+                        on ? 'bg-orange-500' : 'bg-gray-700'
                       }`}
                     >
                       <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${on ? 'translate-x-6' : 'translate-x-1'}`} />
@@ -304,29 +295,28 @@ export default function MobileAccessPanel({ mode, role, user, canWriteRole, canW
       )}
 
       {/* Save bar */}
-      {!loading && !alwaysAllowed && (
-        <div className="flex items-center gap-2 px-4 py-3 border-t border-[var(--input-border)] bg-[var(--surface-1)]/60">
-          {notice && <span className="text-xs text-green-300 inline-flex items-center gap-1"><Check size={13} /> {notice}</span>}
-          {errorMsg && <span className="text-xs text-red-300 inline-flex items-center gap-1"><AlertTriangle size={13} /> {errorMsg}</span>}
-          {!notice && !errorMsg && (
-            <span className="text-xs text-[var(--text-muted)]">
-              {dirtyCount > 0 ? `${dirtyCount} unsaved change${dirtyCount !== 1 ? 's' : ''}` : 'No changes'}
-            </span>
-          )}
-          <div className="ml-auto flex items-center gap-2">
-            {dirtyCount > 0 && !readOnly && (
-              <button onClick={discard} disabled={saving} className="btn-secondary text-xs inline-flex items-center gap-1.5 disabled:opacity-40"><X size={13} /> Discard</button>
+      {!loading && !loadError && !alwaysAllowed && (
+        <div className="px-4 py-3 border-t border-gray-800 bg-gray-900/40 space-y-2">
+          {errorMsg && <ErrorState message={errorMsg} />}
+          <div className="flex flex-wrap items-center gap-2">
+            {notice ? (
+              <span role="status" className="text-xs text-emerald-300 inline-flex items-center gap-1"><Check size={13} aria-hidden="true" /> {notice}</span>
+            ) : (
+              <span className="text-xs text-gray-400">
+                {readOnly ? 'Read only for your account.' : dirtyCount > 0 ? `${dirtyCount} unsaved change${dirtyCount !== 1 ? 's' : ''}` : 'No changes'}
+              </span>
             )}
-            <button
-              onClick={save}
-              disabled={readOnly || saving || dirtyCount === 0}
-              className="btn-primary text-xs inline-flex items-center gap-1.5 disabled:opacity-40"
-            >
-              {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Save mobile access
-            </button>
+            <div className="ml-auto flex items-center gap-2">
+              {dirtyCount > 0 && !readOnly && (
+                <Btn icon={X} onClick={discard} disabled={saving}>Discard</Btn>
+              )}
+              <Btn variant="primary" icon={Save} onClick={save} busy={saving} disabled={readOnly || dirtyCount === 0}>
+                Save mobile access
+              </Btn>
+            </div>
           </div>
         </div>
       )}
-    </div>
+    </Panel>
   )
 }

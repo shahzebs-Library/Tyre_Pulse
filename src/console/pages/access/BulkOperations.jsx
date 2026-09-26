@@ -16,10 +16,9 @@
  * roles, any custom roles and every role already present in the directory so no
  * assignable role is ever missing.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  Users, Search, RefreshCw, AlertTriangle, Crown, Check, X, Info, Loader2,
-  Layers, ShieldCheck, UserCog, KeyRound, Calendar, Ban, CheckCircle2,
+  Users, RefreshCw, Crown, Check, Layers, ShieldCheck, UserCog, KeyRound, Ban, CheckCircle2, AlertTriangle,
 } from 'lucide-react'
 import { ACCESS_ROLES, MODULE_GROUPS, MODULE_LABEL } from '../../../lib/moduleCatalog'
 import { CAPABILITIES } from '../../../lib/permissionMatrix'
@@ -27,16 +26,13 @@ import { listProfiles } from '../../../lib/api/users'
 import { listCustomRoles } from '../../../lib/api/customRoles'
 import { bulkSetRole, bulkSetGrant } from '../../../lib/api/adminAccess'
 import { toUserMessage } from '../../../lib/safeError'
+import { displayName } from './UserDirectory'
+import {
+  Badge, Btn, EmptyState, ErrorState, LoadingState, Modal, Note, Panel, PanelHeader, SearchInput, Segmented,
+  Select, StatTile,
+} from '../../components/ui'
 
-const ROLE_TINT = {
-  Admin: 'text-purple-300', Manager: 'text-blue-300', Director: 'text-indigo-300',
-  Reporter: 'text-cyan-300', Inspector: 'text-green-300', 'Tyre Man': 'text-amber-300',
-  Driver: 'text-[var(--text-secondary)]',
-}
-
-function displayName(u) {
-  return u?.full_name || u?.username || u?.email || 'Unnamed user'
-}
+const INPUT = 'w-full px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 focus:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500'
 
 export default function BulkOperations() {
   const [users, setUsers] = useState(null)
@@ -47,6 +43,7 @@ export default function BulkOperations() {
   const [selected, setSelected] = useState(() => new Set())
 
   const [customRoles, setCustomRoles] = useState([])
+  const [customRolesError, setCustomRolesError] = useState(false)
 
   // Action mode + form
   const [mode, setMode] = useState('role') // 'role' | 'capability'
@@ -58,22 +55,8 @@ export default function BulkOperations() {
 
   const [confirming, setConfirming] = useState(false)
   const [applying, setApplying] = useState(false)
-
-  const [toasts, setToasts] = useState([])
-  const timers = useRef({})
-  const pushToast = useCallback((kind, message) => {
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
-    setToasts((t) => [...t, { id, kind, message }])
-    timers.current[id] = setTimeout(() => {
-      setToasts((t) => t.filter((x) => x.id !== id))
-      delete timers.current[id]
-    }, 6000)
-  }, [])
-  const dismissToast = useCallback((id) => {
-    setToasts((t) => t.filter((x) => x.id !== id))
-    if (timers.current[id]) { clearTimeout(timers.current[id]); delete timers.current[id] }
-  }, [])
-  useEffect(() => () => { Object.values(timers.current).forEach(clearTimeout) }, [])
+  const [applyError, setApplyError] = useState('')
+  const [result, setResult] = useState('')
 
   const loadUsers = useCallback(async () => {
     setRefreshing(true); setUsersError('')
@@ -92,8 +75,8 @@ export default function BulkOperations() {
 
   useEffect(() => {
     listCustomRoles()
-      .then((rows) => setCustomRoles(Array.isArray(rows) ? rows : []))
-      .catch(() => setCustomRoles([]))
+      .then((rows) => { setCustomRoles(Array.isArray(rows) ? rows : []); setCustomRolesError(false) })
+      .catch(() => { setCustomRoles([]); setCustomRolesError(true) })
   }, [])
 
   const roleOptions = useMemo(() => {
@@ -115,11 +98,7 @@ export default function BulkOperations() {
     return (users || []).filter((u) => {
       if (roleFilter !== 'all' && u.role !== roleFilter) return false
       if (!q) return true
-      return (
-        displayName(u).toLowerCase().includes(q) ||
-        String(u.email || '').toLowerCase().includes(q) ||
-        String(u.username || '').toLowerCase().includes(q)
-      )
+      return [displayName(u), u.email, u.username].some((v) => String(v || '').toLowerCase().includes(q))
     })
   }, [users, search, roleFilter])
 
@@ -144,8 +123,11 @@ export default function BulkOperations() {
 
   const selectedIds = useMemo(() => Array.from(selected), [selected])
   const selectedCount = selectedIds.length
+  const selectedSupers = useMemo(
+    () => (users || []).filter((u) => selected.has(u.id) && u.is_super_admin).length,
+    [users, selected],
+  )
 
-  // Validation for enabling the "Review" action.
   const canReview = useMemo(() => {
     if (selectedCount === 0) return false
     if (mode === 'role') return !!roleValue
@@ -153,14 +135,15 @@ export default function BulkOperations() {
   }, [selectedCount, mode, roleValue, moduleKey])
 
   const capMeta = CAPABILITIES.find((c) => c.key === capability)
+  const plural = (n) => `${n} user${n === 1 ? '' : 's'}`
 
   const applyChange = useCallback(async () => {
-    setApplying(true)
+    setApplying(true); setApplyError('')
     try {
       let count
       if (mode === 'role') {
         count = await bulkSetRole(selectedIds, roleValue)
-        pushToast('success', `${count} of ${selectedCount} user${selectedCount === 1 ? '' : 's'} set to ${roleValue}.`)
+        setResult(`${count} of ${plural(selectedCount)} set to ${roleValue}.`)
       } else {
         count = await bulkSetGrant({
           userIds: selectedIds,
@@ -170,193 +153,127 @@ export default function BulkOperations() {
           expiresAt: expiry ? new Date(`${expiry}T23:59:59`).toISOString() : null,
         })
         const label = MODULE_LABEL[moduleKey] || moduleKey
-        pushToast('success', `${effect === 'revoke' ? 'Revoke' : 'Grant'} applied to ${count} user${count === 1 ? '' : 's'}: ${capability} on ${label}.`)
+        setResult(`${effect === 'revoke' ? 'Revoke' : 'Grant'} applied to ${plural(count)}: ${capability} on ${label}.`)
       }
       setConfirming(false)
-      if (mode === 'role') await loadUsers() // roles changed -> refresh directory
+      if (mode === 'role') await loadUsers() // roles changed, refresh the directory
     } catch (err) {
-      pushToast('error', toUserMessage(err, 'Could not apply the bulk change.'))
+      setApplyError(toUserMessage(err, 'Could not apply the bulk change.'))
     } finally {
       setApplying(false)
     }
-  }, [mode, selectedIds, selectedCount, roleValue, moduleKey, capability, effect, expiry, pushToast, loadUsers])
+  }, [mode, selectedIds, selectedCount, roleValue, moduleKey, capability, effect, expiry, loadUsers])
+
+  const na = users === null || !!usersError
+  const destructive = mode === 'role' || effect === 'revoke'
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start gap-2">
-        <Info size={15} className="text-[var(--text-muted)] mt-0.5 shrink-0" />
-        <p className="text-xs text-[var(--text-muted)] max-w-3xl">
-          Apply one change to many users at once. Set a role for the whole selection, or grant / revoke
-          a capability on a module. Changes are never applied until you confirm. Role changes honour the
-          server last-super-admin guard, so the confirmed count can be lower than the number selected.
-        </p>
+      <Note icon={Layers}>
+        Apply one change to many users at once. Set a role for the whole selection, or grant or revoke a
+        capability on a module. Nothing is applied until you confirm. Role changes honour the server
+        last-super-admin guard, so the confirmed count can be lower than the number selected.
+      </Note>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <StatTile label="Users" icon={Users} value={na ? 'N/A' : users.length} sub={users === null ? 'Loading' : usersError ? 'Could not load' : 'In the directory'} />
+        <StatTile label="Shown" value={na ? 'N/A' : filteredUsers.length} sub="After search and role filter" />
+        <StatTile label="Selected" tone={selectedCount ? 'accent' : 'default'} value={selectedCount} sub="Will receive the change" />
+        <StatTile label="Super admins selected" icon={Crown} tone={selectedSupers ? 'warning' : 'default'} value={na ? 'N/A' : selectedSupers} sub="Never demoted by a role change" />
       </div>
+
+      {result && <div role="status"><Note tone="accent" icon={Check}>{result}</Note></div>}
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,380px)_1fr] gap-4">
         {/* Left: multi-select user directory */}
-        <div className="card !p-0 overflow-hidden flex flex-col max-h-[78vh]">
-          <div className="p-3 border-b border-[var(--input-border)] space-y-2">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-[var(--text-primary)] inline-flex items-center gap-1.5">
-                <Users size={15} className="text-[var(--brand-bright)]" /> Users
-                {Array.isArray(users) && <span className="text-[var(--text-muted)] font-normal">({filteredUsers.length})</span>}
-              </h3>
-              <button
-                onClick={loadUsers}
-                disabled={refreshing}
-                className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-50"
-                aria-label="Refresh users"
-              >
-                <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
-              </button>
-            </div>
-            <div className="relative">
-              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-              <input aria-label="Search users"
-                className="input pl-8 py-1.5 text-sm w-full"
-                placeholder="Search name or email..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <select aria-label="Filter users by role"
-                className="input py-1.5 text-sm flex-1"
-                value={roleFilter}
-                onChange={(e) => setRoleFilter(e.target.value)}
-              >
-                <option value="all">All roles</option>
-                {roleOptions.map((r) => <option key={r} value={r}>{r}</option>)}
-              </select>
-            </div>
-            <div className="flex items-center justify-between">
-              <button
-                onClick={toggleSelectAllVisible}
-                disabled={filteredUsers.length === 0}
-                className="text-xs inline-flex items-center gap-1.5 text-[var(--text-secondary)] hover:text-[var(--brand-bright)] disabled:opacity-40"
-              >
-                <span className={`w-4 h-4 rounded border flex items-center justify-center ${allVisibleSelected ? 'bg-[var(--brand-bright)] border-[var(--brand-bright)]' : 'border-[var(--input-border)]'}`}>
-                  {allVisibleSelected && <Check size={11} className="text-black" />}
-                </span>
-                Select all visible
-              </button>
-              {selectedCount > 0 && (
-                <button onClick={clearSelection} className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)]">
-                  Clear ({selectedCount})
-                </button>
-              )}
+        <Panel flush className="overflow-hidden flex flex-col max-h-[78vh]">
+          <div className="p-3 border-b border-gray-800 space-y-2">
+            <PanelHeader icon={Users} title="Users"
+              subtitle={na ? undefined : `${filteredUsers.length} of ${users.length} shown`}
+              actions={<Btn size="xs" variant="quiet" icon={RefreshCw} busy={refreshing} title="Refresh users" ariaLabel="Refresh users" onClick={loadUsers} />} />
+            <SearchInput value={search} onChange={setSearch} placeholder="Search name or email" />
+            <Select value={roleFilter} onChange={setRoleFilter} ariaLabel="Filter users by role"
+              options={[{ value: 'all', label: 'All roles' }, ...roleOptions.map((r) => ({ value: r, label: r }))]} />
+            <div className="flex items-center justify-between gap-2">
+              <label className="inline-flex items-center gap-2 text-xs text-gray-300 cursor-pointer">
+                <input type="checkbox" className="w-4 h-4 accent-orange-500" checked={allVisibleSelected}
+                  disabled={filteredUsers.length === 0} onChange={toggleSelectAllVisible} />
+                Select all shown
+              </label>
+              {selectedCount > 0 && <Btn size="xs" variant="quiet" onClick={clearSelection}>Clear ({selectedCount})</Btn>}
             </div>
           </div>
 
           <div className="overflow-y-auto flex-1">
             {users === null ? (
-              <div className="p-3 space-y-2">
-                {[0, 1, 2, 3, 4].map((i) => (
-                  <div key={i} className="h-11 rounded-lg bg-[var(--input-bg)] animate-pulse" />
-                ))}
-              </div>
+              <div className="p-3"><LoadingState label="Loading users" rows={5} /></div>
             ) : usersError ? (
-              <div className="p-6 text-center">
-                <AlertTriangle size={22} className="mx-auto mb-2 text-red-400" />
-                <p className="text-sm text-red-300 font-medium">Could not load users</p>
-                <p className="text-xs text-[var(--text-muted)] mt-1">{usersError}</p>
-                <button onClick={loadUsers} className="btn-secondary text-xs mt-3 inline-flex items-center gap-1.5">
-                  <RefreshCw size={12} /> Retry
-                </button>
-              </div>
+              <div className="p-3"><ErrorState message={usersError} onRetry={loadUsers} /></div>
             ) : filteredUsers.length === 0 ? (
-              <div className="p-8 text-center text-[var(--text-muted)]">
-                <Users size={24} className="mx-auto mb-2 opacity-60" />
-                <p className="text-sm">{users.length === 0 ? 'No users found.' : 'No users match your filters.'}</p>
-              </div>
+              <EmptyState icon={Users}
+                title={users.length === 0 ? 'No users found' : 'No users match'}
+                reason={users.length === 0 ? 'The user directory returned no accounts.' : 'Nothing matches this search and role.'} />
             ) : (
-              <ul>
+              <ul aria-label="Users">
                 {filteredUsers.map((u) => {
                   const on = selected.has(u.id)
                   return (
                     <li key={u.id}>
-                      <button
-                        onClick={() => toggleUser(u.id)}
-                        className={`w-full text-left px-3 py-2.5 flex items-center gap-2.5 border-b border-[var(--input-border)]/50 transition-colors ${
-                          on ? 'bg-[var(--brand-subtle,rgba(34,197,94,0.12))]' : 'hover:bg-[var(--input-bg)]/50'
-                        }`}
-                      >
-                        <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${on ? 'bg-[var(--brand-bright)] border-[var(--brand-bright)]' : 'border-[var(--input-border)]'}`}>
-                          {on && <Check size={11} className="text-black" />}
-                        </span>
+                      <label className={`w-full px-3 py-2.5 flex items-center gap-2.5 border-b border-gray-800/60 cursor-pointer transition-colors ${
+                        on ? 'bg-orange-950/30' : 'hover:bg-gray-900/60'
+                      }`}>
+                        <input type="checkbox" className="w-4 h-4 accent-orange-500 shrink-0" checked={on} onChange={() => toggleUser(u.id)} />
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-[var(--text-primary)] truncate flex items-center gap-1.5">
+                          <p className="text-sm font-medium text-gray-100 truncate flex items-center gap-1.5">
                             {displayName(u)}
-                            {u.is_super_admin && <Crown size={12} className="text-amber-400 shrink-0" />}
+                            {u.is_super_admin && <Crown size={12} className="text-amber-400 shrink-0" aria-label="Super admin" />}
                           </p>
-                          <p className="text-xs text-[var(--text-muted)] truncate">{u.email || u.username || 'No email'}</p>
+                          <p className="text-xs text-gray-400 truncate">{u.email || u.username || 'No email'}</p>
                         </div>
-                        <span className={`text-[11px] font-medium shrink-0 ${ROLE_TINT[u.role] || 'text-[var(--text-secondary)]'}`}>
-                          {u.role || 'No role'}
-                        </span>
-                      </button>
+                        <Badge tone={u.role === 'Admin' ? 'accent' : 'default'}>{u.role || 'No role'}</Badge>
+                      </label>
                     </li>
                   )
                 })}
               </ul>
             )}
           </div>
-        </div>
+        </Panel>
 
         {/* Right: action builder */}
         <div className="min-w-0 space-y-4">
-          <div className="card">
-            <div className="flex items-center gap-2 mb-3">
-              <Layers size={16} className="text-[var(--brand-bright)]" />
-              <h3 className="text-sm font-semibold text-[var(--text-primary)]">Bulk action</h3>
-              <span className="ml-auto text-xs text-[var(--text-muted)]">
-                {selectedCount} user{selectedCount === 1 ? '' : 's'} selected
-              </span>
-            </div>
+          <Panel>
+            <PanelHeader icon={Layers} title="Bulk action" subtitle={`${plural(selectedCount)} selected`} />
 
-            {/* Mode switch */}
-            <div className="flex gap-1.5 p-1 rounded-lg bg-[var(--surface-1)] w-fit mb-4" style={{ border: '1px solid var(--border-dim)' }}>
-              {[
-                { key: 'role', label: 'Set role', icon: UserCog },
-                { key: 'capability', label: 'Grant / revoke', icon: KeyRound },
-              ].map((m) => {
-                const Icon = m.icon
-                const on = mode === m.key
-                return (
-                  <button
-                    key={m.key}
-                    onClick={() => setMode(m.key)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                      on ? 'bg-[var(--surface-3)] text-[var(--brand-bright)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                    }`}
-                    style={on ? { border: '1px solid var(--border-bright)' } : { border: '1px solid transparent' }}
-                  >
-                    <Icon size={14} /> {m.label}
-                  </button>
-                )
-              })}
+            <div className="mb-4">
+              <Segmented role="group" ariaLabel="Bulk action type" value={mode} onChange={setMode}
+                options={[
+                  { key: 'role', label: <><UserCog size={13} aria-hidden="true" />Set role</> },
+                  { key: 'capability', label: <><KeyRound size={13} aria-hidden="true" />Grant or revoke</> },
+                ]} />
             </div>
 
             {mode === 'role' ? (
               <div className="space-y-3">
                 <div>
-                  <label className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold block mb-1.5">New role</label>
-                  <select aria-label="New role" className="input py-2 text-sm w-full" value={roleValue} onChange={(e) => setRoleValue(e.target.value)}>
-                    <option value="">Select a role...</option>
-                    {assignableRoles.map((r) => <option key={r} value={r}>{r}</option>)}
-                  </select>
+                  <label htmlFor="bulk-role" className="text-[11px] uppercase tracking-wider text-gray-400 font-semibold block mb-1.5">New role</label>
+                  <Select id="bulk-role" value={roleValue} onChange={setRoleValue} placeholder="Select a role"
+                    options={assignableRoles.map((r) => ({ value: r, label: r }))} />
                 </div>
-                <p className="text-xs text-[var(--text-muted)] inline-flex items-start gap-1.5">
-                  <ShieldCheck size={13} className="mt-0.5 shrink-0" />
+                {customRolesError && (
+                  <Note tone="warning">Custom roles could not be loaded, so only built-in roles and roles already in use are listed.</Note>
+                )}
+                <p className="text-xs text-gray-400 inline-flex items-start gap-1.5">
+                  <ShieldCheck size={13} className="mt-0.5 shrink-0" aria-hidden="true" />
                   Super admins in the selection are never demoted by this action; they are skipped server side.
                 </p>
               </div>
             ) : (
               <div className="space-y-3">
                 <div>
-                  <label className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold block mb-1.5">Module</label>
-                  <select aria-label="Module" className="input py-2 text-sm w-full" value={moduleKey} onChange={(e) => setModuleKey(e.target.value)}>
-                    <option value="">Select a module...</option>
+                  <label htmlFor="bulk-module" className="text-[11px] uppercase tracking-wider text-gray-400 font-semibold block mb-1.5">Module</label>
+                  <select id="bulk-module" className={INPUT} value={moduleKey} onChange={(e) => setModuleKey(e.target.value)}>
+                    <option value="">Select a module</option>
                     {MODULE_GROUPS.map((g) => (
                       <optgroup key={g.group} label={g.group}>
                         {g.modules.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
@@ -366,140 +283,76 @@ export default function BulkOperations() {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold block mb-1.5">Capability</label>
-                    <select aria-label="Capability" className="input py-2 text-sm w-full" value={capability} onChange={(e) => setCapability(e.target.value)}>
-                      {CAPABILITIES.filter((c) => c.key !== 'delete').map((c) => (
-                        <option key={c.key} value={c.key}>{c.label}{c.enforced ? '' : ' (stored only)'}</option>
-                      ))}
-                    </select>
+                    <label htmlFor="bulk-cap" className="text-[11px] uppercase tracking-wider text-gray-400 font-semibold block mb-1.5">Capability</label>
+                    <Select id="bulk-cap" value={capability} onChange={setCapability}
+                      options={CAPABILITIES.filter((c) => c.key !== 'delete').map((c) => ({ value: c.key, label: `${c.label}${c.enforced ? '' : ' (stored only)'}` }))} />
                   </div>
                   <div>
-                    <label className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold block mb-1.5">Effect</label>
-                    <div className="flex gap-1.5">
-                      {[
-                        { key: 'grant', label: 'Grant', icon: CheckCircle2, tint: 'text-green-300 border-green-800/50 bg-green-900/20' },
-                        { key: 'revoke', label: 'Revoke', icon: Ban, tint: 'text-red-300 border-red-800/50 bg-red-900/20' },
-                      ].map((o) => {
-                        const Icon = o.icon
-                        const on = effect === o.key
-                        return (
-                          <button
-                            key={o.key}
-                            type="button"
-                            aria-pressed={on}
-                            onClick={() => setEffect(o.key)}
-                            className={`flex-1 inline-flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-lg text-sm border transition-colors ${
-                              on ? o.tint : 'text-[var(--text-secondary)] border-[var(--input-border)] bg-[var(--input-bg)] hover:text-[var(--text-primary)]'
-                            }`}
-                          >
-                            <Icon size={14} /> {o.label}
-                          </button>
-                        )
-                      })}
-                    </div>
+                    <p className="text-[11px] uppercase tracking-wider text-gray-400 font-semibold mb-1.5">Effect</p>
+                    <Segmented role="group" ariaLabel="Effect" value={effect} onChange={setEffect}
+                      options={[
+                        { key: 'grant', label: <><CheckCircle2 size={13} aria-hidden="true" />Grant</> },
+                        { key: 'revoke', label: <><Ban size={13} aria-hidden="true" />Revoke</> },
+                      ]} />
                   </div>
                 </div>
                 <div>
-                  <label className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold block mb-1.5 inline-flex items-center gap-1.5">
-                    <Calendar size={12} /> Expiry (optional)
-                  </label>
-                  <input aria-label="Expiry date" type="date" className="input py-2 text-sm w-full" value={expiry} onChange={(e) => setExpiry(e.target.value)} />
-                  <p className="text-[11px] text-[var(--text-muted)] mt-1">Leave blank for a permanent override.</p>
+                  <label htmlFor="bulk-expiry" className="text-[11px] uppercase tracking-wider text-gray-400 font-semibold block mb-1.5">Expiry (optional)</label>
+                  <input id="bulk-expiry" type="date" className={INPUT} value={expiry} onChange={(e) => setExpiry(e.target.value)} />
+                  <p className="text-[11px] text-gray-400 mt-1">Leave blank for a permanent override.</p>
                 </div>
                 {capMeta && !capMeta.enforced && (
-                  <p className="text-xs text-amber-300/90 inline-flex items-start gap-1.5">
-                    <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+                  <Note tone="warning" icon={AlertTriangle}>
                     The {capMeta.label} capability is stored for progressive enforcement and is not gated by the app yet.
-                  </p>
+                  </Note>
                 )}
               </div>
             )}
 
-            <div className="flex items-center justify-end gap-2 mt-4 pt-3 border-t border-[var(--input-border)]">
-              <button
-                onClick={() => setConfirming(true)}
-                disabled={!canReview}
-                className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-40"
-              >
+            <div className="flex flex-wrap items-center justify-between gap-2 mt-4 pt-3 border-t border-gray-800">
+              <p className="text-xs text-gray-400">
+                {selectedCount === 0 ? 'Select one or more users to enable a bulk action.' : 'You will review the exact change before it is applied.'}
+              </p>
+              <Btn variant="primary" onClick={() => { setApplyError(''); setResult(''); setConfirming(true) }} disabled={!canReview}>
                 Review and apply
-              </button>
+              </Btn>
             </div>
-          </div>
-
-          {selectedCount === 0 && (
-            <div className="card flex items-center gap-2.5 text-sm text-[var(--text-muted)]">
-              <Info size={15} className="shrink-0" />
-              Select one or more users on the left to enable a bulk action.
-            </div>
-          )}
+          </Panel>
         </div>
       </div>
 
-      {/* Confirm modal */}
-      {confirming && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" role="dialog" aria-modal="true">
-          <div className="card w-full max-w-md">
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-xl bg-[var(--brand-subtle,rgba(34,197,94,0.12))] flex items-center justify-center shrink-0">
-                <Layers size={18} className="text-[var(--brand-bright)]" />
-              </div>
-              <div className="min-w-0">
-                <h3 className="text-base font-semibold text-[var(--text-primary)]">Confirm bulk change</h3>
-                <p className="text-sm text-[var(--text-muted)] mt-1">
-                  {mode === 'role' ? (
-                    <>Set role <span className="text-[var(--text-primary)] font-medium">{roleValue}</span> for{' '}
-                      <span className="text-[var(--text-primary)] font-medium">{selectedCount}</span> user{selectedCount === 1 ? '' : 's'}.</>
-                  ) : (
-                    <><span className={effect === 'revoke' ? 'text-red-300 font-medium' : 'text-green-300 font-medium'}>{effect === 'revoke' ? 'Revoke' : 'Grant'}</span>{' '}
-                      the <span className="text-[var(--text-primary)] font-medium">{capability}</span> capability on{' '}
-                      <span className="text-[var(--text-primary)] font-medium">{MODULE_LABEL[moduleKey] || moduleKey}</span> for{' '}
-                      <span className="text-[var(--text-primary)] font-medium">{selectedCount}</span> user{selectedCount === 1 ? '' : 's'}
-                      {expiry ? <> until <span className="text-[var(--text-primary)] font-medium">{expiry}</span></> : ''}.</>
-                  )}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center justify-end gap-2 mt-5">
-              <button onClick={() => setConfirming(false)} disabled={applying} className="btn-ghost text-sm disabled:opacity-40">
-                Cancel
-              </button>
-              <button onClick={applyChange} disabled={applying} className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60">
-                {applying ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                {applying ? 'Applying...' : 'Apply change'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <Toasts items={toasts} onDismiss={dismissToast} />
-    </div>
-  )
-}
-
-function Toasts({ items, onDismiss }) {
-  if (!items.length) return null
-  return (
-    <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 w-80 max-w-[calc(100vw-2rem)]">
-      {items.map((t) => (
-        <div
-          key={t.id}
-          role="status"
-          className={`card !p-3 flex items-start gap-2.5 shadow-lg border ${
-            t.kind === 'error' ? 'border-red-800/60' : 'border-green-800/60'
-          }`}
-        >
-          {t.kind === 'error'
-            ? <AlertTriangle size={16} className="text-red-400 mt-0.5 shrink-0" />
-            : <Check size={16} className="text-green-400 mt-0.5 shrink-0" />}
-          <p className="text-sm text-[var(--text-primary)] flex-1">{t.message}</p>
-          <button
-            onClick={() => onDismiss(t.id)}
-            className="text-[var(--text-muted)] hover:text-[var(--text-primary)] shrink-0"
-            aria-label="Dismiss"
-          ><X size={14} /></button>
-        </div>
-      ))}
+      <Modal
+        open={confirming}
+        title="Confirm bulk change"
+        subtitle={`${plural(selectedCount)} affected`}
+        onClose={() => { if (!applying) setConfirming(false) }}
+        width="max-w-md"
+        footer={(
+          <>
+            <Btn onClick={() => setConfirming(false)} disabled={applying}>Cancel</Btn>
+            <Btn variant={destructive ? 'danger' : 'primary'} icon={Check} onClick={applyChange} busy={applying}>
+              {applying ? 'Applying...' : 'Apply change'}
+            </Btn>
+          </>
+        )}
+      >
+        {applyError && <div className="mb-3"><ErrorState message={applyError} /></div>}
+        <p className="text-sm text-gray-300 break-words">
+          {mode === 'role' ? (
+            <>Set role <span className="text-gray-100 font-medium">{roleValue}</span> for{' '}
+              <span className="text-gray-100 font-medium">{plural(selectedCount)}</span>.</>
+          ) : (
+            <><span className={effect === 'revoke' ? 'text-red-300 font-medium' : 'text-emerald-300 font-medium'}>{effect === 'revoke' ? 'Revoke' : 'Grant'}</span>{' '}
+              the <span className="text-gray-100 font-medium">{capability}</span> capability on{' '}
+              <span className="text-gray-100 font-medium">{MODULE_LABEL[moduleKey] || moduleKey}</span> for{' '}
+              <span className="text-gray-100 font-medium">{plural(selectedCount)}</span>
+              {expiry ? <> until <span className="text-gray-100 font-medium">{expiry}</span></> : ''}.</>
+          )}
+        </p>
+        {mode === 'role' && selectedSupers > 0 && (
+          <p className="text-xs text-amber-200 mt-2">{plural(selectedSupers)} in the selection {selectedSupers === 1 ? 'is a super admin and' : 'are super admins and'} will be skipped.</p>
+        )}
+      </Modal>
     </div>
   )
 }

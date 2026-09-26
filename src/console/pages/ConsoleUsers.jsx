@@ -19,6 +19,7 @@ import {
   Users, Lock, Unlock, CheckCircle, RefreshCw, Edit2, Key, AlertTriangle,
   Shield, MoreVertical, UserCheck, UserX, Globe, CheckSquare, Square, UserCog,
   ShieldCheck, MapPin, Plus, Smartphone, Monitor, UserPlus, PieChart, LogOut,
+  FileSpreadsheet, FileText,
 } from 'lucide-react'
 import {
   Panel, PanelHeader, Note, StatTile, ProportionBar, Badge, Code, Btn, SearchInput, Select, Toolbar,
@@ -30,6 +31,7 @@ import { supabase } from '../../lib/supabase'
 import { fetchAllPages } from '../../lib/fetchAll'
 import { sanitizeSearchTerm } from '../../lib/searchFilter'
 import { toUserMessage } from '../../lib/safeError'
+import { exportConsoleRows } from '../../lib/consoleTable'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import { ACCESS_ROLES, ALL_MODULES } from '../../lib/moduleCatalog'
 import { listCustomRoles } from '../../lib/api/customRoles'
@@ -86,6 +88,23 @@ export function summarizeUsers(rows = []) {
 
 const ROLE_TONE = { Admin: 'danger', Manager: 'accent', Director: 'info' }
 
+// Columns the register can sort on. The list is server-paged, so sorting is a
+// server ORDER BY with an id tiebreak (a stable page boundary), never a sort
+// of the 20 rows on screen.
+const SORTABLE = new Set(['full_name', 'role', 'site', 'created_at'])
+
+/**
+ * Country reach as the database enforces it (V309): Admin and super admin see
+ * every country, an ALL or * entry grants every country, and for anyone else
+ * an empty scope means no country access, not all of them.
+ */
+export function userCountryLabel(u) {
+  if (u?.is_super_admin || u?.role === 'Admin') return 'All countries'
+  const arr = (Array.isArray(u?.country) ? u.country : [u?.country]).map((c) => String(c ?? '').trim()).filter(Boolean)
+  if (arr.some((c) => ['ALL', '*'].includes(c.toUpperCase()))) return 'All countries'
+  return arr.length ? arr.join(', ') : 'No country access'
+}
+
 export default function ConsoleUsers() {
   const { logAction, activeOrg } = useConsoleAuth()
   const navigate = useNavigate()
@@ -132,6 +151,12 @@ export default function ConsoleUsers() {
   const [toast, setToast]           = useState(null)
   const [loadError, setLoadError]   = useState(null)
   const [menuPos, setMenuPos]       = useState(null)   // { top, right } for the row action menu
+  const [sort, setSort]             = useState({ key: 'created_at', dir: 'desc' })
+  const [confirmAction, setConfirmAction] = useState(null) // { kind: 'lock'|'unapprove', user }
+  const [confirmBusy, setConfirmBusy] = useState(false)
+  const [confirmError, setConfirmError] = useState('')
+  const [exporting, setExporting]   = useState('')
+  const [exportError, setExportError] = useState('')
 
   // Whole-base stats for the tiles and charts (paged, never capped at 1000).
   const [statRows, setStatRows]       = useState([])
@@ -147,13 +172,15 @@ export default function ConsoleUsers() {
 
   const PAGE_SIZE = 20
 
-  const load = useCallback(async () => {
-    setLoading(true)
+  // One query builder for the page read and the export, so the file always
+  // matches the filters on screen.
+  const buildQuery = useCallback((withCount) => {
+    const sortKey = SORTABLE.has(sort.key) ? sort.key : 'created_at'
     let q = supabase
       .from('profiles')
-      .select('id, full_name, email, role, site, sites, country, approved, locked, web_access, created_at, organisation_id, is_super_admin', { count: 'exact' })
-      .order('created_at', { ascending: false })
-      .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1)
+      .select('id, full_name, email, role, site, sites, country, approved, locked, web_access, created_at, organisation_id, is_super_admin', withCount ? { count: 'exact' } : undefined)
+      .order(sortKey, { ascending: sort.dir === 'asc', nullsFirst: false })
+      .order('id', { ascending: true })
 
     if (activeOrg) q = q.eq('organisation_id', activeOrg.id)
     else if (filterOrg) q = q.eq('organisation_id', filterOrg)
@@ -163,7 +190,12 @@ export default function ConsoleUsers() {
     if (filterStatus === 'locked')   q = q.eq('locked', true)
     if (filterStatus === 'approved') q = q.eq('approved', true).eq('locked', false)
     if (search) { const s = sanitizeSearchTerm(search); q = q.or(`full_name.ilike.%${s}%,email.ilike.%${s}%,site.ilike.%${s}%`) }
+    return q
+  }, [activeOrg, filterOrg, filterRole, filterStatus, search, sort])
 
+  const load = useCallback(async () => {
+    setLoading(true)
+    const q = buildQuery(true).range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1)
     const { data, count, error: err } = await q
     if (err) {
       setLoadError(toUserMessage(err, 'Could not load users.'))
@@ -175,9 +207,49 @@ export default function ConsoleUsers() {
     }
     setSelected(new Set())
     setLoading(false)
-  }, [activeOrg, filterOrg, filterRole, filterStatus, search, page])
+  }, [buildQuery, page])
 
   useEffect(() => { load() }, [load])
+
+  const onSort = useCallback((key) => {
+    setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: key === 'created_at' ? 'desc' : 'asc' }))
+    setPage(0)
+  }, [])
+
+  async function runExport(format) {
+    setExporting(format); setExportError('')
+    try {
+      const { data, error: err, truncated } = await fetchAllPages(
+        (from, to) => buildQuery(false).range(from, to),
+        { max: STATS_MAX },
+      )
+      if (err) throw err
+      await exportConsoleRows({
+        rows: data ?? [],
+        title: 'Users',
+        format,
+        columns: [
+          { key: 'full_name', header: 'Name' },
+          { key: 'email', header: 'Email' },
+          { key: 'role', header: 'Role' },
+          { key: 'country', header: 'Countries', value: userCountryLabel },
+          { key: 'sites', header: 'Site access', value: (u) => {
+            const ss = Array.isArray(u.sites) ? u.sites.filter(Boolean) : []
+            return ss.length === 0 ? 'No access' : isOrgWideSites(ss) ? 'All sites' : ss.join(', ')
+          } },
+          { key: 'site', header: 'Site' },
+          { key: 'status', header: 'Status', value: (u) => ({ locked: 'Locked', approved: 'Approved', pending: 'Pending' }[userStatus(u)]) },
+          { key: 'web_access', header: 'Web login', value: (u) => (u.web_access === false ? 'Blocked (mobile only)' : 'Allowed') },
+          { key: 'created_at', header: 'Joined', value: (u) => (u.created_at ? new Date(u.created_at).toLocaleDateString() : '') },
+        ],
+      })
+      if (truncated) flashToast(`Exported the first ${STATS_MAX.toLocaleString()} users only.`)
+    } catch (e) {
+      setExportError(toUserMessage(e, 'Could not export the user register.'))
+    } finally {
+      setExporting('')
+    }
+  }
 
   // One lean paged read of every user in the current org scope (not the role /
   // status / search filters: the tiles describe the whole base, and clicking one
@@ -322,23 +394,46 @@ export default function ConsoleUsers() {
     setTimeout(() => setToast(null), 4000)
   }
 
-  async function toggleApprove(user) {
-    const approved = !user.approved
+  // Approving and unlocking are one click. Revoking approval and locking take
+  // someone out of the app, so they go through a confirm dialog first.
+  async function setApproval(user, approved) {
     const { error: err } = await supabase.from('profiles').update({ approved }).eq('id', user.id)
-    if (err) { setLoadError(toUserMessage(err, 'Could not change approval.')); return }
+    if (err) throw err
     await logAction(approved ? 'approve_user' : 'unapprove_user', user.id, 'user', { email: user.email })
     flashToast(approved ? 'User approved' : 'Approval revoked')
     refreshAll()
   }
 
-  async function toggleLock(user) {
-    const locked = !user.locked
-    if (locked && typeof window !== 'undefined' && window.confirm && !window.confirm(`Lock ${user.full_name || user.email || 'this user'}? They cannot use the app until unlocked.`)) return
+  async function setLocked(user, locked) {
     const { error: err } = await supabase.from('profiles').update({ locked }).eq('id', user.id)
-    if (err) { setLoadError(toUserMessage(err, 'Could not change the lock.')); return }
+    if (err) throw err
     await logAction(locked ? 'lock_user' : 'unlock_user', user.id, 'user', { email: user.email })
     flashToast(locked ? 'Account locked' : 'Account unlocked')
     refreshAll()
+  }
+
+  async function toggleApprove(user) {
+    if (user.approved) { setConfirmError(''); setConfirmAction({ kind: 'unapprove', user }); return }
+    try { await setApproval(user, true) } catch (e) { setLoadError(toUserMessage(e, 'Could not change approval.')) }
+  }
+
+  async function toggleLock(user) {
+    if (!user.locked) { setConfirmError(''); setConfirmAction({ kind: 'lock', user }); return }
+    try { await setLocked(user, false) } catch (e) { setLoadError(toUserMessage(e, 'Could not change the lock.')) }
+  }
+
+  async function runConfirmedAction() {
+    if (!confirmAction) return
+    setConfirmBusy(true); setConfirmError('')
+    try {
+      if (confirmAction.kind === 'lock') await setLocked(confirmAction.user, true)
+      else await setApproval(confirmAction.user, false)
+      setConfirmAction(null)
+    } catch (e) {
+      setConfirmError(toUserMessage(e, confirmAction.kind === 'lock' ? 'Could not lock the account.' : 'Could not revoke approval.'))
+    } finally {
+      setConfirmBusy(false)
+    }
   }
 
   // Web-app access (V278). Enabling is applied directly; disabling (mobile-only)
@@ -571,14 +666,19 @@ export default function ConsoleUsers() {
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2"><Users size={18} className="text-orange-400" /> Users</h1>
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-gray-400 mt-1">
             Approve, lock and scope every account in {scopeLabel}. Figures cover the whole user base, not just the page shown.
           </p>
         </div>
-        <Btn icon={RefreshCw} onClick={refreshAll} busy={loading || statsLoading}>Refresh</Btn>
+        <div className="flex flex-wrap items-center gap-2">
+          <Btn icon={FileSpreadsheet} onClick={() => runExport('excel')} busy={exporting === 'excel'} disabled={loading || !!loadError || total === 0}>Excel</Btn>
+          <Btn icon={FileText} onClick={() => runExport('pdf')} busy={exporting === 'pdf'} disabled={loading || !!loadError || total === 0}>PDF</Btn>
+          <Btn icon={RefreshCw} onClick={refreshAll} busy={loading || statsLoading}>Refresh</Btn>
+        </div>
       </header>
 
       <ErrorState message={loadError} onRetry={refreshAll} />
+      <ErrorState message={exportError} />
       {statsError && !loadError && <ErrorState message={statsError} onRetry={loadStats} />}
       {statsTruncated && (
         <Note icon={AlertTriangle} tone="warning">
@@ -610,7 +710,7 @@ export default function ConsoleUsers() {
                 emptyText="No users in this scope." />
               {stats.total > 0 && (
                 <div className="mt-4 space-y-1.5">
-                  <p className="text-[11px] text-gray-500">Account status</p>
+                  <p className="text-[11px] text-gray-400">Account status</p>
                   <ProportionBar total={stats.total} segments={[
                     { label: 'Approved', value: stats.approved, tone: 'good' },
                     { label: 'Pending', value: stats.pending, tone: 'warning' },
@@ -637,20 +737,20 @@ export default function ConsoleUsers() {
       <Panel flush>
         <div className="p-4 pb-3 space-y-3">
           <PanelHeader icon={Users} title="User register"
-            subtitle={loading ? 'Loading' : `${total.toLocaleString()} user${total === 1 ? '' : 's'} match the current filters`} />
+            subtitle={loading ? 'Loading' : loadError ? 'Could not be read' : `${total.toLocaleString()} user${total === 1 ? '' : 's'} match the current filters`} />
           <Toolbar>
             <SearchInput value={search} onChange={(v) => { setSearch(v); setPage(0) }}
               placeholder="Search name, email, site" className="flex-1 min-w-48" />
-            <Select value={filterRole} onChange={(v) => { setFilterRole(v); setPage(0) }} placeholder="All roles" className="w-40"
+            <Select value={filterRole} onChange={(v) => { setFilterRole(v); setPage(0) }} placeholder="All roles" ariaLabel="Filter by role" className="w-40"
               options={roles.map(r => ({ value: r, label: r }))} />
-            <Select value={filterStatus} onChange={(v) => { setFilterStatus(v); setPage(0) }} placeholder="All status" className="w-36"
+            <Select value={filterStatus} onChange={(v) => { setFilterStatus(v); setPage(0) }} placeholder="All status" ariaLabel="Filter by status" className="w-36"
               options={[
                 { value: 'approved', label: 'Approved' },
                 { value: 'pending', label: 'Pending' },
                 { value: 'locked', label: 'Locked' },
               ]} />
             {!activeOrg && (
-              <Select value={filterOrg} onChange={(v) => { setFilterOrg(v); setPage(0) }} placeholder="All organisations" className="w-48"
+              <Select value={filterOrg} onChange={(v) => { setFilterOrg(v); setPage(0) }} placeholder="All organisations" ariaLabel="Filter by organisation" className="w-48"
                 options={orgs.map(o => ({ value: o.id, label: o.name }))} />
             )}
             {hasFilters && <Btn variant="quiet" onClick={clearFilters}>Clear filters</Btn>}
@@ -679,18 +779,18 @@ export default function ConsoleUsers() {
             <Table className="border-0 rounded-none">
               <THead>
                 <Th className="w-10">
-                  <button onClick={toggleSelectAll} className="text-gray-500 hover:text-orange-400 transition-colors"
+                  <button type="button" onClick={toggleSelectAll} className="rounded text-gray-400 hover:text-orange-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
                     title={allOnPageSelected ? 'Clear page' : 'Select page'} aria-label={allOnPageSelected ? 'Clear page' : 'Select page'}>
                     {allOnPageSelected ? <CheckSquare size={15} className="text-orange-400" /> : <Square size={15} />}
                   </button>
                 </Th>
-                <Th>User</Th>
-                <Th>Role</Th>
+                <Th sortKey="full_name" sort={sort} onSort={onSort}>User</Th>
+                <Th sortKey="role" sort={sort} onSort={onSort}>Role</Th>
                 <Th>Countries</Th>
                 <Th>Sites</Th>
-                <Th>Site</Th>
+                <Th sortKey="site" sort={sort} onSort={onSort}>Site</Th>
                 <Th>Status</Th>
-                <Th>Joined</Th>
+                <Th sortKey="created_at" sort={sort} onSort={onSort}>Joined</Th>
                 <Th align="right">Actions</Th>
               </THead>
               <tbody>
@@ -703,8 +803,9 @@ export default function ConsoleUsers() {
                     <Tr key={user.id} tone={!isSel && st === 'pending' ? 'warning' : undefined}
                       className={isSel ? 'bg-orange-950/20' : ''}>
                       <Td>
-                        <button onClick={() => toggleSelect(user.id)} aria-label={isSel ? 'Deselect user' : 'Select user'}
-                          className="text-gray-500 hover:text-orange-400 transition-colors">
+                        <button type="button" onClick={() => toggleSelect(user.id)} aria-label={`${isSel ? 'Deselect' : 'Select'} ${user.full_name || user.email || 'user'}`}
+                          aria-pressed={isSel}
+                          className="rounded text-gray-400 hover:text-orange-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
                           {isSel ? <CheckSquare size={15} className="text-orange-400" /> : <Square size={15} />}
                         </button>
                       </Td>
@@ -721,19 +822,22 @@ export default function ConsoleUsers() {
                                 <Badge tone="info" icon={Smartphone} title="Mobile app only (web login blocked)">Mobile only</Badge>
                               )}
                             </div>
-                            <p className="text-gray-500 truncate">{user.email ?? 'N/A'}</p>
+                            <p className="text-gray-400 truncate">{user.email ?? 'N/A'}</p>
                           </div>
                         </div>
                       </Td>
                       <Td><Badge tone={ROLE_TONE[user.role] || 'default'}>{user.role ?? 'N/A'}</Badge></Td>
                       <Td>
-                        {countries.length === 0
-                          ? <span className="text-gray-500">All</span>
-                          : <div className="flex flex-wrap gap-1">{countries.map(c => <Badge key={c}>{c}</Badge>)}</div>}
+                        {userCountryLabel(user) === 'All countries'
+                          ? <Badge tone="accent" icon={Globe}>All countries</Badge>
+                          : countries.length === 0
+                            ? <Badge tone="danger" icon={Globe}>No access</Badge>
+                            : <div className="flex flex-wrap gap-1">{countries.map(c => <Badge key={c}>{c}</Badge>)}</div>}
                       </Td>
                       <Td>
                         <button type="button" onClick={e => { e.stopPropagation(); openEdit(user) }}
-                          title="Edit site access" className="text-left">
+                          title="Edit site access" aria-label={`Edit site access for ${user.full_name || user.email || 'user'}`}
+                          className="text-left rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
                           {userSites.length === 0
                             ? <Badge tone="danger" icon={MapPin}>No access</Badge>
                             : isOrgWideSites(userSites)
@@ -754,7 +858,7 @@ export default function ConsoleUsers() {
                             ? <Badge tone="good" icon={CheckCircle}>Approved</Badge>
                             : <Badge tone="warning" icon={AlertTriangle}>Pending</Badge>}
                       </Td>
-                      <Td nowrap className="text-gray-500">
+                      <Td nowrap className="text-gray-400">
                         {user.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}
                       </Td>
                       <Td align="right">
@@ -762,9 +866,9 @@ export default function ConsoleUsers() {
                           {st === 'pending' && (
                             <Btn size="xs" variant="good" icon={UserCheck} onClick={() => toggleApprove(user)}>Approve</Btn>
                           )}
-                          <button onClick={e => openMenu(e, user.id)} aria-label="More actions" aria-haspopup="menu"
+                          <button type="button" onClick={e => openMenu(e, user.id)} aria-label={`More actions for ${user.full_name || user.email || 'user'}`} aria-haspopup="menu"
                             aria-expanded={actionMenu === user.id}
-                            className="p-1.5 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors">
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-200 hover:bg-gray-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
                             <MoreVertical size={14} />
                           </button>
                         </div>
@@ -776,7 +880,7 @@ export default function ConsoleUsers() {
             </Table>
             {total > PAGE_SIZE && (
               <div className="flex items-center justify-between px-4 py-3 border-t border-gray-800">
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-gray-400">
                   Showing {page * PAGE_SIZE + 1} to {Math.min((page + 1) * PAGE_SIZE, total)} of {total}
                 </p>
                 <div className="flex gap-2">
@@ -854,7 +958,7 @@ export default function ConsoleUsers() {
                   )
                 })}
               </div>
-              <p className="text-[11px] text-gray-500 mt-1.5">Admins and super-admins see all countries. Other roles see only the countries listed here.</p>
+              <p className="text-[11px] text-gray-400 mt-1.5">Admins and super-admins see all countries. Other roles see only the countries listed here.</p>
             </Field>
             <Field group label={<span className="flex items-center gap-1.5"><MapPin size={11} /> Site access</span>}>
               <div className="flex items-center justify-between gap-2 mb-1.5">
@@ -880,7 +984,7 @@ export default function ConsoleUsers() {
               ) : siteOptsError ? (
                 <p className="text-[11px] text-red-400 py-1">Could not load the site list. You can still add sites by name below.</p>
               ) : siteOpts.length === 0 && (editForm.sites?.length ?? 0) === 0 ? (
-                <p className="text-[11px] text-gray-500 py-1">No operational sites found yet. Add a site by name below.</p>
+                <p className="text-[11px] text-gray-400 py-1">No operational sites found yet. Add a site by name below.</p>
               ) : (
                 <div className="max-h-40 overflow-y-auto rounded-lg border border-gray-800 bg-gray-900 divide-y divide-gray-800">
                   {[...new Set([...siteOpts, ...withoutOrgWide(editForm.sites)])].sort((a, b) => a.localeCompare(b)).map(s => {
@@ -902,7 +1006,7 @@ export default function ConsoleUsers() {
                   className={`${INPUT} flex-1`} />
                 <Btn icon={Plus} onClick={addFreeTextSite} disabled={!siteAdd.trim()}>Add</Btn>
               </div>
-              <p className="text-[11px] text-gray-500 mt-1.5">No sites assigned means no site-scoped access. Use All sites for org-wide, or list specific sites. Enforced by the database.</p>
+              <p className="text-[11px] text-gray-400 mt-1.5">No sites assigned means no site-scoped access. Use All sites for org-wide, or list specific sites. Enforced by the database.</p>
             </Field>
           </div>
         )}
@@ -922,7 +1026,7 @@ export default function ConsoleUsers() {
           <Field label="New role">
             <Select value={bulkRole} onChange={setBulkRole} options={roles.map(r => ({ value: r, label: r }))} />
           </Field>
-          <p className="text-[11px] text-gray-500">Super admins are never demoted and the last admin is protected, so the applied count may be lower than selected.</p>
+          <p className="text-[11px] text-gray-400">Super admins are never demoted and the last admin is protected, so the applied count may be lower than selected.</p>
         </div>
       </Modal>
 
@@ -978,7 +1082,7 @@ export default function ConsoleUsers() {
             </p>
             <Note icon={AlertTriangle} tone="warning">{ACCESS_TOKEN_NOTE}</Note>
             <label className="block">
-              <span className="text-[11px] uppercase tracking-wide text-gray-500">Reason (recorded in the audit trail)</span>
+              <span className="text-[11px] uppercase tracking-wide text-gray-400">Reason (recorded in the audit trail)</span>
               <input type="text" value={revokeReason} maxLength={500}
                 onChange={(e) => { setRevokeReason(e.target.value); setRevokeError('') }}
                 placeholder="For example: lost phone" className={`${INPUT} mt-1`} />
@@ -1036,7 +1140,7 @@ export default function ConsoleUsers() {
                   email. A reset link would never arrive, so set the password here instead.
                 </Note>
                 <label className="block">
-                  <span className="text-[11px] uppercase tracking-wide text-gray-500">New password</span>
+                  <span className="text-[11px] uppercase tracking-wide text-gray-400">New password</span>
                   <input
                     type="text"
                     value={newPassword}
@@ -1046,7 +1150,7 @@ export default function ConsoleUsers() {
                     className={`${INPUT} mt-1`}
                   />
                   {/* Shown, not hidden: the admin has to read it out to the person. */}
-                  <span className="mt-1 block text-[11px] text-gray-500">
+                  <span className="mt-1 block text-[11px] text-gray-400">
                     Shown so you can pass it on. Ask them to change it once they are back in.
                   </span>
                 </label>
@@ -1078,6 +1182,27 @@ export default function ConsoleUsers() {
         </div>
       </Modal>
 
+      {/* Lock / revoke-approval confirmation */}
+      <Modal open={!!confirmAction} width="max-w-md"
+        title={confirmAction?.kind === 'lock' ? 'Lock this account?' : 'Revoke approval?'}
+        subtitle={confirmAction ? (confirmAction.user.full_name || confirmAction.user.email || 'This user') : undefined}
+        onClose={() => { if (!confirmBusy) setConfirmAction(null) }}
+        footer={(
+          <>
+            <Btn onClick={() => setConfirmAction(null)} disabled={confirmBusy}>Cancel</Btn>
+            <Btn variant="danger" icon={confirmAction?.kind === 'lock' ? Lock : UserX} busy={confirmBusy} onClick={runConfirmedAction}>
+              {confirmAction?.kind === 'lock' ? 'Lock account' : 'Revoke approval'}
+            </Btn>
+          </>
+        )}>
+        <ErrorState message={confirmError} />
+        <p className="text-xs text-gray-300 leading-relaxed mt-2">
+          {confirmAction?.kind === 'lock'
+            ? 'They cannot use the app until the account is unlocked. The change is recorded in the audit trail.'
+            : 'They lose access to the app until an administrator approves them again. The change is recorded in the audit trail.'}
+        </p>
+      </Modal>
+
       {/* Success toast */}
       {toast && (
         <div role="status" className="fixed bottom-6 right-6 z-[60] shadow-2xl">
@@ -1088,12 +1213,12 @@ export default function ConsoleUsers() {
   )
 }
 
-const INPUT = 'w-full h-9 bg-gray-900 border border-gray-800 rounded-lg px-3 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-gray-700'
+const INPUT = 'w-full h-9 bg-gray-900 border border-gray-800 rounded-lg px-3 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-gray-700 focus-visible:ring-2 focus-visible:ring-orange-500'
 
 function MenuItem({ icon: Icon, label, onClick, danger }) {
   return (
-    <button role="menuitem" onClick={onClick}
-      className={`w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-gray-800 transition-colors ${danger ? 'text-red-400' : 'text-gray-300'}`}>
+    <button type="button" role="menuitem" onClick={onClick}
+      className={`w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-gray-800 transition-colors focus-visible:outline-none focus-visible:bg-gray-800 ${danger ? 'text-red-400' : 'text-gray-300'}`}>
       <Icon size={12} />
       {label}
     </button>
@@ -1104,7 +1229,7 @@ function MenuItem({ icon: Icon, label, onClick, danger }) {
 // field holding several buttons (chips) is a named group instead, since a
 // label around buttons would forward clicks on its text to the first button.
 function Field({ label, children, group = false }) {
-  const head = <span className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">{label}</span>
+  const head = <span className="block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1">{label}</span>
   if (group) return <div role="group">{head}{children}</div>
   return <label className="block">{head}{children}</label>
 }

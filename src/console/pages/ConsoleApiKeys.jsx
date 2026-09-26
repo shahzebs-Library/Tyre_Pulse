@@ -15,7 +15,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  KeyRound, Ban, CalendarClock, RefreshCw, Download, AlertTriangle, Info, Activity, Building2,
+  KeyRound, Ban, CalendarClock, RefreshCw, FileSpreadsheet, FileText, AlertTriangle, Info, Activity, Building2,
 } from 'lucide-react'
 import {
   Panel, PanelHeader, Note, StatTile, Badge, Code, Btn, Segmented, SearchInput, Select, Toolbar,
@@ -28,7 +28,7 @@ import {
   FLAG_META, STATUS_META, ROTATE_AFTER_DAYS, STALE_AFTER_DAYS,
 } from '../../lib/apiKeyLifecycle'
 import { toUserMessage } from '../../lib/safeError'
-import { exportToExcel, reportFileName } from '../../lib/exportUtils'
+import { exportConsoleRows } from '../../lib/consoleTable'
 
 function fmtWhen(v) {
   if (!v) return 'N/A'
@@ -182,22 +182,37 @@ export default function ConsoleApiKeys() {
     return { labels, values }
   }, [data])
 
-  const doExport = () => {
-    exportToExcel(
-      rows.map((k) => ({
-        name: k.name, organisation: k.organisation_name || '', prefix: k.key_prefix,
-        scopes: (k.scopes || []).join(', '), status: STATUS_META[k.status].label,
-        created_by: k.created_by_name || '', created_at: fmtWhen(k.created_at),
-        last_used_at: fmtWhen(k.last_used_at), expires_at: fmtDate(k.expires_at),
-        age_days: k.ageDays ?? 'N/A', requests_last_hour: k.requests_last_hour ?? 0,
-        findings: k.flags.map((f) => FLAG_META[f].label).join('; '),
-        revoked_at: fmtWhen(k.revoked_at), revoke_reason: k.revoke_reason || '',
-      })),
-      ['name', 'organisation', 'prefix', 'scopes', 'status', 'created_by', 'created_at', 'last_used_at', 'expires_at', 'age_days', 'requests_last_hour', 'findings', 'revoked_at', 'revoke_reason'],
-      ['Name', 'Organisation', 'Prefix', 'Scopes', 'Status', 'Created by', 'Created', 'Last used', 'Expires', 'Age (days)', 'Requests (last hour)', 'Findings', 'Revoked', 'Revoke reason'],
-      reportFileName('API Keys', new Date().toISOString().slice(0, 10)),
-      'API Keys',
-    )
+  const [exporting, setExporting] = useState('')
+  const [exportError, setExportError] = useState(null)
+  const doExport = async (format) => {
+    setExporting(format); setExportError(null)
+    try {
+      await exportConsoleRows({
+        rows,
+        title: 'API Keys',
+        format,
+        columns: [
+          { key: 'name', header: 'Name' },
+          { key: 'organisation_name', header: 'Organisation' },
+          { key: 'key_prefix', header: 'Prefix' },
+          { key: 'scopes', header: 'Scopes', value: (k) => (k.scopes || []).join(', ') },
+          { key: 'status', header: 'Status', value: (k) => STATUS_META[k.status].label },
+          { key: 'created_by_name', header: 'Created by' },
+          { key: 'created_at', header: 'Created', value: (k) => fmtWhen(k.created_at) },
+          { key: 'last_used_at', header: 'Last used', value: (k) => fmtWhen(k.last_used_at) },
+          { key: 'expires_at', header: 'Expires', value: (k) => fmtDate(k.expires_at) },
+          { key: 'ageDays', header: 'Age (days)', value: (k) => k.ageDays ?? 'N/A' },
+          { key: 'requests_last_hour', header: 'Requests (last hour)', value: (k) => k.requests_last_hour ?? 0 },
+          { key: 'findings', header: 'Findings', value: (k) => k.flags.map((f) => FLAG_META[f].label).join('; ') },
+          { key: 'revoked_at', header: 'Revoked', value: (k) => (k.revoked_at ? fmtWhen(k.revoked_at) : '') },
+          { key: 'revoke_reason', header: 'Revoke reason' },
+        ],
+      })
+    } catch (e) {
+      setExportError(toUserMessage(e, 'Could not create the export file.'))
+    } finally {
+      setExporting('')
+    }
   }
 
   const done = (msg) => { setRevokeTarget(null); setExpiryTarget(null); setFlash(msg); load() }
@@ -215,17 +230,19 @@ export default function ConsoleApiKeys() {
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1><KeyRound size={18} className="text-orange-400" /> API Keys</h1>
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-gray-400 mt-1">
             Every public API key across all organisations. Only the prefix is shown; the secret is never stored. Last read {fmtWhen(data?.generatedAt)}.
           </p>
         </div>
         <Toolbar>
           <Btn icon={RefreshCw} onClick={load} busy={loading}>Refresh</Btn>
-          <Btn icon={Download} onClick={doExport} disabled={!rows.length}>Export</Btn>
+          <Btn icon={FileSpreadsheet} onClick={() => doExport('excel')} busy={exporting === 'excel'} disabled={!!error || !rows.length}>Excel</Btn>
+          <Btn icon={FileText} onClick={() => doExport('pdf')} busy={exporting === 'pdf'} disabled={!!error || !rows.length}>PDF</Btn>
         </Toolbar>
       </header>
 
       {flash && <Note icon={Info} tone="accent">{flash}</Note>}
+      {exportError && <ErrorState message={exportError} />}
 
       {loading && !data ? <LoadingState label="Loading API keys" /> : error ? <ErrorState message={error} onRetry={load} /> : (
         <>
@@ -263,7 +280,7 @@ export default function ConsoleApiKeys() {
             <TrendChart labels={usageSeries.labels} series={[{ label: 'Requests', values: usageSeries.values }]} height={160}
               summary={`${summary.requestsLastHour} requests in the last 60 minutes`}
               emptyText="No API calls in the last hour." />
-            <p className="text-[11px] text-gray-500 mt-2">
+            <p className="text-[11px] text-gray-400 mt-2">
               Only the last 60 minutes exist: the per-minute counter behind rate limiting is pruned to one hour on every call, and there is no per-request log. Older activity is known only through each key&apos;s last used time.
             </p>
           </Panel>
@@ -274,7 +291,7 @@ export default function ConsoleApiKeys() {
               <Toolbar>
                 <Segmented options={tabs} value={Object.keys(FLAG_META).includes(status) ? '' : status} onChange={setStatus} ariaLabel="Filter by status" />
                 <SearchInput value={search} onChange={setSearch} placeholder="Search name, prefix, organisation, creator" className="w-72" />
-                <Select value={org} onChange={setOrg} options={orgOptions} placeholder="All organisations" className="w-52" />
+                <Select value={org} onChange={setOrg} options={orgOptions} placeholder="All organisations" ariaLabel="Filter by organisation" className="w-52" />
                 {FLAG_META[status] && <Badge tone={FLAG_META[status].tone}>Finding: {FLAG_META[status].label}</Badge>}
               </Toolbar>
             </div>
@@ -296,7 +313,7 @@ export default function ConsoleApiKeys() {
                   <Th sortKey="created_at" sort={sort} onSort={onSort}>Created</Th>
                   <Th sortKey="last_used_at" sort={sort} onSort={onSort}>Last used</Th>
                   <Th sortKey="expires_at" sort={sort} onSort={onSort}>Expires</Th>
-                  <Th>Status</Th>
+                  <Th sortKey="status" sort={sort} onSort={onSort}>Status</Th>
                   <Th>Findings</Th>
                   <Th align="right">Actions</Th>
                 </THead>

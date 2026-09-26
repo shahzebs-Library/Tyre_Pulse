@@ -10,7 +10,7 @@
  *
  * No logic is re-implemented here; each tab renders the canonical page verbatim.
  */
-import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { ShieldAlert } from 'lucide-react'
 import SecurityCenter from '../../pages/SecurityCenter'
 import SsoConfiguration from '../../pages/SsoConfiguration'
@@ -22,8 +22,16 @@ const TABS = [
 ]
 
 export default function ConsoleSecurity() {
-  const [active, setActive] = useState('security')
-  const tab = TABS.find(t => t.key === active) ?? TABS[0]
+  // The active tab lives in ?tab= so a link can open SSO directly and the
+  // browser back button returns to the previous tab.
+  const [params, setParams] = useSearchParams()
+  const tab = TABS.find(t => t.key === params.get('tab')) ?? TABS[0]
+  const active = tab.key
+  const setActive = (key) => {
+    const next = new URLSearchParams(params)
+    next.set('tab', key)
+    setParams(next, { replace: true })
+  }
   const Active = tab.Component
 
   return (
@@ -33,18 +41,19 @@ export default function ConsoleSecurity() {
           <h1>
             <ShieldAlert size={18} className="text-orange-400" /> Security
           </h1>
-          <p className="text-xs text-gray-500 mt-1">Account security, session control and single sign-on.</p>
+          <p className="text-xs text-gray-400 mt-1">Account security, session control and single sign-on.</p>
         </div>
       </header>
 
       <div className="space-y-2">
         <Segmented
           size="md"
+          ariaLabel="Security sections"
           value={active}
           onChange={setActive}
           options={TABS.map((t) => ({ key: t.key, label: t.label, hint: t.desc }))}
         />
-        <p className="text-xs text-gray-500">{tab.desc}</p>
+        <p className="text-xs text-gray-400">{tab.desc}</p>
       </div>
 
       {/* The hosted pages render on the console surface, as they do under Access

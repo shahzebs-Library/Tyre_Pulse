@@ -1,12 +1,17 @@
-import { Fragment, useEffect, useState, useCallback } from 'react'
+import { Fragment, useEffect, useMemo, useState, useCallback } from 'react'
 import {
   Building2, Plus, Edit2, Lock, Unlock, Trash2, Globe,
   CheckCircle, XCircle, ChevronDown, ChevronUp, Save, RefreshCw,
-  Users, Database, AlertTriangle, Eye,
+  Users, Database, Eye, FileSpreadsheet, FileText,
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { toUserMessage } from '../../lib/safeError'
-import { Btn, ErrorState, LoadingState, EmptyState, Modal, SearchInput, Select, Toolbar } from '../components/ui'
+import {
+  Badge, Btn, ErrorState, LoadingState, EmptyState, Modal, SearchInput, Select, Toolbar,
+  StatTile, Table, THead, Th, Tr, Td,
+} from '../components/ui'
+import { exportConsoleRows, sortRows, useTableSort } from '../../lib/consoleTable'
+import { orgStatus, summarizeOrgs } from '../../lib/consoleOrganisations'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 
 const PLANS = ['trial', 'starter', 'professional', 'enterprise']
@@ -42,6 +47,11 @@ export default function ConsoleOrganisations() {
   const [busyId, setBusyId] = useState(null)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState(null)
+  const [confirmLock, setConfirmLock] = useState(null)
+  const [lockError, setLockError] = useState(null)
+  const [exporting, setExporting] = useState('')
+  const [exportError, setExportError] = useState('')
+  const { sort, onSort } = useTableSort({ key: 'name', dir: 'asc' })
 
   const load = useCallback(async () => {
     setLoading(true); setLoadError('')
@@ -64,12 +74,12 @@ export default function ConsoleOrganisations() {
 
   async function loadOrgStats(orgId) {
     if (orgStats[orgId]) return
-    // tyre_records is country-scoped, not organisation-scoped, so a per-org tyre
-    // count isn't available from the data model - report the platform total.
+    // Both counts are scoped to this organisation (tyre_records carries
+    // organisation_id since V290). A failed count reads N/A, never 0.
     try {
       const [{ count: users, error: uErr }, { count: tyres, error: tErr }] = await Promise.all([
         supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('organisation_id', orgId),
-        supabase.from('tyre_records').select('id', { count: 'exact', head: true }),
+        supabase.from('tyre_records').select('id', { count: 'exact', head: true }).eq('organisation_id', orgId),
       ])
       setOrgStats(prev => ({ ...prev, [orgId]: { users: uErr ? 'N/A' : (users ?? 0), tyres: tErr ? 'N/A' : (tyres ?? 0) } }))
     } catch {
@@ -121,16 +131,42 @@ export default function ConsoleOrganisations() {
 
   async function toggleLock(org) {
     const locked = !org.locked
-    setBusyId(org.id); setLoadError('')
+    setBusyId(org.id); setLockError(null)
     try {
       const { error: err } = await supabase.from('organisations').update({ locked }).eq('id', org.id)
       if (err) throw err
       await logAction(locked ? 'lock_org' : 'unlock_org', org.id, 'organisation', { name: org.name })
+      setConfirmLock(null)
       await load()
     } catch (e) {
-      setLoadError(toUserMessage(e, 'Could not change the organisation lock.'))
+      setLockError(toUserMessage(e, 'Could not change the organisation lock.'))
     } finally {
       setBusyId(null)
+    }
+  }
+
+  async function runExport(format) {
+    setExporting(format); setExportError('')
+    try {
+      await exportConsoleRows({
+        rows: sorted,
+        title: 'Organisations',
+        format,
+        columns: [
+          { key: 'name', header: 'Organisation' },
+          { key: 'slug', header: 'Slug' },
+          { key: 'plan', header: 'Plan' },
+          { key: 'status', header: 'Status', value: r => orgStatus(r) },
+          { key: 'country', header: 'Primary country' },
+          { key: 'countries', header: 'Countries', value: r => (r.countries ?? []).join(', ') },
+          { key: 'contact_email', header: 'Contact email' },
+          { key: 'created_at', header: 'Created', value: r => fmtDate(r.created_at) },
+        ],
+      })
+    } catch (e) {
+      setExportError(toUserMessage(e, 'Could not create the export file.'))
+    } finally {
+      setExporting('')
     }
   }
 
@@ -153,17 +189,19 @@ export default function ConsoleOrganisations() {
     loadOrgStats(org.id)
   }
 
-  const filtered = orgs.filter(o => {
-    const matchSearch = !search || o.name.toLowerCase().includes(search.toLowerCase()) ||
-      (o.slug ?? '').toLowerCase().includes(search.toLowerCase()) ||
-      (o.contact_email ?? '').toLowerCase().includes(search.toLowerCase())
-    const matchPlan   = !filterPlan   || o.plan === filterPlan
-    const matchStatus = !filterStatus ||
-      (filterStatus === 'active' && o.active && !o.locked) ||
-      (filterStatus === 'locked' && o.locked) ||
-      (filterStatus === 'inactive' && !o.active)
-    return matchSearch && matchPlan && matchStatus
-  })
+  const summary = useMemo(() => summarizeOrgs(orgs), [orgs])
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return orgs.filter(o => {
+      const matchSearch = !q || [o.name, o.slug, o.contact_email, o.country, ...(o.countries ?? [])]
+        .some(v => String(v ?? '').toLowerCase().includes(q))
+      const matchPlan   = !filterPlan   || o.plan === filterPlan
+      const matchStatus = !filterStatus || orgStatus(o).toLowerCase() === filterStatus
+      return matchSearch && matchPlan && matchStatus
+    })
+  }, [orgs, search, filterPlan, filterStatus])
+  const sorted = useMemo(() => sortRows(filtered, sort, { status: orgStatus }), [filtered, sort])
+  const statusTile = (key) => setFilterStatus(s => (s === key ? '' : key))
 
   const toggleCountry = (c) =>
     setForm(f => ({
@@ -180,13 +218,33 @@ export default function ConsoleOrganisations() {
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-white">Organisations</h1>
-          <p className="text-sm text-gray-400 mt-0.5">{loading || loadError ? 'N/A' : `${orgs.length} total organisations`}</p>
+          <h1 className="text-xl font-bold text-gray-100">Organisations</h1>
+          <p className="text-sm text-gray-400 mt-0.5">
+            Companies on the platform, their plan, countries and access state.
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Btn icon={FileSpreadsheet} onClick={() => runExport('excel')} busy={exporting === 'excel'} disabled={loading || !!loadError || sorted.length === 0}>Excel</Btn>
+          <Btn icon={FileText} onClick={() => runExport('pdf')} busy={exporting === 'pdf'} disabled={loading || !!loadError || sorted.length === 0}>PDF</Btn>
           <Btn icon={RefreshCw} onClick={load} busy={loading}>Refresh</Btn>
           <Btn variant="primary" icon={Plus} onClick={openCreate}>New Organisation</Btn>
         </div>
+      </div>
+
+      {exportError && <ErrorState message={exportError} />}
+
+      {/* Summary */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <StatTile label="Organisations" icon={Building2} value={loading || loadError ? 'N/A' : summary.total}
+          sub={loading ? 'Loading' : loadError ? 'Could not load' : 'All plans'} onClick={() => setFilterStatus('')} active={!filterStatus} />
+        <StatTile label="Active" tone="good" value={loading || loadError ? 'N/A' : summary.active}
+          sub="Open for sign-in" onClick={() => statusTile('active')} active={filterStatus === 'active'} />
+        <StatTile label="Locked" tone={summary.locked ? 'danger' : 'default'} value={loading || loadError ? 'N/A' : summary.locked}
+          sub="Access blocked" onClick={() => statusTile('locked')} active={filterStatus === 'locked'} />
+        <StatTile label="Inactive" tone="muted" value={loading || loadError ? 'N/A' : summary.inactive}
+          sub="Switched off" onClick={() => statusTile('inactive')} active={filterStatus === 'inactive'} />
+        <StatTile label="Enterprise plan" tone="accent" value={loading || loadError ? 'N/A' : (summary.byPlan.enterprise ?? 0)}
+          sub={loading || loadError ? '' : `${summary.countries} countries covered`} />
       </div>
 
       {/* Filters */}
@@ -209,107 +267,76 @@ export default function ConsoleOrganisations() {
       ) : filtered.length === 0 ? (
         <EmptyState icon={Building2} title="No organisations match" reason="Nothing matches this search, plan and status. Clear the filters to see every organisation." />
       ) : (
-        <div className="rounded-xl border border-gray-800 overflow-x-auto">
-          <table className="w-full text-xs min-w-[720px]">
-            <thead>
-              <tr className="border-b border-gray-800 bg-gray-900/60">
-                <th scope="col" className="text-left px-4 py-3 text-gray-400 font-semibold uppercase tracking-wider">Organisation</th>
-                <th scope="col" className="text-left px-4 py-3 text-gray-400 font-semibold uppercase tracking-wider">Plan</th>
-                <th scope="col" className="text-left px-4 py-3 text-gray-400 font-semibold uppercase tracking-wider">Countries</th>
-                <th scope="col" className="text-left px-4 py-3 text-gray-400 font-semibold uppercase tracking-wider">Status</th>
-                <th scope="col" className="text-left px-4 py-3 text-gray-400 font-semibold uppercase tracking-wider">Created</th>
-                <th scope="col" className="px-4 py-3"><span className="sr-only">Actions</span></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(org => {
-                const open = expanded === org.id
-                return (
+        <Table className="min-w-0">
+          <THead>
+            <Th sortKey="name" sort={sort} onSort={onSort}>Organisation</Th>
+            <Th sortKey="plan" sort={sort} onSort={onSort}>Plan</Th>
+            <Th>Countries</Th>
+            <Th sortKey="status" sort={sort} onSort={onSort}>Status</Th>
+            <Th sortKey="created_at" sort={sort} onSort={onSort}>Created</Th>
+            <Th align="right"><span className="sr-only">Actions</span></Th>
+          </THead>
+          <tbody>
+            {sorted.map(org => {
+              const open = expanded === org.id
+              const countries = org.countries ?? []
+              return (
                 <Fragment key={org.id}>
-                  <tr
-                    className="border-b border-gray-800/60 hover:bg-gray-800/30 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-orange-500"
-                    tabIndex={0}
-                    aria-expanded={open}
-                    onClick={() => toggleExpand(org)}
-                    onKeyDown={e => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); toggleExpand(org) } }}>
-                    <td className="px-4 py-3">
+                  <Tr onClick={() => toggleExpand(org)}>
+                    <Td>
                       <div className="flex items-center gap-2.5 min-w-0">
                         <div className="w-8 h-8 rounded-lg bg-orange-900/30 border border-orange-800/40 flex items-center justify-center flex-shrink-0">
-                          <Building2 size={14} className="text-orange-400" />
+                          <Building2 size={14} className="text-orange-400" aria-hidden="true" />
                         </div>
                         <div className="min-w-0">
-                          <p className="font-semibold text-white truncate max-w-[220px]" title={org.name}>{org.name}</p>
-                          <p className="text-gray-400 truncate max-w-[220px]" title={org.slug || ''}>{org.slug}</p>
+                          <p className="font-semibold text-gray-100 truncate max-w-[220px]" title={org.name}>{org.name}</p>
+                          <p className="text-gray-400 truncate max-w-[220px]" title={org.slug || ''}>{org.slug || 'No slug'}</p>
                         </div>
                       </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <PlanBadge plan={org.plan} />
-                    </td>
-                    <td className="px-4 py-3">
+                    </Td>
+                    <Td><PlanBadge plan={org.plan} /></Td>
+                    <Td>
                       <div className="flex flex-wrap gap-1">
-                        {(org.countries ?? []).slice(0, 3).map(c => (
-                          <span key={c} className="text-[10px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 border border-gray-700">{c}</span>
-                        ))}
-                        {(org.countries ?? []).length > 3 && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-400">+{org.countries.length - 3}</span>
-                        )}
-                        {(!org.countries || org.countries.length === 0) && org.country && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 border border-gray-700">{org.country}</span>
-                        )}
+                        {countries.slice(0, 3).map(c => <Badge key={c}>{c}</Badge>)}
+                        {countries.length > 3 && <Badge title={countries.slice(3).join(', ')}>+{countries.length - 3}</Badge>}
+                        {countries.length === 0 && (org.country ? <Badge>{org.country}</Badge> : <span className="text-gray-400">None set</span>)}
                       </div>
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
+                    </Td>
+                    <Td nowrap>
                       {org.locked
-                        ? <span className="flex items-center gap-1 text-red-400"><Lock size={11} /> Locked</span>
+                        ? <Badge tone="danger" icon={Lock}>Locked</Badge>
                         : org.active
-                          ? <span className="flex items-center gap-1 text-green-400"><CheckCircle size={11} /> Active</span>
-                          : <span className="flex items-center gap-1 text-gray-400"><XCircle size={11} /> Inactive</span>
-                      }
-                    </td>
-                    <td className="px-4 py-3 text-gray-400 whitespace-nowrap">
-                      {org.created_at ? new Date(org.created_at).toLocaleDateString() : 'N/A'}
-                    </td>
-                    <td className="px-4 py-3">
+                          ? <Badge tone="good" icon={CheckCircle}>Active</Badge>
+                          : <Badge icon={XCircle}>Inactive</Badge>}
+                    </Td>
+                    <Td nowrap className="text-gray-400">{fmtDate(org.created_at)}</Td>
+                    <Td align="right">
                       <div className="flex items-center gap-1 justify-end" onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
-                        <button type="button" onClick={() => openEdit(org)} aria-label={`Edit ${org.name}`}
-                          className="p-1.5 rounded hover:bg-gray-700 text-gray-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 disabled:opacity-50 hover:text-blue-400" title="Edit">
-                          <Edit2 size={13} />
-                        </button>
-                        <button type="button" onClick={() => toggleLock(org)} disabled={busyId === org.id}
-                          aria-label={`${org.locked ? 'Unlock' : 'Lock'} ${org.name}`}
-                          className="p-1.5 rounded hover:bg-gray-700 text-gray-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 disabled:opacity-50 hover:text-amber-400" title={org.locked ? 'Unlock' : 'Lock'}>
-                          {org.locked ? <Unlock size={13} /> : <Lock size={13} />}
-                        </button>
-                        <button type="button" onClick={() => { setDeleteError(null); setConfirmDelete(org) }} disabled={busyId === org.id}
-                          aria-label={`Delete ${org.name}`}
-                          className="p-1.5 rounded hover:bg-gray-700 text-gray-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 disabled:opacity-50 hover:text-red-400" title="Delete">
-                          <Trash2 size={13} />
-                        </button>
-                        <button type="button" onClick={() => toggleExpand(org)} aria-expanded={open}
-                          aria-label={`${open ? 'Hide' : 'Show'} details for ${org.name}`}
-                          className="p-1.5 rounded hover:bg-gray-700 text-gray-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 disabled:opacity-50 hover:text-gray-200" title={open ? 'Hide details' : 'Show details'}>
-                          {open ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                        </button>
+                        <Btn size="xs" variant="quiet" icon={Edit2} title="Edit" ariaLabel={`Edit ${org.name}`} onClick={() => openEdit(org)} />
+                        <Btn size="xs" variant="quiet" icon={org.locked ? Unlock : Lock} title={org.locked ? 'Unlock' : 'Lock'}
+                          ariaLabel={`${org.locked ? 'Unlock' : 'Lock'} ${org.name}`} busy={busyId === org.id}
+                          onClick={() => { setLockError(null); setConfirmLock(org) }} />
+                        <Btn size="xs" variant="quiet" icon={Trash2} title="Delete" ariaLabel={`Delete ${org.name}`} disabled={busyId === org.id}
+                          onClick={() => { setDeleteError(null); setConfirmDelete(org) }} />
+                        <Btn size="xs" variant="quiet" icon={open ? ChevronUp : ChevronDown} title={open ? 'Hide details' : 'Show details'}
+                          ariaLabel={`${open ? 'Hide' : 'Show'} details for ${org.name}`} aria-expanded={open} onClick={() => toggleExpand(org)} />
                       </div>
-                    </td>
-                  </tr>
+                    </Td>
+                  </Tr>
                   {open && (
-                    <tr className="border-b border-gray-800/40 bg-gray-900/30">
+                    <tr className="border-t border-gray-800/40 bg-gray-900/30">
                       <td colSpan={6} className="px-6 py-4">
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                          <Stat label="Users" value={orgStats[org.id]?.users ?? '...'} icon={Users} color="blue" />
-                          <Stat label="Tyre Records (platform total)" value={orgStats[org.id]?.tyres ?? '...'} icon={Database} color="orange" />
-                          <Stat label="Contact" value={org.contact_email ?? 'N/A'} icon={Globe} color="purple" />
-                          <Stat label="Plan" value={org.plan ?? 'N/A'} icon={Eye} color="green" />
+                          <Stat label="Users" value={orgStats[org.id]?.users ?? 'Loading...'} icon={Users} />
+                          <Stat label="Tyre records" value={orgStats[org.id]?.tyres ?? 'Loading...'} icon={Database} />
+                          <Stat label="Contact" value={org.contact_email ?? 'N/A'} icon={Globe} />
+                          <Stat label="Plan" value={org.plan ?? 'N/A'} icon={Eye} />
                         </div>
-                        {org.countries && org.countries.length > 0 && (
+                        {countries.length > 0 && (
                           <div className="mt-3">
-                            <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1.5">All Countries</p>
+                            <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1.5">All countries</p>
                             <div className="flex flex-wrap gap-1.5">
-                              {org.countries.map(c => (
-                                <span key={c} className="text-xs px-2 py-0.5 rounded bg-gray-800 text-gray-300 border border-gray-700">{c}</span>
-                              ))}
+                              {countries.map(c => <Badge key={c}>{c}</Badge>)}
                             </div>
                           </div>
                         )}
@@ -317,11 +344,10 @@ export default function ConsoleOrganisations() {
                     </tr>
                   )}
                 </Fragment>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+              )
+            })}
+          </tbody>
+        </Table>
       )}
 
       {/* Create / Edit Modal */}
@@ -337,12 +363,7 @@ export default function ConsoleOrganisations() {
         )}
       >
         <div className="space-y-4">
-          {error && (
-            <div role="alert" className="flex items-center gap-2 p-3 rounded-lg bg-red-950/50 border border-red-800/50">
-              <AlertTriangle size={13} className="text-red-400 flex-shrink-0" />
-              <p className="text-xs text-red-300 break-words">{error}</p>
-            </div>
-          )}
+          {error && <ErrorState message={error} />}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field label="Organisation Name *" htmlFor="org-name">
               <input id="org-name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
@@ -428,29 +449,52 @@ export default function ConsoleOrganisations() {
           All associated data may be affected.
         </p>
       </Modal>
+
+      {/* Lock / unlock confirm */}
+      <Modal
+        open={!!confirmLock}
+        title={confirmLock?.locked ? 'Unlock organisation?' : 'Lock organisation?'}
+        subtitle={confirmLock?.name}
+        onClose={() => { if (!busyId) setConfirmLock(null) }}
+        width="max-w-md"
+        footer={(
+          <>
+            <Btn onClick={() => setConfirmLock(null)} disabled={!!busyId}>Cancel</Btn>
+            <Btn variant={confirmLock?.locked ? 'primary' : 'danger'} icon={confirmLock?.locked ? Unlock : Lock}
+              onClick={() => toggleLock(confirmLock)} busy={!!busyId}>
+              {confirmLock?.locked ? 'Unlock' : 'Lock'}
+            </Btn>
+          </>
+        )}
+      >
+        {lockError && <div className="mb-3"><ErrorState message={lockError} /></div>}
+        <p className="text-sm text-gray-300 break-words">
+          {confirmLock?.locked
+            ? 'Members of this organisation will be able to sign in and use the app again.'
+            : 'Every member of this organisation will be blocked from the app until it is unlocked. The action is recorded in the audit trail.'}
+        </p>
+      </Modal>
     </div>
   )
 }
 
-function PlanBadge({ plan }) {
-  const c = {
-    trial: 'text-gray-400 bg-gray-800 border-gray-700',
-    starter: 'text-blue-400 bg-blue-900/20 border-blue-800/40',
-    professional: 'text-purple-400 bg-purple-900/20 border-purple-800/40',
-    enterprise: 'text-orange-400 bg-orange-900/20 border-orange-800/40',
-  }
-  return (
-    <span className={`text-[10px] px-1.5 py-0.5 rounded border font-semibold capitalize ${c[plan] ?? c.trial}`}>{plan ?? 'N/A'}</span>
-  )
+function fmtDate(v) {
+  if (!v) return 'N/A'
+  const d = new Date(v)
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString()
 }
 
-function Stat({ label, value, icon: Icon, color }) {
-  const c = { blue: 'text-blue-400', orange: 'text-orange-400', purple: 'text-purple-400', green: 'text-green-400' }
+function PlanBadge({ plan }) {
+  const tone = { trial: 'default', starter: 'info', professional: 'good', enterprise: 'accent' }
+  return <Badge tone={tone[plan] || 'default'}>{plan ? plan.charAt(0).toUpperCase() + plan.slice(1) : 'N/A'}</Badge>
+}
+
+function Stat({ label, value, icon: Icon }) {
   return (
     <div className="flex items-center gap-2 min-w-0">
-      <Icon size={14} className={`shrink-0 ${c[color]}`} />
+      <Icon size={14} className="shrink-0 text-orange-400" aria-hidden="true" />
       <div className="min-w-0">
-        <p className="text-xs font-semibold text-white break-all">{value}</p>
+        <p className="text-xs font-semibold text-gray-100 break-all">{value}</p>
         <p className="text-[10px] text-gray-400">{label}</p>
       </div>
     </div>

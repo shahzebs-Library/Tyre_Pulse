@@ -12,7 +12,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  Timer, ShieldCheck, ShieldOff, Clock, RefreshCw, Download, Plus, Ban, Info, History, Hourglass, BarChart3,
+  Timer, ShieldCheck, ShieldOff, Clock, RefreshCw, FileSpreadsheet, FileText, Plus, Ban, Info, History, Hourglass, BarChart3,
 } from 'lucide-react'
 import {
   Panel, PanelHeader, Note, StatTile, Badge, Code, Btn, Segmented, SearchInput, Select, Toolbar,
@@ -30,7 +30,7 @@ import {
 } from '../../lib/jitElevation'
 import { ALL_MODULES, MODULE_LABEL } from '../../lib/moduleCatalog'
 import { toUserMessage } from '../../lib/safeError'
-import { exportToExcel, reportFileName } from '../../lib/exportUtils'
+import { exportConsoleRows, sortRows, useTableSort } from '../../lib/consoleTable'
 
 function fmtWhen(v) {
   if (!v) return 'N/A'
@@ -51,7 +51,7 @@ function Who({ row }) {
   return (
     <div>
       <div className="text-gray-200">{row.target_name || 'Unknown user'}</div>
-      <div className="text-[11px] text-gray-500">{row.target_role || 'N/A'}{row.organisation_name ? `, ${row.organisation_name}` : ''}</div>
+      <div className="text-[11px] text-gray-400">{row.target_role || 'N/A'}{row.organisation_name ? `, ${row.organisation_name}` : ''}</div>
     </div>
   )
 }
@@ -204,7 +204,7 @@ function GrantModal({ open, onClose, onDone }) {
             User
             <Select value={form.userId} onChange={set('userId')} options={userOptions}
               placeholder={users ? 'Choose a user' : 'Loading users'} className="mt-1 w-full" />
-            <span className="text-[11px] text-gray-500">Admins and super admins are not listed: they already hold every capability.</span>
+            <span className="text-[11px] text-gray-400">Admins and super admins are not listed: they already hold every capability.</span>
           </label>
         )}
         <label className="block text-xs text-gray-400">
@@ -215,7 +215,7 @@ function GrantModal({ open, onClose, onDone }) {
           <p className="text-xs text-gray-400 mb-1">Capability</p>
           <Segmented role="group" ariaLabel="Capability" value={form.capability} onChange={set('capability')}
             options={JIT_CAPABILITIES.map((c) => ({ key: c.key, label: c.label }))} />
-          <p className="text-[11px] text-gray-500 mt-1">Delete is not offered: the server refuses delete to every non-admin, so a grant would change nothing.</p>
+          <p className="text-[11px] text-gray-400 mt-1">Delete is not offered: the server refuses delete to every non-admin, so a grant would change nothing.</p>
         </div>
         <div>
           <p className="text-xs text-gray-400 mb-1">Duration</p>
@@ -263,29 +263,51 @@ export default function ConsoleJitElevation() {
   const minuteNow = Math.floor(now / 60000) * 60000
   const summary = useMemo(() => summarize(rows, minuteNow), [rows, minuteNow])
   const parts = useMemo(() => partition(rows, minuteNow), [rows, minuteNow])
-  const history = useMemo(() => filterRows(parts.history, { search, status: histStatus }, minuteNow), [parts, search, histStatus, minuteNow])
+  const { sort, onSort } = useTableSort({ key: 'created_at', dir: 'desc' })
+  const history = useMemo(() => sortRows(
+    filterRows(parts.history, { search, status: histStatus }, minuteNow),
+    sort,
+    { access: (r) => moduleName(r.module_key), outcome: (r) => effectiveStatus(r, minuteNow) },
+  ), [parts, search, histStatus, minuteNow, sort])
   const trend = useMemo(() => dailySeries(rows, (r) => r.created_at, 14), [rows])
   const topModules = useMemo(() => topShare(rows, (r) => moduleName(r.module_key), 6), [rows])
 
   const done = (msg) => { setDecide(null); setRevokeTarget(null); setGranting(false); setFlash(msg); load() }
 
-  const doExport = () => {
-    exportToExcel(
-      rows.map((r) => ({
-        user: r.target_name || '', role: r.target_role || '', organisation: r.organisation_name || '',
-        module: moduleName(r.module_key), module_key: r.module_key, capability: capName(r.capability),
-        status: STATUS_META[effectiveStatus(r, Date.now())]?.label || r.status,
-        requested_by: r.requested_by_name || '', requested_minutes: r.requested_minutes,
-        granted_minutes: r.granted_minutes ?? 'N/A', reason: r.reason || '',
-        requested_at: fmtWhen(r.created_at), decided_by: r.decided_by_name || '', decided_at: fmtWhen(r.decided_at),
-        decision_note: r.decision_note || '', expires_at: fmtWhen(r.expires_at),
-        revoked_by: r.revoked_by_name || '', revoked_at: fmtWhen(r.revoked_at), revoke_reason: r.revoke_reason || '',
-      })),
-      ['user', 'role', 'organisation', 'module', 'module_key', 'capability', 'status', 'requested_by', 'requested_minutes', 'granted_minutes', 'reason', 'requested_at', 'decided_by', 'decided_at', 'decision_note', 'expires_at', 'revoked_by', 'revoked_at', 'revoke_reason'],
-      ['User', 'Role', 'Organisation', 'Module', 'Module key', 'Capability', 'Status', 'Requested by', 'Requested (min)', 'Granted (min)', 'Reason', 'Requested at', 'Decided by', 'Decided at', 'Decision note', 'Expires', 'Revoked by', 'Revoked at', 'Revoke reason'],
-      reportFileName('JIT Elevation', new Date().toISOString().slice(0, 10)),
-      'Elevations',
-    )
+  const [exporting, setExporting] = useState('')
+  const [exportError, setExportError] = useState(null)
+  const doExport = async (format) => {
+    setExporting(format); setExportError(null)
+    try {
+      await exportConsoleRows({
+        rows,
+        title: 'JIT Elevation',
+        format,
+        columns: [
+          { key: 'target_name', header: 'User' },
+          { key: 'target_role', header: 'Role' },
+          { key: 'organisation_name', header: 'Organisation' },
+          { key: 'module', header: 'Module', value: (r) => moduleName(r.module_key) },
+          { key: 'capability', header: 'Capability', value: (r) => capName(r.capability) },
+          { key: 'status', header: 'Status', value: (r) => STATUS_META[effectiveStatus(r, Date.now())]?.label || r.status },
+          { key: 'requested_by_name', header: 'Requested by' },
+          { key: 'requested_minutes', header: 'Requested (min)' },
+          { key: 'granted_minutes', header: 'Granted (min)', value: (r) => r.granted_minutes ?? 'N/A' },
+          { key: 'reason', header: 'Reason' },
+          { key: 'created_at', header: 'Requested at', value: (r) => fmtWhen(r.created_at) },
+          { key: 'decided_by_name', header: 'Decided by' },
+          { key: 'decided_at', header: 'Decided at', value: (r) => (r.decided_at ? fmtWhen(r.decided_at) : '') },
+          { key: 'decision_note', header: 'Decision note' },
+          { key: 'expires_at', header: 'Expires', value: (r) => (r.expires_at ? fmtWhen(r.expires_at) : '') },
+          { key: 'revoked_by_name', header: 'Revoked by' },
+          { key: 'revoke_reason', header: 'Revoke reason' },
+        ],
+      })
+    } catch (e) {
+      setExportError(toUserMessage(e, 'Could not create the export file.'))
+    } finally {
+      setExporting('')
+    }
   }
 
   const histTabs = [
@@ -300,18 +322,20 @@ export default function ConsoleJitElevation() {
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1><Timer size={18} className="text-orange-400" /> Just-in-time Elevation</h1>
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-gray-400 mt-1">
             Time-limited access to one module capability, with a reason, a decision and an automatic end. Last read {fmtWhen(data?.generatedAt)}.
           </p>
         </div>
         <Toolbar>
           <Btn icon={Plus} variant="primary" onClick={() => setGranting(true)}>Grant temporary access</Btn>
           <Btn icon={RefreshCw} onClick={load} busy={loading}>Refresh</Btn>
-          <Btn icon={Download} onClick={doExport} disabled={!rows.length}>Export</Btn>
+          <Btn icon={FileSpreadsheet} onClick={() => doExport('excel')} busy={exporting === 'excel'} disabled={!!error || !rows.length}>Excel</Btn>
+          <Btn icon={FileText} onClick={() => doExport('pdf')} busy={exporting === 'pdf'} disabled={!!error || !rows.length}>PDF</Btn>
         </Toolbar>
       </header>
 
       {flash && <Note icon={Info} tone="accent">{flash}</Note>}
+      {exportError && <ErrorState message={exportError} />}
 
       {loading && !data ? <LoadingState label="Loading elevation requests" /> : error ? <ErrorState message={error} onRetry={load} /> : (
         <>
@@ -377,7 +401,7 @@ export default function ConsoleJitElevation() {
                         <Td><What row={r} /></Td>
                         <Td nowrap>
                           <div className="text-gray-300">{r.decided_by_name || 'Unknown'}</div>
-                          {r.requested_by === r.decided_by && <div className="text-[11px] text-gray-500">Granted directly</div>}
+                          {r.requested_by === r.decided_by && <div className="text-[11px] text-gray-400">Granted directly</div>}
                         </Td>
                         <Td nowrap>
                           <div className="text-gray-100 tabular-nums">{formatRemaining(left)}</div>
@@ -424,7 +448,14 @@ export default function ConsoleJitElevation() {
               <div className="p-4 pt-0"><EmptyState title="Nothing matches" reason="No past request matches the current filters." /></div>
             ) : (
               <Table className="rounded-none border-x-0 border-b-0">
-                <THead><Th>User</Th><Th>Access</Th><Th>Outcome</Th><Th>Requested</Th><Th>Decided</Th><Th>Detail</Th></THead>
+                <THead>
+                  <Th sortKey="target_name" sort={sort} onSort={onSort}>User</Th>
+                  <Th sortKey="access" sort={sort} onSort={onSort}>Access</Th>
+                  <Th sortKey="outcome" sort={sort} onSort={onSort}>Outcome</Th>
+                  <Th sortKey="created_at" sort={sort} onSort={onSort}>Requested</Th>
+                  <Th sortKey="decided_at" sort={sort} onSort={onSort}>Decided</Th>
+                  <Th>Detail</Th>
+                </THead>
                 <tbody>
                   {history.map((r) => {
                     const s = effectiveStatus(r, minuteNow)
@@ -439,11 +470,11 @@ export default function ConsoleJitElevation() {
                         <Td><Badge tone={meta.tone}>{meta.label}</Badge></Td>
                         <Td nowrap>
                           <div className="text-gray-300">{fmtWhen(r.created_at)}</div>
-                          <div className="text-[11px] text-gray-500">{r.requested_by_name || 'Unknown'}, {formatMinutes(r.requested_minutes)}</div>
+                          <div className="text-[11px] text-gray-400">{r.requested_by_name || 'Unknown'}, {formatMinutes(r.requested_minutes)}</div>
                         </Td>
                         <Td nowrap>
                           <div className="text-gray-300">{fmtWhen(r.decided_at)}</div>
-                          {r.decided_by_name && <div className="text-[11px] text-gray-500">{r.decided_by_name}</div>}
+                          {r.decided_by_name && <div className="text-[11px] text-gray-400">{r.decided_by_name}</div>}
                         </Td>
                         <Td><span className="text-gray-400 block max-w-[18rem]" title={detail}>{detail || 'N/A'}</span></Td>
                       </Tr>

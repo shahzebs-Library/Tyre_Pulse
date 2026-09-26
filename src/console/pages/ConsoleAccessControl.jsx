@@ -94,7 +94,7 @@ export default function ConsoleAccessControl() {
           <h1>
             <ShieldCheck size={18} className="text-orange-400" /> Access Control
           </h1>
-          <p className="text-xs text-gray-500 mt-1 max-w-3xl">
+          <p className="text-xs text-gray-400 mt-1 max-w-3xl">
             One home for role permissions, custom roles, per-user grants, effective access, country scope, bulk
             changes, the access audit trail and account security. Super Admin controls apply platform wide.
           </p>
@@ -102,8 +102,8 @@ export default function ConsoleAccessControl() {
       </header>
 
       <nav aria-label="Access Control sections" className="space-y-2">
-        <Segmented options={tabOptions} value={active} onChange={selectTab} />
-        <p className="text-xs text-gray-500">{activeTab.desc}</p>
+        <Segmented options={tabOptions} value={active} onChange={selectTab} ariaLabel="Access Control sections" />
+        <p className="text-xs text-gray-400">{activeTab.desc}</p>
       </nav>
 
       {/* Active panel */}

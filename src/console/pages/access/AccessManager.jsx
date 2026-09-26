@@ -49,6 +49,7 @@ import {
   grantKeysForScope, computeRoleViewChanges,
 } from '../../../lib/api/accessGrants'
 import { toUserMessage } from '../../../lib/safeError'
+import { EmptyState, ErrorState, LoadingState, Note, Panel } from '../../components/ui'
 
 // Capabilities beyond `view` (the Advanced row). view is the big ON/OFF toggle.
 const EXTRA_CAPS = CAPABILITIES.filter((c) => c.key !== 'view')
@@ -293,6 +294,7 @@ export default function AccessManager() {
   // Per-user grants for the selected user
   const [grantIdx, setGrantIdx] = useState({})
   const [grantsLoading, setGrantsLoading] = useState(false)
+  const [grantsError, setGrantsError] = useState('')
 
   // Draft + baseline
   const [baseline, setBaseline] = useState(null) // loaded effective state
@@ -320,9 +322,12 @@ export default function AccessManager() {
 
   const flashTimer = useRef(null)
   const flash = useCallback((msg, isError = false) => {
-    if (isError) { setErrorMsg(msg); setNotice('') } else { setNotice(msg); setErrorMsg('') }
+    // A success note fades after a few seconds; an error stays until the next
+    // action, because the unsaved edits it refers to are still on screen.
     if (flashTimer.current) clearTimeout(flashTimer.current)
-    flashTimer.current = setTimeout(() => { setNotice(''); setErrorMsg('') }, 6000)
+    if (isError) { setErrorMsg(msg); setNotice(''); return }
+    setNotice(msg); setErrorMsg('')
+    flashTimer.current = setTimeout(() => setNotice(''), 6000)
   }, [])
   useEffect(() => () => { if (flashTimer.current) clearTimeout(flashTimer.current) }, [])
 
@@ -409,7 +414,7 @@ export default function AccessManager() {
 
   const buildUser = useCallback(async (user) => {
     if (!user || !viewMap || !overrides) { setBaseline(null); setDraft(null); return }
-    setGrantsLoading(true)
+    setGrantsLoading(true); setGrantsError('')
     try {
       const rows = await listUserGrants(user.id)
       const idx = indexGrants(rows)
@@ -423,12 +428,14 @@ export default function AccessManager() {
       setBaseline(uState)
       setDraft(structuredClone(uState))
     } catch (err) {
-      flash(toUserMessage(err, 'Could not load grants for this user.'), true)
+      // Shown in place of the editor with a Retry: editing on top of an unread
+      // grant list would plan writes against the wrong baseline.
+      setGrantsError(toUserMessage(err, 'Could not load grants for this user.'))
       setBaseline(null); setDraft(null)
     } finally {
       setGrantsLoading(false)
     }
-  }, [viewMap, overrides, flash])
+  }, [viewMap, overrides])
 
   useEffect(() => {
     if (loading) return
@@ -827,16 +834,11 @@ export default function AccessManager() {
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-4 pb-24">
-      {/* Intro */}
-      <div className="flex items-start gap-2">
-        <Info size={15} className="text-[var(--text-muted)] mt-0.5 shrink-0" />
-        <p className="text-xs text-[var(--text-muted)] max-w-3xl">
-          Turn access on or off for every module and the tabs inside it, for a whole role or for one
-          person. Use a preset to set a sensible level in one click, then Save. Only View on the base
-          modules is enforced today; sub-modules and the create, edit, delete, export and approve
-          capabilities are stored for progressive enforcement and are labelled "stored only".
-        </p>
-      </div>
+      <Note icon={SlidersHorizontal}>
+        Turn access on or off for every module and the tabs inside it, for a whole role or for one person.
+        Use a preset to set a sensible level in one click, then Save. Capabilities that are recorded but not yet
+        enforced by the app are labelled stored only.
+      </Note>
 
       {/* Mode + subject selector */}
       <div className="card space-y-3">
@@ -943,15 +945,9 @@ export default function AccessManager() {
 
       {/* Load / error states */}
       {loading ? (
-        <div className="card flex items-center justify-center py-16 text-[var(--text-muted)]">
-          <Loader2 size={20} className="animate-spin mr-2 text-[var(--brand-bright)]" /> Loading access data...
-        </div>
+        <Panel><LoadingState label="Loading access data" rows={5} /></Panel>
       ) : loadError ? (
-        <div className="card flex flex-col items-center justify-center py-14 text-center gap-3">
-          <AlertTriangle size={24} className="text-red-400" />
-          <p className="text-sm text-red-300">{loadError}</p>
-          <button onClick={loadGlobals} className="btn-secondary text-sm inline-flex items-center gap-1.5"><RefreshCw size={14} /> Retry</button>
-        </div>
+        <ErrorState message={loadError} onRetry={loadGlobals} />
       ) : (
         <div className={`grid grid-cols-1 gap-4 ${mode === 'user' ? 'xl:grid-cols-[minmax(0,300px)_1fr_minmax(0,260px)]' : 'xl:grid-cols-[1fr_minmax(0,280px)]'}`}>
           {/* User directory (user mode only) */}
@@ -1011,11 +1007,12 @@ export default function AccessManager() {
           {/* Tree editor */}
           <div className="min-w-0 order-1 xl:order-2">
             {mode === 'user' && !selectedUser ? (
-              <div className="card flex flex-col items-center justify-center text-center py-16">
-                <UserCog size={30} className="text-[var(--text-muted)] opacity-70 mb-3" />
-                <p className="text-[var(--text-primary)] font-medium">Select a user</p>
-                <p className="text-sm text-[var(--text-muted)] mt-1 max-w-sm">Choose someone from the list to edit exactly what they can reach, on top of their role.</p>
-              </div>
+              <Panel>
+                <EmptyState icon={UserCog} title="Select a user"
+                  reason="Choose someone from the list to edit exactly what they can reach, on top of their role." />
+              </Panel>
+            ) : mode === 'user' && grantsError ? (
+              <ErrorState message={grantsError} onRetry={() => buildUser(selectedUser)} />
             ) : (
               <div className="space-y-3">
                 {/* Role-wide surface control (role mode only) */}
@@ -1281,7 +1278,7 @@ export default function AccessManager() {
 
       {/* Notice / error */}
       {(notice || errorMsg) && (
-        <div className={`fixed bottom-4 right-4 z-40 max-w-sm rounded-xl px-4 py-2.5 text-sm flex items-start gap-2 ${errorMsg ? 'text-red-300 bg-red-900/20 border border-red-800/50' : 'text-green-300 bg-green-900/20 border border-green-800/50'}`}>
+        <div role={errorMsg ? 'alert' : 'status'} className={`fixed bottom-4 right-4 z-40 max-w-sm rounded-xl px-4 py-2.5 text-sm flex items-start gap-2 ${errorMsg ? 'text-red-300 bg-red-900/20 border border-red-800/50' : 'text-green-300 bg-green-900/20 border border-green-800/50'}`}>
           {errorMsg ? <AlertTriangle size={15} className="mt-0.5 shrink-0" /> : <Check size={15} className="mt-0.5 shrink-0" />} {errorMsg || notice}
         </div>
       )}

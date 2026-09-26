@@ -12,7 +12,7 @@
  * V317 yet) degrades to a clean, friendly message / empty list so the UI can
  * still render instead of throwing a raw error.
  */
-import { supabase, unwrap } from './_client'
+import { supabase, unwrap, fetchAllPages, isNotProvisioned } from './_client'
 
 export const COLS =
   'id,user_id,organisation_id,email,reason,status,requested_at,processed_by,processed_at'
@@ -99,18 +99,26 @@ export const DELETION_STATUSES = ['pending', 'processing', 'completed', 'rejecte
  * @param {{ status?: string }} [opts]
  * @returns {Promise<object[]>}
  */
-export async function listDeletionRequests({ status } = {}) {
-  try {
+export async function listDeletionRequests({ status, max = 20000 } = {}) {
+  // Paged past the 1000-row response cap, ordered with an id tiebreak so no
+  // row is dropped or repeated at a page boundary. Only a genuinely missing
+  // table (pre-V317) reads as an empty queue; a permission or network failure
+  // throws so the console can say it could not look.
+  const { data, error } = await fetchAllPages((from, to) => {
     let q = supabase
       .from('account_deletion_requests')
       .select(COLS)
       .order('requested_at', { ascending: false })
+      .order('id', { ascending: true })
+      .range(from, to)
     if (status && DELETION_STATUSES.includes(status)) q = q.eq('status', status)
-    return unwrap(await q) ?? []
-  } catch (err) {
-    if (isMissingRelation(err)) return []
-    throw err
+    return q
+  }, { max })
+  if (error) {
+    if (isNotProvisioned(error)) return []
+    unwrap({ data: null, error })
   }
+  return data ?? []
 }
 
 /**

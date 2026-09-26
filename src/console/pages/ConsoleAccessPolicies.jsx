@@ -35,7 +35,7 @@ import {
 } from '../../lib/accessPolicies'
 import { toUserMessage } from '../../lib/safeError'
 
-const inputCls = 'w-full px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 placeholder-gray-600 focus:border-gray-700 focus:outline-none'
+const inputCls = 'w-full px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 placeholder-gray-500 focus:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500'
 
 function fmtWhen(v) {
   if (!v) return 'N/A'
@@ -45,7 +45,7 @@ function fmtWhen(v) {
 function Field({ label, children, hint }) {
   return (
     <label className="block space-y-1">
-      <span className="text-[11px] uppercase tracking-wide text-gray-500">{label}</span>
+      <span className="text-[11px] uppercase tracking-wide text-gray-400">{label}</span>
       {children}
       {hint && <span className="block text-[11px] text-gray-400">{hint}</span>}
     </label>
@@ -68,7 +68,7 @@ function ReasonModal({ open, title, subtitle, confirmLabel, variant = 'primary',
   return (
     <Modal open={open} onClose={onClose} title={title} subtitle={subtitle} width="max-w-lg"
       footer={<>
-        <Btn onClick={onClose}>Cancel</Btn>
+        <Btn onClick={onClose} disabled={busy}>Cancel</Btn>
         <Btn variant={variant} busy={busy} onClick={go}>{confirmLabel}</Btn>
       </>}>
       <div className="space-y-3">
@@ -90,6 +90,7 @@ function IpAllowlistPanel({ ip, onChanged }) {
   const [rowErr, setRowErr] = useState('')
   const [toggle, setToggle] = useState(null) // 'on' | 'off'
   const [adding, setAdding] = useState(false)
+  const [confirmDel, setConfirmDel] = useState(null) // entry pending delete
 
   const check = useMemo(() => (cidr.trim() ? validateAllowlistEntry({ label: label || 'x', cidr }) : null), [label, cidr])
   const lockoutRisk = enableLockoutRisk(ip.callerIp, ip.entries)
@@ -192,10 +193,7 @@ function IpAllowlistPanel({ ip, onChanged }) {
                         </Btn>
                         <Btn size="xs" variant="quiet" icon={Trash2} disabled={strandDel} busy={busyId === e.id}
                           title={strandDel ? 'This would lock you out while the allowlist is on' : `Delete ${e.cidr}`}
-                          onClick={() => {
-                            if (typeof window !== 'undefined' && window.confirm && !window.confirm(`Delete the allowlist entry ${e.label ? `${e.label} (${e.cidr})` : e.cidr}? This cannot be undone.`)) return
-                            rowAction(e.id, () => deleteAllowlistEntry(e.id))
-                          }}>Delete</Btn>
+                          onClick={() => { setRowErr(''); setConfirmDel(e) }}>Delete</Btn>
                       </div>
                     </Td>
                   </Tr>
@@ -212,6 +210,20 @@ function IpAllowlistPanel({ ip, onChanged }) {
           {' '}<Code>{"select set_config('app.access_policy_rpc','on',true); update public.system_config set value='false' where key='console_ip_allowlist_enabled';"}</Code>
         </Note>
       </div>
+
+      <Modal open={!!confirmDel} width="max-w-md"
+        title="Delete this allowlist entry?"
+        subtitle={confirmDel ? (confirmDel.label ? `${confirmDel.label} (${confirmDel.cidr})` : confirmDel.cidr) : undefined}
+        onClose={() => { if (!busyId) setConfirmDel(null) }}
+        footer={<>
+          <Btn onClick={() => setConfirmDel(null)} disabled={!!busyId}>Cancel</Btn>
+          <Btn variant="danger" icon={Trash2} busy={!!busyId}
+            onClick={async () => { const e = confirmDel; await rowAction(e.id, () => deleteAllowlistEntry(e.id)); setConfirmDel(null) }}>
+            Delete entry
+          </Btn>
+        </>}>
+        <p className="text-sm text-gray-300">The range is removed from the allowlist. This cannot be undone.</p>
+      </Modal>
 
       <ReasonModal open={toggle === 'on'} onClose={() => setToggle(null)} title="Turn on the console IP allowlist"
         subtitle="Super admins outside the listed ranges will see a blocked screen instead of the console."
@@ -265,7 +277,7 @@ function SsoPanel({ sso, onChanged }) {
                   </Td>
                   <Td>
                     <Badge tone={st.tone}>{st.label}</Badge>
-                    {o.required && <span className="ml-2 text-[11px] text-gray-500">{o.affected_users} user(s)</span>}
+                    {o.required && <span className="ml-2 text-[11px] text-gray-400">{o.affected_users} user(s)</span>}
                   </Td>
                   <Td align="right">
                     {o.required
@@ -325,7 +337,7 @@ export default function ConsoleAccessPolicies() {
           <h1 className="text-xl font-semibold text-gray-100 flex items-center gap-2">
             <ShieldCheck size={20} className="text-orange-400" /> Access Policies
           </h1>
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-gray-400 mt-1">
             Limit where the console can be opened from, and require single sign-on for an organisation. Every change is audited with your address.
           </p>
         </div>

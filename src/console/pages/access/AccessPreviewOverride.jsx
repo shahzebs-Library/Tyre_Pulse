@@ -27,9 +27,8 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  SlidersHorizontal, Users, KeyRound, Search, RefreshCw, AlertTriangle, Crown,
-  CheckCircle2, XCircle, Info, ShieldCheck, Globe, Loader2, ChevronRight,
-  Check, X, Ban, RotateCcw, Filter,
+  SlidersHorizontal, Users, KeyRound, RefreshCw, Crown, CheckCircle2, XCircle, ShieldCheck, Globe,
+  ChevronRight, Check, Ban, RotateCcw,
 } from 'lucide-react'
 
 import { MODULE_GROUPS, ALL_MODULES, MODULE_LABEL, ACCESS_ROLES } from '../../../lib/moduleCatalog'
@@ -40,14 +39,13 @@ import {
 } from '../../../lib/api/accessGrants'
 import { listGlobalPermissions, saveModulePermissions } from '../../../lib/api/modulePermissions'
 import { toUserMessage } from '../../../lib/safeError'
+import UserDirectory, { displayName } from './UserDirectory'
+import {
+  Badge, Btn, EmptyState, ErrorState, LoadingState, Modal, Note, Panel, PanelHeader, SearchInput, Segmented,
+  StatTile, Toolbar,
+} from '../../components/ui'
 
 const FULL_ACCESS_ROLES = new Set(['Admin'])
-
-const ROLE_TINT = {
-  Admin: 'text-purple-300', Manager: 'text-blue-300', Director: 'text-indigo-300',
-  Reporter: 'text-cyan-300', Inspector: 'text-green-300', 'Tyre Man': 'text-amber-300',
-  Driver: 'text-[var(--text-secondary)]',
-}
 
 // Roles that see every country regardless of their profiles.country array.
 // DB app_can_see_country grants all-countries only to super/Admin; Director is scoped.
@@ -59,10 +57,6 @@ const MODULE_FILTERS = [
   { key: 'denied', label: 'Denied' },
   { key: 'overridden', label: 'Overridden' },
 ]
-
-function displayName(u) {
-  return u?.full_name || u?.username || u?.email || 'Unnamed user'
-}
 
 // Honest country label under the new scope semantics: admins/super (and the
 // see-all roles) see every country; an "all"/"*" sentinel grants every country;
@@ -78,29 +72,23 @@ function countryLabel(country, seesAll) {
 export default function AccessPreviewOverride() {
   const [mode, setMode] = useState('user') // 'user' | 'role'
 
-  // Shared toast plumbing (mirrors the sibling access pages).
-  const [toasts, setToasts] = useState([])
-  const timers = useRef({})
+  // Result of the last override. A success fades; an error stays on screen
+  // until the next action so it cannot be missed.
+  const [result, setResult] = useState(null) // { kind: 'success'|'error', message }
+  const resultTimer = useRef(null)
   const pushToast = useCallback((kind, message) => {
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
-    setToasts((t) => [...t, { id, kind, message }])
-    timers.current[id] = setTimeout(() => {
-      setToasts((t) => t.filter((x) => x.id !== id))
-      delete timers.current[id]
-    }, 5000)
+    if (resultTimer.current) clearTimeout(resultTimer.current)
+    setResult({ kind, message })
+    if (kind === 'success') resultTimer.current = setTimeout(() => setResult(null), 5000)
   }, [])
-  const dismissToast = useCallback((id) => {
-    setToasts((t) => t.filter((x) => x.id !== id))
-    if (timers.current[id]) { clearTimeout(timers.current[id]); delete timers.current[id] }
-  }, [])
-  useEffect(() => () => { Object.values(timers.current).forEach(clearTimeout) }, [])
+  useEffect(() => () => { if (resultTimer.current) clearTimeout(resultTimer.current) }, [])
+  const [moduleSearch, setModuleSearch] = useState('')
+  const [confirmRoleDeny, setConfirmRoleDeny] = useState(null) // row pending a role-wide deny
 
   // ----- Users (for the "By User" subject picker) -----
   const [users, setUsers] = useState(null) // null = loading
   const [usersError, setUsersError] = useState('')
   const [usersRefreshing, setUsersRefreshing] = useState(false)
-  const [userSearch, setUserSearch] = useState('')
-  const [userRoleFilter, setUserRoleFilter] = useState('all')
   const [selectedUserId, setSelectedUserId] = useState(null)
 
   const loadUsers = useCallback(async () => {
@@ -183,25 +171,6 @@ export default function AccessPreviewOverride() {
     return Array.from(set)
   }, [permMap])
 
-  const userRoleOptions = useMemo(() => {
-    const set = new Set()
-    for (const u of users || []) if (u.role) set.add(u.role)
-    return Array.from(set).sort()
-  }, [users])
-
-  const filteredUsers = useMemo(() => {
-    const q = userSearch.trim().toLowerCase()
-    return (users || []).filter((u) => {
-      if (userRoleFilter !== 'all' && u.role !== userRoleFilter) return false
-      if (!q) return true
-      return (
-        displayName(u).toLowerCase().includes(q) ||
-        String(u.email || '').toLowerCase().includes(q) ||
-        String(u.username || '').toLowerCase().includes(q)
-      )
-    })
-  }, [users, userSearch, userRoleFilter])
-
   // ---- Normalised preview rows (uniform shape for both modes) ----
   const isSuperSubject = mode === 'user'
     ? (!!access?.is_super || !!selectedUser?.is_super_admin)
@@ -258,16 +227,18 @@ export default function AccessPreviewOverride() {
 
   const visibleGroups = useMemo(() => {
     if (!previewRows) return []
+    const q = moduleSearch.trim().toLowerCase()
     const filtered = previewRows.filter((r) => {
-      if (moduleFilter === 'allowed') return r.allowed
-      if (moduleFilter === 'denied') return !r.allowed
-      if (moduleFilter === 'overridden') return !!r.override
+      if (moduleFilter === 'allowed' && !r.allowed) return false
+      if (moduleFilter === 'denied' && r.allowed) return false
+      if (moduleFilter === 'overridden' && !r.override) return false
+      if (q && !`${r.label} ${r.key} ${r.reason}`.toLowerCase().includes(q)) return false
       return true
     })
     return MODULE_GROUPS
       .map((g) => ({ group: g.group, rows: filtered.filter((r) => r.group === g.group) }))
       .filter((g) => g.rows.length > 0)
-  }, [previewRows, moduleFilter])
+  }, [previewRows, moduleFilter, moduleSearch])
 
   // ---- Override actions ----
   const applyUserOverride = useCallback(async (row, action) => {
@@ -314,113 +285,74 @@ export default function AccessPreviewOverride() {
   }, [selectedRole, overridesLocked, pushToast, loadPerms])
 
   const subjectChosen = mode === 'user' ? !!selectedUser : !!selectedRole
+  const previewError = mode === 'user' ? accessError : permError
+  const statsReady = !!previewRows && !previewError
+  const stat = (v) => (statsReady ? v : 'N/A')
+
+  // A role-wide deny changes access for everyone holding the role, so it is
+  // confirmed first. Allow and every per-user change stay one click.
+  const onRoleOverride = useCallback((row, enabled) => {
+    if (!enabled) { setConfirmRoleDeny(row); return }
+    applyRoleOverride(row, true)
+  }, [applyRoleOverride])
 
   return (
     <div className="space-y-4">
-      {/* Intro */}
-      <div className="flex items-start gap-2">
-        <Info size={15} className="text-[var(--text-muted)] mt-0.5 shrink-0" />
-        <p className="text-xs text-[var(--text-muted)] max-w-3xl">
-          Pick a role or a single user, preview exactly which modules they can reach (their sidebar),
-          and force allow or deny on any module in one click. User changes are per-user grants; role
-          changes update the role baseline for everyone with that role. Only the View capability is
-          enforced today.
-        </p>
-      </div>
+      <Note icon={SlidersHorizontal}>
+        Pick a role or a single user, preview exactly which modules they can reach (their sidebar), and
+        force allow or deny on any module. User changes are per-user grants; role changes update the role
+        baseline for everyone with that role. Changes reach an affected user on their next refresh.
+      </Note>
 
-      {/* Subject mode switch */}
-      <div
-        className="flex gap-1.5 p-1 rounded-xl bg-[var(--surface-1)] w-fit"
-        style={{ border: '1px solid var(--border-dim)' }}
-        role="tablist"
-        aria-label="Subject type"
-      >
-        {[
-          { key: 'user', label: 'By User', icon: Users },
-          { key: 'role', label: 'By Role', icon: KeyRound },
-        ].map((m) => {
-          const Icon = m.icon
-          const on = mode === m.key
-          return (
-            <button
-              key={m.key}
-              type="button"
-              role="tab"
-              aria-selected={on}
-              onClick={() => setMode(m.key)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                on
-                  ? 'bg-[var(--surface-3)] text-[var(--brand-bright)]'
-                  : 'text-[var(--text-secondary)] hover:text-[var(--brand-bright)]'
-              }`}
-              style={on ? { border: '1px solid var(--border-bright)' } : { border: '1px solid transparent' }}
-            >
-              <Icon size={15} /> {m.label}
-            </button>
-          )
-        })}
-      </div>
+      <Segmented ariaLabel="Subject type" size="md" value={mode} onChange={setMode}
+        options={[
+          { key: 'user', label: <><Users size={14} aria-hidden="true" />By user</> },
+          { key: 'role', label: <><KeyRound size={14} aria-hidden="true" />By role</> },
+        ]} />
+
+      {result && (
+        result.kind === 'error'
+          ? <ErrorState message={result.message} />
+          : <div role="status"><Note tone="accent" icon={Check}>{result.message}</Note></div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,340px)_1fr] gap-4">
-        {/* Left: subject picker */}
-        <div className="card !p-0 overflow-hidden flex flex-col max-h-[76vh]">
-          {mode === 'user' ? (
-            <UserPicker
-              users={users}
-              error={usersError}
-              refreshing={usersRefreshing}
-              onRefresh={loadUsers}
-              search={userSearch}
-              onSearch={setUserSearch}
-              roleFilter={userRoleFilter}
-              onRoleFilter={setUserRoleFilter}
-              roleOptions={userRoleOptions}
-              filteredUsers={filteredUsers}
-              selectedId={selectedUserId}
-              onSelect={setSelectedUserId}
-            />
-          ) : (
-            <RolePicker
-              permMap={permMap}
-              error={permError}
-              refreshing={permRefreshing}
-              onRefresh={loadPerms}
-              roleOptions={roleOptions}
-              selectedRole={selectedRole}
-              onSelect={setSelectedRole}
-            />
-          )}
-        </div>
+        {mode === 'user' ? (
+          <UserDirectory users={users} error={usersError} onRetry={loadUsers} refreshing={usersRefreshing}
+            selectedId={selectedUserId} onSelect={setSelectedUserId} />
+        ) : (
+          <RolePicker
+            permMap={permMap}
+            error={permError}
+            refreshing={permRefreshing}
+            onRefresh={loadPerms}
+            roleOptions={roleOptions}
+            selectedRole={selectedRole}
+            onSelect={setSelectedRole}
+          />
+        )}
 
-        {/* Right: preview + override */}
         <div className="min-w-0">
           {!subjectChosen ? (
-            <div className="card flex flex-col items-center justify-center text-center py-16">
-              <SlidersHorizontal size={30} className="text-[var(--text-muted)] opacity-70 mb-3" />
-              <p className="text-[var(--text-primary)] font-medium">
-                Pick a {mode === 'user' ? 'user' : 'role'} to preview
-              </p>
-              <p className="text-sm text-[var(--text-muted)] mt-1 max-w-sm">
-                Choose a {mode === 'user' ? 'user from the directory' : 'role from the list'} to see
-                which modules they can reach, then allow or deny any module in one click.
-              </p>
-            </div>
+            <Panel>
+              <EmptyState icon={SlidersHorizontal} title={`Pick a ${mode === 'user' ? 'user' : 'role'} to preview`}
+                reason={`Choose a ${mode === 'user' ? 'user from the directory' : 'role from the list'} to see which modules they can reach, then allow or deny any module.`} />
+            </Panel>
           ) : (
             <div className="space-y-4">
-              {/* Subject header */}
-              <div className="card">
+              <Panel>
                 <div className="flex flex-wrap items-center gap-3">
-                  <div className="w-11 h-11 rounded-full bg-[var(--input-bg)] flex items-center justify-center shrink-0 text-sm font-semibold text-[var(--text-secondary)]">
+                  <div className="w-11 h-11 rounded-full bg-gray-800 flex items-center justify-center shrink-0 text-sm font-semibold text-gray-300" aria-hidden="true">
                     {mode === 'user'
                       ? displayName(selectedUser).slice(0, 2).toUpperCase()
-                      : <KeyRound size={18} className="text-[var(--brand-bright)]" />}
+                      : <KeyRound size={18} className="text-orange-400" />}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-1.5">
+                    <h3 className="text-base font-semibold text-gray-100 flex items-center gap-1.5">
                       {mode === 'user' ? displayName(selectedUser) : `${selectedRole} role`}
-                      {overridesLocked && <Crown size={14} className="text-amber-400" />}
-                    </p>
-                    <p className="text-xs text-[var(--text-muted)] truncate">
+                      {overridesLocked && <Crown size={14} className="text-amber-400" aria-label="Full access" />}
+                    </h3>
+                    <p className="text-xs text-gray-400 truncate">
                       {mode === 'user'
                         ? (selectedUser.email || selectedUser.username || 'No email')
                         : 'Baseline access for every user with this role'}
@@ -429,113 +361,55 @@ export default function AccessPreviewOverride() {
                   <div className="flex flex-wrap items-center gap-2">
                     {mode === 'user' && (
                       <>
-                        <span className="badge inline-flex items-center gap-1.5 bg-[var(--input-bg)] text-[var(--text-secondary)] border border-[var(--input-border)]">
-                          <ShieldCheck size={12} /> {access?.role || selectedUser.role || 'No role'}
-                        </span>
-                        <span className="badge inline-flex items-center gap-1.5 bg-[var(--input-bg)] text-[var(--text-secondary)] border border-[var(--input-border)]">
-                          <Globe size={12} /> {countryLabel(
-                            access?.country ?? selectedUser.country,
-                            isSuperSubject || COUNTRY_SEES_ALL_ROLES.has(access?.role || selectedUser.role),
-                          )}
-                        </span>
+                        <Badge icon={ShieldCheck}>{access?.role || selectedUser.role || 'No role'}</Badge>
+                        <Badge icon={Globe}>{countryLabel(
+                          access?.country ?? selectedUser.country,
+                          isSuperSubject || COUNTRY_SEES_ALL_ROLES.has(access?.role || selectedUser.role),
+                        )}</Badge>
                       </>
                     )}
-                    {overridesLocked && (
-                      <span className="badge inline-flex items-center gap-1.5 bg-amber-900/20 text-amber-300 border border-amber-800/50">
-                        <Crown size={12} /> Full access
-                      </span>
-                    )}
+                    {overridesLocked && <Badge tone="warning" icon={Crown}>Full access</Badge>}
                   </div>
                 </div>
+              </Panel>
 
-                {previewRows && (
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
-                    <Stat label="Modules" value={counts.total} tint="text-[var(--text-primary)]" />
-                    <Stat label="Allowed" value={counts.allowed} tint="text-green-300" />
-                    <Stat label="Denied" value={counts.denied} tint="text-red-300" />
-                    <Stat
-                      label={mode === 'user' ? 'Overridden' : 'Role level'}
-                      value={mode === 'user' ? counts.overridden : counts.allowed}
-                      tint="text-amber-300"
-                    />
-                  </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <StatTile label="Modules" value={stat(counts.total)} onClick={() => setModuleFilter('all')} active={moduleFilter === 'all'} />
+                <StatTile label="Allowed" tone="good" value={stat(counts.allowed)} onClick={() => setModuleFilter('allowed')} active={moduleFilter === 'allowed'} />
+                <StatTile label="Denied" tone="danger" value={stat(counts.denied)} onClick={() => setModuleFilter('denied')} active={moduleFilter === 'denied'} />
+                {mode === 'user' ? (
+                  <StatTile label="Overridden" tone="warning" value={stat(counts.overridden)} sub="Per-user grant or revoke"
+                    onClick={() => setModuleFilter('overridden')} active={moduleFilter === 'overridden'} />
+                ) : (
+                  <StatTile label="Coverage" tone="accent" sub="Share of modules allowed"
+                    value={statsReady && counts.total ? `${Math.round((counts.allowed / counts.total) * 100)}%` : 'N/A'} />
                 )}
-                <p className="text-[11px] text-[var(--text-muted)] mt-2">
-                  {counts.allowed} of {counts.total} modules allowed.
-                </p>
               </div>
 
-              {/* Full-access note */}
               {overridesLocked && (
-                <div className="flex items-start gap-2 px-4 py-3 rounded-xl bg-amber-900/15 border border-amber-800/40">
-                  <Crown size={15} className="text-amber-300 mt-0.5 shrink-0" />
-                  <p className="text-xs text-amber-200">
-                    Admin and Super Admin always have full access and cannot be reduced. Overrides are
-                    disabled for this subject.
-                  </p>
-                </div>
+                <Note tone="warning" icon={Crown}>
+                  Admin and Super Admin always have full access and cannot be reduced. Overrides are disabled for this subject.
+                </Note>
               )}
 
-              {/* Module filter */}
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold inline-flex items-center gap-1.5">
-                  <Filter size={12} /> Show
-                </span>
-                {MODULE_FILTERS.map((f) => {
-                  const on = moduleFilter === f.key
-                  return (
-                    <button
-                      key={f.key}
-                      onClick={() => setModuleFilter(f.key)}
-                      className={`px-2.5 py-1 rounded-lg text-xs border transition-colors ${
-                        on
-                          ? 'bg-[var(--surface-3)] text-[var(--brand-bright)] border-[var(--border-bright)]'
-                          : 'bg-[var(--input-bg)] text-[var(--text-secondary)] border-[var(--input-border)] hover:text-[var(--text-primary)]'
-                      }`}
-                    >
-                      {f.label}
-                    </button>
-                  )
-                })}
-              </div>
+              <Toolbar>
+                <Segmented role="group" ariaLabel="Show modules" value={moduleFilter} onChange={setModuleFilter}
+                  options={MODULE_FILTERS.filter((f) => mode === 'user' || f.key !== 'overridden').map((f) => ({ key: f.key, label: f.label }))} />
+                <SearchInput value={moduleSearch} onChange={setModuleSearch} placeholder="Search module or reason" className="flex-1 min-w-[180px]" />
+              </Toolbar>
 
-              {/* Preview + override body */}
-              {previewRows === null ? (
-                <div className="card flex items-center justify-center py-16">
-                  <Loader2 size={22} className="animate-spin text-[var(--brand-bright)]" />
-                  <span className="ml-2 text-sm text-[var(--text-muted)]">Resolving access...</span>
-                </div>
-              ) : (mode === 'user' && accessError) ? (
-                <div className="card p-8 text-center">
-                  <AlertTriangle size={22} className="mx-auto mb-2 text-red-400" />
-                  <p className="text-sm text-red-300 font-medium">Could not resolve access</p>
-                  <p className="text-xs text-[var(--text-muted)] mt-1">{accessError}</p>
-                  <button onClick={() => loadAccess(selectedUserId)} className="btn-secondary text-xs mt-3 inline-flex items-center gap-1.5">
-                    <RefreshCw size={12} /> Retry
-                  </button>
-                </div>
-              ) : (mode === 'role' && permError) ? (
-                <div className="card p-8 text-center">
-                  <AlertTriangle size={22} className="mx-auto mb-2 text-red-400" />
-                  <p className="text-sm text-red-300 font-medium">Could not load role permissions</p>
-                  <p className="text-xs text-[var(--text-muted)] mt-1">{permError}</p>
-                  <button onClick={loadPerms} className="btn-secondary text-xs mt-3 inline-flex items-center gap-1.5">
-                    <RefreshCw size={12} /> Retry
-                  </button>
-                </div>
+              {previewRows === null && !previewError ? (
+                <Panel><LoadingState label="Resolving access" rows={5} /></Panel>
+              ) : previewError ? (
+                <ErrorState message={previewError} onRetry={mode === 'user' ? () => loadAccess(selectedUserId) : loadPerms} />
               ) : visibleGroups.length === 0 ? (
-                <div className="card p-10 text-center text-[var(--text-muted)]">
-                  <SlidersHorizontal size={24} className="mx-auto mb-2 opacity-60" />
-                  <p className="text-sm">No modules match this filter.</p>
-                </div>
+                <Panel><EmptyState icon={SlidersHorizontal} title="No modules match" reason="Nothing matches this filter and search." /></Panel>
               ) : (
                 <div className="space-y-4">
                   {visibleGroups.map((g) => (
-                    <div key={g.group} className="card !p-0 overflow-hidden">
-                      <div className="px-4 py-2.5 border-b border-[var(--input-border)] bg-[var(--surface-1)]">
-                        <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
-                          {g.group}
-                        </h3>
+                    <Panel key={g.group} flush className="overflow-hidden">
+                      <div className="px-4 py-2.5 border-b border-gray-800 bg-gray-900/60">
+                        <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-300">{g.group}</h4>
                       </div>
                       <ul>
                         {g.rows.map((row) => (
@@ -546,186 +420,81 @@ export default function AccessPreviewOverride() {
                             locked={overridesLocked}
                             busy={busyKey === row.key}
                             onUserOverride={applyUserOverride}
-                            onRoleOverride={applyRoleOverride}
+                            onRoleOverride={onRoleOverride}
                           />
                         ))}
                       </ul>
-                    </div>
+                    </Panel>
                   ))}
                 </div>
               )}
-
-              <p className="text-[11px] text-[var(--text-muted)]">
-                Changes reach an affected user on their next refresh or re-login. Only the View
-                capability is enforced today; other capabilities are stored for progressive enforcement.
-              </p>
             </div>
           )}
         </div>
       </div>
 
-      <Toasts items={toasts} onDismiss={dismissToast} />
+      <Modal
+        open={!!confirmRoleDeny}
+        title="Deny this module for the whole role?"
+        subtitle={confirmRoleDeny ? `${confirmRoleDeny.label} for ${selectedRole}` : undefined}
+        onClose={() => { if (!busyKey) setConfirmRoleDeny(null) }}
+        width="max-w-md"
+        footer={(
+          <>
+            <Btn onClick={() => setConfirmRoleDeny(null)} disabled={!!busyKey}>Cancel</Btn>
+            <Btn variant="danger" icon={Ban} busy={!!busyKey}
+              onClick={async () => { const row = confirmRoleDeny; await applyRoleOverride(row, false); setConfirmRoleDeny(null) }}>
+              Deny for role
+            </Btn>
+          </>
+        )}
+      >
+        <p className="text-sm text-gray-300">
+          Every user with the {selectedRole} role loses access to this module on their next refresh, unless they
+          hold a per-user grant. You can allow it again at any time.
+        </p>
+      </Modal>
     </div>
   )
 }
 
 /* ---------------- Subpanels ---------------- */
 
-function UserPicker({
-  users, error, refreshing, onRefresh, search, onSearch, roleFilter, onRoleFilter,
-  roleOptions, filteredUsers, selectedId, onSelect,
-}) {
-  return (
-    <>
-      <div className="p-3 border-b border-[var(--input-border)] space-y-2">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] inline-flex items-center gap-1.5">
-            <Users size={15} className="text-[var(--brand-bright)]" /> Users
-            {Array.isArray(users) && <span className="text-[var(--text-muted)] font-normal">({filteredUsers.length})</span>}
-          </h3>
-          <button
-            onClick={onRefresh}
-            disabled={refreshing}
-            className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-50"
-            aria-label="Refresh users"
-          >
-            <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
-          </button>
-        </div>
-        <div className="relative">
-          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-          <input aria-label="Search users"
-            className="input pl-8 py-1.5 text-sm w-full"
-            placeholder="Search name or email..."
-            value={search}
-            onChange={(e) => onSearch(e.target.value)}
-          />
-        </div>
-        <select aria-label="Filter users by role"
-          className="input py-1.5 text-sm w-full"
-          value={roleFilter}
-          onChange={(e) => onRoleFilter(e.target.value)}
-        >
-          <option value="all">All roles</option>
-          {roleOptions.map((r) => <option key={r} value={r}>{r}</option>)}
-        </select>
-      </div>
-
-      <div className="overflow-y-auto flex-1">
-        {users === null ? (
-          <div className="p-3 space-y-2">
-            {[0, 1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-12 rounded-lg bg-[var(--input-bg)] animate-pulse" />
-            ))}
-          </div>
-        ) : error ? (
-          <div className="p-6 text-center">
-            <AlertTriangle size={22} className="mx-auto mb-2 text-red-400" />
-            <p className="text-sm text-red-300 font-medium">Could not load users</p>
-            <p className="text-xs text-[var(--text-muted)] mt-1">{error}</p>
-            <button onClick={onRefresh} className="btn-secondary text-xs mt-3 inline-flex items-center gap-1.5">
-              <RefreshCw size={12} /> Retry
-            </button>
-          </div>
-        ) : filteredUsers.length === 0 ? (
-          <div className="p-8 text-center text-[var(--text-muted)]">
-            <Users size={24} className="mx-auto mb-2 opacity-60" />
-            <p className="text-sm">{users.length === 0 ? 'No users found.' : 'No users match your filters.'}</p>
-          </div>
-        ) : (
-          <ul>
-            {filteredUsers.map((u) => {
-              const on = u.id === selectedId
-              return (
-                <li key={u.id}>
-                  <button
-                    onClick={() => onSelect(u.id)}
-                    className={`w-full text-left px-3 py-2.5 flex items-center gap-2.5 border-b border-[var(--input-border)]/50 transition-colors ${
-                      on ? 'bg-[var(--brand-subtle,rgba(34,197,94,0.12))]' : 'hover:bg-[var(--input-bg)]/50'
-                    }`}
-                  >
-                    <div className="w-8 h-8 rounded-full bg-[var(--input-bg)] flex items-center justify-center shrink-0 text-xs font-semibold text-[var(--text-secondary)]">
-                      {displayName(u).slice(0, 2).toUpperCase()}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-[var(--text-primary)] truncate flex items-center gap-1.5">
-                        {displayName(u)}
-                        {u.is_super_admin && <Crown size={12} className="text-amber-400 shrink-0" />}
-                      </p>
-                      <p className="text-xs text-[var(--text-muted)] truncate">{u.email || u.username || 'No email'}</p>
-                    </div>
-                    <span className={`text-[11px] font-medium shrink-0 ${ROLE_TINT[u.role] || 'text-[var(--text-secondary)]'}`}>
-                      {u.role || 'No role'}
-                    </span>
-                    <ChevronRight size={14} className={`shrink-0 ${on ? 'text-[var(--brand-bright)]' : 'text-[var(--text-muted)]'}`} />
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
-        )}
-      </div>
-    </>
-  )
-}
-
 function RolePicker({ permMap, error, refreshing, onRefresh, roleOptions, selectedRole, onSelect }) {
   return (
-    <>
-      <div className="p-3 border-b border-[var(--input-border)] flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-[var(--text-primary)] inline-flex items-center gap-1.5">
-          <KeyRound size={15} className="text-[var(--brand-bright)]" /> Roles
-          {Array.isArray(roleOptions) && <span className="text-[var(--text-muted)] font-normal">({roleOptions.length})</span>}
-        </h3>
-        <button
-          onClick={onRefresh}
-          disabled={refreshing}
-          className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-50"
-          aria-label="Refresh roles"
-        >
-          <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
-        </button>
+    <Panel flush className="overflow-hidden flex flex-col max-h-[76vh]">
+      <div className="p-3 border-b border-gray-800">
+        <PanelHeader icon={KeyRound} title="Roles" subtitle={permMap && !error ? `${roleOptions.length} roles` : undefined}
+          actions={<Btn size="xs" variant="quiet" icon={RefreshCw} busy={refreshing} title="Refresh roles" ariaLabel="Refresh roles" onClick={onRefresh} />} />
       </div>
-
       <div className="overflow-y-auto flex-1">
         {permMap === null ? (
-          <div className="p-3 space-y-2">
-            {[0, 1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-11 rounded-lg bg-[var(--input-bg)] animate-pulse" />
-            ))}
-          </div>
+          <div className="p-3"><LoadingState label="Loading roles" rows={5} /></div>
         ) : error ? (
-          <div className="p-6 text-center">
-            <AlertTriangle size={22} className="mx-auto mb-2 text-red-400" />
-            <p className="text-sm text-red-300 font-medium">Could not load roles</p>
-            <p className="text-xs text-[var(--text-muted)] mt-1">{error}</p>
-            <button onClick={onRefresh} className="btn-secondary text-xs mt-3 inline-flex items-center gap-1.5">
-              <RefreshCw size={12} /> Retry
-            </button>
-          </div>
+          <div className="p-3"><ErrorState message={error} onRetry={onRefresh} /></div>
         ) : (
-          <ul>
+          <ul aria-label="Roles">
             {roleOptions.map((r) => {
               const on = r === selectedRole
               const isFull = FULL_ACCESS_ROLES.has(r)
               return (
                 <li key={r}>
                   <button
+                    type="button"
                     onClick={() => onSelect(r)}
-                    className={`w-full text-left px-3 py-2.5 flex items-center gap-2.5 border-b border-[var(--input-border)]/50 transition-colors ${
-                      on ? 'bg-[var(--brand-subtle,rgba(34,197,94,0.12))]' : 'hover:bg-[var(--input-bg)]/50'
+                    aria-pressed={on}
+                    className={`w-full text-left px-3 py-2.5 flex items-center gap-2.5 border-b border-gray-800/60 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-orange-500 ${
+                      on ? 'bg-orange-950/30' : 'hover:bg-gray-900/60'
                     }`}
                   >
-                    <div className="w-8 h-8 rounded-lg bg-[var(--input-bg)] flex items-center justify-center shrink-0">
-                      <KeyRound size={14} className={ROLE_TINT[r] || 'text-[var(--text-secondary)]'} />
+                    <div className="w-8 h-8 rounded-lg bg-gray-800 flex items-center justify-center shrink-0" aria-hidden="true">
+                      <KeyRound size={14} className="text-orange-400" />
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className={`text-sm font-medium truncate flex items-center gap-1.5 ${ROLE_TINT[r] || 'text-[var(--text-primary)]'}`}>
-                        {r}
-                        {isFull && <Crown size={12} className="text-amber-400 shrink-0" />}
-                      </p>
-                    </div>
-                    <ChevronRight size={14} className={`shrink-0 ${on ? 'text-[var(--brand-bright)]' : 'text-[var(--text-muted)]'}`} />
+                    <p className="min-w-0 flex-1 text-sm font-medium text-gray-100 truncate flex items-center gap-1.5">
+                      {r}
+                      {isFull && <Crown size={12} className="text-amber-400 shrink-0" aria-label="Full access" />}
+                    </p>
+                    <ChevronRight size={14} className={`shrink-0 ${on ? 'text-orange-400' : 'text-gray-500'}`} aria-hidden="true" />
                   </button>
                 </li>
               )
@@ -733,148 +502,47 @@ function RolePicker({ permMap, error, refreshing, onRefresh, roleOptions, select
           </ul>
         )}
       </div>
-    </>
+    </Panel>
   )
 }
 
 function ModuleRow({ row, mode, locked, busy, onUserOverride, onRoleOverride }) {
   return (
-    <li className="px-4 py-3 flex items-center gap-3 border-b border-[var(--input-border)]/50 last:border-b-0 hover:bg-[var(--input-bg)]/40">
-      {/* State */}
+    <li className="px-4 py-3 flex flex-wrap items-center gap-3 border-b border-gray-800/60 last:border-b-0 hover:bg-gray-900/40">
       <div className="shrink-0">
         {row.allowed
-          ? <CheckCircle2 size={17} className="text-green-400" />
-          : <XCircle size={17} className="text-red-400" />}
+          ? <CheckCircle2 size={17} className="text-emerald-400" aria-label="Allowed" />
+          : <XCircle size={17} className="text-red-400" aria-label="Denied" />}
       </div>
-
-      {/* Label + reason */}
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-[var(--text-primary)] truncate flex items-center gap-2">
+        <p className="text-sm font-medium text-gray-100 truncate flex items-center gap-2">
           {row.label}
-          {mode === 'user' && row.override === 'grant' && (
-            <span className="badge bg-green-900/25 text-green-300 border border-green-800/50 text-[10px]">Grant</span>
-          )}
-          {mode === 'user' && row.override === 'revoke' && (
-            <span className="badge bg-red-900/25 text-red-300 border border-red-800/50 text-[10px]">Revoke</span>
-          )}
+          {mode === 'user' && row.override === 'grant' && <Badge tone="good">Grant</Badge>}
+          {mode === 'user' && row.override === 'revoke' && <Badge tone="danger">Revoke</Badge>}
         </p>
-        <p className="text-[11px] text-[var(--text-muted)] truncate">{row.reason || 'N/A'}</p>
+        <p className="text-[11px] text-gray-400 truncate">{row.reason || 'N/A'}</p>
       </div>
-
-      {/* Override control */}
-      <div className="shrink-0 flex items-center gap-1">
-        {busy ? (
-          <Loader2 size={16} className="animate-spin text-[var(--brand-bright)] mx-3" />
-        ) : locked ? (
-          <span className="text-[11px] text-[var(--text-muted)] italic px-2">Locked</span>
+      <div className="shrink-0 flex items-center gap-1" role="group" aria-label={`${row.label} access`}>
+        {locked ? (
+          <span className="text-[11px] text-gray-400 px-2">Locked</span>
         ) : mode === 'user' ? (
-          <div className="flex items-center gap-1 rounded-lg bg-[var(--input-bg)] p-0.5 border border-[var(--input-border)]">
-            <SegBtn
-              active={row.override === 'grant'}
-              tone="green"
-              title="Allow (per-user grant)"
-              onClick={() => onUserOverride(row, 'grant')}
-            >
-              <Check size={13} /> Allow
-            </SegBtn>
-            <SegBtn
-              active={row.override === 'revoke'}
-              tone="red"
-              title="Deny (per-user revoke)"
-              onClick={() => onUserOverride(row, 'revoke')}
-            >
-              <Ban size={13} /> Deny
-            </SegBtn>
-            <SegBtn
-              active={false}
-              tone="muted"
-              title="Clear the override (follow the role)"
-              disabled={!row.override}
-              onClick={() => onUserOverride(row, 'clear')}
-            >
-              <RotateCcw size={13} /> Clear
-            </SegBtn>
-          </div>
+          <>
+            <Btn size="xs" icon={Check} variant={row.override === 'grant' ? 'good' : 'ghost'} busy={busy} aria-pressed={row.override === 'grant'}
+              title="Allow (per-user grant)" onClick={() => onUserOverride(row, 'grant')}>Allow</Btn>
+            <Btn size="xs" icon={Ban} variant={row.override === 'revoke' ? 'danger' : 'ghost'} disabled={busy} aria-pressed={row.override === 'revoke'}
+              title="Deny (per-user revoke)" onClick={() => onUserOverride(row, 'revoke')}>Deny</Btn>
+            <Btn size="xs" icon={RotateCcw} disabled={busy || !row.override}
+              title="Clear the override and follow the role" onClick={() => onUserOverride(row, 'clear')}>Clear</Btn>
+          </>
         ) : (
-          <div className="flex items-center gap-1 rounded-lg bg-[var(--input-bg)] p-0.5 border border-[var(--input-border)]">
-            <SegBtn
-              active={row.allowed}
-              tone="green"
-              title="Allow this module for the role"
-              onClick={() => onRoleOverride(row, true)}
-            >
-              <Check size={13} /> Allow
-            </SegBtn>
-            <SegBtn
-              active={!row.allowed}
-              tone="red"
-              title="Deny this module for the role"
-              onClick={() => onRoleOverride(row, false)}
-            >
-              <Ban size={13} /> Deny
-            </SegBtn>
-          </div>
+          <>
+            <Btn size="xs" icon={Check} variant={row.allowed ? 'good' : 'ghost'} busy={busy} aria-pressed={row.allowed}
+              title="Allow this module for the role" onClick={() => onRoleOverride(row, true)}>Allow</Btn>
+            <Btn size="xs" icon={Ban} variant={!row.allowed ? 'danger' : 'ghost'} disabled={busy} aria-pressed={!row.allowed}
+              title="Deny this module for the role" onClick={() => onRoleOverride(row, false)}>Deny</Btn>
+          </>
         )}
       </div>
     </li>
-  )
-}
-
-function SegBtn({ active, tone, title, onClick, disabled, children }) {
-  const toneOn = tone === 'green'
-    ? 'bg-green-900/40 text-green-200 border-green-700/60'
-    : tone === 'red'
-      ? 'bg-red-900/40 text-red-200 border-red-700/60'
-      : 'bg-[var(--surface-3)] text-[var(--text-primary)] border-[var(--border-bright)]'
-  return (
-    <button
-      type="button"
-      title={title}
-      disabled={disabled}
-      onClick={onClick}
-      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-        active
-          ? toneOn
-          : 'bg-transparent text-[var(--text-secondary)] border-transparent hover:text-[var(--text-primary)]'
-      }`}
-    >
-      {children}
-    </button>
-  )
-}
-
-function Stat({ label, value, tint }) {
-  return (
-    <div className="rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)]/40 px-3 py-2">
-      <p className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">{label}</p>
-      <p className={`text-lg font-bold ${tint}`}>{value}</p>
-    </div>
-  )
-}
-
-function Toasts({ items, onDismiss }) {
-  if (!items.length) return null
-  return (
-    <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 w-80 max-w-[calc(100vw-2rem)]">
-      {items.map((t) => (
-        <div
-          key={t.id}
-          role="status"
-          className={`card !p-3 flex items-start gap-2.5 shadow-lg border ${
-            t.kind === 'error' ? 'border-red-800/60' : 'border-green-800/60'
-          }`}
-        >
-          {t.kind === 'error'
-            ? <AlertTriangle size={16} className="text-red-400 mt-0.5 shrink-0" />
-            : <Check size={16} className="text-green-400 mt-0.5 shrink-0" />}
-          <p className="text-sm text-[var(--text-primary)] flex-1">{t.message}</p>
-          <button
-            onClick={() => onDismiss(t.id)}
-            className="text-[var(--text-muted)] hover:text-[var(--text-primary)] shrink-0"
-            aria-label="Dismiss"
-          ><X size={14} /></button>
-        </div>
-      ))}
-    </div>
   )
 }

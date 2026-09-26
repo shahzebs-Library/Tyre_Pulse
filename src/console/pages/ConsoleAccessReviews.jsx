@@ -9,7 +9,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  ClipboardCheck, Play, RefreshCw, Download, CheckCircle2, XCircle, PenLine, Clock,
+  ClipboardCheck, Play, RefreshCw, FileSpreadsheet, FileText, CheckCircle2, XCircle, PenLine, Clock,
   ArrowLeft, ShieldCheck, Lock, CalendarClock, ListChecks, AlertTriangle, Users, UserX,
 } from 'lucide-react'
 import {
@@ -25,7 +25,8 @@ import {
   evidenceRows, EVIDENCE_COLUMNS, DECISION_LABEL, isOverdue, DORMANT_DAYS,
 } from '../../lib/accessReviews'
 import { toUserMessage } from '../../lib/safeError'
-import { exportToExcel, reportFileName } from '../../lib/exportUtils'
+import { exportToExcel, exportToPdf, reportFileName } from '../../lib/exportUtils'
+import { sortRows, useTableSort } from '../../lib/consoleTable'
 
 const PAGE = 100
 const DECISION_TONE = { pending: 'quiet', keep: 'good', revoke: 'danger', modify: 'warning' }
@@ -51,7 +52,19 @@ function defaultDue() {
 
 /* ── campaign list ─────────────────────────────────────────────────────────── */
 
+const CAMPAIGN_SORT = {
+  status: (c) => (c.status === 'closed' ? 0 : isOverdue(c) ? 2 : 1),
+  progress: (c) => {
+    const total = Number(c.total) || 0
+    return total ? (total - (Number(c.pending) || 0)) / total : null
+  },
+  total: (c) => Number(c.total) || 0,
+  revoked: (c) => Number(c.revoked) || 0,
+}
+
 function CampaignList({ campaigns, onOpen }) {
+  const { sort, onSort } = useTableSort({ key: 'created_at', dir: 'desc' })
+  const sorted = useMemo(() => sortRows(campaigns, sort, CAMPAIGN_SORT), [campaigns, sort])
   if (!campaigns.length) {
     return (
       <EmptyState icon={ClipboardCheck} title="No access reviews yet"
@@ -61,20 +74,25 @@ function CampaignList({ campaigns, onOpen }) {
   return (
     <Table>
       <THead>
-        <Th>Campaign</Th><Th>Status</Th><Th>Started</Th><Th>Due</Th>
-        <Th>Progress</Th><Th align="right">Revoke</Th><Th align="right">Users</Th>
+        <Th sortKey="name" sort={sort} onSort={onSort}>Campaign</Th>
+        <Th sortKey="status" sort={sort} onSort={onSort}>Status</Th>
+        <Th sortKey="created_at" sort={sort} onSort={onSort}>Started</Th>
+        <Th sortKey="due_at" sort={sort} onSort={onSort}>Due</Th>
+        <Th sortKey="progress" sort={sort} onSort={onSort}>Progress</Th>
+        <Th align="right" sortKey="revoked" sort={sort} onSort={onSort}>Revoke</Th>
+        <Th align="right" sortKey="total" sort={sort} onSort={onSort}>Users</Th>
       </THead>
       <tbody>
-        {campaigns.map((c) => {
+        {sorted.map((c) => {
           const total = Number(c.total) || 0
           const decided = total - (Number(c.pending) || 0)
           const pct = total ? Math.round((decided / total) * 100) : 0
           const overdue = isOverdue(c)
           return (
-            <Tr key={c.id} onClick={() => onOpen(c.id)}>
+            <Tr key={c.id} onClick={() => onOpen(c.id)} ariaLabel={`Open ${c.name}`}>
               <Td>
                 <p className="text-gray-200">{c.name}</p>
-                <p className="text-[11px] text-gray-500">by {c.created_by_email || 'N/A'}</p>
+                <p className="text-[11px] text-gray-400">by {c.created_by_email || 'N/A'}</p>
               </Td>
               <Td>
                 {c.status === 'closed'
@@ -124,6 +142,8 @@ function CampaignView({ campaignId, onBack, onChanged }) {
   const [applyOpen, setApplyOpen] = useState(false)
   const [applyBusy, setApplyBusy] = useState(false)
   const [applyResult, setApplyResult] = useState(null)
+  const [exporting, setExporting] = useState('')
+  const { sort, onSort } = useTableSort({ key: 'full_name', dir: 'asc' })
 
   const load = useCallback(async () => {
     setLoading(true); setError(null)
@@ -143,7 +163,11 @@ function CampaignView({ campaignId, onBack, onChanged }) {
   const closed = campaign?.status === 'closed'
   const progress = useMemo(() => reviewProgress(items), [items])
   const roles = useMemo(() => rolesIn(items), [items])
-  const filtered = useMemo(() => filterItems(items, { search, decision, role, flag }), [items, search, decision, role, flag])
+  const filtered = useMemo(() => sortRows(filterItems(items, { search, decision, role, flag }), sort, {
+    grants: grantCount,
+    countries: (it) => (it.country || []).join(', '),
+    sites: (it) => (it.sites || []).join(', '),
+  }), [items, search, decision, role, flag, sort])
   const bulkTargets = useMemo(() => bulkKeepCandidates(filtered), [filtered])
   const dormantCount = useMemo(() => filterItems(items, { flag: 'dormant' }).length, [items])
   const superCount = useMemo(() => filterItems(items, { flag: 'super' }).length, [items])
@@ -205,6 +229,8 @@ function CampaignView({ campaignId, onBack, onChanged }) {
       if (res.failed) setActionError(`${res.failed} of ${bulkTargets.length} decisions could not be saved. ${toUserMessage(res.errors[0], '')}`)
       await load()
       onChanged?.()
+    } catch (e) {
+      setActionError(toUserMessage(e, 'The bulk keep could not be completed. Reload to see which decisions were saved.'))
     } finally {
       setBulkBusy(false); setBulkOpen(false); setBulkProgress(null)
     }
@@ -224,17 +250,21 @@ function CampaignView({ campaignId, onBack, onChanged }) {
     }
   }
 
-  async function exportEvidence() {
+  async function exportEvidence(format) {
+    setExporting(format); setActionError(null)
     try {
-      await exportToExcel(
-        evidenceRows(filtered.length ? filtered : items),
-        EVIDENCE_COLUMNS.map(([k]) => k),
-        EVIDENCE_COLUMNS.map(([, h]) => h),
-        reportFileName('Access Review Evidence', campaign?.name, fmtDate(new Date())),
-        'Access review',
-      )
+      const rows = evidenceRows(filtered.length ? filtered : items)
+      const file = reportFileName('Access Review Evidence', campaign?.name, fmtDate(new Date()))
+      if (format === 'pdf') {
+        await exportToPdf(rows, EVIDENCE_COLUMNS.map(([key, header]) => ({ key, header })),
+          `Access Review Evidence: ${campaign?.name || ''}`, file, 'landscape')
+      } else {
+        await exportToExcel(rows, EVIDENCE_COLUMNS.map(([k]) => k), EVIDENCE_COLUMNS.map(([, h]) => h), file, 'Access review')
+      }
     } catch (e) {
       setActionError(toUserMessage(e, 'Could not export the evidence.'))
+    } finally {
+      setExporting('')
     }
   }
 
@@ -257,7 +287,7 @@ function CampaignView({ campaignId, onBack, onChanged }) {
         <Btn icon={ArrowLeft} onClick={onBack}>All reviews</Btn>
         <div className="flex-1 min-w-0">
           <h2 className="text-lg font-semibold text-gray-100 truncate">{campaign.name}</h2>
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-gray-400">
             Snapshot {fmtDate(campaign.created_at, true)} by {campaign.created_by_email || 'N/A'}
             {' | '}Due {fmtDate(campaign.due_at)}
             {closed && ` | Closed ${fmtDate(campaign.closed_at, true)} by ${campaign.closed_by_email || 'N/A'}`}
@@ -265,7 +295,8 @@ function CampaignView({ campaignId, onBack, onChanged }) {
         </div>
         <Toolbar>
           <Btn icon={RefreshCw} onClick={load} busy={loading}>Refresh</Btn>
-          <Btn icon={Download} onClick={exportEvidence}>Export evidence</Btn>
+          <Btn icon={FileSpreadsheet} onClick={() => exportEvidence('excel')} busy={exporting === 'excel'}>Export evidence</Btn>
+          <Btn icon={FileText} onClick={() => exportEvidence('pdf')} busy={exporting === 'pdf'}>PDF</Btn>
           {!closed && (
             <Btn variant="danger" icon={Lock} onClick={() => setApplyOpen(true)}>Apply decisions</Btn>
           )}
@@ -297,20 +328,20 @@ function CampaignView({ campaignId, onBack, onChanged }) {
       <div className="grid gap-4 lg:grid-cols-3">
         <Panel>
           <PanelHeader icon={ListChecks} title="Decision progress" subtitle={`${progress.decided} of ${progress.total} decided`} />
-          <div className="px-4 pb-4">
+          <div>
             <ShareChart parts={parts} center={{ value: progress.pct == null ? 'N/A' : `${progress.pct}%`, label: 'Decided' }}
               summary={`${progress.decided} of ${progress.total} users have a decision`} />
           </div>
         </Panel>
         <Panel>
           <PanelHeader icon={Users} title="Users by role" subtitle="Largest eight roles in this snapshot" />
-          <div className="px-4 pb-4">
+          <div>
             <BarsChart bars={byRole} summary="Number of users per role" />
           </div>
         </Panel>
         <Panel>
           <PanelHeader icon={UserX} title="Reviewer attention" subtitle="Accounts that deserve a closer look" />
-          <div className="px-4 pb-4 space-y-3">
+          <div className="space-y-3">
             <ScoreRing score={progress.pct ?? 0} label="Completion" size={96} />
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <StatTile label="Dormant" value={dormantCount} sub={`${DORMANT_DAYS}+ days`} tone={dormantCount ? 'warning' : 'default'}
@@ -331,17 +362,17 @@ function CampaignView({ campaignId, onBack, onChanged }) {
               Keep all pending in view ({bulkTargets.length})
             </Btn>
           )} />
-        <div className="px-4 pb-4 space-y-3">
+        <div className="space-y-3">
           <Toolbar>
             <SearchInput value={search} onChange={setSearch} placeholder="Search name, email, role, country or site" className="w-72" />
-            <Select value={role} onChange={setRole} placeholder="All roles" options={roles.map((r) => ({ value: r, label: r }))} className="w-44" />
-            <Segmented value={flag} onChange={setFlag} options={[
+            <Select value={role} onChange={setRole} placeholder="All roles" ariaLabel="Filter by role" options={roles.map((r) => ({ value: r, label: r }))} className="w-44" />
+            <Segmented role="group" ariaLabel="Filter by account type" value={flag} onChange={setFlag} options={[
               { key: 'all', label: 'Everyone' },
               { key: 'dormant', label: 'Dormant', count: dormantCount },
               { key: 'super', label: 'Super admins', count: superCount },
               { key: 'grants', label: 'Has grants', count: grantsCount },
             ]} />
-            <Segmented value={decision} onChange={setDecision} options={[
+            <Segmented role="group" ariaLabel="Filter by decision" value={decision} onChange={setDecision} options={[
               { key: 'all', label: 'Any decision' },
               { key: 'pending', label: 'Pending', count: progress.pending },
               { key: 'keep', label: 'Keep', count: progress.keep },
@@ -355,8 +386,14 @@ function CampaignView({ campaignId, onBack, onChanged }) {
           ) : (
             <Table>
               <THead>
-                <Th>User</Th><Th>Role</Th><Th>Countries</Th><Th>Sites</Th>
-                <Th align="right">Grants</Th><Th>Last sign in</Th><Th>Decision</Th><Th align="right">Action</Th>
+                <Th sortKey="full_name" sort={sort} onSort={onSort}>User</Th>
+                <Th sortKey="role" sort={sort} onSort={onSort}>Role</Th>
+                <Th sortKey="countries" sort={sort} onSort={onSort}>Countries</Th>
+                <Th sortKey="sites" sort={sort} onSort={onSort}>Sites</Th>
+                <Th align="right" sortKey="grants" sort={sort} onSort={onSort}>Grants</Th>
+                <Th sortKey="last_sign_in_at" sort={sort} onSort={onSort}>Last sign in</Th>
+                <Th sortKey="decision" sort={sort} onSort={onSort}>Decision</Th>
+                <Th align="right">Action</Th>
               </THead>
               <tbody>
                 {shown.map((it) => {
@@ -371,7 +408,7 @@ function CampaignView({ campaignId, onBack, onChanged }) {
                           {it.is_super_admin && <Badge tone="accent" icon={ShieldCheck}>Super admin</Badge>}
                           {it.locked && <Badge tone="quiet" icon={Lock}>Locked</Badge>}
                         </div>
-                        <p className="text-[11px] text-gray-500">{it.user_email || 'N/A'}</p>
+                        <p className="text-[11px] text-gray-400">{it.user_email || 'N/A'}</p>
                       </Td>
                       <Td nowrap>{it.role || 'N/A'}</Td>
                       <Td><span className="text-gray-400">{(it.country || []).join(', ') || 'None'}</span></Td>
@@ -388,8 +425,8 @@ function CampaignView({ campaignId, onBack, onChanged }) {
                       </Td>
                       <Td>
                         <Badge tone={DECISION_TONE[it.decision] || 'quiet'} icon={DIcon}>{DECISION_LABEL[it.decision] || 'Pending'}</Badge>
-                        {it.decision_note && <p className="text-[11px] text-gray-500 mt-0.5 max-w-[220px] truncate" title={it.decision_note}>{it.decision_note}</p>}
-                        {it.apply_result && <p className="text-[11px] text-gray-500 mt-0.5">Applied: {it.apply_result}</p>}
+                        {it.decision_note && <p className="text-[11px] text-gray-400 mt-0.5 max-w-[220px] truncate" title={it.decision_note}>{it.decision_note}</p>}
+                        {it.apply_result && <p className="text-[11px] text-gray-400 mt-0.5">Applied: {it.apply_result}</p>}
                       </Td>
                       <Td align="right" nowrap>
                         {closed ? (
@@ -439,7 +476,7 @@ function CampaignView({ campaignId, onBack, onChanged }) {
           <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={4} autoFocus
             aria-label={noteFor?.decision === 'revoke' ? 'Reason for revoking' : 'What should change'}
             placeholder={noteFor?.decision === 'revoke' ? 'Reason, for example: left the company' : 'What should change'}
-            className="w-full rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 p-2.5 placeholder-gray-600 focus:border-gray-700 focus:outline-none" />
+            className="w-full rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 p-2.5 placeholder-gray-500 focus:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />
         </div>
       </Modal>
 
@@ -509,6 +546,7 @@ export default function ConsoleAccessReviews() {
   const openCount = campaigns.filter((c) => c.status !== 'closed').length
   const overdueCount = campaigns.filter((c) => isOverdue(c)).length
   const lastClosed = campaigns.find((c) => c.status === 'closed')
+  const na = loading || !!error
 
   async function start() {
     setStarting(true); setStartError(null)
@@ -531,7 +569,7 @@ export default function ConsoleAccessReviews() {
           <h1 className="text-xl font-semibold text-gray-100 flex items-center gap-2">
             <ClipboardCheck size={20} className="text-orange-400" /> Access Reviews
           </h1>
-          <p className="text-xs text-gray-500 mt-0.5">
+          <p className="text-xs text-gray-400 mt-0.5">
             Periodic recertification of every user's access, kept as audit evidence (ISO 27001 A.5.18 and A.8.2, SOC 2 CC6).
           </p>
         </div>
@@ -548,20 +586,20 @@ export default function ConsoleAccessReviews() {
       ) : (
         <>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <StatTile label="Reviews" value={campaigns.length} icon={ClipboardCheck} />
-            <StatTile label="Open" value={openCount} icon={Clock} tone={openCount ? 'accent' : 'default'} />
-            <StatTile label="Overdue" value={overdueCount} icon={AlertTriangle} tone={overdueCount ? 'danger' : 'good'} />
-            <StatTile label="Last completed" value={lastClosed ? fmtDate(lastClosed.closed_at) : 'Never'} icon={CalendarClock}
-              sub={lastClosed ? lastClosed.name : 'No review has been closed yet'} />
+            <StatTile label="Reviews" value={na ? 'N/A' : campaigns.length} icon={ClipboardCheck} />
+            <StatTile label="Open" value={na ? 'N/A' : openCount} icon={Clock} tone={openCount ? 'accent' : 'default'} />
+            <StatTile label="Overdue" value={na ? 'N/A' : overdueCount} icon={AlertTriangle} tone={na ? 'default' : overdueCount ? 'danger' : 'good'} />
+            <StatTile label="Last completed" value={na ? 'N/A' : lastClosed ? fmtDate(lastClosed.closed_at) : 'Never'} icon={CalendarClock}
+              sub={na ? undefined : lastClosed ? lastClosed.name : 'No review has been closed yet'} />
           </div>
-          {!loading && !lastClosed && (
+          {!na && !lastClosed && (
             <Note icon={AlertTriangle} tone="warning">
               No access review has been completed. Auditors expect one at least every quarter for privileged users and every year for everyone.
             </Note>
           )}
           <Panel>
             <PanelHeader icon={ListChecks} title="Review campaigns" subtitle="Open one to record decisions or export the evidence" />
-            <div className="px-4 pb-4">
+            <div>
               {loading ? <LoadingState label="Loading reviews" />
                 : error ? <ErrorState message={error} onRetry={load} />
                   : <CampaignList campaigns={campaigns} onOpen={setOpenId} />}
@@ -587,7 +625,7 @@ export default function ConsoleAccessReviews() {
             <input type="date" value={due} onChange={(e) => setDue(e.target.value)}
               className="mt-1 w-full rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 px-2.5 py-1.5 focus:border-gray-700 focus:outline-none" />
           </label>
-          <p className="text-[11px] text-gray-500">
+          <p className="text-[11px] text-gray-400">
             The snapshot is fixed at the moment the review starts, so the evidence shows exactly what was reviewed even if access changes later.
           </p>
           {startError && <Note icon={AlertTriangle} tone="danger">{startError}</Note>}

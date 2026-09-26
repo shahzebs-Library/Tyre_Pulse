@@ -20,7 +20,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  UserX, RefreshCw, Mail, Clock, Play, CheckCircle2, XCircle, Inbox, Info,
+  UserX, RefreshCw, Mail, Clock, Play, CheckCircle2, XCircle, Inbox, Info, FileSpreadsheet, FileText,
 } from 'lucide-react'
 import {
   Panel, PanelHeader, Note, StatTile, ProportionBar, Badge, Btn, Segmented, SearchInput, Toolbar,
@@ -32,6 +32,7 @@ import {
   listDeletionRequests, setDeletionRequestStatus, DELETION_STATUSES,
 } from '../../lib/api/accountDeletion'
 import { toUserMessage } from '../../lib/safeError'
+import { exportConsoleRows, sortRows, useTableSort } from '../../lib/consoleTable'
 
 const STATUS_META = {
   pending:    { label: 'Pending',    tone: 'warning' },
@@ -64,7 +65,10 @@ export default function ConsoleAccountDeletions() {
   const [filter, setFilter]     = useState('all')
   const [search, setSearch]     = useState('')
   const [loading, setLoading]   = useState(true)
-  const [error, setError]       = useState('')
+  const [error, setError]       = useState('')      // the queue could not be read
+  const [actionError, setActionError] = useState('') // a status change failed
+  const [exporting, setExporting] = useState('')
+  const { sort, onSort } = useTableSort({ key: 'requested_at', dir: 'desc' })
   const [busyId, setBusyId]     = useState(null)   // row being advanced
   const [confirm, setConfirm]   = useState(null)   // { id, status, email }
 
@@ -74,6 +78,7 @@ export default function ConsoleAccountDeletions() {
       const data = await listDeletionRequests({})
       setRows(Array.isArray(data) ? data : [])
     } catch (e) {
+      setRows([])
       setError(toUserMessage(e, 'Could not load deletion requests.'))
     } finally {
       setLoading(false)
@@ -96,6 +101,8 @@ export default function ConsoleAccountDeletions() {
       return `${r.email || ''} ${r.reason || ''}`.toLowerCase().includes(q)
     })
   }, [rows, filter, search])
+  const sorted = useMemo(() => sortRows(visible, sort), [visible, sort])
+  const na = loading || !!error
 
   const trend = useMemo(() => dailySeries(rows, (r) => r.requested_at, TREND_DAYS), [rows])
 
@@ -107,14 +114,36 @@ export default function ConsoleAccountDeletions() {
   }, [rows])
 
   async function advance(id, status) {
-    setBusyId(id); setError('')
+    setBusyId(id); setActionError('')
     try {
       const updated = await setDeletionRequestStatus(id, status)
       setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...updated } : r)))
     } catch (e) {
-      setError(toUserMessage(e, 'Could not update the request.'))
+      setActionError(toUserMessage(e, 'Could not update the request.'))
     } finally {
       setBusyId(null); setConfirm(null)
+    }
+  }
+
+  async function runExport(format) {
+    setExporting(format); setActionError('')
+    try {
+      await exportConsoleRows({
+        rows: sorted,
+        title: 'Account Deletion Requests',
+        format,
+        columns: [
+          { key: 'email', header: 'Requester' },
+          { key: 'reason', header: 'Reason' },
+          { key: 'requested_at', header: 'Requested', value: (r) => fmtDateTime(r.requested_at) },
+          { key: 'status', header: 'Status', value: (r) => STATUS_META[r.status]?.label || r.status },
+          { key: 'processed_at', header: 'Resolved', value: (r) => (r.processed_at ? fmtDateTime(r.processed_at) : '') },
+        ],
+      })
+    } catch (e) {
+      setActionError(toUserMessage(e, 'Could not create the export file.'))
+    } finally {
+      setExporting('')
     }
   }
 
@@ -128,7 +157,7 @@ export default function ConsoleAccountDeletions() {
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2"><UserX size={18} className="text-orange-400" /> Account Deletions</h1>
-          <p className="text-xs text-gray-500 mt-1">Work the account and data deletion request queue for your organisation.</p>
+          <p className="text-xs text-gray-400 mt-1">Work the account and data deletion request queue for your organisation.</p>
         </div>
         <Btn icon={RefreshCw} onClick={load} busy={loading}>Refresh</Btn>
       </header>
@@ -138,18 +167,20 @@ export default function ConsoleAccountDeletions() {
       </Note>
 
       <ErrorState message={error} onRetry={load} />
+      <ErrorState message={actionError} />
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <StatTile label="Total" value={loading ? 'N/A' : counts.total} icon={Inbox} />
-        <StatTile label="Pending" value={loading ? 'N/A' : counts.pending} tone={counts.pending ? 'warning' : 'default'}
+        <StatTile label="Total" value={na ? 'N/A' : counts.total} icon={Inbox}
+          onClick={() => setFilter('all')} active={filter === 'all'} />
+        <StatTile label="Pending" value={na ? 'N/A' : counts.pending} tone={counts.pending ? 'warning' : 'default'}
           onClick={() => setFilter('pending')} active={filter === 'pending'} />
-        <StatTile label="Processing" value={loading ? 'N/A' : counts.processing}
+        <StatTile label="Processing" value={na ? 'N/A' : counts.processing}
           onClick={() => setFilter('processing')} active={filter === 'processing'} />
-        <StatTile label="Completed" value={loading ? 'N/A' : counts.completed} tone="good"
+        <StatTile label="Completed" value={na ? 'N/A' : counts.completed} tone="good"
           onClick={() => setFilter('completed')} active={filter === 'completed'} />
-        <StatTile label="Rejected" value={loading ? 'N/A' : counts.rejected} tone={counts.rejected ? 'danger' : 'default'}
+        <StatTile label="Rejected" value={na ? 'N/A' : counts.rejected} tone={counts.rejected ? 'danger' : 'default'}
           onClick={() => setFilter('rejected')} active={filter === 'rejected'} />
-        <StatTile label="Oldest open" value={loading || oldestOpen == null ? 'N/A' : `${oldestOpen}d`}
+        <StatTile label="Oldest open" value={na || oldestOpen == null ? 'N/A' : `${oldestOpen}d`}
           sub="Days since the oldest open request" tone={oldestOpen != null && oldestOpen > 30 ? 'danger' : 'default'} icon={Clock} />
       </div>
 
@@ -157,7 +188,9 @@ export default function ConsoleAccountDeletions() {
         <Panel className="lg:col-span-2">
           <PanelHeader icon={Clock} title="Requests raised per day"
             subtitle={`Last ${TREND_DAYS} days, ${trend.total} request${trend.total === 1 ? '' : 's'} in the window`} />
-          {loading ? <LoadingState rows={3} /> : (
+          {loading ? <LoadingState rows={3} /> : error ? (
+            <p className="text-xs text-gray-400">Unavailable because the queue could not be read.</p>
+          ) : (
             <TrendChart labels={trend.labels} series={[{ label: 'Requests', values: trend.values }]} height={180}
               summary={`${trend.total} deletion requests raised in the last ${TREND_DAYS} days`}
               emptyText="No deletion requests raised in the last 30 days." />
@@ -165,7 +198,9 @@ export default function ConsoleAccountDeletions() {
         </Panel>
         <Panel>
           <PanelHeader icon={Inbox} title="Queue by status" subtitle="Share of every request on record" />
-          {loading ? <LoadingState rows={2} /> : counts.total === 0 ? (
+          {loading ? <LoadingState rows={2} /> : error ? (
+            <p className="text-xs text-gray-400">Unavailable because the queue could not be read.</p>
+          ) : counts.total === 0 ? (
             <EmptyState title="No requests" reason="No user has filed a deletion request yet." />
           ) : (
             <div className="space-y-3">
@@ -190,29 +225,37 @@ export default function ConsoleAccountDeletions() {
 
       <Panel flush>
         <div className="p-4 pb-3 space-y-3">
-          <PanelHeader icon={Inbox} title="Requests" subtitle={`${visible.length} of ${counts.total} shown`} />
+          <PanelHeader icon={Inbox} title="Requests" subtitle={na ? undefined : `${visible.length} of ${counts.total} shown`}
+            actions={(
+              <>
+                <Btn icon={FileSpreadsheet} onClick={() => runExport('excel')} busy={exporting === 'excel'} disabled={na || sorted.length === 0}>Excel</Btn>
+                <Btn icon={FileText} onClick={() => runExport('pdf')} busy={exporting === 'pdf'} disabled={na || sorted.length === 0}>PDF</Btn>
+              </>
+            )} />
           <Toolbar>
-            <Segmented options={filterOptions} value={filter} onChange={setFilter} />
+            <Segmented options={filterOptions} value={filter} onChange={setFilter} ariaLabel="Filter by status" />
             <SearchInput value={search} onChange={setSearch} placeholder="Search email or reason" className="w-64" />
           </Toolbar>
         </div>
-        {loading ? <div className="px-4"><LoadingState label="Loading requests" /></div> : visible.length === 0 ? (
+        {loading ? <div className="px-4"><LoadingState label="Loading requests" /></div> : error ? (
+          <EmptyState title="Queue unavailable" reason="The deletion request queue could not be read. Use Retry above." />
+        ) : visible.length === 0 ? (
           <EmptyState
             title={rows.length === 0 ? 'No deletion requests' : 'No requests match'}
             reason={rows.length === 0
-              ? (error ? 'The queue could not be read, so nothing is shown.' : 'No user has filed an account deletion request.')
+              ? 'No user has filed an account deletion request.'
               : 'Nothing matches the current status filter and search.'} />
         ) : (
           <Table className="border-0 rounded-none">
             <THead>
-              <Th>Requester</Th>
-              <Th>Reason</Th>
-              <Th>Requested</Th>
-              <Th>Status</Th>
+              <Th sortKey="email" sort={sort} onSort={onSort}>Requester</Th>
+              <Th sortKey="reason" sort={sort} onSort={onSort}>Reason</Th>
+              <Th sortKey="requested_at" sort={sort} onSort={onSort}>Requested</Th>
+              <Th sortKey="status" sort={sort} onSort={onSort}>Status</Th>
               <Th align="right">Actions</Th>
             </THead>
             <tbody>
-              {visible.map((r) => {
+              {sorted.map((r) => {
                 const rowBusy = busyId === r.id
                 return (
                   <Tr key={r.id}>
@@ -222,7 +265,7 @@ export default function ConsoleAccountDeletions() {
                         {r.email || 'N/A'}
                       </span>
                     </Td>
-                    <Td className="text-gray-400 max-w-[260px] truncate"><span title={r.reason || ''}>{r.reason || 'N/A'}</span></Td>
+                    <Td className="text-gray-300 max-w-[260px] truncate"><span title={r.reason || ''}>{r.reason || 'N/A'}</span></Td>
                     <Td nowrap className="text-gray-400">{fmtDateTime(r.requested_at)}</Td>
                     <Td><StatusBadge status={r.status} /></Td>
                     <Td align="right">
@@ -240,7 +283,7 @@ export default function ConsoleAccountDeletions() {
                           </>
                         )}
                         {(r.status === 'completed' || r.status === 'rejected') && (
-                          <span className="text-[11px] text-gray-500">Resolved {fmtDateTime(r.processed_at)}</span>
+                          <span className="text-[11px] text-gray-400">Resolved {fmtDateTime(r.processed_at)}</span>
                         )}
                       </div>
                     </Td>

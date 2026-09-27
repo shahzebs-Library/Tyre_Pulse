@@ -34,7 +34,11 @@ enum InspectionSubmitIssue {
   missingSite,
   missingVehicle,
   missingInspectorName,
-  missingGps,
+
+  /// The odometer or hour meter holds text that is not a readable number.
+  /// Raised by the wizard state (which owns the typed text), never by
+  /// [validateInspectionForSubmit], which only sees the parsed payload.
+  invalidMeterReading,
   noTyreTouched,
   tyresIncomplete,
   missingSignature,
@@ -84,11 +88,12 @@ class InspectionPayload {
   final String? findings;
 
   /// Kilometres. `Number('')` is 0 and 0 IS finite (artifact rule 5.22), so
-  /// this is `int?` and a blank field is represented as `null`, never as
-  /// `0` - a zero here is a real reading (an asset with a reset or brand
-  /// new odometer), and folding "not entered" into it fabricates fleet
-  /// history.
-  final int? odometerKm;
+  /// a blank field is represented as `null`, never as `0` - a zero here is a
+  /// real reading (an asset with a reset or brand new odometer), and
+  /// folding "not entered" into it fabricates fleet history. A `double`
+  /// because the column is `numeric(12,1)` (MIGRATIONS_V21.sql): a decimal
+  /// reading is storable and must not be dropped.
+  final double? odometerKm;
   final double? hourMeter;
 
   /// Self-contained SVG or `data:` URL. Required before submit - see
@@ -118,7 +123,7 @@ class InspectionPayload {
     String? notes,
     String? findings,
     bool clearFindings = false,
-    int? odometerKm,
+    double? odometerKm,
     bool clearOdometerKm = false,
     double? hourMeter,
     bool clearHourMeter = false,
@@ -238,9 +243,11 @@ List<InspectionSubmitIssue> validateInspectionForSubmit(
   if (payload.inspector.trim().isEmpty) {
     issues.add(InspectionSubmitIssue.missingInspectorName);
   }
-  if (payload.gpsFix == null) {
-    issues.add(InspectionSubmitIssue.missingGps);
-  }
+  // GPS is deliberately NOT a gate. `mobile/app/(app)/inspection/new.tsx`
+  // saves with whatever fix was warmed up and a null fix simply omits the
+  // coordinates ("the inspection must save instantly"). A site with no sky
+  // view, or an inspector who denied location, must still be able to
+  // record the tyres they looked at.
 
   // The three checks above are structural prerequisites for the two below
   // (completeness and "touched at all" need a real vehicle type to mean
@@ -248,9 +255,15 @@ List<InspectionSubmitIssue> validateInspectionForSubmit(
   // wants the FULL set of what is wrong, not just the first thing. Only
   // the actual UI flow enforces "fix the header before I show you the
   // tyres" ordering, by virtue of being a wizard.
-  if (touchedPositionCount(payload.tyreConditions) == 0) {
+  final TyreCompletenessResult completeness = inspectionCompleteness(payload);
+  if (!completeness.applicable) {
+    // Tyreless equipment (generator, placing boom, stationary pump, any
+    // plant): there is nothing to touch, so "at least one tyre" does not
+    // apply - it would make these machines impossible to inspect. The
+    // completeness engine reports them as not applicable, never "0 of 0".
+  } else if (touchedPositionCount(payload.tyreConditions) == 0) {
     issues.add(InspectionSubmitIssue.noTyreTouched);
-  } else if (!inspectionCompleteness(payload).ok) {
+  } else if (!completeness.ok) {
     issues.add(InspectionSubmitIssue.tyresIncomplete);
   }
 

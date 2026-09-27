@@ -2831,7 +2831,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pmCopyCatalog =>
-      'title=Maintenance Control Center~subtitle=Control today\'s maintenance workload~createWorkOrder=Create work order~pmDue=PM due~priorityQueue=Priority work queue~viewAll=View all~allWorkOrders=View all work orders~quickAccess=Quick access~workOrders=Work orders~workOrdersHint=Create & manage~pmSchedule=PM schedule~pmScheduleHint=Plan & track PM~inspections=Inspections~inspectionsHint=Check & report~parts=Parts~partsHint=Stock & requests~tyres=Tyres~tyresHint=Records, rotation & replacements~overdue=Overdue~dueSoon=Due soon~active=Active plans~due=Due now~all=All plans~empty=No maintenance plans~emptyDue=No preventive maintenance is due in the next 14 days.~emptyAll=No active preventive maintenance plans are available.~plan=Maintenance plan~daysOverdue=days overdue~daysLeft=days left~noDate=No due date~record=Record service~meter=Meter reading~performedBy=Performed by~workshop=Workshop~partsCost=Parts cost~labourCost=Labour cost~findings=Findings~completed=Completed~partial=Partially completed~deferred=Deferred~failed=Failed~save=Save service~invalidNumber=Enter valid numeric values.~loadFailed=The maintenance plans could not be loaded.~saveFailed=The service record could not be saved. Try again.';
+      'title=Maintenance Control Center~subtitle=Control today\'s maintenance workload~createWorkOrder=Create work order~pmDue=PM due~priorityQueue=Priority work queue~viewAll=View all~allWorkOrders=View all work orders~quickAccess=Quick access~workOrders=Work orders~workOrdersHint=Create & manage~pmSchedule=PM schedule~pmScheduleHint=Plan & track PM~inspections=Inspections~inspectionsHint=Check & report~parts=Parts~partsHint=Stock & requests~tyres=Tyres~tyresHint=Records, rotation & replacements~overdue=Overdue~dueSoon=Due soon~active=Active plans~due=Due now~all=All plans~empty=No maintenance plans~emptyDue=No preventive maintenance is due in the next 14 days.~emptyAll=No active preventive maintenance plans are available.~plan=Maintenance plan~daysOverdue=days overdue~daysLeft=days left~noDate=No due date~record=Record service~meter=Meter reading~performedBy=Performed by~workshop=Workshop~partsCost=Parts cost~labourCost=Labour cost~findings=Findings~completed=Completed~partial=Partially completed~deferred=Deferred~failed=Failed~save=Save service~invalidNumber=Enter valid numeric values.~loadFailed=The maintenance plans could not be loaded.~saveFailed=The service record could not be saved. Try again.~openBreakdowns=Open breakdowns~activeWorkOrders=Active work orders~breakdown=Breakdown~workOrder=Work order~dueToday=Due today~since=Since~opened=Opened~queueEmpty=Nothing needs attention~woLoadFailed=Open work orders could not be loaded.~retry=Retry~countFailed=This count could not be loaded. Tap to retry.';
 
   @override
   String get stockCountCopyCatalog =>
@@ -3035,4 +3035,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get inspectionSelectedAssetTitle => 'Selected asset';
+
+  @override
+  String get profileSyncUnknownFooter =>
+      'Pending sync could not be checked. Unsynced work may still be on this device';
+
+  @override
+  String get homeRecentInspectionsTitle => 'Your recent inspections';
+
+  @override
+  String get homeAssetNotChecked => 'Not checked';
+
+  @override
+  String get homeNothingForRoleTitle => 'Nothing to check for your role';
 }

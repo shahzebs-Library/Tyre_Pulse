@@ -22,6 +22,7 @@ import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/accidents/accidents_providers.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_models.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_copy.dart';
+import 'package:tyre_pulse/features/accidents/presentation/accident_mock_copy.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_ui.dart';
 import 'package:tyre_pulse/features/approvals/presentation/widgets/queue_list_kit.dart';
 
@@ -97,6 +98,9 @@ class _AccidentDashboardScreenState
       setState(() {
         if (reset) _items.clear();
         _items.addAll(page.items);
+        // A later page that loads clears an earlier load-more failure;
+        // otherwise the inline error banner outlives the problem it reports.
+        _error = null;
         _hasMore = page.hasMore;
         _loading = false;
         _loadingMore = false;
@@ -113,9 +117,9 @@ class _AccidentDashboardScreenState
 
   List<AccidentRecord> get _shown {
     final String query = _search.text.trim().toLowerCase();
+    final AccidentMockCopy mockCopy = AccidentMockCopy.of(context);
     return _items.where((AccidentRecord item) {
-      final bool closed = item.status?.toLowerCase() == 'closed' ||
-          item.closureStatus?.toLowerCase() == 'closed';
+      final bool closed = accidentRecordIsClosed(item);
       if (_status == _StatusFilter.open && closed) return false;
       if (_status == _StatusFilter.closed && !closed) return false;
       if (query.isEmpty) return true;
@@ -130,6 +134,7 @@ class _AccidentDashboardScreenState
         humaniseAccidentToken(item.displayStatus),
         item.severity,
         humaniseAccidentToken(item.severity),
+        accidentSeverityLevel(mockCopy, item.severity),
         item.reporterName,
       ].any((String? value) => value?.toLowerCase().contains(query) ?? false);
     }).toList(growable: false);
@@ -141,9 +146,9 @@ class _AccidentDashboardScreenState
   Widget build(BuildContext context) {
     final AccidentCopy copy = AccidentCopy.of(context);
     return TpScaffold(
-      // The approved mock family's open white canvas: one green primary
-      // action at the top, open section headers, hairline-divided rows.
-      backgroundColor: TpPalette.of(context).surface,
+      // The mock family's tinted canvas: a white command band with one
+      // lifted green primary action, then the register as one grouped card.
+      backgroundColor: TpPalette.of(context).surfaceAlt,
       appBar: TpAppBar(
         title: copy('dashboardTitle'),
         subtitle: copy('dashboardSubtitle'),
@@ -171,6 +176,7 @@ class _AccidentDashboardScreenState
   Widget _intro(AccidentCopy copy) {
     final TpPalette palette = TpPalette.of(context);
     final TextTheme text = Theme.of(context).textTheme;
+    final TpStatusColors alert = palette.forStatus(TpStatus.critical);
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         TpSpace.lg,
@@ -182,37 +188,84 @@ class _AccidentDashboardScreenState
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           // The single full-width green primary action of the mock family.
-          TpButton.primary(
-            key: AccidentDashboardScreenKeys.reportAction,
-            label: copy('reportAction'),
-            icon: Icons.add_a_photo_outlined,
-            isFullWidth: true,
-            onPressed: _report,
-          ),
-          const SizedBox(height: TpSpace.xl),
-          Text(
-            copy('dashboardEyebrow').toUpperCase(),
-            style: text.labelSmall?.copyWith(
-              color: palette.primary,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.5,
+          QueuePrimaryLift(
+            child: TpButton.primary(
+              key: AccidentDashboardScreenKeys.reportAction,
+              label: copy('reportAction'),
+              icon: Icons.add_a_photo_outlined,
+              isFullWidth: true,
+              onPressed: _report,
             ),
           ),
-          const SizedBox(height: TpSpace.xs),
-          Semantics(
-            header: true,
-            child: Text(
-              copy('dashboardHeroTitle'),
-              style: text.titleMedium?.copyWith(
-                color: palette.text,
-                fontWeight: FontWeight.w800,
+          const SizedBox(height: TpSpace.lg),
+          // The register's purpose, set on a soft alert-tinted panel so the
+          // command centre reads as safety work at a glance.
+          Container(
+            padding: const EdgeInsets.all(TpSpace.md),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(TpRadius.lg),
+              border: Border.all(color: alert.base.withValues(alpha: 0.18)),
+              gradient: LinearGradient(
+                begin: AlignmentDirectional.topStart,
+                end: AlignmentDirectional.bottomEnd,
+                colors: <Color>[alert.soft, palette.surface],
               ),
             ),
-          ),
-          const SizedBox(height: TpSpace.xs),
-          Text(
-            copy('dashboardHeroMessage'),
-            style: text.bodySmall?.copyWith(color: palette.textSecondary),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: palette.surface,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: alert.base.withValues(alpha: 0.25),
+                    ),
+                  ),
+                  child: Icon(
+                    Icons.car_crash_outlined,
+                    color: alert.base,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: TpSpace.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        copy('dashboardEyebrow').toUpperCase(),
+                        style: text.labelSmall?.copyWith(
+                          color: alert.onSoft,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: TpSpace.xs),
+                      Semantics(
+                        header: true,
+                        child: Text(
+                          copy('dashboardHeroTitle'),
+                          style: text.titleMedium?.copyWith(
+                            color: palette.text,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: TpSpace.xs),
+                      Text(
+                        copy('dashboardHeroMessage'),
+                        style: text.bodySmall?.copyWith(
+                          color: palette.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: TpSpace.lg),
           TpSearchField(
@@ -277,8 +330,9 @@ class _AccidentDashboardScreenState
       child: ListView(
         padding: const EdgeInsets.only(bottom: TpSpace.xxl),
         children: <Widget>[
-          _capped(_intro(copy)),
+          ColoredBox(color: palette.surface, child: _capped(_intro(copy))),
           Divider(height: 1, thickness: 1, color: palette.border),
+          const SizedBox(height: TpSpace.lg),
           if (_error != null)
             // A later page failed while earlier cases are still on screen:
             // keep them, and say plainly that the register is incomplete.
@@ -326,8 +380,15 @@ class _AccidentDashboardScreenState
                 _AccidentRow(
                   key: AccidentDashboardScreenKeys.card(shown[i].id),
                   item: shown[i],
-                  showDivider: i < shown.length - 1 || _hasMore,
+                  showDivider: i < shown.length - 1,
+                  isFirst: i == 0,
                   notRecordedLabel: copy('notRecorded'),
+                  severityLabel: (shown[i].severity?.trim().isEmpty ?? true)
+                      ? copy('notRecorded')
+                      : accidentSeverityLevel(
+                          AccidentMockCopy.of(context),
+                          shown[i].severity,
+                        ),
                   unrecordedAssetLabel: copy('unrecordedAsset'),
                   onTap: () => context.push(
                     AccidentDetailRoute(accidentId: AccidentId(shown[i].id))
@@ -365,14 +426,22 @@ class _AccidentRow extends StatelessWidget {
     required this.item,
     required this.onTap,
     required this.showDivider,
+    required this.isFirst,
     required this.notRecordedLabel,
+    required this.severityLabel,
     required this.unrecordedAssetLabel,
     super.key,
   });
   final AccidentRecord item;
   final VoidCallback onTap;
   final bool showDivider;
+  final bool isFirst;
   final String notRecordedLabel;
+
+  /// The canonical Minor / Moderate / Major level, already localised. The
+  /// stored token is never shown raw: `severe` (and legacy `fatal` /
+  /// `total loss`) read Major, matching the web ladder in accidentVocab.js.
+  final String severityLabel;
   final String unrecordedAssetLabel;
 
   @override
@@ -393,7 +462,7 @@ class _AccidentRow extends StatelessWidget {
           status: statusTone,
         ),
         QueueStatusTag(
-          label: _humanisedOr(item.severity, notRecordedLabel),
+          label: severityLabel,
           status: severityTone,
         ),
       ],
@@ -405,6 +474,7 @@ class _AccidentRow extends StatelessWidget {
         ]),
       ],
       showDivider: showDivider,
+      isFirst: isFirst,
       onTap: onTap,
     );
   }

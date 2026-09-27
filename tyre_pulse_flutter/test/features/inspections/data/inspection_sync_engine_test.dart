@@ -80,6 +80,7 @@ class _FakeRemoteRepository implements InspectionRemoteRepository {
   /// Set to throw a specific object on the next [upsertInspection] call.
   Object? failWith;
   final List<String> upsertedClientUuids = <String>[];
+  final List<InspectionPayload> upsertedPayloads = <InspectionPayload>[];
 
   @override
   Future<List<String>> listSites({String? country}) async => <String>[];
@@ -94,6 +95,7 @@ class _FakeRemoteRepository implements InspectionRemoteRepository {
       throw failure; // ignore: only_throw_errors - deliberate arbitrary-error injection
     }
     upsertedClientUuids.add(clientUuid);
+    upsertedPayloads.add(payload);
   }
 
   @override
@@ -154,11 +156,35 @@ class _FakeDraftRepository implements InspectionDraftRepository {
     String? findings,
   }) async {}
 
+  final List<(String, String)> detachCalls = <(String, String)>[];
+
+  @override
+  Future<InspectionDraftHeader?> header(String draftKey) async => null;
+
+  @override
+  Future<List<String>> removePhotos(String draftKey, String position) async =>
+      <String>[];
+
+  @override
+  Future<bool> detachForSubmission({
+    required String fromKey,
+    required String toKey,
+  }) async {
+    detachCalls.add((fromKey, toKey));
+    if (readingsByDraft.containsKey(toKey)) return true;
+    final Map<String, TyrePositionReading>? moved =
+        readingsByDraft.remove(fromKey);
+    if (moved == null) return false;
+    readingsByDraft[toKey] = moved;
+    return true;
+  }
+
   @override
   Future<void> saveTyreReading(
     String draftKey,
-    TyrePositionReading reading,
-  ) async {
+    TyrePositionReading reading, {
+    bool markChecked = true,
+  }) async {
     final Map<String, TyrePositionReading> map = readingsByDraft.putIfAbsent(
       draftKey,
       () => <String, TyrePositionReading>{},
@@ -303,7 +329,7 @@ void main() {
       expect(await queue.byId('c-1'), isNull);
 
       // The draft is discarded ONLY on confirmed delivery.
-      expect(draftRepo.discardCalls, <String>['draft-1']);
+      expect(draftRepo.discardCalls, <String>['draft-1#submitted:c-1']);
     });
 
     test(
@@ -432,7 +458,7 @@ void main() {
 
       uploader.shouldFail = false;
       await engine.flushQueue();
-      expect(draftRepo.discardCalls, <String>['draft-1']);
+      expect(draftRepo.discardCalls, <String>['draft-1#submitted:c-1']);
       expect(await queue.byId('c-1'), isNull);
     });
 
@@ -453,6 +479,165 @@ void main() {
       );
 
       expect(uploader.uploadedPaths, isEmpty);
+    });
+  });
+
+  group('P0-1: per-tyre notes survive delivery', () {
+    test(
+        'the delivered payload keeps each wheel\'s notes and readings from the '
+        'queued snapshot; the draft (which has no notes column) only '
+        'supplies the photo path', () async {
+      draftRepo.readingsByDraft['draft-1'] = <String, TyrePositionReading>{
+        // What the draft row really holds: no notes, a photo path folded in.
+        'LHF1': const TyrePositionReading(
+          position: 'LHF1',
+          checked: true,
+          photoLocalPath: '/tmp/lhf1.jpg',
+        ),
+      };
+
+      await engine.submitNow(
+        draftKey: 'draft-1',
+        payload: _payload(
+          tyreConditions: <String, TyrePositionReading>{
+            'LHF1': const TyrePositionReading(
+              position: 'LHF1',
+              condition: TyreReadingCondition.worn,
+              pressurePsi: 0,
+              checked: true,
+              notes: 'Sidewall bulge, inner edge',
+            ),
+          },
+        ),
+        clientUuid: 'c-1',
+      );
+
+      final TyrePositionReading sent =
+          remote.upsertedPayloads.single.tyreConditions['LHF1']!;
+      expect(sent.notes, 'Sidewall bulge, inner edge');
+      expect(sent.condition, TyreReadingCondition.worn);
+      expect(sent.pressurePsi, 0);
+      expect(sent.photoUrl, 'https://example.test/uploaded/LHF1.jpg');
+      expect(uploader.uploadedPaths, <String>['/tmp/lhf1.jpg']);
+    });
+
+    test(
+        'mergeDraftPhotos never adds a wheel the snapshot did not submit '
+        'and never replaces a permanent photo URL', () {
+      final Map<String, TyrePositionReading> merged = mergeDraftPhotos(
+        snapshot: <String, TyrePositionReading>{
+          'LHF1': const TyrePositionReading(
+            position: 'LHF1',
+            notes: 'keep',
+            photoUrl: 'https://x/lhf1.jpg',
+          ),
+          'RHF1': const TyrePositionReading(position: 'RHF1', notes: 'n'),
+        },
+        draft: <String, TyrePositionReading>{
+          'LHF1': const TyrePositionReading(
+            position: 'LHF1',
+            photoLocalPath: '/tmp/a.jpg',
+          ),
+          'RHF1': const TyrePositionReading(
+            position: 'RHF1',
+            photoLocalPath: '/tmp/b.jpg',
+          ),
+          'LHR1': const TyrePositionReading(
+            position: 'LHR1',
+            photoLocalPath: '/tmp/c.jpg',
+          ),
+        },
+      );
+      expect(merged.keys, unorderedEquals(<String>['LHF1', 'RHF1']));
+      expect(merged['LHF1']!.photoUrl, 'https://x/lhf1.jpg');
+      expect(merged['LHF1']!.photoLocalPath, isNull);
+      expect(merged['RHF1']!.photoLocalPath, '/tmp/b.jpg');
+      expect(merged['RHF1']!.notes, 'n');
+    });
+  });
+
+  group('P0-3: a submitted draft leaves the live key', () {
+    test(
+        'submitNow queues under the submitted key and moves the draft there '
+        'before any delivery attempt', () async {
+      remote.failWith = const SupabaseFailure(
+        error: AppError.network(),
+        cause: SupabaseFailureCause.offline,
+      );
+      draftRepo.readingsByDraft['user-1|TM514'] = <String, TyrePositionReading>{
+        'LHF1': const TyrePositionReading(position: 'LHF1', checked: true),
+      };
+
+      await engine.submitNow(
+        draftKey: 'user-1|TM514',
+        payload: _payload(),
+        clientUuid: 'c-9',
+      );
+
+      final QueuedInspection queued = (await queue.byId('c-9'))!;
+      expect(queued.draftKey, 'user-1|TM514#submitted:c-9');
+      expect(draftRepo.detachCalls, <(String, String)>[
+        ('user-1|TM514', 'user-1|TM514#submitted:c-9'),
+      ]);
+      // The live key is now free for the next inspection of TM514.
+      expect(draftRepo.readingsByDraft.containsKey('user-1|TM514'), isFalse);
+    });
+
+    test(
+        'reconcile upgrades an entry an older build queued under the live '
+        'key: the draft moves and the entry is rewritten', () async {
+      draftRepo.readingsByDraft['user-1|TM514'] = <String, TyrePositionReading>{
+        'LHF1': const TyrePositionReading(position: 'LHF1', checked: true),
+      };
+      await queue.enqueue(
+        QueuedInspection(
+          id: 'old-1',
+          draftKey: 'user-1|TM514',
+          payload: _payload(),
+          createdAt: DateTime.utc(2026, 8, 20),
+          status: InspectionQueueStatus.failed,
+        ),
+      );
+
+      await engine.reconcileQueuedDrafts();
+
+      expect(
+        (await queue.byId('old-1'))!.draftKey,
+        'user-1|TM514#submitted:old-1',
+      );
+      expect(
+        draftRepo.readingsByDraft.keys,
+        <String>['user-1|TM514#submitted:old-1'],
+      );
+      // Running it again changes nothing.
+      await engine.reconcileQueuedDrafts();
+      expect(
+        (await queue.byId('old-1'))!.draftKey,
+        'user-1|TM514#submitted:old-1',
+      );
+    });
+
+    test(
+        'reconcile completes a move a crash interrupted, from the live key '
+        'the submitted key names', () async {
+      draftRepo.readingsByDraft['user-1|TM514'] = <String, TyrePositionReading>{
+        'LHF1': const TyrePositionReading(position: 'LHF1', checked: true),
+      };
+      await queue.enqueue(
+        QueuedInspection(
+          id: 'c-2',
+          draftKey: 'user-1|TM514#submitted:c-2',
+          payload: _payload(),
+          createdAt: DateTime.utc(2026, 8, 20),
+        ),
+      );
+
+      await engine.reconcileQueuedDrafts();
+
+      expect(
+        draftRepo.readingsByDraft.keys,
+        <String>['user-1|TM514#submitted:c-2'],
+      );
     });
   });
 

@@ -186,8 +186,9 @@ class _ChecklistApprovalsQueueScreenState
 
     return TpScaffold(
       backFallback: fallback,
-      // The mock family's open white canvas - see the inspection queue.
-      backgroundColor: TpPalette.of(context).surface,
+      // The tinted canvas behind one grouped white card - see the
+      // inspection queue.
+      backgroundColor: TpPalette.of(context).surfaceAlt,
       appBar: TpAppBar(
         title: l10n.checklistApprovalsTitle,
         subtitle: _loading
@@ -231,6 +232,7 @@ class _ChecklistApprovalsQueueScreenState
             Container(
               width: double.infinity,
               decoration: BoxDecoration(
+                color: TpPalette.of(context).surface,
                 border: Border(
                   bottom: BorderSide(color: TpPalette.of(context).border),
                 ),
@@ -267,7 +269,10 @@ class _ChecklistApprovalsQueueScreenState
                     ],
                   )
                 : ListView.builder(
-                    padding: const EdgeInsets.only(bottom: TpSpace.xxl),
+                    padding: const EdgeInsets.only(
+                      top: TpSpace.lg,
+                      bottom: TpSpace.xxl,
+                    ),
                     itemCount: visible.length,
                     itemBuilder: (context, index) {
                       final ChecklistApprovalItem item = visible[index];
@@ -275,6 +280,7 @@ class _ChecklistApprovalsQueueScreenState
                         item: item,
                         locale: Localizations.localeOf(context).toLanguageTag(),
                         showDivider: index < visible.length - 1,
+                        isFirst: index == 0,
                         summary: statusSummary(
                           _templateLikeFor(item),
                           item.asSubmissionLike,
@@ -442,6 +448,7 @@ class _QueueRow extends StatelessWidget {
     required this.item,
     required this.locale,
     required this.showDivider,
+    required this.isFirst,
     required this.summary,
     required this.isMine,
     required this.fallbackTitle,
@@ -452,6 +459,7 @@ class _QueueRow extends StatelessWidget {
   final ChecklistApprovalItem item;
   final String locale;
   final bool showDivider;
+  final bool isFirst;
   final ApprovalStatusSummary summary;
   final bool isMine;
   final String fallbackTitle;
@@ -493,6 +501,7 @@ class _QueueRow extends StatelessWidget {
         ].join(' • '),
       ],
       showDivider: showDivider,
+      isFirst: isFirst,
       onTap: onTap,
     );
   }

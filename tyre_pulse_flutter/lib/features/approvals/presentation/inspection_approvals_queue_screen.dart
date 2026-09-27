@@ -157,9 +157,9 @@ class _InspectionApprovalsQueueScreenState
 
     return TpScaffold(
       backFallback: fallback,
-      // The mock family's open white canvas: rows sit on the page itself,
-      // separated by hairlines, not floated as cards on a tinted ground.
-      backgroundColor: TpPalette.of(context).surface,
+      // A softly tinted canvas so each date group reads as one white card,
+      // the depth the mock family's list sections carry.
+      backgroundColor: TpPalette.of(context).surfaceAlt,
       appBar: TpAppBar(
         title: l10n.inspectionApprovalsTitle,
         backFallback: fallback,
@@ -278,12 +278,14 @@ class _InspectionApprovalsQueueScreenState
           final InspectionApprovalItem item = row as InspectionApprovalItem;
           final bool lastInGroup =
               index == rows.length || rows[index] is String;
+          final bool firstInGroup = index < 2 || rows[index - 2] is String;
           return _capped(
             _QueueRow(
               item: item,
               tab: _tab,
               locale: locale,
               showDivider: !lastInGroup,
+              isFirst: firstInGroup,
               fallbackTitle: l10n.inspectionApprovalFallbackTitle,
               inspectorFallback: l10n.inspectionInspectorUnknown,
               pendingLabel: l10n.inspectionApprovalsPendingBadge,
@@ -345,6 +347,7 @@ class _QueueSummary extends StatelessWidget {
     return DecoratedBox(
       key: InspectionApprovalsQueueKeys.summary,
       decoration: BoxDecoration(
+        color: palette.surface,
         border: Border(bottom: BorderSide(color: palette.border)),
       ),
       child: Padding(
@@ -406,6 +409,7 @@ class _QueueRow extends StatelessWidget {
     required this.tab,
     required this.locale,
     required this.showDivider,
+    required this.isFirst,
     required this.fallbackTitle,
     required this.inspectorFallback,
     required this.pendingLabel,
@@ -418,6 +422,7 @@ class _QueueRow extends StatelessWidget {
   final InspectionApprovalTab tab;
   final String locale;
   final bool showDivider;
+  final bool isFirst;
   final String fallbackTitle;
   final String inspectorFallback;
   final String pendingLabel;
@@ -465,6 +470,7 @@ class _QueueRow extends StatelessWidget {
         ].join(' • '),
       ],
       showDivider: showDivider,
+      isFirst: isFirst,
       onTap: onTap,
     );
   }

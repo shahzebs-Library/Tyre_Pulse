@@ -103,6 +103,9 @@ class _VehicleDetailBody extends ConsumerWidget {
     );
 
     return TpScaffold(
+      // A softly tinted canvas so the white hero, metric and detail cards
+      // carry the mock's depth.
+      backgroundColor: TpPalette.of(context).surfaceAlt,
       appBar: TpAppBar(
         title: l10n.vehiclesDetailSubtitle,
         onBack: () => Navigator.of(context).maybePop(),
@@ -184,6 +187,8 @@ abstract final class VehicleDetailScreenKeys {
   static const Key tyresTab = Key('vehicle_detail.tab.tyres');
   static const Key historyTab = Key('vehicle_detail.tab.history');
   static const Key tyreMap = Key('vehicle_detail.tyre_map');
+  static const Key tyreMapNotRecorded =
+      Key('vehicle_detail.tyre_map.not_recorded');
   static const Key details = Key('vehicle_detail.details');
   static const Key reportIssue = Key('vehicle_detail.report_issue');
   static const Key createWorkOrder = Key('vehicle_detail.create_work_order');
@@ -247,17 +252,20 @@ class _DetailViewState extends ConsumerState<_DetailView> {
           }
         : null;
     final List<(String, String?)> fields = _assetFields();
-    final List<({String label, String value})> metrics = <({
+    final List<({IconData icon, String label, String value})> metrics = <({
+      IconData icon,
       String label,
       String value,
     })>[
       (
+        icon: Icons.speed_rounded,
         label: l10n.vehiclesFieldCurrentKm,
         value: asset.currentKm == null
             ? l10n.valueNotMeasured
             : '${formatVehicleOdometer(asset.currentKm!)} km',
       ),
       (
+        icon: Icons.tag_rounded,
         label: l10n.vehiclesFieldFleetNo,
         value: _present(asset.fleetNumber) ?? l10n.valueNotMeasured,
       ),
@@ -474,16 +482,27 @@ class _AssetHeroCard extends StatelessWidget {
     final String? site = _clean(asset.site);
     final InspectionDraftSummary? liveDraft = draft;
 
-    return TpCard(
+    return Container(
       key: VehicleDetailScreenKeys.hero,
       padding: const EdgeInsets.all(TpSpace.lg),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(TpRadius.xl),
+        border: Border.all(color: palette.border),
+        gradient: LinearGradient(
+          begin: AlignmentDirectional.topStart,
+          end: AlignmentDirectional.bottomEnd,
+          colors: <Color>[palette.surface, palette.surface, palette.surfaceAlt],
+          stops: const <double>[0, 0.45, 1],
+        ),
+        boxShadow: <BoxShadow>[_softLift(palette)],
+      ),
       child: LayoutBuilder(
         builder: (BuildContext context, BoxConstraints constraints) {
-          final double proportional = constraints.maxWidth * 0.44;
+          final double proportional = constraints.maxWidth * 0.5;
           final double photoWidth = proportional < 120
               ? 120
-              : (proportional > 260 ? 260 : proportional);
-          final double photoHeight = photoWidth * 0.82;
+              : (proportional > 300 ? 300 : proportional);
+          final double photoHeight = photoWidth * 0.9;
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
@@ -516,7 +535,8 @@ class _AssetHeroCard extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: text.headlineMedium?.copyWith(
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -0.5,
                             color: palette.text,
                           ),
                         ),
@@ -554,7 +574,8 @@ class _AssetHeroCard extends StatelessWidget {
                             ],
                           ),
                         ],
-                        if (liveDraft != null) ...<Widget>[
+                        if (liveDraft != null &&
+                            liveDraft.total > 0) ...<Widget>[
                           const SizedBox(height: TpSpace.lg),
                           _DraftReadiness(draft: liveDraft, l10n: l10n),
                         ],
@@ -572,12 +593,14 @@ class _AssetHeroCard extends StatelessWidget {
               ),
               if (onInspect != null) ...<Widget>[
                 const SizedBox(height: TpSpace.lg),
-                TpButton.primary(
-                  key: VehicleDetailScreenKeys.inspectNow,
-                  label: l10n.vehiclesInspectNow,
-                  icon: Icons.fact_check_outlined,
-                  isFullWidth: true,
-                  onPressed: onInspect,
+                _PrimaryLift(
+                  child: TpButton.primary(
+                    key: VehicleDetailScreenKeys.inspectNow,
+                    label: l10n.vehiclesInspectNow,
+                    icon: Icons.fact_check_outlined,
+                    isFullWidth: true,
+                    onPressed: onInspect,
+                  ),
                 ),
               ],
             ],
@@ -618,6 +641,7 @@ class _ClassPill extends StatelessWidget {
       decoration: BoxDecoration(
         color: tone.soft,
         borderRadius: BorderRadius.circular(TpRadius.pill),
+        border: Border.all(color: tone.base.withValues(alpha: 0.25)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -664,23 +688,47 @@ class _HeroPhoto extends StatelessWidget {
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
     final String? image = photo;
+    final TpStatusColors glow = palette.info;
+    // A soft sky wash behind the illustration, so the vehicle sits on the
+    // card the way the mock's hero photograph does rather than floating on
+    // flat white.
     return Container(
       key: VehicleDetailScreenKeys.heroPhoto,
       width: width,
       height: height,
       clipBehavior: Clip.antiAlias,
-      alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: image == null ? palette.surfaceAlt : null,
         borderRadius: BorderRadius.circular(TpRadius.lg),
+        gradient: RadialGradient(
+          center: const Alignment(0, -0.15),
+          radius: 0.85,
+          colors: <Color>[
+            glow.soft,
+            glow.soft.withValues(alpha: 0.35),
+            palette.surface.withValues(alpha: 0),
+          ],
+          stops: const <double>[0, 0.6, 1],
+        ),
       ),
-      child: image == null
-          ? Icon(
-              vehicleFallbackIcon(asset),
-              size: height * 0.5,
-              color: palette.primary,
+      child: Stack(
+        alignment: Alignment.center,
+        children: <Widget>[
+          if (image == null)
+            Container(
+              width: height * 0.62,
+              height: height * 0.62,
+              decoration: BoxDecoration(
+                color: palette.primarySoft,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                vehicleFallbackIcon(asset),
+                size: height * 0.36,
+                color: palette.primary,
+              ),
             )
-          : Image.asset(
+          else
+            Image.asset(
               image,
               width: width,
               height: height,
@@ -688,6 +736,8 @@ class _HeroPhoto extends StatelessWidget {
               filterQuality: FilterQuality.high,
               semanticLabel: asset.displayIdentity,
             ),
+        ],
+      ),
     );
   }
 }
@@ -718,17 +768,18 @@ class _DraftReadiness extends StatelessWidget {
         child: Row(
           children: <Widget>[
             SizedBox(
-              width: 64,
-              height: 64,
+              width: 68,
+              height: 68,
               child: Stack(
                 alignment: Alignment.center,
                 children: <Widget>[
                   SizedBox.expand(
                     child: CircularProgressIndicator(
                       value: ratio,
-                      strokeWidth: 6,
-                      backgroundColor: palette.border,
-                      color: palette.primary,
+                      strokeWidth: 7,
+                      strokeCap: StrokeCap.round,
+                      backgroundColor: palette.primarySoft,
+                      color: palette.forStatus(TpStatus.ok).base,
                     ),
                   ),
                   Text(
@@ -746,13 +797,24 @@ class _DraftReadiness extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text(
-                    l10n.inspectionDraftLabel,
-                    style: text.labelMedium?.copyWith(
-                      color: palette.textSecondary,
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: TpSpace.sm,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: palette.info.soft,
+                      borderRadius: BorderRadius.circular(TpRadius.sm),
+                    ),
+                    child: Text(
+                      l10n.inspectionDraftLabel,
+                      style: text.labelSmall?.copyWith(
+                        color: palette.info.onSoft,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: TpSpace.xs),
                   Text(
                     progress,
                     maxLines: 2,
@@ -775,7 +837,7 @@ class _DraftReadiness extends StatelessWidget {
 class _AssetMetricGrid extends StatelessWidget {
   const _AssetMetricGrid({required this.metrics});
 
-  final List<({String label, String value})> metrics;
+  final List<({IconData icon, String label, String value})> metrics;
 
   @override
   Widget build(BuildContext context) {
@@ -793,25 +855,58 @@ class _AssetMetricGrid extends StatelessWidget {
 class _AssetMetricCard extends StatelessWidget {
   const _AssetMetricCard({required this.metric});
 
-  final ({String label, String value}) metric;
+  final ({IconData icon, String label, String value}) metric;
 
   @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
     final TextTheme text = Theme.of(context).textTheme;
-    return TpCard(
-      background: palette.surfaceAlt,
+    return Container(
       padding: const EdgeInsets.all(TpSpace.md),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      decoration: BoxDecoration(
+        color: palette.surface,
+        borderRadius: BorderRadius.circular(TpRadius.lg),
+        border: Border.all(color: palette.border),
+        boxShadow: <BoxShadow>[_softLift(palette)],
+      ),
+      child: Row(
         children: <Widget>[
-          Text(metric.label, maxLines: 1, style: text.labelSmall),
-          const SizedBox(height: TpSpace.sm),
-          Text(
-            metric.value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: text.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: palette.primarySoft,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              metric.icon,
+              size: TpSizing.iconSm,
+              color: palette.primary,
+            ),
+          ),
+          const SizedBox(width: TpSpace.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  metric.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: text.labelSmall?.copyWith(color: palette.textMuted),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  metric.value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: text.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: palette.text,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -892,14 +987,15 @@ class _AssetTabButton extends StatelessWidget {
             border: Border(
               bottom: BorderSide(
                 color: selected ? palette.primary : Colors.transparent,
-                width: 2,
+                width: 3,
               ),
             ),
           ),
           child: Text(
             label,
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: selected ? palette.primary : palette.textSecondary,
+                  color: selected ? palette.primary : palette.textMuted,
+                  fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
                 ),
           ),
         ),
@@ -1025,16 +1121,42 @@ class _AssetTyreMap extends StatelessWidget {
   Widget build(BuildContext context) {
     final String vehicleType = asset.vehicleType?.trim() ?? '';
     final List<String> positions = diagramPositions(vehicleType, asset.assetNo);
-    return KeyedSubtree(
-      key: VehicleDetailScreenKeys.tyreMap,
-      child: VehicleTyreDiagram(
-        vehicleType: vehicleType,
-        assetNo: asset.assetNo,
-        positions: positions,
-        tyreData: const <String, Map<String, Object?>>{},
-        width: 150,
-        compact: true,
-      ),
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    // This map is drawn from the layout alone - the asset screen carries no
+    // tyre readings - so every wheel is honestly "not recorded", which the
+    // design system paints in its distinct [TpStatus.unknown] tone (the same
+    // tone the inspection capture legend uses for "Not recorded"). The
+    // diagram's compact legend lists only Good / Monitor / Critical, so
+    // without this key every wheel would be an unexplained colour that reads
+    // as an alert. The key states what the colour means instead of repainting
+    // unmeasured wheels to look like a result.
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        KeyedSubtree(
+          key: VehicleDetailScreenKeys.tyreMap,
+          child: VehicleTyreDiagram(
+            vehicleType: vehicleType,
+            assetNo: asset.assetNo,
+            positions: positions,
+            tyreData: const <String, Map<String, Object?>>{},
+            width: 150,
+            compact: true,
+          ),
+        ),
+        if (positions.isNotEmpty) ...<Widget>[
+          const SizedBox(height: TpSpace.sm),
+          Center(
+            child: TpStatusChip(
+              key: VehicleDetailScreenKeys.tyreMapNotRecorded,
+              status: TpStatus.unknown,
+              label: l10n.tyreDiagramListNotRecorded,
+              isCompact: true,
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
@@ -1046,12 +1168,33 @@ class _SectionHeading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      label.toUpperCase(),
-      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: TpPalette.of(context).text,
-            fontWeight: FontWeight.w800,
+    final TpPalette palette = TpPalette.of(context);
+    // The mock's bold sentence-case section title, led by a short green
+    // accent bar.
+    return Semantics(
+      header: true,
+      child: Row(
+        children: <Widget>[
+          Container(
+            width: 4,
+            height: 16,
+            decoration: BoxDecoration(
+              color: palette.primary,
+              borderRadius: BorderRadius.circular(TpRadius.pill),
+            ),
           ),
+          const SizedBox(width: TpSpace.sm),
+          Expanded(
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: palette.text,
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1085,6 +1228,14 @@ class _StickyAssetActions extends StatelessWidget {
       decoration: BoxDecoration(
         color: palette.surface,
         border: Border(top: BorderSide(color: palette.border)),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: _shadowTint(palette),
+            offset: const Offset(0, -4),
+            blurRadius: 12,
+            spreadRadius: -4,
+          ),
+        ],
       ),
       child: Row(
         children: <Widget>[
@@ -1162,6 +1313,48 @@ class _FieldRow extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// The shadow tint this screen uses: a faint navy lift on the light theme,
+/// a plain dark drop on the dark theme (a light-ink shadow would glow).
+Color _shadowTint(TpPalette palette) => palette.brightness == Brightness.dark
+    ? Colors.black.withValues(alpha: 0.45)
+    : palette.text.withValues(alpha: 0.07);
+
+/// The quiet card lift shared by the hero and the metric cards.
+BoxShadow _softLift(TpPalette palette) => BoxShadow(
+      color: _shadowTint(palette),
+      offset: const Offset(0, 4),
+      blurRadius: 14,
+      spreadRadius: -6,
+    );
+
+/// A soft brand-green glow under the one primary action on this screen.
+class _PrimaryLift extends StatelessWidget {
+  const _PrimaryLift({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(TpRadius.md),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: palette.primary.withValues(
+              alpha: palette.brightness == Brightness.dark ? 0.35 : 0.3,
+            ),
+            offset: const Offset(0, 6),
+            blurRadius: 16,
+            spreadRadius: -4,
+          ),
+        ],
+      ),
+      child: child,
     );
   }
 }

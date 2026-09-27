@@ -54,6 +54,39 @@ class DraftsDao extends DatabaseAccessor<AppDatabase> with _$DraftsDaoMixin {
   }) =>
       '$userId|${normaliseLookupKey(assetNo)}';
 
+  /// Marks an inspection draft that has been SUBMITTED and handed to the
+  /// submission queue, but not yet confirmed delivered.
+  ///
+  /// A submitted draft still owns its photo files and signature until the
+  /// server confirms the write, so it cannot be deleted at submit time. It
+  /// also must not keep the live `userId|ASSETNO` key: that key is what the
+  /// next inspection of the same machine resolves to, and sharing it let a
+  /// new sheet resume the queued one's readings and then be deleted with it
+  /// on delivery. So a submission moves the draft to
+  /// `userId|ASSETNO#submitted:<clientUuid>` ([detachInspectionDraft]), and
+  /// every "unfinished work" read excludes that shape.
+  static const String submittedInspectionDraftMarker = '#submitted:';
+
+  /// The key a submitted draft is moved to. See
+  /// [submittedInspectionDraftMarker].
+  static String submittedInspectionDraftKey({
+    required String draftKey,
+    required String clientUuid,
+  }) =>
+      '$draftKey$submittedInspectionDraftMarker$clientUuid';
+
+  /// Whether [draftKey] names a submitted (queued) draft rather than work in
+  /// progress.
+  static bool isSubmittedInspectionDraftKey(String draftKey) =>
+      draftKey.contains(submittedInspectionDraftMarker);
+
+  /// The live key a submitted key was detached from, or null when
+  /// [draftKey] is not a submitted key.
+  static String? sourceOfSubmittedInspectionDraftKey(String draftKey) {
+    final int at = draftKey.indexOf(submittedInspectionDraftMarker);
+    return at < 0 ? null : draftKey.substring(0, at);
+  }
+
   /// `userId|templateId|ASSETNO`. An empty asset is a legitimate component: a
   /// sheet started before a machine is picked gets its own slot, and the row is
   /// rekeyed once one is chosen.
@@ -135,12 +168,121 @@ class DraftsDao extends DatabaseAccessor<AppDatabase> with _$DraftsDaoMixin {
       return Future<List<InspectionDraft>>.value(const <InspectionDraft>[]);
     }
     return (select(inspectionDrafts)
-          ..where((t) => t.userId.equals(userId))
+          ..where(
+            (t) =>
+                t.userId.equals(userId) &
+                t.draftKey.like('%$submittedInspectionDraftMarker%').not(),
+          )
           ..orderBy([
             (t) => OrderingTerm.desc(t.updatedAt),
             (t) => OrderingTerm.desc(t.draftKey),
           ]))
         .get();
+  }
+
+  /// Moves an inspection draft - header, tyre positions, photo rows and
+  /// signature rows - from [fromKey] to [toKey], in one transaction.
+  ///
+  /// Used when a sheet is submitted (see [submittedInspectionDraftMarker]).
+  /// Idempotent and loss-free by construction: when [toKey] already has a
+  /// header nothing moves (a retry after a crash between the two halves of
+  /// a submission must not pull newer work across); when [fromKey] has no
+  /// header nothing moves either. Photo FILES are never touched - only the
+  /// rows that own them change key, so a local path stays valid. Returns
+  /// whether a draft now exists at [toKey].
+  Future<bool> detachInspectionDraft({
+    required String fromKey,
+    required String toKey,
+  }) {
+    return transaction(() async {
+      if (await inspectionDraft(toKey) != null) return true;
+      final InspectionDraft? source = await inspectionDraft(fromKey);
+      if (source == null) return false;
+
+      await into(inspectionDrafts).insert(
+        source.copyWith(draftKey: toKey).toCompanion(false),
+      );
+      await (update(inspectionDraftPositions)
+            ..where((t) => t.draftKey.equals(fromKey)))
+          .write(InspectionDraftPositionsCompanion(draftKey: Value(toKey)));
+      await (update(draftPhotos)
+            ..where(
+              (t) =>
+                  t.ownerKind.equals(OwnerKind.inspectionDraft) &
+                  t.ownerKey.equals(fromKey),
+            ))
+          .write(DraftPhotosCompanion(ownerKey: Value(toKey)));
+      await (update(capturedSignatures)
+            ..where(
+              (t) =>
+                  t.ownerKind.equals(OwnerKind.inspectionDraft) &
+                  t.ownerKey.equals(fromKey),
+            ))
+          .write(CapturedSignaturesCompanion(ownerKey: Value(toKey)));
+      await (delete(inspectionDrafts)..where((t) => t.draftKey.equals(fromKey)))
+          .go();
+      return true;
+    });
+  }
+
+  /// Removes every photo row a draft holds for one [position], returning the
+  /// removed local paths so the caller can delete the files. Used when the
+  /// inspector removes a wheel's photo: without it the row survived, the
+  /// photo reappeared on resume and was uploaded on submit.
+  Future<List<String>> removeInspectionDraftPhotos({
+    required String draftKey,
+    required String position,
+  }) {
+    return transaction(() async {
+      final rows = await (select(draftPhotos)
+            ..where(
+              (t) =>
+                  t.ownerKind.equals(OwnerKind.inspectionDraft) &
+                  t.ownerKey.equals(draftKey) &
+                  t.fieldKey.equals(position),
+            ))
+          .get();
+      await (delete(draftPhotos)
+            ..where(
+              (t) =>
+                  t.ownerKind.equals(OwnerKind.inspectionDraft) &
+                  t.ownerKey.equals(draftKey) &
+                  t.fieldKey.equals(position),
+            ))
+          .go();
+      return rows.map((DraftPhoto p) => p.localPath).toList(growable: false);
+    });
+  }
+
+  /// [inspectionDraftsForUser] as a live query, narrowed to [workspaceIds].
+  ///
+  /// Emits again whenever an inspection draft header is saved, rekeyed,
+  /// detached on submit or discarded, so a screen that stays mounted (Home)
+  /// never keeps offering a draft that was submitted or thrown away
+  /// elsewhere. A submitted draft (see [submittedInspectionDraftMarker]) is
+  /// excluded exactly as the one-shot read excludes it.
+  ///
+  /// The same shared-handset rule as the one-shot read: a blank user id, or
+  /// no workspace id at all, emits an empty list rather than everything.
+  Stream<List<InspectionDraft>> watchInspectionDraftsForUser({
+    required String userId,
+    required Set<String> workspaceIds,
+  }) {
+    if (userId.isEmpty || workspaceIds.isEmpty) {
+      return Stream<List<InspectionDraft>>.value(const <InspectionDraft>[]);
+    }
+    return (select(inspectionDrafts)
+          ..where(
+            (t) =>
+                t.userId.equals(userId) &
+                t.workspaceId.isIn(workspaceIds) &
+                t.draftKey.like('%$submittedInspectionDraftMarker%').not(),
+          )
+          ..orderBy([
+            (t) => OrderingTerm.desc(t.updatedAt),
+            (t) => OrderingTerm.desc(t.draftKey),
+          ]))
+        .watch();
   }
 
   /// Records one wheel.

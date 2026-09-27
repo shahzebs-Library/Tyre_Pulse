@@ -116,7 +116,7 @@ class _InspectionView {
   final String? approvalStatus;
   final String? notes;
   final String? findings;
-  final int? odometerKm;
+  final num? odometerKm;
   final double? hourMeter;
   final String? signature;
   final double? gpsLat;
@@ -323,7 +323,7 @@ class _DetailBody extends StatelessWidget {
                   Expanded(
                     child: _MetricTile(
                       label: l10n.inspectionOdometerLabel,
-                      value: '${view.odometerKm} km',
+                      value: '${_meterText(view.odometerKm!)} km',
                     ),
                   ),
                 if (view.hourMeter != null)
@@ -558,3 +558,7 @@ class _MetricTile extends StatelessWidget {
     );
   }
 }
+
+/// A whole reading without a trailing `.0`; a decimal one as stored.
+String _meterText(num value) =>
+    value == value.roundToDouble() ? value.toInt().toString() : '$value';

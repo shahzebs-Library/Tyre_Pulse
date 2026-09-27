@@ -18,12 +18,31 @@
 ///   ([homeLatestInspectionDraftProvider], read-only over the inspections
 ///   feature's local draft store).
 /// - CRITICAL - the first critical tyre alert ([tyreAlertsProvider]).
-/// - AWAITING SIGNATURE - pending inspection approvals
-///   ([homePendingInspectionApprovalsProvider]).
+/// - AWAITING SIGNATURE - an exact server count of pending inspection
+///   approvals ([homePendingInspectionApprovalsProvider]), shown only to a
+///   role that `decide_inspection_approval` would actually let sign
+///   ([homeCanSignInspectionApprovalsProvider]).
 ///
-/// The mock's "Scheduled daily checklist" row, its "Fleet pulse"
-/// Good/Attention/Critical/Not-checked counts and its "Recent assets" photo
-/// strip have NO data source this app can read, so they are not rendered.
+/// Below the timeline, "Your recent inspections" ([homeRecentAssetsProvider])
+/// is the mock's "Recent assets" strip, derived honestly from the signed-in
+/// user's own latest inspections: each card's status is the worst tyre
+/// condition THAT inspection recorded, and the section is labelled for what
+/// it is rather than as a live fleet state.
+///
+/// The mock's "Scheduled daily checklist" row and its "Fleet pulse"
+/// Good/Attention/Critical/Not-checked counts have NO data source this app
+/// can read: the only fleet aggregate (`get_mobile_analytics`, V479) counts
+/// `tyre_records.risk_level`, which is essentially unpopulated, so those
+/// counts would read as an unrated fleet rather than a measurement. They are
+/// not rendered.
+///
+/// # Staying current while mounted
+///
+/// Home stays mounted beneath every screen it opens, so its sources refresh
+/// on pull-to-refresh, when the app resumes, and when Home becomes visible
+/// again (its [TickerMode] turns back on after a tab switch or a pop). The
+/// draft source is a live Drift watch on top of that, so a submitted or
+/// discarded draft leaves the timeline without any refresh at all.
 /// There is no connectivity provider either, so the header never claims
 /// "Online": it states only what the local queue knows (all synced, N
 /// waiting, or could not check).
@@ -64,7 +83,8 @@ import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/alerts/alerts_providers.dart';
 import 'package:tyre_pulse/features/alerts/domain/tyre_alert.dart';
-import 'package:tyre_pulse/features/approvals/data/inspection_approval_item.dart';
+import 'package:tyre_pulse/features/assets/presentation/vehicle_photo_resolver.dart';
+import 'package:tyre_pulse/features/home/domain/home_work.dart';
 import 'package:tyre_pulse/features/home/home_layout.dart';
 import 'package:tyre_pulse/features/home/home_providers.dart';
 import 'package:tyre_pulse/features/inspections/domain/inspection_draft_summary.dart';
@@ -85,10 +105,15 @@ abstract final class HomeScreenKeys {
   static const Key syncStatus = Key('home.sync');
   static const Key newInspection = Key('home.newInspection');
   static const Key todaysWork = Key('home.todaysWork');
+  static const Key recentAssets = Key('home.recentAssets');
+  static const Key refresh = Key('home.refresh');
 
   /// One timeline row: `draft`, `critical`, `approvals`, `unavailable`,
-  /// `loading` or `empty`.
+  /// `loading`, `empty` or `none` (no work source applies to this role).
   static Key workRow(String id) => Key('home.work.$id');
+
+  /// One card in "Your recent inspections", keyed by asset code.
+  static Key recentAsset(String assetNo) => Key('home.recent.$assetNo');
 
   static Key action(String id) => Key('home.action.$id');
 }
@@ -170,6 +195,71 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
+  late final AppLifecycleListener _lifecycle;
+
+  /// Whether Home was visible (its [TickerMode] on) at the last dependency
+  /// change. A shell branch that is not selected, and a route covered by an
+  /// opaque route above it, both run with tickers disabled; the flip back to
+  /// enabled is the moment Home is on screen again.
+  bool _wasVisible = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _lifecycle = AppLifecycleListener(onResume: _refreshSources);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final bool visible = TickerMode.valuesOf(context).enabled;
+    if (visible && !_wasVisible) {
+      // Never invalidate providers in the middle of a build.
+      WidgetsBinding.instance.addPostFrameCallback((_) => _refreshSources());
+    }
+    _wasVisible = visible;
+  }
+
+  @override
+  void dispose() {
+    _lifecycle.dispose();
+    super.dispose();
+  }
+
+  /// Re-reads every Home source. Cheap for the ones a role cannot see: an
+  /// invalidated provider nobody watches is not re-fetched.
+  void _refreshSources() {
+    if (!mounted) return;
+    ref
+      ..invalidate(homeLatestInspectionDraftProvider)
+      ..invalidate(homePendingInspectionApprovalsProvider)
+      ..invalidate(tyreAlertsProvider)
+      ..invalidate(homePendingSyncCountProvider)
+      ..invalidate(homeRecentAssetsProvider);
+  }
+
+  /// Pull-to-refresh: invalidate, then wait for the sources this role is
+  /// actually watching so the indicator stays up until they answer. A
+  /// failure is not rethrown - the section it belongs to renders it.
+  Future<void> _pullToRefresh({
+    required bool draft,
+    required bool approvals,
+    required bool alerts,
+    required bool recent,
+  }) async {
+    _refreshSources();
+    Future<void> settle(Future<Object?> future) =>
+        future.then<void>((_) {}, onError: (Object _) {});
+    await Future.wait(<Future<void>>[
+      settle(ref.read(homePendingSyncCountProvider.future)),
+      if (draft) settle(ref.read(homeLatestInspectionDraftProvider.future)),
+      if (approvals)
+        settle(ref.read(homePendingInspectionApprovalsProvider.future)),
+      if (alerts) settle(ref.read(tyreAlertsProvider.future)),
+      if (recent) settle(ref.read(homeRecentAssetsProvider.future)),
+    ]);
+  }
+
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
@@ -188,6 +278,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
     final bool canSeeApprovals = ref.watch(
       canAccessModuleProvider(ModuleKey.approvals),
+    );
+    // Reaching the approvals module is not enough to be asked to sign: the
+    // server's own role gate is narrower (V606).
+    final bool canSignApprovals =
+        canSeeApprovals && ref.watch(homeCanSignInspectionApprovalsProvider);
+    final bool canSeeHistory = ref.watch(
+      canAccessModuleProvider(ModuleKey.history),
     );
     final bool canSeeAlerts = ref.watch(
       canAccessModuleProvider(ModuleKey.alerts),
@@ -212,9 +309,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final DateTime now = ref.watch(homeHeaderClockProvider)();
     final AsyncValue<InspectionDraftSummary?>? draft =
         canInspect ? ref.watch(homeLatestInspectionDraftProvider) : null;
-    final AsyncValue<List<InspectionApprovalItem>>? approvals = canSeeApprovals
+    final AsyncValue<HomePendingApprovals>? approvals = canSignApprovals
         ? ref.watch(homePendingInspectionApprovalsProvider)
         : null;
+    final AsyncValue<List<HomeRecentAsset>>? recent =
+        canInspect ? ref.watch(homeRecentAssetsProvider) : null;
     final AsyncValue<List<TyreAlert>>? alerts =
         canSeeAlerts ? ref.watch(tyreAlertsProvider) : null;
     final AsyncValue<int> pendingSync = ref.watch(homePendingSyncCountProvider);
@@ -232,93 +331,167 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     return TpScaffold(
       backgroundColor: palette.background,
-      body: ListView(
-        padding: EdgeInsets.zero,
-        children: <Widget>[
-          _Band(
-            color: palette.surface,
-            padding: const EdgeInsetsDirectional.fromSTEB(16, 14, 8, 14),
-            child: _HomeHeader(
-              l10n: l10n,
-              workspace: workspace,
-              now: now,
-              pendingSync: pendingSync,
-              notificationCount: _scalarCountText(notificationCount),
-              onSiteTap: () => _showSite(workspace, l10n),
-              onNotifications: () =>
-                  context.push(const NotificationsRoute().location),
+      body: RefreshIndicator(
+        key: HomeScreenKeys.refresh,
+        color: palette.primary,
+        onRefresh: () => _pullToRefresh(
+          draft: draft != null,
+          approvals: approvals != null,
+          alerts: alerts != null,
+          recent: recent != null,
+        ),
+        child: ListView(
+          padding: EdgeInsets.zero,
+          // Always scrollable, so a short Home can still be pulled.
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: <Widget>[
+            // Header and the primary calls to action share one softly tinted
+            // band, so the top of Home reads as a single "start here" block
+            // rather than three stacked strips.
+            DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: AlignmentDirectional.topStart,
+                  end: AlignmentDirectional.bottomEnd,
+                  colors: <Color>[
+                    palette.surface,
+                    Color.lerp(palette.surface, palette.primarySoft, 0.75)!,
+                  ],
+                ),
+                border: Border(bottom: BorderSide(color: palette.border)),
+              ),
+              child: _Band(
+                color: Colors.transparent,
+                padding: const EdgeInsetsDirectional.fromSTEB(16, 16, 12, 18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    _Entrance(
+                      index: 0,
+                      child: _HomeHeader(
+                        l10n: l10n,
+                        workspace: workspace,
+                        now: now,
+                        pendingSync: pendingSync,
+                        notificationCount: _scalarCountText(notificationCount),
+                        onSiteTap: () => _showSite(workspace, l10n),
+                        onNotifications: () =>
+                            context.push(const NotificationsRoute().location),
+                      ),
+                    ),
+                    if (canInspect || canSeeAccidents) ...<Widget>[
+                      const SizedBox(height: 18),
+                      _Entrance(
+                        index: 1,
+                        child: Padding(
+                          padding: const EdgeInsetsDirectional.only(end: 4),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: <Widget>[
+                              if (canInspect)
+                                _NewInspectionButton(
+                                  label: l10n.inspectionNewInspection,
+                                  onTap: () => context
+                                      .go(const NewInspectionRoute().location),
+                                ),
+                              if (canInspect && canSeeAccidents)
+                                const SizedBox(height: 12),
+                              if (canSeeAccidents)
+                                _AccidentCommandShortcut(
+                                  l10n: l10n,
+                                  onTap: () => context.go(
+                                    const AccidentDashboardRoute().location,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
             ),
-          ),
-          Divider(height: 1, thickness: 1, color: palette.border),
-          if (canInspect || canSeeAccidents) ...<Widget>[
             _Band(
-              color: palette.surface,
-              padding: const EdgeInsets.all(16),
+              color: palette.background,
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 28),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
-                  if (canInspect)
-                    _NewInspectionButton(
-                      label: l10n.inspectionNewInspection,
-                      onTap: () =>
-                          context.go(const NewInspectionRoute().location),
+                  _HomeSectionHeader(
+                    title: l10n.homeTodaysWork,
+                    action: l10n.homeViewAll,
+                    onAction: _seeAllDestination(
+                      canSeeAlerts: canSeeAlerts,
+                      canSeeApprovals: canSeeApprovals,
+                      canSeeTasks: canSeeTasks,
                     ),
-                  if (canInspect && canSeeAccidents) const SizedBox(height: 12),
-                  if (canSeeAccidents)
-                    _AccidentCommandShortcut(
-                      l10n: l10n,
-                      onTap: () => context.go(
-                        const AccidentDashboardRoute().location,
-                      ),
+                  ),
+                  const SizedBox(height: 10),
+                  _Entrance(index: 2, child: _TodaysWorkCard(work: work)),
+                  if (_showRecent(recent)) ...<Widget>[
+                    const SizedBox(height: 26),
+                    _HomeSectionHeader(
+                      title: l10n.homeRecentInspectionsTitle,
+                      action: l10n.homeViewAll,
+                      onAction: canSeeHistory
+                          ? () =>
+                              context.go(const ActivityHistoryRoute().location)
+                          : null,
                     ),
+                    const SizedBox(height: 12),
+                    _RecentAssetsStrip(
+                      recent: recent!,
+                      onRetry: () => ref.invalidate(homeRecentAssetsProvider),
+                      onOpen: canSeeVehicles
+                          ? (String assetNo) => context.push(
+                                VehiclesRoute(assetNo: AssetNo(assetNo))
+                                    .location,
+                              )
+                          : null,
+                    ),
+                  ],
+                  const SizedBox(height: 26),
+                  _HomeSectionHeader(title: l10n.homeQuickActions),
+                  const SizedBox(height: 12),
+                  // Deliberately NOT animated: the grid sits below the fold on
+                  // a phone, so a rise nobody sees would only move tap targets
+                  // under a finger that arrives early.
+                  _DashboardQuickActions(
+                    l10n: l10n,
+                    canScan: canScan,
+                    canWash: canWash,
+                    canSeeVehicles: canSeeVehicles,
+                    canReportIssue: canReportIssue,
+                    canReportAccident: canReportAccident,
+                    onScanner: () =>
+                        context.push(const ScannerRoute().location),
+                    onWashing: () => context.go(const WashingRoute().location),
+                    onAsset: () => context.push(const VehiclesRoute().location),
+                    onReportIssue: () =>
+                        context.push(const ReportIssueRoute().location),
+                    onAccident: () =>
+                        context.push(const AccidentReportRoute().location),
+                    onMore: () => _showServices(sections, l10n),
+                  ),
                 ],
               ),
             ),
-            Divider(height: 1, thickness: 1, color: palette.border),
           ],
-          _Band(
-            color: palette.background,
-            padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                _HomeSectionHeader(
-                  title: l10n.homeTodaysWork,
-                  action: l10n.homeViewAll,
-                  onAction: _seeAllDestination(
-                    canSeeAlerts: canSeeAlerts,
-                    canSeeApprovals: canSeeApprovals,
-                    canSeeTasks: canSeeTasks,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                _TodaysWorkCard(work: work),
-                const SizedBox(height: 22),
-                _HomeSectionHeader(title: l10n.homeQuickActions),
-                const SizedBox(height: 10),
-                _DashboardQuickActions(
-                  l10n: l10n,
-                  canScan: canScan,
-                  canWash: canWash,
-                  canSeeVehicles: canSeeVehicles,
-                  canReportIssue: canReportIssue,
-                  canReportAccident: canReportAccident,
-                  onScanner: () => context.push(const ScannerRoute().location),
-                  onWashing: () => context.go(const WashingRoute().location),
-                  onAsset: () => context.push(const VehiclesRoute().location),
-                  onReportIssue: () =>
-                      context.push(const ReportIssueRoute().location),
-                  onAccident: () =>
-                      context.push(const AccidentReportRoute().location),
-                  onMore: () => _showServices(sections, l10n),
-                ),
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
+
+  /// The recent strip is shown while loading, on failure (so the failure is
+  /// said), and when there is at least one asset. An empty history hides it:
+  /// a person who has inspected nothing has no recent inspections to list.
+  static bool _showRecent(AsyncValue<List<HomeRecentAsset>>? recent) =>
+      switch (recent) {
+        null => false,
+        AsyncData<List<HomeRecentAsset>>(:final value) => value.isNotEmpty,
+        _ => true,
+      };
 
   /// Builds the timeline rows from the three real sources, in the mock's
   /// order: unfinished work first, then safety, then sign-off.
@@ -328,14 +501,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     required DateTime now,
     required AsyncValue<InspectionDraftSummary?>? draft,
     required AsyncValue<List<TyreAlert>>? alerts,
-    required AsyncValue<List<InspectionApprovalItem>>? approvals,
+    required AsyncValue<HomePendingApprovals>? approvals,
   }) {
     final List<_WorkRowData> rows = <_WorkRowData>[];
     final List<String> failed = <String>[];
     bool loading = false;
+    bool loadedAny = false;
 
     switch (draft) {
       case AsyncData<InspectionDraftSummary?>(:final value):
+        loadedAny = true;
         if (value != null) rows.add(_draftRow(l10n, palette, now, value));
       case AsyncError<InspectionDraftSummary?>():
         failed.add(l10n.inspectionDraftLabel);
@@ -347,6 +522,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     switch (alerts) {
       case AsyncData<List<TyreAlert>>(:final value):
+        loadedAny = true;
         final TyreAlert? critical = value
             .cast<TyreAlert?>()
             .firstWhere((TyreAlert? a) => a!.isCritical, orElse: () => null);
@@ -362,11 +538,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
 
     switch (approvals) {
-      case AsyncData<List<InspectionApprovalItem>>(:final value):
-        if (value.isNotEmpty) {
+      case AsyncData<HomePendingApprovals>(:final value):
+        loadedAny = true;
+        if (value.count > 0) {
           rows.add(_approvalsRow(l10n, palette, now, value));
         }
-      case AsyncError<List<InspectionApprovalItem>>():
+      case AsyncError<HomePendingApprovals>():
         failed.add(l10n.homeApprovalsMetric);
       case null:
         break;
@@ -374,7 +551,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         loading = true;
     }
 
-    return _TodaysWork(rows: rows, failed: failed, loading: loading);
+    return _TodaysWork(
+      rows: rows,
+      failed: failed,
+      loading: loading,
+      loadedAny: loadedAny,
+      applicable: draft != null || alerts != null || approvals != null,
+      onRetry: failed.isEmpty
+          ? null
+          : () => ref
+            ..invalidate(homeLatestInspectionDraftProvider)
+            ..invalidate(tyreAlertsProvider)
+            ..invalidate(homePendingInspectionApprovalsProvider),
+    );
   }
 
   _WorkRowData _draftRow(
@@ -437,22 +626,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     AppLocalizations l10n,
     TpPalette palette,
     DateTime now,
-    List<InspectionApprovalItem> items,
+    HomePendingApprovals pending,
   ) {
-    DateTime? newest;
-    for (final InspectionApprovalItem item in items) {
-      final DateTime? created = DateTime.tryParse(item.createdAt ?? '');
-      if (created != null && (newest == null || created.isAfter(newest))) {
-        newest = created;
-      }
-    }
+    final DateTime? newest = pending.newestAt;
     return _WorkRowData(
       id: 'approvals',
       tone: palette.warning,
       icon: Icons.assignment_turned_in_outlined,
       tag: l10n.homeAwaitingSignatureTag,
       title: l10n.inspectionApprovalsTitle,
-      detail: l10n.inspectionApprovalsAwaitingCount(items.length),
+      detail: l10n.inspectionApprovalsAwaitingCount(pending.count),
       time: newest == null ? null : _relativeTime(l10n, context, newest, now),
       onTap: () => context.go(const InspectionApprovalsRoute().location),
     );
@@ -531,10 +714,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ListTile(
                     leading: Icon(_tileMeta(l10n, tile.id).icon),
                     title: Text(_tileMeta(l10n, tile.id).label),
-                    trailing: Icon(
-                      Directionality.of(context) == TextDirection.rtl
-                          ? Icons.chevron_left_rounded
-                          : Icons.chevron_right_rounded,
+                    trailing: const Icon(
+                      // Mirrors itself under RTL (matchTextDirection).
+                      Icons.chevron_right_rounded,
                     ),
                     onTap: () {
                       Navigator.of(sheetContext).pop();
@@ -646,6 +828,57 @@ class _Band extends StatelessWidget {
   }
 }
 
+/// The soft, two-layer card shadow Home uses for depth.
+///
+/// Light mode gets a faint ink-tinted lift; dark mode a deeper black one,
+/// because an ink-tinted shadow disappears on a near-black background.
+List<BoxShadow> _homeShadow(TpPalette palette, {double lift = 1}) {
+  final bool dark = palette.brightness == Brightness.dark;
+  final Color ink = dark ? Colors.black : palette.text;
+  return <BoxShadow>[
+    BoxShadow(
+      color: ink.withValues(alpha: (dark ? 0.38 : 0.07) * lift),
+      blurRadius: 18 * lift,
+      offset: Offset(0, 6 * lift),
+    ),
+    BoxShadow(
+      color: ink.withValues(alpha: dark ? 0.30 : 0.04),
+      blurRadius: 2,
+      offset: const Offset(0, 1),
+    ),
+  ];
+}
+
+/// A short, staggered fade-and-rise as Home first appears.
+///
+/// Skipped entirely when the platform asks for reduced motion, so the
+/// content is simply there.
+class _Entrance extends StatelessWidget {
+  const _Entrance({required this.index, required this.child});
+
+  /// Position in the stagger; each step starts a little later.
+  final int index;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) return child;
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: 1),
+      duration: Duration(milliseconds: 260 + index * 70),
+      curve: Curves.easeOutCubic,
+      builder: (BuildContext context, double t, Widget? child) => Opacity(
+        opacity: t,
+        child: Transform.translate(
+          offset: Offset(0, 14 * (1 - t)),
+          child: child,
+        ),
+      ),
+      child: child,
+    );
+  }
+}
+
 class _HomeHeader extends StatelessWidget {
   const _HomeHeader({
     required this.l10n,
@@ -683,135 +916,153 @@ class _HomeHeader extends StatelessWidget {
     final String? country = workspace?.activeCountry?.trim();
     final bool showBadge = notificationCount != '—' && notificationCount != '0';
 
-    return Row(
+    return Column(
       key: HomeScreenKeys.hero,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        Container(
-          width: 52,
-          height: 52,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: palette.primarySoft,
-            shape: BoxShape.circle,
-            border: Border.all(color: palette.border),
-          ),
-          child: initials == null
-              ? Icon(Icons.person_outline_rounded, color: palette.primary)
-              : Text(
-                  initials,
-                  style: text.titleMedium?.copyWith(
-                    color: palette.primary,
-                    fontWeight: FontWeight.w800,
-                  ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            // A gradient ring around the initials gives the avatar the
+            // presence of the mock's profile photo without inventing one.
+            Container(
+              width: 56,
+              height: 56,
+              padding: const EdgeInsets.all(2.5),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  begin: AlignmentDirectional.topStart,
+                  end: AlignmentDirectional.bottomEnd,
+                  colors: <Color>[palette.primary, palette.info.base],
                 ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Row(
-                children: <Widget>[
-                  Flexible(
-                    child: Text(
-                      greeting,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: text.titleMedium?.copyWith(
-                        color: palette.text,
-                        fontWeight: FontWeight.w700,
+                boxShadow: _homeShadow(palette, lift: 0.6),
+              ),
+              child: Container(
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: palette.primarySoft,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: palette.surface, width: 2),
+                ),
+                child: initials == null
+                    ? Icon(Icons.person_outline_rounded, color: palette.primary)
+                    : Text(
+                        initials,
+                        style: text.titleMedium?.copyWith(
+                          color: palette.primary,
+                          fontWeight: FontWeight.w900,
+                        ),
                       ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Text(
+                    greeting,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: text.bodyMedium?.copyWith(
+                      color: palette.textSecondary,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                  const SizedBox(width: 4),
-                  Flexible(
-                    child: Text(
-                      name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: text.titleMedium?.copyWith(
-                        color: palette.text,
-                        fontWeight: FontWeight.w800,
-                      ),
+                  const SizedBox(height: 1),
+                  Text(
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: text.headlineSmall?.copyWith(
+                      color: palette.text,
+                      fontWeight: FontWeight.w900,
+                      height: 1.15,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 4),
-              InkWell(
-                onTap: onSiteTap,
-                borderRadius: BorderRadius.circular(TpRadius.sm),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 2),
-                  child: Row(
-                    children: <Widget>[
-                      Icon(
-                        Icons.location_on_outlined,
-                        size: 16,
-                        color: palette.textSecondary,
-                      ),
-                      const SizedBox(width: 4),
-                      Flexible(
-                        child: Text(
-                          site,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: text.bodySmall?.copyWith(
-                            color: palette.textSecondary,
-                          ),
-                        ),
-                      ),
-                      if (country != null && country.isNotEmpty) ...<Widget>[
-                        Text(
-                          '  •  ',
-                          style: text.bodySmall?.copyWith(
-                            color: palette.textMuted,
-                          ),
-                        ),
-                        Flexible(
-                          child: Text(
-                            country,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: text.bodySmall?.copyWith(
-                              color: palette.textSecondary,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 8),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            IconButton(
+            ),
+            const SizedBox(width: 8),
+            _HeaderIconButton(
               tooltip: l10n.homeNotificationsTooltip,
-              visualDensity: VisualDensity.compact,
               onPressed: onNotifications,
-              icon: Stack(
+              icon: Icons.notifications_none_rounded,
+              badge: showBadge ? notificationCount : null,
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: <Widget>[
+            Flexible(
+              child: _SiteChip(
+                site: site,
+                country: country,
+                onTap: onSiteTap,
+              ),
+            ),
+            const SizedBox(width: 8),
+            _HomeSyncStatus(l10n: l10n, pending: pendingSync),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// The notification bell in a rounded, lifted square, as in the mock.
+class _HeaderIconButton extends StatelessWidget {
+  const _HeaderIconButton({
+    required this.tooltip,
+    required this.onPressed,
+    required this.icon,
+    this.badge,
+  });
+
+  final String tooltip;
+  final VoidCallback onPressed;
+  final IconData icon;
+  final String? badge;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final String? badge = this.badge;
+    return Tooltip(
+      message: tooltip,
+      child: Semantics(
+        button: true,
+        label: tooltip,
+        child: Material(
+          color: palette.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(TpRadius.md),
+            side: BorderSide(color: palette.border),
+          ),
+          child: InkWell(
+            onTap: onPressed,
+            customBorder: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(TpRadius.md),
+            ),
+            child: SizedBox(
+              width: 48,
+              height: 48,
+              child: Stack(
                 clipBehavior: Clip.none,
+                alignment: Alignment.center,
                 children: <Widget>[
-                  Icon(
-                    Icons.notifications_none_rounded,
-                    size: 22,
-                    color: palette.text,
-                  ),
-                  if (showBadge)
+                  Icon(icon, size: 24, color: palette.text),
+                  if (badge != null)
                     PositionedDirectional(
-                      top: -5,
-                      end: -7,
+                      top: 6,
+                      end: 6,
                       child: Container(
-                        constraints: const BoxConstraints(minWidth: 16),
-                        height: 16,
-                        padding: const EdgeInsets.symmetric(horizontal: 3),
+                        constraints: const BoxConstraints(minWidth: 18),
+                        height: 18,
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
                           color: palette.critical.base,
@@ -822,12 +1073,12 @@ class _HomeHeader extends StatelessWidget {
                           ),
                         ),
                         child: Text(
-                          notificationCount,
+                          badge,
                           style: TextStyle(
                             color: palette.critical.onBase,
-                            fontSize: 8,
+                            fontSize: 9,
                             height: 1,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w900,
                           ),
                         ),
                       ),
@@ -835,10 +1086,76 @@ class _HomeHeader extends StatelessWidget {
                 ],
               ),
             ),
-            _HomeSyncStatus(l10n: l10n, pending: pendingSync),
-          ],
+          ),
         ),
-      ],
+      ),
+    );
+  }
+}
+
+/// The active site and country as a tappable pill.
+class _SiteChip extends StatelessWidget {
+  const _SiteChip({
+    required this.site,
+    required this.country,
+    required this.onTap,
+  });
+
+  final String site;
+  final String? country;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final TextStyle? style = Theme.of(context).textTheme.labelMedium?.copyWith(
+          color: palette.textSecondary,
+          fontWeight: FontWeight.w700,
+        );
+    final String? country = this.country;
+    return Material(
+      color: palette.surface.withValues(alpha: 0.85),
+      shape: StadiumBorder(side: BorderSide(color: palette.border)),
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const StadiumBorder(),
+        child: Padding(
+          padding: const EdgeInsetsDirectional.fromSTEB(8, 6, 12, 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Icon(
+                Icons.location_on_rounded,
+                size: 16,
+                color: palette.primary,
+              ),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  site,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: style,
+                ),
+              ),
+              if (country != null && country.isNotEmpty) ...<Widget>[
+                Text(
+                  '  •  ',
+                  style: style?.copyWith(color: palette.textMuted),
+                ),
+                Flexible(
+                  child: Text(
+                    country,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: style,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -865,7 +1182,7 @@ class _HomeSyncStatus extends StatelessWidget {
           l10n.syncPendingChanges(value),
         ),
       AsyncData<int>() => (
-          Icons.cloud_done_outlined,
+          Icons.cloud_done_rounded,
           palette.ok,
           l10n.syncAllSynced,
         ),
@@ -878,85 +1195,147 @@ class _HomeSyncStatus extends StatelessWidget {
     };
     return ConstrainedBox(
       key: HomeScreenKeys.syncStatus,
-      constraints: const BoxConstraints(maxWidth: 116),
-      child: Padding(
-        padding: const EdgeInsetsDirectional.only(end: 8),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Icon(icon, size: 15, color: tone.base),
-            const SizedBox(width: 4),
-            Flexible(
-              child: Text(
-                label,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: palette.textSecondary,
-                      fontWeight: FontWeight.w600,
-                    ),
+      constraints: const BoxConstraints(maxWidth: 180),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: tone.soft,
+          borderRadius: BorderRadius.circular(TpRadius.pill),
+        ),
+        child: Padding(
+          padding: const EdgeInsetsDirectional.fromSTEB(8, 6, 10, 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Icon(icon, size: 16, color: tone.base),
+              const SizedBox(width: 5),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: tone.onSoft,
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _NewInspectionButton extends StatelessWidget {
+class _NewInspectionButton extends StatefulWidget {
   const _NewInspectionButton({required this.label, required this.onTap});
 
   final String label;
   final VoidCallback onTap;
 
   @override
+  State<_NewInspectionButton> createState() => _NewInspectionButtonState();
+}
+
+class _NewInspectionButtonState extends State<_NewInspectionButton> {
+  bool _pressed = false;
+
+  void _setPressed(bool value) {
+    if (_pressed != value) setState(() => _pressed = value);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
+    final bool reduceMotion =
+        MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    final Color deep = Color.lerp(palette.primary, Colors.black, 0.22)!;
     return Semantics(
       button: true,
-      label: label,
+      label: widget.label,
       excludeSemantics: true,
-      child: Material(
-        key: HomeScreenKeys.newInspection,
-        color: palette.primary,
-        borderRadius: BorderRadius.circular(TpRadius.md),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: SizedBox(
-            height: 64,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: <Widget>[
-                  Container(
-                    width: 30,
-                    height: 30,
-                    decoration: BoxDecoration(
-                      color: palette.onPrimary,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.add_rounded,
-                      color: palette.primary,
-                      size: 22,
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Flexible(
-                    child: Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+      child: AnimatedScale(
+        scale: _pressed ? 0.98 : 1,
+        duration:
+            reduceMotion ? Duration.zero : const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(TpRadius.md),
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color:
+                    palette.primary.withValues(alpha: _pressed ? 0.22 : 0.34),
+                blurRadius: _pressed ? 8 : 18,
+                offset: Offset(0, _pressed ? 3 : 8),
+              ),
+            ],
+          ),
+          child: Material(
+            key: HomeScreenKeys.newInspection,
+            borderRadius: BorderRadius.circular(TpRadius.md),
+            clipBehavior: Clip.antiAlias,
+            color: palette.primary,
+            child: Ink(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: AlignmentDirectional.topStart,
+                  end: AlignmentDirectional.bottomEnd,
+                  colors: <Color>[palette.primary, deep],
+                ),
+              ),
+              child: InkWell(
+                onTap: widget.onTap,
+                onHighlightChanged: _setPressed,
+                splashColor: palette.onPrimary.withValues(alpha: 0.12),
+                highlightColor: palette.onPrimary.withValues(alpha: 0.06),
+                child: SizedBox(
+                  height: 68,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 18),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: <Widget>[
+                        Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
                             color: palette.onPrimary,
-                            fontWeight: FontWeight.w800,
+                            shape: BoxShape.circle,
+                            boxShadow: <BoxShadow>[
+                              BoxShadow(
+                                color: deep.withValues(alpha: 0.45),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
                           ),
+                          child: Icon(
+                            Icons.add_rounded,
+                            color: palette.primary,
+                            size: 26,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Flexible(
+                          child: Text(
+                            widget.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleLarge
+                                ?.copyWith(
+                                  color: palette.onPrimary,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.2,
+                                ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
+                ),
               ),
             ),
           ),
@@ -983,12 +1362,16 @@ class _HomeSectionHeader extends StatelessWidget {
     return Row(
       children: <Widget>[
         Expanded(
-          child: Text(
-            title,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: palette.text,
-                  fontWeight: FontWeight.w800,
-                ),
+          child: Semantics(
+            header: true,
+            child: Text(
+              title,
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    color: palette.text,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 19,
+                  ),
+            ),
           ),
         ),
         if (action != null && onAction != null)
@@ -997,10 +1380,21 @@ class _HomeSectionHeader extends StatelessWidget {
             style: TextButton.styleFrom(
               visualDensity: VisualDensity.compact,
               foregroundColor: palette.primary,
+              padding: const EdgeInsetsDirectional.fromSTEB(10, 4, 4, 4),
             ),
-            child: Text(
-              action!,
-              style: const TextStyle(fontWeight: FontWeight.w800),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Text(
+                  action!,
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+                const Icon(
+                  // Mirrors itself under RTL (matchTextDirection).
+                  Icons.chevron_right_rounded,
+                  size: 20,
+                ),
+              ],
             ),
           ),
       ],
@@ -1041,7 +1435,20 @@ class _TodaysWork {
     required this.rows,
     required this.failed,
     required this.loading,
+    required this.loadedAny,
+    required this.applicable,
+    this.onRetry,
   });
+
+  /// True when at least one source answered. "Nothing needs you right now"
+  /// is a claim only a source that actually answered can support.
+  final bool loadedAny;
+
+  /// False when no work source applies to this role at all.
+  final bool applicable;
+
+  /// Re-reads the failed sources; null when nothing failed.
+  final VoidCallback? onRetry;
 
   final List<_WorkRowData> rows;
 
@@ -1071,6 +1478,17 @@ class _TodaysWorkCard extends StatelessWidget {
           tag: l10n.homeStatUnavailableCaption,
           title: l10n.homeStatUnavailableCaption,
           detail: work.failed.join(' • '),
+          secondary: work.onRetry == null ? null : l10n.actionRetry,
+          onTap: work.onRetry,
+        ),
+      if (!work.applicable)
+        _WorkRowData(
+          id: 'none',
+          tone: palette.unknown,
+          icon: Icons.info_outline_rounded,
+          tag: '',
+          title: l10n.homeNothingForRoleTitle,
+          detail: '',
         ),
       if (work.rows.isEmpty && work.failed.isEmpty && work.loading)
         _WorkRowData(
@@ -1081,7 +1499,10 @@ class _TodaysWorkCard extends StatelessWidget {
           title: l10n.homeStatLoadingCaption,
           detail: '',
         ),
-      if (work.rows.isEmpty && work.failed.isEmpty && !work.loading)
+      if (work.rows.isEmpty &&
+          work.failed.isEmpty &&
+          !work.loading &&
+          work.loadedAny)
         _WorkRowData(
           id: 'empty',
           tone: palette.ok,
@@ -1096,11 +1517,12 @@ class _TodaysWorkCard extends StatelessWidget {
       key: HomeScreenKeys.todaysWork,
       decoration: BoxDecoration(
         color: palette.surface,
-        borderRadius: BorderRadius.circular(TpRadius.md),
-        border: Border.all(color: palette.border),
+        borderRadius: BorderRadius.circular(TpRadius.lg),
+        border: Border.all(color: palette.border.withValues(alpha: 0.7)),
+        boxShadow: _homeShadow(palette),
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(TpRadius.md),
+        borderRadius: BorderRadius.circular(TpRadius.lg),
         child: Column(
           children: <Widget>[
             for (int i = 0; i < rows.length; i++)
@@ -1139,7 +1561,6 @@ class _WorkTimelineRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
     final TextTheme text = Theme.of(context).textTheme;
-    final bool rtl = Directionality.of(context) == TextDirection.rtl;
     final String? time = data.time;
 
     Widget connector(bool visible) => Expanded(
@@ -1148,7 +1569,7 @@ class _WorkTimelineRow extends StatelessWidget {
               width: 2,
               height: double.infinity,
               child: ColoredBox(
-                color: visible ? palette.border : Colors.transparent,
+                color: visible ? palette.borderStrong : Colors.transparent,
               ),
             ),
           ),
@@ -1160,12 +1581,14 @@ class _WorkTimelineRow extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: data.onTap,
+          splashColor: data.tone.soft,
+          highlightColor: data.tone.soft.withValues(alpha: 0.5),
           child: IntrinsicHeight(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
                 SizedBox(
-                  width: 68,
+                  width: 72,
                   child: Stack(
                     fit: StackFit.expand,
                     children: <Widget>[
@@ -1177,18 +1600,27 @@ class _WorkTimelineRow extends StatelessWidget {
                       ),
                       Center(
                         child: Container(
-                          width: 44,
-                          height: 44,
+                          width: 50,
+                          height: 50,
                           decoration: BoxDecoration(
-                            color: data.tone.soft,
+                            color: palette.surface,
                             shape: BoxShape.circle,
-                            border:
-                                Border.all(color: palette.surface, width: 3),
                           ),
-                          child: Icon(
-                            data.icon,
-                            color: data.tone.base,
-                            size: 22,
+                          padding: const EdgeInsets.all(3),
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: data.tone.soft,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: data.tone.base.withValues(alpha: 0.28),
+                                width: 1.5,
+                              ),
+                            ),
+                            child: Icon(
+                              data.icon,
+                              color: data.tone.base,
+                              size: 23,
+                            ),
                           ),
                         ),
                       ),
@@ -1201,15 +1633,17 @@ class _WorkTimelineRow extends StatelessWidget {
                       border: isLast
                           ? null
                           : Border(
-                              bottom: BorderSide(color: palette.border),
+                              bottom: BorderSide(
+                                color: palette.border.withValues(alpha: 0.8),
+                              ),
                             ),
                     ),
                     child: Padding(
                       padding: const EdgeInsetsDirectional.fromSTEB(
                         0,
-                        12,
-                        8,
-                        12,
+                        14,
+                        10,
+                        14,
                       ),
                       child: Row(
                         children: <Widget>[
@@ -1241,13 +1675,16 @@ class _WorkTimelineRow extends StatelessWidget {
                                           style: text.labelSmall?.copyWith(
                                             color: data.timeIsAlert
                                                 ? data.tone.base
-                                                : palette.textSecondary,
+                                                : palette.textMuted,
+                                            fontWeight: data.timeIsAlert
+                                                ? FontWeight.w800
+                                                : FontWeight.w600,
                                           ),
                                         ),
                                       ],
                                     ],
                                   ),
-                                  const SizedBox(height: 6),
+                                  const SizedBox(height: 7),
                                 ],
                                 Text(
                                   data.title,
@@ -1256,10 +1693,11 @@ class _WorkTimelineRow extends StatelessWidget {
                                   style: text.titleSmall?.copyWith(
                                     color: palette.text,
                                     fontWeight: FontWeight.w800,
+                                    fontSize: 15,
                                   ),
                                 ),
                                 if (data.detail.isNotEmpty) ...<Widget>[
-                                  const SizedBox(height: 3),
+                                  const SizedBox(height: 4),
                                   Text(
                                     data.detail,
                                     maxLines: 2,
@@ -1276,7 +1714,7 @@ class _WorkTimelineRow extends StatelessWidget {
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: text.bodySmall?.copyWith(
-                                      color: palette.textSecondary,
+                                      color: palette.textMuted,
                                     ),
                                   ),
                                 ],
@@ -1286,10 +1724,9 @@ class _WorkTimelineRow extends StatelessWidget {
                           if (data.onTap != null) ...<Widget>[
                             const SizedBox(width: 6),
                             Icon(
-                              rtl
-                                  ? Icons.chevron_left_rounded
-                                  : Icons.chevron_right_rounded,
-                              color: palette.text,
+                              // Mirrors itself under RTL (matchTextDirection).
+                              Icons.chevron_right_rounded,
+                              color: palette.textMuted,
                             ),
                           ],
                         ],
@@ -1315,10 +1752,11 @@ class _StatusTag extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
         color: tone.soft,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(TpRadius.sm),
+        border: Border.all(color: tone.base.withValues(alpha: 0.18)),
       ),
       child: Text(
         label.toUpperCase(),
@@ -1326,8 +1764,8 @@ class _StatusTag extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
               color: tone.onSoft,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.3,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.6,
             ),
       ),
     );
@@ -1343,75 +1781,103 @@ class _AccidentCommandShortcut extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
-    return Material(
-      key: HomeScreenKeys.action('accidents'),
-      color: palette.critical.soft,
-      borderRadius: BorderRadius.circular(TpRadius.sm),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 62),
-          padding: const EdgeInsetsDirectional.fromSTEB(12, 9, 10, 9),
-          decoration: BoxDecoration(
-            border: Border.all(
-              color: palette.critical.base.withValues(alpha: 0.25),
+    final TpStatusColors tone = palette.critical;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(TpRadius.md),
+        boxShadow: _homeShadow(palette, lift: 0.7),
+      ),
+      child: Material(
+        key: HomeScreenKeys.action('accidents'),
+        color: palette.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(TpRadius.md),
+          side: BorderSide(color: tone.base.withValues(alpha: 0.22)),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          splashColor: tone.soft,
+          highlightColor: tone.soft.withValues(alpha: 0.5),
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                // The red leading rail marks this as the urgent lane without
+                // flooding the whole card in red.
+                ColoredBox(color: tone.base, child: const SizedBox(width: 5)),
+                Expanded(
+                  child: Container(
+                    constraints: const BoxConstraints(minHeight: 66),
+                    padding:
+                        const EdgeInsetsDirectional.fromSTEB(12, 10, 10, 10),
+                    child: Row(
+                      children: <Widget>[
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: tone.soft,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: tone.base.withValues(alpha: 0.28),
+                              width: 1.5,
+                            ),
+                          ),
+                          child: Icon(
+                            Icons.car_crash_outlined,
+                            color: tone.base,
+                            size: 22,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: <Widget>[
+                              Text(
+                                _catalogLabel(
+                                  l10n.accidentCopyCatalog,
+                                  'dashboardTitle',
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleSmall
+                                    ?.copyWith(
+                                      color: palette.text,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                l10n.homeReportAccidentAction,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .labelMedium
+                                    ?.copyWith(
+                                      color: tone.base,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(
+                          // Mirrors itself under RTL (matchTextDirection).
+                          Icons.chevron_right_rounded,
+                          color: palette.textMuted,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
-            borderRadius: BorderRadius.circular(TpRadius.sm),
-          ),
-          child: Row(
-            children: <Widget>[
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: palette.critical.base,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.car_crash_outlined,
-                  color: palette.critical.onBase,
-                  size: 21,
-                ),
-              ),
-              const SizedBox(width: 11),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Text(
-                      _catalogLabel(
-                        l10n.accidentCopyCatalog,
-                        'dashboardTitle',
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                            color: palette.critical.onSoft,
-                            fontWeight: FontWeight.w900,
-                          ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      l10n.homeReportAccidentAction,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: palette.critical.onSoft,
-                            fontWeight: FontWeight.w600,
-                          ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(
-                Directionality.of(context) == TextDirection.rtl
-                    ? Icons.chevron_left_rounded
-                    : Icons.chevron_right_rounded,
-                color: palette.critical.onSoft,
-              ),
-            ],
           ),
         ),
       ),
@@ -1453,13 +1919,24 @@ class _DashboardQuickActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final actions =
-        <({String id, String label, IconData icon, VoidCallback onTap})>[
+    final TpPalette palette = TpPalette.of(context);
+    // Each action carries the tone of what it leads to: capture work is
+    // blue, fleet records green, a reported fault amber, an accident red,
+    // and the catalogue neutral - so the grid scans by colour, not only by
+    // reading every label.
+    final actions = <({
+      String id,
+      String label,
+      IconData icon,
+      TpStatusColors tone,
+      VoidCallback onTap,
+    })>[
       if (canScan)
         (
           id: 'scanner',
           label: l10n.scannerTitle,
           icon: Icons.qr_code_scanner_rounded,
+          tone: palette.info,
           onTap: onScanner,
         ),
       if (canWash)
@@ -1467,13 +1944,15 @@ class _DashboardQuickActions extends StatelessWidget {
           id: 'washing',
           label: l10n.tabWashing,
           icon: Icons.local_car_wash_rounded,
+          tone: palette.info,
           onTap: onWashing,
         ),
       if (canSeeVehicles)
         (
           id: 'asset',
           label: l10n.homeAssetAction,
-          icon: Icons.directions_car_outlined,
+          icon: Icons.local_shipping_outlined,
+          tone: palette.ok,
           onTap: onAsset,
         ),
       if (canReportIssue)
@@ -1481,6 +1960,7 @@ class _DashboardQuickActions extends StatelessWidget {
           id: 'reportIssue',
           label: l10n.homeReportIssueAction,
           icon: Icons.report_gmailerrorred_rounded,
+          tone: palette.warning,
           onTap: onReportIssue,
         ),
       if (canReportAccident)
@@ -1488,12 +1968,14 @@ class _DashboardQuickActions extends StatelessWidget {
           id: 'accident',
           label: l10n.homeReportAccidentAction,
           icon: Icons.car_crash_outlined,
+          tone: palette.critical,
           onTap: onAccident,
         ),
       (
         id: 'more',
         label: l10n.homeMoreAction,
         icon: Icons.apps_rounded,
+        tone: palette.neutral,
         onTap: onMore,
       ),
     ];
@@ -1503,10 +1985,10 @@ class _DashboardQuickActions extends StatelessWidget {
         final int perRow = constraints.maxWidth >= 280 ? 3 : 2;
         final int columns = actions.length < perRow ? actions.length : perRow;
         final double width =
-            (constraints.maxWidth - (columns - 1) * 8) / columns;
+            (constraints.maxWidth - (columns - 1) * 10) / columns;
         return Wrap(
-          spacing: 8,
-          runSpacing: 8,
+          spacing: 10,
+          runSpacing: 10,
           children: <Widget>[
             for (final action in actions)
               SizedBox(
@@ -1515,6 +1997,7 @@ class _DashboardQuickActions extends StatelessWidget {
                   key: HomeScreenKeys.action(action.id),
                   label: action.label,
                   icon: action.icon,
+                  tone: action.tone,
                   onTap: action.onTap,
                 ),
               ),
@@ -1529,55 +2012,68 @@ class _DashboardActionCard extends StatelessWidget {
   const _DashboardActionCard({
     required this.label,
     required this.icon,
+    required this.tone,
     required this.onTap,
     super.key,
   });
 
   final String label;
   final IconData icon;
+  final TpStatusColors tone;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
-    return Material(
-      color: palette.surface,
-      borderRadius: BorderRadius.circular(TpRadius.md),
-      child: InkWell(
-        onTap: onTap,
+    return DecoratedBox(
+      decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(TpRadius.md),
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 92),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-          decoration: BoxDecoration(
-            border: Border.all(color: palette.border),
-            borderRadius: BorderRadius.circular(TpRadius.md),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: palette.primarySoft,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, color: palette.primary, size: 19),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                label,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: palette.text,
-                      height: 1.15,
-                      fontWeight: FontWeight.w700,
+        boxShadow: _homeShadow(palette, lift: 0.6),
+      ),
+      child: Material(
+        color: palette.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(TpRadius.md),
+          side: BorderSide(color: palette.border.withValues(alpha: 0.7)),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          splashColor: tone.soft,
+          highlightColor: tone.soft.withValues(alpha: 0.5),
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 112),
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: tone.soft,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: tone.base.withValues(alpha: 0.22),
+                      width: 1.5,
                     ),
-              ),
-            ],
+                  ),
+                  child: Icon(icon, color: tone.base, size: 21),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  label,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: palette.text,
+                        height: 1.15,
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1772,6 +2268,221 @@ class _DashboardActionCard extends StatelessWidget {
       );
     default:
       return (label: id, icon: Icons.circle_outlined, approve: false);
+  }
+}
+
+/// "Your recent inspections": the mock's "Recent assets" strip, from the
+/// signed-in user's own latest inspections.
+class _RecentAssetsStrip extends StatelessWidget {
+  const _RecentAssetsStrip({
+    required this.recent,
+    required this.onRetry,
+    required this.onOpen,
+  });
+
+  final AsyncValue<List<HomeRecentAsset>> recent;
+  final VoidCallback onRetry;
+
+  /// Opens the asset; null when this role cannot reach asset details, in
+  /// which case the cards are not tappable rather than leading to a refusal.
+  final void Function(String assetNo)? onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final TpPalette palette = TpPalette.of(context);
+    final TextTheme text = Theme.of(context).textTheme;
+
+    Widget statusLine(IconData icon, String label, {VoidCallback? onTap}) {
+      return Material(
+        color: palette.surface,
+        borderRadius: BorderRadius.circular(TpRadius.lg),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(TpRadius.lg),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            child: Row(
+              children: <Widget>[
+                Icon(icon, color: palette.textMuted, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: text.bodyMedium?.copyWith(
+                      color: palette.textSecondary,
+                    ),
+                  ),
+                ),
+                if (onTap != null)
+                  Text(
+                    l10n.actionRetry,
+                    style: text.labelLarge?.copyWith(
+                      color: palette.primary,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return KeyedSubtree(
+      key: HomeScreenKeys.recentAssets,
+      child: switch (recent) {
+        AsyncData<List<HomeRecentAsset>>(:final value) => SizedBox(
+            height: 150,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              clipBehavior: Clip.none,
+              itemCount: value.length,
+              separatorBuilder: (BuildContext _, int __) =>
+                  const SizedBox(width: 10),
+              itemBuilder: (BuildContext context, int index) =>
+                  _RecentAssetCard(asset: value[index], onOpen: onOpen),
+            ),
+          ),
+        AsyncError<List<HomeRecentAsset>>() => statusLine(
+            Icons.sync_problem_rounded,
+            l10n.homeStatUnavailableCaption,
+            onTap: onRetry,
+          ),
+        _ => statusLine(
+            Icons.hourglass_empty_rounded,
+            l10n.homeStatLoadingCaption,
+          ),
+      },
+    );
+  }
+}
+
+class _RecentAssetCard extends StatelessWidget {
+  const _RecentAssetCard({required this.asset, required this.onOpen});
+
+  final HomeRecentAsset asset;
+  final void Function(String assetNo)? onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final TpPalette palette = TpPalette.of(context);
+    final TextTheme text = Theme.of(context).textTheme;
+    final String? photo = vehiclePhotoAssetFor(
+      assetNo: asset.assetNo,
+      vehicleType: asset.vehicleType,
+    );
+    final (TpStatusColors tone, String label) = switch (asset.health) {
+      HomeAssetHealth.good => (palette.ok, l10n.tyreConditionGood),
+      HomeAssetHealth.attention => (palette.warning, l10n.statusWarning),
+      HomeAssetHealth.critical => (palette.critical, l10n.statusCritical),
+      HomeAssetHealth.notChecked => (
+          palette.unknown,
+          l10n.homeAssetNotChecked,
+        ),
+    };
+    final VoidCallback? tap =
+        onOpen == null ? null : () => onOpen!(asset.assetNo);
+
+    return SizedBox(
+      key: HomeScreenKeys.recentAsset(asset.assetNo),
+      width: 118,
+      child: Semantics(
+        button: tap != null,
+        label: '${asset.assetNo}, $label',
+        excludeSemantics: true,
+        child: Material(
+          color: palette.surface,
+          borderRadius: BorderRadius.circular(TpRadius.md),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: tap,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(TpRadius.md),
+                border: Border.all(color: palette.border),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  Expanded(
+                    child: ColoredBox(
+                      color: palette.surfaceAlt,
+                      child: photo == null
+                          ? Icon(
+                              Icons.local_shipping_outlined,
+                              size: 40,
+                              color: palette.primary,
+                            )
+                          : Padding(
+                              padding: const EdgeInsets.all(6),
+                              child: Image.asset(
+                                photo,
+                                fit: BoxFit.contain,
+                                filterQuality: FilterQuality.medium,
+                                errorBuilder: (
+                                  BuildContext _,
+                                  Object __,
+                                  StackTrace? ___,
+                                ) =>
+                                    Icon(
+                                  Icons.local_shipping_outlined,
+                                  size: 40,
+                                  color: palette.primary,
+                                ),
+                              ),
+                            ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          asset.assetNo,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: text.titleSmall?.copyWith(
+                            color: palette.text,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: <Widget>[
+                            DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: tone.base,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const SizedBox(width: 8, height: 8),
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: text.labelMedium?.copyWith(
+                                  color: tone.onSoft,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

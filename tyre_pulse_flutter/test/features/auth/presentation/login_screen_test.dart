@@ -209,8 +209,6 @@ Future<void> _precacheSaudiLoginArtwork(WidgetTester tester) async {
   final BuildContext context = tester.element(find.byType(LoginScreen));
   await tester.runAsync(() async {
     for (final String asset in <String>[
-      'assets/login/figma_city_background.png',
-      'assets/login/figma_pump_truck.png',
       'assets/login/figma_brand_pulse.png',
       'assets/login/saudi_arabia_hero.png',
       'assets/login/figma_user.png',

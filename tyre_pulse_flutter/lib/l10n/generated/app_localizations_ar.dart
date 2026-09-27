@@ -2839,7 +2839,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get pmCopyCatalog =>
-      'title=مركز التحكم بالصيانة~subtitle=تحكم في عبء أعمال الصيانة اليوم~createWorkOrder=إنشاء أمر عمل~pmDue=الصيانة الوقائية المستحقة~priorityQueue=قائمة الأعمال ذات الأولوية~viewAll=عرض الكل~allWorkOrders=عرض جميع أوامر العمل~quickAccess=وصول سريع~workOrders=أوامر العمل~workOrdersHint=إنشاء وإدارة~pmSchedule=جدول الصيانة~pmScheduleHint=تخطيط ومتابعة الصيانة~inspections=الفحوصات~inspectionsHint=فحص وإبلاغ~parts=قطع الغيار~partsHint=المخزون والطلبات~tyres=الإطارات~tyresHint=السجلات والتدوير والاستبدال~overdue=متأخرة~dueSoon=مستحقة قريباً~active=الخطط النشطة~due=المستحقة الآن~all=كل الخطط~empty=لا توجد خطط صيانة~emptyDue=لا توجد صيانة وقائية مستحقة خلال 14 يوماً القادمة.~emptyAll=لا توجد خطط صيانة وقائية نشطة.~plan=خطة الصيانة~daysOverdue=يوم تأخير~daysLeft=يوم متبقٍ~noDate=لا يوجد تاريخ استحقاق~record=تسجيل الخدمة~meter=قراءة العداد~performedBy=نفذها~workshop=الورشة~partsCost=تكلفة القطع~labourCost=تكلفة العمالة~findings=الملاحظات~completed=مكتملة~partial=مكتملة جزئياً~deferred=مؤجلة~failed=غير مكتملة~save=حفظ الخدمة~invalidNumber=أدخل قيماً رقمية صحيحة.~loadFailed=تعذر تحميل خطط الصيانة.~saveFailed=تعذر حفظ سجل الخدمة. حاول مرة أخرى.';
+      'title=مركز التحكم بالصيانة~subtitle=تحكم في عبء أعمال الصيانة اليوم~createWorkOrder=إنشاء أمر عمل~pmDue=الصيانة الوقائية المستحقة~priorityQueue=قائمة الأعمال ذات الأولوية~viewAll=عرض الكل~allWorkOrders=عرض جميع أوامر العمل~quickAccess=وصول سريع~workOrders=أوامر العمل~workOrdersHint=إنشاء وإدارة~pmSchedule=جدول الصيانة~pmScheduleHint=تخطيط ومتابعة الصيانة~inspections=الفحوصات~inspectionsHint=فحص وإبلاغ~parts=قطع الغيار~partsHint=المخزون والطلبات~tyres=الإطارات~tyresHint=السجلات والتدوير والاستبدال~overdue=متأخرة~dueSoon=مستحقة قريباً~active=الخطط النشطة~due=المستحقة الآن~all=كل الخطط~empty=لا توجد خطط صيانة~emptyDue=لا توجد صيانة وقائية مستحقة خلال 14 يوماً القادمة.~emptyAll=لا توجد خطط صيانة وقائية نشطة.~plan=خطة الصيانة~daysOverdue=يوم تأخير~daysLeft=يوم متبقٍ~noDate=لا يوجد تاريخ استحقاق~record=تسجيل الخدمة~meter=قراءة العداد~performedBy=نفذها~workshop=الورشة~partsCost=تكلفة القطع~labourCost=تكلفة العمالة~findings=الملاحظات~completed=مكتملة~partial=مكتملة جزئياً~deferred=مؤجلة~failed=غير مكتملة~save=حفظ الخدمة~invalidNumber=أدخل قيماً رقمية صحيحة.~loadFailed=تعذر تحميل خطط الصيانة.~saveFailed=تعذر حفظ سجل الخدمة. حاول مرة أخرى.~openBreakdowns=الأعطال المفتوحة~activeWorkOrders=أوامر العمل النشطة~breakdown=عطل~workOrder=أمر عمل~dueToday=مستحق اليوم~since=منذ~opened=فُتح~queueEmpty=لا يوجد ما يحتاج إلى متابعة~woLoadFailed=تعذر تحميل أوامر العمل المفتوحة.~retry=إعادة المحاولة~countFailed=تعذر تحميل هذا العدد. اضغط لإعادة المحاولة.';
 
   @override
   String get stockCountCopyCatalog =>
@@ -3043,4 +3043,17 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get inspectionSelectedAssetTitle => 'الأصل المحدد';
+
+  @override
+  String get profileSyncUnknownFooter =>
+      'تعذّر التحقق من المزامنة المعلقة. قد يكون هناك عمل غير متزامن على هذا الجهاز';
+
+  @override
+  String get homeRecentInspectionsTitle => 'فحوصاتك الأخيرة';
+
+  @override
+  String get homeAssetNotChecked => 'لم يُفحص';
+
+  @override
+  String get homeNothingForRoleTitle => 'لا يوجد ما يلزم فحصه لدورك';
 }

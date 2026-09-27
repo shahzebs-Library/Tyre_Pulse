@@ -5,23 +5,25 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/back_navigation.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
-import 'package:tyre_pulse/core/errors/app_error.dart';
-import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
 import 'package:tyre_pulse/core/permissions/module_registry.dart';
 import 'package:tyre_pulse/core/permissions/permission_providers.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_photo_resolver.dart';
 import 'package:tyre_pulse/features/notifications/notifications_providers.dart';
+import 'package:tyre_pulse/features/preventive_maintenance/domain/maintenance_work_order.dart';
 import 'package:tyre_pulse/features/preventive_maintenance/domain/pm_plan.dart';
 import 'package:tyre_pulse/features/preventive_maintenance/pm_providers.dart';
 import 'package:tyre_pulse/features/preventive_maintenance/presentation/pm_copy.dart';
+import 'package:tyre_pulse/features/work_orders/domain/work_order_status.dart';
 import 'package:tyre_pulse/features/work_orders/presentation/widgets/create_work_order_sheet.dart';
+import 'package:tyre_pulse/features/work_orders/presentation/widgets/work_order_badges.dart';
 
 class PreventiveMaintenanceScreen extends ConsumerStatefulWidget {
   const PreventiveMaintenanceScreen({required this.route, super.key});
@@ -39,7 +41,6 @@ class _PreventiveMaintenanceScreenState
   @override
   Widget build(BuildContext context) {
     final PmCopy copy = PmCopy.of(context);
-    final AsyncValue<List<PmPlan>> state = ref.watch(activePmPlansProvider);
     final String fallback = TpBackFallbacks.forRoute(widget.route);
     // The bell badge is driven by the real unread inbox. It is shown only
     // when the inbox has actually been read AND holds unread rows: a loading
@@ -71,34 +72,50 @@ class _PreventiveMaintenanceScreenState
           const SizedBox(width: TpSpace.sm),
         ],
       ),
-      body: state.when(
-        loading: () => const TpLoadingState(),
-        error: (Object error, StackTrace stackTrace) => TpErrorState(
-          error: switch (error) {
-            final SupabaseFailure failure => failure.error,
-            final AppError appError => appError,
-            _ => AppError(
-                kind: AppErrorKind.unknown,
-                message: copy('loadFailed'),
-                cause: error,
-                isRetryable: true,
-              ),
-          },
-          onRetry: () => ref.invalidate(activePmPlansProvider),
-        ),
-        data: (List<PmPlan> plans) => _content(copy, plans),
-      ),
+      body: _content(copy),
     );
   }
 
-  Widget _content(PmCopy copy, List<PmPlan> plans) {
+  void _retryAll() {
+    ref
+      ..invalidate(activePmPlansProvider)
+      ..invalidate(openBreakdownsCountProvider)
+      ..invalidate(activeWorkOrdersCountProvider)
+      ..invalidate(maintenanceQueueWorkOrdersProvider);
+  }
+
+  Widget _content(PmCopy copy) {
     final DateTime now = DateTime.now();
-    final int overdue = plans
-        .where((PmPlan plan) => plan.dueBand(now) == PmDueBand.overdue)
-        .length;
-    final int soon = plans
-        .where((PmPlan plan) => plan.dueBand(now) == PmDueBand.dueSoon)
-        .length;
+    final AsyncValue<List<PmPlan>> planState = ref.watch(
+      activePmPlansProvider,
+    );
+    final AsyncValue<List<MaintenanceWorkOrder>> orderState = ref.watch(
+      maintenanceQueueWorkOrdersProvider,
+    );
+    final bool plansFailed = planState.hasError && !planState.isLoading;
+    final bool ordersFailed = orderState.hasError && !orderState.isLoading;
+    final List<PmPlan> plans =
+        plansFailed ? const <PmPlan>[] : planState.value ?? const <PmPlan>[];
+    final List<MaintenanceWorkOrder> orders = ordersFailed
+        ? const <MaintenanceWorkOrder>[]
+        : orderState.value ?? const <MaintenanceWorkOrder>[];
+    final bool queueLoading = (!planState.hasValue && planState.isLoading) ||
+        (!orderState.hasValue && orderState.isLoading);
+    final AsyncValue<int> pmDueCount = planState.whenData(
+      (List<PmPlan> value) => value
+          .where(
+            (PmPlan plan) => <PmDueBand>{
+              PmDueBand.overdue,
+              PmDueBand.dueSoon,
+            }.contains(plan.dueBand(now)),
+          )
+          .length,
+    );
+    final AsyncValue<int> overdueCount = planState.whenData(
+      (List<PmPlan> value) => value
+          .where((PmPlan plan) => plan.dueBand(now) == PmDueBand.overdue)
+          .length,
+    );
     final List<PmPlan> visible = dueOnly
         ? plans
             .where(
@@ -118,11 +135,27 @@ class _PreventiveMaintenanceScreenState
     final bool canStock = ref.watch(canAccessModuleProvider(ModuleKey.stock));
     final bool canTyres = ref.watch(canAccessModuleProvider(ModuleKey.records));
     final TpPalette palette = TpPalette.of(context);
+    final List<MaintenanceQueueEntry> queue = buildMaintenanceQueue(
+      workOrders: orders,
+      plans: visible,
+      now: now,
+    );
 
     return RefreshIndicator(
       onRefresh: () async {
-        ref.invalidate(activePmPlansProvider);
-        await ref.read(activePmPlansProvider.future);
+        _retryAll();
+        // A failed source renders its own error row; the pull itself must
+        // still finish.
+        await Future.wait<Object?>(<Future<Object?>>[
+          ref.read(activePmPlansProvider.future).catchError((Object _) {
+            return const <PmPlan>[];
+          }),
+          ref
+              .read(maintenanceQueueWorkOrdersProvider.future)
+              .catchError((Object _) {
+            return const <MaintenanceWorkOrder>[];
+          }),
+        ]);
       },
       child: ListView(
         key: const Key('pm.list'),
@@ -167,49 +200,63 @@ class _PreventiveMaintenanceScreenState
           ),
           const SizedBox(height: TpSpace.lg),
           if (canWorkOrders) ...<Widget>[
-            SizedBox(
-              height: 56,
-              child: FilledButton(
-                key: const Key('pm.createWorkOrder'),
-                onPressed: () => unawaited(_createWorkOrder()),
-                style: FilledButton.styleFrom(
-                  backgroundColor: palette.primary,
-                  foregroundColor: palette.onPrimary,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(TpRadius.md),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(TpRadius.md),
+                boxShadow: palette.brightness == Brightness.light
+                    ? <BoxShadow>[
+                        BoxShadow(
+                          color: palette.primary.withValues(alpha: 0.26),
+                          blurRadius: 18,
+                          offset: const Offset(0, 8),
+                        ),
+                      ]
+                    : null,
+              ),
+              child: SizedBox(
+                height: 58,
+                child: FilledButton(
+                  key: const Key('pm.createWorkOrder'),
+                  onPressed: () => unawaited(_createWorkOrder()),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: palette.primary,
+                    foregroundColor: palette.onPrimary,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(TpRadius.md),
+                    ),
                   ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: <Widget>[
-                    DecoratedBox(
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(4),
-                        child: Icon(
-                          Icons.add_rounded,
-                          color: palette.primary,
-                          size: 24,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: <Widget>[
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: palette.onPrimary,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(4),
+                          child: Icon(
+                            Icons.add_rounded,
+                            color: palette.primary,
+                            size: 24,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: TpSpace.md),
-                    Flexible(
-                      child: Text(
-                        copy('createWorkOrder'),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style:
-                            Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  color: palette.onPrimary,
-                                  fontWeight: FontWeight.w800,
-                                ),
+                      const SizedBox(width: TpSpace.md),
+                      Flexible(
+                        child: Text(
+                          copy('createWorkOrder'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style:
+                              Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    color: palette.onPrimary,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -222,37 +269,50 @@ class _PreventiveMaintenanceScreenState
               children: <Widget>[
                 Expanded(
                   child: _PmMetric(
-                    value: overdue + soon,
+                    metricKey: const Key('pm.kpi.pmDue'),
+                    value: pmDueCount,
                     label: copy('pmDue'),
-                    icon: Icons.build_circle_outlined,
+                    icon: Icons.handyman_outlined,
                     status: TpStatus.warning,
+                    retryLabel: copy('countFailed'),
+                    onRetry: () => ref.invalidate(activePmPlansProvider),
                   ),
                 ),
                 const _PmMetricDivider(),
                 Expanded(
                   child: _PmMetric(
-                    value: overdue,
-                    label: copy('overdue'),
+                    metricKey: const Key('pm.kpi.breakdowns'),
+                    value: ref.watch(openBreakdownsCountProvider),
+                    label: copy('openBreakdowns'),
                     icon: Icons.warning_rounded,
                     status: TpStatus.critical,
+                    retryLabel: copy('countFailed'),
+                    onRetry: () => ref.invalidate(openBreakdownsCountProvider),
                   ),
                 ),
                 const _PmMetricDivider(),
                 Expanded(
                   child: _PmMetric(
-                    value: plans.length,
-                    label: copy('active'),
+                    metricKey: const Key('pm.kpi.activeWorkOrders'),
+                    value: ref.watch(activeWorkOrdersCountProvider),
+                    label: copy('activeWorkOrders'),
                     icon: Icons.assignment_outlined,
                     status: TpStatus.info,
+                    retryLabel: copy('countFailed'),
+                    onRetry: () =>
+                        ref.invalidate(activeWorkOrdersCountProvider),
                   ),
                 ),
                 const _PmMetricDivider(),
                 Expanded(
                   child: _PmMetric(
-                    value: soon,
-                    label: copy('dueSoon'),
-                    icon: Icons.verified_user_outlined,
-                    status: TpStatus.ok,
+                    metricKey: const Key('pm.kpi.overdue'),
+                    value: overdueCount,
+                    label: copy('overdue'),
+                    icon: Icons.event_busy_rounded,
+                    status: TpStatus.critical,
+                    retryLabel: copy('countFailed'),
+                    onRetry: () => ref.invalidate(activePmPlansProvider),
                   ),
                 ),
               ],
@@ -277,24 +337,58 @@ class _PreventiveMaintenanceScreenState
             onChanged: (bool value) => setState(() => dueOnly = value),
           ),
           const _SectionDivider(),
-          if (visible.isEmpty)
-            SizedBox(
-              height: 220,
-              child: TpEmptyState(
-                icon: Icons.build_circle_outlined,
-                title: copy('empty'),
-                message: dueOnly ? copy('emptyDue') : copy('emptyAll'),
+          if (queueLoading)
+            const _QueueLoading()
+          else ...<Widget>[
+            if (ordersFailed)
+              _QueueError(
+                key: const Key('pm.queue.workOrdersError'),
+                message: copy('woLoadFailed'),
+                retryLabel: copy('retry'),
+                onRetry: () =>
+                    ref.invalidate(maintenanceQueueWorkOrdersProvider),
               ),
-            )
-          else
-            for (int index = 0; index < visible.length; index++)
-              _PmPlanRow(
-                plan: visible[index],
-                now: now,
-                copy: copy,
-                showDivider: index < visible.length - 1,
-                onRecord: () => unawaited(_record(visible[index], copy)),
+            if (plansFailed)
+              _QueueError(
+                key: const Key('pm.queue.plansError'),
+                message: copy('loadFailed'),
+                retryLabel: copy('retry'),
+                onRetry: () => ref.invalidate(activePmPlansProvider),
               ),
+            if (queue.isEmpty && !ordersFailed && !plansFailed)
+              SizedBox(
+                height: 220,
+                child: TpEmptyState(
+                  icon: Icons.build_circle_outlined,
+                  title: copy('queueEmpty'),
+                  message: dueOnly ? copy('emptyDue') : copy('emptyAll'),
+                ),
+              ),
+            for (int index = 0; index < queue.length; index++)
+              switch (queue[index]) {
+                WorkOrderQueueEntry(:final MaintenanceWorkOrder workOrder) =>
+                  _WorkOrderRow(
+                    order: workOrder,
+                    now: now,
+                    copy: copy,
+                    showDivider: index < queue.length - 1,
+                    onOpen: canWorkOrders
+                        ? () => context.push(
+                              WorkOrderDetailRoute(
+                                workOrderId: WorkOrderId(workOrder.id),
+                              ).location,
+                            )
+                        : null,
+                  ),
+                PmPlanQueueEntry(:final PmPlan plan) => _PmPlanRow(
+                    plan: plan,
+                    now: now,
+                    copy: copy,
+                    showDivider: index < queue.length - 1,
+                    onRecord: () => unawaited(_record(plan, copy)),
+                  ),
+              },
+          ],
           const _SectionDivider(),
           if (canWorkOrders) ...<Widget>[
             const SizedBox(height: TpSpace.xs),
@@ -304,11 +398,9 @@ class _PreventiveMaintenanceScreenState
                 onPressed: () => context.push(const WorkOrdersRoute().location),
                 iconAlignment: IconAlignment.end,
                 style: TextButton.styleFrom(foregroundColor: palette.primary),
-                icon: Icon(
-                  Directionality.of(context) == TextDirection.rtl
-                      ? Icons.chevron_left_rounded
-                      : Icons.chevron_right_rounded,
-                ),
+                // chevron_right_rounded sets matchTextDirection, so Flutter
+                // mirrors it under RTL on its own.
+                icon: const Icon(Icons.chevron_right_rounded),
                 label: Text(
                   copy('allWorkOrders'),
                   style: const TextStyle(fontWeight: FontWeight.w800),
@@ -332,6 +424,7 @@ class _PreventiveMaintenanceScreenState
               Expanded(
                 child: _QuickAccessTile(
                   icon: Icons.assignment,
+                  tone: palette.ok,
                   label: copy('workOrders'),
                   hint: copy('workOrdersHint'),
                   onTap: canWorkOrders
@@ -343,6 +436,7 @@ class _PreventiveMaintenanceScreenState
               Expanded(
                 child: _QuickAccessTile(
                   icon: Icons.calendar_month,
+                  tone: palette.info,
                   label: copy('pmSchedule'),
                   hint: copy('pmScheduleHint'),
                   onTap: () => setState(() => dueOnly = false),
@@ -352,6 +446,7 @@ class _PreventiveMaintenanceScreenState
               Expanded(
                 child: _QuickAccessTile(
                   icon: Icons.verified_user,
+                  tone: palette.unknown,
                   label: copy('inspections'),
                   hint: copy('inspectionsHint'),
                   onTap: canInspect
@@ -363,6 +458,7 @@ class _PreventiveMaintenanceScreenState
               Expanded(
                 child: _QuickAccessTile(
                   icon: Icons.inventory_2,
+                  tone: palette.warning,
                   label: copy('parts'),
                   hint: copy('partsHint'),
                   onTap: canStock
@@ -373,17 +469,12 @@ class _PreventiveMaintenanceScreenState
             ],
           ),
           const SizedBox(height: TpSpace.sm),
-          TpCard(
-            padding: EdgeInsets.zero,
-            child: TpActionRow(
-              icon: Icons.tire_repair_rounded,
-              label: copy('tyres'),
-              value: copy('tyresHint'),
-              showDivider: false,
-              onTap: canTyres
-                  ? () => context.push(const TyreRecordsRoute().location)
-                  : null,
-            ),
+          _TyresRow(
+            label: copy('tyres'),
+            hint: copy('tyresHint'),
+            onTap: canTyres
+                ? () => context.push(const TyreRecordsRoute().location)
+                : null,
           ),
         ],
       ),
@@ -406,23 +497,56 @@ class _PreventiveMaintenanceScreenState
   }
 }
 
+/// One KPI tile. Its number comes from one source only: a count that is
+/// still loading shows a spinner, a count that failed shows "-" (never 0,
+/// which would read as a real measurement) and retries on tap.
 class _PmMetric extends StatelessWidget {
   const _PmMetric({
+    required this.metricKey,
     required this.value,
     required this.label,
     required this.icon,
     required this.status,
+    required this.retryLabel,
+    required this.onRetry,
   });
 
-  final int value;
+  final Key metricKey;
+  final AsyncValue<int> value;
   final String label;
   final IconData icon;
   final TpStatus status;
+  final String retryLabel;
+  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
     final TpStatusColors colors = TpPalette.of(context).forStatus(status);
-    return Padding(
+    final bool failed = value.hasError && !value.isLoading;
+    final int? count = failed ? null : value.value;
+    final TextStyle? numberStyle =
+        Theme.of(context).textTheme.headlineMedium?.copyWith(
+              color: failed ? TpPalette.of(context).textMuted : colors.base,
+              fontWeight: FontWeight.w900,
+              height: 1.1,
+            );
+    final Widget number = failed
+        ? Text('-', key: const Key('pm.kpi.unavailable'), style: numberStyle)
+        : count == null
+            ? SizedBox(
+                height: 30,
+                child: Center(
+                  child: SizedBox.square(
+                    dimension: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.4,
+                      color: colors.base,
+                    ),
+                  ),
+                ),
+              )
+            : Text('$count', maxLines: 1, style: numberStyle);
+    final Widget tile = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 2),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -432,24 +556,14 @@ class _PmMetric extends StatelessWidget {
               color: colors.soft,
               shape: BoxShape.circle,
             ),
-            child: Padding(
-              padding: const EdgeInsets.all(TpSpace.sm),
-              child: Icon(icon, color: colors.onSoft, size: TpSizing.iconLg),
+            child: SizedBox(
+              width: 52,
+              height: 52,
+              child: Icon(icon, color: colors.base, size: 28),
             ),
           ),
           const SizedBox(height: TpSpace.xs),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              '$value',
-              maxLines: 1,
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    color: colors.base,
-                    fontWeight: FontWeight.w900,
-                    height: 1.1,
-                  ),
-            ),
-          ),
+          FittedBox(fit: BoxFit.scaleDown, child: number),
           const SizedBox(height: 2),
           // Two short lines at most, balanced and centred, so "Active plans"
           // or an Arabic label never breaks mid-word into a ragged stack.
@@ -465,6 +579,16 @@ class _PmMetric extends StatelessWidget {
                 ?.copyWith(height: 1.15, fontWeight: FontWeight.w600),
           ),
         ],
+      ),
+    );
+    if (!failed) return KeyedSubtree(key: metricKey, child: tile);
+    return Tooltip(
+      key: metricKey,
+      message: retryLabel,
+      child: InkWell(
+        onTap: onRetry,
+        borderRadius: BorderRadius.circular(TpRadius.md),
+        child: Semantics(button: true, label: retryLabel, child: tile),
       ),
     );
   }
@@ -570,11 +694,7 @@ class _SectionHeading extends StatelessWidget {
             onPressed: onAction,
             iconAlignment: IconAlignment.end,
             style: TextButton.styleFrom(foregroundColor: palette.primary),
-            icon: Icon(
-              Directionality.of(context) == TextDirection.rtl
-                  ? Icons.chevron_left_rounded
-                  : Icons.chevron_right_rounded,
-            ),
+            icon: const Icon(Icons.chevron_right_rounded),
             label: Text(
               action,
               style: const TextStyle(fontWeight: FontWeight.w800),
@@ -671,12 +791,14 @@ class _QuietFilterOption extends StatelessWidget {
 class _QuickAccessTile extends StatelessWidget {
   const _QuickAccessTile({
     required this.icon,
+    required this.tone,
     required this.label,
     required this.hint,
     required this.onTap,
   });
 
   final IconData icon;
+  final TpStatusColors tone;
   final String label;
   final String hint;
   final VoidCallback? onTap;
@@ -688,16 +810,20 @@ class _QuickAccessTile extends StatelessWidget {
       button: onTap != null,
       enabled: onTap != null,
       child: Material(
-        color: palette.surface,
+        color: onTap == null ? palette.surface : tone.soft,
         shape: RoundedRectangleBorder(
-          side: BorderSide(color: palette.border),
+          side: BorderSide(
+            color: onTap == null
+                ? palette.border
+                : tone.base.withValues(alpha: 0.25),
+          ),
           borderRadius: BorderRadius.circular(TpRadius.md),
         ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
           child: SizedBox(
-            height: 116,
+            height: 128,
             child: Padding(
               padding: const EdgeInsets.symmetric(
                 horizontal: TpSpace.xs,
@@ -706,7 +832,30 @@ class _QuickAccessTile extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: <Widget>[
-                  Icon(icon, color: palette.primary, size: 28),
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: onTap == null ? palette.surfaceSunken : tone.base,
+                      borderRadius: BorderRadius.circular(TpRadius.md),
+                      boxShadow: onTap == null ||
+                              palette.brightness != Brightness.light
+                          ? null
+                          : <BoxShadow>[
+                              BoxShadow(
+                                color: tone.base.withValues(alpha: 0.3),
+                                blurRadius: 8,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(
+                      icon,
+                      color: onTap == null ? palette.textMuted : tone.onBase,
+                      size: 24,
+                    ),
+                  ),
                   const SizedBox(height: TpSpace.sm),
                   Text(
                     label,
@@ -730,6 +879,97 @@ class _QuickAccessTile extends StatelessWidget {
                         .labelSmall
                         ?.copyWith(color: palette.textMuted, height: 1.1),
                   ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The wide tyres entry under the quick-access grid: a filled brand badge on
+/// a tinted surface, matching the mock's full-width "Tyres" card.
+class _TyresRow extends StatelessWidget {
+  const _TyresRow({
+    required this.label,
+    required this.hint,
+    required this.onTap,
+  });
+
+  final String label;
+  final String hint;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final TextTheme text = Theme.of(context).textTheme;
+    final bool enabled = onTap != null;
+    return Semantics(
+      button: enabled,
+      enabled: enabled,
+      child: Material(
+        color: palette.surfaceAlt,
+        shape: RoundedRectangleBorder(
+          side: BorderSide(color: palette.border),
+          borderRadius: BorderRadius.circular(TpRadius.md),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 68),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: TpSpace.md,
+                vertical: TpSpace.sm,
+              ),
+              child: Row(
+                children: <Widget>[
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: enabled ? palette.primary : palette.surfaceSunken,
+                      shape: BoxShape.circle,
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(
+                      Icons.tire_repair_rounded,
+                      color: enabled ? palette.onPrimary : palette.textMuted,
+                    ),
+                  ),
+                  const SizedBox(width: TpSpace.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Text(
+                          label,
+                          style: text.titleSmall?.copyWith(
+                            color: enabled ? palette.text : palette.textMuted,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        Text(
+                          hint,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: text.bodySmall?.copyWith(
+                            color: palette.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (enabled)
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      color: palette.textSecondary,
+                    ),
                 ],
               ),
             ),
@@ -773,10 +1013,10 @@ class _PmPlanRow extends StatelessWidget {
       PmDueBand.none => TpStatus.neutral,
     };
     final String title = plan.assetNo ?? plan.name ?? copy('plan');
-    final String detail = <String>[
-      if (plan.assetCategory != null) plan.assetCategory!,
-      if (plan.assetNo != null && plan.name != null) plan.name!,
-    ].join(' · ');
+    // The category is carried by its own chip below, so the detail line is
+    // the plan name when the asset number is already the title.
+    final String detail =
+        (plan.assetNo != null && plan.name != null) ? plan.name! : '';
     final DateTime? due = plan.nextDue;
     final String dueText = <String>[
       if (due != null)
@@ -792,6 +1032,24 @@ class _PmPlanRow extends StatelessWidget {
       status: plan.status,
     );
     final String? photo = vehiclePhotoAsset(asset);
+    final TpStatusColors tone = palette.forStatus(status);
+    final String dueLabel = switch (band) {
+      PmDueBand.overdue => '${days!.abs()} ${copy('daysOverdue')}',
+      PmDueBand.dueSoon => '$days ${copy('daysLeft')}',
+      PmDueBand.ok => '$days ${copy('daysLeft')}',
+      PmDueBand.none => copy('noDate'),
+    };
+    final IconData dueIcon = switch (band) {
+      PmDueBand.overdue => Icons.schedule_rounded,
+      PmDueBand.dueSoon => Icons.event_rounded,
+      PmDueBand.ok => Icons.event_available_rounded,
+      PmDueBand.none => Icons.event_busy_rounded,
+    };
+    final String? bandChip = switch (band) {
+      PmDueBand.overdue => copy('overdue'),
+      PmDueBand.dueSoon => copy('dueSoon'),
+      PmDueBand.ok || PmDueBand.none => null,
+    };
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
@@ -799,46 +1057,45 @@ class _PmPlanRow extends StatelessWidget {
           key: Key('pm.plan.${plan.id}'),
           onTap: onRecord,
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: TpSpace.sm),
+            padding: const EdgeInsets.symmetric(vertical: TpSpace.md),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Container(
-                  width: 64,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    color: palette.surfaceAlt,
-                    borderRadius: BorderRadius.circular(TpRadius.sm),
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  alignment: Alignment.center,
-                  child: photo == null
-                      ? Icon(
-                          vehicleFallbackIcon(asset),
-                          size: 28,
-                          color: palette.primary,
-                        )
-                      : Image.asset(
-                          photo,
-                          width: double.infinity,
-                          height: double.infinity,
-                          fit: BoxFit.contain,
-                          filterQuality: FilterQuality.high,
-                        ),
-                ),
+                _QueueThumbnail(asset: asset, photo: photo),
                 const SizedBox(width: TpSpace.md),
                 Expanded(
-                  flex: 3,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: <Widget>[
-                      Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: text.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w900,
-                        ),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Expanded(
+                            child: Text(
+                              title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: text.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: TpSpace.xs),
+                          Icon(dueIcon, size: 16, color: tone.base),
+                          const SizedBox(width: 3),
+                          Flexible(
+                            child: Text(
+                              dueLabel,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: text.labelMedium?.copyWith(
+                                color: tone.base,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                       if (detail.isNotEmpty)
                         Text(
@@ -849,73 +1106,104 @@ class _PmPlanRow extends StatelessWidget {
                             color: palette.textSecondary,
                           ),
                         ),
-                      if (plan.site != null)
-                        Row(
-                          children: <Widget>[
-                            Icon(
-                              Icons.location_on_outlined,
-                              size: 14,
-                              color: palette.textMuted,
-                            ),
-                            const SizedBox(width: 2),
-                            Flexible(
-                              child: Text(
-                                plan.site!,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: text.bodySmall?.copyWith(
-                                  color: palette.textSecondary,
+                      if (plan.site != null || dueText.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Row(
+                            children: <Widget>[
+                              if (plan.site != null) ...<Widget>[
+                                Icon(
+                                  Icons.location_on_outlined,
+                                  size: 14,
+                                  color: palette.textMuted,
                                 ),
-                              ),
-                            ),
-                          ],
-                        ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: TpSpace.sm),
-                Flexible(
-                  flex: 2,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: AlignmentDirectional.centerEnd,
-                        child: TpStatusChip(
-                          status: status,
-                          isCompact: true,
-                          label: switch (band) {
-                            PmDueBand.overdue =>
-                              '${days!.abs()} ${copy('daysOverdue')}',
-                            PmDueBand.dueSoon => '$days ${copy('daysLeft')}',
-                            PmDueBand.ok => '$days ${copy('daysLeft')}',
-                            PmDueBand.none => copy('noDate'),
-                          },
-                        ),
-                      ),
-                      if (dueText.isNotEmpty) ...<Widget>[
-                        const SizedBox(height: TpSpace.xs),
-                        Text(
-                          dueText,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: text.bodySmall?.copyWith(
-                            color: palette.textMuted,
+                                const SizedBox(width: 2),
+                                Flexible(
+                                  child: Text(
+                                    plan.site!,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: text.bodySmall?.copyWith(
+                                      color: palette.textSecondary,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: TpSpace.sm),
+                              ],
+                              if (dueText.isNotEmpty)
+                                Flexible(
+                                  flex: 2,
+                                  child: Text(
+                                    dueText,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: text.bodySmall?.copyWith(
+                                      color: palette.textMuted,
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
-                      ],
+                      const SizedBox(height: TpSpace.sm),
+                      Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: Wrap(
+                              spacing: TpSpace.xs,
+                              runSpacing: TpSpace.xs,
+                              children: <Widget>[
+                                // The row type tag, as in the mock: this
+                                // row is preventive maintenance, not a job
+                                // card.
+                                _PmChip(
+                                  key: Key('pm.plan.${plan.id}.tag'),
+                                  label: copy('pmDue'),
+                                  tone: band == PmDueBand.overdue
+                                      ? palette.critical
+                                      : palette.warning,
+                                ),
+                                if (bandChip != null &&
+                                    band != PmDueBand.overdue)
+                                  _PmChip(label: bandChip, tone: tone),
+                                if (plan.priority != null)
+                                  _PmChip(
+                                    label: _capitalised(plan.priority!),
+                                    tone: palette.forStatus(
+                                      workOrderToneToStatus(
+                                        workOrderPriorityTone(plan.priority),
+                                      ),
+                                    ),
+                                  )
+                                else if (plan.assetCategory != null)
+                                  _PmChip(
+                                    label: plan.assetCategory!,
+                                    tone: palette.info,
+                                  ),
+                              ],
+                            ),
+                          ),
+                          SizedBox.square(
+                            dimension: 40,
+                            child: IconButton(
+                              key: Key('pm.record.${plan.id}'),
+                              tooltip: copy('record'),
+                              onPressed: onRecord,
+                              padding: EdgeInsets.zero,
+                              style: IconButton.styleFrom(
+                                backgroundColor: palette.primarySoft,
+                                foregroundColor: palette.primary,
+                              ),
+                              icon: const Icon(
+                                Icons.check_circle_outline_rounded,
+                                size: 22,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
-                ),
-                IconButton(
-                  key: Key('pm.record.${plan.id}'),
-                  tooltip: copy('record'),
-                  onPressed: onRecord,
-                  visualDensity: VisualDensity.compact,
-                  color: palette.primary,
-                  icon: const Icon(Icons.check_circle_outline_rounded),
                 ),
               ],
             ),
@@ -926,6 +1214,435 @@ class _PmPlanRow extends StatelessWidget {
       ],
     );
   }
+}
+
+/// `pm_programs.priority` is stored lower case (V253 CHECK); the chip shows
+/// it the way the work order vocabulary spells it.
+String _capitalised(String value) {
+  final String trimmed = value.trim();
+  if (trimmed.isEmpty) return trimmed;
+  return trimmed[0].toUpperCase() + trimmed.substring(1).toLowerCase();
+}
+
+/// The queue's loading row, shown until both sources have answered once.
+class _QueueLoading extends StatelessWidget {
+  const _QueueLoading();
+
+  @override
+  Widget build(BuildContext context) => const SizedBox(
+        key: Key('pm.queue.loading'),
+        height: 160,
+        child: Center(child: CircularProgressIndicator()),
+      );
+}
+
+/// One source of the queue failed. The other source's rows still render;
+/// this row says which part is missing and retries only that part.
+class _QueueError extends StatelessWidget {
+  const _QueueError({
+    required this.message,
+    required this.retryLabel,
+    required this.onRetry,
+    super.key,
+  });
+
+  final String message;
+  final String retryLabel;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final TpStatusColors tone = palette.critical;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: TpSpace.sm),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: tone.soft,
+          borderRadius: BorderRadius.circular(TpRadius.md),
+          border: Border.all(color: tone.base.withValues(alpha: 0.25)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            TpSpace.md,
+            TpSpace.xs,
+            TpSpace.xs,
+            TpSpace.xs,
+          ),
+          child: Row(
+            children: <Widget>[
+              Icon(Icons.error_outline_rounded, color: tone.base, size: 20),
+              const SizedBox(width: TpSpace.sm),
+              Expanded(
+                child: Text(
+                  message,
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: tone.onSoft),
+                ),
+              ),
+              TextButton(
+                onPressed: onRetry,
+                style: TextButton.styleFrom(foregroundColor: tone.base),
+                child: Text(
+                  retryLabel,
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One open work order in the priority queue: photo, asset, job card and
+/// type, site, the due or opened date, type/priority/status chips and the
+/// assigned technician. Tapping opens the existing work order detail.
+///
+/// The technician is `work_orders.assigned_owner_id` resolved to
+/// `profiles.full_name`; an unassigned job shows no name rather than an
+/// invented one.
+class _WorkOrderRow extends StatelessWidget {
+  const _WorkOrderRow({
+    required this.order,
+    required this.now,
+    required this.copy,
+    required this.showDivider,
+    required this.onOpen,
+  });
+
+  final MaintenanceWorkOrder order;
+  final DateTime now;
+  final PmCopy copy;
+  final bool showDivider;
+  final VoidCallback? onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final TextTheme text = Theme.of(context).textTheme;
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final MaterialLocalizations dates = MaterialLocalizations.of(context);
+    final int? days = order.daysToTarget(now);
+    final DateTime? target = order.targetCompletion?.toLocal();
+    final DateTime? opened = order.openedAt?.toLocal();
+    final TpStatus dueStatus = switch (days) {
+      null => TpStatus.neutral,
+      < 0 => TpStatus.critical,
+      0 => TpStatus.warning,
+      _ => TpStatus.ok,
+    };
+    final TpStatusColors dueTone = palette.forStatus(dueStatus);
+    final String? dueLabel = switch (days) {
+      null => null,
+      < 0 => copy('overdue'),
+      0 => copy('dueToday'),
+      _ => '$days ${copy('daysLeft')}',
+    };
+    final String dateText = switch (days) {
+      null when opened != null =>
+        '${copy('opened')} ${dates.formatShortDate(opened)}',
+      null => '',
+      < 0 => '${copy('since')} ${dates.formatShortDate(target!)}',
+      _ => dates.formatShortDate(target!),
+    };
+    final String title =
+        order.assetNo ?? order.workOrderNo ?? copy('workOrder');
+    final String detail = <String>[
+      if (order.assetNo != null && order.workOrderNo != null)
+        order.workOrderNo!,
+      if (!order.isBreakdown) workOrderWorkTypeLabel(l10n, order.workType),
+    ].join(' · ');
+    final VehicleAsset asset = VehicleAsset(
+      id: order.id,
+      assetNo: order.assetNo,
+      vehicleType: order.assetCategory,
+      site: order.site,
+    );
+    final String? photo = vehiclePhotoAsset(asset);
+    final TpStatusColors statusTone = palette.forStatus(
+      workOrderToneToStatus(workOrderStatusTone(order.status)),
+    );
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        InkWell(
+          key: Key('pm.wo.${order.id}'),
+          onTap: onOpen,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: TpSpace.md),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                _QueueThumbnail(asset: asset, photo: photo),
+                const SizedBox(width: TpSpace.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Expanded(
+                            child: Text(
+                              title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: text.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                          if (dueLabel != null) ...<Widget>[
+                            const SizedBox(width: TpSpace.xs),
+                            Icon(
+                              days! < 0
+                                  ? Icons.schedule_rounded
+                                  : Icons.event_rounded,
+                              size: 16,
+                              color: dueTone.base,
+                            ),
+                            const SizedBox(width: 3),
+                            Flexible(
+                              child: Text(
+                                dueLabel,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: text.labelMedium?.copyWith(
+                                  color: dueTone.base,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      if (detail.isNotEmpty)
+                        Text(
+                          detail,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: text.bodySmall?.copyWith(
+                            color: palette.textSecondary,
+                          ),
+                        ),
+                      if (order.site != null || dateText.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Row(
+                            children: <Widget>[
+                              if (order.site != null) ...<Widget>[
+                                Icon(
+                                  Icons.location_on_outlined,
+                                  size: 14,
+                                  color: palette.textMuted,
+                                ),
+                                const SizedBox(width: 2),
+                                Flexible(
+                                  child: Text(
+                                    order.site!,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: text.bodySmall?.copyWith(
+                                      color: palette.textSecondary,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: TpSpace.sm),
+                              ],
+                              if (dateText.isNotEmpty)
+                                Flexible(
+                                  flex: 2,
+                                  child: Text(
+                                    dateText,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: text.bodySmall?.copyWith(
+                                      color: palette.textMuted,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      const SizedBox(height: TpSpace.sm),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: <Widget>[
+                          Expanded(
+                            child: Wrap(
+                              spacing: TpSpace.xs,
+                              runSpacing: TpSpace.xs,
+                              children: <Widget>[
+                                _PmChip(
+                                  key: Key('pm.wo.${order.id}.tag'),
+                                  label: order.isBreakdown
+                                      ? copy('breakdown')
+                                      : copy('workOrder'),
+                                  tone: order.isBreakdown
+                                      ? palette.critical
+                                      : palette.info,
+                                ),
+                                if (order.priority != null)
+                                  _PmChip(
+                                    label: order.priority!,
+                                    tone: palette.forStatus(
+                                      workOrderToneToStatus(
+                                        workOrderPriorityTone(order.priority),
+                                      ),
+                                    ),
+                                  ),
+                                _PmChip(
+                                  label: workOrderStatusLabel(
+                                    l10n,
+                                    order.status,
+                                  ),
+                                  tone: statusTone,
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (order.technicianName != null)
+                            _TechnicianTag(name: order.technicianName!)
+                          else if (onOpen != null)
+                            Icon(
+                              Icons.chevron_right_rounded,
+                              color: palette.textMuted,
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (showDivider)
+          Divider(height: 1, thickness: 1, color: palette.border),
+      ],
+    );
+  }
+}
+
+/// The assigned technician: initials in a soft circle and the first name.
+class _TechnicianTag extends StatelessWidget {
+  const _TechnicianTag({required this.name});
+
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final String initials = pmInitials(name) ?? '';
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 104),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Container(
+            width: 26,
+            height: 26,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: palette.primarySoft,
+              shape: BoxShape.circle,
+            ),
+            child: Text(
+              initials,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: palette.primary,
+                    fontWeight: FontWeight.w900,
+                  ),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context)
+                  .textTheme
+                  .labelMedium
+                  ?.copyWith(fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The equipment thumbnail shared by both kinds of queue row.
+class _QueueThumbnail extends StatelessWidget {
+  const _QueueThumbnail({required this.asset, required this.photo});
+
+  final VehicleAsset asset;
+  final String? photo;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return Container(
+      width: 84,
+      height: 76,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: <Color>[palette.surfaceAlt, palette.surfaceSunken],
+        ),
+        borderRadius: BorderRadius.circular(TpRadius.md),
+        border: Border.all(color: palette.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      alignment: Alignment.center,
+      padding: const EdgeInsets.all(4),
+      child: photo == null
+          ? Icon(vehicleFallbackIcon(asset), size: 32, color: palette.primary)
+          : Image.asset(
+              photo!,
+              width: double.infinity,
+              height: double.infinity,
+              fit: BoxFit.contain,
+              filterQuality: FilterQuality.high,
+            ),
+    );
+  }
+}
+
+/// A soft, tone-coloured label chip for the queue rows.
+class _PmChip extends StatelessWidget {
+  const _PmChip({required this.label, required this.tone, super.key});
+
+  final String label;
+  final TpStatusColors tone;
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+        decoration: BoxDecoration(
+          color: tone.soft,
+          borderRadius: BorderRadius.circular(TpRadius.sm),
+          border: Border.all(color: tone.base.withValues(alpha: 0.2)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: tone.onSoft,
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+        ),
+      );
 }
 
 class _RecordServiceSheet extends ConsumerStatefulWidget {

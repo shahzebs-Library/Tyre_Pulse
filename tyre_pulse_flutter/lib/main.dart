@@ -10,6 +10,7 @@ import 'package:tyre_pulse/app/router/module_access_resolver_impl.dart';
 import 'package:tyre_pulse/app/router/route_access.dart';
 import 'package:tyre_pulse/app/router/screen_registry.dart';
 import 'package:tyre_pulse/app/theme/tp_display_settings.dart';
+import 'package:tyre_pulse/app/theme/tp_display_settings_prefs_store.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
 import 'package:tyre_pulse/core/auth/auth_dependency_providers.dart';
 import 'package:tyre_pulse/core/auth/auth_providers.dart';
@@ -173,9 +174,21 @@ Future<void> main() async {
   await registerBackgroundSync();
   _connectivitySyncTrigger.start();
 
+  // Read the saved language and theme BEFORE the first frame, so the app
+  // never opens on a flash of the wrong language. `load` never throws: a
+  // missing, corrupt or unreadable value falls back to the defaults, and a
+  // failed background write is logged rather than surfaced as a crash.
+  final TpDisplaySettingsStore displaySettingsStore =
+      await SharedPreferencesDisplaySettingsStore.load(
+    onWriteError: (Object error, StackTrace stackTrace) => debugPrint(
+      'Display settings could not be saved: ${error.runtimeType}',
+    ),
+  );
+
   runApp(
     ProviderScope(
       overrides: [
+        displaySettingsStoreProvider.overrideWithValue(displaySettingsStore),
         ...authLayerOverrides,
         secureStoreProvider.overrideWithValue(secureStore),
         telemetryReporterProvider.overrideWithValue(telemetry),

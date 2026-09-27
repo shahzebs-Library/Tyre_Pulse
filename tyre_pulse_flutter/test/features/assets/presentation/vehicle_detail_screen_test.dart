@@ -171,6 +171,12 @@ void main() {
     expect(find.text('ABC-1234'), findsOneWidget);
     expect(find.text('TR-MIXER'), findsNWidgets(2));
     expect(find.byKey(VehicleDetailScreenKeys.tyreMap), findsOneWidget);
+    // The map carries no readings, so its wheels are "not recorded"; the key
+    // explains that tone instead of leaving it an unexplained colour.
+    expect(
+      find.byKey(VehicleDetailScreenKeys.tyreMapNotRecorded),
+      findsOneWidget,
+    );
     expect(
       find.byKey(VehicleDetailScreenKeys.multiViewBoard),
       findsOneWidget,
@@ -444,6 +450,35 @@ void main() {
       expect(find.text('80%'), findsOneWidget);
       expect(find.text('8 of 10 checked'), findsOneWidget);
       expect(find.text('Draft'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'a draft with no position total draws no readiness ring',
+    (WidgetTester tester) async {
+      const VehicleAsset asset = VehicleAsset(
+        id: 'v1',
+        assetNo: _assetNo,
+        vehicleType: 'TR-MIXER',
+      );
+      await _pump(
+        tester,
+        <Override>[
+          _resolved(const VehicleDetailLoaded(asset)),
+          _canStartInspection(true),
+        ],
+        draft: InspectionDraftSummary(
+          draftKey: 'u1:TM514',
+          assetNo: _assetNo,
+          filled: 0,
+          total: 0,
+          updatedAt: DateTime.utc(2026, 9, 27, 8),
+        ),
+      );
+      await _pumpLoadedFrame(tester);
+
+      expect(find.byKey(VehicleDetailScreenKeys.draftReadiness), findsNothing);
+      expect(find.text('Draft'), findsNothing);
     },
   );
 

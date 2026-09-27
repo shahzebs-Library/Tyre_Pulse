@@ -10,6 +10,8 @@
 /// `auth_controller_test.dart` itself uses.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 // `Override` is deliberately not exported by the main flutter_riverpod
@@ -28,9 +30,9 @@ import 'package:tyre_pulse/core/auth/auth_repository.dart';
 import 'package:tyre_pulse/core/auth/auth_state.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
-import 'package:tyre_pulse/features/home/home_providers.dart';
 import 'package:tyre_pulse/features/notifications/notifications_providers.dart';
 import 'package:tyre_pulse/features/profile/presentation/profile_screen.dart';
+import 'package:tyre_pulse/features/profile/profile_providers.dart';
 
 import '../../../core/auth/auth_test_support.dart';
 
@@ -50,6 +52,7 @@ Future<_Pumped> _pumpSignedIn(
   List<String> sites = const <String>['ALL'],
   Locale locale = const Locale('en'),
   AsyncValue<int> pendingSync = const AsyncData<int>(0),
+  Stream<int>? pendingSyncStream,
   int unread = 0,
   String appVersion = '2.0.0',
 }) async {
@@ -84,11 +87,13 @@ Future<_Pumped> _pumpSignedIn(
       ),
       // Read-only counts the screen shows. Overridden so the test never
       // touches the offline database or the live Supabase inbox.
-      homePendingSyncCountProvider.overrideWith(
-        (Ref ref) => switch (pendingSync) {
-          AsyncData<int>(:final int value) => Future<int>.value(value),
-          _ => Future<int>.error(StateError('queue unreadable')),
-        },
+      profilePendingSyncCountProvider.overrideWith(
+        (Ref ref) =>
+            pendingSyncStream ??
+            switch (pendingSync) {
+              AsyncData<int>(:final int value) => Stream<int>.value(value),
+              _ => Stream<int>.error(StateError('queue unreadable')),
+            },
       ),
       unreadNotificationsCountProvider.overrideWithValue(
         AsyncData<int>(unread),
@@ -348,6 +353,39 @@ void main() {
   );
 
   testWidgets(
+    'the pending count is live: a sync finishing while Profile stays open '
+    'updates the strip and removes the unsynced footer',
+    (WidgetTester tester) async {
+      final StreamController<int> queue = StreamController<int>();
+      addTearDown(queue.close);
+      queue.add(3);
+      await _pumpSignedIn(tester, pendingSyncStream: queue.stream);
+
+      expect(
+        find.descendant(
+          of: find.byKey(ProfileScreenKeys.status),
+          matching: find.text('3'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.byKey(ProfileScreenKeys.unsyncedFooter), findsOneWidget);
+
+      queue.add(0);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.descendant(
+          of: find.byKey(ProfileScreenKeys.status),
+          matching: find.text('3'),
+        ),
+        findsNothing,
+      );
+      expect(find.text('All changes synced'), findsOneWidget);
+      expect(find.byKey(ProfileScreenKeys.unsyncedFooter), findsNothing);
+    },
+  );
+
+  testWidgets(
     'an unreadable queue renders a dash and Unavailable, never a zero',
     (WidgetTester tester) async {
       await _pumpSignedIn(
@@ -369,7 +407,20 @@ void main() {
         ),
         findsOneWidget,
       );
-      expect(find.byKey(ProfileScreenKeys.unsyncedFooter), findsNothing);
+      // Unknown is treated as "may have unsynced work": the warning stays,
+      // worded so it does not claim work IS queued.
+      expect(find.byKey(ProfileScreenKeys.unsyncedFooter), findsOneWidget);
+      expect(
+        find.text(
+          'Pending sync could not be checked. Unsynced work may still be '
+          'on this device',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Unsynced drafts remain safely on this device'),
+        findsNothing,
+      );
     },
   );
 

@@ -407,6 +407,40 @@ void main() {
       expect(await db.queueDao.pendingCount(workspaceId: workspaceA), 1);
       expect(await db.queueDao.pendingCount(), 2);
     });
+
+    test(
+      'the watched count re-emits on enqueue and sync, scoped to the '
+      'workspace, and agrees with the one-shot count',
+      () async {
+        final List<int> seen = <int>[];
+        final sub = db.queueDao
+            .watchPendingCount(workspaceId: workspaceA)
+            .listen(seen.add);
+        addTearDown(sub.cancel);
+
+        Future<void> settle() => pumpEventQueue();
+
+        await settle();
+        expect(seen.last, 0);
+
+        await seedCommand(db, id: 'cmd-a', workspaceId: workspaceA);
+        await settle();
+        expect(seen.last, 1);
+
+        // Another workspace's work never moves this workspace's count.
+        await seedCommand(db, id: 'cmd-b', workspaceId: workspaceB);
+        await settle();
+        expect(seen.last, 1);
+
+        await db.queueDao.markSynced('cmd-a', testNow);
+        await settle();
+        expect(seen.last, 0);
+        expect(
+          seen.last,
+          await db.queueDao.pendingCount(workspaceId: workspaceA),
+        );
+      },
+    );
   });
 
   group('pruning', () {

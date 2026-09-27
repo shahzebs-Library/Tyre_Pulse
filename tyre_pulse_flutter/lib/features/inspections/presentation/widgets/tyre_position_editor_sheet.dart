@@ -77,8 +77,12 @@ class _TyrePositionEditorSheetState
     _treadController = TextEditingController(
       text: widget.reading.treadDepthMm?.toString() ?? '',
     );
+    // Only the RECORDED serial goes in the box. The fitted serial from the
+    // register used to be pre-filled here too, but never emitted, so the
+    // field showed a value the reading did not carry. It is shown as the
+    // hint instead, and "look up" confirms it into the reading.
     _serialController = TextEditingController(
-      text: widget.reading.serialNumber ?? widget.installedTyre?.serialNo ?? '',
+      text: widget.reading.serialNumber ?? '',
     );
     _notesController = TextEditingController(text: widget.reading.notes ?? '');
   }
@@ -95,8 +99,12 @@ class _TyrePositionEditorSheetState
   void _emit(TyrePositionReading next) => widget.onChanged(next);
 
   Future<void> _lookupSerial() async {
-    final String serial = _serialController.text.trim();
+    final String typed = _serialController.text.trim();
+    final String serial = typed.isNotEmpty
+        ? typed
+        : (widget.installedTyre?.serialNo ?? '').trim();
     if (serial.isEmpty || _isLookingUpSerial) return;
+    if (typed.isEmpty) _serialController.text = serial;
     setState(() {
       _isLookingUpSerial = true;
       _serialNotFound = false;
@@ -289,6 +297,7 @@ class _TyrePositionEditorSheetState
                 TpInput(
                   label: l10n.inspectionSerialLabel,
                   controller: _serialController,
+                  hint: widget.installedTyre?.serialNo,
                   textCapitalization: TextCapitalization.characters,
                   suffix: IconButton(
                     tooltip: l10n.serialSearchTitle,

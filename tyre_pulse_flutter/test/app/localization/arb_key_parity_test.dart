@@ -494,10 +494,19 @@ void main() {
     // ("Scan asset", replacing the borrowed scannerTitle "Scan" on the
     // full-width scan button) and inspectionSelectedAssetTitle ("Selected
     // asset", the heading on the selected-asset card) = 2.
-    test('en, ar and ur each carry exactly 898 translatable keys today', () {
-      expect(_translatableKeys(en).length, 898);
-      expect(_translatableKeys(ar).length, 898);
-      expect(_translatableKeys(ur).length, 898);
+    // 898 + 1 = 899. profileSyncUnknownFooter: the line under Profile's
+    // Sign out when the offline queue count could not be read. The existing
+    // profileUnsyncedFooter ASSERTS work is queued, which is not known in that
+    // state, so an unknown count gets its own honest "may still be" wording.
+    // 899 + 3 = 902. Home: homeRecentInspectionsTitle (the "Your recent
+    // inspections" strip, mock 07's Recent assets derived from the user's own
+    // inspections), homeAssetNotChecked (a card whose inspection recorded no
+    // tyre evidence) and homeNothingForRoleTitle (no work source applies to
+    // the role, so "Nothing needs you right now" cannot be claimed) = 3.
+    test('en, ar and ur each carry exactly 902 translatable keys today', () {
+      expect(_translatableKeys(en).length, 902);
+      expect(_translatableKeys(ar).length, 902);
+      expect(_translatableKeys(ur).length, 902);
     });
   });
 

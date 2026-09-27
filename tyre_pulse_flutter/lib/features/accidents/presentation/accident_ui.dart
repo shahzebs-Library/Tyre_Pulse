@@ -29,6 +29,11 @@ TpStatus accidentTone(String? token) {
   final String value = token?.trim().toLowerCase() ?? '';
   if (value.contains('fatal') ||
       value.contains('severe') ||
+      // The Minor / Moderate / Major ladder: `major` and the legacy
+      // `total loss` fold onto the same critical tone as `severe`.
+      value == 'major' ||
+      value.contains('total loss') ||
+      value.contains('total_loss') ||
       value.contains('reject') ||
       value.contains('overdue')) {
     return TpStatus.critical;

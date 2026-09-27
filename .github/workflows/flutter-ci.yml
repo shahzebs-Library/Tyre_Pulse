@@ -15,6 +15,11 @@ on:
       - "tyre_pulse_flutter/**"
       - ".github/workflows/flutter-ci.yml"
   workflow_dispatch:
+    inputs:
+      update_goldens:
+        description: "Regenerate golden images on Windows and commit them to this branch"
+        type: boolean
+        default: false
 
 concurrency:
   group: flutter-ci-${{ github.ref }}
@@ -30,6 +35,9 @@ jobs:
     # Golden images were authored on Windows. Keep exact pixel assertions on
     # that renderer; Linux and macOS still compile the Android/iOS applications.
     runs-on: windows-latest
+    # Write access is only used by the opt-in "Regenerate goldens" step.
+    permissions:
+      contents: write
     defaults:
       run:
         shell: bash
@@ -103,6 +111,24 @@ jobs:
         # matter to errors already; anything left at info level is still a
         # signal we chose to keep.
         run: flutter analyze --fatal-infos
+
+      - name: Regenerate goldens
+        # Opt-in only (manual run with update_goldens). Goldens are exact-pixel
+        # Windows renders, so they can only be regenerated here. The commit is
+        # made with GITHUB_TOKEN, which does not start another workflow run;
+        # re-run this workflow normally afterwards to confirm green.
+        if: github.event_name == 'workflow_dispatch' && inputs.update_goldens
+        run: |
+          flutter test --update-goldens
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A -- ':(glob)test/**/goldens/*.png'
+          if git diff --cached --quiet; then
+            echo "Goldens already current."
+          else
+            git commit -m "test(flutter): regenerate goldens on Windows [update-goldens]"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
 
       - name: Test
         run: flutter test --coverage

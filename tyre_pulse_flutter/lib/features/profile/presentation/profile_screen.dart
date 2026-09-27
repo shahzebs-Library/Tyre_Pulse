@@ -69,11 +69,22 @@
 /// Rows that only report a fact carry no chevron; a chevron means the row
 /// really opens something. The app keeps its own green theme.
 ///
-/// Counts come from existing providers, read only:
-/// `homePendingSyncCountProvider` (the offline queue, via `QueueDao`) and
-/// `unreadNotificationsCountProvider` (the live inbox). A count that could not
-/// be read renders `-`, never `0` (AGENTS.md "States are not all the same
-/// thing").
+/// Counts come from providers, read only: `profilePendingSyncCountProvider`
+/// (a LIVE watch over the offline queue via `QueueDao.watchPendingCount`, so
+/// the count and the unsynced-work line never go stale while this anchored
+/// screen stays mounted) and `unreadNotificationsCountProvider` (the live
+/// inbox). A count that could not be read renders `-`, never `0` (AGENTS.md
+/// "States are not all the same thing"), and an unreadable queue still shows
+/// the warning under Sign out: unknown is treated as "may have unsynced
+/// work", never as "nothing queued".
+///
+/// The mock's "Assigned tasks" and "Last sync" tiles are deliberately absent.
+/// `corrective_actions.assigned_to` is free text with no per-user filter in
+/// `TasksRepository`, so a "mine" count would be an invented query; and the
+/// sync engine records only when a run ENDED (`sync.lastRunAt`, written in a
+/// `finally` whether the run succeeded or not), not a last SUCCESSFUL sync.
+/// "Help & support" and "Privacy & audit" have no route in `routes.dart`, so
+/// they are absent rather than dead rows.
 library;
 
 import 'dart:async';
@@ -93,9 +104,9 @@ import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/features/auth/presentation/login_security_copy.dart';
 import 'package:tyre_pulse/features/driver_workspace/presentation/driver_workspace_panel.dart';
-import 'package:tyre_pulse/features/home/home_providers.dart';
 import 'package:tyre_pulse/features/notifications/notifications_providers.dart';
 import 'package:tyre_pulse/features/notifications/presentation/notifications_copy.dart';
+import 'package:tyre_pulse/features/profile/profile_providers.dart';
 
 /// Stable finders for Profile's responsive visual regions.
 @visibleForTesting
@@ -308,14 +319,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     AuthState authState,
     WorkspaceProfile profile,
   ) {
-    final AsyncValue<int> pendingSync = ref.watch(homePendingSyncCountProvider);
+    final AsyncValue<int> pendingSync =
+        ref.watch(profilePendingSyncCountProvider);
     final AsyncValue<int> unread = ref.watch(unreadNotificationsCountProvider);
     final Locale activeLocale =
         ref.watch(localeProvider) ?? Localizations.localeOf(context);
     final ThemeMode activeTheme = ref.watch(themeModeProvider);
     final String? version =
         _visibleVersion(ref.watch(currentAppVersionProvider));
-    final int? pending = pendingSync.asData?.value;
 
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
@@ -360,7 +371,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       ),
                       account: _AccountBlock(
                         isSigningOut: _isSigningOut,
-                        pending: pending,
+                        pendingSync: pendingSync,
                         onSignOut: () => unawaited(_confirmAndSignOut()),
                       ),
                     ),
@@ -409,31 +420,56 @@ class _IdentityHeader extends StatelessWidget {
           Stack(
             clipBehavior: Clip.none,
             children: <Widget>[
+              // A brand ring around a soft two-tone initials disc,
+              // separated by a background-coloured gap so the ring reads as
+              // a ring on either theme.
               Container(
-                width: 88,
-                height: 88,
+                width: 100,
+                height: 100,
+                padding: const EdgeInsets.all(3),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: palette.primarySoft,
-                  border: Border.all(
-                    color: palette.primary.withValues(alpha: 0.28),
-                  ),
+                  color: palette.primary,
+                  boxShadow: <BoxShadow>[
+                    BoxShadow(
+                      color: palette.primary.withValues(alpha: 0.18),
+                      blurRadius: 16,
+                    ),
+                  ],
                 ),
-                alignment: Alignment.center,
-                child: Text(
-                  _profileInitials(name),
-                  style: text.headlineMedium?.copyWith(
-                    color: palette.primaryDark,
-                    fontWeight: FontWeight.w800,
+                child: Container(
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: palette.background,
+                  ),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: <Color>[palette.primarySoft, palette.info.soft],
+                      ),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      _profileInitials(name),
+                      style: text.headlineMedium?.copyWith(
+                        color: palette.primaryDark,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
                   ),
                 ),
               ),
               PositionedDirectional(
                 end: 4,
-                bottom: 4,
+                bottom: 6,
                 child: Container(
-                  width: 18,
-                  height: 18,
+                  width: 20,
+                  height: 20,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: profile.isLocked
@@ -454,14 +490,15 @@ class _IdentityHeader extends StatelessWidget {
                   (name == null || name.trim().isEmpty)
                       ? l10n.valueUnavailable
                       : name,
-                  style: text.titleLarge?.copyWith(
+                  style: text.headlineSmall?.copyWith(
                     color: palette.text,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.3,
                   ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: TpSpace.xs),
+                const SizedBox(height: TpSpace.sm),
                 if (profile.employeeId != null) ...<Widget>[
                   _IdentityLine(
                     icon: Icons.person_outline_rounded,
@@ -515,7 +552,7 @@ class _IdentityLine extends StatelessWidget {
     final TextStyle? base = Theme.of(context).textTheme.bodyMedium;
     return Row(
       children: <Widget>[
-        Icon(icon, size: 16, color: palette.textSecondary),
+        Icon(icon, size: 16, color: palette.primary),
         const SizedBox(width: 6),
         if (label != null) ...<Widget>[
           Text(label!, style: base?.copyWith(color: palette.textSecondary)),
@@ -637,8 +674,11 @@ class _ProfileStatusStrip extends StatelessWidget {
                 icon: Icons.cloud_upload_outlined,
                 value: _countText(pendingSync),
                 label: l10n.homeSyncStatLabel,
-                color:
-                    (pending ?? 0) > 0 ? palette.warning.base : palette.ok.base,
+                tone: pending == null
+                    ? palette.neutral
+                    : pending > 0
+                        ? palette.warning
+                        : palette.ok,
               ),
             ),
             VerticalDivider(width: 1, thickness: 1, color: palette.border),
@@ -647,9 +687,7 @@ class _ProfileStatusStrip extends StatelessWidget {
                 icon: Icons.notifications_none_rounded,
                 value: _countText(unread),
                 label: NotificationsCopy.of(context)('title'),
-                color: (unreadCount ?? 0) > 0
-                    ? palette.warning.base
-                    : palette.info.base,
+                tone: (unreadCount ?? 0) > 0 ? palette.critical : palette.info,
               ),
             ),
             if (profileStale) ...<Widget>[
@@ -659,7 +697,7 @@ class _ProfileStatusStrip extends StatelessWidget {
                   icon: Icons.cloud_off_outlined,
                   value: l10n.offlineTitle,
                   label: l10n.stateOfflineCachedTitle,
-                  color: palette.warning.base,
+                  tone: palette.warning,
                 ),
               ),
             ],
@@ -675,13 +713,13 @@ class _ProfileStatusItem extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.value,
-    required this.color,
+    required this.tone,
   });
 
   final IconData icon;
   final String label;
   final String value;
-  final Color color;
+  final TpStatusColors tone;
 
   @override
   Widget build(BuildContext context) {
@@ -690,7 +728,16 @@ class _ProfileStatusItem extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: TpSpace.sm),
       child: Row(
         children: <Widget>[
-          Icon(icon, size: TpSizing.iconMd, color: color),
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: tone.soft,
+              borderRadius: BorderRadius.circular(TpRadius.md),
+            ),
+            alignment: Alignment.center,
+            child: Icon(icon, size: TpSizing.iconMd, color: tone.base),
+          ),
           const SizedBox(width: TpSpace.sm),
           Expanded(
             child: Column(
@@ -701,9 +748,10 @@ class _ProfileStatusItem extends StatelessWidget {
                   value,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: text.titleMedium?.copyWith(
-                    color: color,
-                    fontWeight: FontWeight.w800,
+                  style: text.titleLarge?.copyWith(
+                    color: tone.base,
+                    fontWeight: FontWeight.w900,
+                    height: 1.1,
                   ),
                 ),
                 Text(
@@ -712,6 +760,7 @@ class _ProfileStatusItem extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: text.labelSmall?.copyWith(
                     color: TpPalette.of(context).textSecondary,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
@@ -793,16 +842,19 @@ class _SettingsColumn extends StatelessWidget {
           rows: <Widget>[
             _SettingsRow(
               icon: Icons.work_outline_rounded,
+              tone: palette.info,
               label: l10n.profileRoleLabel,
               value: profile.role.displayName,
             ),
             _SettingsRow(
               icon: Icons.public_outlined,
+              tone: palette.ok,
               label: l10n.vehiclesFieldCountry,
               value: countries,
             ),
             _SettingsRow(
               icon: Icons.location_city_outlined,
+              tone: palette.warning,
               label: l10n.vehiclesFieldSite,
               value: _siteScopeLabel(profile, l10n),
             ),
@@ -815,6 +867,7 @@ class _SettingsColumn extends StatelessWidget {
             _SettingsRow(
               key: ProfileScreenKeys.languageRow,
               icon: Icons.translate_rounded,
+              tone: palette.unknown,
               label: l10n.profileLanguageLabel,
               value: _languageLabel(activeLocale),
               onTap: onChooseLanguage,
@@ -822,6 +875,7 @@ class _SettingsColumn extends StatelessWidget {
             _SettingsRow(
               key: ProfileScreenKeys.themeRow,
               icon: Icons.contrast_rounded,
+              tone: palette.info,
               label: l10n.profileThemeLabel,
               value: _themeLabel(activeTheme, l10n),
               onTap: onChooseTheme,
@@ -835,6 +889,11 @@ class _SettingsColumn extends StatelessWidget {
             _SettingsRow(
               key: ProfileScreenKeys.pendingSyncRow,
               icon: Icons.cloud_sync_outlined,
+              tone: pending == null
+                  ? palette.neutral
+                  : pending == 0
+                      ? palette.ok
+                      : palette.warning,
               label: l10n.homeSyncStatLabel,
               value: pending == null
                   ? l10n.valueUnavailable
@@ -856,6 +915,7 @@ class _SettingsColumn extends StatelessWidget {
               _SettingsRow(
                 key: ProfileScreenKeys.appVersionRow,
                 icon: Icons.info_outline_rounded,
+                tone: palette.neutral,
                 label: loginCopy.version(version!),
               ),
             ],
@@ -886,28 +946,59 @@ class _SettingsSection extends StatelessWidget {
               start: TpSpace.xs,
               bottom: TpSpace.sm,
             ),
-            child: Text(
-              title!,
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: palette.text,
-                    fontWeight: FontWeight.w800,
+            child: Row(
+              children: <Widget>[
+                Container(
+                  width: 4,
+                  height: 16,
+                  decoration: BoxDecoration(
+                    color: palette.primary,
+                    borderRadius: BorderRadius.circular(TpRadius.pill),
                   ),
+                ),
+                const SizedBox(width: TpSpace.sm),
+                Expanded(
+                  child: Text(
+                    title!,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          color: palette.text,
+                          fontWeight: FontWeight.w900,
+                        ),
+                  ),
+                ),
+              ],
             ),
           ),
         DecoratedBox(
           decoration: BoxDecoration(
             color: palette.surface,
-            borderRadius: BorderRadius.circular(TpRadius.md),
+            borderRadius: BorderRadius.circular(TpRadius.lg),
             border: Border.all(color: palette.border),
+            // Depth only in light: a shadow tinted from white text would
+            // glow on the dark theme.
+            boxShadow: palette.brightness == Brightness.light
+                ? <BoxShadow>[
+                    BoxShadow(
+                      color: palette.text.withValues(alpha: 0.05),
+                      blurRadius: 12,
+                      offset: const Offset(0, 3),
+                    ),
+                  ]
+                : null,
           ),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(TpRadius.md),
+            borderRadius: BorderRadius.circular(TpRadius.lg),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
                 for (int i = 0; i < rows.length; i++) ...<Widget>[
                   if (i > 0)
-                    Divider(height: 1, thickness: 1, color: palette.border),
+                    Divider(
+                      height: 1,
+                      thickness: 1,
+                      indent: 64,
+                      color: palette.border,
+                    ),
                   rows[i],
                 ],
               ],
@@ -924,6 +1015,7 @@ class _SettingsSection extends StatelessWidget {
 class _SettingsRow extends StatelessWidget {
   const _SettingsRow({
     required this.icon,
+    required this.tone,
     required this.label,
     this.value,
     this.valueColor,
@@ -932,6 +1024,7 @@ class _SettingsRow extends StatelessWidget {
   });
 
   final IconData icon;
+  final TpStatusColors tone;
   final String label;
   final String? value;
   final Color? valueColor;
@@ -943,7 +1036,7 @@ class _SettingsRow extends StatelessWidget {
     final TextTheme text = Theme.of(context).textTheme;
 
     final Widget content = ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 48),
+      constraints: const BoxConstraints(minHeight: 56),
       child: Padding(
         padding: const EdgeInsets.symmetric(
           horizontal: TpSpace.md,
@@ -951,11 +1044,26 @@ class _SettingsRow extends StatelessWidget {
         ),
         child: Row(
           children: <Widget>[
-            Icon(icon, size: TpSizing.iconMd, color: palette.textSecondary),
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: tone.soft,
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: Icon(icon, size: 20, color: tone.base),
+            ),
             const SizedBox(width: TpSpace.md),
             Expanded(
               flex: 2,
-              child: Text(label, style: text.bodyMedium),
+              child: Text(
+                label,
+                style: text.bodyMedium?.copyWith(
+                  color: palette.text,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
             if (value != null) ...<Widget>[
               const SizedBox(width: TpSpace.md),
@@ -976,7 +1084,7 @@ class _SettingsRow extends StatelessWidget {
               Icon(
                 Icons.chevron_right_rounded,
                 size: TpSizing.iconMd,
-                color: palette.textMuted,
+                color: palette.primary,
               ),
             ],
           ],
@@ -992,17 +1100,18 @@ class _SettingsRow extends StatelessWidget {
   }
 }
 
-/// Full-width outlined red sign-out, plus - only while work is still queued -
-/// an orange line saying so.
+/// Full-width outlined red sign-out, plus an orange line while work is still
+/// queued - or while the queue could not be read, because an unknown count
+/// may be hiding unsynced work and must not read as "all clear".
 class _AccountBlock extends StatelessWidget {
   const _AccountBlock({
     required this.isSigningOut,
-    required this.pending,
+    required this.pendingSync,
     required this.onSignOut,
   });
 
   final bool isSigningOut;
-  final int? pending;
+  final AsyncValue<int> pendingSync;
   final VoidCallback onSignOut;
 
   @override
@@ -1010,20 +1119,26 @@ class _AccountBlock extends StatelessWidget {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final TpPalette palette = TpPalette.of(context);
     final Color danger = palette.critical.base;
-    final int queued = pending ?? 0;
+    final int? queued = pendingSync.asData?.value;
+    final bool unknown = queued == null && pendingSync.hasError;
+    final bool showFooter = unknown || (queued ?? 0) > 0;
 
     return Column(
       key: ProfileScreenKeys.account,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         SizedBox(
-          height: 48,
+          height: 52,
           child: OutlinedButton.icon(
             key: ProfileScreenKeys.signOut,
             onPressed: isSigningOut ? null : onSignOut,
             style: OutlinedButton.styleFrom(
               foregroundColor: danger,
-              side: BorderSide(color: danger),
+              backgroundColor: palette.critical.soft.withValues(alpha: 0.45),
+              side: BorderSide(color: danger, width: 1.5),
+              textStyle: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(TpRadius.md),
               ),
@@ -1041,7 +1156,7 @@ class _AccountBlock extends StatelessWidget {
             label: Text(l10n.actionSignOut),
           ),
         ),
-        if (queued > 0) ...<Widget>[
+        if (showFooter) ...<Widget>[
           const SizedBox(height: TpSpace.sm),
           Row(
             key: ProfileScreenKeys.unsyncedFooter,
@@ -1055,7 +1170,9 @@ class _AccountBlock extends StatelessWidget {
               const SizedBox(width: TpSpace.xs),
               Flexible(
                 child: Text(
-                  l10n.profileUnsyncedFooter,
+                  unknown
+                      ? l10n.profileSyncUnknownFooter
+                      : l10n.profileUnsyncedFooter,
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: palette.warning.base,

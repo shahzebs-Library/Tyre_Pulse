@@ -324,7 +324,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 left: 0,
                 right: 0,
                 top: _kCompactFormTop,
-                height: 516 + feedbackExtra,
+                height: 844 - _kCompactFormTop + feedbackExtra,
                 child: _ExactLoginForm(
                   key: const Key('login.form.card'),
                   curvedTop: true,
@@ -445,36 +445,53 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 /// curved rim and the country footer rules.
 const Color _kLoginGold = Color(0xFFD29A45);
 
-/// Height of the compact hero. It runs 40dp past the form's top so the lowest
-/// point of the form's curved edge still sits over artwork, never over the
-/// scaffold background.
-const double _kCompactHeroHeight = 368;
+/// The highlight end of the gold rim and rules.
+const Color _kLoginGoldLight = Color(0xFFF1CB85);
+
+/// Height of the compact hero. It runs [_kFormEdgeDip] past the form's top so
+/// the lowest point of the form's curved edge still sits over artwork, never
+/// over the scaffold background (mocks 01-03 give the artwork the whole upper
+/// half of the phone).
+const double _kCompactHeroHeight = 424;
 
 /// Top of the compact form, and how far its curved edge dips at the physical
 /// left. `_kCompactFormTop + _kFormEdgeDip == _kCompactHeroHeight`.
-const double _kCompactFormTop = 328;
-const double _kFormEdgeDip = 40;
+const double _kCompactFormTop = 344;
+const double _kFormEdgeDip = 80;
 
+/// Every country uses its full-resolution landmark composition. The earlier
+/// Saudi cut-outs were low-resolution crops of the mock with its white curve
+/// baked in, which showed as a hard box around the machine.
 String _countryHeroAsset(LoginCountry country) => switch (country) {
-      LoginCountry.saudiArabia => 'assets/login/figma_city_background.png',
+      LoginCountry.saudiArabia => 'assets/login/saudi_arabia_hero.png',
       LoginCountry.unitedArabEmirates =>
         'assets/login/united_arab_emirates_hero.png',
       LoginCountry.egypt => 'assets/login/egypt_hero.png',
     };
 
-/// Where each country's artwork is anchored inside the compact hero, chosen
-/// so the landmark and the PMV machine both sit above the form's curved edge
-/// (mocks 01-03). The Saudi composition is a pre-cropped 390dp export and is
-/// anchored at its top edge like before.
+/// Where each composition is anchored inside the compact hero, so the
+/// landmark and the PMV machine both sit above the form's curved edge.
 Alignment _countryHeroAlignment(LoginCountry country) => switch (country) {
-      LoginCountry.saudiArabia => Alignment.topCenter,
-      LoginCountry.unitedArabEmirates => const Alignment(0, 0.15),
-      LoginCountry.egypt => const Alignment(0, 0.2),
+      LoginCountry.saudiArabia => const Alignment(0, 0.86),
+      LoginCountry.unitedArabEmirates => const Alignment(0, 0.66),
+      LoginCountry.egypt => const Alignment(0, 0.84),
     };
 
-const List<Shadow> _kHeroTextShadow = <Shadow>[
-  Shadow(color: Color(0x99000000), blurRadius: 8),
+/// Brightness 1.1x, a touch of contrast and saturation; alpha untouched.
+const List<double> _kHeroLift = <double>[
+  1.16, 0.02, 0.02, 0, 4, //
+  0.02, 1.16, 0.02, 0, 4, //
+  0.02, 0.02, 1.16, 0, 6, //
+  0, 0, 0, 1, 0, //
 ];
+
+const List<Shadow> _kHeroTextShadow = <Shadow>[
+  Shadow(color: Color(0x99000000), blurRadius: 10, offset: Offset(0, 1)),
+];
+
+/// The night navy the artwork is composed on, used behind the image while it
+/// decodes and for the legibility scrim behind the brand lockup.
+const Color _kHeroNight = Color(0xFF030A29);
 
 class _ExactLoginHero extends StatelessWidget {
   const _ExactLoginHero({required this.country, super.key});
@@ -485,7 +502,7 @@ class _ExactLoginHero extends StatelessWidget {
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final String asset = _countryHeroAsset(country);
-    final bool saudi = country == LoginCountry.saudiArabia;
+    final TextTheme text = Theme.of(context).textTheme;
 
     return Semantics(
       key: const Key('login.country.hero'),
@@ -495,145 +512,216 @@ class _ExactLoginHero extends StatelessWidget {
         localizedLoginCountryName(l10n, country),
       ),
       child: ColoredBox(
-        color: const Color(0xFF030A29),
+        color: _kHeroNight,
         child: Stack(
           fit: StackFit.expand,
           children: <Widget>[
-            Image.asset(
-              asset,
-              key: ValueKey<String>(asset),
-              fit: BoxFit.cover,
-              alignment: _countryHeroAlignment(country),
-              excludeFromSemantics: true,
-              filterQuality: FilterQuality.high,
-            ),
-            if (saudi) ...<Widget>[
-              // The Saudi export carries a light band at its bottom edge.
-              // Fading it to the night ground keeps the curved form edge
-              // reading as the only boundary, as in the mock.
-              const Positioned(
-                left: 0,
-                right: 0,
-                top: 270,
-                bottom: 0,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: <Color>[
-                        Color(0x000A0E1A),
-                        Color(0xFF0A0E1A),
-                        Color(0xFF0A0E1A),
-                      ],
-                      stops: <double>[0, 0.56, 1],
-                    ),
-                  ),
-                ),
-              ),
-              Positioned(
-                left: 4,
-                top: 175,
-                width: 236,
-                height: 152,
-                child: Image.asset(
-                  'assets/login/figma_pump_truck.png',
-                  fit: BoxFit.contain,
-                  excludeFromSemantics: true,
-                  filterQuality: FilterQuality.high,
-                ),
-              ),
-              // Masks only the lettering baked into the Saudi export's
-              // top-left corner; it fades out before the landmark begins, so
-              // the artwork itself is never dimmed.
-              const Positioned(
-                left: 0,
-                top: 0,
-                width: 185,
-                height: 176,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.centerLeft,
-                      end: Alignment.centerRight,
-                      colors: <Color>[
-                        Color(0xFF030A29),
-                        Color(0xFF030A29),
-                        Color(0x00030A29),
-                      ],
-                      stops: <double>[0, 0.81, 1],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-            Positioned(
-              left: 24,
-              top: 44,
-              width: 58,
-              height: 30,
+            // A gentle lift in exposure and contrast so the night artwork
+            // reads as lit landmarks rather than a dark photo on a phone
+            // screen outdoors.
+            ColorFiltered(
+              colorFilter: const ColorFilter.matrix(_kHeroLift),
               child: Image.asset(
-                'assets/login/figma_brand_pulse.png',
-                fit: BoxFit.contain,
+                asset,
+                key: ValueKey<String>(asset),
+                fit: BoxFit.cover,
+                alignment: _countryHeroAlignment(country),
                 excludeFromSemantics: true,
+                filterQuality: FilterQuality.high,
               ),
             ),
-            Positioned(
-              left: 84,
-              top: 34,
-              width: 126,
-              child: Semantics(
-                key: const Key('login.brand.title'),
-                container: true,
-                header: true,
-                label: l10n.appTitle,
-                child: ExcludeSemantics(
-                  child: Text(
-                    'TYRE\nPULSE',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: Colors.white,
-                          fontSize: 24,
-                          height: 0.98,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.2,
-                          shadows: _kHeroTextShadow,
-                        ),
-                  ),
+            // A soft wash from the physical top-left only, so the lockup reads
+            // on any sky while the landmark and machine keep full brightness.
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  center: Alignment(-1.1, -1.05),
+                  radius: 1.15,
+                  colors: <Color>[
+                    Color(0xD9030A29),
+                    Color(0x80030A29),
+                    Color(0x00030A29),
+                  ],
+                  stops: <double>[0, 0.45, 1],
                 ),
               ),
             ),
+            // The faint geometric lattice of the mocks, fading out long
+            // before it reaches the landmark.
             const Positioned(
-              left: 24,
-              top: 116,
-              width: 28,
-              height: 2,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: _kLoginGold,
-                  borderRadius: BorderRadius.all(Radius.circular(1)),
-                ),
+              left: 0,
+              top: 0,
+              width: 240,
+              height: 220,
+              child: ExcludeSemantics(
+                child: CustomPaint(painter: _LatticePainter()),
               ),
             ),
+            // Physically anchored top-left in every language: the artwork is
+            // not mirrored in RTL, so the copy stays over the open sky and
+            // never over the landmark. The brand lockup is a logo and stays
+            // left-to-right; the localized title keeps its own direction.
             Positioned(
               left: 24,
-              top: 130,
-              width: 176,
-              child: Text(
-                l10n.loginHeroTitle,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: Colors.white,
-                      fontSize: 18,
-                      height: 1.2,
-                      fontWeight: FontWeight.w500,
-                      shadows: _kHeroTextShadow,
+              top: 56,
+              right: 72,
+              child: _LoginEntrance(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  textDirection: TextDirection.ltr,
+                  children: <Widget>[
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      textDirection: TextDirection.ltr,
+                      children: <Widget>[
+                        Image.asset(
+                          'assets/login/figma_brand_pulse.png',
+                          width: 66,
+                          height: 34,
+                          fit: BoxFit.contain,
+                          excludeFromSemantics: true,
+                        ),
+                        const SizedBox(width: 6),
+                        Semantics(
+                          key: const Key('login.brand.title'),
+                          container: true,
+                          header: true,
+                          label: l10n.appTitle,
+                          child: ExcludeSemantics(
+                            child: Text(
+                              'TYRE\nPULSE',
+                              textDirection: TextDirection.ltr,
+                              style: text.titleLarge?.copyWith(
+                                color: Colors.white,
+                                fontSize: 27,
+                                height: 0.94,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.6,
+                                shadows: _kHeroTextShadow,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
+                    const SizedBox(height: 22),
+                    const SizedBox(
+                      width: 34,
+                      height: 3,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: <Color>[_kLoginGoldLight, _kLoginGold],
+                          ),
+                          borderRadius: BorderRadius.all(Radius.circular(2)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      l10n.loginHeroTitle,
+                      textAlign: TextAlign.left,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.titleLarge?.copyWith(
+                        color: Colors.white,
+                        fontSize: 20,
+                        height: 1.2,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.1,
+                        shadows: _kHeroTextShadow,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Paints the thin eight-point star lattice from the mocks' top-left corner,
+/// fading radially so it never competes with the artwork.
+class _LatticePainter extends CustomPainter {
+  const _LatticePainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Rect bounds = Offset.zero & size;
+    canvas.saveLayer(bounds, Paint());
+    final Paint line = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.8
+      ..color = const Color(0x383D6BC4);
+    const double cell = 38;
+    for (double y = -cell / 2; y < size.height + cell; y += cell) {
+      for (double x = -cell / 2; x < size.width + cell; x += cell) {
+        final Offset c = Offset(x, y);
+        const double r = cell * 0.36;
+        canvas
+          ..drawRect(
+            Rect.fromCenter(center: c, width: r * 2, height: r * 2),
+            line,
+          )
+          ..save()
+          ..translate(c.dx, c.dy)
+          ..rotate(0.785398)
+          ..drawRect(
+            Rect.fromCenter(center: Offset.zero, width: r * 2, height: r * 2),
+            line,
+          )
+          ..restore();
+      }
+    }
+    canvas
+      ..drawRect(
+        bounds,
+        Paint()
+          ..blendMode = BlendMode.dstIn
+          ..shader = const RadialGradient(
+            center: Alignment.topLeft,
+            radius: 1.1,
+            colors: <Color>[Color(0xFFFFFFFF), Color(0x00FFFFFF)],
+          ).createShader(bounds),
+      )
+      ..restore();
+  }
+
+  @override
+  bool shouldRepaint(_LatticePainter oldDelegate) => false;
+}
+
+/// A short fade-and-rise for the first frame of the screen. It is skipped
+/// entirely when the platform asks for reduced motion, and never hides its
+/// child from assistive technology while it runs.
+class _LoginEntrance extends StatelessWidget {
+  const _LoginEntrance({required this.child, this.delay = 0});
+
+  final Widget child;
+
+  /// Fraction of the run spent waiting before this piece moves, so the hero
+  /// copy and the form settle in sequence rather than all at once.
+  final double delay;
+
+  @override
+  Widget build(BuildContext context) {
+    if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) return child;
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 560),
+      curve: Interval(delay, 1, curve: Curves.easeOutCubic),
+      builder: (BuildContext context, double t, Widget? child) => Opacity(
+        opacity: t,
+        alwaysIncludeSemantics: true,
+        child: Transform.translate(
+          offset: Offset(0, (1 - t) * 14),
+          child: child,
+        ),
+      ),
+      child: child,
     );
   }
 }
@@ -650,7 +738,7 @@ class _LoginFormEdge extends ShapeBorder {
   final double dip;
   final Color rimColor;
 
-  static const double _rimWidth = 2;
+  static const double _rimWidth = 2.5;
 
   Path _edge(Rect rect) => Path()
     ..moveTo(rect.left, rect.top + dip)
@@ -678,14 +766,30 @@ class _LoginFormEdge extends ShapeBorder {
 
   @override
   void paint(Canvas canvas, Rect rect, {TextDirection? textDirection}) {
-    canvas.drawPath(
-      _edge(rect),
-      Paint()
-        ..color = rimColor
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = _rimWidth
-        ..isAntiAlias = true,
-    );
+    final Path edge = _edge(rect);
+    // A warm glow first, then the rim itself brightening towards the physical
+    // right where the curve flattens out under the landmark.
+    canvas
+      ..drawPath(
+        edge,
+        Paint()
+          ..color = rimColor.withValues(alpha: 0.35)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = _rimWidth * 3
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3)
+          ..isAntiAlias = true,
+      )
+      ..drawPath(
+        edge,
+        Paint()
+          ..shader = LinearGradient(
+            colors: <Color>[rimColor, _kLoginGoldLight, rimColor],
+            stops: const <double>[0, 0.62, 1],
+          ).createShader(rect)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = _rimWidth
+          ..isAntiAlias = true,
+      );
   }
 
   @override
@@ -779,201 +883,253 @@ class _ExactLoginForm extends StatelessWidget {
             final double left = (constraints.maxWidth - fieldWidth) / 2;
             final double toggleWidth = fieldWidth < 232 ? fieldWidth : 232.0;
             final double toggleLeft = (constraints.maxWidth - toggleWidth) / 2;
-            return Stack(
-              children: <Widget>[
-                Positioned(
-                  left: toggleLeft,
-                  top: 26,
-                  width: toggleWidth,
-                  height: 52,
-                  child: _LanguageToggle(
-                    active: activeLocale,
-                    onSelect: onSelectLocale,
+            return _LoginEntrance(
+              delay: 0.12,
+              child: Stack(
+                children: <Widget>[
+                  Positioned(
+                    left: toggleLeft,
+                    top: 28,
+                    width: toggleWidth,
+                    height: 52,
+                    child: _LanguageToggle(
+                      active: activeLocale,
+                      onSelect: onSelectLocale,
+                    ),
                   ),
-                ),
-                Positioned(
-                  left: left,
-                  top: 88,
-                  width: fieldWidth,
-                  child: Semantics(
-                    header: true,
+                  Positioned(
+                    left: left,
+                    top: 90,
+                    width: fieldWidth,
+                    child: Semantics(
+                      header: true,
+                      child: Text(
+                        l10n.loginWelcomeTitle,
+                        style: Theme.of(context)
+                            .textTheme
+                            .headlineMedium
+                            ?.copyWith(
+                              color: palette.text,
+                              fontSize: 30,
+                              height: 1.1,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.3,
+                            ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: left,
+                    top: 127,
+                    width: fieldWidth,
                     child: Text(
-                      l10n.loginWelcomeTitle,
-                      style:
-                          Theme.of(context).textTheme.headlineMedium?.copyWith(
-                                color: palette.text,
-                                fontSize: 28,
-                                height: 1.14,
-                                fontWeight: FontWeight.w800,
-                              ),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  left: left,
-                  top: 124,
-                  width: fieldWidth,
-                  child: Text(
-                    l10n.loginSignInSubtitle,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: palette.textMuted,
-                          fontSize: 13,
-                          height: 1.25,
-                        ),
-                  ),
-                ),
-                Positioned(
-                  left: left,
-                  top: 156,
-                  width: fieldWidth,
-                  child: _FieldLabel(l10n.loginIdentifierLabel),
-                ),
-                Positioned(
-                  left: left,
-                  top: 175,
-                  width: fieldWidth,
-                  height: 48,
-                  child: _ExactTextField(
-                    controller: identifierController,
-                    enabled: !busy,
-                    hint: l10n.loginIdentifierPlaceholder,
-                    prefixAsset: 'assets/login/figma_user.png',
-                    keyboardType: TextInputType.emailAddress,
-                    textInputAction: TextInputAction.next,
-                    autofillHints: const <String>[
-                      AutofillHints.username,
-                      AutofillHints.email,
-                    ],
-                    onChanged: onIdentifierChanged,
-                  ),
-                ),
-                Positioned(
-                  left: left,
-                  top: 232,
-                  width: fieldWidth,
-                  child: _FieldLabel(l10n.loginPasswordLabel),
-                ),
-                Positioned(
-                  left: left,
-                  top: 251,
-                  width: fieldWidth,
-                  height: 48,
-                  child: _ExactTextField(
-                    controller: passwordController,
-                    enabled: !busy,
-                    hint: l10n.loginPasswordPlaceholder,
-                    prefixAsset: 'assets/login/figma_lock.png',
-                    obscureText: obscurePassword,
-                    textInputAction: TextInputAction.done,
-                    autofillHints: const <String>[AutofillHints.password],
-                    onChanged: onPasswordChanged,
-                    onSubmitted: (String _) => unawaited(onSubmit()),
-                    suffix: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: <Widget>[
-                        SizedBox(
-                          width: 1,
-                          height: 28,
-                          child: ColoredBox(color: palette.border),
-                        ),
-                        IconButton(
-                          key: LoginActionKeys.passwordToggle,
-                          icon: obscurePassword
-                              ? Image.asset(
-                                  'assets/login/figma_password_visibility.png',
-                                  width: 24,
-                                  height: 24,
-                                )
-                              : const Icon(Icons.visibility_off_outlined),
-                          tooltip: obscurePassword
-                              ? l10n.loginShowPassword
-                              : l10n.loginHidePassword,
-                          onPressed: busy ? null : onTogglePassword,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                if (hasFeedback)
-                  Positioned(
-                    left: left,
-                    right: left,
-                    top: 308,
-                    child: lockoutMinutes != null
-                        ? _LoginBanner(
-                            key: LoginBannerKeys.locked,
-                            icon: Icons.lock_outline,
-                            tone: TpStatus.warning,
-                            message: l10n.loginErrorLocked(lockoutMinutes!),
-                          )
-                        : _LoginBanner(
-                            key: LoginBannerKeys.error,
-                            icon: Icons.error_outline,
-                            tone: TpStatus.critical,
-                            message: errorMessage!,
+                      l10n.loginSignInSubtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: palette.textMuted,
+                            fontSize: 14,
+                            height: 1.25,
                           ),
+                    ),
                   ),
-                Positioned(
-                  left: left,
-                  top: 315 + feedbackOffset,
-                  width: fieldWidth,
-                  height: 52,
-                  child: TpButton.primary(
-                    key: const Key('login.submit'),
-                    label: l10n.actionSignIn,
-                    isFullWidth: true,
-                    isBusy: isSubmitting,
-                    onPressed: busy ? null : () => unawaited(onSubmit()),
-                  ),
-                ),
-                Positioned(
-                  left: left,
-                  top: 372 + feedbackOffset,
-                  width: fieldWidth,
-                  height: 48,
-                  child: _LoginQuietActions(
-                    copy: copy,
-                    isBiometricChecking: isBiometricChecking,
-                    onForgotPassword: onForgotPassword,
-                    onAccessHelp: onAccessHelp,
-                    onBiometric: busy ? null : () => unawaited(onBiometric()),
-                  ),
-                ),
-                if (footerKey != null)
                   Positioned(
                     left: left,
-                    top: 424 + feedbackOffset,
+                    top: 158,
+                    width: fieldWidth,
+                    child: _FieldLabel(l10n.loginIdentifierLabel),
+                  ),
+                  Positioned(
+                    left: left,
+                    top: 177,
+                    width: fieldWidth,
+                    height: 48,
+                    child: _ExactTextField(
+                      controller: identifierController,
+                      enabled: !busy,
+                      hint: l10n.loginIdentifierPlaceholder,
+                      prefixAsset: 'assets/login/figma_user.png',
+                      keyboardType: TextInputType.emailAddress,
+                      textInputAction: TextInputAction.next,
+                      autofillHints: const <String>[
+                        AutofillHints.username,
+                        AutofillHints.email,
+                      ],
+                      onChanged: onIdentifierChanged,
+                    ),
+                  ),
+                  Positioned(
+                    left: left,
+                    top: 234,
+                    width: fieldWidth,
+                    child: _FieldLabel(l10n.loginPasswordLabel),
+                  ),
+                  Positioned(
+                    left: left,
+                    top: 253,
+                    width: fieldWidth,
+                    height: 48,
+                    child: _ExactTextField(
+                      controller: passwordController,
+                      enabled: !busy,
+                      hint: l10n.loginPasswordPlaceholder,
+                      prefixAsset: 'assets/login/figma_lock.png',
+                      obscureText: obscurePassword,
+                      textInputAction: TextInputAction.done,
+                      autofillHints: const <String>[AutofillHints.password],
+                      onChanged: onPasswordChanged,
+                      onSubmitted: (String _) => unawaited(onSubmit()),
+                      suffix: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          SizedBox(
+                            width: 1,
+                            height: 28,
+                            child: ColoredBox(color: palette.border),
+                          ),
+                          IconButton(
+                            key: LoginActionKeys.passwordToggle,
+                            icon: obscurePassword
+                                ? Image.asset(
+                                    'assets/login/figma_password_visibility.png',
+                                    width: 24,
+                                    height: 24,
+                                  )
+                                : const Icon(Icons.visibility_off_outlined),
+                            tooltip: obscurePassword
+                                ? l10n.loginShowPassword
+                                : l10n.loginHidePassword,
+                            onPressed: busy ? null : onTogglePassword,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (hasFeedback)
+                    Positioned(
+                      left: left,
+                      right: left,
+                      top: 310,
+                      child: lockoutMinutes != null
+                          ? _LoginBanner(
+                              key: LoginBannerKeys.locked,
+                              icon: Icons.lock_outline,
+                              tone: TpStatus.warning,
+                              message: l10n.loginErrorLocked(lockoutMinutes!),
+                            )
+                          : _LoginBanner(
+                              key: LoginBannerKeys.error,
+                              icon: Icons.error_outline,
+                              tone: TpStatus.critical,
+                              message: errorMessage!,
+                            ),
+                    ),
+                  Positioned(
+                    left: left,
+                    top: 316 + feedbackOffset,
                     width: fieldWidth,
                     height: 52,
-                    child: _CountryFooter(
-                      controlKey: footerKey,
-                      country: country,
-                      onTap: onChangeCountry,
+                    child: _SignInButtonDepth(
+                      enabled: !busy,
+                      child: TpButton.primary(
+                        key: const Key('login.submit'),
+                        label: l10n.actionSignIn,
+                        isFullWidth: true,
+                        isBusy: isSubmitting,
+                        onPressed: busy ? null : () => unawaited(onSubmit()),
+                      ),
                     ),
                   ),
-                if (appVersion != null)
                   Positioned(
                     left: left,
-                    top: 482 + feedbackOffset,
+                    top: 370 + feedbackOffset,
                     width: fieldWidth,
-                    height: 18,
-                    child: Text(
-                      copy.version(appVersion!),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: palette.textMuted,
-                            fontSize: 10,
-                          ),
+                    height: 48,
+                    child: _LoginQuietActions(
+                      copy: copy,
+                      isBiometricChecking: isBiometricChecking,
+                      onForgotPassword: onForgotPassword,
+                      onAccessHelp: onAccessHelp,
+                      onBiometric: busy ? null : () => unawaited(onBiometric()),
                     ),
                   ),
-              ],
+                  if (footerKey != null)
+                    Positioned(
+                      left: left,
+                      top: 420 + feedbackOffset,
+                      width: fieldWidth,
+                      height: 52,
+                      child: _CountryFooter(
+                        controlKey: footerKey,
+                        country: country,
+                        onTap: onChangeCountry,
+                      ),
+                    ),
+                  if (appVersion != null)
+                    Positioned(
+                      left: left,
+                      top: 474 + feedbackOffset,
+                      width: fieldWidth,
+                      height: 18,
+                      child: Text(
+                        copy.version(appVersion!),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: palette.textMuted,
+                              fontSize: 10,
+                            ),
+                      ),
+                    ),
+                ],
+              ),
             );
           },
         ),
+      ),
+    );
+  }
+}
+
+/// Lifts the primary action off the page with a soft green glow, so the one
+/// thing to do on this screen reads first (mocks 01-03), and gives its label
+/// the mock's larger, bolder weight. The glow drops away while disabled.
+class _SignInButtonDepth extends StatelessWidget {
+  const _SignInButtonDepth({required this.enabled, required this.child});
+
+  final bool enabled;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final TpPalette palette = TpPalette.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(TpRadius.md),
+        boxShadow: enabled
+            ? <BoxShadow>[
+                BoxShadow(
+                  color: palette.primary.withValues(alpha: 0.3),
+                  blurRadius: 16,
+                  spreadRadius: -4,
+                  offset: const Offset(0, 8),
+                ),
+              ]
+            : const <BoxShadow>[],
+      ),
+      child: Theme(
+        data: theme.copyWith(
+          textTheme: theme.textTheme.copyWith(
+            labelLarge: theme.textTheme.labelLarge?.copyWith(
+              fontSize: 17,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.3,
+            ),
+          ),
+        ),
+        child: child,
       ),
     );
   }
@@ -997,7 +1153,7 @@ class _FieldLabel extends StatelessWidget {
       );
 }
 
-class _ExactTextField extends StatelessWidget {
+class _ExactTextField extends StatefulWidget {
   const _ExactTextField({
     required this.controller,
     required this.enabled,
@@ -1025,43 +1181,94 @@ class _ExactTextField extends StatelessWidget {
   final Widget? suffix;
 
   @override
+  State<_ExactTextField> createState() => _ExactTextFieldState();
+}
+
+/// Tracks focus only so the field's own icon and divider can pick up the
+/// focus colour together with the border, the way the mocks show an active
+/// field.
+class _ExactTextFieldState extends State<_ExactTextField> {
+  final FocusNode _focus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _focus.addListener(_onFocusChange);
+  }
+
+  void _onFocusChange() => setState(() {});
+
+  @override
+  void dispose() {
+    _focus
+      ..removeListener(_onFocusChange)
+      ..dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
+    final bool focused = _focus.hasFocus;
     final OutlineInputBorder border = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(9),
+      borderRadius: BorderRadius.circular(10),
       borderSide: BorderSide(color: palette.border),
     );
     return TextField(
-      controller: controller,
-      enabled: enabled,
-      keyboardType: keyboardType,
-      textInputAction: textInputAction,
-      autofillHints: autofillHints,
-      obscureText: obscureText,
-      onChanged: onChanged,
-      onSubmitted: onSubmitted,
+      controller: widget.controller,
+      focusNode: _focus,
+      enabled: widget.enabled,
+      keyboardType: widget.keyboardType,
+      textInputAction: widget.textInputAction,
+      autofillHints: widget.autofillHints,
+      obscureText: widget.obscureText,
+      onChanged: widget.onChanged,
+      onSubmitted: widget.onSubmitted,
+      cursorColor: palette.focus,
       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
             color: palette.text,
             fontSize: 15,
+            fontWeight: FontWeight.w500,
           ),
       decoration: InputDecoration(
-        hintText: hint,
+        hintText: widget.hint,
         hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: palette.textMuted,
+              color: palette.textMuted.withValues(alpha: 0.8),
               fontSize: 14,
             ),
         filled: true,
-        fillColor: palette.surface,
+        fillColor: focused ? palette.surface : palette.surfaceAlt,
         contentPadding: const EdgeInsets.symmetric(vertical: 12),
-        prefixIcon: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Image.asset(prefixAsset, width: 24, height: 24),
+        prefixIcon: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Image.asset(
+                widget.prefixAsset,
+                width: 22,
+                height: 22,
+                color: focused ? palette.focus : null,
+                excludeFromSemantics: true,
+              ),
+            ),
+            SizedBox(
+              width: 1,
+              height: 24,
+              child: ColoredBox(
+                color: focused
+                    ? palette.focus.withValues(alpha: 0.5)
+                    : palette.border,
+              ),
+            ),
+            const SizedBox(width: 12),
+          ],
         ),
         prefixIconConstraints: const BoxConstraints(
           minWidth: 48,
           minHeight: 48,
         ),
-        suffixIcon: suffix,
+        suffixIcon: widget.suffix,
         suffixIconConstraints: const BoxConstraints(
           minWidth: TpSizing.minTouchTarget,
           minHeight: TpSizing.minTouchTarget,
@@ -1160,6 +1367,8 @@ class _LanguageSegment extends StatelessWidget {
       onTap: onTap,
       child: Material(
         color: selected ? palette.text : Colors.transparent,
+        elevation: selected ? 2 : 0,
+        shadowColor: palette.text,
         borderRadius: radius,
         child: InkWell(
           onTap: onTap,
@@ -1208,9 +1417,12 @@ class _LoginQuietActions extends StatelessWidget {
     final TpPalette palette = TpPalette.of(context);
     final ButtonStyle style = TextButton.styleFrom(
       foregroundColor: palette.textSecondary,
-      padding: EdgeInsets.zero,
+      padding: const EdgeInsets.symmetric(horizontal: TpSpace.xs),
       minimumSize: const Size(48, 48),
-      textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+      textStyle: Theme.of(context).textTheme.labelMedium?.copyWith(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
     );
     return Row(
       children: <Widget>[
@@ -1228,7 +1440,12 @@ class _LoginQuietActions extends StatelessWidget {
         IconButton(
           key: LoginActionKeys.biometric,
           tooltip: copy.biometric,
-          color: palette.textSecondary,
+          style: IconButton.styleFrom(
+            backgroundColor: palette.primarySoft,
+            foregroundColor: palette.primary,
+            disabledBackgroundColor: palette.surfaceAlt,
+            side: BorderSide(color: palette.primary.withValues(alpha: 0.25)),
+          ),
           onPressed: onBiometric,
           icon: isBiometricChecking
               ? SizedBox(
@@ -1237,7 +1454,7 @@ class _LoginQuietActions extends StatelessWidget {
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
                     valueColor: AlwaysStoppedAnimation<Color>(
-                      palette.textSecondary,
+                      palette.primary,
                     ),
                   ),
                 )
@@ -1282,13 +1499,23 @@ class _CountryFooter extends StatelessWidget {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final TpPalette palette = TpPalette.of(context);
     final String countryName = localizedLoginCountryName(l10n, country);
-    const Widget rule = Flexible(
-      child: SizedBox(
-        width: 88,
-        height: 1,
-        child: ColoredBox(color: _kLoginGold),
-      ),
-    );
+    Widget rule({required bool leading}) => Flexible(
+          child: SizedBox(
+            width: 92,
+            height: 1.5,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: AlignmentDirectional.centerStart,
+                  end: AlignmentDirectional.centerEnd,
+                  colors: leading
+                      ? const <Color>[Color(0x00D29A45), _kLoginGold]
+                      : const <Color>[_kLoginGold, Color(0x00D29A45)],
+                ),
+              ),
+            ),
+          ),
+        );
     return Semantics(
       container: true,
       button: true,
@@ -1308,7 +1535,7 @@ class _CountryFooter extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: <Widget>[
-                  rule,
+                  rule(leading: true),
                   const SizedBox(width: TpSpace.md),
                   Image.asset(
                     'assets/login/figma_location.png',
@@ -1317,7 +1544,7 @@ class _CountryFooter extends StatelessWidget {
                     excludeFromSemantics: true,
                   ),
                   const SizedBox(width: TpSpace.md),
-                  rule,
+                  rule(leading: false),
                 ],
               ),
               const SizedBox(height: 4),
@@ -1328,7 +1555,8 @@ class _CountryFooter extends StatelessWidget {
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: palette.text,
                       fontSize: 13,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.2,
                     ),
               ),
             ],

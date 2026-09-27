@@ -256,6 +256,33 @@ final class AccidentReportInput {
       photoPaths.isNotEmpty;
 }
 
+/// Tokens that mean the incident case is closed, on any of the columns that
+/// can carry it. `legacy_closed` is the honest backfill closure level for
+/// cases closed before the workstream model (V417 M4) and `fully_closed` the
+/// closure-review outcome; both are closed cases for an Open/Closed filter.
+const Set<String> _closedTokens = <String>{
+  'closed',
+  'legacy_closed',
+  'fully_closed',
+};
+
+/// Whether an accident record is a closed case, for the register's
+/// Open / Closed filter. Mirrors the web `isIncidentClosed` (status or
+/// closure status reads closed) and additionally honours the case status and
+/// closure level, where `legacy_closed` / `fully_closed` live.
+bool accidentRecordIsClosed(AccidentRecord record) {
+  for (final String? value in <String?>[
+    record.status,
+    record.caseStatus,
+    record.closureStatus,
+    record.closureLevel,
+  ]) {
+    final String token = value?.trim().toLowerCase() ?? '';
+    if (_closedTokens.contains(token)) return true;
+  }
+  return false;
+}
+
 String humaniseAccidentToken(String? value) {
   final String raw = value?.trim() ?? '';
   if (raw.isEmpty) return '';

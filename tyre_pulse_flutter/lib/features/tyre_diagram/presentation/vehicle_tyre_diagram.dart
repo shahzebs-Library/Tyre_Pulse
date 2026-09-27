@@ -169,22 +169,16 @@ class VehicleTyreDiagram extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.center,
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Text(
-            l10n.tyreDiagramFrontLabel,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: palette.textSecondary,
-                  fontWeight: FontWeight.w800,
-                ),
+          _CaptureOrientationPill(
+            label: l10n.tyreDiagramFrontLabel,
+            icon: Icons.keyboard_double_arrow_up_rounded,
           ),
           const SizedBox(height: TpSpace.sm),
           diagramCanvas,
           const SizedBox(height: TpSpace.sm),
-          Text(
-            l10n.inspectionRearLabel,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: palette.textSecondary,
-                  fontWeight: FontWeight.w800,
-                ),
+          _CaptureOrientationPill(
+            label: l10n.inspectionRearLabel,
+            icon: Icons.keyboard_double_arrow_down_rounded,
           ),
         ],
       );
@@ -449,10 +443,10 @@ abstract final class TyreCaptureStageMetrics {
   static const double groupGap = 8;
   static const double inset = 12;
   static const double minLeader = 18;
-  static const double knobSize = 14;
+  static const double knobSize = 16;
 
   static double cardWidthFor(double stageWidth) =>
-      (stageWidth * 0.18).clamp(60, 70).toDouble();
+      (stageWidth * 0.2).clamp(62, 74).toDouble();
 
   static double groupHeight(int rows) =>
       rows <= 0 ? 0 : (rows * slotExtent) + ((rows - 1) * rowGap);
@@ -641,16 +635,33 @@ class _FigmaTyreCaptureStage extends StatelessWidget {
         height: stageHeight,
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: palette.surfaceAlt,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: palette.border),
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: <Color>[palette.surface, palette.surfaceAlt],
+            ),
           ),
           child: Stack(
             clipBehavior: Clip.none,
             children: <Widget>[
               Positioned.fill(
                 child: ExcludeSemantics(
-                  child: CustomPaint(
-                    painter: _CaptureGridPainter(color: palette.border),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: CustomPaint(
+                      painter: _CaptureGridPainter(
+                        color: palette.info.base,
+                        glow: palette.surface,
+                        vehicleCentre: Rect.fromLTWH(
+                          photoLeft,
+                          0,
+                          photoWidth,
+                          stageHeight,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -907,6 +918,14 @@ class _CaptureLeader extends StatelessWidget {
               decoration: BoxDecoration(
                 color: colors.base,
                 shape: BoxShape.circle,
+                border: Border.all(color: palette.surface, width: 1.5),
+                boxShadow: <BoxShadow>[
+                  BoxShadow(
+                    color: colors.base.withValues(alpha: 0.35),
+                    blurRadius: 4,
+                    offset: const Offset(0, 1),
+                  ),
+                ],
               ),
               child: Icon(
                 vehicleOnRight
@@ -932,11 +951,11 @@ class _DashedLeaderPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final Paint paint = Paint()
       ..color = color
-      ..strokeWidth = 1.2
+      ..strokeWidth = 1.6
       ..strokeCap = StrokeCap.round;
     final double y = size.height / 2;
     const double dash = 4;
-    const double gap = 3;
+    const double gap = 2.5;
     double x = 0;
     while (x < size.width) {
       final double end = math.min(x + dash, size.width);
@@ -950,29 +969,107 @@ class _DashedLeaderPainter extends CustomPainter {
       oldDelegate.color != color;
 }
 
-/// The faint engineering grid behind the vehicle on the approved mocks.
+/// The blueprint grid behind the vehicle on the approved mocks: a fine
+/// minor grid, a stronger major grid every fourth line and a soft glow
+/// under the vehicle so the photo lifts off the paper. Decoration only.
 class _CaptureGridPainter extends CustomPainter {
-  const _CaptureGridPainter({required this.color});
+  const _CaptureGridPainter({
+    required this.color,
+    required this.glow,
+    required this.vehicleCentre,
+  });
 
   final Color color;
+  final Color glow;
+  final Rect vehicleCentre;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final Paint paint = Paint()
-      ..color = color.withValues(alpha: 0.35)
-      ..strokeWidth = 0.5;
-    const double step = 24;
-    for (double x = step; x < size.width; x += step) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+    final Paint minor = Paint()
+      ..color = color.withValues(alpha: 0.07)
+      ..strokeWidth = 0.6;
+    final Paint major = Paint()
+      ..color = color.withValues(alpha: 0.14)
+      ..strokeWidth = 0.8;
+    const double step = 16;
+    int i = 1;
+    for (double x = step; x < size.width; x += step, i++) {
+      canvas.drawLine(
+        Offset(x, 0),
+        Offset(x, size.height),
+        i % 4 == 0 ? major : minor,
+      );
     }
-    for (double y = step; y < size.height; y += step) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    i = 1;
+    for (double y = step; y < size.height; y += step, i++) {
+      canvas.drawLine(
+        Offset(0, y),
+        Offset(size.width, y),
+        i % 4 == 0 ? major : minor,
+      );
     }
+
+    final Rect glowRect = vehicleCentre.inflate(vehicleCentre.width * 0.35);
+    canvas.drawOval(
+      glowRect,
+      Paint()
+        ..shader = RadialGradient(
+          colors: <Color>[
+            glow.withValues(alpha: 0.9),
+            glow.withValues(alpha: 0),
+          ],
+        ).createShader(glowRect),
+    );
   }
 
   @override
   bool shouldRepaint(_CaptureGridPainter oldDelegate) =>
-      oldDelegate.color != color;
+      oldDelegate.color != color ||
+      oldDelegate.glow != glow ||
+      oldDelegate.vehicleCentre != vehicleCentre;
+}
+
+/// FRONT / REAR orientation marker above and below the capture stage.
+class _CaptureOrientationPill extends StatelessWidget {
+  const _CaptureOrientationPill({required this.label, required this.icon});
+
+  final String label;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: palette.surface,
+        borderRadius: BorderRadius.circular(TpRadius.pill),
+        border: Border.all(color: palette.border),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: TpSpace.md,
+          vertical: 3,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            ExcludeSemantics(
+              child: Icon(icon, size: 14, color: palette.primary),
+            ),
+            const SizedBox(width: TpSpace.xs),
+            Text(
+              label,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: palette.text,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.2,
+                  ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 /// A text-led tyre card: status icon, then ONLY what was actually recorded
@@ -1012,101 +1109,129 @@ class _FigmaTyreStatusCard extends StatelessWidget {
     final TextStyle? valueStyle =
         Theme.of(context).textTheme.labelSmall?.copyWith(
               color: valueColor,
-              fontSize: 11,
-              height: 1.1,
-              fontWeight: FontWeight.w700,
+              fontSize: 12,
+              height: 1.15,
+              fontWeight: FontWeight.w800,
             );
     const double hPad = 6;
     const double vPad = 3;
     final double innerWidth = width - (hPad * 2) - 4;
 
+    final Color borderColor = selected
+        ? (tone == TpStatus.unknown ? palette.focus : colors.base)
+        : (tone == TpStatus.unknown ? palette.borderStrong : colors.base);
+    final Color fill = tone == TpStatus.critical
+        ? colors.soft
+        : (selected
+            ? Color.alphaBlend(
+                colors.soft.withValues(alpha: 0.55),
+                palette.surface,
+              )
+            : palette.surface);
+
     return Semantics(
       label: semanticLabel,
       selected: selected,
       button: onTap != null,
-      child: Material(
-        color: selected || tone == TpStatus.critical
-            ? colors.soft
-            : palette.surface,
-        shape: RoundedRectangleBorder(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(10),
-          side: BorderSide(
-            color: selected ? palette.focus : colors.base,
-            width: selected ? 2 : 1.2,
-          ),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: hPad,
-              vertical: vPad,
+          boxShadow: <BoxShadow>[
+            BoxShadow(
+              color: (tone == TpStatus.unknown ? palette.overlay : colors.base)
+                  .withValues(alpha: selected ? 0.32 : 0.14),
+              blurRadius: selected ? 10 : 6,
+              spreadRadius: selected ? 1 : 0,
+              offset: const Offset(0, 2),
             ),
-            child: Directionality(
-              textDirection: readingDirection,
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: AlignmentDirectional.topStart,
-                child: SizedBox(
-                  width: innerWidth < 1 ? 1 : innerWidth,
-                  child: ExcludeSemantics(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: colors.base,
-                            shape: BoxShape.circle,
-                          ),
-                          child: SizedBox(
-                            width: 14,
-                            height: 14,
-                            child: Icon(
-                              _captureStatusIcon(tone),
-                              color: colors.onBase,
-                              size: 11,
+          ],
+        ),
+        child: Material(
+          color: fill,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+            side: BorderSide(
+              color: borderColor,
+              width: selected ? 2.2 : 1.4,
+            ),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: hPad,
+                vertical: vPad,
+              ),
+              child: Directionality(
+                textDirection: readingDirection,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: AlignmentDirectional.topStart,
+                  child: SizedBox(
+                    width: innerWidth < 1 ? 1 : innerWidth,
+                    child: ExcludeSemantics(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: colors.base,
+                              shape: BoxShape.circle,
+                            ),
+                            child: SizedBox(
+                              width: 15,
+                              height: 15,
+                              child: Icon(
+                                _captureStatusIcon(tone),
+                                color: colors.onBase,
+                                size: 11,
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(height: 2),
-                        if (wheel.isRecorded && !hasMeasurement)
-                          Text(
-                            statusLabel,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: valueStyle,
-                          ),
-                        if (!wheel.isRecorded)
-                          Text(
-                            l10n.tyreDiagramListNotRecorded,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: valueStyle?.copyWith(
-                              color: palette.textSecondary,
-                              fontWeight: FontWeight.w600,
+                          const SizedBox(height: 2),
+                          if (wheel.isRecorded && !hasMeasurement)
+                            Text(
+                              statusLabel,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: valueStyle,
                             ),
-                          ),
-                        if (wheel.treadDisplay != null)
-                          Text(
-                            l10n.tyreDiagramListTreadValue(
-                              wheel.treadDisplay!,
+                          if (!wheel.isRecorded)
+                            Text(
+                              l10n.tyreDiagramListNotRecorded,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: valueStyle?.copyWith(
+                                color: palette.textSecondary,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: valueStyle,
-                          ),
-                        if (wheel.pressureDisplay != null)
-                          Text(
-                            l10n.tyreDiagramListPressureValue(
-                              wheel.pressureDisplay!,
+                          if (wheel.treadDisplay != null)
+                            _CaptureMeasurement(
+                              text: l10n.tyreDiagramListTreadValue(
+                                wheel.treadDisplay!,
+                              ),
+                              number: wheel.treadDisplay!,
+                              style: valueStyle,
+                              unitColor: tone == TpStatus.critical
+                                  ? colors.base
+                                  : palette.textSecondary,
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: valueStyle,
-                          ),
-                      ],
+                          if (wheel.pressureDisplay != null)
+                            _CaptureMeasurement(
+                              text: l10n.tyreDiagramListPressureValue(
+                                wheel.pressureDisplay!,
+                              ),
+                              number: wheel.pressureDisplay!,
+                              style: valueStyle,
+                              unitColor: tone == TpStatus.critical
+                                  ? colors.base
+                                  : palette.textSecondary,
+                            ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -1115,6 +1240,48 @@ class _FigmaTyreStatusCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// One recorded value, the number set bold and its unit set lighter, while
+/// the whole localized string (e.g. `118 psi`) stays one text node.
+class _CaptureMeasurement extends StatelessWidget {
+  const _CaptureMeasurement({
+    required this.text,
+    required this.number,
+    required this.style,
+    required this.unitColor,
+  });
+
+  final String text;
+  final String number;
+  final TextStyle? style;
+  final Color unitColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final int at = text.indexOf(number);
+    final TextStyle? unitStyle = style?.copyWith(
+      fontSize: 9.5,
+      fontWeight: FontWeight.w600,
+      color: unitColor,
+    );
+    final List<InlineSpan> spans = at < 0
+        ? <InlineSpan>[TextSpan(text: text, style: style)]
+        : <InlineSpan>[
+            if (at > 0) TextSpan(text: text.substring(0, at), style: unitStyle),
+            TextSpan(text: number, style: style),
+            if (at + number.length < text.length)
+              TextSpan(
+                text: text.substring(at + number.length),
+                style: unitStyle,
+              ),
+          ];
+    return Text.rich(
+      TextSpan(children: spans),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
     );
   }
 }

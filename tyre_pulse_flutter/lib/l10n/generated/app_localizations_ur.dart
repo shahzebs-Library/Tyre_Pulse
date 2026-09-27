@@ -2845,7 +2845,7 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get pmCopyCatalog =>
-      'title=دیکھ بھال کنٹرول سینٹر~subtitle=آج کے دیکھ بھال کے کام کو کنٹرول کریں~createWorkOrder=ورک آرڈر بنائیں~pmDue=پی ایم واجب~priorityQueue=ترجیحی کاموں کی قطار~viewAll=سب دیکھیں~allWorkOrders=تمام ورک آرڈرز دیکھیں~quickAccess=فوری رسائی~workOrders=ورک آرڈرز~workOrdersHint=بنائیں اور منظم کریں~pmSchedule=پی ایم شیڈول~pmScheduleHint=پی ایم کی منصوبہ بندی اور پیروی~inspections=معائنے~inspectionsHint=جانچیں اور رپورٹ کریں~parts=پرزے~partsHint=اسٹاک اور درخواستیں~tyres=ٹائر~tyresHint=ریکارڈ، گردش اور تبدیلی~overdue=تاخیر شدہ~dueSoon=جلد واجب~active=فعال منصوبے~due=اب واجب~all=تمام منصوبے~empty=دیکھ بھال کا کوئی منصوبہ نہیں~emptyDue=اگلے 14 دنوں میں کوئی احتیاطی دیکھ بھال واجب نہیں۔~emptyAll=کوئی فعال احتیاطی دیکھ بھال منصوبہ دستیاب نہیں۔~plan=دیکھ بھال منصوبہ~daysOverdue=دن تاخیر~daysLeft=دن باقی~noDate=واجب تاریخ نہیں~record=سروس ریکارڈ کریں~meter=میٹر ریڈنگ~performedBy=کام کرنے والا~workshop=ورکشاپ~partsCost=پرزوں کی قیمت~labourCost=مزدوری کی قیمت~findings=مشاہدات~completed=مکمل~partial=جزوی مکمل~deferred=ملتوی~failed=ناکام~save=سروس محفوظ کریں~invalidNumber=درست عددی قدریں درج کریں۔~loadFailed=دیکھ بھال منصوبے لوڈ نہیں ہو سکے۔~saveFailed=سروس ریکارڈ محفوظ نہیں ہو سکا۔ دوبارہ کوشش کریں۔';
+      'title=دیکھ بھال کنٹرول سینٹر~subtitle=آج کے دیکھ بھال کے کام کو کنٹرول کریں~createWorkOrder=ورک آرڈر بنائیں~pmDue=پی ایم واجب~priorityQueue=ترجیحی کاموں کی قطار~viewAll=سب دیکھیں~allWorkOrders=تمام ورک آرڈرز دیکھیں~quickAccess=فوری رسائی~workOrders=ورک آرڈرز~workOrdersHint=بنائیں اور منظم کریں~pmSchedule=پی ایم شیڈول~pmScheduleHint=پی ایم کی منصوبہ بندی اور پیروی~inspections=معائنے~inspectionsHint=جانچیں اور رپورٹ کریں~parts=پرزے~partsHint=اسٹاک اور درخواستیں~tyres=ٹائر~tyresHint=ریکارڈ، گردش اور تبدیلی~overdue=تاخیر شدہ~dueSoon=جلد واجب~active=فعال منصوبے~due=اب واجب~all=تمام منصوبے~empty=دیکھ بھال کا کوئی منصوبہ نہیں~emptyDue=اگلے 14 دنوں میں کوئی احتیاطی دیکھ بھال واجب نہیں۔~emptyAll=کوئی فعال احتیاطی دیکھ بھال منصوبہ دستیاب نہیں۔~plan=دیکھ بھال منصوبہ~daysOverdue=دن تاخیر~daysLeft=دن باقی~noDate=واجب تاریخ نہیں~record=سروس ریکارڈ کریں~meter=میٹر ریڈنگ~performedBy=کام کرنے والا~workshop=ورکشاپ~partsCost=پرزوں کی قیمت~labourCost=مزدوری کی قیمت~findings=مشاہدات~completed=مکمل~partial=جزوی مکمل~deferred=ملتوی~failed=ناکام~save=سروس محفوظ کریں~invalidNumber=درست عددی قدریں درج کریں۔~loadFailed=دیکھ بھال منصوبے لوڈ نہیں ہو سکے۔~saveFailed=سروس ریکارڈ محفوظ نہیں ہو سکا۔ دوبارہ کوشش کریں۔~openBreakdowns=کھلی خرابیاں~activeWorkOrders=فعال ورک آرڈرز~breakdown=خرابی~workOrder=ورک آرڈر~dueToday=آج واجب~since=سے~opened=کھولا گیا~queueEmpty=کسی چیز پر توجہ درکار نہیں~woLoadFailed=کھلے ورک آرڈرز لوڈ نہیں ہو سکے۔~retry=دوبارہ کوشش کریں~countFailed=یہ تعداد لوڈ نہیں ہو سکی۔ دوبارہ کوشش کے لیے ٹیپ کریں۔';
 
   @override
   String get stockCountCopyCatalog =>
@@ -3049,4 +3049,17 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get inspectionSelectedAssetTitle => 'منتخب اثاثہ';
+
+  @override
+  String get profileSyncUnknownFooter =>
+      'زیر التواء ہم آہنگی کی جانچ نہیں ہو سکی۔ ممکن ہے اس ڈیوائس پر غیر ہم آہنگ کام موجود ہو';
+
+  @override
+  String get homeRecentInspectionsTitle => 'آپ کے حالیہ معائنے';
+
+  @override
+  String get homeAssetNotChecked => 'جانچ نہیں ہوئی';
+
+  @override
+  String get homeNothingForRoleTitle => 'آپ کے کردار کے لیے جانچنے کو کچھ نہیں';
 }

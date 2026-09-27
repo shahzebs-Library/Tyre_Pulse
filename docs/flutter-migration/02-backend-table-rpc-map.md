@@ -224,6 +224,21 @@ are also in the registry. `repair_requests` is NOT: its migration,
 reads AUTHORED - NOT YET APPLIED, so the table does not exist (artifact 06
 section 2, artifact 09 decision D5).
 
+Home (`features/home/data/home_repository.dart`, added 2026-09-27) reads only
+`inspections`, which section 2 already lists and the registry already holds as
+`SupabaseTables.inspections`: an exact head count (PostgREST `count=exact`) of
+`approval_status = 'pending_approval'` plus the newest `created_at`, and the
+signed-in user's own recent rows by `created_by` (written by
+`inspection_payload.dart`, indexed by `MIGRATIONS_V21.sql`). No new table, RPC
+or bucket. The approvals count is shown only to a role that
+`decide_inspection_approval` (last redefined in
+`MIGRATIONS_V606_CHECKLIST_DATA_COLLECTOR_APPROVAL.sql`) would let sign -
+`core/permissions/inspection_signers.dart` mirrors that role list.
+`get_mobile_analytics` (V479) is registered but deliberately NOT used for a
+Home "fleet pulse": its only health measure is `tyre_records.risk_level`,
+which is essentially unpopulated, so its counts would describe an unrated
+fleet, not a measured one.
+
 ### 7.2 RPCs
 
 Each was confirmed by locating its `create function` in a migration.
@@ -263,3 +278,28 @@ To close it: add `driverFineResponses` to `SupabaseTables`, the three RPCs to
 `SupabaseRpcs` (and `all`), give the bucket a named constant, and point the
 repository at them. It is a code change that needs `flutter analyze` and the
 registry drift test to run in CI.
+
+### 7.6 Maintenance Control Center reads (added 2026-09-27)
+
+`features/preventive_maintenance/data/maintenance_work_order_repository.dart`
+reads two tables already in the registry (`SupabaseTables.workOrders`,
+`SupabaseTables.profiles`); no new table, RPC or bucket. Online-only reads, no
+writes. Every column was traced to its migration:
+
+| Read | Columns | Created by |
+|---|---|---|
+| Head counts on `work_orders` (`Prefer: count=exact`, HEAD) | `work_type`, `status`, `country` | `MIGRATIONS_V16.sql` |
+| Queue preview on `work_orders`, two bounded selects (breakdowns oldest first, other open work newest first) | `id`, `work_order_no`, `asset_no`, `work_type`, `status`, `priority`, `site`, `opened_at`, `target_completion` | `MIGRATIONS_V16.sql` |
+| | `asset_category` | `MIGRATIONS_V381_JOB_CARD_INTAKE.sql` |
+| | `assigned_owner_id` (uuid -> `profiles.id`) | `MIGRATIONS_V291_WORKSHOP_LIVE_CONTROL.sql` |
+| Technician names on `profiles` (`id in (...)`) | `id`, `full_name` | `profiles_select` in `MIGRATIONS_V5.sql` lets every authenticated user read every profile |
+
+"Active" is `status not in (Completed, Closed, Cancelled)`: the
+`work_orders_status_check` in `MIGRATIONS_V497_WORK_ORDER_STATUS_CHECK_UNION.sql`
+admits no other finished value and no casing variant, and the column is NOT
+NULL, so the exact server-side `not in` is complete. A breakdown is
+`work_type = 'Emergency'`, the value the V381 job-card intake maps the ERP's
+"Break Down" onto and `get_daily_job_cards` (V381c) counts. Country scoping
+reuses `workOrderCountryFilter` (`country.eq.X,country.is.null`), never a
+strict `.eq`. A failed count renders `-`, never `0`. Fleet availability, the
+mock's fourth tile, has no source and is not shown; the tile is Overdue PM.

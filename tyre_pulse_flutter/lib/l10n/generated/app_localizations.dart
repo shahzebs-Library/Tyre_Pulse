@@ -5107,7 +5107,7 @@ abstract class AppLocalizations {
   /// No description provided for @pmCopyCatalog.
   ///
   /// In en, this message translates to:
-  /// **'title=Maintenance Control Center~subtitle=Control today\'s maintenance workload~createWorkOrder=Create work order~pmDue=PM due~priorityQueue=Priority work queue~viewAll=View all~allWorkOrders=View all work orders~quickAccess=Quick access~workOrders=Work orders~workOrdersHint=Create & manage~pmSchedule=PM schedule~pmScheduleHint=Plan & track PM~inspections=Inspections~inspectionsHint=Check & report~parts=Parts~partsHint=Stock & requests~tyres=Tyres~tyresHint=Records, rotation & replacements~overdue=Overdue~dueSoon=Due soon~active=Active plans~due=Due now~all=All plans~empty=No maintenance plans~emptyDue=No preventive maintenance is due in the next 14 days.~emptyAll=No active preventive maintenance plans are available.~plan=Maintenance plan~daysOverdue=days overdue~daysLeft=days left~noDate=No due date~record=Record service~meter=Meter reading~performedBy=Performed by~workshop=Workshop~partsCost=Parts cost~labourCost=Labour cost~findings=Findings~completed=Completed~partial=Partially completed~deferred=Deferred~failed=Failed~save=Save service~invalidNumber=Enter valid numeric values.~loadFailed=The maintenance plans could not be loaded.~saveFailed=The service record could not be saved. Try again.'**
+  /// **'title=Maintenance Control Center~subtitle=Control today\'s maintenance workload~createWorkOrder=Create work order~pmDue=PM due~priorityQueue=Priority work queue~viewAll=View all~allWorkOrders=View all work orders~quickAccess=Quick access~workOrders=Work orders~workOrdersHint=Create & manage~pmSchedule=PM schedule~pmScheduleHint=Plan & track PM~inspections=Inspections~inspectionsHint=Check & report~parts=Parts~partsHint=Stock & requests~tyres=Tyres~tyresHint=Records, rotation & replacements~overdue=Overdue~dueSoon=Due soon~active=Active plans~due=Due now~all=All plans~empty=No maintenance plans~emptyDue=No preventive maintenance is due in the next 14 days.~emptyAll=No active preventive maintenance plans are available.~plan=Maintenance plan~daysOverdue=days overdue~daysLeft=days left~noDate=No due date~record=Record service~meter=Meter reading~performedBy=Performed by~workshop=Workshop~partsCost=Parts cost~labourCost=Labour cost~findings=Findings~completed=Completed~partial=Partially completed~deferred=Deferred~failed=Failed~save=Save service~invalidNumber=Enter valid numeric values.~loadFailed=The maintenance plans could not be loaded.~saveFailed=The service record could not be saved. Try again.~openBreakdowns=Open breakdowns~activeWorkOrders=Active work orders~breakdown=Breakdown~workOrder=Work order~dueToday=Due today~since=Since~opened=Opened~queueEmpty=Nothing needs attention~woLoadFailed=Open work orders could not be loaded.~retry=Retry~countFailed=This count could not be loaded. Tap to retry.'**
   String get pmCopyCatalog;
 
   /// No description provided for @stockCountCopyCatalog.
@@ -5487,6 +5487,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Selected asset'**
   String get inspectionSelectedAssetTitle;
+
+  /// Shown under Sign out when the offline queue count could not be read: unknown is treated as possibly unsynced work, never as all synced.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending sync could not be checked. Unsynced work may still be on this device'**
+  String get profileSyncUnknownFooter;
+
+  /// Home: heading of the strip listing the assets the signed-in user inspected most recently, each with the worst tyre condition that inspection recorded.
+  ///
+  /// In en, this message translates to:
+  /// **'Your recent inspections'**
+  String get homeRecentInspectionsTitle;
+
+  /// Home recent-inspection card: status when that inspection recorded no tyre condition with evidence.
+  ///
+  /// In en, this message translates to:
+  /// **'Not checked'**
+  String get homeAssetNotChecked;
+
+  /// Home Today's work: shown when no work source (drafts, tyre alerts, sign-offs) applies to the signed-in role, so 'nothing needs you' cannot be claimed.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing to check for your role'**
+  String get homeNothingForRoleTitle;
 }
 
 class _AppLocalizationsDelegate

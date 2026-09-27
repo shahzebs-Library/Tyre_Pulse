@@ -23,13 +23,14 @@ import {
 import { Doughnut, Bar } from 'react-chartjs-2'
 import {
   Truck, TrendingUp, Calendar, DollarSign, Plus, Pencil, Trash2, Search, X,
-  Filter, Save, Loader2, AlertTriangle, FileSpreadsheet, FileText, ClipboardList,
-  Gauge, MapPin, Clock, ArrowUpDown, CalendarClock, Layers, Wallet, ListChecks,
-  AlertOctagon, ChevronUp, ChevronDown, CalendarDays,
+  Save, Loader2, AlertTriangle, FileSpreadsheet, FileText, ClipboardList,
+  Gauge, MapPin, Clock, CalendarClock, Layers, Wallet, ListChecks,
+  AlertOctagon, CalendarDays, RefreshCw,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import Card, { CardHeader } from '../components/ui/Card'
 import Modal from '../components/ui/Modal'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   listRenewalPlansEnriched, createRenewalPlan, updateRenewalPlan, deleteRenewalPlan,
@@ -40,30 +41,34 @@ import {
 import {
   buildRenewalKpis, buildRenewalInsights, statusDistribution, priorityDistribution,
   renewalPipeline, estimateBudget, bySite, byVehicleType, ageBands, mileageBands,
-  overduePlans, sortBySoonest, daysUntil,
+  overduePlans, sortBySoonest, daysUntil, filterRenewalPlans, renewalRegisterRows,
+  renewalExportRows, RENEWAL_EXPORT_COLUMNS,
 } from '../lib/fleetRenewalAnalytics'
 import { formatCurrencyCompact } from '../lib/formatters'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { compareValues } from '../lib/consoleTable'
+import { colorAt, categorical, withAlpha } from '../lib/reportColors'
+import { isMissingRelation } from '../lib/api/_client'
 
 const EPOCH_DATE = new Date(0)
-import { colorAt, categorical, withAlpha } from '../lib/reportColors'
-import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
-import { isMissingRelation } from '../lib/api/_client'
+const ICON_BTN = 'inline-flex items-center justify-center h-11 w-11 sm:h-9 sm:w-9 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]'
+const valueSort = (a, b, id) => compareValues(a.getValue(id), b.getValue(id))
+const blank = (v) => (v === null || v === undefined || v === '' ? undefined : v)
 
 ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, Tooltip, Legend)
 
 // Semantic colours (status/priority carry meaning -> NOT palettized).
 const STATUS_STYLES = {
-  planned:   'bg-sky-900/40 text-sky-300 border border-sky-700/50',
-  approved:  'bg-green-900/40 text-green-300 border border-green-700/50',
-  deferred:  'bg-amber-900/40 text-amber-300 border border-amber-700/50',
-  completed: 'bg-emerald-900/40 text-emerald-300 border border-emerald-700/50',
+  planned:   'bg-sky-500/15 text-sky-500 border border-sky-500/40',
+  approved:  'bg-green-500/15 text-green-500 border border-green-500/40',
+  deferred:  'bg-amber-500/15 text-amber-500 border border-amber-500/40',
+  completed: 'bg-emerald-500/15 text-emerald-500 border border-emerald-500/40',
 }
 const PRIORITY_STYLES = {
-  low:    'bg-slate-700/40 text-slate-300 border border-slate-600/50',
-  medium: 'bg-sky-900/40 text-sky-300 border border-sky-700/50',
-  high:   'bg-red-900/40 text-red-300 border border-red-700/50',
+  low:    'bg-[var(--input-bg)] text-[var(--text-secondary)] border border-[var(--input-border)]',
+  medium: 'bg-sky-500/15 text-sky-500 border border-sky-500/40',
+  high:   'bg-red-500/15 text-red-500 border border-red-500/40',
 }
 const STATUS_HEX = { planned: '#0ea5e9', approved: '#22c55e', deferred: '#f59e0b', completed: '#10b981' }
 const PRIORITY_HEX = { low: '#64748b', medium: '#0ea5e9', high: '#ef4444' }
@@ -73,16 +78,6 @@ const EMPTY_FORM = {
   target_replace_date: '', est_cost: '', priority: 'medium', status: 'planned',
   site: '', notes: '',
 }
-
-const SORT_KEYS = {
-  soonest: 'Soonest first',
-  asset: 'Asset',
-  age: 'Age',
-  km: 'Mileage',
-  cost: 'Est. cost',
-  priority: 'Priority',
-}
-const PRIORITY_RANK = { high: 3, medium: 2, low: 1 }
 
 const fmtDate = (v) => (v ? String(v).slice(0, 10) : 'N/A')
 const num = (v) => (v === '' || v == null || Number.isNaN(Number(v)) ? 'N/A' : Number(v).toLocaleString())
@@ -100,8 +95,7 @@ export default function FleetRenewal() {
   const [fromDate, setFromDate] = useState('')
   const [toDateVal, setToDateVal] = useState('')
   const [search, setSearch] = useState('')
-  const [sortKey, setSortKey] = useState('soonest')
-  const [sortDir, setSortDir] = useState('asc')
+  const [overdueOnly, setOverdueOnly] = useState(false)
   const [pipelineGranularity, setPipelineGranularity] = useState('month')
 
   const [modalOpen, setModalOpen] = useState(false)
@@ -150,44 +144,14 @@ export default function FleetRenewal() {
     [rows],
   )
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    const from = fromDate ? String(fromDate).slice(0, 10) : null
-    const to = toDateVal ? String(toDateVal).slice(0, 10) : null
-    const list = (rows || []).filter((r) => {
-      if (statusFilter !== 'all' && r.status !== statusFilter) return false
-      if (priorityFilter !== 'all' && r.priority !== priorityFilter) return false
-      if (siteFilter !== 'all' && (r.site || '') !== siteFilter) return false
-      const d = r.target_replace_date ? String(r.target_replace_date).slice(0, 10) : null
-      if (from && (!d || d < from)) return false
-      if (to && (!d || d > to)) return false
-      if (q) {
-        const hay = `${r.asset_no || ''} ${r.recommendation || ''} ${r.site || ''} ${r.vehicle_type || ''} ${r.notes || ''}`.toLowerCase()
-        if (!hay.includes(q)) return false
-      }
-      return true
-    })
-    // Sort
-    let sorted
-    if (sortKey === 'soonest') {
-      sorted = sortBySoonest(list, now)
-    } else {
-      const cmp = {
-        asset: (a, b) => String(a.asset_no || '').localeCompare(String(b.asset_no || '')),
-        age: (a, b) => (Number(a.age_years) || -1) - (Number(b.age_years) || -1),
-        km: (a, b) => (Number(a.current_km) || -1) - (Number(b.current_km) || -1),
-        cost: (a, b) => (Number(a.est_cost) || -1) - (Number(b.est_cost) || -1),
-        priority: (a, b) => (PRIORITY_RANK[a.priority] || 0) - (PRIORITY_RANK[b.priority] || 0),
-      }[sortKey]
-      sorted = list.slice().sort(cmp)
-    }
-    if (sortDir === 'desc' && sortKey !== 'soonest') sorted = sorted.reverse()
-    return sorted
-  }, [rows, statusFilter, priorityFilter, siteFilter, fromDate, toDateVal, search, sortKey, sortDir, now])
+  const filtered = useMemo(() => filterRenewalPlans(rows || [], {
+    status: statusFilter, priority: priorityFilter, site: siteFilter,
+    from: fromDate, to: toDateVal, search, overdueOnly,
+  }, now), [rows, statusFilter, priorityFilter, siteFilter, fromDate, toDateVal, search, overdueOnly, now])
 
-  // Paged, not capped - this register used to stop at 500 rows.
-  // The exports below still walk `filtered` in full.
-  const pager = usePagedRows(filtered)
+  // Soonest action first; the register sorts across the WHOLE filtered set and
+  // the exports below walk it in full, never just the visible page.
+  const register = useMemo(() => renewalRegisterRows(filtered, now), [filtered, now])
 
   const chartText = (typeof document !== 'undefined'
     && getComputedStyle(document.documentElement).getPropertyValue('--text-muted')) || '#9ca3af'
@@ -240,28 +204,26 @@ export default function FleetRenewal() {
   // Band bars
   const ageBandChart = {
     labels: ageBandData.bands.map((b) => b.label),
-    datasets: [{ label: 'Assets', data: ageBandData.bands.map((b) => b.count), backgroundColor: withAlpha('#f59e0b', 0.8), borderRadius: 4 }],
+    datasets: [{ label: 'Assets', data: ageBandData.bands.map((b) => b.count), backgroundColor: withAlpha(colorAt(2), 0.8), borderRadius: 4 }],
   }
   const mileageBandChart = {
     labels: mileageBandData.bands.map((b) => b.label),
-    datasets: [{ label: 'Assets', data: mileageBandData.bands.map((b) => b.count), backgroundColor: withAlpha('#0ea5e9', 0.8), borderRadius: 4 }],
+    datasets: [{ label: 'Assets', data: mileageBandData.bands.map((b) => b.count), backgroundColor: withAlpha(colorAt(4), 0.8), borderRadius: 4 }],
   }
 
-  // Export
-  const EXPORT_COLS = ['asset_no', 'vehicle_type', 'site', 'age_years', 'current_km', 'recommendation', 'priority', 'target_replace_date', 'est_cost', 'status']
-  const EXPORT_HEADERS = ['Asset', 'Vehicle type', 'Site', 'Age (yrs)', 'Current km', 'Recommendation', 'Priority', 'Target date', 'Est. cost', 'Status']
-  const exportRows = filtered.map((r) => ({
-    asset_no: r.asset_no || '',
-    vehicle_type: r.vehicle_type || '',
-    site: r.site || '',
-    age_years: r.age_years ?? '',
-    current_km: r.current_km ?? '',
-    recommendation: r.recommendation || '',
-    priority: RENEWAL_PRIORITY_META[r.priority]?.label || r.priority || '',
-    target_replace_date: r.target_replace_date || '',
-    est_cost: r.est_cost ?? '',
-    status: RENEWAL_STATUS_META[r.status]?.label || r.status || '',
-  }))
+  // Export: the full filtered register, in soonest-first order.
+  const exportRows = useMemo(() => renewalExportRows(filtered, now), [filtered, now])
+  const scopeLabel = activeCountry && activeCountry !== 'All' ? activeCountry : 'All countries'
+  const doExcel = async () => {
+    try {
+      await exportToExcel(exportRows, RENEWAL_EXPORT_COLUMNS.map((c) => c.key), RENEWAL_EXPORT_COLUMNS.map((c) => c.header), reportFileName('Fleet Renewal Plans', scopeLabel))
+    } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) }
+  }
+  const doPdf = async () => {
+    try {
+      await exportToPdf(exportRows, RENEWAL_EXPORT_COLUMNS, `Fleet Renewal Planning (${scopeLabel})`, reportFileName('Fleet Renewal Plans', scopeLabel), 'landscape')
+    } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) }
+  }
 
   // CRUD
   const openCreate = () => { setEditing(null); setForm(EMPTY_FORM); setFormError(''); setModalOpen(true) }
@@ -324,9 +286,9 @@ export default function FleetRenewal() {
 
   const clearFilters = () => {
     setStatusFilter('all'); setPriorityFilter('all'); setSiteFilter('all')
-    setFromDate(''); setToDateVal(''); setSearch('')
+    setFromDate(''); setToDateVal(''); setSearch(''); setOverdueOnly(false)
   }
-  const hasFilters = statusFilter !== 'all' || priorityFilter !== 'all' || siteFilter !== 'all' || fromDate || toDateVal || search
+  const hasFilters = statusFilter !== 'all' || priorityFilter !== 'all' || siteFilter !== 'all' || fromDate || toDateVal || search || overdueOnly
 
   const money = (v) => (v == null ? 'N/A' : formatCurrencyCompact(v, activeCurrency))
 
@@ -341,22 +303,40 @@ export default function FleetRenewal() {
     { label: 'Avg age', value: kpi.avgAge == null ? 'N/A' : `${kpi.avgAge.toFixed(1)} yr`, icon: Gauge, tone: 'text-sky-400' },
   ]
 
-  const setSort = (k) => {
-    if (k === sortKey) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
-    else { setSortKey(k); setSortDir(k === 'soonest' ? 'asc' : 'desc') }
-  }
-  const SortHead = ({ label, k }) => (
-    <th className="px-4 py-3 font-semibold whitespace-nowrap">
-      {k ? (
-        <button onClick={() => setSort(k)} className="inline-flex items-center gap-1 hover:text-[var(--text-primary)]">
-          {label}
-          {sortKey === k ? (sortDir === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />) : <ArrowUpDown size={11} className="opacity-40" />}
-        </button>
-      ) : label}
-    </th>
-  )
-
   const loading = rows === null
+
+  const columns = [
+    {
+      id: 'asset', header: 'Asset', accessorFn: (r) => blank(r.asset_no), sortingFn: valueSort, sortUndefined: 'last', size: 140,
+      cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{row.original.asset_no || 'N/A'}</span>,
+    },
+    { id: 'type', header: 'Type', accessorFn: (r) => blank(r.vehicle_type), sortingFn: valueSort, sortUndefined: 'last', size: 120, cell: ({ getValue }) => <span className="text-[var(--text-secondary)]">{getValue() || 'N/A'}</span> },
+    { id: 'site', header: 'Site', accessorFn: (r) => blank(r.site), sortingFn: valueSort, sortUndefined: 'last', size: 120, cell: ({ getValue }) => <span className="text-[var(--text-secondary)]">{getValue() || 'N/A'}</span> },
+    { id: 'age', header: 'Age', accessorFn: (r) => r.ageValue ?? undefined, sortingFn: valueSort, sortUndefined: 'last', size: 80, meta: { align: 'right' }, cell: ({ getValue }) => <span className="tabular-nums">{getValue() == null ? 'N/A' : `${getValue()} yr`}</span> },
+    { id: 'km', header: 'Current km', accessorFn: (r) => r.kmValue ?? undefined, sortingFn: valueSort, sortUndefined: 'last', size: 110, meta: { align: 'right' }, cell: ({ getValue }) => <span className="tabular-nums">{num(getValue())}</span> },
+    { id: 'recommendation', header: 'Recommendation', accessorFn: (r) => blank(r.recommendation), sortingFn: valueSort, sortUndefined: 'last', size: 220, cell: ({ getValue }) => <span className="text-[var(--text-secondary)] block max-w-[220px] truncate" title={getValue() || ''}>{getValue() || 'N/A'}</span> },
+    { id: 'priority', header: 'Priority', accessorFn: (r) => r.priorityRank || undefined, sortingFn: valueSort, sortUndefined: 'last', size: 100, cell: ({ row }) => <span className={`badge text-[11px] px-2 py-0.5 rounded ${PRIORITY_STYLES[row.original.priority] || ''}`}>{RENEWAL_PRIORITY_META[row.original.priority]?.label || row.original.priority || 'N/A'}</span> },
+    {
+      id: 'target', header: 'Target date', accessorFn: (r) => r.daysToTarget ?? undefined, sortingFn: valueSort, sortUndefined: 'last', size: 150,
+      cell: ({ row }) => (
+        <span className="whitespace-nowrap">
+          <span className={row.original.isOverdue ? 'text-red-500 font-medium' : 'text-[var(--text-secondary)]'}>{fmtDate(row.original.target_replace_date)}</span>
+          {row.original.isOverdue && <span className="ml-1.5 text-[10px] font-semibold uppercase text-red-500">overdue</span>}
+        </span>
+      ),
+    },
+    { id: 'cost', header: 'Est. cost', accessorFn: (r) => r.costValue ?? undefined, sortingFn: valueSort, sortUndefined: 'last', size: 110, meta: { align: 'right' }, cell: ({ getValue }) => <span className="tabular-nums text-[var(--text-secondary)]">{getValue() == null ? 'N/A' : formatCurrencyCompact(getValue(), activeCurrency)}</span> },
+    { id: 'status', header: 'Status', accessorFn: (r) => blank(RENEWAL_STATUS_META[r.status]?.label || r.status), sortingFn: valueSort, sortUndefined: 'last', size: 110, cell: ({ row }) => <span className={`badge text-[11px] px-2 py-0.5 rounded ${STATUS_STYLES[row.original.status] || ''}`}>{RENEWAL_STATUS_META[row.original.status]?.label || row.original.status || 'N/A'}</span> },
+    {
+      id: 'actions', header: '', enableSorting: false, size: 100, meta: { export: false },
+      cell: ({ row }) => (
+        <div className="flex items-center justify-end gap-1">
+          <button type="button" onClick={() => openEdit(row.original)} className={ICON_BTN} aria-label={`Edit plan for ${row.original.asset_no}`}><Pencil size={14} /></button>
+          <button type="button" onClick={() => { setDeleteError(''); setConfirmDelete(row.original) }} className={`${ICON_BTN} hover:text-red-500`} aria-label={`Delete plan for ${row.original.asset_no}`}><Trash2 size={14} /></button>
+        </div>
+      ),
+    },
+  ]
 
   return (
     <div className="space-y-6">
@@ -368,15 +348,15 @@ export default function FleetRenewal() {
         refreshing={refreshing}
         updatedAt={updatedAt}
         actions={
-          <div className="flex items-center gap-2">
-            <button onClick={async () => { try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'fleet_renewal_plans') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
-              <FileSpreadsheet size={14} /> Excel
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={doExcel} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] sm:min-h-0" disabled={!filtered.length}>
+              <FileSpreadsheet size={14} aria-hidden="true" /> Excel
             </button>
-            <button onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Fleet Renewal Planning', 'fleet_renewal_plans', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
-              <FileText size={14} /> PDF
+            <button type="button" onClick={doPdf} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] sm:min-h-0" disabled={!filtered.length}>
+              <FileText size={14} aria-hidden="true" /> PDF
             </button>
-            <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5">
-              <Plus size={14} /> New plan
+            <button type="button" onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px] sm:min-h-0" disabled={error === 'missing'}>
+              <Plus size={14} aria-hidden="true" /> New plan
             </button>
           </div>
         }
@@ -398,17 +378,18 @@ export default function FleetRenewal() {
           </div>
         </Card>
       ) : error ? (
-        <Card tone="crit" className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
-          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
+        <Card tone="crit" className="items-start gap-[var(--space-3)] flex-wrap" style={{ flexDirection: 'row' }} role="alert">
+          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
           <div className="flex-1">
             <p className="text-red-300 font-medium">Could not load renewal plans.</p>
             <p className="text-[var(--text-muted)] text-sm mt-1">{error}</p>
           </div>
-          <button onClick={load} className="btn-secondary text-sm">Retry</button>
+          <button type="button" onClick={load} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] sm:min-h-0"><RefreshCw size={14} aria-hidden="true" /> Retry</button>
         </Card>
       ) : null}
 
       {/* KPI tiles */}
+      <p className="text-[11px] text-[var(--text-muted)] -mb-3">Figures cover all {kpi.total.toLocaleString()} plan(s) in {scopeLabel}. Filters below narrow the register only.</p>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-[var(--gap-grid)]">
         {kpis.map((k) => {
           const Icon = k.icon
@@ -452,8 +433,8 @@ export default function FleetRenewal() {
           actions={
             <div className="flex items-center gap-1 text-xs">
               {['month', 'year'].map((g) => (
-                <button key={g} onClick={() => setPipelineGranularity(g)}
-                  className={`px-2.5 py-1 rounded ${pipelineGranularity === g ? 'bg-[var(--input-bg)] text-[var(--text-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}>
+                <button key={g} type="button" onClick={() => setPipelineGranularity(g)} aria-pressed={pipelineGranularity === g}
+                  className={`px-2.5 py-1 min-h-[36px] rounded ${pipelineGranularity === g ? 'bg-[var(--input-bg)] text-[var(--text-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}>
                   {g === 'month' ? 'Monthly' : 'Yearly'}
                 </button>
               ))}
@@ -558,12 +539,13 @@ export default function FleetRenewal() {
           <h3 className="text-sm font-semibold text-red-300 mb-3 flex items-center gap-1.5"><AlertOctagon size={15} /> Overdue watchlist ({overdue.length})</h3>
           <div className="flex flex-wrap gap-2">
             {sortBySoonest(overdue, now).slice(0, 12).map((r) => (
-              <button key={r.id} onClick={() => openEdit(r)} className="text-left rounded-lg border border-red-800/40 bg-red-900/15 px-3 py-2 hover:bg-red-900/25">
+              <button key={r.id} type="button" onClick={() => openEdit(r)} className="text-left rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 min-h-[44px] hover:bg-red-500/20" aria-label={`Edit overdue plan for ${r.asset_no}`}>
                 <p className="text-sm font-medium text-[var(--text-primary)]">{r.asset_no}</p>
-                <p className="text-xs text-red-300">{Math.abs(daysUntil(r.target_replace_date, now) || 0)} day(s) overdue</p>
+                <p className="text-xs text-red-500">{Math.abs(daysUntil(r.target_replace_date, now) || 0)} day(s) overdue</p>
               </button>
             ))}
           </div>
+          <button type="button" onClick={() => setOverdueOnly(true)} className="btn-secondary text-sm mt-3 min-h-[44px] sm:min-h-0">Show all {overdue.length} overdue in the register</button>
         </Card>
       )}
 
@@ -574,7 +556,8 @@ export default function FleetRenewal() {
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[200px]">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-            <input className="input pl-9 w-full" placeholder="Search asset, type, recommendation, site..." value={search} onChange={(e) => setSearch(e.target.value)} />
+            <label htmlFor="fr-search" className="sr-only">Search renewal plans</label>
+            <input id="fr-search" className="input pl-9 w-full" placeholder="Search asset, type, recommendation, site..." value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
             <option value="all">All statuses</option>
@@ -588,85 +571,33 @@ export default function FleetRenewal() {
             <option value="all">All sites</option>
             {siteOptions.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
-          <select className="input" value={sortKey} onChange={(e) => setSort(e.target.value)} aria-label="Sort">
-            {Object.entries(SORT_KEYS).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
-          </select>
+          <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] min-h-[44px] cursor-pointer">
+            <input type="checkbox" className="h-4 w-4" checked={overdueOnly} onChange={(e) => setOverdueOnly(e.target.checked)} />
+            Overdue only
+          </label>
         </div>
         <div className="flex flex-wrap items-center gap-2 mt-2">
-          <label className="text-xs text-[var(--text-muted)] flex items-center gap-1.5"><Calendar size={13} /> Target from</label>
-          <input type="date" className="input" value={fromDate} onChange={(e) => setFromDate(e.target.value)} aria-label="Target from" />
-          <label className="text-xs text-[var(--text-muted)]">to</label>
-          <input type="date" className="input" value={toDateVal} onChange={(e) => setToDateVal(e.target.value)} aria-label="Target to" />
-          {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
-          <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {kpi.total}</span>
+          <label htmlFor="fr-from" className="text-xs text-[var(--text-muted)] flex items-center gap-1.5"><Calendar size={13} aria-hidden="true" /> Target from</label>
+          <input id="fr-from" type="date" className="input" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+          <label htmlFor="fr-to" className="text-xs text-[var(--text-muted)]">to</label>
+          <input id="fr-to" type="date" className="input" value={toDateVal} onChange={(e) => setToDateVal(e.target.value)} />
+          {hasFilters && <button type="button" onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] sm:min-h-0"><X size={14} aria-hidden="true" /> Clear</button>}
+          <span className="text-xs text-[var(--text-muted)] ml-auto" aria-live="polite">{filtered.length} of {kpi.total}</span>
         </div>
       </Card>
 
-      {/* Table. `pad="none"` replaces the old `!p-0` override, and `clip`
-          reproduces the edge-to-edge crop the legacy .card gave for free. The
-          rows-per-page control in TablePagination is a native <select>, whose
-          option list the browser paints outside this overflow context, so
-          clipping it here is safe. */}
-      <Card pad="none" clip>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                <SortHead label="Asset" k="asset" />
-                <SortHead label="Type" />
-                <SortHead label="Site" />
-                <SortHead label="Age" k="age" />
-                <SortHead label="Current km" k="km" />
-                <SortHead label="Recommendation" />
-                <SortHead label="Priority" k="priority" />
-                <SortHead label="Target date" k="soonest" />
-                <SortHead label="Est. cost" k="cost" />
-                <SortHead label="Status" />
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                [0, 1, 2, 3, 4].map((i) => <tr key={i} className="border-b border-[var(--input-border)]/50"><td colSpan={11} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>)
-              ) : filtered.length === 0 ? (
-                <tr><td colSpan={11} className="px-4 py-12 text-center text-[var(--text-muted)]">
-                  <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {kpi.total === 0 ? 'No renewal plans yet. Create the first to start planning.' : 'No plans match these filters.'}
-                </td></tr>
-              ) : (
-                pager.pageRows.map((r) => {
-                  const dd = daysUntil(r.target_replace_date, now)
-                  const isOverdue = ['planned', 'approved', 'deferred'].includes(r.status) && dd != null && dd <= 0
-                  return (
-                    <tr key={r.id} className={`border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40 ${isOverdue ? 'bg-red-900/10' : ''}`}>
-                      <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.asset_no || 'N/A'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.vehicle_type || 'N/A'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.site || 'N/A'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.age_years == null ? 'N/A' : `${r.age_years} yr`}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{num(r.current_km)}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] max-w-[220px] truncate" title={r.recommendation || ''}>{r.recommendation || 'N/A'}</td>
-                      <td className="px-4 py-2.5"><span className={`badge text-[11px] px-2 py-0.5 rounded ${PRIORITY_STYLES[r.priority] || ''}`}>{RENEWAL_PRIORITY_META[r.priority]?.label || r.priority}</span></td>
-                      <td className="px-4 py-2.5 whitespace-nowrap">
-                        <span className={isOverdue ? 'text-red-300 font-medium' : 'text-[var(--text-secondary)]'}>{fmtDate(r.target_replace_date)}</span>
-                        {isOverdue && <span className="ml-1.5 text-[10px] text-red-400">overdue</span>}
-                      </td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.est_cost == null ? 'N/A' : formatCurrencyCompact(r.est_cost, activeCurrency)}</td>
-                      <td className="px-4 py-2.5"><span className={`badge text-[11px] px-2 py-0.5 rounded ${STATUS_STYLES[r.status] || ''}`}>{RENEWAL_STATUS_META[r.status]?.label || r.status}</span></td>
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-center gap-1.5">
-                          <button onClick={() => openEdit(r)} className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Edit"><Pencil size={14} /></button>
-                          <button onClick={() => setConfirmDelete(r)} className="p-1.5 rounded hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-300" aria-label="Delete"><Trash2 size={14} /></button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-        <TablePagination {...pager} />
-      </Card>
+      <EnterpriseTable
+        columns={columns}
+        data={register}
+        getRowId={(r) => String(r.id)}
+        loading={loading}
+        enableGlobalFilter={false}
+        enableColumnFilters={false}
+        enableExport={false}
+        viewKey="fleet-renewal"
+        initialPageSize={25}
+        emptyMessage={error === 'missing' ? 'Fleet renewal planning is not enabled yet.' : error ? 'Plans could not be loaded. Use Retry above.' : kpi.total === 0 ? 'No renewal plans yet. Create the first to start planning.' : 'No plans match these filters.'}
+      />
 
       {/* Create / Edit modal. The submit button stays INSIDE the <form> rather
           than moving to Modal's `footer`: a footer button would need a

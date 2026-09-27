@@ -8,10 +8,13 @@
  * price / data-quality anomalies.
  *
  * Full role-gated CRUD, 8 KPI tiles, charts, date-range / site / supplier /
- * status / search filters, sortable table, Excel + PDF export, and loading /
- * error+Retry / honest empty states. Runs on the `fuel_deliveries` table
- * (MIGRATIONS_V148_FUEL_DELIVERIES.sql). Pure maths lives in
- * src/lib/fuelDeliveryAnalytics.js (no fabricated data).
+ * status / flag / search filters, a sortable register (EnterpriseTable),
+ * Excel + PDF export, and loading / error+Retry / honest empty states. Runs on
+ * the `fuel_deliveries` table (MIGRATIONS_V148_FUEL_DELIVERIES.sql); when it is
+ * not provisioned the page says so and logging stays disabled. Pure maths
+ * lives in src/lib/fuelDeliveryAnalytics.js (no fabricated data). Money is
+ * never totalled across countries (the table has no currency column) and an
+ * uncosted delivery is never counted as costing 0.
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
@@ -20,25 +23,28 @@ import {
 } from 'chart.js'
 import { Bar } from 'react-chartjs-2'
 import {
-  Fuel, Droplet, DollarSign, Package, Plus, Pencil, Trash2, Search, X, Filter,
+  Fuel, Droplet, DollarSign, Package, Plus, Pencil, Trash2, Search, X,
   Save, Loader2, AlertTriangle, FileSpreadsheet, FileText, CheckCircle2,
   Clock, XCircle, TrendingUp, TrendingDown, Minus, Building2, Truck,
-  ShieldAlert, ArrowUp, ArrowDown, Activity, RefreshCw,
+  ShieldAlert, Activity, RefreshCw,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import Modal from '../components/ui/Modal'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   listDeliveries, createDelivery, updateDelivery, deleteDelivery,
   isDeliveriesTableMissing, DELIVERY_STATUSES,
 } from '../lib/api/fuelDeliveries'
 import {
-  analyzeDeliveries, filterDeliveries, distinctValues,
+  analyzeDeliveries, filterDeliveries, distinctValues, costBasis, deliveryRegisterRows,
+  deliveryExportRows, DELIVERY_EXPORT_COLUMNS, ANOMALY_LABELS,
 } from '../lib/fuelDeliveryAnalytics'
 import { toUserMessage } from '../lib/safeError'
 import { formatCurrencyCompact } from '../lib/formatters'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { categorical, colorAt, withAlpha } from '../lib/reportColors'
-import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { compareValues } from '../lib/consoleTable'
 
 ChartJS.register(ArcElement, CategoryScale, LinearScale, BarElement, LineElement, PointElement, Tooltip, Legend)
 
@@ -48,19 +54,28 @@ const cssVar = (name, fallback) => {
 }
 
 const STATUS_META = {
-  ordered: { label: 'Ordered', cls: 'bg-sky-900/40 text-sky-300 border border-sky-700/50', icon: Clock },
-  delivered: { label: 'Delivered', cls: 'bg-green-900/40 text-green-300 border border-green-700/50', icon: CheckCircle2 },
-  cancelled: { label: 'Cancelled', cls: 'bg-red-900/40 text-red-300 border border-red-700/50', icon: XCircle },
+  ordered: { label: 'Ordered', cls: 'bg-sky-500/15 text-sky-500 border border-sky-500/40', icon: Clock },
+  delivered: { label: 'Delivered', cls: 'bg-green-500/15 text-green-500 border border-green-500/40', icon: CheckCircle2 },
+  cancelled: { label: 'Cancelled', cls: 'bg-red-500/15 text-red-500 border border-red-500/40', icon: XCircle },
 }
 
 const ANOMALY_META = {
-  price_outlier: { label: 'Price outlier', cls: 'text-red-300 bg-red-900/30 border-red-800/50' },
-  cost_mismatch: { label: 'Cost mismatch', cls: 'text-amber-300 bg-amber-900/30 border-amber-800/50' },
-  missing_cost: { label: 'Missing cost', cls: 'text-amber-300 bg-amber-900/30 border-amber-800/50' },
-  missing_litres: { label: 'Missing litres', cls: 'text-amber-300 bg-amber-900/30 border-amber-800/50' },
+  price_outlier: { label: ANOMALY_LABELS.price_outlier, cls: 'text-red-500 bg-red-500/10 border-red-500/40' },
+  cost_mismatch: { label: ANOMALY_LABELS.cost_mismatch, cls: 'text-amber-500 bg-amber-500/10 border-amber-500/40' },
+  missing_cost: { label: ANOMALY_LABELS.missing_cost, cls: 'text-amber-500 bg-amber-500/10 border-amber-500/40' },
+  missing_litres: { label: ANOMALY_LABELS.missing_litres, cls: 'text-amber-500 bg-amber-500/10 border-amber-500/40' },
 }
 
-const today = () => new Date().toISOString().slice(0, 10)
+const LIST_CAP = 500 // listDeliveries returns the newest 500 deliveries.
+const ICON_BTN = 'inline-flex items-center justify-center h-11 w-11 sm:h-9 sm:w-9 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]'
+const valueSort = (a, b, id) => compareValues(a.getValue(id), b.getValue(id))
+const blank = (v) => (v === null || v === undefined || v === '' ? undefined : v)
+
+// Local calendar day, never toISOString (UTC) which rolls back a day east of UTC.
+const today = () => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 const EMPTY_FORM = {
   delivery_no: '', supplier: '', site: '', tank: '',
   litres: '', unit_price: '', total_cost: '',
@@ -75,16 +90,6 @@ function fmtDate(v) {
 function fmtNum(v) {
   const n = parseFloat(v)
   return Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: 2 }) : 'N/A'
-}
-
-// ─── Sort config ──────────────────────────────────────────────────────────────
-const SORTS = {
-  delivered_at: (a, b) => (Date.parse(a.delivered_at || 0) || 0) - (Date.parse(b.delivered_at || 0) || 0),
-  supplier: (a, b) => String(a.supplier || '').localeCompare(String(b.supplier || '')),
-  site: (a, b) => String(a.site || '').localeCompare(String(b.site || '')),
-  litres: (a, b) => (parseFloat(a.litres) || 0) - (parseFloat(b.litres) || 0),
-  unit_price: (a, b) => (parseFloat(a.unit_price) || 0) - (parseFloat(b.unit_price) || 0),
-  total_cost: (a, b) => (parseFloat(a.total_cost) || 0) - (parseFloat(b.total_cost) || 0),
 }
 
 // ─── Create / edit modal ──────────────────────────────────────────────────────
@@ -143,68 +148,55 @@ function DeliveryModal({ open, initial, onClose, onSaved, activeCountry }) {
   }, [form, editing, initial, activeCountry, onSaved])
 
   if (!open) return null
+  const close = () => { if (!busy) onClose?.() }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onMouseDown={onClose}>
-      <div
-        className="card w-full max-w-2xl max-h-[92vh] overflow-y-auto !bg-[var(--card-bg)] border border-[var(--input-border)]"
-        onMouseDown={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
-            <Fuel size={18} className="text-brand-bright" />
-            {editing ? 'Edit delivery' : 'Log fuel delivery'}
-          </h2>
-          <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Close">
-            <X size={18} />
-          </button>
-        </div>
-
-        <form onSubmit={submit} className="space-y-4">
+    <Modal open onClose={close} size="lg" title={<span className="inline-flex items-center gap-2"><Fuel size={18} aria-hidden="true" />{editing ? 'Edit delivery' : 'Log fuel delivery'}</span>}>
+        <form onSubmit={submit} className="space-y-4" noValidate>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="label">Supplier</label>
-              <input className="input w-full" placeholder="e.g. ADNOC Distribution" value={form.supplier} maxLength={200}
+              <label className="label" htmlFor="fd-supplier">Supplier</label>
+              <input id="fd-supplier" className="input w-full" placeholder="e.g. ADNOC Distribution" value={form.supplier} maxLength={200}
                 onChange={(e) => set('supplier', e.target.value)} />
             </div>
             <div>
-              <label className="label">Site</label>
-              <input className="input w-full" placeholder="e.g. Dubai Depot" value={form.site} maxLength={200}
+              <label className="label" htmlFor="fd-site">Site</label>
+              <input id="fd-site" className="input w-full" placeholder="e.g. Dubai Depot" value={form.site} maxLength={200}
                 onChange={(e) => set('site', e.target.value)} />
             </div>
             <div>
-              <label className="label">Tank</label>
-              <input className="input w-full" placeholder="e.g. Tank A / Diesel bulk" value={form.tank} maxLength={120}
+              <label className="label" htmlFor="fd-tank">Tank</label>
+              <input id="fd-tank" className="input w-full" placeholder="e.g. Tank A / Diesel bulk" value={form.tank} maxLength={120}
                 onChange={(e) => set('tank', e.target.value)} />
             </div>
             <div>
-              <label className="label">Delivery No.</label>
-              <input className="input w-full" placeholder="e.g. DN-2026-001" value={form.delivery_no} maxLength={64}
+              <label className="label" htmlFor="fd-delivery_no">Delivery No.</label>
+              <input id="fd-delivery_no" className="input w-full" placeholder="e.g. DN-2026-001" value={form.delivery_no} maxLength={64}
                 onChange={(e) => set('delivery_no', e.target.value)} />
             </div>
             <div>
-              <label className="label">Litres</label>
-              <input type="number" step="0.01" min="0" className="input w-full" placeholder="1000" value={form.litres}
+              <label className="label" htmlFor="fd-litres">Litres</label>
+              <input id="fd-litres" type="number" step="0.01" min="0" className="input w-full" placeholder="1000" value={form.litres}
                 onChange={(e) => set('litres', e.target.value)} />
             </div>
             <div>
-              <label className="label">Unit price / L</label>
-              <input type="number" step="0.001" min="0" className="input w-full" placeholder="2.85" value={form.unit_price}
+              <label className="label" htmlFor="fd-unit_price">Unit price / L</label>
+              <input id="fd-unit_price" type="number" step="0.001" min="0" className="input w-full" placeholder="2.85" value={form.unit_price}
                 onChange={(e) => set('unit_price', e.target.value)} />
             </div>
             <div>
-              <label className="label">Total cost</label>
-              <input type="number" step="0.01" min="0" className="input w-full" placeholder="Auto-calculated" value={form.total_cost}
+              <label className="label" htmlFor="fd-total_cost">Total cost</label>
+              <input id="fd-total_cost" type="number" step="0.01" min="0" className="input w-full" placeholder="Auto-calculated" value={form.total_cost}
                 onChange={(e) => set('total_cost', e.target.value)} />
             </div>
             <div>
-              <label className="label">Delivered / due date</label>
-              <input type="date" className="input w-full" value={form.delivered_at}
+              <label className="label" htmlFor="fd-delivered_at">Delivered / due date</label>
+              <input id="fd-delivered_at" type="date" className="input w-full" value={form.delivered_at}
                 onChange={(e) => set('delivered_at', e.target.value)} />
             </div>
             <div>
-              <label className="label">Status</label>
-              <select className="input w-full" value={form.status} onChange={(e) => set('status', e.target.value)}>
+              <label className="label" htmlFor="fd-status">Status</label>
+              <select id="fd-status" className="input w-full" value={form.status} onChange={(e) => set('status', e.target.value)}>
                 {DELIVERY_STATUSES.map((s) => (
                   <option key={s} value={s}>{STATUS_META[s]?.label || s}</option>
                 ))}
@@ -212,78 +204,87 @@ function DeliveryModal({ open, initial, onClose, onSaved, activeCountry }) {
             </div>
           </div>
           <div>
-            <label className="label">Notes</label>
-            <textarea className="input w-full min-h-[80px] resize-y" placeholder="Optional - reference, driver, batch quality..."
+            <label className="label" htmlFor="fd-notes">Notes</label>
+            <textarea id="fd-notes" className="input w-full min-h-[80px] resize-y" placeholder="Optional - reference, driver, batch quality..."
               value={form.notes} maxLength={8000} onChange={(e) => set('notes', e.target.value)} />
           </div>
 
           {error && (
-            <div className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
-              <AlertTriangle size={15} className="mt-0.5 shrink-0" /> {error}
+            <div role="alert" className="flex items-start gap-2 text-sm text-red-500 bg-red-500/10 border border-red-500/40 rounded-lg px-3 py-2">
+              <AlertTriangle size={15} className="mt-0.5 shrink-0" aria-hidden="true" /> {error}
             </div>
           )}
 
           <div className="flex items-center justify-end gap-2 pt-1">
-            <button type="button" onClick={onClose} className="btn-secondary text-sm">Cancel</button>
-            <button type="submit" disabled={busy} className="btn-primary text-sm inline-flex items-center gap-2 disabled:opacity-60">
-              {busy ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+            <button type="button" onClick={close} className="btn-secondary text-sm min-h-[44px] sm:min-h-0" disabled={busy}>Cancel</button>
+            <button type="submit" disabled={busy} className="btn-primary text-sm inline-flex items-center gap-2 disabled:opacity-60 min-h-[44px] sm:min-h-0">
+              {busy ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Save size={15} aria-hidden="true" />}
               {busy ? 'Saving...' : editing ? 'Save changes' : 'Log delivery'}
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   )
 }
 
 // ─── Delete confirm ───────────────────────────────────────────────────────────
-function ConfirmDelete({ row, onCancel, onConfirm, busy }) {
+function ConfirmDelete({ row, onCancel, onConfirm, busy, error }) {
   if (!row) return null
+  const close = () => { if (!busy) onCancel?.() }
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onMouseDown={onCancel}>
-      <div className="card w-full max-w-md border border-[var(--input-border)]" onMouseDown={(e) => e.stopPropagation()}>
-        <h3 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2">
-          <Trash2 size={16} className="text-red-400" /> Delete delivery
-        </h3>
-        <p className="text-sm text-[var(--text-muted)] mt-2">
-          Delete the delivery{row.delivery_no ? ` "${row.delivery_no}"` : ''}
-          {row.supplier ? ` from ${row.supplier}` : ''}? This cannot be undone.
-        </p>
-        <div className="flex items-center justify-end gap-2 mt-4">
-          <button onClick={onCancel} className="btn-secondary text-sm">Cancel</button>
-          <button onClick={onConfirm} disabled={busy} className="btn-danger text-sm inline-flex items-center gap-2 disabled:opacity-60">
-            {busy ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />} Delete
+    <Modal
+      open
+      onClose={close}
+      size="sm"
+      title="Delete delivery?"
+      footer={
+        <>
+          <button type="button" onClick={close} className="btn-secondary text-sm" disabled={busy}>Cancel</button>
+          <button type="button" onClick={onConfirm} disabled={busy} className="btn-danger text-sm inline-flex items-center gap-2 disabled:opacity-60">
+            {busy ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Trash2 size={15} aria-hidden="true" />} {busy ? 'Deleting...' : 'Delete'}
           </button>
-        </div>
-      </div>
-    </div>
+        </>
+      }
+    >
+      <p className="text-sm text-[var(--text-secondary)]">
+        Delete the delivery{row.delivery_no ? ` "${row.delivery_no}"` : ''}
+        {row.supplier ? ` from ${row.supplier}` : ''}? This cannot be undone.
+      </p>
+      {error && (
+        <p role="alert" className="flex items-start gap-2 text-sm text-red-500 mt-3">
+          <AlertTriangle size={15} className="mt-0.5 shrink-0" aria-hidden="true" /> {error}
+        </p>
+      )}
+    </Modal>
   )
 }
 
 // ─── KPI tile ─────────────────────────────────────────────────────────────────
 function Kpi({ label, value, icon: Icon, tone, sub }) {
   return (
-    <div className="card">
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-[var(--text-muted)]">{label}</p>
-        <Icon size={16} className={tone} />
+    <div className="card min-w-0">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs text-[var(--text-muted)] truncate">{label}</p>
+        <Icon size={16} className={tone} aria-hidden="true" />
       </div>
-      <p className={`text-2xl font-bold mt-1 ${tone}`}>{value}</p>
+      <p className={`text-2xl font-bold mt-1 tabular-nums break-words ${tone}`}>{value}</p>
       {sub && <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{sub}</p>}
     </div>
   )
 }
 
 // ─── Chart panel wrapper ──────────────────────────────────────────────────────
-function ChartCard({ title, icon: Icon, empty, children }) {
+function ChartCard({ title, icon: Icon, empty, loading, emptyText = 'No data for this metric yet.', summary, children }) {
   return (
-    <div className="card">
-      <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2 mb-3">
-        <Icon size={15} className="text-brand-bright" /> {title}
-      </h3>
-      {empty
-        ? <div className="h-56 flex items-center justify-center text-sm text-[var(--text-muted)]">No data for this metric yet.</div>
-        : <div className="h-56">{children}</div>}
+    <div className="card min-w-0">
+      <h2 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2 mb-3">
+        <Icon size={15} className="text-brand-bright" aria-hidden="true" /> {title}
+      </h2>
+      {loading
+        ? <div className="h-56 bg-[var(--input-bg)] rounded animate-pulse" aria-busy="true" />
+        : empty
+          ? <div className="h-56 flex items-center justify-center text-sm text-[var(--text-muted)] text-center px-4">{emptyText}</div>
+          : <div className="h-56" role="img" aria-label={summary || title}>{children}</div>}
     </div>
   )
 }
@@ -303,8 +304,9 @@ export default function FuelDelivery() {
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
   const [search, setSearch] = useState('')
-  const [sortKey, setSortKey] = useState('delivered_at')
-  const [sortDir, setSortDir] = useState('desc')
+  const [flaggedOnly, setFlaggedOnly] = useState(false)
+  const [actionError, setActionError] = useState('')
+  const [deleteError, setDeleteError] = useState('')
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
@@ -322,7 +324,6 @@ export default function FuelDelivery() {
       setMissing(data.length === 0 ? await isDeliveriesTableMissing() : false)
     } catch (err) {
       setError(toUserMessage(err, 'Could not load fuel deliveries.'))
-      setRows([])
     } finally {
       setRefreshing(false)
     }
@@ -333,21 +334,24 @@ export default function FuelDelivery() {
   const siteOptions = useMemo(() => distinctValues(rows || [], 'site'), [rows])
   const supplierOptions = useMemo(() => distinctValues(rows || [], 'supplier'), [rows])
 
-  const filtered = useMemo(() => {
-    const list = filterDeliveries(rows || [], {
-      status: statusFilter, site: siteFilter, supplier: supplierFilter, from, to, search,
-    })
-    const cmp = SORTS[sortKey] || SORTS.delivered_at
-    const sorted = [...list].sort(cmp)
-    return sortDir === 'desc' ? sorted.reverse() : sorted
-  }, [rows, statusFilter, siteFilter, supplierFilter, from, to, search, sortKey, sortDir])
-
-  // Paged, not capped - this register used to stop at 500 rows.
-  // The exports below still walk `filtered` in full.
-  const pager = usePagedRows(filtered)
+  const base = useMemo(() => filterDeliveries(rows || [], {
+    status: statusFilter, site: siteFilter, supplier: supplierFilter, from, to, search,
+  }), [rows, statusFilter, siteFilter, supplierFilter, from, to, search])
+  const registerAll = useMemo(() => deliveryRegisterRows(base), [base])
+  // The flag filter narrows the register only; KPIs and charts follow the other
+  // filters so a flagged-only view never reads as the whole fleet's fuel spend.
+  const register = useMemo(
+    () => (flaggedOnly ? registerAll.filter((r) => r.anomaly) : registerAll)
+      .slice().sort((x, y) => (y.deliveredTime ?? -Infinity) - (x.deliveredTime ?? -Infinity)),
+    [registerAll, flaggedOnly],
+  )
+  const filtered = base
 
   // Analytics reflect the filtered set so the KPIs/charts drill with the filters.
-  const a = useMemo(() => analyzeDeliveries(filtered), [filtered])
+  const clock = updatedAt || undefined
+  const a = useMemo(() => analyzeDeliveries(filtered, clock ? { now: clock } : {}), [filtered, clock])
+  const money = useMemo(() => costBasis(filtered), [filtered])
+  const topAnomalies = useMemo(() => a.anomalies.slice(0, 40), [a])
 
   const trend = a.priceTrend
   const TrendIcon = trend.direction === 'up' ? TrendingUp : trend.direction === 'down' ? TrendingDown : Minus
@@ -356,18 +360,19 @@ export default function FuelDelivery() {
     ? 'Not enough months'
     : `${trend.changePct > 0 ? '+' : ''}${trend.changePct}% vs prior month`
 
-  const loading = rows === null
-  const na = (v) => (loading ? 'N/A' : v)
+  const loading = rows === null && !error
+  const failedEmpty = rows === null && !!error
+  const na = (v) => (rows === null ? 'N/A' : v)
 
   const kpis = [
     { label: 'Deliveries', value: na(a.totalDeliveries.toLocaleString()), icon: Package, tone: 'text-[var(--text-primary)]', sub: a.cancelledDeliveries ? `${a.cancelledDeliveries} cancelled excluded` : `${a.countedDeliveries} counted` },
-    { label: 'Total litres', value: na(`${a.totalLitres.toLocaleString()} L`), icon: Droplet, tone: 'text-sky-400', sub: a.avgDeliverySize != null ? `avg ${a.avgDeliverySize.toLocaleString()} L / delivery` : null },
-    { label: 'Total spend', value: na(formatCurrencyCompact(a.totalCost, activeCurrency)), icon: DollarSign, tone: 'text-amber-400', sub: a.avgDeliveryCost != null ? `avg ${formatCurrencyCompact(a.avgDeliveryCost, activeCurrency)} / delivery` : null },
-    { label: 'Avg price / L', value: na(a.avgPricePerLitre != null ? `${activeCurrency} ${a.avgPricePerLitre.toFixed(3)}` : 'N/A'), icon: Fuel, tone: 'text-green-400', sub: a.priceStats.min != null ? `range ${a.priceStats.min} to ${a.priceStats.max}` : null },
-    { label: 'Price trend', value: na(trend.current != null ? `${activeCurrency} ${trend.current.toFixed(3)}` : 'N/A'), icon: TrendIcon, tone: trendTone, sub: trendSub },
-    { label: 'Suppliers', value: na(a.supplierCount.toLocaleString()), icon: Truck, tone: 'text-indigo-400', sub: a.topSupplier ? `top: ${a.topSupplier.key}` : null },
-    { label: 'Sites', value: na(a.siteCount.toLocaleString()), icon: Building2, tone: 'text-purple-400', sub: a.topSite ? `top: ${a.topSite.key}` : null },
-    { label: 'Anomalies', value: na(a.anomalyCount.toLocaleString()), icon: ShieldAlert, tone: a.anomalyCount ? 'text-red-400' : 'text-green-400', sub: a.priceCoveragePct != null ? `${a.priceCoveragePct}% priced` : null },
+    { label: 'Total litres', value: na(`${a.totalLitres.toLocaleString()} L`), icon: Droplet, tone: 'text-sky-500', sub: a.avgDeliverySize != null ? `avg ${a.avgDeliverySize.toLocaleString()} L / delivery` : null },
+    { label: 'Total spend', value: na(money.totalCost != null ? formatCurrencyCompact(money.totalCost, activeCurrency) : 'N/A'), icon: DollarSign, tone: 'text-amber-500', sub: money.mixedCurrency ? 'Several countries: pick one to total spend' : money.uncostedCount ? `${money.uncostedCount} delivery(s) without a cost` : null },
+    { label: 'Avg price / L', value: na(money.blendedPrice != null ? `${activeCurrency} ${money.blendedPrice.toFixed(3)}` : 'N/A'), icon: Fuel, tone: 'text-green-500', sub: money.mixedCurrency ? 'Not comparable across countries' : a.priceStats.min != null ? `range ${a.priceStats.min} to ${a.priceStats.max}` : null },
+    { label: 'Price trend', value: na(!money.mixedCurrency && trend.current != null ? `${activeCurrency} ${trend.current.toFixed(3)}` : 'N/A'), icon: TrendIcon, tone: trendTone, sub: money.mixedCurrency ? 'Pick one country' : trendSub },
+    { label: 'Suppliers', value: na(a.supplierCount.toLocaleString()), icon: Truck, tone: 'text-indigo-500', sub: a.topSupplier ? `top: ${a.topSupplier.key}` : null },
+    { label: 'Sites', value: na(a.siteCount.toLocaleString()), icon: Building2, tone: 'text-purple-500', sub: a.topSite ? `top: ${a.topSite.key}` : null },
+    { label: 'Anomalies', value: na(a.anomalyCount.toLocaleString()), icon: ShieldAlert, tone: a.anomalyCount ? 'text-red-500' : 'text-green-500', sub: a.priceCoveragePct != null ? `${a.priceCoveragePct}% priced` : null },
   ]
 
   // ── Chart data ────────────────────────────────────────────────────────────
@@ -381,7 +386,8 @@ export default function FuelDelivery() {
     labels: a.monthly.map((m) => m.label),
     datasets: [
       { type: 'bar', label: 'Litres', data: a.monthly.map((m) => m.litres), backgroundColor: withAlpha(volColor, 0.75), borderRadius: 4, maxBarThickness: 26, yAxisID: 'y', order: 2 },
-      { type: 'line', label: `Price / L (${activeCurrency})`, data: a.monthly.map((m) => m.avgPrice), borderColor: priceColor, backgroundColor: priceColor, tension: 0.3, spanGaps: true, yAxisID: 'y1', pointRadius: 3, order: 1 },
+      // Price per litre is withheld when the set spans countries (no shared currency).
+      ...(money.mixedCurrency ? [] : [{ type: 'line', label: `Price / L (${activeCurrency})`, data: a.monthly.map((m) => m.avgPrice), borderColor: priceColor, backgroundColor: priceColor, tension: 0.3, spanGaps: true, yAxisID: 'y1', pointRadius: 3, order: 1 }]),
     ],
   }
   const trendOpts = {
@@ -412,48 +418,77 @@ export default function FuelDelivery() {
     },
   }
 
-  // ── Exports (respect current filters/sort) ──────────────────────────────────
-  const EXPORT_COLS = ['delivery_no', 'supplier', 'site', 'tank', 'litres', 'unit_price', 'total_cost', 'delivered_at', 'status']
-  const EXPORT_HEADERS = ['Delivery No', 'Supplier', 'Site', 'Tank', 'Litres', 'Unit Price', 'Total Cost', 'Delivered', 'Status']
-  const exportRows = filtered.map((r) => ({
-    delivery_no: r.delivery_no || '', supplier: r.supplier || '', site: r.site || '', tank: r.tank || '',
-    litres: r.litres ?? '', unit_price: r.unit_price ?? '', total_cost: r.total_cost ?? '',
-    delivered_at: r.delivered_at || '', status: STATUS_META[r.status]?.label || r.status || '',
-  }))
+  // ── Exports: the full register as filtered, never just the visible page ──
+  const exportRows = useMemo(() => deliveryExportRows(register), [register])
+  const scopeLabel = activeCountry && activeCountry !== 'All' ? activeCountry : 'All countries'
+  const doExcel = async () => {
+    setActionError('')
+    try {
+      await exportToExcel(exportRows, DELIVERY_EXPORT_COLUMNS.map((c) => c.key), DELIVERY_EXPORT_COLUMNS.map((c) => c.header), reportFileName('Fuel Deliveries', scopeLabel))
+    } catch (e) { setActionError(toUserMessage(e, 'Could not export. Try again.')) }
+  }
+  const doPdf = async () => {
+    setActionError('')
+    try {
+      await exportToPdf(exportRows, DELIVERY_EXPORT_COLUMNS, `Fuel Deliveries (${scopeLabel})`, reportFileName('Fuel Deliveries', scopeLabel), 'landscape')
+    } catch (e) { setActionError(toUserMessage(e, 'Could not export. Try again.')) }
+  }
 
   const openCreate = () => { setEditing(null); setModalOpen(true) }
-  const openEdit = (row) => { setEditing(row); setModalOpen(true) }
+  const openEdit = useCallback((row) => { setEditing(row); setModalOpen(true) }, [])
   const onSaved = () => { setModalOpen(false); setEditing(null); load() }
 
   const doDelete = async () => {
     if (!confirm) return
-    setDeleting(true)
+    setDeleting(true); setDeleteError('')
     try {
       await deleteDelivery(confirm.id)
       setConfirm(null)
       load()
     } catch (err) {
-      setError(toUserMessage(err, 'Could not delete the delivery.'))
+      setDeleteError(toUserMessage(err, 'Could not delete the delivery.'))
     } finally {
       setDeleting(false)
     }
   }
 
-  const setSort = (key) => {
-    if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
-    else { setSortKey(key); setSortDir('desc') }
-  }
-  const SortHead = ({ label, k, right }) => (
-    <th className={`px-4 py-3 font-semibold whitespace-nowrap ${right ? 'text-right' : ''}`}>
-      <button onClick={() => setSort(k)} className={`inline-flex items-center gap-1 hover:text-[var(--text-primary)] ${right ? 'flex-row-reverse' : ''}`}>
-        {label}
-        {sortKey === k && (sortDir === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
-      </button>
-    </th>
-  )
+  const columns = useMemo(() => [
+    { id: 'delivery_no', header: 'Delivery', accessorFn: (r) => blank(r.delivery_no), sortingFn: valueSort, sortUndefined: 'last', size: 130, cell: ({ getValue }) => <span className="font-mono text-xs text-[var(--text-primary)]">{getValue() || 'N/A'}</span> },
+    { id: 'supplier', header: 'Supplier', accessorFn: (r) => blank(r.supplier), sortingFn: valueSort, sortUndefined: 'last', size: 150, cell: ({ getValue }) => <span className="text-[var(--text-secondary)]">{getValue() || 'N/A'}</span> },
+    { id: 'site', header: 'Site / Tank', accessorFn: (r) => blank(r.site), sortingFn: valueSort, sortUndefined: 'last', size: 160, cell: ({ row }) => <span className="text-[var(--text-secondary)]">{row.original.site || 'N/A'}{row.original.tank ? ` | ${row.original.tank}` : ''}</span> },
+    { id: 'litres', header: 'Litres', accessorFn: (r) => r.litresValue ?? undefined, sortingFn: valueSort, sortUndefined: 'last', size: 110, meta: { align: 'right' }, cell: ({ getValue }) => <span className="tabular-nums text-[var(--text-secondary)]">{getValue() == null ? 'N/A' : `${fmtNum(getValue())} L`}</span> },
+    { id: 'unit_price', header: 'Unit price', accessorFn: (r) => r.unitValue ?? undefined, sortingFn: valueSort, sortUndefined: 'last', size: 110, meta: { align: 'right' }, cell: ({ getValue }) => <span className="tabular-nums text-[var(--text-secondary)]">{getValue() == null ? 'N/A' : `${activeCurrency} ${fmtNum(getValue())}`}</span> },
+    { id: 'total_cost', header: 'Total cost', accessorFn: (r) => r.costValue ?? undefined, sortingFn: valueSort, sortUndefined: 'last', size: 120, meta: { align: 'right' }, cell: ({ getValue }) => <span className="tabular-nums font-medium text-[var(--text-primary)]">{getValue() == null ? 'N/A' : formatCurrencyCompact(getValue(), activeCurrency)}</span> },
+    { id: 'delivered_at', header: 'Delivered', accessorFn: (r) => r.deliveredTime ?? undefined, sortingFn: valueSort, sortUndefined: 'last', size: 120, cell: ({ row }) => <span className="text-[var(--text-secondary)] whitespace-nowrap">{fmtDate(row.original.delivered_at)}</span> },
+    {
+      id: 'status', header: 'Status', accessorFn: (r) => STATUS_META[r.status]?.label || r.status || undefined, sortingFn: valueSort, sortUndefined: 'last', size: 120,
+      cell: ({ row }) => {
+        const st = STATUS_META[row.original.status]
+        if (!st) return <span className="text-[var(--text-muted)]">{row.original.status || 'N/A'}</span>
+        const StatusIcon = st.icon
+        return <span className={`badge text-[11px] px-2 py-0.5 rounded inline-flex items-center gap-1 ${st.cls}`}><StatusIcon size={11} aria-hidden="true" /> {st.label}</span>
+      },
+    },
+    {
+      id: 'flag', header: 'Flag', accessorFn: (r) => (r.anomaly ? ANOMALY_LABELS[r.anomaly] : undefined), sortingFn: valueSort, sortUndefined: 'last', size: 130,
+      cell: ({ row }) => {
+        const m = row.original.anomaly ? ANOMALY_META[row.original.anomaly] : null
+        return m ? <span className={`badge text-[10px] px-2 py-0.5 rounded border ${m.cls}`}>{m.label}</span> : <span className="text-[var(--text-muted)]">None</span>
+      },
+    },
+    {
+      id: 'actions', header: '', enableSorting: false, size: 100, meta: { export: false },
+      cell: ({ row }) => (
+        <div className="flex items-center gap-1 justify-end">
+          <button type="button" onClick={() => openEdit(row.original)} className={ICON_BTN} aria-label={`Edit delivery ${row.original.delivery_no || ''}`.trim()}><Pencil size={14} /></button>
+          <button type="button" onClick={() => { setDeleteError(''); setConfirm(row.original) }} className={`${ICON_BTN} hover:text-red-500`} aria-label={`Delete delivery ${row.original.delivery_no || ''}`.trim()}><Trash2 size={14} /></button>
+        </div>
+      ),
+    },
+  ], [activeCurrency, openEdit])
 
-  const clearFilters = () => { setStatusFilter('all'); setSiteFilter(''); setSupplierFilter(''); setFrom(''); setTo(''); setSearch('') }
-  const hasFilters = statusFilter !== 'all' || siteFilter || supplierFilter || from || to || search
+  const clearFilters = () => { setStatusFilter('all'); setSiteFilter(''); setSupplierFilter(''); setFrom(''); setTo(''); setSearch(''); setFlaggedOnly(false) }
+  const hasFilters = statusFilter !== 'all' || siteFilter || supplierFilter || from || to || search || flaggedOnly
 
   return (
     <div className="space-y-6">
@@ -465,27 +500,25 @@ export default function FuelDelivery() {
         refreshing={refreshing}
         updatedAt={updatedAt}
         actions={
-          <div className="flex items-center gap-2">
-            <button onClick={async () => { try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'fuel_deliveries') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }}
-              className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
-              <FileSpreadsheet size={14} /> Excel
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={doExcel} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] sm:min-h-0" disabled={!register.length}>
+              <FileSpreadsheet size={14} aria-hidden="true" /> Excel
             </button>
-            <button onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Fuel Deliveries', 'fuel_deliveries', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }}
-              className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
-              <FileText size={14} /> PDF
+            <button type="button" onClick={doPdf} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] sm:min-h-0" disabled={!register.length}>
+              <FileText size={14} aria-hidden="true" /> PDF
             </button>
-            <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5" disabled={missing}>
-              <Plus size={14} /> Log delivery
+            <button type="button" onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px] sm:min-h-0" disabled={missing}>
+              <Plus size={14} aria-hidden="true" /> Log delivery
             </button>
           </div>
         }
       />
 
       {missing && (
-        <div className="card border border-amber-800/50 flex items-start gap-3">
-          <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
+        <div className="card border border-amber-500/40 flex items-start gap-3" role="status">
+          <AlertTriangle size={18} className="text-amber-500 mt-0.5 shrink-0" aria-hidden="true" />
           <div>
-            <p className="text-amber-300 font-medium">Fuel deliveries aren't enabled on this database yet.</p>
+            <p className="text-[var(--text-primary)] font-medium">Fuel deliveries are not enabled on this database yet.</p>
             <p className="text-[var(--text-muted)] text-sm mt-1">
               Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V148_FUEL_DELIVERIES.sql</span>, then reload.
             </p>
@@ -494,35 +527,49 @@ export default function FuelDelivery() {
       )}
 
       {error && !missing && (
-        <div className="card border border-red-800/50 flex items-start gap-3">
-          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
-          <div className="flex-1">
-            <p className="text-red-300 font-medium">Couldn't load fuel deliveries.</p>
+        <div className="card border border-red-500/40 flex flex-wrap items-start gap-3" role="alert">
+          <AlertTriangle size={18} className="text-red-500 mt-0.5 shrink-0" aria-hidden="true" />
+          <div className="flex-1 min-w-0">
+            <p className="text-[var(--text-primary)] font-medium">Could not load fuel deliveries.</p>
             <p className="text-[var(--text-muted)] text-sm mt-1">{error}</p>
           </div>
-          <button onClick={load} className="btn-secondary text-sm inline-flex items-center gap-1.5">
-            <RefreshCw size={14} /> Retry
+          <button type="button" onClick={load} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] sm:min-h-0">
+            <RefreshCw size={14} aria-hidden="true" /> Retry
           </button>
         </div>
       )}
 
+      {actionError && (
+        <div className="card border border-red-500/40 flex items-start gap-3" role="alert">
+          <AlertTriangle size={18} className="text-red-500 mt-0.5 shrink-0" aria-hidden="true" />
+          <p className="text-sm text-[var(--text-secondary)] flex-1">{actionError}</p>
+          <button type="button" onClick={() => setActionError('')} className={ICON_BTN} aria-label="Dismiss message"><X size={14} /></button>
+        </div>
+      )}
+
       {/* KPI tiles */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {kpis.map((k) => <Kpi key={k.label} {...k} />)}
-      </div>
+      <section aria-label="Fuel delivery figures">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {kpis.map((k) => <Kpi key={k.label} {...k} sub={rows === null ? null : k.sub} />)}
+        </div>
+        <p className="text-[11px] text-[var(--text-muted)] mt-2">
+          Figures and charts follow the filters below ({filtered.length} of {(rows || []).length} deliveries). Cancelled deliveries are excluded from litres and spend.
+          {rows && rows.length >= LIST_CAP ? ` Only the newest ${LIST_CAP} deliveries are loaded, so older ones are not counted.` : ''}
+        </p>
+      </section>
 
       {/* Charts */}
       {!missing && (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
           <div className="xl:col-span-2">
-            <ChartCard title="Monthly volume and price per litre (last 12 months)" icon={Activity} empty={loading || !hasMonthly}>
+            <ChartCard title={money.mixedCurrency ? 'Monthly volume (last 12 months)' : 'Monthly volume and price per litre (last 12 months)'} icon={Activity} loading={loading} empty={!hasMonthly} summary={`${a.totalLitres.toLocaleString()} litres delivered across the last 12 months`}>
               <Bar data={trendData} options={trendOpts} />
             </ChartCard>
           </div>
-          <ChartCard title="Volume by site" icon={Building2} empty={loading || !a.bySite.length}>
+          <ChartCard title="Volume by site" icon={Building2} loading={loading} empty={!a.bySite.length} summary={a.topSite ? `Largest site by volume: ${a.topSite.key}` : undefined}>
             <Bar data={siteData} options={hBarOpts} />
           </ChartCard>
-          <ChartCard title="Spend by supplier" icon={Truck} empty={loading || !a.bySupplier.length}>
+          <ChartCard title="Spend by supplier" icon={Truck} loading={loading} empty={money.mixedCurrency || !a.bySupplier.length} emptyText={money.mixedCurrency ? 'Deliveries span several countries with different currencies. Pick one country to compare supplier spend.' : undefined} summary={a.topSupplier ? `Largest supplier: ${a.topSupplier.key}` : undefined}>
             <Bar data={supplierData} options={hBarOpts} />
           </ChartCard>
         </div>
@@ -530,13 +577,16 @@ export default function FuelDelivery() {
 
       {/* Anomalies */}
       {!missing && !loading && a.anomalies.length > 0 && (
-        <div className="card border border-amber-800/40">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2 mb-3">
-            <ShieldAlert size={15} className="text-amber-400" /> Price & data-quality flags
-            <span className="text-xs text-[var(--text-muted)] font-normal">({a.anomalies.length})</span>
-          </h3>
+        <div className="card border border-amber-500/40">
+          <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
+            <h2 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
+              <ShieldAlert size={15} className="text-amber-500" aria-hidden="true" /> Price and data-quality flags
+              <span className="text-xs text-[var(--text-muted)] font-normal">({a.anomalies.length})</span>
+            </h2>
+            <button type="button" onClick={() => setFlaggedOnly(true)} className="btn-secondary text-xs min-h-[44px] sm:min-h-0">Show flagged in the register</button>
+          </div>
           <div className="space-y-2 max-h-64 overflow-y-auto">
-            {a.anomalies.slice(0, 40).map((an, i) => {
+            {topAnomalies.map((an, i) => {
               const meta = ANOMALY_META[an.type] || { label: an.type, cls: 'text-[var(--text-muted)] bg-[var(--input-bg)] border-[var(--input-border)]' }
               return (
                 <div key={an.id || i} className="flex items-start gap-3 text-sm">
@@ -560,93 +610,50 @@ export default function FuelDelivery() {
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[200px]">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-            <input className="input pl-9 w-full" placeholder="Search delivery no, supplier, site, tank, notes..." value={search} onChange={(e) => setSearch(e.target.value)} />
+            <label htmlFor="fd-search" className="sr-only">Search deliveries</label>
+            <input id="fd-search" className="input pl-9 w-full" placeholder="Search delivery no, supplier, site, tank, notes..." value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-          <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
+          <select className="input w-full sm:w-auto" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
             <option value="all">All statuses</option>
             {DELIVERY_STATUSES.map((s) => <option key={s} value={s}>{STATUS_META[s]?.label || s}</option>)}
           </select>
-          <select className="input" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} aria-label="Site">
+          <select className="input w-full sm:w-auto" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} aria-label="Site">
             <option value="">All sites</option>
             {siteOptions.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
-          <select className="input" value={supplierFilter} onChange={(e) => setSupplierFilter(e.target.value)} aria-label="Supplier">
+          <select className="input w-full sm:w-auto" value={supplierFilter} onChange={(e) => setSupplierFilter(e.target.value)} aria-label="Supplier">
             <option value="">All suppliers</option>
             {supplierOptions.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <label className="text-xs text-[var(--text-muted)]">From</label>
-          <input type="date" className="input" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="From date" />
-          <label className="text-xs text-[var(--text-muted)]">To</label>
-          <input type="date" className="input" value={to} onChange={(e) => setTo(e.target.value)} aria-label="To date" />
-          {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
-          <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {(rows || []).length}</span>
+          <label htmlFor="fd-from" className="text-xs text-[var(--text-muted)]">From</label>
+          <input id="fd-from" type="date" className="input" value={from} onChange={(e) => setFrom(e.target.value)} />
+          <label htmlFor="fd-to" className="text-xs text-[var(--text-muted)]">To</label>
+          <input id="fd-to" type="date" className="input" value={to} onChange={(e) => setTo(e.target.value)} />
+          <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] min-h-[44px] cursor-pointer">
+            <input type="checkbox" className="h-4 w-4" checked={flaggedOnly} onChange={(e) => setFlaggedOnly(e.target.checked)} />
+            Flagged only
+          </label>
+          {hasFilters && <button type="button" onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] sm:min-h-0"><X size={14} aria-hidden="true" /> Clear</button>}
+          <span className="text-xs text-[var(--text-muted)] ml-auto" aria-live="polite">{register.length} of {(rows || []).length}</span>
         </div>
       </div>
 
-      {/* Table */}
-      <div className="card overflow-hidden !p-0">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                <th className="px-4 py-3 font-semibold whitespace-nowrap">Delivery</th>
-                <SortHead label="Supplier" k="supplier" />
-                <SortHead label="Site / Tank" k="site" />
-                <SortHead label="Litres" k="litres" right />
-                <SortHead label="Unit price" k="unit_price" right />
-                <SortHead label="Total cost" k="total_cost" right />
-                <SortHead label="Delivered" k="delivered_at" />
-                <th className="px-4 py-3 font-semibold whitespace-nowrap">Status</th>
-                <th className="px-4 py-3 font-semibold whitespace-nowrap"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                [0, 1, 2, 3, 4].map((i) => <tr key={i} className="border-b border-[var(--input-border)]/50"><td colSpan={9} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>)
-              ) : filtered.length === 0 ? (
-                <tr><td colSpan={9} className="px-4 py-12 text-center text-[var(--text-muted)]">
-                  <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {(rows || []).length === 0 ? 'No fuel deliveries logged yet. Use "Log delivery" to add the first.' : 'No deliveries match these filters.'}
-                </td></tr>
-              ) : (
-                pager.pageRows.map((r) => {
-                  const st = STATUS_META[r.status] || STATUS_META.delivered
-                  const StatusIcon = st.icon
-                  return (
-                    <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{r.delivery_no || 'N/A'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.supplier || 'N/A'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.site || 'N/A'}{r.tank ? ` | ${r.tank}` : ''}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] text-right">{r.litres == null ? 'N/A' : `${fmtNum(r.litres)} L`}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] text-right">{r.unit_price == null ? 'N/A' : `${activeCurrency} ${fmtNum(r.unit_price)}`}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-primary)] font-medium text-right">{r.total_cost == null ? 'N/A' : formatCurrencyCompact(r.total_cost, activeCurrency)}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtDate(r.delivered_at)}</td>
-                      <td className="px-4 py-2.5">
-                        <span className={`badge text-[11px] px-2 py-0.5 rounded inline-flex items-center gap-1 ${st.cls}`}>
-                          <StatusIcon size={11} /> {st.label}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-center gap-1 justify-end">
-                          <button onClick={() => openEdit(r)} className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg)]" aria-label="Edit">
-                            <Pencil size={14} />
-                          </button>
-                          <button onClick={() => setConfirm(r)} className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-red-400 hover:bg-[var(--input-bg)]" aria-label="Delete">
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-        <TablePagination {...pager} />
-      </div>
+      <EnterpriseTable
+        columns={columns}
+        data={register}
+        getRowId={(r) => String(r.id)}
+        loading={loading}
+        error={failedEmpty ? error : null}
+        onRetry={load}
+        enableGlobalFilter={false}
+        enableColumnFilters={false}
+        enableExport={false}
+        viewKey="fuel-delivery"
+        initialPageSize={25}
+        emptyMessage={missing ? 'Fuel deliveries are not enabled yet.' : (rows || []).length === 0 ? 'No fuel deliveries logged yet. Use "Log delivery" to add the first.' : 'No deliveries match these filters.'}
+      />
 
       <DeliveryModal
         open={modalOpen}
@@ -655,7 +662,7 @@ export default function FuelDelivery() {
         onClose={() => { setModalOpen(false); setEditing(null) }}
         onSaved={onSaved}
       />
-      <ConfirmDelete row={confirm} busy={deleting} onCancel={() => setConfirm(null)} onConfirm={doDelete} />
+      <ConfirmDelete row={confirm} busy={deleting} error={deleteError} onCancel={() => { setConfirm(null); setDeleteError('') }} onConfirm={doDelete} />
     </div>
   )
 }

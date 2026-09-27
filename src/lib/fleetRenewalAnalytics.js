@@ -352,3 +352,82 @@ export function buildRenewalInsights(rows, now = new Date()) {
   }
   return out
 }
+
+// -- Register (filter + enrichment + export) ----------------------------------
+
+/**
+ * Filter the register. Every criterion is optional; 'all' / '' mean no filter.
+ * `from` / `to` bound the target_replace_date (YYYY-MM-DD, inclusive). A plan
+ * with no target date is excluded once either bound is set: it cannot be
+ * shown to fall inside a window nobody dated.
+ */
+export function filterRenewalPlans(rows, { status = 'all', priority = 'all', site = 'all', from = '', to = '', search = '', overdueOnly = false } = {}, now = new Date()) {
+  const q = String(search || '').trim().toLowerCase()
+  const lo = from ? String(from).slice(0, 10) : null
+  const hi = to ? String(to).slice(0, 10) : null
+  return asArray(rows).filter((r) => {
+    if (status !== 'all' && r?.status !== status) return false
+    if (priority !== 'all' && r?.priority !== priority) return false
+    if (site !== 'all' && (r?.site || '') !== site) return false
+    const d = r?.target_replace_date ? String(r.target_replace_date).slice(0, 10) : null
+    if (lo && (!d || d < lo)) return false
+    if (hi && (!d || d > hi)) return false
+    if (overdueOnly) {
+      const dd = daysUntil(r?.target_replace_date, now)
+      if (!(isOpen(r) && dd != null && dd <= 0)) return false
+    }
+    if (q) {
+      const hay = [r?.asset_no, r?.recommendation, r?.site, r?.vehicle_type, r?.notes]
+        .map((v) => (v == null ? '' : String(v))).join(' ').toLowerCase()
+      if (!hay.includes(q)) return false
+    }
+    return true
+  })
+}
+
+/** Rows ready for the register: parsed numbers, days to target, overdue flag. */
+export function renewalRegisterRows(rows, now = new Date()) {
+  return sortBySoonest(rows, now).map((r) => {
+    const days = daysUntil(r?.target_replace_date, now)
+    return {
+      ...r,
+      ageValue: numOrNull(r?.age_years),
+      kmValue: numOrNull(r?.current_km),
+      costValue: numOrNull(r?.est_cost),
+      daysToTarget: days,
+      priorityRank: PRIORITY_RANK[r?.priority] || 0,
+      isOverdue: isOpen(r) && days != null && days <= 0,
+    }
+  })
+}
+
+export const RENEWAL_EXPORT_COLUMNS = [
+  { key: 'asset_no', header: 'Asset' },
+  { key: 'vehicle_type', header: 'Vehicle type' },
+  { key: 'site', header: 'Site' },
+  { key: 'age_years', header: 'Age (yrs)' },
+  { key: 'current_km', header: 'Current km' },
+  { key: 'recommendation', header: 'Recommendation' },
+  { key: 'priority', header: 'Priority' },
+  { key: 'target_replace_date', header: 'Target date' },
+  { key: 'days_to_target', header: 'Days to target' },
+  { key: 'est_cost', header: 'Est. cost' },
+  { key: 'status', header: 'Status' },
+]
+
+/** Export shape; unknown values stay blank, never 0. */
+export function renewalExportRows(rows, now = new Date()) {
+  return renewalRegisterRows(rows, now).map((r) => ({
+    asset_no: r.asset_no || '',
+    vehicle_type: r.vehicle_type || '',
+    site: r.site || '',
+    age_years: r.ageValue ?? '',
+    current_km: r.kmValue ?? '',
+    recommendation: r.recommendation || '',
+    priority: RENEWAL_PRIORITY_LABEL[r.priority] || r.priority || '',
+    target_replace_date: r.target_replace_date ? String(r.target_replace_date).slice(0, 10) : '',
+    days_to_target: r.daysToTarget ?? '',
+    est_cost: r.costValue ?? '',
+    status: RENEWAL_STATUS_LABEL[r.status] || r.status || '',
+  }))
+}

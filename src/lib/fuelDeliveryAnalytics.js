@@ -326,3 +326,107 @@ export function analyzeDeliveries(rows = [], { months = 12, now = new Date(), to
     _internal: { costedLitres: round(costedLitres) },
   }
 }
+
+// ─── Register / honesty helpers for the page ──────────────────────────────────
+
+export const ANOMALY_LABELS = {
+  price_outlier: 'Price outlier',
+  cost_mismatch: 'Cost mismatch',
+  missing_cost: 'Missing cost',
+  missing_litres: 'Missing litres',
+}
+
+/** Distinct countries present on the rows (fuel_deliveries has no currency column). */
+export function countriesIn(rows = []) {
+  return [...new Set((Array.isArray(rows) ? rows : []).map((r) => str(r?.country)).filter(Boolean))].sort()
+}
+
+/**
+ * Money figures that never pretend. `analyzeDeliveries().totalCost` adds 0 for
+ * an uncosted delivery and divides by EVERY litre, so a half-costed log reads
+ * as cheap fuel. This returns:
+ *   - totalCost: sum over deliveries that carry a cost, or null when none do
+ *   - blendedPrice: cost / litres over deliveries carrying BOTH (null otherwise)
+ *   - costedCount / uncostedCount over counted (non-cancelled) deliveries
+ *   - mixedCurrency: rows span >1 country, so money must not be totalled
+ */
+export function costBasis(rows = []) {
+  const counted = (Array.isArray(rows) ? rows : []).filter(isCounted)
+  let cost = 0
+  let costed = 0
+  let pairCost = 0
+  let pairLitres = 0
+  for (const r of counted) {
+    const c = numOrNull(r?.total_cost)
+    const l = numOrNull(r?.litres)
+    if (c != null) { cost += c; costed += 1 }
+    if (c != null && l != null && l > 0) { pairCost += c; pairLitres += l }
+  }
+  const mixedCurrency = countriesIn(counted).length > 1
+  return {
+    totalCost: costed && !mixedCurrency ? round(cost) : null,
+    blendedPrice: pairLitres > 0 && !mixedCurrency ? round(pairCost / pairLitres, 3) : null,
+    costedCount: costed,
+    uncostedCount: counted.length - costed,
+    mixedCurrency,
+  }
+}
+
+/** Status tally over every row, in lifecycle order. */
+export function statusBreakdown(rows = []) {
+  const list = Array.isArray(rows) ? rows : []
+  return STATUSES.map((s) => ({ key: s, count: list.filter((r) => str(r?.status).toLowerCase() === s).length }))
+}
+
+/** Rows ready for the register: parsed numbers, price per litre, anomaly type. */
+export function deliveryRegisterRows(rows = []) {
+  const list = Array.isArray(rows) ? rows : []
+  const flags = new Map(detectAnomalies(list).map((a) => [a.id, a.type]))
+  return list.map((r) => {
+    const t = deliveryTime(r)
+    const ppl = pricePerLitre(r)
+    return {
+      ...r,
+      litresValue: numOrNull(r?.litres),
+      unitValue: numOrNull(r?.unit_price),
+      costValue: numOrNull(r?.total_cost),
+      pplValue: ppl == null ? null : round(ppl, 3),
+      deliveredTime: t,
+      anomaly: flags.get(r?.id) || null,
+    }
+  })
+}
+
+export const DELIVERY_EXPORT_COLUMNS = [
+  { key: 'delivery_no', header: 'Delivery No' },
+  { key: 'supplier', header: 'Supplier' },
+  { key: 'site', header: 'Site' },
+  { key: 'tank', header: 'Tank' },
+  { key: 'litres', header: 'Litres' },
+  { key: 'unit_price', header: 'Unit Price' },
+  { key: 'total_cost', header: 'Total Cost' },
+  { key: 'price_per_litre', header: 'Price per litre' },
+  { key: 'delivered_at', header: 'Delivered' },
+  { key: 'status', header: 'Status' },
+  { key: 'flag', header: 'Flag' },
+  { key: 'country', header: 'Country' },
+]
+
+const STATUS_LABELS = { ordered: 'Ordered', delivered: 'Delivered', cancelled: 'Cancelled' }
+
+export function deliveryExportRows(rows = []) {
+  return deliveryRegisterRows(rows).map((r) => ({
+    delivery_no: r.delivery_no || '',
+    supplier: r.supplier || '',
+    site: r.site || '',
+    tank: r.tank || '',
+    litres: r.litresValue ?? '',
+    unit_price: r.unitValue ?? '',
+    total_cost: r.costValue ?? '',
+    price_per_litre: r.pplValue ?? '',
+    delivered_at: r.delivered_at ? String(r.delivered_at).slice(0, 10) : '',
+    status: STATUS_LABELS[str(r.status).toLowerCase()] || r.status || '',
+    flag: r.anomaly ? ANOMALY_LABELS[r.anomaly] || r.anomaly : '',
+    country: r.country || '',
+  }))
+}

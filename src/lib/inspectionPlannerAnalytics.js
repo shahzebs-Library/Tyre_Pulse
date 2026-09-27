@@ -15,6 +15,8 @@
  *  - A group with no assets has a null rate, never 0% or 100%.
  */
 
+import { monthBounds } from './inspectionPlanner'
+
 const DAY_MS = 86400000
 export const COVERAGE_STATES = Object.freeze(['covered', 'overdue', 'never'])
 export const COVERAGE_LABEL = Object.freeze({ covered: 'Covered', overdue: 'Overdue', never: 'Never inspected' })
@@ -152,4 +154,36 @@ export function inspectorWorkload(inspections = [], schedule = [], { today, days
   return [...map.values()]
     .map((e) => ({ name: e.name, readings: e.readings, assets: e.assets.size, upcoming: e.upcoming, missed: e.missed }))
     .sort((a, b) => b.readings - a.readings || b.upcoming - a.upcoming || a.name.localeCompare(b.name))
+}
+
+/**
+ * Inspection READINGS per site per calendar month for the `months` months
+ * ending at `today`'s month. Readings dated after `today` are ignored (a
+ * future-dated reading is a data error, not work done). Sites are keyed by
+ * country + site so the same site name in two countries stays separate.
+ * Each site carries its row total; `monthTotals` sums every site per month.
+ */
+export function siteReadingFrequency(inspections = [], today, months = 6) {
+  if (!today) return { months: [], sites: [], monthTotals: [] }
+  const bounds = Array.from({ length: months }, (_, index) => monthBounds(today, index - (months - 1)))
+  const first = bounds[0].start
+  const sites = new Map()
+  for (const row of Array.isArray(inspections) ? inspections : []) {
+    const d = day(row?.inspection_date)
+    if (!row?.site || !d || d < first || d > today) continue
+    const k = JSON.stringify([row.country || '', row.site])
+    if (!sites.has(k)) sites.set(k, { key: k, site: [row.site, row.country].filter(Boolean).join(' · '), counts: bounds.map(() => 0), total: 0 })
+    const index = bounds.findIndex((m) => d >= m.start && d <= m.end)
+    if (index >= 0) { sites.get(k).counts[index]++; sites.get(k).total++ }
+  }
+  const list = [...sites.values()].sort((a, b) => a.site.localeCompare(b.site))
+  const monthTotals = bounds.map((_, i) => list.reduce((sum, s) => sum + s.counts[i], 0))
+  return { months: bounds, sites: list, monthTotals }
+}
+
+/** The `n` busiest sites by total readings (ties by name), for the chart. */
+export function busiestSites(sites = [], n = 6) {
+  return [...(Array.isArray(sites) ? sites : [])]
+    .sort((a, b) => b.total - a.total || a.site.localeCompare(b.site))
+    .slice(0, Math.max(0, n))
 }

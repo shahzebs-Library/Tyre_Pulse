@@ -66,3 +66,26 @@ describe('inspectionPlannerAnalytics', () => {
     expect(w.find((x) => x.name === 'Future')).toBeUndefined()
   })
 })
+
+describe('siteReadingFrequency', () => {
+  it('counts readings per site per month, ignores future and out-of-window rows', async () => {
+    const { siteReadingFrequency, busiestSites } = await import('../lib/inspectionPlannerAnalytics')
+    const rows = [
+      { site: 'North', country: 'KSA', inspection_date: '2026-09-02' },
+      { site: 'North', country: 'KSA', inspection_date: '2026-08-15' },
+      { site: 'North', country: 'UAE', inspection_date: '2026-09-03' },
+      { site: 'South', country: 'KSA', inspection_date: '2026-09-30' }, // after today
+      { site: 'South', country: 'KSA', inspection_date: '2026-01-01' }, // before window
+      { site: '', country: 'KSA', inspection_date: '2026-09-01' },
+    ]
+    const f = siteReadingFrequency(rows, '2026-09-27', 6)
+    expect(f.months).toHaveLength(6)
+    expect(f.months[5].start).toBe('2026-09-01')
+    expect(f.sites.map((s) => s.site)).toEqual(['North · KSA', 'North · UAE'])
+    expect(f.sites[0].counts.slice(4)).toEqual([1, 1])
+    expect(f.sites[0].total).toBe(2)
+    expect(f.monthTotals[5]).toBe(2)
+    expect(busiestSites(f.sites, 1).map((s) => s.site)).toEqual(['North · KSA'])
+    expect(siteReadingFrequency(rows, '', 6)).toEqual({ months: [], sites: [], monthTotals: [] })
+  })
+})

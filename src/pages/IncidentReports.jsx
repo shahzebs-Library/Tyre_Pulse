@@ -1,59 +1,72 @@
 /**
- * IncidentReports (route /incidents) — logs operational incidents (near-miss,
- * damage, breakdown, safety, theft…) raised against an asset/site. Distinct from
- * the formal Accidents module: this is the lightweight operational log with a
- * status lifecycle, severity grading, root-cause / action tracking and export.
+ * IncidentReports (route /incidents) - the SAFETY operational incident log
+ * (near-miss, damage, breakdown, safety, theft) raised against an asset/site.
+ * Runs on the `incident_reports` table via `src/lib/api/incidents.js`
+ * (apply MIGRATIONS_V138_INCIDENT_REPORTS.sql). Distinct from the formal
+ * Accidents module AND from the console platform-incident workflow.
  *
- * Real data, KPI tiles, a severity/type chart, search + status/severity/type
- * filters, create/edit modal, delete confirmation, Excel/PDF export, and
- * loading / empty / error states throughout. Runs on the `incident_reports`
- * table (apply MIGRATIONS_V138_INCIDENT_REPORTS.sql).
+ * KPI strip, 12-month trend, type and site breakdowns, search + status /
+ * severity / type / site / date filters, a sortable EnterpriseTable register,
+ * create/edit, delete confirmation, Excel/PDF export, and loading / empty /
+ * error states throughout. Derived figures live in the pure
+ * `src/lib/incidentReportsAnalytics.js` engine.
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import {
   AlertOctagon, Plus, Trash2, Pencil, X, Search, Filter, ShieldAlert,
   CheckCircle2, Inbox, FileSpreadsheet, FileText, AlertTriangle, Loader2,
+  RefreshCw, Timer, Percent, BarChart3, Building2,
 } from 'lucide-react'
+import { Chart as ChartJS, BarElement, CategoryScale, LinearScale, Tooltip, Legend } from 'chart.js'
+import { Bar } from 'react-chartjs-2'
 import PageHeader from '../components/ui/PageHeader'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import Modal from '../components/ui/Modal'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   listIncidents, createIncident, updateIncident, deleteIncident,
   INCIDENT_TYPES, INCIDENT_SEVERITIES, INCIDENT_STATUSES,
 } from '../lib/api/incidents'
-import { summarizeIncidents, incidentAgeDays } from '../lib/incidents'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import {
+  incidentTableRows, filterIncidents, hasIncidentFilters, incidentKpis, incidentMonthlyTrend,
+  incidentsBySite, incidentsByType, incidentExportRows, incidentSiteOptions, incidentTypeLabel,
+  INCIDENT_SEVERITY_LABEL, INCIDENT_STATUS_LABEL, INCIDENT_EXPORT_COLS, INCIDENT_EXPORT_HEADERS,
+} from '../lib/incidentReportsAnalytics'
+import { colorAt, withAlpha } from '../lib/reportColors'
+import { compareValues } from '../lib/consoleTable'
+import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { isMissingRelation } from '../lib/api/_client'
 
-const TYPE_META = {
-  near_miss: { label: 'Near miss' },
-  damage: { label: 'Damage' },
-  breakdown: { label: 'Breakdown' },
-  safety: { label: 'Safety' },
-  theft: { label: 'Theft' },
-  other: { label: 'Other' },
-}
-const typeLabel = (t) => TYPE_META[t]?.label || (t ? t.replace(/_/g, ' ') : 'N/A')
+ChartJS.register(BarElement, CategoryScale, LinearScale, Tooltip, Legend)
 
-const SEVERITY_META = {
-  low: { label: 'Low', cls: 'bg-slate-700/40 text-slate-300 border border-slate-600/50', color: '#64748b' },
-  medium: { label: 'Medium', cls: 'bg-sky-900/40 text-sky-300 border border-sky-700/50', color: '#0ea5e9' },
-  high: { label: 'High', cls: 'bg-amber-900/40 text-amber-300 border border-amber-700/50', color: '#f59e0b' },
-  critical: { label: 'Critical', cls: 'bg-red-900/40 text-red-300 border border-red-700/50', color: '#ef4444' },
+// Semantic severity / status styling: every badge carries its text label too,
+// so colour is never the only signal.
+const SEVERITY_CLS = {
+  low: 'bg-slate-700/40 text-slate-300 border border-slate-600/50',
+  medium: 'bg-sky-900/40 text-sky-300 border border-sky-700/50',
+  high: 'bg-amber-900/40 text-amber-300 border border-amber-700/50',
+  critical: 'bg-red-900/40 text-red-300 border border-red-700/50',
 }
-const STATUS_META = {
-  open: { label: 'Open', cls: 'bg-sky-900/40 text-sky-300 border border-sky-700/50' },
-  investigating: { label: 'Investigating', cls: 'bg-amber-900/40 text-amber-300 border border-amber-700/50' },
-  resolved: { label: 'Resolved', cls: 'bg-green-900/40 text-green-300 border border-green-700/50' },
-  closed: { label: 'Closed', cls: 'bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]' },
+const STATUS_CLS = {
+  open: 'bg-sky-900/40 text-sky-300 border border-sky-700/50',
+  investigating: 'bg-amber-900/40 text-amber-300 border border-amber-700/50',
+  resolved: 'bg-green-900/40 text-green-300 border border-green-700/50',
+  closed: 'bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]',
 }
+const STATUS_TONE = { open: 'text-sky-400', investigating: 'text-amber-400', resolved: 'text-green-400', closed: 'text-[var(--text-muted)]' }
 
-function fmtDate(v) {
-  if (!v) return 'N/A'
-  const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString()
+const BAR_OPTS = {
+  responsive: true, maintainAspectRatio: false,
+  plugins: { legend: { position: 'bottom', labels: { color: 'var(--text-muted)', boxWidth: 10 } } },
+  scales: {
+    x: { ticks: { color: 'var(--text-muted)', font: { size: 10 } }, grid: { display: false } },
+    y: { beginAtZero: true, ticks: { color: 'var(--text-muted)', precision: 0 }, grid: { color: 'var(--panel-2)' } },
+  },
 }
+const HBAR_OPTS = { ...BAR_OPTS, indexAxis: 'y', plugins: { legend: { display: false } } }
+
+const sortBy = (a, b, id) => compareValues(a.getValue(id), b.getValue(id))
 
 const emptyForm = (country) => ({
   incident_no: '',
@@ -73,13 +86,18 @@ export default function IncidentReports() {
   const { activeCountry } = useSettings() || {}
   const [rows, setRows] = useState(null)
   const [error, setError] = useState('')
+  const [actionError, setActionError] = useState('')
   const [missing, setMissing] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [updatedAt, setUpdatedAt] = useState(null)
+  const [now, setNow] = useState(() => Date.now())
 
   const [statusFilter, setStatusFilter] = useState('all')
   const [severityFilter, setSeverityFilter] = useState('all')
   const [typeFilter, setTypeFilter] = useState('all')
+  const [siteFilter, setSiteFilter] = useState('')
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
   const [search, setSearch] = useState('')
 
   const [modalOpen, setModalOpen] = useState(false)
@@ -95,6 +113,7 @@ export default function IncidentReports() {
     try {
       const data = await listIncidents({ country: activeCountry })
       setRows(Array.isArray(data) ? data : [])
+      setNow(Date.now())
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) setMissing(true)
@@ -107,47 +126,54 @@ export default function IncidentReports() {
 
   useEffect(() => { load() }, [load])
 
-  const summary = useMemo(() => summarizeIncidents(rows || []), [rows])
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return (rows || []).filter((r) => {
-      if (statusFilter !== 'all' && r.status !== statusFilter) return false
-      if (severityFilter !== 'all' && r.severity !== severityFilter) return false
-      if (typeFilter !== 'all' && r.incident_type !== typeFilter) return false
-      if (q) {
-        const hay = `${r.incident_no || ''} ${r.asset_no || ''} ${r.site || ''} ${r.reported_by || ''} ${r.description || ''}`.toLowerCase()
-        if (!hay.includes(q)) return false
-      }
-      return true
-    })
-  }, [rows, statusFilter, severityFilter, typeFilter, search])
+  // A failed read is not an empty log: figures read N/A, never zero.
+  const known = rows !== null && !error
+  const filters = { status: statusFilter, severity: severityFilter, type: typeFilter, site: siteFilter, from: fromDate, to: toDate, search }
+  const hasFilters = hasIncidentFilters(filters)
+  const siteOptions = useMemo(() => incidentSiteOptions(rows || []), [rows])
+  const filtered = useMemo(
+    () => filterIncidents(rows || [], { status: statusFilter, severity: severityFilter, type: typeFilter, site: siteFilter, from: fromDate, to: toDate, search }),
+    [rows, statusFilter, severityFilter, typeFilter, siteFilter, fromDate, toDate, search],
+  )
+  const tableRows = useMemo(() => incidentTableRows(filtered, now), [filtered, now])
+  const kpi = useMemo(() => incidentKpis(filtered, now), [filtered, now])
+  const trend = useMemo(() => incidentMonthlyTrend(filtered, now, 12), [filtered, now])
+  const byType = useMemo(() => incidentsByType(filtered), [filtered])
+  const bySite = useMemo(() => incidentsBySite(filtered), [filtered])
 
   const kpis = [
-    { label: 'Total incidents', value: summary.total, icon: AlertOctagon, tone: 'text-[var(--text-primary)]' },
-    { label: 'Open / investigating', value: summary.open, icon: Inbox, tone: 'text-sky-400' },
-    { label: 'High / critical', value: summary.bySeverity.high + summary.bySeverity.critical, icon: ShieldAlert, tone: 'text-red-400' },
-    { label: 'Resolved', value: summary.byStatus.resolved + summary.byStatus.closed, icon: CheckCircle2, tone: 'text-green-400' },
+    { label: 'Total incidents', value: kpi.total, icon: AlertOctagon, tone: 'text-[var(--text-primary)]' },
+    { label: 'Open / investigating', value: kpi.open, icon: Inbox, tone: 'text-sky-400' },
+    { label: 'High / critical', value: kpi.highCritical, icon: ShieldAlert, tone: kpi.highCritical > 0 ? 'text-red-400' : 'text-[var(--text-muted)]' },
+    { label: 'Resolved / closed', value: kpi.resolved, icon: CheckCircle2, tone: 'text-green-400' },
+    { label: 'Resolution rate', value: kpi.resolutionRatePct == null ? 'N/A' : `${kpi.resolutionRatePct}%`, icon: Percent, tone: 'text-violet-400' },
+    { label: 'Avg open age', value: kpi.avgOpenAgeDays == null ? 'N/A' : `${kpi.avgOpenAgeDays}d`, sub: kpi.oldestOpenDays == null ? 'no dated open incidents' : `oldest ${kpi.oldestOpenDays}d`, icon: Timer, tone: 'text-amber-400' },
   ]
 
-  // Export --------------------------------------------------------------------
-  const EXPORT_COLS = ['incident_no', 'incident_type', 'asset_no', 'site', 'incident_date', 'severity', 'status', 'age_days', 'reported_by', 'description']
-  const EXPORT_HEADERS = ['Incident #', 'Type', 'Asset', 'Site', 'Date', 'Severity', 'Status', 'Age (days)', 'Reported by', 'Description']
-  const incidentsPager = usePagedRows(filtered)
-  const exportRows = filtered.map((r) => ({
-    incident_no: r.incident_no || '',
-    incident_type: typeLabel(r.incident_type),
-    asset_no: r.asset_no || '',
-    site: r.site || '',
-    incident_date: r.incident_date || '',
-    severity: SEVERITY_META[r.severity]?.label || r.severity || '',
-    status: STATUS_META[r.status]?.label || r.status || '',
-    age_days: incidentAgeDays(r, Date.now()) ?? '',
-    reported_by: r.reported_by || '',
-    description: r.description || '',
-  }))
+  const trendData = {
+    labels: trend.labels,
+    datasets: [
+      { label: 'All incidents', data: trend.counts, backgroundColor: withAlpha(colorAt(0), 0.75), borderRadius: 4 },
+      { label: 'High / critical', data: trend.highCritical, backgroundColor: withAlpha('#ef4444', 0.75), borderRadius: 4 },
+    ],
+  }
+  const typeData = {
+    labels: byType.map((t) => t.label),
+    datasets: [{ label: 'Incidents', data: byType.map((t) => t.count), backgroundColor: byType.map((_, i) => withAlpha(colorAt(i), 0.8)), borderRadius: 4 }],
+  }
 
-  // Form handlers -------------------------------------------------------------
+  const exportName = reportFileName('Incident Reports')
+  const runExport = async (kind) => {
+    setActionError('')
+    try {
+      const out = incidentExportRows(filtered, now)
+      if (kind === 'excel') await exportToExcel(out, INCIDENT_EXPORT_COLS, INCIDENT_EXPORT_HEADERS, exportName)
+      else await exportToPdf(out, INCIDENT_EXPORT_COLS.map((k, i) => ({ key: k, header: INCIDENT_EXPORT_HEADERS[i] })), 'Incident Reports', exportName, 'landscape')
+    } catch (e) {
+      setActionError(toUserMessage(e, 'Could not export. Try again.'))
+    }
+  }
+
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
 
   const openCreate = () => {
@@ -174,6 +200,7 @@ export default function IncidentReports() {
     setFormError('')
     setModalOpen(true)
   }
+  const closeModal = () => { if (!saving) setModalOpen(false) }
 
   const save = useCallback(async (e) => {
     e?.preventDefault?.()
@@ -208,14 +235,64 @@ export default function IncidentReports() {
       setRows((prev) => (prev || []).filter((r) => r.id !== confirmDelete.id))
       setConfirmDelete(null)
     } catch (err) {
-      setError(toUserMessage(err, 'Could not delete the incident.'))
+      setActionError(toUserMessage(err, 'Could not delete the incident.'))
+      setConfirmDelete(null)
     } finally {
       setDeleting(false)
     }
   }, [confirmDelete])
 
-  const clearFilters = () => { setStatusFilter('all'); setSeverityFilter('all'); setTypeFilter('all'); setSearch('') }
-  const hasFilters = statusFilter !== 'all' || severityFilter !== 'all' || typeFilter !== 'all' || search
+  const clearFilters = () => {
+    setStatusFilter('all'); setSeverityFilter('all'); setTypeFilter('all'); setSiteFilter(''); setFromDate(''); setToDate(''); setSearch('')
+  }
+
+  const columns = [
+    { id: 'no', header: 'Incident #', accessorFn: (r) => r.incident_no || undefined, sortingFn: sortBy, sortUndefined: 'last', size: 130, cell: ({ getValue }) => <span className="font-mono text-xs text-[var(--text-primary)]">{getValue() || 'N/A'}</span> },
+    { id: 'type', header: 'Type', accessorFn: (r) => r._typeLabel, sortingFn: sortBy, size: 120 },
+    { id: 'asset', header: 'Asset', accessorFn: (r) => r.asset_no || undefined, sortingFn: sortBy, sortUndefined: 'last', size: 120, cell: ({ getValue }) => getValue() || 'N/A' },
+    { id: 'site', header: 'Site', accessorFn: (r) => r.site || undefined, sortingFn: sortBy, sortUndefined: 'last', size: 140, cell: ({ getValue }) => getValue() || 'N/A' },
+    { id: 'date', header: 'Date', accessorFn: (r) => r._date || undefined, sortingFn: sortBy, sortUndefined: 'last', size: 120, cell: ({ getValue }) => getValue() || 'N/A' },
+    {
+      id: 'severity', header: 'Severity', accessorFn: (r) => INCIDENT_SEVERITIES.indexOf(r.severity), size: 110,
+      cell: ({ row: { original: r } }) => <span className={`badge text-[11px] px-2 py-0.5 rounded ${SEVERITY_CLS[r.severity] || SEVERITY_CLS.medium}`}>{r._severityLabel}</span>,
+    },
+    {
+      id: 'status', header: 'Status', accessorFn: (r) => INCIDENT_STATUSES.indexOf(r.status), size: 130,
+      cell: ({ row: { original: r } }) => <span className={`badge text-[11px] px-2 py-0.5 rounded ${STATUS_CLS[r.status] || STATUS_CLS.open}`}>{r._statusLabel}</span>,
+    },
+    { id: 'age', header: 'Age', accessorFn: (r) => r._age ?? undefined, sortUndefined: 'last', size: 80, meta: { align: 'right' }, cell: ({ row: { original: r } }) => (r._age == null ? 'N/A' : `${r._age}d`) },
+    { id: 'reporter', header: 'Reported by', accessorFn: (r) => r.reported_by || undefined, sortingFn: sortBy, sortUndefined: 'last', size: 140, cell: ({ getValue }) => getValue() || 'N/A' },
+    {
+      id: 'actions', header: '', enableSorting: false, size: 104, meta: { export: false },
+      cell: ({ row: { original: r } }) => (
+        <div className="flex items-center gap-1 justify-end">
+          <button type="button" onClick={() => openEdit(r)} className="inline-flex items-center justify-center w-11 h-11 rounded-lg hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label={`Edit incident ${r.incident_no || r.asset_no || ''}`.trim()}><Pencil size={15} aria-hidden="true" /></button>
+          <button type="button" onClick={() => setConfirmDelete(r)} className="inline-flex items-center justify-center w-11 h-11 rounded-lg hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400" aria-label={`Delete incident ${r.incident_no || r.asset_no || ''}`.trim()}><Trash2 size={15} aria-hidden="true" /></button>
+        </div>
+      ),
+    },
+  ]
+  const siteColumns = [
+    { id: 'site', header: 'Site', accessorFn: (r) => r.site, sortingFn: sortBy, size: 200 },
+    { id: 'total', header: 'Incidents', accessorFn: (r) => r.total, size: 100, meta: { align: 'right' } },
+    { id: 'open', header: 'Open', accessorFn: (r) => r.open, size: 90, meta: { align: 'right' } },
+    { id: 'hc', header: 'High / critical', accessorFn: (r) => r.highCritical, size: 130, meta: { align: 'right' } },
+  ]
+
+  const unavailable = 'Unavailable: the incident log could not be read.'
+  const chartState = (hasData, node) => (
+    rows === null ? <div className="h-full rounded bg-[var(--input-bg)] animate-pulse" />
+      : !known ? <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">{unavailable}</div>
+      : hasData ? node
+      : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">{hasFilters ? 'No incidents match these filters.' : 'No incidents logged yet.'}</div>
+  )
+
+  const field = (id, label, input) => (
+    <div>
+      <label htmlFor={id} className="label">{label}</label>
+      {input}
+    </div>
+  )
 
   return (
     <div className="space-y-6">
@@ -227,25 +304,25 @@ export default function IncidentReports() {
         refreshing={refreshing}
         updatedAt={updatedAt}
         actions={
-          <div className="flex items-center gap-2">
-            <button onClick={async () => { try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'incident_reports') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
-              <FileSpreadsheet size={14} /> Excel
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={() => runExport('excel')} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!known || !filtered.length}>
+              <FileSpreadsheet size={14} aria-hidden="true" /> Excel
             </button>
-            <button onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Incident Reports', 'incident_reports', 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
-              <FileText size={14} /> PDF
+            <button type="button" onClick={() => runExport('pdf')} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!known || !filtered.length}>
+              <FileText size={14} aria-hidden="true" /> PDF
             </button>
-            <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5">
-              <Plus size={15} /> Report incident
+            <button type="button" onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={missing}>
+              <Plus size={15} aria-hidden="true" /> Report incident
             </button>
           </div>
         }
       />
 
       {missing && (
-        <div className="card border border-amber-800/50 flex items-start gap-3">
-          <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
+        <div role="status" className="card border border-amber-800/50 flex items-start gap-3">
+          <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" aria-hidden="true" />
           <div>
-            <p className="text-amber-300 font-medium">Incident reports aren’t enabled on this database yet.</p>
+            <p className="text-amber-300 font-medium">Incident reports are not enabled on this database yet.</p>
             <p className="text-[var(--text-muted)] text-sm mt-1">
               Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V138_INCIDENT_REPORTS.sql</span>, then reload.
             </p>
@@ -254,222 +331,221 @@ export default function IncidentReports() {
       )}
 
       {error && !missing && (
-        <div className="card border border-red-800/50 flex items-start gap-3">
-          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
-          <div><p className="text-red-300 font-medium">Couldn’t load incident reports.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
+        <div role="alert" className="card border border-red-800/50 flex flex-wrap items-start gap-3">
+          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
+          <div className="flex-1 min-w-0"><p className="text-red-300 font-medium">Could not load incident reports.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
+          <button type="button" onClick={load} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]"><RefreshCw size={14} aria-hidden="true" /> Retry</button>
         </div>
       )}
+      {actionError && <p role="alert" className="card text-sm text-red-300">{actionError}</p>}
 
-      {/* KPI tiles */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {/* KPI strip (follows the filters) */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         {kpis.map((k) => {
           const Icon = k.icon
           return (
             <div key={k.label} className="card">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
-                <Icon size={16} className={k.tone} />
+                <Icon size={16} className={k.tone} aria-hidden="true" />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
+              <p className={`text-2xl font-bold mt-1 tabular-nums ${k.tone}`}>{known ? k.value : 'N/A'}</p>
+              {k.sub && known ? <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{k.sub}</p> : null}
             </div>
           )
         })}
       </div>
 
-      {/* Lifecycle status summary (tiles only) */}
+      {/* Lifecycle status tiles (click to filter) */}
       <div className="card">
-        <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Lifecycle status</h3>
+        <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Lifecycle status</h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {INCIDENT_STATUSES.map((s) => (
-            <div key={s} className="rounded-lg border border-[var(--input-border)] p-4 text-center">
-              <p className={`text-2xl font-bold ${s === 'open' ? 'text-sky-400' : s === 'investigating' ? 'text-amber-400' : s === 'resolved' ? 'text-green-400' : 'text-[var(--text-muted)]'}`}>
-                {rows === null ? 'N/A' : summary.byStatus[s]}
-              </p>
-              <p className="text-xs text-[var(--text-muted)] mt-1">{STATUS_META[s].label}</p>
-            </div>
+            <button
+              key={s}
+              type="button"
+              aria-pressed={statusFilter === s}
+              onClick={() => setStatusFilter(statusFilter === s ? 'all' : s)}
+              className={`rounded-lg border border-[var(--input-border)] p-4 text-center min-h-[44px] transition-colors hover:bg-[var(--input-bg)] focus-visible:ring-2 focus-visible:ring-[var(--brand-bright)] ${statusFilter === s ? 'ring-2 ring-[var(--brand-bright)]' : ''}`}
+            >
+              <span className={`block text-2xl font-bold tabular-nums ${STATUS_TONE[s]}`}>{known ? kpi.byStatus[s] : 'N/A'}</span>
+              <span className="block text-xs text-[var(--text-muted)] mt-1">{INCIDENT_STATUS_LABEL[s]}</span>
+            </button>
           ))}
         </div>
         <p className="text-xs text-[var(--text-muted)] mt-4 flex items-center gap-1.5">
-          <ShieldAlert size={12} /> {summary.open} incident{summary.open === 1 ? '' : 's'} still require attention.
+          <ShieldAlert size={12} aria-hidden="true" /> {known ? `${kpi.open} incident${kpi.open === 1 ? '' : 's'} still require attention.` : 'Open workload unavailable.'}
+          {known && kpi.openUndated > 0 ? ` ${kpi.openUndated} open incident${kpi.openUndated === 1 ? ' has' : 's have'} no date, so no age.` : ''}
         </p>
       </div>
 
-      {/* Filters */}
-      <div className="card space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-            <input className="input pl-9 w-full" placeholder="Search incident #, asset, site, reporter, description…" value={search} onChange={(e) => setSearch(e.target.value)} />
+      {/* Trend + type */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="card lg:col-span-2">
+          <div className="flex items-center gap-2 mb-3"><BarChart3 size={15} className="text-[var(--text-muted)]" aria-hidden="true" /><h2 className="text-sm font-semibold text-[var(--text-primary)]">Incidents per month (last 12 months)</h2></div>
+          <div className="h-64" role="img" aria-label={known ? `Incidents per month: ${trend.labels.map((l, i) => `${l} ${trend.counts[i]}`).join(', ')}` : 'Monthly trend unavailable'}>
+            {chartState(trend.counts.some((c) => c > 0), <Bar data={trendData} options={BAR_OPTS} />)}
           </div>
-          <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
-            <option value="all">All statuses</option>
-            {INCIDENT_STATUSES.map((s) => <option key={s} value={s}>{STATUS_META[s].label}</option>)}
-          </select>
-          <select className="input" value={severityFilter} onChange={(e) => setSeverityFilter(e.target.value)} aria-label="Severity">
-            <option value="all">All severities</option>
-            {INCIDENT_SEVERITIES.map((s) => <option key={s} value={s}>{SEVERITY_META[s].label}</option>)}
-          </select>
-          <select className="input" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} aria-label="Type">
-            <option value="all">All types</option>
-            {INCIDENT_TYPES.map((t) => <option key={t} value={t}>{typeLabel(t)}</option>)}
-          </select>
-          {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
-          <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {summary.total}</span>
+          {known && trend.undated > 0 && <p className="text-[11px] text-[var(--text-muted)] mt-2">{trend.undated} incident{trend.undated === 1 ? '' : 's'} without a date are not plotted.</p>}
+        </div>
+        <div className="card">
+          <div className="flex items-center gap-2 mb-3"><Filter size={15} className="text-[var(--text-muted)]" aria-hidden="true" /><h2 className="text-sm font-semibold text-[var(--text-primary)]">By type</h2></div>
+          <div className="h-64" role="img" aria-label={known ? `Incidents by type: ${byType.map((t) => `${t.label} ${t.count}`).join(', ')}` : 'Type breakdown unavailable'}>
+            {chartState(byType.some((t) => t.count > 0), <Bar data={typeData} options={HBAR_OPTS} />)}
+          </div>
         </div>
       </div>
 
-      {/* Table */}
-      <div className="card overflow-hidden !p-0">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                {['Incident #', 'Type', 'Asset', 'Site', 'Date', 'Severity', 'Status', 'Age', ''].map((h) => <th key={h} className="px-4 py-3 font-semibold whitespace-nowrap">{h}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {rows === null ? (
-                [0, 1, 2, 3, 4].map((i) => <tr key={i} className="border-b border-[var(--input-border)]/50"><td colSpan={9} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>)
-              ) : filtered.length === 0 ? (
-                <tr><td colSpan={9} className="px-4 py-12 text-center text-[var(--text-muted)]">
-                  {(rows.length === 0 && !missing) ? (
-                    <span className="inline-flex flex-col items-center gap-2">
-                      <AlertOctagon size={26} className="opacity-60" />
-                      No incidents logged yet.
-                      <button onClick={openCreate} className="btn-primary text-xs inline-flex items-center gap-1.5 mt-1"><Plus size={13} /> Report the first incident</button>
-                    </span>
-                  ) : (
-                    <span className="inline-flex flex-col items-center gap-2"><Filter size={22} className="opacity-60" />No incidents match these filters.</span>
-                  )}
-                </td></tr>
-              ) : (
-                incidentsPager.pageRows.map((r) => {
-                  const age = incidentAgeDays(r, Date.now())
-                  return (
-                    <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{r.incident_no || 'N/A'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] capitalize">{typeLabel(r.incident_type)}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.asset_no || 'N/A'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.site || 'N/A'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDate(r.incident_date)}</td>
-                      <td className="px-4 py-2.5"><span className={`badge text-[11px] px-2 py-0.5 rounded ${SEVERITY_META[r.severity]?.cls || SEVERITY_META.medium.cls}`}>{SEVERITY_META[r.severity]?.label || r.severity}</span></td>
-                      <td className="px-4 py-2.5"><span className={`badge text-[11px] px-2 py-0.5 rounded ${STATUS_META[r.status]?.cls || STATUS_META.open.cls}`}>{STATUS_META[r.status]?.label || r.status}</span></td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{age == null ? 'N/A' : `${age}d`}</td>
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-center gap-1 justify-end">
-                          <button onClick={() => openEdit(r)} className="p-1.5 rounded-lg hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Edit"><Pencil size={14} /></button>
-                          <button onClick={() => setConfirmDelete(r)} className="p-1.5 rounded-lg hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400" aria-label="Delete"><Trash2 size={14} /></button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-          <TablePagination {...incidentsPager} />
+      {/* By site */}
+      {known && bySite.length > 0 && (
+        <div className="card !p-0 overflow-hidden">
+          <div className="flex items-center gap-2 px-4 pt-4 pb-2"><Building2 size={15} className="text-[var(--text-muted)]" aria-hidden="true" /><h2 className="text-sm font-semibold text-[var(--text-primary)]">Incidents by site</h2></div>
+          <EnterpriseTable columns={siteColumns} data={bySite} getRowId={(r) => r.site} enableGlobalFilter={false} enableColumnFilters={false} enableExport={false} initialPageSize={25} emptyMessage="No sites in this view." />
         </div>
+      )}
+
+      {/* Filters */}
+      <div className="card">
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="relative flex-1 min-w-[200px]">
+            <label htmlFor="inc-search" className="sr-only">Search incidents</label>
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+            <input id="inc-search" type="search" className="input pl-9 w-full min-h-[44px]" placeholder="Search incident #, asset, site, reporter, description" value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
+          <select className="input min-h-[44px]" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
+            <option value="all">All statuses</option>
+            {INCIDENT_STATUSES.map((s) => <option key={s} value={s}>{INCIDENT_STATUS_LABEL[s]}</option>)}
+          </select>
+          <select className="input min-h-[44px]" value={severityFilter} onChange={(e) => setSeverityFilter(e.target.value)} aria-label="Severity">
+            <option value="all">All severities</option>
+            {INCIDENT_SEVERITIES.map((s) => <option key={s} value={s}>{INCIDENT_SEVERITY_LABEL[s]}</option>)}
+          </select>
+          <select className="input min-h-[44px]" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} aria-label="Type">
+            <option value="all">All types</option>
+            {INCIDENT_TYPES.map((t) => <option key={t} value={t}>{incidentTypeLabel(t)}</option>)}
+          </select>
+          <select className="input min-h-[44px]" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} aria-label="Site">
+            <option value="">All sites</option>
+            {siteOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <label className="text-xs text-[var(--text-muted)] flex flex-col gap-1">From
+            <input type="date" className="input min-h-[44px]" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+          </label>
+          <label className="text-xs text-[var(--text-muted)] flex flex-col gap-1">To
+            <input type="date" className="input min-h-[44px]" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+          </label>
+          {hasFilters && <button type="button" onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]"><X size={14} aria-hidden="true" /> Clear</button>}
+          <span className="text-xs text-[var(--text-muted)] ml-auto" aria-live="polite">{known ? `${filtered.length} of ${rows.length}` : 'N/A'}</span>
+        </div>
+      </div>
+
+      {/* Register */}
+      <div className="card overflow-hidden !p-0">
+        {known && filtered.length === 0 ? (
+          <div className="px-4 py-12 text-center text-[var(--text-muted)]">
+            {rows.length === 0 && !missing ? (
+              <span className="inline-flex flex-col items-center gap-2">
+                <AlertOctagon size={26} className="opacity-60" aria-hidden="true" />
+                No incidents logged yet.
+                <button type="button" onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5 mt-1 min-h-[44px]"><Plus size={13} aria-hidden="true" /> Report the first incident</button>
+              </span>
+            ) : missing ? (
+              <span>Incident reports are not provisioned on this database.</span>
+            ) : (
+              <span className="inline-flex flex-col items-center gap-2">
+                <Filter size={22} className="opacity-60" aria-hidden="true" />
+                No incidents match these filters.
+                <button type="button" onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]"><X size={14} aria-hidden="true" /> Clear filters</button>
+              </span>
+            )}
+          </div>
+        ) : (
+          <EnterpriseTable
+            columns={columns}
+            data={tableRows}
+            getRowId={(r) => String(r.id)}
+            loading={rows === null}
+            error={error || null}
+            onRetry={load}
+            enableGlobalFilter={false}
+            enableColumnFilters={false}
+            enableExport={false}
+            initialPageSize={25}
+            emptyMessage="No incidents to show."
+          />
+        )}
       </div>
 
       {/* Create / edit modal */}
-      {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={() => !saving && setModalOpen(false)}>
-          <div className="card w-full max-w-2xl max-h-[90vh] overflow-y-auto !p-0" onClick={(e) => e.stopPropagation()}>
-            <div className="sticky top-0 bg-[var(--card-bg)] border-b border-[var(--input-border)] px-6 py-4 flex items-center justify-between z-10">
-              <h2 className="font-bold text-[var(--text-primary)] inline-flex items-center gap-2">
-                <AlertOctagon size={18} className="text-[var(--brand-bright)]" /> {editing ? 'Edit incident' : 'Report incident'}
-              </h2>
-              <button onClick={() => setModalOpen(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
-            </div>
-            <form onSubmit={save} className="p-6 space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="label">Incident #</label>
-                  <input className="input w-full" placeholder="Optional reference" value={form.incident_no} maxLength={60} onChange={(e) => set('incident_no', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Type</label>
-                  <select className="input w-full" value={form.incident_type} onChange={(e) => set('incident_type', e.target.value)}>
-                    {INCIDENT_TYPES.map((t) => <option key={t} value={t}>{typeLabel(t)}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="label">Asset #</label>
-                  <input className="input w-full" placeholder="e.g. TRK-104" value={form.asset_no} maxLength={60} onChange={(e) => set('asset_no', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Site</label>
-                  <input className="input w-full" placeholder="Depot / location" value={form.site} maxLength={120} onChange={(e) => set('site', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Incident date</label>
-                  <input type="date" className="input w-full" value={form.incident_date || ''} onChange={(e) => set('incident_date', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Severity</label>
-                  <select className="input w-full" value={form.severity} onChange={(e) => set('severity', e.target.value)}>
-                    {INCIDENT_SEVERITIES.map((s) => <option key={s} value={s}>{SEVERITY_META[s].label}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="label">Reported by</label>
-                  <input className="input w-full" placeholder="Name" value={form.reported_by} maxLength={120} onChange={(e) => set('reported_by', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Status</label>
-                  <select className="input w-full" value={form.status} onChange={(e) => set('status', e.target.value)}>
-                    {INCIDENT_STATUSES.map((s) => <option key={s} value={s}>{STATUS_META[s].label}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className="label">Description</label>
-                <textarea className="input w-full min-h-[100px] resize-y" placeholder="What happened? Include the sequence of events and any contributing factors." value={form.description} maxLength={8000} onChange={(e) => set('description', e.target.value)} />
-              </div>
-              <div>
-                <label className="label">Action taken</label>
-                <textarea className="input w-full min-h-[80px] resize-y" placeholder="Immediate action, containment, and any corrective steps." value={form.action_taken} maxLength={8000} onChange={(e) => set('action_taken', e.target.value)} />
-              </div>
-              {formError && (
-                <div className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
-                  <AlertTriangle size={15} className="mt-0.5 shrink-0" /> {formError}
-                </div>
-              )}
-              <div className="flex items-center justify-end gap-3 pt-1">
-                <button type="button" onClick={() => setModalOpen(false)} className="btn-secondary text-sm" disabled={saving}>Cancel</button>
-                <button type="submit" className="btn-primary text-sm inline-flex items-center gap-2 disabled:opacity-60" disabled={saving}>
-                  {saving ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}
-                  {saving ? 'Saving…' : editing ? 'Update incident' : 'Save incident'}
-                </button>
-              </div>
-            </form>
+      <Modal
+        open={modalOpen}
+        onClose={closeModal}
+        title={editing ? 'Edit incident' : 'Report incident'}
+        size="lg"
+        footer={(
+          <>
+            <button type="button" onClick={closeModal} className="btn-secondary text-sm min-h-[44px]" disabled={saving}>Cancel</button>
+            <button type="submit" form="incident-form" className="btn-primary text-sm inline-flex items-center gap-2 min-h-[44px] disabled:opacity-60" disabled={saving}>
+              {saving ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <CheckCircle2 size={15} aria-hidden="true" />}
+              {saving ? 'Saving' : editing ? 'Update incident' : 'Save incident'}
+            </button>
+          </>
+        )}
+      >
+        <form id="incident-form" onSubmit={save} className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {field('inc-no', 'Incident #', <input id="inc-no" className="input w-full" placeholder="Optional reference" value={form.incident_no} maxLength={60} onChange={(e) => set('incident_no', e.target.value)} />)}
+            {field('inc-type', 'Type', (
+              <select id="inc-type" className="input w-full" value={form.incident_type} onChange={(e) => set('incident_type', e.target.value)}>
+                {INCIDENT_TYPES.map((t) => <option key={t} value={t}>{incidentTypeLabel(t)}</option>)}
+              </select>
+            ))}
+            {field('inc-asset', 'Asset #', <input id="inc-asset" className="input w-full" placeholder="e.g. TRK-104" value={form.asset_no} maxLength={60} onChange={(e) => set('asset_no', e.target.value)} />)}
+            {field('inc-site', 'Site', <input id="inc-site" className="input w-full" placeholder="Depot / location" value={form.site} maxLength={120} onChange={(e) => set('site', e.target.value)} list="inc-site-options" />)}
+            {field('inc-date', 'Incident date', <input id="inc-date" type="date" className="input w-full" value={form.incident_date || ''} onChange={(e) => set('incident_date', e.target.value)} />)}
+            {field('inc-severity', 'Severity', (
+              <select id="inc-severity" className="input w-full" value={form.severity} onChange={(e) => set('severity', e.target.value)}>
+                {INCIDENT_SEVERITIES.map((s) => <option key={s} value={s}>{INCIDENT_SEVERITY_LABEL[s]}</option>)}
+              </select>
+            ))}
+            {field('inc-reporter', 'Reported by', <input id="inc-reporter" className="input w-full" placeholder="Name" value={form.reported_by} maxLength={120} onChange={(e) => set('reported_by', e.target.value)} />)}
+            {field('inc-status', 'Status', (
+              <select id="inc-status" className="input w-full" value={form.status} onChange={(e) => set('status', e.target.value)}>
+                {INCIDENT_STATUSES.map((s) => <option key={s} value={s}>{INCIDENT_STATUS_LABEL[s]}</option>)}
+              </select>
+            ))}
           </div>
-        </div>
-      )}
+          <datalist id="inc-site-options">{siteOptions.map((s) => <option key={s} value={s} />)}</datalist>
+          {field('inc-desc', 'Description', <textarea id="inc-desc" className="input w-full min-h-[100px] resize-y" placeholder="What happened? Include the sequence of events and any contributing factors." value={form.description} maxLength={8000} onChange={(e) => set('description', e.target.value)} />)}
+          {field('inc-action', 'Action taken', <textarea id="inc-action" className="input w-full min-h-[80px] resize-y" placeholder="Immediate action, containment, and any corrective steps." value={form.action_taken} maxLength={8000} onChange={(e) => set('action_taken', e.target.value)} />)}
+          {formError && (
+            <div role="alert" className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
+              <AlertTriangle size={15} className="mt-0.5 shrink-0" aria-hidden="true" /> {formError}
+            </div>
+          )}
+        </form>
+      </Modal>
 
       {/* Delete confirmation */}
-      {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={() => !deleting && setConfirmDelete(null)}>
-          <div className="card w-full max-w-md" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-lg bg-red-900/30 flex items-center justify-center shrink-0"><Trash2 size={18} className="text-red-400" /></div>
-              <div className="min-w-0">
-                <h3 className="font-semibold text-[var(--text-primary)]">Delete this incident?</h3>
-                <p className="text-sm text-[var(--text-muted)] mt-1">
-                  {typeLabel(confirmDelete.incident_type)}{confirmDelete.asset_no ? ` · ${confirmDelete.asset_no}` : ''}{confirmDelete.incident_no ? ` · ${confirmDelete.incident_no}` : ''}. This cannot be undone.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center justify-end gap-3 mt-5">
-              <button onClick={() => setConfirmDelete(null)} className="btn-secondary text-sm" disabled={deleting}>Cancel</button>
-              <button onClick={doDelete} className="btn-primary text-sm inline-flex items-center gap-2 !bg-red-600 hover:!bg-red-500 disabled:opacity-60" disabled={deleting}>
-                {deleting ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
-                {deleting ? 'Deleting…' : 'Delete'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal
+        open={!!confirmDelete}
+        onClose={() => { if (!deleting) setConfirmDelete(null) }}
+        title="Delete this incident?"
+        size="sm"
+        footer={(
+          <>
+            <button type="button" onClick={() => setConfirmDelete(null)} className="btn-secondary text-sm min-h-[44px]" disabled={deleting}>Cancel</button>
+            <button type="button" onClick={doDelete} className="btn-danger text-sm inline-flex items-center gap-2 min-h-[44px] disabled:opacity-60" disabled={deleting}>
+              {deleting ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Trash2 size={15} aria-hidden="true" />}
+              {deleting ? 'Deleting' : 'Delete'}
+            </button>
+          </>
+        )}
+      >
+        <p className="text-sm text-[var(--text-muted)]">
+          {confirmDelete ? incidentTypeLabel(confirmDelete.incident_type) : ''}{confirmDelete?.asset_no ? ` | ${confirmDelete.asset_no}` : ''}{confirmDelete?.incident_no ? ` | ${confirmDelete.incident_no}` : ''}. This cannot be undone.
+        </p>
+      </Modal>
     </div>
   )
 }

@@ -10,17 +10,18 @@
  * the page renders an actionable "apply the migration" empty state.
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import {
   MapPin, Plus, Search, X, Filter, FileSpreadsheet, FileText, AlertTriangle,
   Pencil, Trash2, Loader2, Layers, CheckCircle2, Ban, Globe2,
-  PieChart, BarChart3, Ruler, ShieldAlert, Map, Activity,
+  PieChart, BarChart3, Ruler, ShieldAlert, Map, Activity, RefreshCw,
 } from 'lucide-react'
 import {
   Chart as ChartJS, ArcElement, BarElement, CategoryScale, LinearScale, Tooltip, Legend,
 } from 'chart.js'
 import { Doughnut, Bar } from 'react-chartjs-2'
 import PageHeader from '../components/ui/PageHeader'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import Modal from '../components/ui/Modal'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   listGeofences, createGeofence, updateGeofence, deleteGeofence,
@@ -31,6 +32,12 @@ import {
   hasValidCenter, zoneAreaKm2,
 } from '../lib/geofences'
 import { colorAt, withAlpha } from '../lib/reportColors'
+import { compareValues } from '../lib/consoleTable'
+import {
+  filterGeofences, geofenceSiteOptions, hasGeofenceFilters, geofenceTableRows,
+  geofenceExportRows, geofenceSiteRollup, headAndRest, geofenceEmptyState,
+  GEOFENCE_EXPORT_COLS, GEOFENCE_EXPORT_HEADERS,
+} from '../lib/geofencingAnalytics'
 import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 
@@ -91,6 +98,7 @@ export default function Geofencing() {
   const { activeCountry } = useSettings() || {}
   const [rows, setRows] = useState(null)
   const [error, setError] = useState('')
+  const [exportError, setExportError] = useState('')
   const [notProvisioned, setNotProvisioned] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [updatedAt, setUpdatedAt] = useState(null)
@@ -141,28 +149,20 @@ export default function Geofencing() {
 
   const summary = useMemo(() => coverageSummary(rows || []), [rows])
 
-  const siteOptions = useMemo(
-    () => [...new Set((rows || []).map((r) => r.site).filter(Boolean))].sort(),
-    [rows],
+  const siteOptions = useMemo(() => geofenceSiteOptions(rows || []), [rows])
+  const filters = { type: typeFilter, site: siteFilter, status: statusFilter, search }
+  const filtered = useMemo(
+    () => filterGeofences(rows || [], { type: typeFilter, site: siteFilter, status: statusFilter, search }),
+    [rows, typeFilter, siteFilter, statusFilter, search],
   )
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return (rows || []).filter((r) => {
-      if (typeFilter !== 'all' && r.zone_type !== typeFilter) return false
-      if (siteFilter && r.site !== siteFilter) return false
-      if (statusFilter === 'active' && r.active === false) return false
-      if (statusFilter === 'inactive' && r.active !== false) return false
-      if (q) {
-        const hay = `${r.name || ''} ${r.site || ''} ${r.notes || ''} ${r.zone_type || ''}`.toLowerCase()
-        if (!hay.includes(q)) return false
-      }
-      return true
-    })
-  }, [rows, typeFilter, siteFilter, statusFilter, search])
+  const tableRows = useMemo(() => geofenceTableRows(filtered), [filtered])
+  const siteRollup = useMemo(() => geofenceSiteRollup(rows || []), [rows])
+  const overlapList = headAndRest(summary.overlaps, 12)
+  const flaggedList = headAndRest(summary.flagged, 12)
+  const emptyState = geofenceEmptyState({ rows, filtered, filters, notProvisioned })
 
   const clearFilters = () => { setTypeFilter('all'); setSiteFilter(''); setStatusFilter('all'); setSearch('') }
-  const hasFilters = typeFilter !== 'all' || siteFilter || statusFilter !== 'all' || search
+  const hasFilters = hasGeofenceFilters(filters)
 
   // ── Charts (follow the reportColors theme; status uses semantic green/slate) ──
   const typeLabels = ZONE_TYPES.map((t) => ZONE_TYPE_META[t].label)
@@ -196,6 +196,10 @@ export default function Geofencing() {
   }), [summary])
 
   const hasChartData = (rows?.length || 0) > 0
+  // A failed read is not an empty register: every figure below reads N/A and
+  // every panel says the data is unavailable rather than showing zero.
+  const known = rows !== null && !error
+  const unavailable = 'Unavailable: the zone register could not be read.'
 
   // ── Lightweight SVG coverage schematic (no external map dependency) ──────────
   const svgPlot = useMemo(() => {
@@ -280,26 +284,63 @@ export default function Geofencing() {
   }
 
   // ── Export ──────────────────────────────────────────────────────────────────
-  const EXPORT_COLS = ['name', 'zone_type', 'site', 'center_lat', 'center_lng', 'radius_m', 'area_km2', 'active']
-  const EXPORT_HEADERS = ['Name', 'Type', 'Site', 'Latitude', 'Longitude', 'Radius (m)', 'Area (km2)', 'Active']
-  const zonesPager = usePagedRows(filtered)
-  const exportRows = filtered.map((r) => {
-    const area = zoneAreaKm2(r.radius_m)
-    return {
-      name: r.name || '', zone_type: ZONE_TYPE_META[r.zone_type]?.label || r.zone_type || '',
-      site: r.site || '', center_lat: r.center_lat ?? '', center_lng: r.center_lng ?? '',
-      radius_m: r.radius_m ?? '',
-      area_km2: area == null ? '' : Math.round(area * 1000) / 1000,
-      active: r.active === false ? 'No' : 'Yes',
-    }
-  })
+  const exportRows = geofenceExportRows(filtered)
   const exportName = reportFileName('Geofence Zones')
 
   const kpis = [
     { label: 'Total zones', value: summary.total, icon: MapPin, tone: 'text-[var(--text-primary)]' },
     { label: 'Active zones', value: summary.active, icon: CheckCircle2, tone: 'text-green-400' },
     { label: 'Site zones', value: summary.byType.site, icon: Layers, tone: 'text-sky-400' },
-    { label: 'Covered area', value: rows === null ? 'N/A' : fmtArea(summary.areaKm2), icon: Globe2, tone: 'text-violet-400' },
+    { label: 'Covered area', value: !known ? 'N/A' : fmtArea(summary.areaKm2), icon: Globe2, tone: 'text-violet-400' },
+  ]
+
+  // ── Register columns (sortable across the WHOLE filtered set) ──────────────
+  const sortBy = (a, b, id) => compareValues(a.getValue(id), b.getValue(id))
+  const columns = [
+    {
+      id: 'name', header: 'Name', accessorFn: (r) => r.name || undefined, sortingFn: sortBy, sortUndefined: 'last', size: 240,
+      cell: ({ row: { original: r } }) => (
+        <div className="min-w-0">
+          <span className="font-medium text-[var(--text-primary)]">{r.name || 'N/A'}</span>
+          {r.notes ? <span className="block text-xs text-[var(--text-muted)] truncate max-w-[240px]" title={r.notes}>{r.notes}</span> : null}
+        </div>
+      ),
+    },
+    {
+      id: 'type', header: 'Type', accessorFn: (r) => r._typeLabel, sortingFn: sortBy, size: 120,
+      cell: ({ row: { original: r } }) => <span className={`badge text-[11px] px-2 py-0.5 rounded ${TYPE_BADGE[r.zone_type] || TYPE_BADGE.custom}`}>{r._typeLabel}</span>,
+    },
+    { id: 'site', header: 'Site', accessorFn: (r) => r.site || undefined, sortingFn: sortBy, sortUndefined: 'last', size: 140, cell: ({ getValue }) => getValue() || 'N/A' },
+    {
+      id: 'centre', header: 'Centre (lat, lng)', accessorFn: (r) => (r._located ? Number(r.center_lat) : undefined), sortUndefined: 'last', size: 170,
+      cell: ({ row: { original: r } }) => <span className="font-mono text-xs text-[var(--text-secondary)]">{fmtCoord(r.center_lat)}, {fmtCoord(r.center_lng)}</span>,
+    },
+    { id: 'radius', header: 'Radius', accessorFn: (r) => r._radius ?? undefined, sortUndefined: 'last', size: 110, meta: { align: 'right' }, cell: ({ row: { original: r } }) => fmtRadius(r._radius) },
+    { id: 'area', header: 'Area', accessorFn: (r) => r._area ?? undefined, sortUndefined: 'last', size: 120, meta: { align: 'right' }, cell: ({ row: { original: r } }) => fmtArea(r._area) },
+    {
+      id: 'status', header: 'Status', accessorFn: (r) => (r._active ? 'Active' : 'Inactive'), size: 110,
+      cell: ({ row: { original: r } }) => (
+        <span className={`badge text-[11px] px-2 py-0.5 rounded inline-flex items-center gap-1 ${ACTIVE_BADGE[r._active ? 'true' : 'false']}`}>
+          {r._active ? <><CheckCircle2 size={11} aria-hidden="true" /> Active</> : <><Ban size={11} aria-hidden="true" /> Inactive</>}
+        </span>
+      ),
+    },
+    {
+      id: 'actions', header: '', enableSorting: false, size: 104, meta: { export: false },
+      cell: ({ row: { original: r } }) => (
+        <div className="flex items-center justify-end gap-1">
+          <button type="button" onClick={(e) => { e.stopPropagation(); openEdit(r) }} className="inline-flex items-center justify-center w-11 h-11 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label={`Edit zone ${r.name || ''}`.trim()}><Pencil size={15} aria-hidden="true" /></button>
+          <button type="button" onClick={(e) => { e.stopPropagation(); setSaveError(''); setConfirmDelete(r) }} className="inline-flex items-center justify-center w-11 h-11 rounded hover:bg-red-900/20 text-[var(--text-muted)] hover:text-red-400" aria-label={`Delete zone ${r.name || ''}`.trim()}><Trash2 size={15} aria-hidden="true" /></button>
+        </div>
+      ),
+    },
+  ]
+  const siteColumns = [
+    { id: 'site', header: 'Site', accessorFn: (r) => r.site, sortingFn: sortBy, size: 200 },
+    { id: 'zones', header: 'Zones', accessorFn: (r) => r.zones, size: 90, meta: { align: 'right' } },
+    { id: 'active', header: 'Active', accessorFn: (r) => r.active, size: 90, meta: { align: 'right' } },
+    { id: 'area', header: 'Covered area', accessorFn: (r) => r.areaKm2 ?? undefined, sortUndefined: 'last', size: 140, meta: { align: 'right' }, cell: ({ row: { original: r } }) => fmtArea(r.areaKm2) },
+    { id: 'types', header: 'Zone types', accessorFn: (r) => r.types.join(', '), enableSorting: false, size: 220, cell: ({ getValue }) => getValue() || 'N/A' },
   ]
 
   return (
@@ -312,16 +353,16 @@ export default function Geofencing() {
         refreshing={refreshing}
         updatedAt={updatedAt}
         actions={
-          <div className="flex items-center gap-2">
-            <button onClick={async () => { try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, exportName) } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={async () => { try { await exportToExcel(exportRows, GEOFENCE_EXPORT_COLS, GEOFENCE_EXPORT_HEADERS, exportName) } catch (e) { setExportError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!known || !filtered.length}>
               <FileSpreadsheet size={14} /> Excel
             </button>
-            <button onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Geofence Zones', exportName, 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
+            <button type="button" onClick={async () => { try { await exportToPdf(exportRows, GEOFENCE_EXPORT_COLS.map((k, i) => ({ key: k, header: GEOFENCE_EXPORT_HEADERS[i] })), 'Geofence Zones', exportName, 'landscape') } catch (e) { setExportError(toUserMessage(e, 'Could not export. Try again.')) } }} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!known || !filtered.length}>
               <FileText size={14} /> PDF
             </button>
             {/* A create into a table that does not exist can only fail, so the
                 action is withheld once the probe is certain it is absent. */}
-            <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5" disabled={notProvisioned}>
+            <button type="button" onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={notProvisioned}>
               <Plus size={14} /> New zone
             </button>
           </div>
@@ -329,11 +370,13 @@ export default function Geofencing() {
       />
 
       {error && (
-        <div className="card border border-red-800/50 flex items-start gap-3">
-          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
-          <div><p className="text-red-300 font-medium">Couldn't load geofences.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
+        <div role="alert" className="card border border-red-800/50 flex flex-wrap items-start gap-3">
+          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
+          <div className="flex-1 min-w-0"><p className="text-red-300 font-medium">Could not load geofences.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
+          <button type="button" onClick={load} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]"><RefreshCw size={14} aria-hidden="true" /> Retry</button>
         </div>
       )}
+      {exportError && <p role="alert" className="card text-sm text-red-300">{exportError}</p>}
 
       {/* KPI tiles */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -345,7 +388,7 @@ export default function Geofencing() {
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} />
               </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
+              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{!known ? 'N/A' : k.value}</p>
             </div>
           )
         })}
@@ -358,10 +401,12 @@ export default function Geofencing() {
             key={t}
             type="button"
             onClick={() => setTypeFilter(typeFilter === t ? 'all' : t)}
-            className={`card text-left transition-colors ${typeFilter === t ? 'ring-1 ring-[var(--brand-bright)]' : ''}`}
+            aria-pressed={typeFilter === t}
+            aria-label={`${ZONE_TYPE_META[t].label} zones: ${known ? summary.byType[t] : 'N/A'}. Filter the register by this type`}
+            className={`card text-left transition-colors min-h-[44px] focus-visible:ring-2 focus-visible:ring-[var(--brand-bright)] ${typeFilter === t ? 'ring-1 ring-[var(--brand-bright)]' : ''}`}
           >
             <span className={`badge text-[11px] px-2 py-0.5 rounded ${TYPE_BADGE[t]}`}>{ZONE_TYPE_META[t].label}</span>
-            <p className="text-2xl font-bold mt-2 text-[var(--text-primary)]">{rows === null ? 'N/A' : summary.byType[t]}</p>
+            <p className="text-2xl font-bold mt-2 text-[var(--text-primary)]">{!known ? 'N/A' : summary.byType[t]}</p>
           </button>
         ))}
       </div>
@@ -369,10 +414,10 @@ export default function Geofencing() {
       {/* Coverage summary stat strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
-          { label: 'Total zones', value: rows === null ? 'N/A' : summary.total, sub: rows === null ? '' : `${summary.geolocated} geolocated`, icon: MapPin, tone: 'text-[var(--text-primary)]' },
-          { label: 'Total covered area', value: rows === null ? 'N/A' : fmtArea(summary.areaKm2), sub: rows === null ? '' : `${summary.radiusCount} zones with a radius`, icon: Globe2, tone: 'text-violet-400' },
-          { label: 'Average radius', value: rows === null ? 'N/A' : fmtRadius(summary.avgRadiusM), sub: 'across geolocated zones', icon: Ruler, tone: 'text-sky-400' },
-          { label: 'Overlapping pairs', value: rows === null ? 'N/A' : summary.overlapPairs, sub: rows === null ? '' : (summary.flaggedCount ? `${summary.flaggedCount} data-quality flags` : 'no data-quality flags'), icon: ShieldAlert, tone: summary.overlapPairs > 0 ? 'text-amber-400' : 'text-green-400' },
+          { label: 'Total zones', value: !known ? 'N/A' : summary.total, sub: !known ? '' : `${summary.geolocated} geolocated`, icon: MapPin, tone: 'text-[var(--text-primary)]' },
+          { label: 'Total covered area', value: !known ? 'N/A' : fmtArea(summary.areaKm2), sub: !known ? '' : `${summary.radiusCount} zones with a radius`, icon: Globe2, tone: 'text-violet-400' },
+          { label: 'Average radius', value: !known ? 'N/A' : fmtRadius(summary.avgRadiusM), sub: 'across geolocated zones', icon: Ruler, tone: 'text-sky-400' },
+          { label: 'Overlapping pairs', value: !known ? 'N/A' : summary.overlapPairs, sub: !known ? '' : (summary.flaggedCount ? `${summary.flaggedCount} data-quality flags` : 'no data-quality flags'), icon: ShieldAlert, tone: summary.overlapPairs > 0 ? 'text-amber-400' : 'text-green-400' },
         ].map((s) => {
           const Icon = s.icon
           return (
@@ -395,7 +440,7 @@ export default function Geofencing() {
           <div className="h-56">
             {rows === null ? <div className="h-full rounded bg-[var(--input-bg)] animate-pulse" />
               : hasChartData ? <Doughnut data={typeDoughnutData} options={CHART_OPTS} />
-              : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No zones to chart yet.</div>}
+              : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">{error ? unavailable : 'No zones to chart yet.'}</div>}
           </div>
         </div>
         <div className="card">
@@ -403,7 +448,7 @@ export default function Geofencing() {
           <div className="h-56">
             {rows === null ? <div className="h-full rounded bg-[var(--input-bg)] animate-pulse" />
               : hasChartData && summary.areaKm2 > 0 ? <Bar data={areaBarData} options={BAR_OPTS} />
-              : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No radii set, so no covered area yet.</div>}
+              : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">{error ? unavailable : 'No radii set, so no covered area yet.'}</div>}
           </div>
         </div>
         <div className="card">
@@ -411,7 +456,7 @@ export default function Geofencing() {
           <div className="h-56">
             {rows === null ? <div className="h-full rounded bg-[var(--input-bg)] animate-pulse" />
               : hasChartData ? <Doughnut data={statusDoughnutData} options={CHART_OPTS} />
-              : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No zones to chart yet.</div>}
+              : <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">{error ? unavailable : 'No zones to chart yet.'}</div>}
           </div>
         </div>
       </div>
@@ -424,8 +469,8 @@ export default function Geofencing() {
             <div className="flex items-center gap-2"><Map size={15} className="text-[var(--text-muted)]" /><h3 className="text-sm font-semibold text-[var(--text-primary)]">Coverage schematic</h3></div>
             {svgPlot ? <span className="text-[11px] text-[var(--text-muted)]">{svgPlot.count} of {svgPlot.total} located</span> : null}
           </div>
-          {rows === null ? (
-            <div className="h-64 rounded bg-[var(--input-bg)] animate-pulse" />
+          {rows === null || error ? (
+            error ? <p className="h-64 flex items-center justify-center text-sm text-[var(--text-muted)]">{unavailable}</p> : <div className="h-64 rounded bg-[var(--input-bg)] animate-pulse" />
           ) : svgPlot ? (
             <>
               <svg viewBox={`0 0 ${svgPlot.W} ${svgPlot.H}`} className="w-full h-64 rounded-lg bg-[var(--input-bg)]/40 border border-[var(--input-border)]" role="img" aria-label="Geofence coverage schematic">
@@ -458,8 +503,8 @@ export default function Geofencing() {
         {/* Overlaps & data quality */}
         <div className="card">
           <div className="flex items-center gap-2 mb-3"><ShieldAlert size={15} className="text-[var(--text-muted)]" /><h3 className="text-sm font-semibold text-[var(--text-primary)]">Overlaps and data quality</h3></div>
-          {rows === null ? (
-            <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-8 rounded bg-[var(--input-bg)] animate-pulse" />)}</div>
+          {rows === null || error ? (
+            error ? <p className="text-sm text-[var(--text-muted)]">{unavailable}</p> : <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-8 rounded bg-[var(--input-bg)] animate-pulse" />)}</div>
           ) : (
             <div className="space-y-4">
               <div>
@@ -468,7 +513,7 @@ export default function Geofencing() {
                   <p className="text-sm text-[var(--text-muted)] inline-flex items-center gap-1.5"><CheckCircle2 size={14} className="text-green-400" /> No overlapping zones.</p>
                 ) : (
                   <ul className="space-y-1.5 max-h-40 overflow-y-auto">
-                    {summary.overlaps.slice(0, 12).map((o, i) => (
+                    {overlapList.head.map((o, i) => (
                       <li key={i} className="text-sm flex items-center justify-between gap-2 border-b border-[var(--input-border)]/40 pb-1.5">
                         <span className="text-[var(--text-secondary)] truncate">
                           <span className="font-medium text-[var(--text-primary)]">{o.aName}</span> and <span className="font-medium text-[var(--text-primary)]">{o.bName}</span>
@@ -477,7 +522,7 @@ export default function Geofencing() {
                         <span className="text-xs text-[var(--text-muted)] whitespace-nowrap">{fmtDistance(o.distanceKm)} apart, {fmtDistance(o.overlapKm)} overlap</span>
                       </li>
                     ))}
-                    {summary.overlaps.length > 12 ? <li className="text-xs text-[var(--text-muted)]">and {summary.overlaps.length - 12} more...</li> : null}
+                    {overlapList.rest > 0 ? <li className="text-xs text-[var(--text-muted)]">and {overlapList.rest} more</li> : null}
                   </ul>
                 )}
               </div>
@@ -487,7 +532,7 @@ export default function Geofencing() {
                   <p className="text-sm text-[var(--text-muted)] inline-flex items-center gap-1.5"><CheckCircle2 size={14} className="text-green-400" /> Every zone has valid coordinates and radius.</p>
                 ) : (
                   <ul className="space-y-1.5 max-h-40 overflow-y-auto">
-                    {summary.flagged.slice(0, 12).map((f) => (
+                    {flaggedList.head.map((f) => (
                       <li key={f.id || f.name} className="text-sm flex items-start gap-2 border-b border-[var(--input-border)]/40 pb-1.5">
                         <AlertTriangle size={13} className="text-amber-400 mt-0.5 shrink-0" />
                         <span className="min-w-0">
@@ -496,7 +541,7 @@ export default function Geofencing() {
                         </span>
                       </li>
                     ))}
-                    {summary.flagged.length > 12 ? <li className="text-xs text-[var(--text-muted)]">and {summary.flagged.length - 12} more...</li> : null}
+                    {flaggedList.rest > 0 ? <li className="text-xs text-[var(--text-muted)]">and {flaggedList.rest} more</li> : null}
                   </ul>
                 )}
               </div>
@@ -505,183 +550,179 @@ export default function Geofencing() {
         </div>
       </div>
 
+      {/* Per-site coverage rollup */}
+      {rows !== null && siteRollup.length > 0 && (
+        <div className="card !p-0 overflow-hidden">
+          <div className="flex items-center gap-2 px-4 pt-4 pb-2"><Layers size={15} className="text-[var(--text-muted)]" aria-hidden="true" /><h2 className="text-sm font-semibold text-[var(--text-primary)]">Coverage by site</h2></div>
+          <EnterpriseTable
+            columns={siteColumns}
+            data={siteRollup}
+            getRowId={(r) => r.site}
+            enableGlobalFilter={false}
+            enableColumnFilters={false}
+            enableExport={false}
+            initialPageSize={25}
+            emptyMessage="No sites recorded on any zone."
+          />
+        </div>
+      )}
+
       {/* Filters */}
       <div className="card space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-end gap-2">
           <div className="relative flex-1 min-w-[200px]">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-            <input className="input pl-9 w-full" placeholder="Search name, site, notes" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <label htmlFor="geo-search" className="sr-only">Search zones</label>
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+            <input id="geo-search" type="search" className="input pl-9 w-full min-h-[44px]" placeholder="Search name, site, notes" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-          <select className="input" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} aria-label="Zone type">
+          <select className="input min-h-[44px]" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} aria-label="Zone type">
             <option value="all">All types</option>
             {ZONE_TYPES.map((t) => <option key={t} value={t}>{ZONE_TYPE_META[t].label}</option>)}
           </select>
-          <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
+          <select className="input min-h-[44px]" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
             <option value="all">All statuses</option>
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
           </select>
-          <select className="input" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} aria-label="Site">
+          <select className="input min-h-[44px]" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} aria-label="Site">
             <option value="">All sites</option>
             {siteOptions.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
-          {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
-          <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {summary.total}</span>
+          {hasFilters && <button type="button" onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]"><X size={14} aria-hidden="true" /> Clear</button>}
+          <span className="text-xs text-[var(--text-muted)] ml-auto" aria-live="polite">{filtered.length} of {summary.total}</span>
         </div>
       </div>
 
-      {/* Table */}
+      {/* Register */}
       <div className="card overflow-hidden !p-0">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                {['Name', 'Type', 'Site', 'Centre (lat, lng)', 'Radius', 'Status', ''].map((h, i) => <th key={i} className="px-4 py-3 font-semibold whitespace-nowrap">{h}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {rows === null ? (
-                [0, 1, 2, 3, 4].map((i) => <tr key={i} className="border-b border-[var(--input-border)]/50"><td colSpan={7} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>)
-              ) : filtered.length === 0 ? (
-                <tr><td colSpan={7} className="px-4 py-12 text-center text-[var(--text-muted)]">
-                  {/* Three genuinely different empty states. Collapsing the last
-                      two is what sent owners to run a migration over a register
-                      that was simply empty. */}
-                  {hasFilters ? (
-                    <><Filter size={22} className="mx-auto mb-2 opacity-60" />No zones match these filters.</>
-                  ) : notProvisioned ? (
-                    <div className="space-y-2">
-                      <AlertTriangle size={24} className="mx-auto mb-1 text-amber-400 opacity-80" />
-                      <p className="text-[var(--text-primary)] font-medium">Geofencing is not enabled on this database yet.</p>
-                      <p className="text-sm">Apply <code className="px-1.5 py-0.5 rounded bg-[var(--input-bg)] text-[var(--text-secondary)]">MIGRATIONS_V133_GEOFENCES.sql</code> to provision the <code className="px-1.5 py-0.5 rounded bg-[var(--input-bg)] text-[var(--text-secondary)]">geofences</code> table, then reload. Zones cannot be added until it exists.</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <MapPin size={24} className="mx-auto mb-1 opacity-60" />
-                      <p className="text-[var(--text-primary)] font-medium">No geofence zones yet.</p>
-                      <p className="text-sm">Add a centre coordinate and radius to define your first zone.</p>
-                      <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5 mt-1"><Plus size={14} /> New zone</button>
-                    </div>
-                  )}
-                </td></tr>
-              ) : (
-                zonesPager.pageRows.map((r) => (
-                  <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                    <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.name || 'N/A'}{r.notes ? <span className="block text-xs text-[var(--text-muted)] font-normal truncate max-w-[240px]">{r.notes}</span> : null}</td>
-                    <td className="px-4 py-2.5"><span className={`badge text-[11px] px-2 py-0.5 rounded ${TYPE_BADGE[r.zone_type] || TYPE_BADGE.custom}`}>{ZONE_TYPE_META[r.zone_type]?.label || r.zone_type}</span></td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.site || 'N/A'}</td>
-                    <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)]">{fmtCoord(r.center_lat)}, {fmtCoord(r.center_lng)}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtRadius(r.radius_m)}</td>
-                    <td className="px-4 py-2.5"><span className={`badge text-[11px] px-2 py-0.5 rounded inline-flex items-center gap-1 ${ACTIVE_BADGE[r.active === false ? 'false' : 'true']}`}>{r.active === false ? <><Ban size={11} /> Inactive</> : <><CheckCircle2 size={11} /> Active</>}</span></td>
-                    <td className="px-4 py-2.5">
-                      <div className="flex items-center justify-end gap-1">
-                        <button onClick={() => openEdit(r)} className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" title="Edit zone"><Pencil size={14} /></button>
-                        <button onClick={() => setConfirmDelete(r)} className="p-1.5 rounded hover:bg-red-900/20 text-[var(--text-muted)] hover:text-red-400" title="Delete zone"><Trash2 size={14} /></button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-          <TablePagination {...zonesPager} />
-        </div>
+        {emptyState && emptyState !== 'loading' && !error ? (
+          <div className="px-4 py-12 text-center text-[var(--text-muted)]">
+            {/* Three genuinely different empty states. Collapsing the last
+                two is what sent owners to run a migration over a register
+                that was simply empty. */}
+            {emptyState === 'filtered' ? (
+              <div className="space-y-2">
+                <Filter size={22} className="mx-auto mb-1 opacity-60" aria-hidden="true" />
+                <p>No zones match these filters.</p>
+                <button type="button" onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]"><X size={14} aria-hidden="true" /> Clear filters</button>
+              </div>
+            ) : emptyState === 'not_provisioned' ? (
+              <div className="space-y-2">
+                <AlertTriangle size={24} className="mx-auto mb-1 text-amber-400 opacity-80" aria-hidden="true" />
+                <p className="text-[var(--text-primary)] font-medium">Geofencing is not enabled on this database yet.</p>
+                <p className="text-sm">Apply <code className="px-1.5 py-0.5 rounded bg-[var(--input-bg)] text-[var(--text-secondary)]">MIGRATIONS_V133_GEOFENCES.sql</code> to provision the <code className="px-1.5 py-0.5 rounded bg-[var(--input-bg)] text-[var(--text-secondary)]">geofences</code> table, then reload.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <MapPin size={24} className="mx-auto mb-1 opacity-60" aria-hidden="true" />
+                <p className="text-[var(--text-primary)] font-medium">No geofence zones yet.</p>
+                <p className="text-sm">Add a centre coordinate and radius to define your first zone.</p>
+                <button type="button" onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5 mt-1 min-h-[44px]"><Plus size={14} aria-hidden="true" /> New zone</button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <EnterpriseTable
+            columns={columns}
+            data={tableRows}
+            getRowId={(r) => String(r.id)}
+            loading={rows === null}
+            error={error || null}
+            onRetry={load}
+            enableGlobalFilter={false}
+            enableColumnFilters={false}
+            enableExport={false}
+            initialPageSize={25}
+            emptyMessage="No zones to show."
+          />
+        )}
       </div>
 
       {/* Create / Edit modal */}
-      {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onMouseDown={closeModal}>
-          <div className="bg-[var(--card-bg)] border border-[var(--input-border)] rounded-2xl w-full max-w-lg shadow-2xl max-h-[92vh] overflow-y-auto" onMouseDown={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--input-border)]">
-              <h2 className="font-bold text-lg text-[var(--text-primary)]">{editing ? 'Edit geofence' : 'New geofence'}</h2>
-              <button onClick={closeModal} className="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
+      <Modal
+        open={modalOpen}
+        onClose={closeModal}
+        title={editing ? 'Edit geofence' : 'New geofence'}
+        size="md"
+        footer={(
+          <>
+            <button type="button" onClick={closeModal} className="btn-secondary text-sm min-h-[44px]" disabled={saving}>Cancel</button>
+            <button type="submit" form="geofence-form" className="btn-primary text-sm inline-flex items-center justify-center gap-2 min-h-[44px]" disabled={saving}>
+              {saving ? <><Loader2 size={14} className="animate-spin" aria-hidden="true" /> Saving</> : <>{editing ? 'Save changes' : 'Create zone'}</>}
+            </button>
+          </>
+        )}
+      >
+        <form id="geofence-form" onSubmit={submit} className="space-y-4" noValidate>
+          {saveError && (
+            <div role="alert" className="border border-red-800/50 bg-red-900/20 rounded-lg px-3 py-2 text-sm text-red-300 flex items-start gap-2">
+              <AlertTriangle size={15} className="mt-0.5 shrink-0" aria-hidden="true" /> {saveError}
             </div>
-            <form onSubmit={submit} className="p-5 space-y-4">
-              {saveError && (
-                <div className="border border-red-800/50 bg-red-900/20 rounded-lg px-3 py-2 text-sm text-red-300 flex items-start gap-2">
-                  <AlertTriangle size={15} className="mt-0.5 shrink-0" /> {saveError}
-                </div>
-              )}
-
-              <div>
-                <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Zone name <span className="text-red-400">*</span></label>
-                <input className="input w-full" value={form.name} onChange={(e) => setField('name', e.target.value)} placeholder="e.g. Jebel Ali Depot" autoFocus />
-                {formErrors.name && <p className="text-red-400 text-xs mt-1">{formErrors.name}</p>}
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Zone type</label>
-                  <select className="input w-full" value={form.zone_type} onChange={(e) => setField('zone_type', e.target.value)}>
-                    {ZONE_TYPES.map((t) => <option key={t} value={t}>{ZONE_TYPE_META[t].label}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Site</label>
-                  <input className="input w-full" value={form.site} onChange={(e) => setField('site', e.target.value)} placeholder="Optional" />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Centre latitude</label>
-                  <input type="number" step="0.0001" className="input w-full" value={form.center_lat} onChange={(e) => setField('center_lat', e.target.value)} placeholder="25.2048" />
-                  {formErrors.center_lat && <p className="text-red-400 text-xs mt-1">{formErrors.center_lat}</p>}
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Centre longitude</label>
-                  <input type="number" step="0.0001" className="input w-full" value={form.center_lng} onChange={(e) => setField('center_lng', e.target.value)} placeholder="55.2708" />
-                  {formErrors.center_lng && <p className="text-red-400 text-xs mt-1">{formErrors.center_lng}</p>}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Radius (metres)</label>
-                <input type="number" step="1" min="0" className="input w-full" value={form.radius_m} onChange={(e) => setField('radius_m', e.target.value)} placeholder="e.g. 2500" />
-                {formErrors.radius_m && <p className="text-red-400 text-xs mt-1">{formErrors.radius_m}</p>}
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Notes</label>
-                <textarea className="input w-full" rows={2} value={form.notes} onChange={(e) => setField('notes', e.target.value)} placeholder="Optional description or operating rules" />
-              </div>
-
-              <label className="flex items-center justify-between">
-                <span className="text-sm text-[var(--text-secondary)]">Active</span>
-                <input type="checkbox" checked={form.active} onChange={(e) => setField('active', e.target.checked)} className="accent-[var(--brand-bright)] w-4 h-4" />
-              </label>
-
-              <div className="flex gap-3 pt-1">
-                <button type="button" onClick={closeModal} className="btn-secondary flex-1 text-sm" disabled={saving}>Cancel</button>
-                <button type="submit" className="btn-primary flex-1 text-sm inline-flex items-center justify-center gap-2" disabled={saving}>
-                  {saving ? <><Loader2 size={14} className="animate-spin" /> Saving</> : <>{editing ? 'Save changes' : 'Create zone'}</>}
-                </button>
-              </div>
-            </form>
+          )}
+          <div>
+            <label htmlFor="geo-name" className="block text-xs font-medium text-[var(--text-muted)] mb-1">Zone name <span className="text-red-400" aria-hidden="true">*</span></label>
+            <input id="geo-name" required aria-invalid={!!formErrors.name} aria-describedby={formErrors.name ? 'geo-name-err' : undefined} className="input w-full" value={form.name} onChange={(e) => setField('name', e.target.value)} placeholder="e.g. Jebel Ali Depot" />
+            {formErrors.name && <p id="geo-name-err" className="text-red-400 text-xs mt-1">{formErrors.name}</p>}
           </div>
-        </div>
-      )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="geo-type" className="block text-xs font-medium text-[var(--text-muted)] mb-1">Zone type</label>
+              <select id="geo-type" className="input w-full" value={form.zone_type} onChange={(e) => setField('zone_type', e.target.value)}>
+                {ZONE_TYPES.map((t) => <option key={t} value={t}>{ZONE_TYPE_META[t].label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="geo-site" className="block text-xs font-medium text-[var(--text-muted)] mb-1">Site</label>
+              <input id="geo-site" className="input w-full" value={form.site} onChange={(e) => setField('site', e.target.value)} placeholder="Optional" list="geo-site-options" />
+              <datalist id="geo-site-options">{siteOptions.map((s) => <option key={s} value={s} />)}</datalist>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="geo-lat" className="block text-xs font-medium text-[var(--text-muted)] mb-1">Centre latitude</label>
+              <input id="geo-lat" type="number" inputMode="decimal" step="0.0001" className="input w-full" value={form.center_lat} onChange={(e) => setField('center_lat', e.target.value)} placeholder="25.2048" aria-invalid={!!formErrors.center_lat} aria-describedby={formErrors.center_lat ? 'geo-lat-err' : undefined} />
+              {formErrors.center_lat && <p id="geo-lat-err" className="text-red-400 text-xs mt-1">{formErrors.center_lat}</p>}
+            </div>
+            <div>
+              <label htmlFor="geo-lng" className="block text-xs font-medium text-[var(--text-muted)] mb-1">Centre longitude</label>
+              <input id="geo-lng" type="number" inputMode="decimal" step="0.0001" className="input w-full" value={form.center_lng} onChange={(e) => setField('center_lng', e.target.value)} placeholder="55.2708" aria-invalid={!!formErrors.center_lng} aria-describedby={formErrors.center_lng ? 'geo-lng-err' : undefined} />
+              {formErrors.center_lng && <p id="geo-lng-err" className="text-red-400 text-xs mt-1">{formErrors.center_lng}</p>}
+            </div>
+          </div>
+          <div>
+            <label htmlFor="geo-radius" className="block text-xs font-medium text-[var(--text-muted)] mb-1">Radius (metres)</label>
+            <input id="geo-radius" type="number" inputMode="numeric" step="1" min="0" className="input w-full" value={form.radius_m} onChange={(e) => setField('radius_m', e.target.value)} placeholder="e.g. 2500" aria-invalid={!!formErrors.radius_m} aria-describedby={formErrors.radius_m ? 'geo-radius-err' : undefined} />
+            {formErrors.radius_m && <p id="geo-radius-err" className="text-red-400 text-xs mt-1">{formErrors.radius_m}</p>}
+          </div>
+          <div>
+            <label htmlFor="geo-notes" className="block text-xs font-medium text-[var(--text-muted)] mb-1">Notes</label>
+            <textarea id="geo-notes" className="input w-full" rows={2} value={form.notes} onChange={(e) => setField('notes', e.target.value)} placeholder="Optional description or operating rules" />
+          </div>
+          <label htmlFor="geo-active" className="flex items-center justify-between min-h-[44px] cursor-pointer">
+            <span className="text-sm text-[var(--text-secondary)]">Active</span>
+            <input id="geo-active" type="checkbox" checked={form.active} onChange={(e) => setField('active', e.target.checked)} className="accent-[var(--brand-bright)] w-5 h-5" />
+          </label>
+        </form>
+      </Modal>
 
       {/* Delete confirm */}
-      {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onMouseDown={() => !deleting && setConfirmDelete(null)}>
-          <div className="bg-[var(--card-bg)] border border-[var(--input-border)] rounded-2xl w-full max-w-sm shadow-2xl p-5" onMouseDown={(e) => e.stopPropagation()}>
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-xl bg-red-900/30 border border-red-800/50 flex items-center justify-center shrink-0"><Trash2 size={18} className="text-red-400" /></div>
-              <div>
-                <h3 className="font-semibold text-[var(--text-primary)]">Delete geofence?</h3>
-                <p className="text-sm text-[var(--text-muted)] mt-1">"{confirmDelete.name}" will be permanently removed. This cannot be undone.</p>
-              </div>
-            </div>
-            <div className="flex gap-3 mt-5">
-              <button onClick={() => setConfirmDelete(null)} className="btn-secondary flex-1 text-sm" disabled={deleting}>Cancel</button>
-              <button onClick={doDelete} className="flex-1 text-sm inline-flex items-center justify-center gap-2 rounded-lg bg-red-600 hover:bg-red-500 text-white px-3 py-2 font-medium transition-colors disabled:opacity-60" disabled={deleting}>
-                {deleting ? <><Loader2 size={14} className="animate-spin" /> Deleting</> : <>Delete</>}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal
+        open={!!confirmDelete}
+        onClose={() => { if (!deleting) setConfirmDelete(null) }}
+        title="Delete geofence?"
+        size="sm"
+        footer={(
+          <>
+            <button type="button" onClick={() => setConfirmDelete(null)} className="btn-secondary text-sm min-h-[44px]" disabled={deleting}>Cancel</button>
+            <button type="button" onClick={doDelete} className="btn-danger text-sm inline-flex items-center justify-center gap-2 min-h-[44px]" disabled={deleting}>
+              {deleting ? <><Loader2 size={14} className="animate-spin" aria-hidden="true" /> Deleting</> : <><Trash2 size={14} aria-hidden="true" /> Delete</>}
+            </button>
+          </>
+        )}
+      >
+        {saveError && !modalOpen && <p role="alert" className="text-sm text-red-300 mb-2">{saveError}</p>}
+        <p className="text-sm text-[var(--text-muted)]">"{confirmDelete?.name}" will be permanently removed. This cannot be undone.</p>
+      </Modal>
     </div>
   )
 }

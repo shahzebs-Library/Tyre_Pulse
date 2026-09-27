@@ -67,3 +67,6 @@ service-account*.json
 
 # --- Coverage ---
 coverage/
+
+# Golden-test failure evidence written by `flutter test`; never commit it.
+test/**/failures/

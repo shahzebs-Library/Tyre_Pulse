@@ -13,7 +13,7 @@
  * - The row action menu was absolutely positioned inside a scrolling table and
  *   was clipped on the last rows. It now opens as a fixed-position menu.
  */
-import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Users, Lock, Unlock, CheckCircle, RefreshCw, Edit2, Key, AlertTriangle,
@@ -209,6 +209,7 @@ export default function ConsoleUsers() {
     if (filterStatus === 'pending')  q = q.eq('approved', false).eq('locked', false)
     if (filterStatus === 'locked')   q = q.eq('locked', true)
     if (filterStatus === 'approved') q = q.eq('approved', true).eq('locked', false)
+    if (filterStatus === 'mobile')   q = q.eq('web_access', false)
     if (search) { const s = sanitizeSearchTerm(search); q = q.or(`full_name.ilike.%${s}%,email.ilike.%${s}%,site.ilike.%${s}%`) }
     return q
   }, [activeOrg, filterOrg, filterRole, filterStatus, search, sort])
@@ -317,8 +318,35 @@ export default function ConsoleUsers() {
     }
   }, [actionMenu])
 
+  // Keyboard: the menu takes focus on open, arrows move between items, Escape
+  // or Tab closes it and returns focus to the button that opened it.
+  const menuRef = useRef(null)
+  const menuTriggerRef = useRef(null)
+  useEffect(() => {
+    if (!actionMenu || !menuPos) return
+    const first = menuRef.current?.querySelector('[role="menuitem"]')
+    first?.focus()
+  }, [actionMenu, menuPos])
+  function onMenuKeyDown(e) {
+    const items = [...(menuRef.current?.querySelectorAll('[role="menuitem"]') || [])]
+    const i = items.indexOf(document.activeElement)
+    if (e.key === 'Escape' || e.key === 'Tab') {
+      if (e.key === 'Escape') e.preventDefault()
+      setActionMenu(null); setMenuPos(null)
+      menuTriggerRef.current?.focus()
+    } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault()
+      const next = e.key === 'ArrowDown' ? (i + 1) % items.length : (i - 1 + items.length) % items.length
+      items[next]?.focus()
+    } else if (e.key === 'Home' || e.key === 'End') {
+      e.preventDefault()
+      items[e.key === 'Home' ? 0 : items.length - 1]?.focus()
+    }
+  }
+
   function openMenu(e, userId) {
     e.stopPropagation()
+    menuTriggerRef.current = e.currentTarget
     if (actionMenu === userId) { setActionMenu(null); setMenuPos(null); return }
     const r = e.currentTarget.getBoundingClientRect()
     const menuH = 230
@@ -718,9 +746,15 @@ export default function ConsoleUsers() {
   const fromDrawer = (fn) => () => { setDetailUser(null); fn() }
 
   return (
-    <div className="space-y-5 max-w-7xl" onClick={closeMenu}>
+    <div className="space-y-4 max-w-7xl" onClick={closeMenu}>
       <PageHeader icon={Users} title="Users"
         purpose={`Approve, lock and scope every account in ${scopeLabel}. Figures cover the whole user base, not just the page shown.`}
+        primary={statsReady && stats.pending > 0 ? (
+          <Btn variant="primary" icon={UserCheck}
+            onClick={() => { setFilterStatus('pending'); setPage(0); setTab('register') }}>
+            Review {stats.pending} pending
+          </Btn>
+        ) : null}
         actions={(
           <>
             <Btn icon={FileSpreadsheet} onClick={() => runExport('excel')} busy={exporting === 'excel'} disabled={loading || !!loadError || total === 0}>Excel</Btn>
@@ -748,7 +782,8 @@ export default function ConsoleUsers() {
           onClick={() => { pickStatus('pending'); setTab('register') }} active={filterStatus === 'pending'} sub="Cannot use the app yet" />
         <StatTile label="Locked" value={tileVal(stats.locked)} tone={stats.locked ? 'danger' : 'default'} icon={Lock}
           onClick={() => { pickStatus('locked'); setTab('register') }} active={filterStatus === 'locked'} />
-        <StatTile label="Mobile only" value={tileVal(stats.mobileOnly)} icon={Smartphone} sub="Web login blocked" />
+        <StatTile label="Mobile only" value={tileVal(stats.mobileOnly)} icon={Smartphone} sub="Web login blocked"
+          onClick={() => { pickStatus('mobile'); setTab('register') }} active={filterStatus === 'mobile'} />
       </div>
 
       <Segmented ariaLabel="User views" value={tab} onChange={setTab} options={[
@@ -811,21 +846,25 @@ export default function ConsoleUsers() {
             subtitle={loading ? 'Loading' : loadError ? 'Could not be read' : `${total.toLocaleString()} user${total === 1 ? '' : 's'} match the current filters. Select a row for detail and actions.`} />
           <Toolbar>
             <SearchInput value={search} onChange={(v) => { setSearch(v); setPage(0) }}
-              placeholder="Search name, email, site" className="flex-1 min-w-48" />
-            <Select value={filterRole} onChange={(v) => { setFilterRole(v); setPage(0) }} placeholder="All roles" ariaLabel="Filter by role" className="w-40"
+              placeholder="Search name, email, site" className="w-full sm:flex-1 sm:min-w-48" />
+            <Select value={filterRole} onChange={(v) => { setFilterRole(v); setPage(0) }} placeholder="All roles" ariaLabel="Filter by role" className="w-full sm:w-40"
               options={roles.map(r => ({ value: r, label: r }))} />
-            <Select value={filterStatus} onChange={(v) => { setFilterStatus(v); setPage(0) }} placeholder="All status" ariaLabel="Filter by status" className="w-36"
+            <Select value={filterStatus} onChange={(v) => { setFilterStatus(v); setPage(0) }} placeholder="All status" ariaLabel="Filter by status" className="w-full sm:w-36"
               options={[
                 { value: 'approved', label: 'Approved' },
                 { value: 'pending', label: 'Pending' },
                 { value: 'locked', label: 'Locked' },
+                { value: 'mobile', label: 'Mobile only' },
               ]} />
             {!activeOrg && (
-              <Select value={filterOrg} onChange={(v) => { setFilterOrg(v); setPage(0) }} placeholder="All organisations" ariaLabel="Filter by organisation" className="w-48"
+              <Select value={filterOrg} onChange={(v) => { setFilterOrg(v); setPage(0) }} placeholder="All organisations" ariaLabel="Filter by organisation" className="w-full sm:w-48"
                 options={orgs.map(o => ({ value: o.id, label: o.name }))} />
             )}
             {hasFilters && <Btn variant="quiet" onClick={clearFilters}>Clear filters</Btn>}
           </Toolbar>
+          <p className="sr-only" aria-live="polite">
+            {loading ? 'Loading users' : loadError ? 'Users could not be read' : `${total} user${total === 1 ? '' : 's'} match the current filters`}
+          </p>
 
           {selected.size > 0 && (
             <div className="flex flex-wrap items-center gap-2 px-3 py-2.5 rounded-lg bg-orange-950/20 border border-orange-800/40">
@@ -999,7 +1038,8 @@ export default function ConsoleUsers() {
 
       {/* Row action menu: fixed so the scrolling table cannot clip it. */}
       {menuUser && menuPos && (
-        <div role="menu" onClick={e => e.stopPropagation()}
+        <div role="menu" ref={menuRef} aria-label={`Actions for ${menuUser.full_name || menuUser.email || 'user'}`}
+          onClick={e => e.stopPropagation()} onKeyDown={onMenuKeyDown}
           style={{ position: 'fixed', top: menuPos.top, right: menuPos.right }}
           className="w-56 bg-gray-900 border border-gray-800 rounded-xl shadow-2xl z-40 py-1">
           <MenuItem icon={Edit2} label="Edit user" onClick={() => openEdit(menuUser)} />
@@ -1321,7 +1361,7 @@ const INPUT = 'w-full h-9 bg-gray-900 border border-gray-800 rounded-lg px-3 tex
 
 function MenuItem({ icon: Icon, label, onClick, danger }) {
   return (
-    <button type="button" role="menuitem" onClick={onClick}
+    <button type="button" role="menuitem" tabIndex={-1} onClick={onClick}
       className={`w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-gray-800 transition-colors focus-visible:outline-none focus-visible:bg-gray-800 ${danger ? 'text-red-400' : 'text-gray-300'}`}>
       <Icon size={12} />
       {label}

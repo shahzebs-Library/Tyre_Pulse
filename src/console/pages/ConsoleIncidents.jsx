@@ -257,12 +257,12 @@ export default function ConsoleIncidents() {
   }
 
   if (loading && !incidents && !error) {
-    return <div className="space-y-5 max-w-7xl"><LoadingState label="Loading incidents" rows={6} /></div>
+    return <div className="space-y-4 max-w-7xl"><LoadingState label="Loading incidents" rows={6} /></div>
   }
   if (error && !incidents) {
     return (
-      <div className="space-y-5 max-w-7xl">
-        <h1><Siren size={18} className="text-orange-400" /> Incidents &amp; Status</h1>
+      <div className="space-y-4 max-w-7xl">
+        <h1 className="flex items-center gap-2"><Siren size={18} className="text-orange-400" aria-hidden="true" /> Incidents &amp; Status</h1>
         <ErrorState message={error} onRetry={load} />
       </div>
     )
@@ -284,13 +284,13 @@ export default function ConsoleIncidents() {
         actions={(<>
           <Btn icon={FileSpreadsheet} onClick={() => exportFile('excel')} busy={exporting === 'excel'} disabled={!all.length || !!exporting}>Excel</Btn>
           <Btn icon={FileText} onClick={() => exportFile('pdf')} busy={exporting === 'pdf'} disabled={!all.length || !!exporting}>PDF</Btn>
-          <Btn icon={Plus} variant="primary" onClick={() => startDraft(null)}>Open incident</Btn>
         </>)}
+        primary={<Btn icon={Plus} variant="primary" onClick={() => startDraft(null)}>Open incident</Btn>}
       />
 
       {error && <Note icon={AlertTriangle} tone="warning">{error}</Note>}
 
-      <section className={`rounded-xl border ${level.ring} bg-gray-900/50 p-4 flex items-center gap-4`} aria-live="polite">
+      <section className={`rounded-xl border ${level.ring} bg-gray-900/50 p-4 flex flex-wrap items-center gap-3 sm:gap-4`} aria-live="polite">
         <LevelIcon size={28} className={level.color} aria-hidden="true" />
         <div className="flex-1 min-w-0">
           <p className={`text-base font-semibold ${level.color}`}>{status.label}</p>
@@ -301,15 +301,18 @@ export default function ConsoleIncidents() {
         )}
       </section>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <StatTile label="Open incidents" value={openCount} icon={Activity}
           tone={openCount ? 'warning' : 'good'} onClick={() => { setView('open'); setTab('incidents') }} active={tab === 'incidents' && view === 'open'} />
-        <StatTile label="SEV1 open" value={openSev.sev1} icon={Flame} tone={openSev.sev1 ? 'danger' : 'default'} />
+        <StatTile label="SEV1 open" value={openSev.sev1} icon={Flame} tone={openSev.sev1 ? 'danger' : 'default'}
+          sub={openSev.sev1 ? 'Act now' : 'None open'}
+          onClick={() => { setView('open'); setTab('incidents') }} />
         <StatTile label={`MTTR ${WINDOW_DAYS}d`} value={formatDuration(mttr90)} icon={Timer}
           sub={mttr90 === null ? 'No resolved incident yet' : 'Start to resolved'} tone={mttr90 === null ? 'muted' : 'default'}
           onClick={() => setTab('trends')} active={tab === 'trends'} />
         <StatTile label={`MTTA ${WINDOW_DAYS}d`} value={formatDuration(mtta90)} icon={Clock}
-          sub={mtta90 === null ? 'Nothing acknowledged yet' : 'Start to first response'} tone={mtta90 === null ? 'muted' : 'default'} />
+          sub={mtta90 === null ? 'Nothing acknowledged yet' : 'Start to first response'} tone={mtta90 === null ? 'muted' : 'default'}
+          onClick={() => setTab('trends')} />
         <StatTile label={`Incidents ${WINDOW_DAYS}d`} value={count90} icon={ListChecks}
           onClick={() => { setView('all'); setTab('incidents') }} active={tab === 'incidents' && view === 'all'} />
       </div>
@@ -336,7 +339,7 @@ export default function ConsoleIncidents() {
               ]} />
               <SearchInput value={search} onChange={setSearch} placeholder="Search title, module, commander" className="w-full sm:w-64"
                 ariaLabel="Search incidents" />
-              <span className="text-[11px] text-gray-500 ml-auto tabular-nums">{listed.length} shown</span>
+              <span className="text-[11px] text-gray-500 sm:ml-auto tabular-nums" aria-live="polite">{listed.length} shown</span>
             </Toolbar>
           </div>
           {listed.length === 0 ? (
@@ -360,7 +363,7 @@ export default function ConsoleIncidents() {
                 </THead>
                 <tbody>
                   {paged.slice.map((i) => (
-                    <Tr key={i.id} onClick={() => openDetail(i)}>
+                    <Tr key={i.id} onClick={() => openDetail(i)} ariaLabel={`Open incident ${i.title}`}>
                       <Td>
                         <p className="text-gray-200 font-medium">{i.title}</p>
                         {(i.affected_modules || []).length > 0 && (
@@ -478,11 +481,11 @@ export default function ConsoleIncidents() {
               <Select value={update.status} onChange={(v) => setUpdate((u) => ({ ...u, status: v }))}
                 options={allowedNext(selected.status).map((s) => ({
                   value: s, label: s === selected.status ? `${STATUS_LABEL[s]} (no change)` : STATUS_LABEL[s],
-                }))} className="w-64" />
+                }))} className="w-full sm:w-64" ariaLabel="New status" />
               <textarea value={update.message} onChange={(e) => setUpdate((u) => ({ ...u, message: e.target.value }))}
                 rows={3} maxLength={4000} aria-label="Update message"
                 placeholder="What changed, what is being done, when the next update is due"
-                className="w-full rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 p-2.5 focus:border-gray-700 focus:outline-none" />
+                className="w-full rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 p-2.5 focus:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />
               {updError && <Note icon={XCircle} tone="danger">{updError}</Note>}
               <div className="flex justify-end">
                 <Btn icon={Send} variant={update.status === 'resolved' && selected.status !== 'resolved' ? 'good' : 'primary'}
@@ -506,7 +509,7 @@ export default function ConsoleIncidents() {
           <div className="space-y-3">
             <Field label="Title">
               <input value={draft.title} maxLength={200} onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-                className="w-full rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 px-2.5 py-1.5 focus:border-gray-700 focus:outline-none" />
+                className="w-full rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 px-2.5 py-1.5 focus:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />
             </Field>
             <Field label="Severity">
               <Segmented role="group" ariaLabel="Severity" value={draft.severity}
@@ -516,21 +519,21 @@ export default function ConsoleIncidents() {
             </Field>
             <Field label="Customer impact">
               <textarea value={draft.impact} rows={2} maxLength={4000} onChange={(e) => setDraft({ ...draft, impact: e.target.value })}
-                className="w-full rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 p-2.5 focus:border-gray-700 focus:outline-none" />
+                className="w-full rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 p-2.5 focus:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />
             </Field>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <Field label="Affected modules (comma separated)">
                 <input value={draft.affected_modules} onChange={(e) => setDraft({ ...draft, affected_modules: e.target.value })}
-                  className="w-full rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 px-2.5 py-1.5 focus:border-gray-700 focus:outline-none" />
+                  className="w-full rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 px-2.5 py-1.5 focus:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />
               </Field>
               <Field label="Started at (blank = now)">
                 <input type="datetime-local" value={draft.started_at} onChange={(e) => setDraft({ ...draft, started_at: e.target.value })}
-                  className="w-full rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 px-2.5 py-1.5 focus:border-gray-700 focus:outline-none" />
+                  className="w-full rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 px-2.5 py-1.5 focus:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />
               </Field>
             </div>
             <Field label="First update (optional)">
               <textarea value={draft.message} rows={2} maxLength={4000} onChange={(e) => setDraft({ ...draft, message: e.target.value })}
-                className="w-full rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 p-2.5 focus:border-gray-700 focus:outline-none" />
+                className="w-full rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 p-2.5 focus:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />
             </Field>
             {draft.source_type && draft.source_type !== 'manual' && (
               <Note icon={Radio}>Opened from a {draft.source_type.replace('_', ' ')} signal. The link is kept on the incident.</Note>

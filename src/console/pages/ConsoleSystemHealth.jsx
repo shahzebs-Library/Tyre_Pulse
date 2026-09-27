@@ -18,6 +18,7 @@ import {
   Activity, ShieldAlert, CheckCircle2, Info, Database, HardDrive,
   Zap, KeyRound, Table2, Server, Clock, Cpu, FileText, Archive, BarChart3, ListChecks,
 } from 'lucide-react'
+import { useInRouterContext, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import {
@@ -178,8 +179,24 @@ function checkDetail(c) {
   return c.status === 'ok' ? c.detail : toUserMessage(c.detail, statusWord(c.status))
 }
 
+/**
+ * Router navigation when mounted inside one, a plain page load otherwise (a
+ * page rendered bare in a unit test). Router presence never changes for a
+ * mounted component, so the hook order is stable.
+ */
+function useGo() {
+  const inRouter = useInRouterContext()
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const navigate = inRouter ? useNavigate() : null
+  return useCallback((to) => {
+    if (navigate) navigate(to)
+    else if (typeof window !== 'undefined') window.location.assign(to)
+  }, [navigate])
+}
+
 export default function ConsoleSystemHealth() {
   const { admin } = useConsoleAuth()
+  const go = useGo()
   const theme = useChartTheme()
 
   const [metrics, setMetrics]   = useState(null)
@@ -540,7 +557,7 @@ export default function ConsoleSystemHealth() {
           tip="The cloud database and backend that powers TyrePulse. Green means the app can reach and read from it."
           tone={dbCheck ? checkTone(dbCheck.status) : 'quiet'}
           value={dbCheck ? statusWord(dbCheck.status) : 'N/A'}
-          sub={dbCheck?.latencyMs != null ? `${dbCheck.latencyMs} ms response` : 'Connection'}
+          sub={dbCheck?.latencyMs != null ? `${dbCheck.latencyMs} ms response` : loading ? 'Checking...' : dbCheck ? 'Connection' : 'Could not check'}
           onClick={() => setTab('subsystems')} active={tab === 'subsystems'}
         />
         <div title="Unresolved critical and error level problems. Opens the error log filtered to open problems.">
@@ -555,21 +572,24 @@ export default function ConsoleSystemHealth() {
           tip="Sync means the newest piece of data recorded anywhere in the system. A recent time means data is flowing in."
           tone={lastSync ? freshnessTone(lastSync) : 'quiet'}
           value={lastSync ? fmtRelative(lastSync) : 'N/A'}
-          sub={lastSync ? fmtDateTime(lastSync) : 'No recent activity'}
+          sub={lastSync ? fmtDateTime(lastSync) : loading ? 'Checking...' : metrics ? 'No recent activity' : 'Could not check'}
+          onClick={() => go('/console/pipeline-monitor')}
         />
         <StatusTile
           icon={Cpu} label="Last AI call"
           tip="The most recent time the AI assistant was used. Helps confirm the AI features are working."
           tone={lastAiCall ? freshnessTone(lastAiCall) : 'quiet'}
           value={lastAiCall ? fmtRelative(lastAiCall) : 'N/A'}
-          sub={metrics?.ai ? `${metrics.ai.total ?? 0} calls, ${metrics.ai.errors ?? 0} failed` : 'No AI activity'}
+          sub={metrics?.ai ? `${metrics.ai.total ?? 0} calls, ${metrics.ai.errors ?? 0} failed` : loading ? 'Checking...' : metrics ? 'No AI activity' : 'Could not check'}
+          onClick={() => go('/console/ai-usage')}
         />
         <StatusTile
           icon={FileText} label="Last report"
           tip="The most recent scheduled report email that was sent to users."
           tone={lastReport ? freshnessTone(lastReport) : 'quiet'}
           value={lastReport ? fmtRelative(lastReport) : 'N/A'}
-          sub={metrics?.reports ? `${metrics.reports.total ?? 0} sent, ${metrics.reports.failed ?? 0} failed` : 'No reports sent'}
+          sub={metrics?.reports ? `${metrics.reports.total ?? 0} sent, ${metrics.reports.failed ?? 0} failed` : loading ? 'Checking...' : metrics ? 'No reports sent' : 'Could not check'}
+          onClick={() => go('/console/delivery')}
         />
       </div>
 
@@ -670,18 +690,18 @@ export default function ConsoleSystemHealth() {
             <Toolbar className="mb-3">
               <SearchInput value={logQuery} onChange={setLogQuery} className="w-full sm:w-64"
                 placeholder="Search message, module or reference" ariaLabel="Search the error log" />
-              <Select value={fSeverity} onChange={setFSeverity} className="w-40" ariaLabel="Filter by severity"
+              <Select value={fSeverity} onChange={setFSeverity} className="w-full sm:w-40" ariaLabel="Filter by severity"
                 options={[{ value: 'all', label: 'All severities' }, ...SEVERITIES.map(s => ({ value: s.key, label: s.label }))]} />
-              <Select value={fModule} onChange={setFModule} className="w-44" ariaLabel="Filter by module"
+              <Select value={fModule} onChange={setFModule} className="w-full sm:w-44" ariaLabel="Filter by module"
                 options={[{ value: 'all', label: 'All modules' }, ...moduleOptions.map(m => ({ value: m, label: m }))]} />
-              <Select value={fResolved} onChange={setFResolved} className="w-36" ariaLabel="Filter by status"
+              <Select value={fResolved} onChange={setFResolved} className="w-full sm:w-36" ariaLabel="Filter by status"
                 options={[{ value: 'open', label: 'Open only' }, { value: 'resolved', label: 'Resolved only' }, { value: 'all', label: 'All' }]} />
-              <Select value={fSince} onChange={setFSince} className="w-36" ariaLabel="Filter by time window"
+              <Select value={fSince} onChange={setFSince} className="w-full sm:w-36" ariaLabel="Filter by time window"
                 options={[
                   { value: '1', label: 'Last 24 hours' }, { value: '7', label: 'Last 7 days' },
                   { value: '14', label: 'Last 14 days' }, { value: '30', label: 'Last 30 days' }, { value: 'all', label: 'All time' },
                 ]} />
-              <span className="text-[11px] text-gray-500 ml-auto tabular-nums">
+              <span className="text-[11px] text-gray-500 sm:ml-auto tabular-nums" aria-live="polite">
                 {visibleLogs.length === logs.length ? `${logs.length} loaded` : `${visibleLogs.length} of ${logs.length} match`}
               </span>
             </Toolbar>

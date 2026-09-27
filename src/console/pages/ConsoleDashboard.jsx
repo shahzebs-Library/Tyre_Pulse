@@ -145,13 +145,21 @@ export default function ConsoleDashboard() {
       <OpsPageHeader
         title="System Overview"
         purpose={activeOrg ? `What needs you, and the platform at a glance, for ${activeOrg.name}.` : 'What needs you, and the platform at a glance, across all organisations.'}
+        primary={attention.data?.length ? (
+          <Btn variant="primary" icon={ClipboardCheck} onClick={() => navigate(attention.data[0].to)}
+            title={attention.data[0].text}>Start with the most urgent</Btn>
+        ) : null}
         refreshedAt={refreshedAt}
         onRefresh={loadAll}
         busy={busy}
       />
 
-      {/* Waiting on you */}
-      {attention.error ? (
+      {/* Waiting on you: announced when it finishes loading, so a screen
+          reader hears whether anything needs action without hunting for it. */}
+      <div aria-live="polite">
+      {attention.loading && !attention.data && !attention.error ? (
+        <Panel><LoadingState label="Checking what is waiting on you" rows={2} /></Panel>
+      ) : attention.error ? (
         <Note tone="warning" icon={Shield}>Could not check what is waiting on you. {attention.error}</Note>
       ) : attention.data && (
         <Panel tone={attention.data.length ? 'accent' : undefined}>
@@ -174,18 +182,20 @@ export default function ConsoleDashboard() {
           )}
         </Panel>
       )}
+      </div>
 
       {/* Headline numbers */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
         <StatTile icon={Users} label="Users" value={fmt(U.total)} sub={statsOk ? `${fmt(U.pending ?? 0)} pending approval` : 'Pending approvals: N/A'}
           onClick={() => navigate('/console/users')} tone={Number(U.pending) > 0 ? 'accent' : 'default'} />
-        <StatTile icon={UserPlus} label="New this week" value={fmt(U.new_week)} sub={statsOk ? `${fmt(U.new_today ?? 0)} today` : 'Today: N/A'} />
+        <StatTile icon={UserPlus} label="New this week" value={fmt(U.new_week)} sub={statsOk ? `${fmt(U.new_today ?? 0)} today` : 'Today: N/A'}
+          onClick={() => setTab('people')} active={tab === 'people'} />
         <StatTile icon={Shield} label="Locked accounts" value={statsOk ? fmt(U.locked ?? 0) : 'N/A'}
           tone={Number(U.locked) > 0 ? 'warning' : 'default'} onClick={() => navigate('/console/users')} />
         <StatTile icon={Building2} label="Organisations" value={fmt(O.total)} sub={statsOk ? `${fmt(O.active ?? 0)} active` : 'Active: N/A'}
           onClick={() => navigate('/console/organisations')} />
         <StatTile icon={Truck} label="Vehicles" value={fmt(A.vehicles)} sub="registered" />
-        <StatTile icon={Zap} label="AI calls (30d)" value={ai.error ? 'N/A' : fmt(aiDaily.total)}
+        <StatTile icon={Zap} label="AI calls (30d)" value={ai.error || !ai.data ? 'N/A' : fmt(aiDaily.total)}
           sub={ai.error || !ai.data ? 'Failures: N/A' : aiFailed ? `${aiFailed} failed` : 'no failures'} tone={aiFailed ? 'warning' : 'default'}
           onClick={() => navigate('/console/ai-usage')} />
       </div>
@@ -198,7 +208,7 @@ export default function ConsoleDashboard() {
         { key: 'activity', label: 'Console activity' },
       ]} />
 
-      {tab === 'overview' && (<>
+      {tab === 'overview' && (<div role="tabpanel" aria-label="Overview" className="space-y-4">
       <div className="grid gap-4 lg:grid-cols-3">
         <Panel>
           <PanelHeader icon={ShieldCheck} title="Security"
@@ -250,10 +260,10 @@ export default function ConsoleDashboard() {
           </div>
         </Panel>
         </div>
-      </>)}
+      </div>)}
 
       {tab === 'people' && (
-        <div className="grid gap-4 lg:grid-cols-3">
+        <div role="tabpanel" aria-label="People" className="grid gap-4 lg:grid-cols-3">
           <div className="lg:col-span-2">
         <Panel>
           <PanelHeader icon={Users} title="Users by role" subtitle="The five largest roles, the rest grouped as Other." />
@@ -281,7 +291,7 @@ export default function ConsoleDashboard() {
       )}
 
       {tab === 'ai' && (
-        <div className="grid gap-4 lg:grid-cols-3">
+        <div role="tabpanel" aria-label="AI usage" className="grid gap-4 lg:grid-cols-3">
         <Panel className="lg:col-span-2">
           <PanelHeader icon={Zap} title="AI usage, last 30 days"
             subtitle={ai.error ? 'Could not read AI usage.' : `${fmt(aiDaily.total)} calls, estimated cost $${aiCost.toFixed(2)}.${ai.data?.truncated ? ` Capped at the first ${nf.format(AI_ROW_CEILING)} calls.` : ''}`}
@@ -306,6 +316,7 @@ export default function ConsoleDashboard() {
       )}
 
       {tab === 'activity' && (
+        <div role="tabpanel" aria-label="Console activity">
         <Panel flush>
           <div className="p-4 pb-2">
             <PanelHeader icon={Activity} title="Recent console actions" subtitle="The latest 50 actions taken in this console."
@@ -340,6 +351,7 @@ export default function ConsoleDashboard() {
           )}
           {actions.data?.length > 0 && <div className="px-4 pb-3"><Pager {...actPaged} size={10} label="actions" /></div>}
         </Panel>
+        </div>
       )}
     </div>
   )

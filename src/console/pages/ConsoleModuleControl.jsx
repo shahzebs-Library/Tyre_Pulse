@@ -370,13 +370,18 @@ export default function ConsoleModuleControl() {
     })
   }
 
+  // A failed registry read is "could not check", never a row of zero counts.
+  const countsKnown = !loading && !(error && modules.length === 0)
+  const countVal = (n) => (countsKnown ? n : 'N/A')
+  const pickStatusTile = (key) => { setStatusFilter(statusFilter === key ? 'all' : key); setTab('modules') }
+
   const filtersActive = search.trim() || category !== 'all' || statusFilter !== 'all'
   function clearFilters() { setSearch(''); setCategory('all'); setStatusFilter('all') }
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-5 max-w-7xl">
+    <div className="space-y-4 max-w-7xl">
       <PageHeader icon={Boxes} title="Module Control Center"
         purpose={`${admin?.full_name ? `Signed in as ${admin.full_name}. ` : ''}Turn product modules Live, into Maintenance, or Off across the platform.`}
         refreshedAt={readAt} onRefresh={load} refreshing={loading} />
@@ -395,14 +400,18 @@ export default function ConsoleModuleControl() {
       {/* Status overview */}
       <div className="grid gap-3 lg:grid-cols-3">
         <div className="grid grid-cols-2 gap-3 lg:col-span-2 content-start">
-          <StatTile label="Live" value={loading ? 'N/A' : counts.live} tone="good" icon={Rocket}
-            active={statusFilter === 'live'} onClick={() => setStatusFilter(statusFilter === 'live' ? 'all' : 'live')} />
-          <StatTile label="Maintenance" value={loading ? 'N/A' : counts.maintenance} tone="warning" icon={Wrench}
-            active={statusFilter === 'maintenance'} onClick={() => setStatusFilter(statusFilter === 'maintenance' ? 'all' : 'maintenance')} />
-          <StatTile label="Off" value={loading ? 'N/A' : counts.disabled} tone="danger" icon={Power}
-            active={statusFilter === 'disabled'} onClick={() => setStatusFilter(statusFilter === 'disabled' ? 'all' : 'disabled')} />
-          <StatTile label="Beta" value={loading ? 'N/A' : counts.beta} tone="muted" icon={Sparkles}
-            active={statusFilter === 'beta'} onClick={() => setStatusFilter(statusFilter === 'beta' ? 'all' : 'beta')} />
+          <StatTile label="Live" value={countVal(counts.live)} tone="good" icon={Rocket}
+            active={tab === 'modules' && statusFilter === 'live'} onClick={() => pickStatusTile('live')}
+            sub={countsKnown ? undefined : loading ? 'Loading' : 'Could not check'} />
+          <StatTile label="Maintenance" value={countVal(counts.maintenance)} tone="warning" icon={Wrench}
+            active={tab === 'modules' && statusFilter === 'maintenance'} onClick={() => pickStatusTile('maintenance')}
+            sub={countsKnown ? undefined : loading ? 'Loading' : 'Could not check'} />
+          <StatTile label="Off" value={countVal(counts.disabled)} tone="danger" icon={Power}
+            active={tab === 'modules' && statusFilter === 'disabled'} onClick={() => pickStatusTile('disabled')}
+            sub={countsKnown ? undefined : loading ? 'Loading' : 'Could not check'} />
+          <StatTile label="Beta" value={countVal(counts.beta)} tone="muted" icon={Sparkles}
+            active={tab === 'modules' && statusFilter === 'beta'} onClick={() => pickStatusTile('beta')}
+            sub={countsKnown ? undefined : loading ? 'Loading' : 'Could not check'} />
           {!loading && overdueWindows > 0 && (
             <div className="col-span-2">
               <Note icon={Clock} tone="warning">
@@ -414,8 +423,10 @@ export default function ConsoleModuleControl() {
         </div>
         <Panel>
           <PanelHeader title="Modules by status"
-            subtitle={loading ? 'Loading' : `${outOfService} of ${modules.length} out of service`} />
-          {loading ? <LoadingState rows={2} /> : (
+            subtitle={loading ? 'Loading' : countsKnown ? `${outOfService} of ${modules.length} out of service` : 'Could not check'} />
+          {loading ? <LoadingState rows={2} /> : !countsKnown ? (
+            <EmptyState icon={Boxes} title="Could not check" reason="The module registry could not be read, so no split is shown rather than zeros." />
+          ) : (
             <ShareChart
               parts={shareParts}
               height={140}
@@ -449,18 +460,21 @@ export default function ConsoleModuleControl() {
             ...(counts.beta ? [{ key: 'beta', label: 'Beta', count: counts.beta }] : []),
           ]}
         />
-        <SearchInput value={search} onChange={setSearch} placeholder="Search by module id or name" className="flex-1 min-w-[200px]" />
+        <SearchInput value={search} onChange={setSearch} placeholder="Search by module id or name" className="w-full sm:flex-1 sm:min-w-[200px]" />
         <Select
           value={category}
           onChange={setCategory}
           options={[{ value: 'all', label: 'All categories' }, ...categories.map((c) => ({ value: c, label: c }))]}
           ariaLabel="Filter by category"
-          className="w-48"
+          className="w-full sm:w-48"
         />
-        <Select value={order} onChange={setOrder} ariaLabel="Sort modules by" className="w-40"
+        <Select value={order} onChange={setOrder} ariaLabel="Sort modules by" className="w-full sm:w-40"
           options={MODULE_ORDERS.map((o) => ({ value: o.key, label: `Sort: ${o.label}` }))} />
         <ExportButtons rows={filtered} columns={MODULE_EXPORT_COLUMNS} title="Module Control" />
       </Toolbar>
+      <p className="sr-only" aria-live="polite">
+        {loading ? 'Loading modules' : countsKnown ? `${filtered.length} of ${modules.length} modules shown` : 'Modules could not be read'}
+      </p>
 
       {/* Bulk action bar */}
       {!loading && filtered.length > 0 && (

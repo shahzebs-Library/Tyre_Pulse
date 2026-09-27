@@ -91,7 +91,7 @@ export default function Vehicle360() {
       const t = await v360.getVehicleTyres(assetNo, { country: v.country })
       setVehicle(v); setTyres(t || [])
       setGps({ lat: v.latitude ?? '', lng: v.longitude ?? '' })
-      setPhotoUrl(v.image_path ? await v360.vehiclePhotoUrl(v.image_path) : null)
+      setPhotoUrl(await v360.vehiclePhotoUrl(v360.resolveVehiclePhotoPath(v)))
       loadHistory(v)
     } catch (e) { setError(toUserMessage(e, 'Could not load the vehicle.')) }
     finally { setLoading(false) }

@@ -85,14 +85,62 @@ export async function vehiclePhotoUrl(path) {
   return data?.signedUrl ?? null
 }
 
+/** One storage path segment: only [A-Za-z0-9_-], never empty, never a traversal. */
+function pathSegment(v, fallback) {
+  const s = String(v ?? '').trim().replace(/[^a-zA-Z0-9_-]/g, '_').replace(/^_+|_+$/g, '')
+  return s || fallback
+}
+
 /**
- * Upload/replace a vehicle's photo. Stores at `<asset_no>/photo.<ext>` (upsert),
- * records the path on vehicle_fleet, and returns { path, url }.
+ * Storage path for a vehicle photo: `<org>/<COUNTRY>/<ASSET>/photo.<ext>`.
+ * The same asset code in two countries (or two tenants) is a DIFFERENT machine,
+ * so the path carries organisation and country; the old `<ASSET>/photo.<ext>`
+ * shape let one machine's upload overwrite (upsert) the other's photo.
+ * Asset and country are upper-cased so spelling variants land on one object.
  */
-export async function uploadVehiclePhoto(assetNo, file, { country } = {}) {
+export function vehiclePhotoPath({ orgId, country, assetNo, ext }) {
+  const org = pathSegment(orgId, 'no-org').toLowerCase()
+  const ctry = pathSegment(scopedCountry(country), 'NO-COUNTRY').toUpperCase()
+  const asset = pathSegment(assetNo, 'NO-ASSET').toUpperCase()
+  const e = pathSegment(ext, 'jpg').toLowerCase()
+  return `${org}/${ctry}/${asset}/photo.${e}`
+}
+
+/** The pre-fix path shape, kept only so old rows are recognisable. */
+export function legacyVehiclePhotoPath(assetNo, ext) {
+  return `${String(assetNo).replace(/[^a-zA-Z0-9_-]/g, '_')}/photo.${ext}`
+}
+
+/**
+ * Path to read for a vehicle: whatever is stored on its row (`image_path`).
+ * Legacy rows keep their old `<ASSET>/photo.<ext>` path and still render; new
+ * uploads store the org/country path. null when the vehicle has no photo.
+ */
+export function resolveVehiclePhotoPath(vehicle) {
+  const p = vehicle?.image_path
+  return typeof p === 'string' && p.trim() ? p.trim() : null
+}
+
+/** The vehicle's own organisation (the row's, not the viewer's), or null. */
+async function vehicleOrgId(assetNo, country) {
+  let q = supabase.from('vehicle_fleet').select('organisation_id')
+    .ilike('asset_no', escapeLike(String(assetNo ?? '').trim()))
+  const c = scopedCountry(country)
+  if (c) q = q.eq('country', c)
+  const { data, error } = await q.order('id').limit(1).maybeSingle()
+  if (error) return null
+  return data?.organisation_id ?? null
+}
+
+/**
+ * Upload/replace a vehicle's photo. Stores at `<org>/<COUNTRY>/<ASSET>/photo.<ext>`
+ * (upsert), records the path on vehicle_fleet, and returns { path, url }.
+ * `orgId` is optional; when omitted the vehicle row's own organisation is used.
+ */
+export async function uploadVehiclePhoto(assetNo, file, { country, orgId } = {}) {
   const ext = validatePhotoFile(file)
-  const safe = String(assetNo).replace(/[^a-zA-Z0-9_-]/g, '_')
-  const path = `${safe}/photo.${ext}`
+  const org = orgId || await vehicleOrgId(assetNo, country)
+  const path = vehiclePhotoPath({ orgId: org, country, assetNo, ext })
   const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, file, {
     upsert: true, contentType: file.type || 'image/jpeg', cacheControl: '3600',
   })

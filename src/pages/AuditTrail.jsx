@@ -1,114 +1,95 @@
+/**
+ * AuditTrail (route /audit): full history of uploads and user activity.
+ *
+ * Two server-paged registers (audit log + upload history) on the shared
+ * EnterpriseTable, a KPI strip with honest "Unavailable" statistics when a read
+ * fails, filters (date, action, user, page search), a change-detail dialog with
+ * a field-level old/new diff, full-filter Excel/PDF exports, and the Admin-only
+ * reversible upload batch reversal (server RPC `reverse_legacy_upload`, typed
+ * confirmation + reason). Presentation logic lives in the pure
+ * `src/lib/auditTrailAnalytics.js` engine.
+ */
 import React, { useEffect, useState, useCallback, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import useLatestRequest from '../lib/useLatestRequest'
 import { fetchAllPages } from '../lib/fetchAll'
 
 import { auditQuery, uploadHistoryQuery, readAuditExport, matchesAuditSearch } from '../lib/api/auditTrail'
-import { exportToExcel } from '../lib/exportUtils'
+import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { useAuth } from '../contexts/AuthContext'
 import { formatDateTime, formatDate } from '../lib/formatters'
 import {
-  FileSpreadsheet, ChevronLeft, ChevronRight, ClipboardList, RefreshCw, Search,
+  FileSpreadsheet, FileText, ClipboardList, RefreshCw, Search, Eye, Activity, Upload, Users, Database, X,
 } from 'lucide-react'
-import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
+import Modal from '../components/ui/Modal'
 import { useReportMeta } from '../hooks/useReportMeta'
+import {
+  hasExpandable, changeDiff, actionMix, pageRangeLabel, pageCountFor, actorName,
+  auditExportRows, uploadExportRows, auditFileName, AUDIT_ACTIONS,
+  AUDIT_EXPORT_COLS, AUDIT_EXPORT_HEADERS, UPLOAD_EXPORT_COLS, UPLOAD_EXPORT_HEADERS,
+} from '../lib/auditTrailAnalytics'
 
 const PAGE_SIZE = 50
 
+// Semantic action tints; the action word is always printed too.
 const ACTION_BADGE = {
-  UPLOAD: 'bg-blue-900/50 text-blue-300 border-blue-700/50',
-  CREATE: 'bg-green-900/50 text-green-300 border-green-700/50',
-  UPDATE: 'bg-amber-900/50 text-amber-300 border-amber-700/50',
-  DELETE: 'bg-red-900/50 text-red-300 border-red-700/50',
-  EDIT:   'bg-amber-900/50 text-amber-300 border-amber-700/50',
-  EXPORT: 'bg-green-900/50 text-green-300 border-green-700/50',
+  UPLOAD: 'bg-blue-500/15 text-blue-500 border-blue-500/30',
+  CREATE: 'bg-green-500/15 text-green-500 border-green-500/30',
+  UPDATE: 'bg-amber-500/15 text-amber-500 border-amber-500/30',
+  DELETE: 'bg-red-500/15 text-red-500 border-red-500/30',
+  EDIT:   'bg-amber-500/15 text-amber-500 border-amber-500/30',
+  EXPORT: 'bg-green-500/15 text-green-500 border-green-500/30',
 }
+const NEUTRAL_BADGE = 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)]'
 
-function nonEmpty(obj) {
-  return obj && typeof obj === 'object' && Object.keys(obj).length > 0
-}
-
-function hasExpandable(row) {
-  return nonEmpty(row.details) || nonEmpty(row.old_values) || nonEmpty(row.new_values) || nonEmpty(row.old_data) || nonEmpty(row.new_data)
-}
-
-function fmtVal(v) {
-  if (v === null || v === undefined || v === '') return 'N/A'
-  if (typeof v === 'object') { try { return JSON.stringify(v) } catch { return String(v) } }
-  return String(v)
-}
-
+/** Field-level old/new diff rendered as a responsive definition list. */
 function AuditChangeDetail({ row }) {
-  const oldV = nonEmpty(row.old_values) ? row.old_values : nonEmpty(row.old_data) ? row.old_data : null
-  const newRaw = nonEmpty(row.new_values) ? row.new_values : nonEmpty(row.new_data) ? row.new_data : null
-  const meta = newRaw?._meta
-  const newV = newRaw
-    ? Object.fromEntries(Object.entries(newRaw).filter(([k]) => k !== '_meta'))
-    : null
-  const fields = [...new Set([...Object.keys(oldV || {}), ...Object.keys(newV || {})])]
-
+  const { fields, meta, details } = changeDiff(row)
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       {fields.length > 0 && (
-        <table className="text-xs w-full max-w-3xl">
-          <thead>
-            <tr className="text-gray-500">
-              <th className="text-left font-medium py-1 pr-4">Field</th>
-              <th className="text-left font-medium py-1 pr-4">Old value</th>
-              <th className="text-left font-medium py-1">New value</th>
-            </tr>
-          </thead>
-          <tbody>
-            {fields.map(f => (
-              <tr key={f} className="border-t border-gray-800">
-                <td className="py-1 pr-4 text-gray-400 font-medium whitespace-nowrap">{f}</td>
-                <td className="py-1 pr-4 text-red-300/80 break-all">{fmtVal(oldV?.[f])}</td>
-                <td className="py-1 text-green-300/80 break-all">{fmtVal(newV?.[f])}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <dl className="divide-y divide-[var(--input-border)] rounded-lg border border-[var(--input-border)]">
+          <div className="hidden sm:grid grid-cols-3 gap-3 px-3 py-2 text-xs font-medium text-[var(--text-muted)]">
+            <span>Field</span><span>Old value</span><span>New value</span>
+          </div>
+          {fields.map((f) => (
+            <div key={f.field} className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-3 px-3 py-2 text-xs">
+              <dt className="font-medium text-[var(--text-secondary)] break-all">{f.field}{f.changed ? '' : ' (unchanged)'}</dt>
+              <dd className="text-[var(--text-muted)] break-all"><span className="sm:hidden font-medium">Old: </span>{f.oldValue}</dd>
+              <dd className={`break-all ${f.changed ? 'text-[var(--text-primary)] font-medium' : 'text-[var(--text-muted)]'}`}><span className="sm:hidden font-medium">New: </span>{f.newValue}</dd>
+            </div>
+          ))}
+        </dl>
       )}
-      {nonEmpty(meta) && (
-        <pre className="text-xs text-gray-400 bg-gray-800/60 rounded p-3 overflow-auto max-h-40">
-          {JSON.stringify(meta, null, 2)}
-        </pre>
+      {meta && (
+        <pre className="text-xs text-[var(--text-secondary)] bg-[var(--input-bg)] rounded p-3 overflow-auto max-h-40">{JSON.stringify(meta, null, 2)}</pre>
       )}
-      {nonEmpty(row.details) && (
-        <pre className="text-xs text-gray-400 bg-gray-800/60 rounded p-3 overflow-auto max-h-40">
-          {JSON.stringify(row.details, null, 2)}
-        </pre>
+      {details && (
+        <pre className="text-xs text-[var(--text-secondary)] bg-[var(--input-bg)] rounded p-3 overflow-auto max-h-40">{JSON.stringify(details, null, 2)}</pre>
       )}
-      {fields.length === 0 && !nonEmpty(meta) && !nonEmpty(row.details) && (
-        <p className="text-xs text-gray-500">No change detail recorded.</p>
+      {fields.length === 0 && !meta && !details && (
+        <p className="text-xs text-[var(--text-muted)]">No change detail recorded.</p>
       )}
     </div>
   )
 }
 
-function SummarySkeleton() {
-  return <div className="animate-pulse bg-gray-800/40 rounded h-8 w-24" />
-}
-
-function SummaryCard({ label, value, color, loading, note }) {
-  const colors = {
-    blue:   'text-blue-400 border-blue-800 bg-blue-900/20',
-    green:  'text-green-400 border-green-800 bg-green-900/20',
-    purple: 'text-purple-400 border-purple-800 bg-purple-900/20',
-    amber:  'text-amber-400 border-amber-800 bg-amber-900/20',
-  }
+function SummaryCard({ label, value, icon: Icon, tone, loading, note }) {
   return (
-    <div className={`card border ${colors[color]}`}>
+    <div className="card min-w-0">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs text-[var(--text-muted)]">{label}</p>
+        <Icon size={16} className={tone} aria-hidden="true" />
+      </div>
       {loading ? (
-        <SummarySkeleton />
+        <div className="animate-pulse bg-[var(--input-bg)] rounded h-8 w-24 mt-1" />
       ) : (
-        <p className={`text-3xl font-bold ${colors[color].split(' ')[0]}`}>{value ?? 'Unavailable'}</p>
+        <p className={`text-2xl sm:text-3xl font-bold mt-1 tabular-nums ${tone}`}>{value ?? 'Unavailable'}</p>
       )}
-      <p className="text-sm mt-1 text-gray-400">{label}</p>
-      {!loading && note ? <p className="text-[11px] mt-0.5 text-gray-500">{note}</p> : null}
+      {!loading && note ? <p className="text-[11px] mt-0.5 text-[var(--text-muted)]">{note}</p> : null}
     </div>
   )
 }
@@ -255,56 +236,32 @@ export default function AuditTrail() {
 
   useEffect(() => { if (activeTab === 'upload') loadUploadHistory() }, [loadUploadHistory, activeTab])
 
-  async function exportAuditLog() {
+  async function exportAuditLog(kind = 'xlsx') {
     if (exporting) return
     setExporting(true); setExportError('')
     try {
-    const data = await readAuditExport({ filters: { dateFrom, dateTo, action: actionFilter, user: userFilter }, search: auditSearch })
-    const rows = (data ?? []).map(r => ({
-      timestamp:  r.created_at ? formatDateTime(r.created_at) : '',
-      user:       r.profiles?.full_name ?? r.profiles?.username ?? r.user_id ?? '',
-      action:     r.action ?? '',
-      table_name: r.table_name ?? '',
-      records:    r.record_count ?? '',
-      details:    r.details ? JSON.stringify(r.details) : '',
-      old_values: JSON.stringify(r.old_values ?? r.old_data ?? null),
-      new_values: JSON.stringify(r.new_values ?? r.new_data ?? null),
-    }))
-
-    exportToExcel(
-      rows,
-      ['timestamp', 'user', 'action', 'table_name', 'records', 'details', 'old_values', 'new_values'],
-      ['Timestamp', 'User', 'Action', 'Table', 'Records', 'Details', 'Old Values', 'New Values'],
-      `TyrePulse_AuditLog_${new Date().toISOString().slice(0, 10)}`,
-      'Audit Log'
-    )
+      const data = await readAuditExport({ filters: { dateFrom, dateTo, action: actionFilter, user: userFilter }, search: auditSearch })
+      const rows = auditExportRows(data ?? [], formatDateTime)
+      if (kind === 'pdf') {
+        await exportToPdf(rows, AUDIT_EXPORT_COLS.slice(0, 5).map((key, i) => ({ key, header: AUDIT_EXPORT_HEADERS[i] })), 'Audit Log', auditFileName('audit'), 'landscape')
+      } else {
+        await exportToExcel(rows, AUDIT_EXPORT_COLS, AUDIT_EXPORT_HEADERS, auditFileName('audit'), 'Audit Log')
+      }
     } catch (error) { setExportError(toUserMessage(error, 'Audit export failed.')) }
     finally { setExporting(false) }
   }
 
-  async function exportUploadHistory() {
+  async function exportUploadHistory(kind = 'xlsx') {
     if (exporting) return
     setExporting(true); setExportError('')
     try {
-    const data = await readAuditExport({ upload: true, filters: { dateFrom, dateTo } })
-    const rows = (data ?? []).map(r => ({
-      file_names:      Array.isArray(r.file_names) ? r.file_names.join(', ') : (r.file_names ?? ''),
-      records_added:   r.records_added ?? 0,
-      records_skipped: r.records_skipped ?? 0,
-      uploaded_by:     r.profiles?.full_name ?? r.profiles?.username ?? r.uploaded_by ?? '',
-      uploaded_at:     r.uploaded_at ? formatDateTime(r.uploaded_at) : '',
-      region:          r.region ?? '',
-      reversed_at:     r.reversed_at ? formatDateTime(r.reversed_at) : '',
-      reversed_count:  r.reversed_count ?? '',
-    }))
-
-    exportToExcel(
-      rows,
-      ['file_names', 'records_added', 'records_skipped', 'uploaded_by', 'uploaded_at', 'region', 'reversed_at', 'reversed_count'],
-      ['File Names', 'Records Added', 'Records Skipped', 'Uploaded By', 'Uploaded At', 'Region', 'Reversed At', 'Reversed Records'],
-      `TyrePulse_UploadHistory_${new Date().toISOString().slice(0, 10)}`,
-      'Upload History'
-    )
+      const data = await readAuditExport({ upload: true, filters: { dateFrom, dateTo } })
+      const rows = uploadExportRows(data ?? [], formatDateTime)
+      if (kind === 'pdf') {
+        await exportToPdf(rows, UPLOAD_EXPORT_COLS.map((key, i) => ({ key, header: UPLOAD_EXPORT_HEADERS[i] })), 'Upload History', auditFileName('upload'), 'landscape')
+      } else {
+        await exportToExcel(rows, UPLOAD_EXPORT_COLS, UPLOAD_EXPORT_HEADERS, auditFileName('upload'), 'Upload History')
+      }
     } catch (error) { setExportError(toUserMessage(error, 'Upload history export failed.')) }
     finally { setExporting(false) }
   }
@@ -330,66 +287,72 @@ export default function AuditTrail() {
     }
   }
 
-  const auditPages  = Math.ceil(auditTotal  / PAGE_SIZE)
-  const uploadPages = Math.ceil(uploadTotal / PAGE_SIZE)
+  const auditPages  = pageCountFor(auditTotal, PAGE_SIZE)
+  const uploadPages = pageCountFor(uploadTotal, PAGE_SIZE)
 
   const visibleAuditRows = auditRows.filter(row => matchesAuditSearch(row, auditSearch))
+  const pageMix = useMemo(() => actionMix(visibleAuditRows), [visibleAuditRows])
+
+  const closeDelete = () => { if (!deleting) { setDeleteTarget(null); setDeleteConfirm(''); setDeleteError('') } }
 
   // EnterpriseTable columns for audit log
   const auditColumns = useMemo(() => [
     {
       id: 'created_at',
       header: 'Timestamp',
-      accessorFn: r => r.created_at ? formatDateTime(r.created_at) : '-',
+      accessorFn: r => r.created_at || '',
       size: 160,
-      cell: ({ getValue }) => <span className="text-gray-400 text-xs whitespace-nowrap">{getValue()}</span>,
+      cell: ({ row }) => <span className="text-[var(--text-muted)] text-xs whitespace-nowrap">{row.original.created_at ? formatDateTime(row.original.created_at) : 'N/A'}</span>,
     },
     {
       id: 'user',
       header: 'User',
-      accessorFn: r => r.profiles?.full_name ?? r.profiles?.username ?? 'Unknown',
+      accessorFn: r => actorName(r),
       size: 140,
       cell: ({ getValue, row }) => row.original.profiles?.full_name || row.original.profiles?.username
-        ? <span className="text-gray-200">{getValue()}</span>
-        : <span className="text-gray-600">Unknown</span>,
+        ? <span className="text-[var(--text-primary)]">{getValue()}</span>
+        : <span className="text-[var(--text-muted)]">{getValue()}</span>,
     },
     {
       id: 'action',
       header: 'Action',
-      accessorFn: r => r.action ?? '-',
+      accessorFn: r => r.action ?? 'N/A',
       size: 100,
       cell: ({ getValue }) => {
         const val = getValue()
-        return val !== '-' ? (
-          <span className={`badge border ${ACTION_BADGE[val] ?? 'bg-gray-800 text-gray-400 border-gray-700'}`}>{val}</span>
-        ) : '-'
+        return val !== 'N/A' ? (
+          <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-medium ${ACTION_BADGE[val] ?? NEUTRAL_BADGE}`}>{val}</span>
+        ) : 'N/A'
       },
     },
-    { id: 'table_name', header: 'Table', accessorFn: r => r.table_name ?? '-', size: 120 },
+    { id: 'table_name', header: 'Table', accessorFn: r => r.table_name ?? 'N/A', size: 120 },
     {
       id: 'record_count',
       header: 'Records',
-      accessorFn: r => r.record_count ?? '-',
+      accessorFn: r => (r.record_count == null ? -1 : Number(r.record_count)),
       size: 80,
       meta: { align: 'right' },
+      cell: ({ row }) => <span className="tabular-nums">{row.original.record_count ?? 'N/A'}</span>,
     },
     {
       id: 'details',
       header: 'Details',
-      accessorFn: r => hasExpandable(r) ? 'expand' : '-',
-      size: 80,
+      accessorFn: r => (hasExpandable(r) ? 'yes' : ''),
+      size: 110,
       enableSorting: false,
       meta: { export: false },
       cell: ({ row }) => hasExpandable(row.original) ? (
         <button
-          onClick={() => setExpandedRow(expandedRow === row.original.id ? null : row.original.id)}
-          className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+          type="button"
+          onClick={() => setExpandedRow(row.original)}
+          className="inline-flex items-center gap-1 min-h-[44px] px-2 text-xs font-medium text-blue-500 hover:underline"
+          aria-label={`View change detail for ${row.original.action || 'event'} on ${row.original.table_name || 'record'}`}
         >
-          {expandedRow === row.original.id ? 'Hide' : 'Show'}
+          <Eye size={13} aria-hidden="true" /> View
         </button>
-      ) : <span className="text-gray-700">-</span>,
+      ) : <span className="text-[var(--text-dim)]">None</span>,
     },
-  ], [expandedRow])
+  ], [])
 
   // EnterpriseTable columns for upload history
   const uploadColumns = useMemo(() => {
@@ -397,9 +360,9 @@ export default function AuditTrail() {
       {
         id: 'file_names',
         header: 'File Names',
-        accessorFn: r => Array.isArray(r.file_names) ? r.file_names.join(', ') : (r.file_names ?? '-'),
+        accessorFn: r => Array.isArray(r.file_names) ? r.file_names.join(', ') : (r.file_names ?? 'N/A'),
         size: 200,
-        cell: ({ getValue }) => <span className="text-gray-200 max-w-xs truncate block">{getValue()}</span>,
+        cell: ({ getValue }) => <span className="text-[var(--text-primary)] max-w-xs truncate block" title={getValue()}>{getValue()}</span>,
       },
       {
         id: 'records_added',
@@ -407,7 +370,7 @@ export default function AuditTrail() {
         accessorFn: r => r.records_added ?? 0,
         size: 100,
         meta: { align: 'right' },
-        cell: ({ getValue }) => <span className="text-green-400 font-medium">{getValue().toLocaleString()}</span>,
+        cell: ({ getValue }) => <span className="text-green-500 font-medium tabular-nums">{getValue().toLocaleString()}</span>,
       },
       {
         id: 'records_skipped',
@@ -415,48 +378,54 @@ export default function AuditTrail() {
         accessorFn: r => r.records_skipped ?? 0,
         size: 100,
         meta: { align: 'right' },
-        cell: ({ getValue }) => <span className="text-amber-400">{getValue().toLocaleString()}</span>,
+        cell: ({ getValue }) => <span className="text-amber-500 tabular-nums">{getValue().toLocaleString()}</span>,
       },
       {
         id: 'uploaded_by',
         header: 'Uploaded By',
-        accessorFn: r => r.profiles?.full_name ?? r.profiles?.username ?? 'Unknown',
+        accessorFn: r => actorName(r, 'uploaded_by'),
         size: 140,
       },
       {
         id: 'uploaded_at',
         header: 'Uploaded At',
-        accessorFn: r => r.uploaded_at ? formatDateTime(r.uploaded_at) : '-',
+        accessorFn: r => r.uploaded_at || '',
         size: 160,
-        cell: ({ getValue }) => <span className="text-gray-400 text-xs whitespace-nowrap">{getValue()}</span>,
+        cell: ({ row }) => <span className="text-[var(--text-muted)] text-xs whitespace-nowrap">{row.original.uploaded_at ? formatDateTime(row.original.uploaded_at) : 'N/A'}</span>,
       },
-      { id: 'region', header: 'Region', accessorFn: r => r.region ?? '-', size: 100 },
+      { id: 'region', header: 'Region', accessorFn: r => r.region ?? 'N/A', size: 100 },
     ]
     if (profile?.role === 'Admin') {
       cols.push({
         id: 'delete',
-        header: 'Delete Batch',
+        header: 'Reverse Batch',
         accessorFn: r => r.batch_id ?? '',
-        size: 120,
+        size: 140,
         enableSorting: false,
         meta: { export: false },
-        cell: ({ row }) => row.original.reversed_at ? <span className="text-xs text-gray-400">Reversed</span> : row.original.batch_id ? (
+        cell: ({ row }) => row.original.reversed_at ? <span className="text-xs text-[var(--text-muted)]">Reversed</span> : row.original.batch_id ? (
           <button
+            type="button"
             onClick={() => { setDeleteReason(''); setDeleteTarget({ batchId: row.original.batch_id, count: row.original.records_added, date: row.original.uploaded_at }) }}
-            className="text-xs text-red-400 border border-red-800/50 hover:bg-red-900/20 px-2 py-1 rounded transition-colors"
+            className="text-xs min-h-[44px] text-red-500 border border-red-500/40 hover:bg-red-500/10 px-3 rounded-lg transition-colors"
           >
             Delete Batch
           </button>
-        ) : <span className="text-gray-700 text-xs">-</span>,
+        ) : <span className="text-[var(--text-dim)] text-xs">N/A</span>,
       })
     }
     return cols
   }, [profile?.role])
 
+  const TABS = [
+    { id: 'audit',  label: 'Audit Log' },
+    { id: 'upload', label: 'Upload History' },
+  ]
+
   return (
     <div className="space-y-4">
       {[readError, auditError, uploadError, exportError].filter(Boolean).map((message, index) => (
-        <div key={index} role="alert" className="rounded border border-red-800 bg-red-900/20 p-3 text-sm text-red-300">{message}</div>
+        <div key={index} role="alert" className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-500">{message}</div>
       ))}
       <PageHeader
         title="Audit Trail"
@@ -464,27 +433,27 @@ export default function AuditTrail() {
         icon={ClipboardList}
       />
 
-      {/* Summary cards */}
+      {/* KPI strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <SummaryCard label="Total Events"             value={stats.totalEvents?.toLocaleString()}  color="blue"   loading={statsLoading} />
-        <SummaryCard label="Uploads This Month"       value={stats.uploadsMonth?.toLocaleString()}  color="green"  loading={statsLoading} />
-        <SummaryCard label="Records Added This Month" value={stats.recordsMonth?.toLocaleString()}  color="purple" loading={statsLoading} note={stats.recordsCapped ? 'At least this many (capped)' : undefined} />
-        <SummaryCard label="Active Users (30 days)"   value={stats.activeUsers?.toLocaleString()}   color="amber"  loading={statsLoading} note={stats.activeCapped ? 'At least this many (capped)' : undefined} />
+        <SummaryCard label="Total Events"             value={stats.totalEvents?.toLocaleString()}  icon={Activity} tone="text-blue-500"   loading={statsLoading} />
+        <SummaryCard label="Uploads This Month"       value={stats.uploadsMonth?.toLocaleString()} icon={Upload}   tone="text-green-500"  loading={statsLoading} />
+        <SummaryCard label="Records Added This Month" value={stats.recordsMonth?.toLocaleString()} icon={Database} tone="text-violet-500" loading={statsLoading} note={stats.recordsCapped ? 'At least this many (capped)' : undefined} />
+        <SummaryCard label="Active Users (30 days)"   value={stats.activeUsers?.toLocaleString()}  icon={Users}    tone="text-amber-500"  loading={statsLoading} note={stats.activeCapped ? 'At least this many (capped)' : undefined} />
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-gray-800">
-        {[
-          { id: 'audit',  label: 'Audit Log' },
-          { id: 'upload', label: 'Upload History' },
-        ].map(({ id, label }) => (
+      <div role="tablist" aria-label="Audit views" className="flex gap-1 border-b border-[var(--input-border)] overflow-x-auto">
+        {TABS.map(({ id, label }) => (
           <button
             key={id}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === id}
             onClick={() => setActiveTab(id)}
-            className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
+            className={`min-h-[44px] px-4 text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap ${
               activeTab === id
-                ? 'border-blue-500 text-blue-400'
-                : 'border-transparent text-gray-500 hover:text-gray-300'
+                ? 'border-blue-500 text-[var(--text-primary)]'
+                : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]'
             }`}
           >
             {label}
@@ -494,33 +463,32 @@ export default function AuditTrail() {
 
       {/* ── Audit Log tab ─────────────────────────────────────────────────── */}
       {activeTab === 'audit' && (
-        <div className="space-y-3">
-          {/* Filters */}
+        <div className="space-y-3" role="tabpanel" aria-label="Audit Log">
           <div className="card">
-            <div className="flex flex-wrap gap-3 items-end">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
               <div>
-                <label className="label">Date From</label>
-                <input type="date" className="input" value={dateFrom}
+                <label className="label" htmlFor="at-from">Date From</label>
+                <input id="at-from" type="date" className="input w-full min-h-[44px]" value={dateFrom}
                   onChange={e => { setDateFrom(e.target.value); setAuditPage(0) }} />
               </div>
               <div>
-                <label className="label">Date To</label>
-                <input type="date" className="input" value={dateTo}
+                <label className="label" htmlFor="at-to">Date To</label>
+                <input id="at-to" type="date" className="input w-full min-h-[44px]" value={dateTo}
                   onChange={e => { setDateTo(e.target.value); setAuditPage(0) }} />
               </div>
               <div>
-                <label className="label">Action</label>
-                <select className="input w-40" value={actionFilter}
+                <label className="label" htmlFor="at-action">Action</label>
+                <select id="at-action" className="input w-full min-h-[44px]" value={actionFilter}
                   onChange={e => { setActionFilter(e.target.value); setAuditPage(0) }}>
                   <option value="">All Actions</option>
-                  {['UPLOAD', 'DELETE', 'EDIT', 'EXPORT'].map(a => (
+                  {AUDIT_ACTIONS.map(a => (
                     <option key={a} value={a}>{a}</option>
                   ))}
                 </select>
               </div>
               <div>
-                <label className="label">User</label>
-                <select className="input w-48" value={userFilter}
+                <label className="label" htmlFor="at-user">User</label>
+                <select id="at-user" className="input w-full min-h-[44px]" value={userFilter}
                   onChange={e => { setUserFilter(e.target.value); setAuditPage(0) }}>
                   <option value="">All Users</option>
                   {userOptions.map(u => (
@@ -529,147 +497,168 @@ export default function AuditTrail() {
                 </select>
               </div>
               <div>
-                <label className="label">Search</label>
+                <label className="label" htmlFor="at-search">Search this page</label>
                 <div className="relative">
-                  <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
+                  <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
                   <input
+                    id="at-search"
                     type="text"
-                    className="input pl-8 w-48"
-                    placeholder="Search this page..."
+                    className="input pl-8 w-full min-h-[44px]"
+                    placeholder="User, action, table"
                     value={auditSearch}
                     onChange={e => setAuditSearch(e.target.value)}
                   />
                 </div>
               </div>
-              <button onClick={loadAudit} className="btn-secondary flex items-center gap-2 text-sm">
-                <RefreshCw size={14} /> Refresh
-              </button>
-              <button onClick={exportAuditLog} disabled={exporting} className="btn-secondary flex items-center gap-2 text-sm ml-auto">
-                <FileSpreadsheet size={14} className="text-green-400" /> Export to Excel
-              </button>
             </div>
-          </div>
-
-          {/* Expanded row detail rendering */}
-          {visibleAuditRows.map(row => expandedRow === row.id && (
-            <div key={`detail-${row.id}`} className="card bg-gray-900/50">
-              <AuditChangeDetail row={row} />
-            </div>
-          ))}
-
-          {/* EnterpriseTable */}
-          <div className="card p-0 overflow-hidden">
-            <EnterpriseTable
-              viewKey="audit-trail"
-              reportMeta={reportMeta}
-              columns={auditColumns}
-              data={visibleAuditRows}
-              getRowId={(row) => String(row.id)}
-              enableGlobalFilter={false}
-              enableSorting={true}
-              enableExport={false}
-              enableColumnVisibility={false}
-              initialPageSize={50}
-              pageSizeOptions={[50]}
-              emptyMessage={auditError ? 'Audit events could not be loaded' : auditLoading ? 'Loading...' : 'No audit events found'}
-            />
-          </div>
-
-          {auditPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3">
-              <p className="text-sm text-gray-400">
-                Showing {auditPage * PAGE_SIZE + 1}-{Math.min((auditPage + 1) * PAGE_SIZE, auditTotal)} of {auditTotal.toLocaleString()}
-              </p>
-              <div className="flex items-center gap-2">
-                <button onClick={() => setAuditPage(p => Math.max(0, p - 1))} disabled={auditPage === 0} className="btn-secondary py-1.5 px-3 disabled:opacity-40">
-                  <ChevronLeft size={16} />
+            <div className="flex flex-wrap items-center gap-2 mt-3">
+              {(dateFrom || dateTo || actionFilter || userFilter || auditSearch) && (
+                <button type="button" onClick={() => { setDateFrom(''); setDateTo(''); setActionFilter(''); setUserFilter(''); setAuditSearch(''); setAuditPage(0) }} className="btn-secondary flex items-center gap-2 text-sm min-h-[44px]">
+                  <X size={14} aria-hidden="true" /> Clear filters
                 </button>
-                <span className="text-sm text-gray-400">Page {auditPage + 1} of {auditPages}</span>
-                <button onClick={() => setAuditPage(p => Math.min(auditPages - 1, p + 1))} disabled={auditPage >= auditPages - 1} className="btn-secondary py-1.5 px-3 disabled:opacity-40">
-                  <ChevronRight size={16} />
+              )}
+              <button type="button" onClick={loadAudit} className="btn-secondary flex items-center gap-2 text-sm min-h-[44px]">
+                <RefreshCw size={14} aria-hidden="true" /> Refresh
+              </button>
+              <div className="flex flex-wrap gap-2 ml-auto">
+                <button type="button" onClick={() => exportAuditLog('xlsx')} disabled={exporting} className="btn-secondary flex items-center gap-2 text-sm min-h-[44px]">
+                  <FileSpreadsheet size={14} aria-hidden="true" /> {exporting ? 'Exporting...' : 'Export to Excel'}
+                </button>
+                <button type="button" onClick={() => exportAuditLog('pdf')} disabled={exporting} className="btn-secondary flex items-center gap-2 text-sm min-h-[44px]">
+                  <FileText size={14} aria-hidden="true" /> PDF
                 </button>
               </div>
             </div>
-          )}
+            {pageMix.length > 0 && (
+              <p className="text-xs text-[var(--text-muted)] mt-3" aria-live="polite">
+                On this page: {pageMix.map((m) => `${m.count} ${m.action}`).join(', ')}
+              </p>
+            )}
+          </div>
+
+          <EnterpriseTable
+            viewKey="audit-trail"
+            reportMeta={reportMeta}
+            columns={auditColumns}
+            data={visibleAuditRows}
+            getRowId={(row) => String(row.id)}
+            loading={auditLoading && !auditRows.length}
+            enableGlobalFilter={false}
+            enableSorting={true}
+            enableExport={false}
+            enableColumnVisibility={false}
+            manualPagination
+            pageIndex={auditPage}
+            pageCount={auditPages}
+            totalRows={auditTotal}
+            pageSize={PAGE_SIZE}
+            pageSizeOptions={[PAGE_SIZE]}
+            onPageChange={(p) => setAuditPage(Math.max(0, Math.min(auditPages - 1, p)))}
+            paginationLabel={() => pageRangeLabel(auditPage, PAGE_SIZE, auditTotal)}
+            emptyMessage={auditError ? 'Audit events could not be loaded' : auditLoading ? 'Loading...' : 'No audit events found'}
+          />
         </div>
       )}
 
       {/* ── Upload History tab ─────────────────────────────────────────────── */}
       {activeTab === 'upload' && (
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-end gap-3">
-            <label className="text-sm">From
-              <input type="date" className="input" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setUploadPage(0); setAuditPage(0) }} />
-            </label>
-            <label className="text-sm">To
-              <input type="date" className="input" value={dateTo} onChange={e => { setDateTo(e.target.value); setUploadPage(0); setAuditPage(0) }} />
-            </label>
-            <button onClick={exportUploadHistory} disabled={exporting} className="btn-secondary flex items-center gap-2 text-sm">
-              <FileSpreadsheet size={14} className="text-green-400" /> Export to Excel
-            </button>
-          </div>
-
-          <div className="card p-0 overflow-hidden">
-            <EnterpriseTable
-              reportMeta={reportMeta}
-              columns={uploadColumns}
-              data={uploadRows}
-              getRowId={(row) => String(row.id)}
-              enableGlobalFilter={false}
-              enableSorting={true}
-              enableExport={false}
-              enableColumnVisibility={false}
-              initialPageSize={50}
-              pageSizeOptions={[50]}
-              emptyMessage={uploadError ? 'Upload history could not be loaded' : uploadLoading ? 'Loading...' : 'No upload history found'}
-            />
-          </div>
-
-          {uploadPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3">
-              <p className="text-sm text-gray-400">
-                Showing {uploadPage * PAGE_SIZE + 1}-{Math.min((uploadPage + 1) * PAGE_SIZE, uploadTotal)} of {uploadTotal.toLocaleString()}
-              </p>
-              <div className="flex items-center gap-2">
-                <button onClick={() => setUploadPage(p => Math.max(0, p - 1))} disabled={uploadPage === 0} className="btn-secondary py-1.5 px-3 disabled:opacity-40">
-                  <ChevronLeft size={16} />
+        <div className="space-y-3" role="tabpanel" aria-label="Upload History">
+          <div className="card">
+            <div className="flex flex-wrap items-end gap-3">
+              <div>
+                <label className="label" htmlFor="up-from">From</label>
+                <input id="up-from" type="date" className="input min-h-[44px]" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setUploadPage(0); setAuditPage(0) }} />
+              </div>
+              <div>
+                <label className="label" htmlFor="up-to">To</label>
+                <input id="up-to" type="date" className="input min-h-[44px]" value={dateTo} onChange={e => { setDateTo(e.target.value); setUploadPage(0); setAuditPage(0) }} />
+              </div>
+              <button type="button" onClick={loadUploadHistory} className="btn-secondary flex items-center gap-2 text-sm min-h-[44px]">
+                <RefreshCw size={14} aria-hidden="true" /> Refresh
+              </button>
+              <div className="flex flex-wrap gap-2 ml-auto">
+                <button type="button" onClick={() => exportUploadHistory('xlsx')} disabled={exporting} className="btn-secondary flex items-center gap-2 text-sm min-h-[44px]">
+                  <FileSpreadsheet size={14} aria-hidden="true" /> {exporting ? 'Exporting...' : 'Export to Excel'}
                 </button>
-                <span className="text-sm text-gray-400">Page {uploadPage + 1} of {uploadPages}</span>
-                <button onClick={() => setUploadPage(p => Math.min(uploadPages - 1, p + 1))} disabled={uploadPage >= uploadPages - 1} className="btn-secondary py-1.5 px-3 disabled:opacity-40">
-                  <ChevronRight size={16} />
+                <button type="button" onClick={() => exportUploadHistory('pdf')} disabled={exporting} className="btn-secondary flex items-center gap-2 text-sm min-h-[44px]">
+                  <FileText size={14} aria-hidden="true" /> PDF
                 </button>
               </div>
             </div>
-          )}
+          </div>
+
+          <EnterpriseTable
+            viewKey="audit-upload-history"
+            reportMeta={reportMeta}
+            columns={uploadColumns}
+            data={uploadRows}
+            getRowId={(row) => String(row.id)}
+            loading={uploadLoading && !uploadRows.length}
+            enableGlobalFilter={false}
+            enableSorting={true}
+            enableExport={false}
+            enableColumnVisibility={false}
+            manualPagination
+            pageIndex={uploadPage}
+            pageCount={uploadPages}
+            totalRows={uploadTotal}
+            pageSize={PAGE_SIZE}
+            pageSizeOptions={[PAGE_SIZE]}
+            onPageChange={(p) => setUploadPage(Math.max(0, Math.min(uploadPages - 1, p)))}
+            paginationLabel={() => pageRangeLabel(uploadPage, PAGE_SIZE, uploadTotal)}
+            emptyMessage={uploadError ? 'Upload history could not be loaded' : uploadLoading ? 'Loading...' : 'No upload history found'}
+          />
         </div>
       )}
 
-      {/* ── Batch delete confirmation modal ───────────────────────────────── */}
-      {deleteTarget && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => { setDeleteTarget(null); setDeleteConfirm(''); setDeleteError('') }}>
-          <div className="bg-gray-900 border border-red-800/50 rounded-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
-            <h2 className="text-lg font-semibold text-white mb-3">Reverse Upload Batch</h2>
-            <p className="text-gray-400 text-sm mb-4">
+      {/* ── Change detail dialog ──────────────────────────────────────────── */}
+      <Modal
+        open={Boolean(expandedRow)}
+        onClose={() => setExpandedRow(null)}
+        size="lg"
+        title="Change detail"
+        subtitle={expandedRow ? `${expandedRow.action || 'Event'} on ${expandedRow.table_name || 'record'} by ${actorName(expandedRow)}, ${expandedRow.created_at ? formatDateTime(expandedRow.created_at) : 'N/A'}` : null}
+      >
+        {expandedRow && <AuditChangeDetail row={expandedRow} />}
+      </Modal>
+
+      {/* ── Batch reversal confirmation ───────────────────────────────────── */}
+      <Modal
+        open={Boolean(deleteTarget)}
+        onClose={closeDelete}
+        size="sm"
+        closeOnBackdrop={!deleting}
+        title="Reverse Upload Batch"
+        footer={
+          <div className="flex items-center justify-end gap-2">
+            <button type="button" onClick={closeDelete} className="btn-secondary min-h-[44px]" disabled={deleting}>Cancel</button>
+            <button type="button" onClick={handleDeleteBatch} disabled={deleteConfirm !== 'DELETE' || deleteReason.trim().length < 3 || deleting}
+              className="btn-danger min-h-[44px] disabled:opacity-40">
+              {deleting ? 'Reversing...' : 'Reverse Batch'}
+            </button>
+          </div>
+        }
+      >
+        {deleteTarget && (
+          <div className="space-y-3">
+            <p className="text-[var(--text-secondary)] text-sm">
               This removes the surviving records from the batch uploaded on {formatDate(deleteTarget.date)}. The original upload contained {deleteTarget.count} records. History and a recovery archive are retained; batches with cleaning or disposal activity cannot be reversed here.
             </p>
-            <label className="block text-sm text-gray-400 mb-2">Reason for reversal
-              <textarea className="input mt-1" value={deleteReason} maxLength={2000} onChange={e => setDeleteReason(e.target.value)} />
-            </label>
-            <p className="text-sm text-gray-400 mb-2">Type <span className="font-mono text-red-400">DELETE</span> to confirm:</p>
-            <input className="input mb-4" placeholder="DELETE" value={deleteConfirm} onChange={e => setDeleteConfirm(e.target.value)} />
-            {deleteError && (
-              <p className="text-sm text-red-300 bg-red-900/30 border border-red-700 rounded-lg p-2.5 mb-4">{deleteError}</p>
-            )}
-            <div className="flex gap-3">
-              <button onClick={handleDeleteBatch} disabled={deleteConfirm !== 'DELETE' || deleteReason.trim().length < 3 || deleting}
-                className="btn-primary bg-red-700 hover:bg-red-600 disabled:opacity-40 flex-1">
-                {deleting ? 'Reversing...' : 'Reverse Batch'}
-              </button>
-              <button onClick={() => { setDeleteTarget(null); setDeleteConfirm(''); setDeleteError('') }} className="btn-secondary">Cancel</button>
+            <div>
+              <label className="label" htmlFor="rv-reason">Reason for reversal</label>
+              <textarea id="rv-reason" className="input w-full" value={deleteReason} maxLength={2000} onChange={e => setDeleteReason(e.target.value)} aria-describedby="rv-reason-help" />
+              <p id="rv-reason-help" className="text-[11px] text-[var(--text-muted)] mt-1">At least 3 characters. Recorded against the reversal.</p>
             </div>
+            <div>
+              <label className="label" htmlFor="rv-confirm">Type <span className="font-mono text-red-500">DELETE</span> to confirm</label>
+              <input id="rv-confirm" className="input w-full" placeholder="DELETE" value={deleteConfirm} onChange={e => setDeleteConfirm(e.target.value)} autoComplete="off" />
+            </div>
+            {deleteError && (
+              <p role="alert" className="text-sm text-red-500 bg-red-500/10 border border-red-500/30 rounded-lg p-2.5">{deleteError}</p>
+            )}
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
     </div>
   )
 }

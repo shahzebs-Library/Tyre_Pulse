@@ -1,37 +1,38 @@
 /**
- * Taas (route /taas) — Tyre-as-a-Service. Manages subscription / usage-billing
+ * Taas (route /taas): Tyre-as-a-Service. Manages subscription / usage-billing
  * contracts that turn tyre servicing into recurring revenue: per-km, per-month,
  * per-tyre, or hybrid plans. Tracks cost-per-km, km utilisation, monthly
  * recurring revenue (MRR), and upcoming renewals so the commercial team can
  * price, forecast, and retain contracts.
  *
- * Runs on the new `taas_subscriptions` table (V195). Real data, KPI tiles, a
- * by-plan revenue breakdown, a renewals-due attention list, per-subscription
- * cost-per-km / utilisation, filters, search, create/edit modal, delete confirm,
- * Excel/PDF export, and loading/empty/error/not-provisioned states throughout.
- * All commercial roll-ups live in the pure `src/lib/taas.js` helpers; the clock
- * is read once (`Date.now()`) and injected into every time-dependent function.
+ * Runs on the `taas_subscriptions` table (V195). Real data only: KPI strip, a
+ * by-plan revenue breakdown, a renewals-due attention list, filters + search, a
+ * sortable paged EnterpriseTable, create/edit dialog, delete confirm, Excel/PDF
+ * export of the whole filtered set, and loading / empty / error+Retry /
+ * not-provisioned states. Money is never blended across currencies. All
+ * calculation lives in the pure `src/lib/taasAnalytics.js` engine.
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
   Repeat, CircleDollarSign, Activity, Package, CalendarClock, AlertTriangle,
-  Search, X, Filter, FileSpreadsheet, FileText, Plus, Pencil, Trash2, Layers,
-  Wallet,
+  Search, X, FileSpreadsheet, FileText, Plus, Pencil, Trash2, Layers, Wallet, TrendingUp,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import Modal from '../components/ui/Modal'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   listTaasSubscriptions, createTaasSubscription, updateTaasSubscription,
   deleteTaasSubscription,
 } from '../lib/api/taas'
 import {
-  summariseTaas, byPlan, costPerKm, kmUtilization, daysToRenewal,
-  PLAN_TYPES, STATUSES,
-} from '../lib/taas'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+  taasKpis, byPlan, costPerKm, kmUtilization, daysToRenewal, filterTaas,
+  renewalsDue, renewalLabel, isLive, taasExportRows, EXPORT_COLS, EXPORT_HEADERS,
+  PLAN_TYPES, STATUSES, PLAN_LABEL, STATUS_LABEL,
+} from '../lib/taasAnalytics'
+import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
 import { formatCurrency, formatCurrencyCompact } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
-import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 import { isMissingRelation } from '../lib/api/_client'
 
 const EMPTY_FORM = {
@@ -41,59 +42,58 @@ const EMPTY_FORM = {
   billed_to_date: '', status: 'active', notes: '',
 }
 
-const PLAN_LABEL = {
-  per_km: 'Per km', per_month: 'Per month', per_tyre: 'Per tyre', hybrid: 'Hybrid',
-  unspecified: 'Unspecified',
-}
 const PLAN_BADGE = {
-  per_km: 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30',
-  per_month: 'bg-sky-500/15 text-sky-300 border-sky-500/30',
-  per_tyre: 'bg-violet-500/15 text-violet-300 border-violet-500/30',
-  hybrid: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
-  unspecified: 'bg-slate-500/15 text-slate-300 border-slate-500/30',
-}
-const STATUS_LABEL = {
-  active: 'Active', trial: 'Trial', paused: 'Paused',
-  cancelled: 'Cancelled', expired: 'Expired',
+  per_km: 'bg-indigo-500/15 text-indigo-500 border-indigo-500/30',
+  per_month: 'bg-sky-500/15 text-sky-500 border-sky-500/30',
+  per_tyre: 'bg-violet-500/15 text-violet-500 border-violet-500/30',
+  hybrid: 'bg-amber-500/15 text-amber-500 border-amber-500/30',
+  unspecified: 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)]',
 }
 const STATUS_BADGE = {
-  active: 'bg-green-500/15 text-green-300 border-green-500/30',
-  trial: 'bg-sky-500/15 text-sky-300 border-sky-500/30',
-  paused: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
-  cancelled: 'bg-red-500/15 text-red-300 border-red-500/30',
-  expired: 'bg-slate-500/15 text-slate-300 border-slate-500/30',
+  active: 'bg-green-500/15 text-green-500 border-green-500/30',
+  trial: 'bg-sky-500/15 text-sky-500 border-sky-500/30',
+  paused: 'bg-amber-500/15 text-amber-500 border-amber-500/30',
+  cancelled: 'bg-red-500/15 text-red-500 border-red-500/30',
+  expired: 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)]',
 }
 
-const fmtKm = (v) => (v == null || v === '' ? 'N/A' : `${Number(v).toLocaleString()} km`)
+const ICON_BTN = 'inline-flex items-center justify-center min-w-[44px] min-h-[44px] rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg)]'
+
 const fmtDate = (v) => {
   if (!v) return 'N/A'
   const d = new Date(v)
   return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString()
 }
-const fmtPct = (v) => (v == null ? 'N/A' : `${Math.round(v)}%`)
-
 
 function Badge({ label, cls }) {
-  return (
-    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${cls}`}>
-      {label}
-    </span>
-  )
+  return <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${cls}`}>{label}</span>
 }
 
-/** Utilisation pill: colours by band, flags over-run above 100%. */
+/** Utilisation bar: band colour plus the number and an "over" word, so colour is never the only signal. */
 function UtilBar({ pct }) {
   if (pct == null) return <span className="text-[var(--text-muted)]">N/A</span>
   const capped = Math.min(pct, 100)
   const over = pct > 100
   const tone = over ? 'bg-red-500' : pct >= 85 ? 'bg-amber-500' : 'bg-green-500'
-  const text = over ? 'text-red-300' : pct >= 85 ? 'text-amber-300' : 'text-green-300'
   return (
     <div className="flex items-center gap-2 min-w-[120px]">
-      <div className="flex-1 h-1.5 rounded-full bg-[var(--input-bg)] overflow-hidden">
+      <div className="flex-1 h-1.5 rounded-full bg-[var(--input-bg)] overflow-hidden" aria-hidden="true">
         <div className={`h-full ${tone}`} style={{ width: `${capped}%` }} />
       </div>
-      <span className={`text-xs font-medium tabular-nums ${text}`}>{Math.round(pct)}%</span>
+      <span className="text-xs font-medium tabular-nums text-[var(--text-secondary)]">{Math.round(pct)}%{over ? ' over' : ''}</span>
+    </div>
+  )
+}
+
+function Kpi({ label, value, sub, icon: Icon, tone }) {
+  return (
+    <div className="card min-w-0">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs text-[var(--text-muted)]">{label}</p>
+        <Icon size={16} className={tone} aria-hidden="true" />
+      </div>
+      <p className={`text-2xl sm:text-3xl font-bold mt-1 tabular-nums break-words ${tone}`}>{value}</p>
+      {sub && <p className="text-xs text-[var(--text-muted)] mt-0.5">{sub}</p>}
     </div>
   )
 }
@@ -105,6 +105,7 @@ export default function Taas() {
 
   const [rows, setRows] = useState(null)
   const [error, setError] = useState('')
+  const [actionError, setActionError] = useState('')
   const [notProvisioned, setNotProvisioned] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [updatedAt, setUpdatedAt] = useState(null)
@@ -129,9 +130,8 @@ export default function Taas() {
       setRows(Array.isArray(data) ? data : [])
       setUpdatedAt(new Date())
     } catch (err) {
-      if (isMissingRelation(err)) setNotProvisioned(true)
+      if (isMissingRelation(err)) { setNotProvisioned(true); setRows([]) }
       else setError(toUserMessage(err, 'Could not load TaaS subscriptions.'))
-      setRows([])
     } finally {
       setRefreshing(false)
     }
@@ -139,90 +139,32 @@ export default function Taas() {
 
   useEffect(() => { load() }, [load])
 
-  const summary = useMemo(() => summariseTaas(rows || [], nowMs), [rows, nowMs])
+  const loaded = Array.isArray(rows)
+  const kpi = useMemo(() => (loaded ? taasKpis(rows, { now: nowMs, currency }) : null), [rows, loaded, nowMs, currency])
   const planBreakdown = useMemo(() => byPlan(rows || []), [rows])
+  const renewals = useMemo(() => renewalsDue(rows || [], nowMs, 30, 12), [rows, nowMs])
+  const countryOptions = useMemo(() => [...new Set((rows || []).map((r) => r.country).filter(Boolean))].sort(), [rows])
 
-  const countryOptions = useMemo(
-    () => [...new Set((rows || []).map((r) => r.country).filter(Boolean))].sort(),
-    [rows],
+  const filtered = useMemo(
+    () => filterTaas(rows || [], { plan: planFilter, status: statusFilter, country: countryFilter, search }),
+    [rows, planFilter, statusFilter, countryFilter, search],
   )
+  const exportRows = useMemo(() => taasExportRows(filtered, currency), [filtered, currency])
+  const fileBase = () => reportFileName('TyrePulse TaaS Subscriptions', activeCountry !== 'All' ? activeCountry : null, reportDateLabel())
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return (rows || []).filter((r) => {
-      if (planFilter && r.plan_type !== planFilter) return false
-      if (statusFilter && r.status !== statusFilter) return false
-      if (countryFilter && r.country !== countryFilter) return false
-      if (q) {
-        const hay = `${r.customer_name || ''} ${r.subscription_no || ''} ${r.asset_no || ''} ${r.notes || ''}`.toLowerCase()
-        if (!hay.includes(q)) return false
-      }
-      return true
-    })
-  }, [rows, planFilter, statusFilter, countryFilter, search])
-
-  // Paged, not capped. This register used to render filtered.slice(0, 500),
-  // so row 501 was unreachable and the table looked complete. The exports
-  // still cover the whole filtered set on purpose.
-  const pager = usePagedRows(filtered)
-
-  // Renewals due (live contracts, next 30 days incl. overdue) — attention list.
-  const renewals = useMemo(() => {
-    return (rows || [])
-      .filter((r) => r.status === 'active' || r.status === 'trial')
-      .map((r) => ({ r, days: daysToRenewal(r, nowMs) }))
-      .filter((x) => x.days != null && x.days <= 30)
-      .sort((a, b) => a.days - b.days)
-      .slice(0, 12)
-  }, [rows, nowMs])
-
-  // ── KPIs ─────────────────────────────────────────────────────────────────
-  const kpis = [
-    { label: 'Subscriptions', value: summary.totalSubscriptions, icon: Repeat, tone: 'text-[var(--text-primary)]' },
-    { label: 'Active contracts', value: summary.activeCount, icon: Activity, tone: 'text-green-400' },
-    { label: 'Monthly recurring revenue', value: formatCurrencyCompact(summary.mrr, currency), icon: CircleDollarSign, tone: 'text-amber-400' },
-    { label: 'Tyres covered', value: summary.totalTyresCovered.toLocaleString(), icon: Package, tone: 'text-sky-400' },
-    { label: 'Renewals due (30d)', value: summary.renewalsDue30d, icon: CalendarClock, tone: summary.renewalsDue30d > 0 ? 'text-orange-400' : 'text-[var(--text-primary)]' },
-  ]
-
-  // ── Export ───────────────────────────────────────────────────────────────
-  const EXPORT_COLS = [
-    'subscription_no', 'customer_name', 'asset_no', 'plan', 'status', 'tyres_covered',
-    'rate', 'committed_km', 'actual_km', 'utilization', 'monthly_fee', 'billed_to_date',
-    'cost_per_km', 'start_date', 'renewal_date',
-  ]
-  const EXPORT_HEADERS = [
-    'Subscription', 'Customer', 'Asset', 'Plan', 'Status', 'Tyres', 'Rate',
-    'Committed km', 'Actual km', 'Utilisation %', 'Monthly fee', 'Billed to date',
-    'Cost per km', 'Start date', 'Renewal date',
-  ]
-  const exportRows = filtered.map((r) => {
-    const cpk = costPerKm(r)
-    const util = kmUtilization(r)
-    return {
-      subscription_no: r.subscription_no || '',
-      customer_name: r.customer_name || '',
-      asset_no: r.asset_no || '',
-      plan: PLAN_LABEL[r.plan_type] || r.plan_type || '',
-      status: STATUS_LABEL[r.status] || r.status || '',
-      tyres_covered: r.tyres_covered ?? '',
-      rate: r.rate ?? '',
-      committed_km: r.committed_km ?? '',
-      actual_km: r.actual_km ?? '',
-      utilization: util == null ? '' : Math.round(util),
-      monthly_fee: r.monthly_fee ?? '',
-      billed_to_date: r.billed_to_date ?? '',
-      cost_per_km: cpk == null ? '' : Math.round(cpk * 1000) / 1000,
-      start_date: r.start_date || '',
-      renewal_date: r.renewal_date || '',
+  const doExport = async (kind) => {
+    setActionError('')
+    try {
+      if (kind === 'xlsx') await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, fileBase(), 'TaaS', { currency, title: 'Tyre-as-a-Service Subscriptions' })
+      else await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Tyre-as-a-Service Subscriptions', fileBase(), 'landscape', '', { currency })
+    } catch (err) {
+      setActionError(toUserMessage(err, 'Could not export. Try again.'))
     }
-  })
+  }
 
   // ── Modal ────────────────────────────────────────────────────────────────
-  const openCreate = () => {
-    setEditing(null); setForm(EMPTY_FORM); setFormError(''); setShowModal(true)
-  }
-  const openEdit = (r) => {
+  const openCreate = () => { setEditing(null); setForm(EMPTY_FORM); setFormError(''); setShowModal(true) }
+  const openEdit = useCallback((r) => {
     setEditing(r)
     setForm({
       subscription_no: r.subscription_no || '', customer_name: r.customer_name || '',
@@ -234,7 +176,7 @@ export default function Taas() {
       billed_to_date: r.billed_to_date ?? '', status: r.status || 'active', notes: r.notes || '',
     })
     setFormError(''); setShowModal(true)
-  }
+  }, [])
   const closeModal = () => { if (!saving) { setShowModal(false); setEditing(null) } }
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
 
@@ -268,7 +210,8 @@ export default function Taas() {
       setConfirmDelete(null)
       await load()
     } catch (err) {
-      setError(toUserMessage(err, 'Could not delete the subscription.'))
+      setActionError(toUserMessage(err, 'Could not delete the subscription.'))
+      setConfirmDelete(null)
     } finally {
       setDeleting(false)
     }
@@ -277,6 +220,65 @@ export default function Taas() {
   const clearFilters = () => { setSearch(''); setPlanFilter(''); setStatusFilter(''); setCountryFilter('') }
   const hasFilters = search || planFilter || statusFilter || countryFilter
   const maxPlanMrr = Math.max(1, ...planBreakdown.map((p) => p.mrr))
+
+  const columns = useMemo(() => [
+    {
+      id: 'customer', header: 'Customer', accessorFn: (r) => r.customer_name || '', size: 200,
+      cell: ({ row }) => (
+        <div className="min-w-0">
+          <p className="font-medium text-[var(--text-primary)] truncate">{row.original.customer_name || 'N/A'}</p>
+          <p className="text-[11px] text-[var(--text-muted)] truncate">{row.original.subscription_no || row.original.asset_no || 'N/A'}</p>
+        </div>
+      ),
+    },
+    {
+      id: 'plan', header: 'Plan', accessorFn: (r) => PLAN_LABEL[r.plan_type] || r.plan_type || 'N/A', size: 110, meta: { filterVariant: 'select' },
+      cell: ({ row }) => <Badge label={PLAN_LABEL[row.original.plan_type] || row.original.plan_type || 'N/A'} cls={PLAN_BADGE[row.original.plan_type] || PLAN_BADGE.unspecified} />,
+    },
+    {
+      id: 'status', header: 'Status', accessorFn: (r) => STATUS_LABEL[r.status] || r.status || 'N/A', size: 110, meta: { filterVariant: 'select' },
+      cell: ({ row }) => <Badge label={STATUS_LABEL[row.original.status] || row.original.status || 'N/A'} cls={STATUS_BADGE[row.original.status] || STATUS_BADGE.expired} />,
+    },
+    { id: 'tyres', header: 'Tyres', accessorFn: (r) => (r.tyres_covered == null ? -1 : Number(r.tyres_covered)), size: 80, meta: { align: 'right' }, cell: ({ row }) => <span className="tabular-nums">{row.original.tyres_covered ?? 'N/A'}</span> },
+    { id: 'util', header: 'Utilisation', accessorFn: (r) => kmUtilization(r) ?? -1, size: 150, cell: ({ row }) => <UtilBar pct={kmUtilization(row.original)} /> },
+    {
+      id: 'cpk', header: 'Cost / km', accessorFn: (r) => costPerKm(r) ?? -1, size: 110, meta: { align: 'right' },
+      cell: ({ row }) => { const c = costPerKm(row.original); return <span className="font-semibold tabular-nums text-[var(--text-primary)]">{c == null ? 'N/A' : formatCurrency(c, row.original.currency || currency, 3)}</span> },
+    },
+    {
+      id: 'fee', header: 'Monthly fee', accessorFn: (r) => (r.monthly_fee == null ? -1 : Number(r.monthly_fee)), size: 120, meta: { align: 'right' },
+      cell: ({ row }) => <span className="tabular-nums">{row.original.monthly_fee == null ? 'N/A' : formatCurrency(row.original.monthly_fee, row.original.currency || currency, 0)}</span>,
+    },
+    {
+      id: 'renewal', header: 'Renewal', accessorFn: (r) => r.renewal_date || '', size: 130,
+      cell: ({ row }) => {
+        const r = row.original
+        const days = daysToRenewal(r, nowMs)
+        return (
+          <span className="whitespace-nowrap">
+            <span className="text-[var(--text-secondary)]">{fmtDate(r.renewal_date)}</span>
+            {days != null && isLive(r) && days <= 30 && (
+              <span className={`block text-[11px] font-medium ${days < 0 ? 'text-red-500' : days <= 7 ? 'text-orange-500' : 'text-amber-500'}`}>{renewalLabel(days)}</span>
+            )}
+          </span>
+        )
+      },
+    },
+    {
+      id: 'actions', header: '', enableSorting: false, size: 110, meta: { export: false, align: 'right' },
+      cell: ({ row }) => (
+        <div className="flex items-center justify-end gap-1">
+          <button type="button" onClick={() => openEdit(row.original)} className={ICON_BTN} aria-label={`Edit subscription for ${row.original.customer_name || 'customer'}`}><Pencil size={15} /></button>
+          <button type="button" onClick={() => setConfirmDelete(row.original)} className={`${ICON_BTN} hover:text-red-500`} aria-label={`Delete subscription for ${row.original.customer_name || 'customer'}`}><Trash2 size={15} /></button>
+        </div>
+      ),
+    },
+  ], [openEdit, currency, nowMs])
+
+  const mrrValue = !kpi ? 'N/A' : kpi.mrr == null ? 'N/A' : formatCurrencyCompact(kpi.mrr, kpi.mrrCurrency || currency)
+  const mrrSub = !kpi ? null : kpi.mixedCurrency
+    ? `Mixed currencies: ${Object.entries(kpi.mrrByCurrency).map(([c, v]) => formatCurrencyCompact(v, c)).join(', ')}`
+    : `${kpi.liveCount} live contract(s)`
 
   return (
     <div className="space-y-6">
@@ -288,25 +290,25 @@ export default function Taas() {
         refreshing={refreshing}
         updatedAt={updatedAt}
         actions={
-          <div className="flex items-center gap-2">
-            <button onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'taas_subscriptions', 'TaaS', { currency, title: 'Tyre-as-a-Service Subscriptions' })} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
-              <FileSpreadsheet size={14} /> Excel
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={() => doExport('xlsx')} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!filtered.length}>
+              <FileSpreadsheet size={14} aria-hidden="true" /> Excel
             </button>
-            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Tyre-as-a-Service Subscriptions', 'taas_subscriptions', 'landscape', '', { currency })} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
-              <FileText size={14} /> PDF
+            <button type="button" onClick={() => doExport('pdf')} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!filtered.length}>
+              <FileText size={14} aria-hidden="true" /> PDF
             </button>
-            <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5" disabled={notProvisioned}>
-              <Plus size={14} /> New subscription
+            <button type="button" onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={notProvisioned}>
+              <Plus size={14} aria-hidden="true" /> New subscription
             </button>
           </div>
         }
       />
 
       {notProvisioned && (
-        <div className="card border border-amber-800/50 flex items-start gap-3">
-          <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
+        <div className="card border border-amber-500/40 flex items-start gap-3" role="status">
+          <AlertTriangle size={18} className="text-amber-500 mt-0.5 shrink-0" aria-hidden="true" />
           <div>
-            <p className="text-amber-300 font-medium">Tyre-as-a-Service isn’t enabled on this database yet.</p>
+            <p className="text-[var(--text-primary)] font-medium">Tyre-as-a-Service is not enabled on this database yet.</p>
             <p className="text-[var(--text-muted)] text-sm mt-1">
               Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V195_TAAS_SUBSCRIPTIONS.sql</span>, then reload.
             </p>
@@ -314,314 +316,262 @@ export default function Taas() {
         </div>
       )}
 
-      {error && (
-        <div className="card border border-red-800/50 flex items-start gap-3">
-          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
-          <div><p className="text-red-300 font-medium">Couldn’t load TaaS subscriptions.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
+      {actionError && (
+        <div role="alert" className="card border border-red-500/40 flex items-start justify-between gap-3">
+          <p className="text-sm text-red-500">{actionError}</p>
+          <button type="button" onClick={() => setActionError('')} className={ICON_BTN} aria-label="Dismiss message"><X size={15} /></button>
         </div>
       )}
 
-      {/* KPI tiles */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-        {kpis.map((k) => {
-          const Icon = k.icon
-          return (
-            <div key={k.label} className="card">
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
-                <Icon size={16} className={k.tone} />
-              </div>
-              <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
-            </div>
-          )
-        })}
+      {/* KPI strip */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+        <Kpi label="Subscriptions" value={kpi ? kpi.totalSubscriptions : 'N/A'} sub={kpi ? `${kpi.trialCount} on trial` : null} icon={Repeat} tone="text-[var(--text-primary)]" />
+        <Kpi label="Active contracts" value={kpi ? kpi.activeCount : 'N/A'} icon={Activity} tone="text-green-500" />
+        <Kpi label="Monthly recurring revenue" value={mrrValue} sub={mrrSub} icon={CircleDollarSign} tone="text-amber-500" />
+        <Kpi label="Tyres covered" value={kpi ? kpi.totalTyresCovered.toLocaleString() : 'N/A'} icon={Package} tone="text-sky-500" />
+        <Kpi label="Avg utilisation" value={kpi?.avgUtilization == null ? 'N/A' : `${kpi.avgUtilization}%`} sub={kpi ? `${kpi.overrunCount} over committed km` : null} icon={TrendingUp} tone="text-indigo-500" />
+        <Kpi label="Renewals due (30d)" value={kpi ? kpi.renewalsDue30d : 'N/A'} sub={kpi ? `${kpi.renewalsOverdue} overdue` : null} icon={CalendarClock} tone={kpi && (kpi.renewalsDue30d > 0 || kpi.renewalsOverdue > 0) ? 'text-orange-500' : 'text-[var(--text-primary)]'} />
       </div>
 
       {/* Revenue by plan + Renewals due */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* By-plan revenue breakdown */}
-        <div className="card">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
-            <Layers size={15} /> Revenue by plan
-          </h3>
-          {rows === null ? (
+        <section className="card" aria-labelledby="taas-plan">
+          <h2 id="taas-plan" className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
+            <Layers size={15} aria-hidden="true" /> Revenue by plan
+          </h2>
+          {!loaded && !error ? (
             <div className="h-24 bg-[var(--input-bg)] rounded animate-pulse" />
+          ) : !loaded ? (
+            <p className="text-sm text-[var(--text-muted)]">Unavailable until the subscriptions load.</p>
           ) : planBreakdown.length === 0 ? (
             <p className="text-sm text-[var(--text-muted)]">No subscriptions yet.</p>
           ) : (
             <div className="space-y-3">
+              {kpi?.mixedCurrency && (
+                <p className="text-xs text-amber-500">Contracts use more than one currency, so revenue per plan is not totalled. Filter by country to compare in one currency.</p>
+              )}
               {planBreakdown.map((p) => (
                 <div key={p.plan_type}>
-                  <div className="flex items-center justify-between text-sm mb-1">
-                    <span className="flex items-center gap-2">
+                  <div className="flex items-center justify-between text-sm mb-1 gap-2">
+                    <span className="flex items-center gap-2 min-w-0">
                       <Badge label={PLAN_LABEL[p.plan_type] || p.plan_type} cls={PLAN_BADGE[p.plan_type] || PLAN_BADGE.unspecified} />
                       <span className="text-[var(--text-muted)] text-xs">{p.count} contract{p.count === 1 ? '' : 's'}</span>
                     </span>
-                    <span className="font-semibold text-[var(--text-primary)] tabular-nums">{formatCurrency(p.mrr, currency, 0)}</span>
+                    <span className="font-semibold text-[var(--text-primary)] tabular-nums">{kpi?.mixedCurrency ? 'N/A' : formatCurrency(p.mrr, kpi?.mrrCurrency || currency, 0)}</span>
                   </div>
-                  <div className="h-1.5 rounded-full bg-[var(--input-bg)] overflow-hidden">
-                    <div className="h-full bg-amber-500" style={{ width: `${(p.mrr / maxPlanMrr) * 100}%` }} />
-                  </div>
+                  {!kpi?.mixedCurrency && (
+                    <div className="h-1.5 rounded-full bg-[var(--input-bg)] overflow-hidden" aria-hidden="true">
+                      <div className="h-full bg-amber-500" style={{ width: `${(p.mrr / maxPlanMrr) * 100}%` }} />
+                    </div>
+                  )}
                 </div>
               ))}
               <div className="flex items-center justify-between pt-2 mt-1 border-t border-[var(--input-border)] text-sm">
-                <span className="text-[var(--text-muted)] flex items-center gap-1.5"><Wallet size={14} /> Total MRR</span>
-                <span className="font-bold text-amber-400 tabular-nums">{formatCurrency(summary.mrr, currency, 0)}</span>
+                <span className="text-[var(--text-muted)] flex items-center gap-1.5"><Wallet size={14} aria-hidden="true" /> Total MRR</span>
+                <span className="font-bold text-amber-500 tabular-nums">{kpi?.mrr == null ? 'N/A' : formatCurrency(kpi.mrr, kpi.mrrCurrency || currency, 0)}</span>
               </div>
             </div>
           )}
-        </div>
+        </section>
 
-        {/* Renewals-due attention list */}
-        <div className="card">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
-            <CalendarClock size={15} /> Renewals due (next 30 days)
-          </h3>
-          {rows === null ? (
+        <section className="card" aria-labelledby="taas-renewals">
+          <h2 id="taas-renewals" className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
+            <CalendarClock size={15} aria-hidden="true" /> Renewals due (next 30 days)
+          </h2>
+          {!loaded && !error ? (
             <div className="h-24 bg-[var(--input-bg)] rounded animate-pulse" />
+          ) : !loaded ? (
+            <p className="text-sm text-[var(--text-muted)]">Unavailable until the subscriptions load.</p>
           ) : renewals.length === 0 ? (
             <p className="text-sm text-[var(--text-muted)]">No live contracts renewing in the next 30 days.</p>
           ) : (
-            <div className="space-y-2 max-h-72 overflow-y-auto">
+            <ul className="space-y-2 max-h-72 overflow-y-auto">
               {renewals.map(({ r, days }) => {
-                const overdue = days < 0
-                const soon = days >= 0 && days <= 7
-                const tone = overdue ? 'text-red-300' : soon ? 'text-orange-300' : 'text-amber-300'
-                const chip = overdue
-                  ? `${Math.abs(days)}d overdue`
-                  : days === 0 ? 'due today' : `in ${days}d`
+                const tone = days < 0 ? 'text-red-500' : days <= 7 ? 'text-orange-500' : 'text-amber-500'
                 return (
-                  <button
-                    key={r.id}
-                    onClick={() => openEdit(r)}
-                    className="w-full flex items-center justify-between gap-3 rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)]/40 px-3 py-2 text-left hover:bg-[var(--input-bg)]/70 transition-colors"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-[var(--text-primary)] truncate">{r.customer_name || 'N/A'}</p>
-                      <p className="text-[11px] text-[var(--text-muted)] truncate">
-                        {r.subscription_no || r.asset_no || 'N/A'} · {PLAN_LABEL[r.plan_type] || r.plan_type || 'N/A'} · {fmtDate(r.renewal_date)}
-                      </p>
-                    </div>
-                    <span className={`text-xs font-semibold whitespace-nowrap ${tone}`}>{chip}</span>
-                  </button>
+                  <li key={r.id}>
+                    <button
+                      type="button"
+                      onClick={() => openEdit(r)}
+                      className="w-full min-h-[44px] flex items-center justify-between gap-3 rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2 text-left hover:border-[var(--text-muted)] transition-colors"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-[var(--text-primary)] truncate">{r.customer_name || 'N/A'}</p>
+                        <p className="text-[11px] text-[var(--text-muted)] truncate">
+                          {r.subscription_no || r.asset_no || 'N/A'}, {PLAN_LABEL[r.plan_type] || r.plan_type || 'N/A'}, {fmtDate(r.renewal_date)}
+                        </p>
+                      </div>
+                      <span className={`text-xs font-semibold whitespace-nowrap ${tone}`}>{renewalLabel(days)}</span>
+                    </button>
+                  </li>
                 )
               })}
-            </div>
+            </ul>
           )}
-        </div>
+        </section>
       </div>
 
       {/* Filters */}
-      <div className="card space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="card">
+        <div className="flex flex-wrap items-end gap-2">
           <div className="relative flex-1 min-w-[200px]">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-            <input className="input pl-9 w-full" placeholder="Search customer, subscription, asset, notes…" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <label htmlFor="taas-search" className="sr-only">Search subscriptions</label>
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+            <input id="taas-search" className="input pl-9 w-full min-h-[44px]" placeholder="Search customer, subscription, asset, notes" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-          <select className="input" value={planFilter} onChange={(e) => setPlanFilter(e.target.value)} aria-label="Plan type">
+          <select className="input min-h-[44px]" value={planFilter} onChange={(e) => setPlanFilter(e.target.value)} aria-label="Plan type">
             <option value="">All plans</option>
             {PLAN_TYPES.map((p) => <option key={p} value={p}>{PLAN_LABEL[p]}</option>)}
           </select>
-          <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
+          <select className="input min-h-[44px]" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
             <option value="">All statuses</option>
             {STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
           </select>
           {countryOptions.length > 0 && (
-            <select className="input" value={countryFilter} onChange={(e) => setCountryFilter(e.target.value)} aria-label="Country">
+            <select className="input min-h-[44px]" value={countryFilter} onChange={(e) => setCountryFilter(e.target.value)} aria-label="Country">
               <option value="">All countries</option>
               {countryOptions.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           )}
-          {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
-          <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {summary.totalSubscriptions}</span>
+          {hasFilters && <button type="button" onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]"><X size={14} aria-hidden="true" /> Clear</button>}
+          <span className="text-xs text-[var(--text-muted)] ml-auto self-center" aria-live="polite">{filtered.length} of {kpi ? kpi.totalSubscriptions : 'N/A'}</span>
         </div>
       </div>
 
-      {/* Table */}
-      <div className="card overflow-hidden !p-0">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                {['Customer', 'Plan', 'Status', 'Tyres', 'Utilisation', 'Cost / km', 'Monthly fee', 'Renewal', ''].map((h, i) => <th key={i} className="px-4 py-3 font-semibold whitespace-nowrap">{h}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {rows === null ? (
-                [0, 1, 2, 3, 4].map((i) => <tr key={i} className="border-b border-[var(--input-border)]/50"><td colSpan={9} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>)
-              ) : filtered.length === 0 ? (
-                <tr><td colSpan={9} className="px-4 py-12 text-center text-[var(--text-muted)]">
-                  <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {rows.length === 0 && !notProvisioned ? 'No subscriptions yet. Create your first TaaS contract.' : 'No subscriptions match these filters.'}
-                </td></tr>
-              ) : (
-                pager.pageRows.map((r) => {
-                  const cpk = costPerKm(r)
-                  const util = kmUtilization(r)
-                  const days = daysToRenewal(r, nowMs)
-                  return (
-                    <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                      <td className="px-4 py-2.5">
-                        <p className="font-medium text-[var(--text-primary)]">{r.customer_name || 'N/A'}</p>
-                        <p className="text-[11px] text-[var(--text-muted)]">{r.subscription_no || r.asset_no || 'N/A'}</p>
-                      </td>
-                      <td className="px-4 py-2.5"><Badge label={PLAN_LABEL[r.plan_type] || r.plan_type || 'N/A'} cls={PLAN_BADGE[r.plan_type] || PLAN_BADGE.unspecified} /></td>
-                      <td className="px-4 py-2.5"><Badge label={STATUS_LABEL[r.status] || r.status || 'N/A'} cls={STATUS_BADGE[r.status] || STATUS_BADGE.expired} /></td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] tabular-nums">{r.tyres_covered ?? 'N/A'}</td>
-                      <td className="px-4 py-2.5"><UtilBar pct={util} /></td>
-                      <td className="px-4 py-2.5 font-semibold text-[var(--text-primary)] tabular-nums">{cpk == null ? 'N/A' : formatCurrency(cpk, r.currency || currency, 3)}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] tabular-nums">{r.monthly_fee == null ? 'N/A' : formatCurrency(r.monthly_fee, r.currency || currency, 0)}</td>
-                      <td className="px-4 py-2.5 whitespace-nowrap">
-                        <span className="text-[var(--text-secondary)]">{fmtDate(r.renewal_date)}</span>
-                        {days != null && (r.status === 'active' || r.status === 'trial') && days <= 30 && (
-                          <span className={`block text-[11px] ${days < 0 ? 'text-red-400' : days <= 7 ? 'text-orange-400' : 'text-amber-400'}`}>
-                            {days < 0 ? `${Math.abs(days)}d overdue` : days === 0 ? 'due today' : `in ${days}d`}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-center justify-end gap-1">
-                          <button onClick={() => openEdit(r)} className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Edit"><Pencil size={14} /></button>
-                          <button onClick={() => setConfirmDelete(r)} className="p-1.5 rounded hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400" aria-label="Delete"><Trash2 size={14} /></button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-        <TablePagination {...pager} />
-      </div>
+      <EnterpriseTable
+        columns={columns}
+        data={filtered}
+        getRowId={(r) => String(r.id)}
+        loading={!loaded && !error}
+        error={error || null}
+        onRetry={load}
+        enableGlobalFilter={false}
+        enableExport={false}
+        viewKey="taas-subscriptions"
+        emptyMessage={
+          notProvisioned ? 'TaaS subscriptions are not provisioned yet.'
+            : (rows || []).length === 0 ? 'No subscriptions yet. Create your first TaaS contract.'
+              : 'No subscriptions match these filters.'
+        }
+      />
 
-      {/* Create / Edit modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" onClick={closeModal}>
-          <div className="card w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-[var(--text-primary)]">{editing ? 'Edit subscription' : 'New TaaS subscription'}</h3>
-              <button onClick={closeModal} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
-            </div>
-            <form onSubmit={submit} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="label">Customer name</label>
-                  <input className="input w-full" placeholder="e.g. Gulf Logistics Co." value={form.customer_name} maxLength={200} onChange={(e) => set('customer_name', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Subscription no. (optional)</label>
-                  <input className="input w-full" placeholder="e.g. TAAS-2026-014" value={form.subscription_no} maxLength={120} onChange={(e) => set('subscription_no', e.target.value)} />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                  <label className="label">Asset (optional)</label>
-                  <input className="input w-full" placeholder="e.g. TRK-1042" value={form.asset_no} maxLength={120} onChange={(e) => set('asset_no', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Plan type</label>
-                  <select className="input w-full" value={form.plan_type} onChange={(e) => set('plan_type', e.target.value)}>
-                    {PLAN_TYPES.map((p) => <option key={p} value={p}>{PLAN_LABEL[p]}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="label">Status</label>
-                  <select className="input w-full" value={form.status} onChange={(e) => set('status', e.target.value)}>
-                    {STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <div>
-                  <label className="label">Tyres covered</label>
-                  <input className="input w-full" type="number" step="1" min="0" placeholder="6" value={form.tyres_covered} onChange={(e) => set('tyres_covered', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Rate</label>
-                  <input className="input w-full" type="number" step="0.01" min="0" placeholder="0.12" value={form.rate} onChange={(e) => set('rate', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Rate unit</label>
-                  <input className="input w-full" placeholder="per km / per tyre" value={form.rate_unit} maxLength={40} onChange={(e) => set('rate_unit', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Monthly fee</label>
-                  <input className="input w-full" type="number" step="0.01" min="0" placeholder="1200" value={form.monthly_fee} onChange={(e) => set('monthly_fee', e.target.value)} />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <div>
-                  <label className="label">Committed km</label>
-                  <input className="input w-full" type="number" step="1" min="0" placeholder="60000" value={form.committed_km} onChange={(e) => set('committed_km', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Actual km</label>
-                  <input className="input w-full" type="number" step="1" min="0" placeholder="42000" value={form.actual_km} onChange={(e) => set('actual_km', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Billed to date</label>
-                  <input className="input w-full" type="number" step="0.01" min="0" placeholder="5040" value={form.billed_to_date} onChange={(e) => set('billed_to_date', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Currency</label>
-                  <input className="input w-full" placeholder={currency} value={form.currency} maxLength={8} onChange={(e) => set('currency', e.target.value)} />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="label">Start date</label>
-                  <input className="input w-full" type="date" value={form.start_date} onChange={(e) => set('start_date', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Renewal date</label>
-                  <input className="input w-full" type="date" value={form.renewal_date} onChange={(e) => set('renewal_date', e.target.value)} />
-                </div>
-              </div>
-              <div>
-                <label className="label">Notes (optional)</label>
-                <textarea className="input w-full min-h-[70px] resize-y" placeholder="e.g. includes retread coverage; quarterly usage true-up" value={form.notes} maxLength={8000} onChange={(e) => set('notes', e.target.value)} />
-              </div>
-
-              {formError && (
-                <div className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
-                  <AlertTriangle size={15} className="mt-0.5 shrink-0" /> {formError}
-                </div>
-              )}
-
-              <div className="flex items-center justify-end gap-2 pt-1">
-                <button type="button" onClick={closeModal} className="btn-secondary text-sm" disabled={saving}>Cancel</button>
-                <button type="submit" className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={saving}>
-                  {saving ? 'Saving…' : editing ? 'Save changes' : 'Create subscription'}
-                </button>
-              </div>
-            </form>
+      {/* Create / Edit dialog */}
+      <Modal
+        open={showModal}
+        onClose={closeModal}
+        size="lg"
+        title={editing ? 'Edit subscription' : 'New TaaS subscription'}
+        closeOnBackdrop={!saving}
+        footer={
+          <div className="flex items-center justify-end gap-2">
+            <button type="button" onClick={closeModal} className="btn-secondary text-sm min-h-[44px]" disabled={saving}>Cancel</button>
+            <button type="submit" form="taas-form" className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px] disabled:opacity-60" disabled={saving}>
+              {saving ? 'Saving...' : editing ? 'Save changes' : 'Create subscription'}
+            </button>
           </div>
-        </div>
-      )}
+        }
+      >
+        <form id="taas-form" onSubmit={submit} className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="label" htmlFor="ta-customer">Customer name *</label>
+              <input id="ta-customer" className="input w-full" placeholder="e.g. Gulf Logistics Co." value={form.customer_name} maxLength={200} onChange={(e) => set('customer_name', e.target.value)} required />
+            </div>
+            <div>
+              <label className="label" htmlFor="ta-no">Subscription no. (optional)</label>
+              <input id="ta-no" className="input w-full" placeholder="e.g. TAAS-2026-014" value={form.subscription_no} maxLength={120} onChange={(e) => set('subscription_no', e.target.value)} />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="label" htmlFor="ta-asset">Asset (optional)</label>
+              <input id="ta-asset" className="input w-full" placeholder="e.g. TRK-1042" value={form.asset_no} maxLength={120} onChange={(e) => set('asset_no', e.target.value)} />
+            </div>
+            <div>
+              <label className="label" htmlFor="ta-plan">Plan type</label>
+              <select id="ta-plan" className="input w-full" value={form.plan_type} onChange={(e) => set('plan_type', e.target.value)}>
+                {PLAN_TYPES.map((p) => <option key={p} value={p}>{PLAN_LABEL[p]}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="label" htmlFor="ta-status">Status</label>
+              <select id="ta-status" className="input w-full" value={form.status} onChange={(e) => set('status', e.target.value)}>
+                {STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {[['tyres_covered', 'Tyres covered', '1', '6'], ['rate', 'Rate', '0.01', '0.12']].map(([k, l, step, ph]) => (
+              <div key={k}>
+                <label className="label" htmlFor={`ta-${k}`}>{l}</label>
+                <input id={`ta-${k}`} className="input w-full" type="number" step={step} min="0" placeholder={ph} value={form[k]} onChange={(e) => set(k, e.target.value)} />
+              </div>
+            ))}
+            <div>
+              <label className="label" htmlFor="ta-unit">Rate unit</label>
+              <input id="ta-unit" className="input w-full" placeholder="per km / per tyre" value={form.rate_unit} maxLength={40} onChange={(e) => set('rate_unit', e.target.value)} />
+            </div>
+            <div>
+              <label className="label" htmlFor="ta-fee">Monthly fee</label>
+              <input id="ta-fee" className="input w-full" type="number" step="0.01" min="0" placeholder="1200" value={form.monthly_fee} onChange={(e) => set('monthly_fee', e.target.value)} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {[['committed_km', 'Committed km', '1', '60000'], ['actual_km', 'Actual km', '1', '42000'], ['billed_to_date', 'Billed to date', '0.01', '5040']].map(([k, l, step, ph]) => (
+              <div key={k}>
+                <label className="label" htmlFor={`ta-${k}`}>{l}</label>
+                <input id={`ta-${k}`} className="input w-full" type="number" step={step} min="0" placeholder={ph} value={form[k]} onChange={(e) => set(k, e.target.value)} />
+              </div>
+            ))}
+            <div>
+              <label className="label" htmlFor="ta-cur">Currency</label>
+              <input id="ta-cur" className="input w-full" placeholder={currency} value={form.currency} maxLength={8} onChange={(e) => set('currency', e.target.value)} />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="label" htmlFor="ta-start">Start date</label>
+              <input id="ta-start" className="input w-full" type="date" value={form.start_date} onChange={(e) => set('start_date', e.target.value)} />
+            </div>
+            <div>
+              <label className="label" htmlFor="ta-renew">Renewal date</label>
+              <input id="ta-renew" className="input w-full" type="date" value={form.renewal_date} onChange={(e) => set('renewal_date', e.target.value)} />
+            </div>
+          </div>
+          <div>
+            <label className="label" htmlFor="ta-notes">Notes (optional)</label>
+            <textarea id="ta-notes" className="input w-full min-h-[70px] resize-y" placeholder="e.g. includes retread coverage; quarterly usage true-up" value={form.notes} maxLength={8000} onChange={(e) => set('notes', e.target.value)} />
+          </div>
+          {formError && (
+            <div role="alert" className="flex items-start gap-2 text-sm text-red-500 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
+              <AlertTriangle size={15} className="mt-0.5 shrink-0" aria-hidden="true" /> {formError}
+            </div>
+          )}
+        </form>
+      </Modal>
 
       {/* Delete confirm */}
-      {confirmDelete && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" onClick={() => !deleting && setConfirmDelete(null)}>
-          <div className="card w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-full bg-red-900/30 flex items-center justify-center shrink-0"><Trash2 size={18} className="text-red-400" /></div>
-              <div>
-                <h3 className="text-[var(--text-primary)] font-semibold">Delete this subscription?</h3>
-                <p className="text-sm text-[var(--text-muted)] mt-1">
-                  {confirmDelete.customer_name || 'Subscription'} · {PLAN_LABEL[confirmDelete.plan_type] || confirmDelete.plan_type || 'N/A'} · {fmtDate(confirmDelete.renewal_date)}. This can’t be undone.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center justify-end gap-2 mt-5">
-              <button onClick={() => setConfirmDelete(null)} className="btn-secondary text-sm" disabled={deleting}>Cancel</button>
-              <button onClick={doDelete} className="btn-danger text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={deleting}>
-                <Trash2 size={14} /> {deleting ? 'Deleting…' : 'Delete'}
-              </button>
-            </div>
+      <Modal
+        open={Boolean(confirmDelete)}
+        onClose={() => !deleting && setConfirmDelete(null)}
+        size="sm"
+        title="Delete this subscription?"
+        closeOnBackdrop={!deleting}
+        footer={
+          <div className="flex items-center justify-end gap-2">
+            <button type="button" onClick={() => setConfirmDelete(null)} className="btn-secondary text-sm min-h-[44px]" disabled={deleting}>Cancel</button>
+            <button type="button" onClick={doDelete} className="btn-danger text-sm inline-flex items-center gap-1.5 min-h-[44px] disabled:opacity-60" disabled={deleting}>
+              <Trash2 size={14} aria-hidden="true" /> {deleting ? 'Deleting...' : 'Delete'}
+            </button>
           </div>
-        </div>
-      )}
+        }
+      >
+        {confirmDelete && (
+          <p className="text-sm text-[var(--text-secondary)]">
+            {confirmDelete.customer_name || 'Subscription'}, {PLAN_LABEL[confirmDelete.plan_type] || confirmDelete.plan_type || 'N/A'}, renewal {fmtDate(confirmDelete.renewal_date)}. This cannot be undone.
+          </p>
+        )}
+      </Modal>
     </div>
   )
 }

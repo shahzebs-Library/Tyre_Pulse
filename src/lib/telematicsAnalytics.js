@@ -384,3 +384,45 @@ export function analyzeTelematics(rows = [], { now = Date.now(), thresholdHours 
     },
   }
 }
+
+/**
+ * Connectivity state of one device against the staleness threshold:
+ * 'never' (no heartbeat on record), 'online' or 'offline'. The page renders a
+ * word as well as a colour, so the state is never conveyed by colour alone.
+ */
+export function connectivityState(device, now = Date.now(), thresholdHours = DEFAULT_STALE_THRESHOLD_HOURS) {
+  if (!device?.last_seen_at) return 'never'
+  return deviceOnline(device, now, thresholdHours) ? 'online' : 'offline'
+}
+
+/** Human "time since last heartbeat" label; 'Never' / 'N/A' when unmeasurable. */
+export function lastSeenLabel(device, now = Date.now()) {
+  if (!device?.last_seen_at) return 'Never'
+  const h = hoursSinceSeen(device, now)
+  if (h == null) return 'N/A'
+  if (h < 1) return 'under 1 h ago'
+  if (h < 48) return `${Math.round(h)} h ago`
+  return `${Math.round(h / 24)} d ago`
+}
+
+/** Active share for display: null (N/A) when there are no devices at all. */
+export function activeShareLabel(kpis) {
+  if (!kpis || !kpis.total) return 'N/A'
+  return `${kpis.activePct}%`
+}
+
+export const DEVICE_EXPORT_COLS = ['device_id', 'provider', 'sim_number', 'asset_no', 'status', 'connectivity', 'install_date', 'last_seen_at', 'site']
+export const DEVICE_EXPORT_HEADERS = ['Device ID', 'Provider', 'SIM', 'Asset', 'Status', 'Connectivity', 'Install date', 'Last seen', 'Site']
+const CONN_WORD = { online: 'Online', offline: 'Offline', never: 'Never' }
+
+/** Export rows for the whole filtered set (never the visible page). */
+export function deviceExportRows(rows = [], now = Date.now(), thresholdHours = DEFAULT_STALE_THRESHOLD_HOURS) {
+  return (Array.isArray(rows) ? rows : []).map((r) => ({
+    device_id: r.device_id || '', provider: r.provider || '', sim_number: r.sim_number || '',
+    asset_no: r.asset_no || '', status: DEVICE_STATUS_META[r.status]?.label || r.status || '',
+    connectivity: CONN_WORD[connectivityState(r, now, thresholdHours)],
+    install_date: r.install_date || '',
+    last_seen_at: r.last_seen_at ? new Date(r.last_seen_at).toLocaleString() : '',
+    site: r.site || '',
+  }))
+}

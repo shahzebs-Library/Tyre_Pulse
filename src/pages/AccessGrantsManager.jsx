@@ -16,11 +16,16 @@
  * server-side; a non-super caller gets a 42501 which is mapped to a clean message via
  * toUserMessage. The user list reuses the existing users service (listProfiles) - no new
  * users API is introduced.
+ *
+ * Presentation (filtering, grant state, KPI summary, export rows) lives in the pure
+ * src/lib/accessGrantsAnalytics.js engine; it describes grants only and never decides
+ * access. The grants register is the shared EnterpriseTable.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Users, Search, ShieldCheck, Crown, UserPlus, Plus, Trash2, X, Check, Ban,
   AlertTriangle, Loader2, Info, Calendar, KeyRound, RefreshCw, ChevronRight,
+  Hourglass, FileSpreadsheet, FileText,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { MODULE_GROUPS, MODULE_LABEL } from '../lib/moduleCatalog'
@@ -30,23 +35,32 @@ import {
   listUserGrants, setUserAccessGrant, revokeUserAccessGrant,
 } from '../lib/api/accessGrants'
 import { toUserMessage } from '../lib/safeError'
-import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import Modal from '../components/ui/Modal'
+import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
+import {
+  displayName, initials, filterUsers, roleOptions as buildRoleOptions, grantState, grantSummary,
+  directorySummary, grantExportRows, GRANT_STATE_LABEL, GRANT_EXPORT_COLS, GRANT_EXPORT_HEADERS,
+} from '../lib/accessGrantsAnalytics'
 
 const ROLE_TINT = {
-  Admin: 'text-purple-300', Manager: 'text-blue-300', Director: 'text-indigo-300',
-  Reporter: 'text-cyan-300', Inspector: 'text-green-300', 'Tyre Man': 'text-amber-300',
-  Driver: 'text-secondary',
+  Admin: 'text-purple-500', Manager: 'text-blue-500', Director: 'text-indigo-500',
+  Reporter: 'text-cyan-500', Inspector: 'text-green-500', 'Tyre Man': 'text-amber-500',
+  Driver: 'text-[var(--text-secondary)]',
 }
+const STATE_CLS = {
+  permanent: 'text-[var(--text-secondary)]',
+  active: 'text-[var(--text-secondary)]',
+  expiring: 'text-amber-500',
+  expired: 'text-[var(--text-muted)]',
+}
+const ICON_BTN = 'inline-flex items-center justify-center min-w-[44px] min-h-[44px] rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg)] disabled:opacity-40'
 
 function fmtDate(value) {
   if (!value) return 'N/A'
   const d = new Date(value)
   if (Number.isNaN(d.getTime())) return 'N/A'
   return d.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })
-}
-
-function displayName(u) {
-  return u?.full_name || u?.username || u?.email || 'Unnamed user'
 }
 
 // ── Toasts (self-contained, no external lib) ─────────────────────────────────
@@ -59,17 +73,17 @@ function Toasts({ items, onDismiss }) {
           key={t.id}
           role="status"
           className={`card !p-3 flex items-start gap-2.5 shadow-lg border ${
-            t.kind === 'error' ? 'border-red-800/60' : 'border-green-800/60'
+            t.kind === 'error' ? 'border-red-500/50' : 'border-green-500/50'
           }`}
         >
           {t.kind === 'error'
-            ? <AlertTriangle size={16} className="text-red-400 mt-0.5 shrink-0" />
-            : <Check size={16} className="text-green-400 mt-0.5 shrink-0" />}
+            ? <AlertTriangle size={16} className="text-red-500 mt-0.5 shrink-0" aria-hidden="true" />
+            : <Check size={16} className="text-green-500 mt-0.5 shrink-0" aria-hidden="true" />}
           <p className="text-sm text-[var(--text-primary)] flex-1">{t.message}</p>
           <button
             onClick={() => onDismiss(t.id)}
-            className="text-[var(--text-muted)] hover:text-[var(--text-primary)] shrink-0"
-            aria-label="Dismiss"
+            className="inline-flex items-center justify-center min-w-[32px] min-h-[32px] rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] shrink-0"
+            aria-label="Dismiss notification"
           ><X size={14} /></button>
         </div>
       ))}
@@ -98,7 +112,8 @@ function ModulePicker({ value, onPick }) {
       <div className="relative mb-2">
         <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
         <input
-          className="input pl-8 py-1.5 text-sm w-full"
+          aria-label="Search modules"
+          className="input pl-8 py-1.5 text-sm w-full min-h-[44px]"
           placeholder="Search modules..."
           value={q}
           onChange={(e) => setQ(e.target.value)}
@@ -118,7 +133,8 @@ function ModulePicker({ value, onPick }) {
                     type="button"
                     key={m.key}
                     onClick={() => onPick(m.key)}
-                    className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-left text-sm transition-colors ${
+                    aria-pressed={on}
+                    className={`flex items-center gap-2 px-2.5 py-1.5 min-h-[44px] rounded-lg border text-left text-sm transition-colors ${
                       on
                         ? 'border-indigo-500/50 bg-indigo-500/10 text-[var(--text-primary)]'
                         : 'border-[var(--input-border)] text-[var(--text-secondary)] hover:bg-[var(--input-bg)]'
@@ -155,7 +171,7 @@ export default function AccessGrantsManager() {
   // Grants for the selected user
   const [grants, setGrants] = useState(null)        // null = loading
   const [grantsError, setGrantsError] = useState('')
-  const grantsPager = usePagedRows(grants)
+  const [nowMs, setNowMs] = useState(() => Date.now())
 
   // Add-grant form
   const [form, setForm] = useState(EMPTY_FORM)
@@ -211,7 +227,10 @@ export default function AccessGrantsManager() {
     try {
       const rows = await listUserGrants(userId)
       setGrants(Array.isArray(rows) ? rows : [])
+      setNowMs(Date.now())
     } catch (err) {
+      // A failed read is not "no grants": the register shows the error with
+      // Retry instead of an empty role baseline.
       setGrantsError(toUserMessage(err, 'Could not load grants for this user.'))
       setGrants([])
     }
@@ -225,25 +244,83 @@ export default function AccessGrantsManager() {
     setFormError('')
   }
 
-  // ── Role filter options (built from real data) ───────────────────────────────
-  const roleOptions = useMemo(() => {
-    const set = new Set()
-    for (const u of users || []) if (u.role) set.add(u.role)
-    return Array.from(set).sort()
-  }, [users])
+  // ── Role filter options + filtered directory (engine, real data only) ───────
+  const roleOptions = useMemo(() => buildRoleOptions(users || []), [users])
+  const filteredUsers = useMemo(() => filterUsers(users || [], { search, role: roleFilter }), [users, search, roleFilter])
+  const dirSummary = useMemo(() => directorySummary(users || []), [users])
+  const gSummary = useMemo(
+    () => (Array.isArray(grants) && !grantsError ? grantSummary(grants, nowMs) : null),
+    [grants, grantsError, nowMs],
+  )
 
-  const filteredUsers = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return (users || []).filter((u) => {
-      if (roleFilter !== 'all' && u.role !== roleFilter) return false
-      if (!q) return true
-      return (
-        displayName(u).toLowerCase().includes(q) ||
-        String(u.email || '').toLowerCase().includes(q) ||
-        String(u.username || '').toLowerCase().includes(q)
-      )
-    })
-  }, [users, search, roleFilter])
+  const exportGrants = useCallback(async (kind) => {
+    if (!selectedUser || !Array.isArray(grants) || !grants.length) return
+    const rows = grantExportRows(grants, { user: selectedUser, moduleLabel: MODULE_LABEL, now: nowMs, fmt: fmtDate })
+    const base = reportFileName('TyrePulse Access Grants', displayName(selectedUser), reportDateLabel())
+    try {
+      if (kind === 'xlsx') await exportToExcel(rows, GRANT_EXPORT_COLS, GRANT_EXPORT_HEADERS, base, 'Grants', { title: 'Per-User Access Grants' })
+      else await exportToPdf(rows, GRANT_EXPORT_COLS.map((key, i) => ({ key, header: GRANT_EXPORT_HEADERS[i] })), `Access Grants: ${displayName(selectedUser)}`, base, 'landscape')
+    } catch (err) {
+      pushToast('error', toUserMessage(err, 'Could not export. Try again.'))
+    }
+  }, [selectedUser, grants, nowMs, pushToast])
+
+  const grantColumns = useMemo(() => [
+    {
+      id: 'effect', header: 'Effect', accessorFn: (g) => (g.effect === 'revoke' ? 'Revoke' : 'Grant'), size: 110, meta: { filterVariant: 'select' },
+      cell: ({ row }) => {
+        const revoke = row.original.effect === 'revoke'
+        return (
+          <span className={`inline-flex items-center gap-1 text-[11px] font-semibold rounded-full px-2 py-0.5 border ${
+            revoke ? 'text-red-500 bg-red-500/10 border-red-500/40' : 'text-green-500 bg-green-500/10 border-green-500/40'
+          }`}>
+            {revoke ? <Ban size={11} aria-hidden="true" /> : <Check size={11} aria-hidden="true" />}
+            {revoke ? 'Revoke' : 'Grant'}
+          </span>
+        )
+      },
+    },
+    {
+      id: 'module', header: 'Module', accessorFn: (g) => MODULE_LABEL[g.module_key] || g.module_key, size: 200,
+      cell: ({ getValue }) => <span className="text-[var(--text-primary)] font-medium">{getValue()}</span>,
+    },
+    {
+      id: 'capability', header: 'Capability', accessorFn: (g) => g.capability || 'view', size: 110, meta: { filterVariant: 'select' },
+      cell: ({ getValue }) => <span className="capitalize">{getValue()}</span>,
+    },
+    {
+      id: 'expires', header: 'Expires', accessorFn: (g) => g.expires_at || '9999', size: 150,
+      cell: ({ row }) => {
+        const st = grantState(row.original, nowMs)
+        return (
+          <span className={`whitespace-nowrap ${STATE_CLS[st]}`}>
+            {row.original.expires_at ? fmtDate(row.original.expires_at) : 'No expiry'}
+            {(st === 'expired' || st === 'expiring') && <span className="block text-[11px] font-medium">{GRANT_STATE_LABEL[st]}</span>}
+          </span>
+        )
+      },
+    },
+    {
+      id: 'granted', header: 'Granted', accessorFn: (g) => g.created_at || '', size: 120,
+      cell: ({ row }) => <span className="whitespace-nowrap">{fmtDate(row.original.created_at)}</span>,
+    },
+    {
+      id: 'note', header: 'Note', accessorFn: (g) => g.note || '', size: 200,
+      cell: ({ getValue }) => <span className="text-[var(--text-muted)] line-clamp-2">{getValue() || 'N/A'}</span>,
+    },
+    {
+      id: 'actions', header: '', enableSorting: false, size: 70, meta: { export: false, align: 'right' },
+      cell: ({ row }) => (
+        <button
+          type="button"
+          onClick={() => setConfirmRemove(row.original)}
+          disabled={!isSuperAdmin}
+          className={`${ICON_BTN} hover:text-red-500`}
+          aria-label={`Remove ${row.original.effect || 'grant'} on ${MODULE_LABEL[row.original.module_key] || row.original.module_key}`}
+        ><Trash2 size={15} /></button>
+      ),
+    },
+  ], [nowMs, isSuperAdmin])
 
   // ── Save a grant ─────────────────────────────────────────────────────────────
   const save = useCallback(async (e) => {
@@ -296,18 +373,36 @@ export default function AccessGrantsManager() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-start gap-2">
-          <Info size={15} className="text-[var(--text-muted)] mt-0.5 shrink-0" />
+          <Info size={15} className="text-[var(--text-muted)] mt-0.5 shrink-0" aria-hidden="true" />
           <p className="text-xs text-[var(--text-muted)] max-w-2xl">
-            Give one specific person more or less access than their role. A <span className="text-green-300">Grant</span> opens a
-            module the role cannot reach; a <span className="text-red-300">Revoke</span> closes a module the role normally can.
+            Give one specific person more or less access than their role. A <span className="text-green-500 font-medium">Grant</span> opens a
+            module the role cannot reach; a <span className="text-red-500 font-medium">Revoke</span> closes a module the role normally can.
             Grants are additive overrides on top of the role baseline and only the View capability is enforced today.
           </p>
         </div>
         {!isSuperAdmin && (
-          <span className="inline-flex items-center gap-1.5 text-[11px] text-amber-300 bg-amber-900/20 border border-amber-800/50 rounded-full px-2.5 py-1">
-            <AlertTriangle size={12} /> Read only: saving grants is Super Admin only.
+          <span role="status" className="inline-flex items-center gap-1.5 text-[11px] text-amber-500 bg-amber-500/10 border border-amber-500/40 rounded-full px-2.5 py-1">
+            <AlertTriangle size={12} aria-hidden="true" /> Read only: saving grants is Super Admin only.
           </span>
         )}
+      </div>
+
+      {/* Directory KPI strip */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: 'Users', value: Array.isArray(users) && !usersError ? dirSummary.users : 'N/A', icon: Users, tone: 'text-[var(--text-primary)]' },
+          { label: 'Super Admins', value: Array.isArray(users) && !usersError ? dirSummary.superAdmins : 'N/A', icon: Crown, tone: 'text-amber-500' },
+          { label: 'Roles in use', value: Array.isArray(users) && !usersError ? dirSummary.roles : 'N/A', icon: ShieldCheck, tone: 'text-indigo-500' },
+          { label: 'Selected user overrides', value: selectedUser ? (gSummary ? gSummary.liveGrants + gSummary.liveRevokes : 'N/A') : 'None selected', icon: KeyRound, tone: 'text-sky-500' },
+        ].map((k) => (
+          <div key={k.label} className="card min-w-0">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
+              <k.icon size={16} className={k.tone} aria-hidden="true" />
+            </div>
+            <p className={`text-xl sm:text-2xl font-bold mt-1 tabular-nums ${k.tone}`}>{k.value}</p>
+          </div>
+        ))}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,340px)_1fr] gap-4">
@@ -316,29 +411,31 @@ export default function AccessGrantsManager() {
           <div className="p-3 border-b border-[var(--input-border)] space-y-2">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold text-[var(--text-primary)] inline-flex items-center gap-1.5">
-                <Users size={15} className="text-[var(--brand-bright)]" /> Users
+                <Users size={15} className="text-[var(--brand-bright)]" aria-hidden="true" /> Users
                 {Array.isArray(users) && <span className="text-[var(--text-muted)] font-normal">({filteredUsers.length})</span>}
               </h3>
               <button
                 onClick={loadUsers}
                 disabled={refreshing}
-                className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-50"
+                className={ICON_BTN}
                 aria-label="Refresh users"
               >
                 <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
               </button>
             </div>
             <div className="relative">
-              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
               <input
-                className="input pl-8 py-1.5 text-sm w-full"
+                aria-label="Search users by name or email"
+                className="input pl-8 py-1.5 text-sm w-full min-h-[44px]"
                 placeholder="Search name or email..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
             <select
-              className="input py-1.5 text-sm w-full"
+              aria-label="Filter users by role"
+              className="input py-1.5 text-sm w-full min-h-[44px]"
               value={roleFilter}
               onChange={(e) => setRoleFilter(e.target.value)}
             >
@@ -356,10 +453,10 @@ export default function AccessGrantsManager() {
               </div>
             ) : usersError ? (
               <div className="p-6 text-center">
-                <AlertTriangle size={22} className="mx-auto mb-2 text-red-400" />
-                <p className="text-sm text-red-300 font-medium">Could not load users</p>
+                <AlertTriangle size={22} className="mx-auto mb-2 text-red-500" aria-hidden="true" />
+                <p role="alert" className="text-sm text-red-500 font-medium">Could not load users</p>
                 <p className="text-xs text-[var(--text-muted)] mt-1">{usersError}</p>
-                <button onClick={loadUsers} className="btn-secondary text-xs mt-3 inline-flex items-center gap-1.5">
+                <button type="button" onClick={loadUsers} className="btn-secondary text-xs mt-3 inline-flex items-center gap-1.5 min-h-[44px]">
                   <RefreshCw size={12} /> Retry
                 </button>
               </div>
@@ -375,25 +472,27 @@ export default function AccessGrantsManager() {
                   return (
                     <li key={u.id}>
                       <button
+                        type="button"
                         onClick={() => selectUser(u.id)}
-                        className={`w-full text-left px-3 py-2.5 flex items-center gap-2.5 border-b border-[var(--input-border)]/50 transition-colors ${
+                        aria-pressed={on}
+                        className={`w-full text-left px-3 py-2.5 min-h-[44px] flex items-center gap-2.5 border-b border-[var(--input-border)]/50 transition-colors ${
                           on ? 'bg-indigo-500/10' : 'hover:bg-[var(--input-bg)]/50'
                         }`}
                       >
                         <div className="w-8 h-8 rounded-full bg-[var(--input-bg)] flex items-center justify-center shrink-0 text-xs font-semibold text-[var(--text-secondary)]">
-                          {displayName(u).slice(0, 2).toUpperCase()}
+                          {initials(u)}
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-medium text-[var(--text-primary)] truncate flex items-center gap-1.5">
                             {displayName(u)}
-                            {u.is_super_admin && <Crown size={12} className="text-amber-400 shrink-0" />}
+                            {u.is_super_admin && <Crown size={12} className="text-amber-500 shrink-0" aria-label="Super Admin" />}
                           </p>
                           <p className="text-xs text-[var(--text-muted)] truncate">{u.email || u.username || 'No email'}</p>
                         </div>
                         <span className={`text-[11px] font-medium shrink-0 ${ROLE_TINT[u.role] || 'text-[var(--text-secondary)]'}`}>
                           {u.role || 'No role'}
                         </span>
-                        <ChevronRight size={14} className={`shrink-0 ${on ? 'text-indigo-300' : 'text-[var(--text-muted)]'}`} />
+                        <ChevronRight size={14} aria-hidden="true" className={`shrink-0 ${on ? 'text-indigo-500' : 'text-[var(--text-muted)]'}`} />
                       </button>
                     </li>
                   )
@@ -419,13 +518,13 @@ export default function AccessGrantsManager() {
               <div className="card">
                 <div className="flex flex-wrap items-center gap-3">
                   <div className="w-11 h-11 rounded-full bg-[var(--input-bg)] flex items-center justify-center shrink-0 text-sm font-semibold text-[var(--text-secondary)]">
-                    {displayName(selectedUser).slice(0, 2).toUpperCase()}
+                    {initials(selectedUser)}
                   </div>
                   <div className="min-w-0">
                     <p className="text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
                       {displayName(selectedUser)}
                       {selectedUser.is_super_admin && (
-                        <span className="inline-flex items-center gap-1 text-[11px] text-amber-300 bg-amber-900/20 border border-amber-800/50 rounded-full px-2 py-0.5">
+                        <span className="inline-flex items-center gap-1 text-[11px] text-amber-500 bg-amber-500/10 border border-amber-500/40 rounded-full px-2 py-0.5">
                           <Crown size={11} /> Super Admin
                         </span>
                       )}
@@ -436,7 +535,22 @@ export default function AccessGrantsManager() {
                     <ShieldCheck size={13} /> {selectedUser.role || 'No role'}
                   </span>
                 </div>
-                <div className="mt-3 flex items-start gap-2 text-xs text-[var(--text-muted)] bg-[var(--input-bg)]/50 rounded-lg px-3 py-2">
+                {gSummary && (
+                  <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {[
+                      { label: 'Live grants', value: gSummary.liveGrants, tone: 'text-green-500', icon: Check },
+                      { label: 'Live revokes', value: gSummary.liveRevokes, tone: 'text-red-500', icon: Ban },
+                      { label: `Expiring in ${gSummary.soonDays}d`, value: gSummary.expiring, tone: 'text-amber-500', icon: Hourglass },
+                      { label: 'Expired (no effect)', value: gSummary.expired, tone: 'text-[var(--text-muted)]', icon: Calendar },
+                    ].map((k) => (
+                      <div key={k.label} className="rounded-lg border border-[var(--input-border)] px-3 py-2">
+                        <p className="text-[11px] text-[var(--text-muted)] flex items-center gap-1"><k.icon size={11} aria-hidden="true" /> {k.label}</p>
+                        <p className={`text-lg font-bold tabular-nums ${k.tone}`}>{k.value}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="mt-3 flex items-start gap-2 text-xs text-[var(--text-muted)] bg-[var(--input-bg)] rounded-lg px-3 py-2">
                   <Info size={13} className="mt-0.5 shrink-0" />
                   <span>
                     Role <span className="text-[var(--text-secondary)] font-medium">{selectedUser.role || 'None'}</span> baseline
@@ -465,15 +579,15 @@ export default function AccessGrantsManager() {
                       <button
                         type="button"
                         onClick={() => setForm((f) => ({ ...f, effect: 'grant' }))}
-                        className={`flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors ${
-                          form.effect === 'grant' ? 'bg-green-500/15 text-green-300' : 'text-[var(--text-secondary)] hover:bg-[var(--input-bg)]'
+                        aria-pressed={form.effect === 'grant'} className={`flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[44px] text-sm font-medium transition-colors ${
+                          form.effect === 'grant' ? 'bg-green-500/15 text-green-500' : 'text-[var(--text-secondary)] hover:bg-[var(--input-bg)]'
                         }`}
                       ><Check size={14} /> Grant</button>
                       <button
                         type="button"
                         onClick={() => setForm((f) => ({ ...f, effect: 'revoke' }))}
-                        className={`flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors border-l border-[var(--input-border)] ${
-                          form.effect === 'revoke' ? 'bg-red-500/15 text-red-300' : 'text-[var(--text-secondary)] hover:bg-[var(--input-bg)]'
+                        aria-pressed={form.effect === 'revoke'} className={`flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[44px] text-sm font-medium transition-colors border-l border-[var(--input-border)] ${
+                          form.effect === 'revoke' ? 'bg-red-500/15 text-red-500' : 'text-[var(--text-secondary)] hover:bg-[var(--input-bg)]'
                         }`}
                       ><Ban size={14} /> Revoke</button>
                     </div>
@@ -525,21 +639,21 @@ export default function AccessGrantsManager() {
                 </div>
 
                 {formError && (
-                  <div className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
-                    <AlertTriangle size={15} className="mt-0.5 shrink-0" /> {formError}
+                  <div role="alert" className="flex items-start gap-2 text-sm text-red-500 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
+                    <AlertTriangle size={15} className="mt-0.5 shrink-0" aria-hidden="true" /> {formError}
                   </div>
                 )}
 
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-xs text-[var(--text-muted)]">
                     {form.moduleKey
-                      ? <>Saving <span className={form.effect === 'revoke' ? 'text-red-300' : 'text-green-300'}>{form.effect}</span> for <span className="text-[var(--text-secondary)]">{MODULE_LABEL[form.moduleKey] || form.moduleKey}</span>.</>
+                      ? <>Saving <span className={form.effect === 'revoke' ? 'text-red-500 font-medium' : 'text-green-500 font-medium'}>{form.effect}</span> for <span className="text-[var(--text-secondary)]">{MODULE_LABEL[form.moduleKey] || form.moduleKey}</span>.</>
                       : 'Pick a module to continue.'}
                   </p>
                   <button
                     type="submit"
                     disabled={saving || !form.moduleKey || !isSuperAdmin}
-                    className="btn-primary text-sm inline-flex items-center gap-1.5 disabled:opacity-60"
+                    className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px] disabled:opacity-60"
                   >
                     {saving ? <><Loader2 size={14} className="animate-spin" /> Saving...</> : <><Check size={14} /> Save grant</>}
                   </button>
@@ -547,117 +661,65 @@ export default function AccessGrantsManager() {
               </form>
 
               {/* Current grants */}
-              <div className="card !p-0 overflow-hidden">
-                <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--input-border)]">
-                  <h3 className="text-sm font-semibold text-[var(--text-primary)] inline-flex items-center gap-1.5">
-                    <KeyRound size={15} className="text-indigo-300" /> Current grants
-                    {Array.isArray(grants) && <span className="text-[var(--text-muted)] font-normal">({grants.length})</span>}
+              <section className="space-y-2" aria-labelledby="agm-current">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 id="agm-current" className="text-sm font-semibold text-[var(--text-primary)] inline-flex items-center gap-1.5">
+                    <KeyRound size={15} className="text-indigo-500" aria-hidden="true" /> Current grants
+                    {Array.isArray(grants) && !grantsError && <span className="text-[var(--text-muted)] font-normal">({grants.length})</span>}
                   </h3>
-                  <button
-                    onClick={() => loadGrants(selectedId)}
-                    className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-                    aria-label="Refresh grants"
-                  ><RefreshCw size={13} /></button>
+                  <div className="flex items-center gap-1">
+                    <button type="button" onClick={() => exportGrants('xlsx')} disabled={!Array.isArray(grants) || !grants.length || Boolean(grantsError)} className="btn-secondary text-xs inline-flex items-center gap-1.5 min-h-[44px]">
+                      <FileSpreadsheet size={13} aria-hidden="true" /> Excel
+                    </button>
+                    <button type="button" onClick={() => exportGrants('pdf')} disabled={!Array.isArray(grants) || !grants.length || Boolean(grantsError)} className="btn-secondary text-xs inline-flex items-center gap-1.5 min-h-[44px]">
+                      <FileText size={13} aria-hidden="true" /> PDF
+                    </button>
+                    <button type="button" onClick={() => loadGrants(selectedId)} className={ICON_BTN} aria-label="Refresh grants"><RefreshCw size={14} /></button>
+                  </div>
                 </div>
-
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                        {['Effect', 'Module', 'Capability', 'Expires', 'Granted', ''].map((h, i) => (
-                          <th key={i} className="px-4 py-2.5 font-semibold whitespace-nowrap">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {grants === null ? (
-                        [0, 1, 2].map((i) => (
-                          <tr key={i} className="border-b border-[var(--input-border)]/50">
-                            <td colSpan={6} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td>
-                          </tr>
-                        ))
-                      ) : grantsError ? (
-                        <tr>
-                          <td colSpan={6} className="px-4 py-10 text-center">
-                            <AlertTriangle size={22} className="mx-auto mb-2 text-red-400" />
-                            <p className="text-sm text-red-300 font-medium">Could not load grants</p>
-                            <p className="text-xs text-[var(--text-muted)] mt-1">{grantsError}</p>
-                          </td>
-                        </tr>
-                      ) : grants.length === 0 ? (
-                        <tr>
-                          <td colSpan={6} className="px-4 py-12 text-center text-[var(--text-muted)]">
-                            <KeyRound size={24} className="mx-auto mb-2 opacity-60" />
-                            No per-user grants yet. This user gets exactly their role baseline.
-                          </td>
-                        </tr>
-                      ) : grantsPager.pageRows.map((g) => {
-                        const revoke = g.effect === 'revoke'
-                        return (
-                          <tr key={g.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                            <td className="px-4 py-2.5">
-                              <span className={`inline-flex items-center gap-1 text-[11px] font-semibold rounded-full px-2 py-0.5 border ${
-                                revoke
-                                  ? 'text-red-300 bg-red-900/20 border-red-800/50'
-                                  : 'text-green-300 bg-green-900/20 border-green-800/50'
-                              }`}>
-                                {revoke ? <Ban size={11} /> : <Check size={11} />}
-                                {revoke ? 'Revoke' : 'Grant'}
-                              </span>
-                            </td>
-                            <td className="px-4 py-2.5 text-[var(--text-primary)] font-medium whitespace-nowrap">
-                              {MODULE_LABEL[g.module_key] || g.module_key}
-                            </td>
-                            <td className="px-4 py-2.5 text-[var(--text-secondary)] capitalize">{g.capability || 'view'}</td>
-                            <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDate(g.expires_at)}</td>
-                            <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDate(g.created_at)}</td>
-                            <td className="px-4 py-2.5 text-right">
-                              <button
-                                onClick={() => setConfirmRemove(g)}
-                                disabled={!isSuperAdmin}
-                                className="p-1.5 rounded hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400 disabled:opacity-40"
-                                aria-label="Remove grant"
-                              ><Trash2 size={14} /></button>
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                  {Array.isArray(grants) && grants.length > 0 && <TablePagination {...grantsPager} />}
-                </div>
-              </div>
+                <EnterpriseTable
+                  columns={grantColumns}
+                  data={Array.isArray(grants) && !grantsError ? grants : []}
+                  getRowId={(g) => String(g.id)}
+                  loading={grants === null}
+                  error={grantsError || null}
+                  onRetry={() => loadGrants(selectedId)}
+                  enableExport={false}
+                  enableColumnVisibility={false}
+                  searchPlaceholder="Search this user's grants"
+                  initialPageSize={25}
+                  emptyMessage="No per-user grants yet. This user gets exactly their role baseline."
+                />
+              </section>
             </div>
           )}
         </div>
       </div>
 
       {/* Remove confirm */}
-      {confirmRemove && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" onClick={() => !removing && setConfirmRemove(null)}>
-          <div className="card w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-full bg-red-900/30 flex items-center justify-center shrink-0">
-                <Trash2 size={18} className="text-red-400" />
-              </div>
-              <div>
-                <h3 className="text-[var(--text-primary)] font-semibold">Remove this grant?</h3>
-                <p className="text-sm text-[var(--text-muted)] mt-1">
-                  The <span className={confirmRemove.effect === 'revoke' ? 'text-red-300' : 'text-green-300'}>{confirmRemove.effect}</span> on
-                  {' '}<span className="text-[var(--text-secondary)]">{MODULE_LABEL[confirmRemove.module_key] || confirmRemove.module_key}</span> will
-                  be deleted and this user reverts to their role baseline for it.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center justify-end gap-2 mt-5">
-              <button onClick={() => setConfirmRemove(null)} className="btn-secondary text-sm" disabled={removing}>Cancel</button>
-              <button onClick={doRemove} className="btn-danger text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={removing}>
-                {removing ? <><Loader2 size={14} className="animate-spin" /> Removing...</> : <><Trash2 size={14} /> Remove</>}
-              </button>
-            </div>
+      <Modal
+        open={Boolean(confirmRemove)}
+        onClose={() => { if (!removing) setConfirmRemove(null) }}
+        size="sm"
+        closeOnBackdrop={!removing}
+        title="Remove this grant?"
+        footer={
+          <div className="flex items-center justify-end gap-2">
+            <button type="button" onClick={() => setConfirmRemove(null)} className="btn-secondary text-sm min-h-[44px]" disabled={removing}>Cancel</button>
+            <button type="button" onClick={doRemove} className="btn-danger text-sm inline-flex items-center gap-1.5 min-h-[44px] disabled:opacity-60" disabled={removing}>
+              {removing ? <><Loader2 size={14} className="animate-spin" aria-hidden="true" /> Removing...</> : <><Trash2 size={14} aria-hidden="true" /> Remove</>}
+            </button>
           </div>
-        </div>
-      )}
+        }
+      >
+        {confirmRemove && (
+          <p className="text-sm text-[var(--text-secondary)]">
+            The <span className={confirmRemove.effect === 'revoke' ? 'text-red-500 font-medium' : 'text-green-500 font-medium'}>{confirmRemove.effect}</span> on
+            {' '}<span className="text-[var(--text-primary)] font-medium">{MODULE_LABEL[confirmRemove.module_key] || confirmRemove.module_key}</span> will
+            be deleted and this user reverts to their role baseline for it.
+          </p>
+        )}
+      </Modal>
 
       <Toasts items={toasts} onDismiss={dismissToast} />
     </div>

@@ -16,9 +16,9 @@
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
-  Router, Wifi, WifiOff, HardDrive, Plus, Pencil, Trash2, Search, X, Filter,
+  Router, Wifi, WifiOff, HardDrive, Plus, Pencil, Trash2, Search, X,
   FileSpreadsheet, FileText, AlertTriangle, Loader2, Save, Clock, MapPin,
-  Radio, Activity, Percent, Building2, ArrowUpDown, Gauge, PlugZap, CircleSlash,
+  Radio, Activity, Percent, Building2, Gauge, PlugZap, CircleSlash,
 } from 'lucide-react'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement,
@@ -26,17 +26,19 @@ import {
 } from 'chart.js'
 import { Bar, Doughnut } from 'react-chartjs-2'
 import PageHeader from '../components/ui/PageHeader'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import Modal from '../components/ui/Modal'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   listDevicesWithMeta, createDevice, updateDevice, deleteDevice, countFleetAssets,
 } from '../lib/api/telematicsDevices'
 import {
-  analyzeTelematics, filterDevices, sortDevices, SORT_KEYS,
-  deviceOnline, hoursSinceSeen, DEVICE_STATUSES, DEVICE_STATUS_META,
-  DEFAULT_STALE_THRESHOLD_HOURS,
+  analyzeTelematics, filterDevices, sortDevices, hoursSinceSeen,
+  DEVICE_STATUSES, DEVICE_STATUS_META, DEFAULT_STALE_THRESHOLD_HOURS,
+  connectivityState, lastSeenLabel, activeShareLabel, deviceExportRows,
+  DEVICE_EXPORT_COLS, DEVICE_EXPORT_HEADERS,
 } from '../lib/telematicsAnalytics'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
-import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { colorAt, categorical, withAlpha } from '../lib/reportColors'
 
@@ -64,14 +66,24 @@ function fmtDate(v) {
   return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString()
 }
 
+// Status badges: semantic tint plus the status word, readable in both themes.
+const STATUS_BADGE = {
+  active: 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30',
+  offline: 'bg-amber-500/15 text-amber-500 border-amber-500/30',
+  decommissioned: 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)]',
+}
+const ICON_BTN = 'inline-flex items-center justify-center min-w-[44px] min-h-[44px] rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg)]'
+const TICK = 'var(--text-muted)'
+
 function LastSeen({ device, now, thresholdHours }) {
-  if (!device.last_seen_at) return <span className="text-[var(--text-dim)]">Never</span>
-  const h = hoursSinceSeen(device, now)
-  const online = deviceOnline(device, now, thresholdHours)
-  const label = h == null ? 'N/A' : h < 1 ? 'under 1 h ago' : h < 48 ? `${Math.round(h)} h ago` : `${Math.round(h / 24)} d ago`
+  const state = connectivityState(device, now, thresholdHours)
+  if (state === 'never') return <span className="text-[var(--text-dim)]">Never</span>
+  const online = state === 'online'
   return (
-    <span className={`inline-flex items-center gap-1.5 ${online ? 'text-emerald-400' : 'text-[var(--text-muted)]'}`}>
-      {online ? <Wifi size={13} /> : <WifiOff size={13} />} {label}
+    <span className={`inline-flex items-center gap-1.5 ${online ? 'text-emerald-500' : 'text-[var(--text-muted)]'}`}>
+      {online ? <Wifi size={13} aria-hidden="true" /> : <WifiOff size={13} aria-hidden="true" />}
+      <span>{lastSeenLabel(device, now)}</span>
+      <span className="sr-only">{online ? '(online)' : '(offline)'}</span>
     </span>
   )
 }
@@ -79,14 +91,14 @@ function LastSeen({ device, now, thresholdHours }) {
 const CHART_OPTS = (horizontal = false) => ({
   responsive: true, maintainAspectRatio: false,
   indexAxis: horizontal ? 'y' : 'x',
-  plugins: { legend: { display: false }, tooltip: { enabled: true } },
+  plugins: { legend: { display: horizontal, labels: { color: TICK, boxWidth: 12 } }, tooltip: { enabled: true } },
   scales: {
-    x: { grid: { color: 'var(--panel-2)' }, ticks: { color: '#9ca3af', precision: 0 }, stacked: horizontal },
-    y: { grid: { color: 'var(--panel-2)' }, ticks: { color: '#9ca3af', precision: 0 }, stacked: horizontal },
+    x: { grid: { color: 'var(--panel-2)' }, ticks: { color: TICK, precision: 0 }, stacked: horizontal },
+    y: { grid: { color: 'var(--panel-2)' }, ticks: { color: TICK, precision: 0 }, stacked: horizontal },
   },
 })
 
-// --- Create / edit modal --------------------------------------------------
+// --- Create / edit dialog ------------------------------------------------
 function DeviceModal({ open, initial, onClose, onSaved, activeCountry }) {
   const [form, setForm] = useState(EMPTY_FORM)
   const [busy, setBusy] = useState(false)
@@ -128,116 +140,97 @@ function DeviceModal({ open, initial, onClose, onSaved, activeCountry }) {
     }
   }, [form, editing, initial, activeCountry, onSaved, onClose])
 
-  if (!open) return null
+  const close = () => { if (!busy) onClose?.() }
+  const field = (id, label, props) => (
+    <div>
+      <label className="label" htmlFor={id}>{label}</label>
+      <input id={id} className="input w-full" {...props} />
+    </div>
+  )
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="card w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-[var(--text-primary)] inline-flex items-center gap-2">
-            <Router size={18} className="text-brand-bright" /> {editing ? 'Edit device' : 'Register device'}
-          </h2>
-          <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
+    <Modal
+      open={open}
+      onClose={close}
+      size="lg"
+      closeOnBackdrop={!busy}
+      title={editing ? 'Edit device' : 'Register device'}
+      footer={
+        <div className="flex items-center justify-end gap-2">
+          <button type="button" onClick={close} className="btn-secondary text-sm min-h-[44px]" disabled={busy}>Cancel</button>
+          <button type="submit" form="device-form" disabled={busy} className="btn-primary text-sm inline-flex items-center gap-2 min-h-[44px] disabled:opacity-60">
+            {busy ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Save size={15} aria-hidden="true" />}
+            {busy ? 'Saving...' : editing ? 'Save changes' : 'Register device'}
+          </button>
         </div>
-
-        <form onSubmit={submit} className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="label">Device ID (IMEI / serial) *</label>
-              <input className="input w-full font-mono" placeholder="356938035643809" value={form.device_id} maxLength={120} onChange={(e) => set('device_id', e.target.value)} />
-            </div>
-            <div>
-              <label className="label">Provider</label>
-              <input className="input w-full" placeholder="Teltonika, Queclink..." value={form.provider} maxLength={120} onChange={(e) => set('provider', e.target.value)} />
-            </div>
-            <div>
-              <label className="label">SIM number</label>
-              <input className="input w-full" placeholder="ICCID / MSISDN" value={form.sim_number} maxLength={60} onChange={(e) => set('sim_number', e.target.value)} />
-            </div>
-            <div>
-              <label className="label">Asset number</label>
-              <input className="input w-full" placeholder="Vehicle / trailer no." value={form.asset_no} maxLength={60} onChange={(e) => set('asset_no', e.target.value)} />
-            </div>
-            <div>
-              <label className="label">Install date</label>
-              <input type="date" className="input w-full" value={form.install_date} onChange={(e) => set('install_date', e.target.value)} />
-            </div>
-            <div>
-              <label className="label">Last seen</label>
-              <input type="datetime-local" className="input w-full" value={form.last_seen_at} onChange={(e) => set('last_seen_at', e.target.value)} />
-            </div>
-            <div>
-              <label className="label">Status</label>
-              <select className="input w-full" value={form.status} onChange={(e) => set('status', e.target.value)}>
-                {DEVICE_STATUSES.map((st) => <option key={st} value={st}>{DEVICE_STATUS_META[st]?.label || st}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="label">Site</label>
-              <input className="input w-full" placeholder="Depot / branch" value={form.site} maxLength={200} onChange={(e) => set('site', e.target.value)} />
-            </div>
-          </div>
+      }
+    >
+      <form id="device-form" onSubmit={submit} className="space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {field('td-id', 'Device ID (IMEI / serial) *', { className: 'input w-full font-mono', placeholder: '356938035643809', value: form.device_id, maxLength: 120, required: true, onChange: (e) => set('device_id', e.target.value) })}
+          {field('td-provider', 'Provider', { placeholder: 'Teltonika, Queclink...', value: form.provider, maxLength: 120, onChange: (e) => set('provider', e.target.value) })}
+          {field('td-sim', 'SIM number', { placeholder: 'ICCID / MSISDN', value: form.sim_number, maxLength: 60, onChange: (e) => set('sim_number', e.target.value) })}
+          {field('td-asset', 'Asset number', { placeholder: 'Vehicle / trailer no.', value: form.asset_no, maxLength: 60, onChange: (e) => set('asset_no', e.target.value) })}
+          {field('td-install', 'Install date', { type: 'date', value: form.install_date, onChange: (e) => set('install_date', e.target.value) })}
+          {field('td-seen', 'Last seen', { type: 'datetime-local', value: form.last_seen_at, onChange: (e) => set('last_seen_at', e.target.value) })}
           <div>
-            <label className="label">Notes</label>
-            <textarea className="input w-full min-h-[80px] resize-y" placeholder="Firmware, install technician, wiring notes..." value={form.notes} maxLength={4000} onChange={(e) => set('notes', e.target.value)} />
+            <label className="label" htmlFor="td-status">Status</label>
+            <select id="td-status" className="input w-full" value={form.status} onChange={(e) => set('status', e.target.value)}>
+              {DEVICE_STATUSES.map((st) => <option key={st} value={st}>{DEVICE_STATUS_META[st]?.label || st}</option>)}
+            </select>
           </div>
-
-          {error && (
-            <div className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
-              <AlertTriangle size={15} className="mt-0.5 shrink-0" /> {error}
-            </div>
-          )}
-
-          <div className="flex items-center justify-end gap-2">
-            <button type="button" onClick={onClose} className="btn-secondary text-sm">Cancel</button>
-            <button type="submit" disabled={busy} className="btn-primary text-sm inline-flex items-center gap-2 disabled:opacity-60">
-              {busy ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
-              {busy ? 'Saving...' : editing ? 'Save changes' : 'Register device'}
-            </button>
+          {field('td-site', 'Site', { placeholder: 'Depot / branch', value: form.site, maxLength: 200, onChange: (e) => set('site', e.target.value) })}
+        </div>
+        <div>
+          <label className="label" htmlFor="td-notes">Notes</label>
+          <textarea id="td-notes" className="input w-full min-h-[80px] resize-y" placeholder="Firmware, install technician, wiring notes..." value={form.notes} maxLength={4000} onChange={(e) => set('notes', e.target.value)} />
+        </div>
+        {error && (
+          <div role="alert" className="flex items-start gap-2 text-sm text-red-500 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
+            <AlertTriangle size={15} className="mt-0.5 shrink-0" aria-hidden="true" /> {error}
           </div>
-        </form>
-      </div>
-    </div>
+        )}
+      </form>
+    </Modal>
   )
 }
 
 // --- Delete confirm -------------------------------------------------------
 function DeleteConfirm({ device, onCancel, onConfirm, busy }) {
-  if (!device) return null
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onCancel}>
-      <div className="card w-full max-w-md" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-xl bg-red-900/30 border border-red-800/50 flex items-center justify-center shrink-0">
-            <Trash2 size={18} className="text-red-400" />
-          </div>
-          <div>
-            <h3 className="font-bold text-[var(--text-primary)]">Remove device?</h3>
-            <p className="text-sm text-[var(--text-muted)] mt-1">
-              Device <span className="font-mono text-[var(--text-secondary)]">{device.device_id}</span> will be permanently removed from the registry. This cannot be undone.
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center justify-end gap-2 mt-5">
-          <button onClick={onCancel} className="btn-secondary text-sm">Cancel</button>
-          <button onClick={onConfirm} disabled={busy} className="btn-danger text-sm inline-flex items-center gap-2 disabled:opacity-60">
-            {busy ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />} Remove
+    <Modal
+      open={Boolean(device)}
+      onClose={() => { if (!busy) onCancel() }}
+      size="sm"
+      closeOnBackdrop={!busy}
+      title="Remove device?"
+      footer={
+        <div className="flex items-center justify-end gap-2">
+          <button type="button" onClick={onCancel} className="btn-secondary text-sm min-h-[44px]" disabled={busy}>Cancel</button>
+          <button type="button" onClick={onConfirm} disabled={busy} className="btn-danger text-sm inline-flex items-center gap-2 min-h-[44px] disabled:opacity-60">
+            {busy ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Trash2 size={15} aria-hidden="true" />} Remove
           </button>
         </div>
-      </div>
-    </div>
+      }
+    >
+      {device && (
+        <p className="text-sm text-[var(--text-secondary)]">
+          Device <span className="font-mono text-[var(--text-primary)]">{device.device_id}</span> will be permanently removed from the registry. This cannot be undone.
+        </p>
+      )}
+    </Modal>
   )
 }
 
 // --- KPI tile -------------------------------------------------------------
 function Kpi({ label, value, sub, icon: Icon, tone }) {
   return (
-    <div className="card">
-      <div className="flex items-center justify-between">
+    <div className="card min-w-0">
+      <div className="flex items-center justify-between gap-2">
         <p className="text-xs text-[var(--text-muted)]">{label}</p>
-        <Icon size={16} className={tone} />
+        <Icon size={16} className={tone} aria-hidden="true" />
       </div>
-      <p className={`text-3xl font-bold mt-1 ${tone}`}>{value}</p>
+      <p className={`text-2xl sm:text-3xl font-bold mt-1 tabular-nums break-words ${tone}`}>{value}</p>
       {sub != null && <p className="text-xs text-[var(--text-muted)] mt-0.5">{sub}</p>}
     </div>
   )
@@ -246,15 +239,15 @@ function Kpi({ label, value, sub, icon: Icon, tone }) {
 // --- Chart card -----------------------------------------------------------
 function ChartCard({ title, icon: Icon, children, hint }) {
   return (
-    <div className="card">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold text-[var(--text-primary)] inline-flex items-center gap-2">
-          <Icon size={15} className="text-brand-bright" /> {title}
-        </h3>
+    <section className="card" aria-label={title}>
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <h2 className="text-sm font-semibold text-[var(--text-primary)] inline-flex items-center gap-2">
+          <Icon size={15} className="text-brand-bright" aria-hidden="true" /> {title}
+        </h2>
         {hint && <span className="text-[11px] text-[var(--text-muted)]">{hint}</span>}
       </div>
       {children}
-    </div>
+    </section>
   )
 }
 
@@ -275,8 +268,7 @@ export default function TelematicsDevices() {
   const [connFilter, setConnFilter] = useState('all')
   const [search, setSearch] = useState('')
   const [thresholdHours, setThresholdHours] = useState(DEFAULT_STALE_THRESHOLD_HOURS)
-  const [sortKey, setSortKey] = useState('last_seen')
-  const [sortDir, setSortDir] = useState('desc')
+  const [actionError, setActionError] = useState('')
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
@@ -298,8 +290,9 @@ export default function TelematicsDevices() {
       setUpdatedAt(new Date())
       setMissing(Boolean(meta?.missing))
     } catch (err) {
+      // A failed read is not an empty registry: keep whatever loaded before
+      // (or nothing), so the KPIs read N/A instead of a false zero.
       setError(toUserMessage(err, 'Could not load telematics devices.'))
-      setRows([])
     } finally {
       setRefreshing(false)
     }
@@ -326,17 +319,10 @@ export default function TelematicsDevices() {
       now, thresholdHours,
     )
     const withAsset = assetFilter ? f.filter((r) => r.asset_no === assetFilter) : f
-    return sortDevices(withAsset, sortKey, sortDir)
-  }, [rows, statusFilter, siteFilter, vendorFilter, connFilter, search, assetFilter, sortKey, sortDir, now, thresholdHours])
-
-  // Paged, not capped. The register used to render filtered.slice(0, 500), so
-  // device 501 was unreachable. The exports still cover the whole filtered set.
-  const pager = usePagedRows(filtered)
-
-  const toggleSort = (key) => {
-    if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
-    else { setSortKey(key); setSortDir(key === 'last_seen' || key === 'install_date' ? 'desc' : 'asc') }
-  }
+    // Default order: most recent heartbeat first. The table re-sorts on any
+    // header click and pages across the WHOLE filtered set (nothing clipped).
+    return sortDevices(withAsset, 'last_seen', 'desc')
+  }, [rows, statusFilter, siteFilter, vendorFilter, connFilter, search, assetFilter, now, thresholdHours])
 
   // --- charts (real data; semantic colours fixed, categorical follow theme) --
   const statusChart = useMemo(() => ({
@@ -386,21 +372,23 @@ export default function TelematicsDevices() {
 
   const { kpis, connectivity: conn, coverage, pipeline, flags } = analysis
 
-  const EXPORT_COLS = ['device_id', 'provider', 'sim_number', 'asset_no', 'status', 'connectivity', 'install_date', 'last_seen_at', 'site']
-  const EXPORT_HEADERS = ['Device ID', 'Provider', 'SIM', 'Asset', 'Status', 'Connectivity', 'Install date', 'Last seen', 'Site']
-  const exportRows = filtered.map((r) => ({
-    device_id: r.device_id || '', provider: r.provider || '', sim_number: r.sim_number || '',
-    asset_no: r.asset_no || '', status: DEVICE_STATUS_META[r.status]?.label || r.status || '',
-    connectivity: !r.last_seen_at ? 'Never' : deviceOnline(r, now, thresholdHours) ? 'Online' : 'Offline',
-    install_date: r.install_date || '', last_seen_at: r.last_seen_at ? new Date(r.last_seen_at).toLocaleString() : '',
-    site: r.site || '',
-  }))
+  const exportRows = useMemo(() => deviceExportRows(filtered, now, thresholdHours), [filtered, now, thresholdHours])
+  const fileBase = () => reportFileName('TyrePulse Telematics Devices', activeCountry !== 'All' ? activeCountry : null, reportDateLabel())
+  const doExport = async (kind) => {
+    setActionError('')
+    try {
+      if (kind === 'xlsx') await exportToExcel(exportRows, DEVICE_EXPORT_COLS, DEVICE_EXPORT_HEADERS, fileBase(), 'Devices', { title: 'Telematics Devices' })
+      else await exportToPdf(exportRows, DEVICE_EXPORT_COLS.map((k, i) => ({ key: k, header: DEVICE_EXPORT_HEADERS[i] })), 'Telematics Devices', fileBase(), 'landscape')
+    } catch (err) {
+      setActionError(toUserMessage(err, 'Could not export. Try again.'))
+    }
+  }
 
   const clearFilters = () => { setStatusFilter('all'); setAssetFilter(''); setVendorFilter(''); setSiteFilter(''); setConnFilter('all'); setSearch('') }
   const hasFilters = statusFilter !== 'all' || assetFilter || vendorFilter || siteFilter || connFilter !== 'all' || search
 
   const openCreate = () => { setEditing(null); setModalOpen(true) }
-  const openEdit = (d) => { setEditing(d); setModalOpen(true) }
+  const openEdit = useCallback((d) => { setEditing(d); setModalOpen(true) }, [])
 
   const confirmDelete = useCallback(async () => {
     if (!deleting) return
@@ -410,24 +398,46 @@ export default function TelematicsDevices() {
       setDeleting(null)
       await load()
     } catch (err) {
-      setError(toUserMessage(err, 'Could not remove the device.'))
+      setActionError(toUserMessage(err, 'Could not remove the device.'))
+      setDeleting(null)
     } finally {
       setDeleteBusy(false)
     }
   }, [deleting, load])
 
   const coveragePctLabel = coverage.coveragePct == null ? 'N/A' : `${coverage.coveragePct}%`
-  const loading = rows === null
+  const loaded = Array.isArray(rows)
+  const loading = !loaded && !error
+  // KPI value helper: N/A until a read has succeeded (never a false zero).
+  const v = (x) => (loaded ? x : 'N/A')
 
-  const SortTh = ({ label, k }) => (
-    <th className="px-4 py-3 font-semibold whitespace-nowrap">
-      {SORT_KEYS.includes(k) ? (
-        <button onClick={() => toggleSort(k)} className={`inline-flex items-center gap-1 hover:text-[var(--text-primary)] ${sortKey === k ? 'text-[var(--text-primary)]' : ''}`}>
-          {label} <ArrowUpDown size={11} className={sortKey === k ? 'opacity-100' : 'opacity-40'} />
-        </button>
-      ) : label}
-    </th>
-  )
+  const columns = useMemo(() => [
+    { id: 'device', header: 'Device ID', accessorFn: (r) => r.device_id || '', size: 170, cell: ({ row }) => <span className="font-mono text-xs text-[var(--text-primary)]">{row.original.device_id}</span> },
+    { id: 'provider', header: 'Provider', accessorFn: (r) => r.provider || 'N/A', size: 130, meta: { filterVariant: 'select' } },
+    { id: 'sim', header: 'SIM', accessorFn: (r) => r.sim_number || 'N/A', size: 150, cell: ({ row }) => <span className="font-mono text-xs">{row.original.sim_number || 'N/A'}</span> },
+    { id: 'asset', header: 'Asset', accessorFn: (r) => r.asset_no || '', size: 120, cell: ({ row }) => row.original.asset_no || <span className="text-[var(--text-dim)]">Unassigned</span> },
+    { id: 'site', header: 'Site', accessorFn: (r) => r.site || 'N/A', size: 130 },
+    { id: 'install', header: 'Install', accessorFn: (r) => r.install_date || '', size: 110, cell: ({ row }) => <span className="whitespace-nowrap">{fmtDate(row.original.install_date)}</span> },
+    {
+      id: 'seen', header: 'Last seen', size: 150,
+      accessorFn: (r) => { const h = hoursSinceSeen(r, now); return h == null ? Number.POSITIVE_INFINITY : h },
+      sortDescFirst: false,
+      cell: ({ row }) => <LastSeen device={row.original} now={now} thresholdHours={thresholdHours} />,
+    },
+    {
+      id: 'status', header: 'Status', accessorFn: (r) => DEVICE_STATUS_META[r.status]?.label || r.status || 'N/A', size: 140, meta: { filterVariant: 'select' },
+      cell: ({ row }) => <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-medium ${STATUS_BADGE[row.original.status] || STATUS_BADGE.decommissioned}`}>{DEVICE_STATUS_META[row.original.status]?.label || row.original.status || 'N/A'}</span>,
+    },
+    {
+      id: 'actions', header: '', enableSorting: false, size: 110, meta: { export: false, align: 'right' },
+      cell: ({ row }) => (
+        <div className="flex items-center gap-1 justify-end">
+          <button type="button" onClick={() => openEdit(row.original)} className={ICON_BTN} aria-label={`Edit device ${row.original.device_id}`}><Pencil size={15} /></button>
+          <button type="button" onClick={() => setDeleting(row.original)} className={`${ICON_BTN} hover:text-red-500`} aria-label={`Remove device ${row.original.device_id}`}><Trash2 size={15} /></button>
+        </div>
+      ),
+    },
+  ], [openEdit, now, thresholdHours])
 
   return (
     <div className="space-y-6">
@@ -439,25 +449,25 @@ export default function TelematicsDevices() {
         refreshing={refreshing}
         updatedAt={updatedAt}
         actions={
-          <div className="flex items-center gap-2">
-            <button onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'telematics_devices')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
-              <FileSpreadsheet size={14} /> Excel
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={() => doExport('xlsx')} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!filtered.length}>
+              <FileSpreadsheet size={14} aria-hidden="true" /> Excel
             </button>
-            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Telematics Devices', 'telematics_devices', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
-              <FileText size={14} /> PDF
+            <button type="button" onClick={() => doExport('pdf')} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!filtered.length}>
+              <FileText size={14} aria-hidden="true" /> PDF
             </button>
-            <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5" disabled={missing}>
-              <Plus size={14} /> Register device
+            <button type="button" onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={missing}>
+              <Plus size={14} aria-hidden="true" /> Register device
             </button>
           </div>
         }
       />
 
       {missing && (
-        <div className="card border border-amber-800/50 flex items-start gap-3">
-          <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
+        <div className="card border border-amber-500/40 flex items-start gap-3" role="status">
+          <AlertTriangle size={18} className="text-amber-500 mt-0.5 shrink-0" aria-hidden="true" />
           <div>
-            <p className="text-amber-300 font-medium">The telematics device registry is not enabled on this database yet.</p>
+            <p className="text-[var(--text-primary)] font-medium">The telematics device registry is not enabled on this database yet.</p>
             <p className="text-[var(--text-muted)] text-sm mt-1">
               Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V147_TELEMATICS_DEVICES.sql</span>, then reload.
             </p>
@@ -466,30 +476,37 @@ export default function TelematicsDevices() {
       )}
 
       {error && (
-        <div className="card border border-red-800/50 flex items-start justify-between gap-3">
+        <div role="alert" className="card border border-red-500/40 flex items-start justify-between gap-3">
           <div className="flex items-start gap-3">
-            <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
-            <div><p className="text-red-300 font-medium">Could not load telematics devices.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
+            <AlertTriangle size={18} className="text-red-500 mt-0.5 shrink-0" aria-hidden="true" />
+            <div><p className="text-[var(--text-primary)] font-medium">Could not load telematics devices.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
           </div>
-          <button onClick={load} className="btn-secondary text-sm shrink-0">Retry</button>
+          <button type="button" onClick={load} className="btn-secondary text-sm shrink-0 min-h-[44px]">Retry</button>
+        </div>
+      )}
+
+      {actionError && (
+        <div role="alert" className="card border border-red-500/40 flex items-start justify-between gap-3">
+          <p className="text-sm text-red-500">{actionError}</p>
+          <button type="button" onClick={() => setActionError('')} className={ICON_BTN} aria-label="Dismiss message"><X size={15} /></button>
         </div>
       )}
 
       {/* KPI tiles */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Kpi label="Total devices" value={loading ? '-' : kpis.total} icon={HardDrive} tone="text-[var(--text-primary)]" />
-        <Kpi label="Active" value={loading ? '-' : `${kpis.activePct}%`} sub={loading ? null : `${kpis.active} of ${kpis.total}`} icon={Radio} tone="text-emerald-400" />
-        <Kpi label="Online now" value={loading ? '-' : conn.online} sub={loading ? null : conn.onlinePct == null ? 'no heartbeats' : `${conn.onlinePct}% of expected`} icon={Wifi} tone="text-sky-400" />
-        <Kpi label="Offline / stale" value={loading ? '-' : kpis.offlineStale} sub={loading ? null : `${conn.never} never reported`} icon={WifiOff} tone="text-amber-400" />
-        <Kpi label="Fleet coverage" value={loading ? '-' : coveragePctLabel} sub={loading ? null : coverage.totalAssets == null ? `${coverage.assetsCovered} assets covered` : `${coverage.assetsCovered} of ${coverage.totalAssets} assets`} icon={Percent} tone="text-indigo-400" />
-        <Kpi label="Unassigned" value={loading ? '-' : kpis.unassigned} sub={loading ? null : 'no asset mapping'} icon={CircleSlash} tone="text-rose-400" />
+        <Kpi label="Total devices" value={v(kpis.total)} icon={HardDrive} tone="text-[var(--text-primary)]" />
+        <Kpi label="Active" value={loaded ? activeShareLabel(kpis) : 'N/A'} sub={loaded ? `${kpis.active} of ${kpis.total}` : null} icon={Radio} tone="text-emerald-500" />
+        <Kpi label="Online now" value={v(conn.online)} sub={loaded ? (conn.onlinePct == null ? 'no heartbeats' : `${conn.onlinePct}% of expected`) : null} icon={Wifi} tone="text-sky-500" />
+        <Kpi label="Offline / stale" value={v(kpis.offlineStale)} sub={loaded ? `${conn.never} never reported` : null} icon={WifiOff} tone="text-amber-500" />
+        <Kpi label="Fleet coverage" value={loaded ? coveragePctLabel : 'N/A'} sub={loaded ? (coverage.totalAssets == null ? `${coverage.assetsCovered} assets covered` : `${coverage.assetsCovered} of ${coverage.totalAssets} assets`) : null} icon={Percent} tone="text-indigo-500" />
+        <Kpi label="Unassigned" value={v(kpis.unassigned)} sub={loaded ? 'no asset mapping' : null} icon={CircleSlash} tone="text-rose-500" />
       </div>
 
       {/* Charts */}
-      {!loading && kpis.total > 0 && (
+      {loaded && kpis.total > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <ChartCard title="Status distribution" icon={Gauge}>
-            <div className="h-56"><Doughnut data={statusChart} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#9ca3af', boxWidth: 12 } } }, cutout: '58%' }} /></div>
+            <div className="h-56"><Doughnut data={statusChart} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: TICK, boxWidth: 12 } } }, cutout: '58%' }} /></div>
           </ChartCard>
           <ChartCard title="Connectivity by last heartbeat" icon={Activity} hint={conn.hasHeartbeatData ? `stale after ${thresholdHours < 24 ? `${thresholdHours}h` : `${Math.round(thresholdHours / 24)}d`}` : 'no heartbeat data'}>
             {conn.hasHeartbeatData
@@ -510,19 +527,19 @@ export default function TelematicsDevices() {
       )}
 
       {/* Install pipeline + data-quality flags */}
-      {!loading && kpis.total > 0 && (
+      {loaded && kpis.total > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="card">
-            <h3 className="text-sm font-semibold text-[var(--text-primary)] inline-flex items-center gap-2 mb-3"><HardDrive size={15} className="text-brand-bright" /> Install pipeline</h3>
+            <h2 className="text-sm font-semibold text-[var(--text-primary)] inline-flex items-center gap-2 mb-3"><HardDrive size={15} className="text-brand-bright" aria-hidden="true" /> Install pipeline</h2>
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-lg border border-[var(--input-border)] p-3">
                 <p className="text-xs text-[var(--text-muted)]">Installed</p>
-                <p className="text-2xl font-bold text-emerald-400">{pipeline.installed}</p>
+                <p className="text-2xl font-bold text-emerald-500">{pipeline.installed}</p>
                 <p className="text-[11px] text-[var(--text-muted)]">have an install date</p>
               </div>
               <div className="rounded-lg border border-[var(--input-border)] p-3">
                 <p className="text-xs text-[var(--text-muted)]">Pending fitment</p>
-                <p className="text-2xl font-bold text-amber-400">{pipeline.pending}</p>
+                <p className="text-2xl font-bold text-amber-500">{pipeline.pending}</p>
                 <p className="text-[11px] text-[var(--text-muted)]">no install date recorded</p>
               </div>
             </div>
@@ -545,15 +562,15 @@ export default function TelematicsDevices() {
           </div>
 
           <div className="card">
-            <h3 className="text-sm font-semibold text-[var(--text-primary)] inline-flex items-center gap-2 mb-3"><AlertTriangle size={15} className="text-amber-400" /> Data quality</h3>
+            <h2 className="text-sm font-semibold text-[var(--text-primary)] inline-flex items-center gap-2 mb-3"><AlertTriangle size={15} className="text-amber-500" aria-hidden="true" /> Data quality</h2>
             {flags.length === 0 ? (
-              <div className="flex items-center gap-2 text-sm text-emerald-400"><Radio size={15} /> No data-quality issues detected in the current view.</div>
+              <div className="flex items-center gap-2 text-sm text-emerald-500"><Radio size={15} aria-hidden="true" /> No data-quality issues detected in the current view.</div>
             ) : (
               <div className="space-y-2">
                 {flags.map((f) => (
                   <div key={f.key} className="flex items-center justify-between rounded-lg border border-[var(--input-border)] px-3 py-2">
                     <span className="text-sm text-[var(--text-secondary)]">{f.label}</span>
-                    <span className="badge text-[11px] px-2 py-0.5 rounded bg-amber-900/40 text-amber-300 border border-amber-700/50">{f.count}</span>
+                    <span className="text-[11px] px-2 py-0.5 rounded border bg-amber-500/15 text-amber-500 border-amber-500/30 tabular-nums">{f.count}</span>
                   </div>
                 ))}
               </div>
@@ -566,99 +583,64 @@ export default function TelematicsDevices() {
       <div className="card space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[200px]">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-            <input className="input pl-9 w-full" placeholder="Search device ID, provider, SIM, asset, site..." value={search} onChange={(e) => setSearch(e.target.value)} />
+            <label htmlFor="td-search" className="sr-only">Search devices</label>
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+            <input id="td-search" className="input pl-9 w-full min-h-[44px]" placeholder="Search device ID, provider, SIM, asset, site" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-          <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
+          <select className="input min-h-[44px]" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
             <option value="all">All statuses</option>
             {DEVICE_STATUSES.map((st) => <option key={st} value={st}>{DEVICE_STATUS_META[st]?.label || st}</option>)}
           </select>
-          <select className="input" value={connFilter} onChange={(e) => setConnFilter(e.target.value)} aria-label="Connectivity">
+          <select className="input min-h-[44px]" value={connFilter} onChange={(e) => setConnFilter(e.target.value)} aria-label="Connectivity">
             <option value="all">Any connectivity</option>
             <option value="online">Online</option>
             <option value="offline">Offline / stale</option>
             <option value="never">Never reported</option>
           </select>
-          <select className="input" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} aria-label="Site">
+          <select className="input min-h-[44px]" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} aria-label="Site">
             <option value="">All sites</option>
             {siteOptions.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
-          <select className="input" value={vendorFilter} onChange={(e) => setVendorFilter(e.target.value)} aria-label="Provider">
+          <select className="input min-h-[44px]" value={vendorFilter} onChange={(e) => setVendorFilter(e.target.value)} aria-label="Provider">
             <option value="">All providers</option>
             {vendorOptions.map((v) => <option key={v} value={v}>{v}</option>)}
           </select>
-          <select className="input" value={assetFilter} onChange={(e) => setAssetFilter(e.target.value)} aria-label="Asset">
+          <select className="input min-h-[44px]" value={assetFilter} onChange={(e) => setAssetFilter(e.target.value)} aria-label="Asset">
             <option value="">All assets</option>
             {assetOptions.map((a) => <option key={a} value={a}>{a}</option>)}
           </select>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <label className="text-xs text-[var(--text-muted)] inline-flex items-center gap-1.5"><Clock size={12} /> Offline after</label>
-          <select className="input py-1 text-sm" value={thresholdHours} onChange={(e) => setThresholdHours(Number(e.target.value))} aria-label="Staleness threshold">
+          <label htmlFor="td-threshold" className="text-xs text-[var(--text-muted)] inline-flex items-center gap-1.5"><Clock size={12} aria-hidden="true" /> Offline after</label>
+          <select id="td-threshold" className="input min-h-[44px] text-sm" value={thresholdHours} onChange={(e) => setThresholdHours(Number(e.target.value))} aria-label="Staleness threshold">
             {THRESHOLD_OPTIONS.map((o) => <option key={o.hours} value={o.hours}>{o.label}</option>)}
           </select>
-          {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
-          <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {kpis.total}</span>
+          {hasFilters && <button type="button" onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]"><X size={14} aria-hidden="true" /> Clear</button>}
+          <span className="text-xs text-[var(--text-muted)] ml-auto" aria-live="polite">{filtered.length} of {loaded ? kpis.total : 'N/A'}</span>
         </div>
       </div>
 
-      {/* Table */}
-      <div className="card overflow-hidden !p-0">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                <SortTh label="Device ID" k="device_id" />
-                <SortTh label="Provider" k="provider" />
-                <th className="px-4 py-3 font-semibold whitespace-nowrap">SIM</th>
-                <SortTh label="Asset" k="asset_no" />
-                <SortTh label="Site" k="site" />
-                <SortTh label="Install" k="install_date" />
-                <SortTh label="Last seen" k="last_seen" />
-                <SortTh label="Status" k="status" />
-                <th className="px-4 py-3 font-semibold" />
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                [0, 1, 2, 3, 4].map((i) => <tr key={i} className="border-b border-[var(--input-border)]/50"><td colSpan={9} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>)
-              ) : filtered.length === 0 ? (
-                <tr><td colSpan={9} className="px-4 py-12 text-center text-[var(--text-muted)]">
-                  {(rows || []).length === 0 && !missing ? (
-                    <><Router size={22} className="mx-auto mb-2 opacity-60" />No telematics devices registered yet. Click "Register device" to add one.</>
-                  ) : (
-                    <><Filter size={22} className="mx-auto mb-2 opacity-60" />No devices match these filters.</>
-                  )}
-                </td></tr>
-              ) : (
-                pager.pageRows.map((r) => (
-                  <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                    <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{r.device_id}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.provider || 'N/A'}</td>
-                    <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)]">{r.sim_number || 'N/A'}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.asset_no || <span className="text-[var(--text-dim)]">Unassigned</span>}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.site || 'N/A'}</td>
-                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtDate(r.install_date)}</td>
-                    <td className="px-4 py-2.5"><LastSeen device={r} now={now} thresholdHours={thresholdHours} /></td>
-                    <td className="px-4 py-2.5"><span className={`badge text-[11px] px-2 py-0.5 rounded ${DEVICE_STATUS_META[r.status]?.cls || ''}`}>{DEVICE_STATUS_META[r.status]?.label || r.status}</span></td>
-                    <td className="px-4 py-2.5">
-                      <div className="flex items-center gap-1 justify-end">
-                        <button onClick={() => openEdit(r)} className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Edit"><Pencil size={14} /></button>
-                        <button onClick={() => setDeleting(r)} className="p-1.5 rounded hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400" aria-label="Delete"><Trash2 size={14} /></button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-        <TablePagination {...pager} />
-      </div>
+      {/* Register */}
+      <EnterpriseTable
+        columns={columns}
+        data={filtered}
+        getRowId={(r) => String(r.id)}
+        loading={loading}
+        error={!loaded && error ? error : null}
+        onRetry={load}
+        enableGlobalFilter={false}
+        enableExport={false}
+        viewKey="telematics-devices"
+        emptyMessage={
+          missing ? 'The device registry is not provisioned yet.'
+            : (rows || []).length === 0 ? 'No telematics devices registered yet. Choose Register device to add one.'
+              : 'No devices match these filters.'
+        }
+      />
 
       {rows && rows.length > 0 && (
         <p className="text-xs text-[var(--text-muted)] inline-flex items-center gap-1.5">
-          <Clock size={12} /> Devices with no contact in the selected window are shown as offline. {conn.never > 0 ? `${conn.never} device(s) have never reported in.` : ''}
+          <Clock size={12} aria-hidden="true" /> Devices with no contact in the selected window are shown as offline. {conn.never > 0 ? `${conn.never} device(s) have never reported in.` : ''}
         </p>
       )}
 

@@ -16,18 +16,24 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Upload, FileSpreadsheet, Wand2, CheckCircle2, AlertTriangle, Loader2,
-  Trash2, ArrowRight, Receipt,
+  Trash2, ArrowRight, Receipt, FileText, RotateCcw,
 } from 'lucide-react'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
+import { currencyForCountry } from '../lib/governedCost'
+import {
+  CATEGORY_LABEL, classifyPreview, filterPreview, previewTotals,
+  previewExportRows, PREVIEW_EXPORT_COLUMNS,
+} from '../lib/expenseImportAnalytics'
 import PageHeader from '../components/ui/PageHeader'
 import FilterBar from '../components/ui/FilterBar'
 import DateField from '../components/ui/DateField'
-import { TablePagination, usePagedRows } from '../components/ui/TablePagination'
 import { useFilterState } from '../hooks/useFilterState'
 import { useSettings } from '../contexts/SettingsContext'
 import { formatCurrency } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
 import { parseWorkbook } from '../lib/import/parseWorkbook'
-import { rowsFromParsedSheet, summarizeRows, classifyLine } from '../lib/partsExpense'
+import { rowsFromParsedSheet, summarizeRows } from '../lib/partsExpense'
 import {
   importExpenseBatch, countPartsConsumption,
 } from '../lib/api/partsConsumption'
@@ -35,7 +41,6 @@ import {
 const LARGE_FILE_ROWS = 60000
 const FILTER_DEFAULTS = { q: '', category: '', from: '', to: '' }
 
-const CATEGORY_LABEL = { tyre: 'Tyres', spare: 'Spare', oil: 'Oil' }
 const CATEGORY_STYLE = {
   tyre: 'bg-[var(--accent-2,#22c55e)]/15 text-[var(--text-primary)] border border-[var(--border)]',
   spare: 'bg-[var(--surface-2,#1e293b)]/60 text-[var(--text-secondary)] border border-[var(--border)]',
@@ -56,8 +61,8 @@ function KpiTile({ label, value, sub }) {
 export default function ExpenseImport() {
   const [filters, setFilter, resetFilters, hasActiveFilters] = useFilterState(FILTER_DEFAULTS)
   const { activeCountry, activeCurrency } = useSettings()
-  const currency = activeCurrency || 'SAR'
   const country = activeCountry && activeCountry !== 'All' ? activeCountry : null
+  const currency = currencyForCountry(country) || activeCurrency || 'SAR'
 
   const [storedCount, setStoredCount] = useState(null)
   const [storedError, setStoredError] = useState(null)
@@ -90,25 +95,32 @@ export default function ExpenseImport() {
 
   const summary = useMemo(() => (rows.length ? summarizeRows(rows) : null), [rows])
 
-  const classifiedRows = useMemo(() => rows.map((r, sourceIndex) => {
-    const c = classifyLine({
-      description: r.item_description, value: r.value_amount, spare: r.spare_parts_amount,
-      tyre: r.tyre_amount, oil: r.oil_amount, total: r.total_amount,
-    })
-    return { r, category: c.category, lineCost: c.lineCost, sourceIndex }
-  }), [rows])
-  const previewRows = useMemo(() => {
-    const q = filters.q.trim().toLowerCase()
-    return classifiedRows.filter(({ r, category }) => {
-      const haystack = [r.item_description, r.item_code, r.work_order_no, r.issue_number, r.asset_code, r.store_code, r.cost_center].join(' ').toLowerCase()
-      const date = String(r.txn_date || '').slice(0, 10)
-      return (!q || haystack.includes(q))
-        && (!filters.category || category === filters.category)
-        && (!filters.from || (date && date >= filters.from))
-        && (!filters.to || (date && date <= filters.to))
-    })
-  }, [classifiedRows, filters])
-  const previewPager = usePagedRows(previewRows)
+  const classifiedRows = useMemo(() => classifyPreview(rows), [rows])
+  // Display filters only: the import below always submits the full `rows` array.
+  const previewRows = useMemo(() => filterPreview(classifiedRows, filters), [classifiedRows, filters])
+  const shown = useMemo(() => previewTotals(previewRows), [previewRows])
+  const allTotals = useMemo(() => previewTotals(classifiedRows), [classifiedRows])
+  const [exportError, setExportError] = useState('')
+  const exportBase = reportFileName('Expense Import Preview', country, fileName.replace(/\.[^.]+$/, ''))
+  const exportPreview = async (kind) => {
+    setExportError('')
+    try {
+      const data = previewExportRows(previewRows)
+      if (kind === 'excel') await exportToExcel(data, PREVIEW_EXPORT_COLUMNS.map((c) => c.key), PREVIEW_EXPORT_COLUMNS.map((c) => c.header), exportBase, 'Preview', { currency })
+      else await exportToPdf(data, PREVIEW_EXPORT_COLUMNS, 'Expense Import Preview', exportBase, 'landscape', '', { currency })
+    } catch (e) { setExportError(toUserMessage(e, 'Could not export. Try again.')) }
+  }
+  const previewColumns = useMemo(() => [
+    { id: 'txn_date', header: 'Date', accessorFn: (s) => String(s.r.txn_date || '').slice(0, 10) || 'N/A', size: 110 },
+    { id: 'work_order_no', header: 'Work order', accessorFn: (s) => s.r.work_order_no || 'N/A', size: 130 },
+    { id: 'asset_code', header: 'Asset', accessorFn: (s) => s.r.asset_code || 'N/A', size: 100 },
+    { id: 'item_description', header: 'Item description', accessorFn: (s) => s.r.item_description || 'N/A', size: 300,
+      cell: ({ row }) => <span className="block max-w-md truncate" title={row.original.r.item_description || ''}>{row.original.r.item_description || 'N/A'}</span> },
+    { id: 'amount', header: 'Amount', accessorFn: (s) => Number(s.lineCost) || 0, size: 130, meta: { align: 'right' },
+      cell: ({ row }) => <span className="tabular-nums text-[var(--text-primary)]">{formatCurrency(row.original.lineCost, currency)}</span> },
+    { id: 'category', header: 'Category', accessorFn: (s) => CATEGORY_LABEL[s.category] || s.category, size: 110,
+      cell: ({ row }) => <span className={`inline-block rounded px-2 py-0.5 text-xs ${CATEGORY_STYLE[row.original.category] || ''}`}>{CATEGORY_LABEL[row.original.category] || row.original.category}</span> },
+  ], [currency])
 
   const handleFile = useCallback(async (file) => {
     if (!file) return
@@ -221,8 +233,11 @@ export default function ExpenseImport() {
         </p>
         <div className="mt-3 text-sm text-[var(--text-tertiary)]">
           {storedError ? (
-            <span className="inline-flex items-center gap-1.5 text-[var(--text-secondary)]">
-              <AlertTriangle className="h-4 w-4" /> {storedError}
+            <span className="inline-flex flex-wrap items-center gap-1.5 text-[var(--text-secondary)]" role="alert">
+              <AlertTriangle className="h-4 w-4 text-red-400" aria-hidden="true" /> {storedError}
+              <button type="button" className="btn-secondary text-xs inline-flex items-center gap-1 min-h-[36px]" onClick={refreshStored}>
+                <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" /> Retry
+              </button>
             </span>
           ) : storedCount == null ? (
             <span className="inline-flex items-center gap-1.5">
@@ -240,11 +255,23 @@ export default function ExpenseImport() {
 
       {/* Error banner */}
       {error && (
-        <div className="card p-4 border border-[var(--border)] flex items-start gap-2">
-          <AlertTriangle className="h-5 w-5 mt-0.5 text-[var(--text-secondary)] shrink-0" />
-          <p className="text-sm text-[var(--text-secondary)]">{error}</p>
+        <div role="alert" className="card p-4 border border-red-800/50 flex items-start justify-between gap-3">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="h-5 w-5 mt-0.5 text-red-400 shrink-0" aria-hidden="true" />
+            <p className="text-sm text-[var(--text-secondary)]">{error}</p>
+          </div>
+          {phase === 'preview' ? (
+            <button type="button" className="btn-secondary text-sm inline-flex items-center gap-1.5 shrink-0 min-h-[44px]" onClick={runImport} disabled={busy}>
+              <RotateCcw className="h-4 w-4" aria-hidden="true" /> Retry import
+            </button>
+          ) : (
+            <button type="button" className="btn-secondary text-sm inline-flex items-center gap-1.5 shrink-0 min-h-[44px]" onClick={() => inputRef.current && inputRef.current.click()} disabled={busy}>
+              <RotateCcw className="h-4 w-4" aria-hidden="true" /> Choose another file
+            </button>
+          )}
         </div>
       )}
+      {exportError && <p role="alert" className="text-sm text-red-300">{exportError}</p>}
 
       {/* STEP 1: choose file (idle / parsing) */}
       {(phase === 'idle' || phase === 'parsing') && (
@@ -286,6 +313,7 @@ export default function ExpenseImport() {
               ref={inputRef}
               type="file"
               accept=".xls,.xlsx,.csv"
+              aria-label="Expense export file"
               className="hidden"
               onChange={onInputChange}
             />
@@ -308,8 +336,8 @@ export default function ExpenseImport() {
           </div>
 
           {/* KPI tiles */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-            <KpiTile label="Rows" value={summary.rows.toLocaleString('en-US')} />
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            <KpiTile label="Rows" value={summary.rows.toLocaleString('en-US')} sub={storedCount == null ? null : `${storedCount.toLocaleString('en-US')} already stored`} />
             <KpiTile label="Total expense" value={formatCurrency(summary.total, currency)} />
             <KpiTile
               label="Tyres"
@@ -325,6 +353,11 @@ export default function ExpenseImport() {
               label="Oil"
               value={formatCurrency(summary.oil, currency)}
               sub={`${summary.oilLines.toLocaleString('en-US')} lines`}
+            />
+            <KpiTile
+              label="Zero-value lines"
+              value={allTotals.zeroCost.toLocaleString('en-US')}
+              sub="carry no amount in the file"
             />
           </div>
 
@@ -368,40 +401,31 @@ export default function ExpenseImport() {
               <DateField value={filters.from} onChange={(value) => setFilter('from', value)} placeholder="From date" ariaLabel="Filter preview from date" max={filters.to || undefined} />
               <DateField value={filters.to} onChange={(value) => setFilter('to', value)} placeholder="To date" ariaLabel="Filter preview to date" min={filters.from || undefined} />
             </FilterBar>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-[var(--text-tertiary)]">
-                    <th className="px-4 py-2 font-medium">Item description</th>
-                    <th className="px-4 py-2 font-medium text-right">Amount</th>
-                    <th className="px-4 py-2 font-medium">Category</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {previewPager.pageRows.map((s) => (
-                    <tr key={`${s.r.source_row || s.sourceIndex}-${s.r.item_code || s.r.item_description}`} className="border-t border-[var(--border)]">
-                      <td className="px-4 py-2 text-[var(--text-secondary)] max-w-md truncate">
-                        {s.r.item_description || 'N/A'}
-                      </td>
-                      <td className="px-4 py-2 text-right text-[var(--text-primary)]">
-                        {formatCurrency(s.lineCost, currency)}
-                      </td>
-                      <td className="px-4 py-2">
-                        <span className={`inline-block rounded px-2 py-0.5 text-xs ${CATEGORY_STYLE[s.category] || ''}`}>
-                          {CATEGORY_LABEL[s.category] || s.category}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {previewRows.length === 0 && (
-                <div className="px-4 py-10 text-center text-sm text-[var(--text-tertiary)]" role="status">
-                  No import rows match these filters. Clear or change the search, category, or date range.
-                </div>
-              )}
+            {hasActiveFilters && (
+              <p className="px-4 pb-2 text-xs text-[var(--text-tertiary)]">
+                Shown: {shown.rows.toLocaleString('en-US')} rows, {formatCurrency(shown.total, currency)} (Tyres {formatCurrency(shown.tyre, currency)}, Spare {formatCurrency(shown.spare, currency)}, Oil {formatCurrency(shown.oil, currency)}). Filters only change this view; the import still sends every row.
+              </p>
+            )}
+            <div className="flex flex-wrap items-center justify-end gap-2 px-3 pb-2">
+              <button type="button" className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" onClick={() => exportPreview('excel')} disabled={!previewRows.length}>
+                <FileSpreadsheet className="h-4 w-4" aria-hidden="true" /> Excel
+              </button>
+              <button type="button" className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" onClick={() => exportPreview('pdf')} disabled={!previewRows.length}>
+                <FileText className="h-4 w-4" aria-hidden="true" /> PDF
+              </button>
             </div>
-            <TablePagination {...previewPager} />
+            <div className="px-3 pb-3">
+              <EnterpriseTable
+                columns={previewColumns}
+                data={previewRows}
+                getRowId={(s) => String(s.sourceIndex)}
+                enableGlobalFilter={false}
+                enableColumnFilters={false}
+                enableExport={false}
+                initialPageSize={25}
+                emptyMessage={rows.length ? 'No import rows match these filters. Clear or change the search, category, or date range.' : 'No data rows found.'}
+              />
+            </div>
           </div>
 
           {/* Options */}
@@ -409,6 +433,7 @@ export default function ExpenseImport() {
             <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer">
               <input
                 type="checkbox"
+                className="h-5 w-5"
                 checked={replaceFirst}
                 onChange={(e) => { setReplaceFirst(e.target.checked); requestRef.current = null }}
                 disabled={busy}

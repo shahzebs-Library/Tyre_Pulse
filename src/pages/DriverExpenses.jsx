@@ -27,7 +27,7 @@ import {
   Wallet, Receipt, DollarSign, Users, Plus, Pencil, Trash2, Search, X, Filter,
   Save, Loader2, AlertTriangle, FileSpreadsheet, FileText, User, Percent,
   Clock, CircleDollarSign, CheckCircle2, TrendingUp, PieChart, Tag,
-  ArrowUp, ArrowDown, RefreshCw,
+  RefreshCw,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
@@ -41,9 +41,9 @@ import {
   statusLabel, categoryLabel, normStatus, normCategory,
 } from '../lib/driverExpensesAnalytics'
 import { toUserMessage } from '../lib/safeError'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { colorAt, categorical, withAlpha } from '../lib/reportColors'
-import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 
 ChartJS.register(
   ArcElement, CategoryScale, LinearScale, BarElement,
@@ -128,14 +128,14 @@ function ExpenseModal({ open, initial, onClose, onSaved }) {
             <Receipt size={18} className="text-[var(--brand-bright)]" />
             {initial?.id ? 'Edit expense claim' : 'New expense claim'}
           </h2>
-          <button type="button" onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">
+          <button type="button" onClick={onClose} aria-label="Close" className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)]">
             <X size={18} />
           </button>
         </div>
 
         <div>
-          <label className="label">Driver name *</label>
-          <input
+          <label className="label" htmlFor="dx-driver_name">Driver name *</label>
+          <input id="dx-driver_name"
             className="input w-full" placeholder="e.g. Ahmed Khan" maxLength={200}
             value={form.driver_name} onChange={(e) => set('driver_name', e.target.value)}
           />
@@ -143,14 +143,14 @@ function ExpenseModal({ open, initial, onClose, onSaved }) {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="label">Category</label>
-            <select className="input w-full" value={form.category} onChange={(e) => set('category', e.target.value)}>
+            <label className="label" htmlFor="dx-category">Category</label>
+            <select id="dx-category" className="input w-full" value={form.category} onChange={(e) => set('category', e.target.value)}>
               {EXPENSE_CATEGORIES.map((c) => <option key={c} value={c}>{cap(c)}</option>)}
             </select>
           </div>
           <div>
-            <label className="label">Status</label>
-            <select className="input w-full" value={form.status} onChange={(e) => set('status', e.target.value)}>
+            <label className="label" htmlFor="dx-status">Status</label>
+            <select id="dx-status" className="input w-full" value={form.status} onChange={(e) => set('status', e.target.value)}>
               {EXPENSE_STATUSES.map((s) => <option key={s} value={s}>{STATUS_META[s]?.label || s}</option>)}
             </select>
           </div>
@@ -158,15 +158,15 @@ function ExpenseModal({ open, initial, onClose, onSaved }) {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="label">Amount</label>
-            <input
+            <label className="label" htmlFor="dx-amount">Amount</label>
+            <input id="dx-amount"
               className="input w-full" type="number" min="0" step="0.01" placeholder="0.00"
               value={form.amount} onChange={(e) => set('amount', e.target.value)}
             />
           </div>
           <div>
-            <label className="label">Expense date</label>
-            <input
+            <label className="label" htmlFor="dx-expense_date">Expense date</label>
+            <input id="dx-expense_date"
               className="input w-full" type="date"
               value={form.expense_date || ''} onChange={(e) => set('expense_date', e.target.value)}
             />
@@ -174,16 +174,16 @@ function ExpenseModal({ open, initial, onClose, onSaved }) {
         </div>
 
         <div>
-          <label className="label">Asset / vehicle no.</label>
-          <input
+          <label className="label" htmlFor="dx-asset_no">Asset / vehicle no.</label>
+          <input id="dx-asset_no"
             className="input w-full" placeholder="e.g. TRK-4821" maxLength={120}
             value={form.asset_no} onChange={(e) => set('asset_no', e.target.value)}
           />
         </div>
 
         <div>
-          <label className="label">Description</label>
-          <textarea
+          <label className="label" htmlFor="dx-description">Description</label>
+          <textarea id="dx-description"
             className="input w-full min-h-[90px] resize-y" maxLength={8000}
             placeholder="Optional notes about this claim..."
             value={form.description} onChange={(e) => set('description', e.target.value)}
@@ -277,19 +277,6 @@ function SpendersCard({ rows, currency, loading }) {
   )
 }
 
-// ─── Sortable table header ────────────────────────────────────────────────────
-function SortTh({ label, field, sort, onSort, className = '' }) {
-  const active = sort.field === field
-  return (
-    <th className={`px-4 py-3 font-semibold whitespace-nowrap select-none cursor-pointer hover:text-[var(--text-secondary)] ${className}`} onClick={() => onSort(field)}>
-      <span className="inline-flex items-center gap-1">
-        {label}
-        {active && (sort.dir === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
-      </span>
-    </th>
-  )
-}
-
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function DriverExpenses() {
   const { activeCountry, activeCurrency } = useSettings()
@@ -305,7 +292,6 @@ export default function DriverExpenses() {
   const [search, setSearch] = useState('')
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
-  const [sort, setSort] = useState({ field: 'expense_date', dir: 'desc' })
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
@@ -328,6 +314,8 @@ export default function DriverExpenses() {
   useEffect(() => { load() }, [load])
 
   const loading = rows === null
+  // A failed read is not "no claims": every figure reads N/A until a retry works.
+  const unknown = loading || (!!error && !missing)
   const analysis = useMemo(() => analyzeExpenses(rows || [], { topN: 8 }), [rows])
   const k = analysis.kpis
 
@@ -339,8 +327,9 @@ export default function DriverExpenses() {
       status: statusFilter, category: categoryFilter, driver: driverFilter,
       search, from: fromDate, to: toDate,
     })
-    return sortExpenses(f, sort.field, sort.dir)
-  }, [rows, statusFilter, categoryFilter, driverFilter, search, fromDate, toDate, sort])
+    // Default order (newest first); the register itself re-sorts on any header.
+    return sortExpenses(f, 'expense_date', 'desc')
+  }, [rows, statusFilter, categoryFilter, driverFilter, search, fromDate, toDate])
 
   // Analytics for the filtered subset drive the KPI + charts, so the page reflects
   // whatever the user has narrowed to (falls back to all when no filters active).
@@ -348,19 +337,17 @@ export default function DriverExpenses() {
 
   const fmtMoney = useCallback((v) => formatCurrencyCompact(v, activeCurrency), [activeCurrency])
 
-  const onSort = (field) => setSort((s) => (s.field === field ? { field, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { field, dir: 'desc' }))
-
   // ── KPI tiles (8) ──
   const vk = view.kpis
   const kpis = [
-    { label: 'Total claims', value: loading ? 'N/A' : vk.total, sub: `${vk.drivers} drivers`, icon: Receipt, tone: 'text-[var(--text-primary)]' },
-    { label: 'Total spend', value: loading ? 'N/A' : fmtMoney(vk.totalValue), sub: `${vk.thisPeriodCount} in ${vk.periodDays}d`, icon: DollarSign, tone: 'text-[var(--brand-bright)]' },
-    { label: 'Avg claim', value: loading ? 'N/A' : (vk.avgClaim == null ? 'N/A' : fmtMoney(vk.avgClaim)), sub: 'per claim', icon: CircleDollarSign, tone: 'text-indigo-400' },
-    { label: 'Approval rate', value: loading ? 'N/A' : (vk.approvalRate == null ? 'N/A' : `${vk.approvalRate}%`), sub: `${vk.decidedCount} decided`, icon: Percent, tone: 'text-emerald-400' },
-    { label: 'Pending', value: loading ? 'N/A' : vk.pendingCount, sub: fmtMoney(vk.pendingValue), icon: Clock, tone: 'text-amber-400' },
-    { label: 'Outstanding', value: loading ? 'N/A' : fmtMoney(vk.reimbursementOutstanding), sub: 'approved, unpaid', icon: Wallet, tone: 'text-sky-400' },
-    { label: 'Reimbursed', value: loading ? 'N/A' : fmtMoney(vk.reimbursedValue), sub: 'paid out', icon: CheckCircle2, tone: 'text-green-400' },
-    { label: 'Rejected', value: loading ? 'N/A' : fmtMoney(vk.rejectedValue), sub: `${vk.byStatusCount.rejected} claims`, icon: X, tone: 'text-red-400' },
+    { label: 'Total claims', value: unknown ? 'N/A' : vk.total, sub: `${vk.drivers} drivers`, icon: Receipt, tone: 'text-[var(--text-primary)]' },
+    { label: 'Total spend', value: unknown ? 'N/A' : fmtMoney(vk.totalValue), sub: `${vk.thisPeriodCount} in ${vk.periodDays}d`, icon: DollarSign, tone: 'text-[var(--brand-bright)]' },
+    { label: 'Avg claim', value: unknown ? 'N/A' : (vk.avgClaim == null ? 'N/A' : fmtMoney(vk.avgClaim)), sub: 'per claim', icon: CircleDollarSign, tone: 'text-indigo-400' },
+    { label: 'Approval rate', value: unknown ? 'N/A' : (vk.approvalRate == null ? 'N/A' : `${vk.approvalRate}%`), sub: `${vk.decidedCount} decided`, icon: Percent, tone: 'text-emerald-400' },
+    { label: 'Pending', value: unknown ? 'N/A' : vk.pendingCount, sub: fmtMoney(vk.pendingValue), icon: Clock, tone: 'text-amber-400' },
+    { label: 'Outstanding', value: unknown ? 'N/A' : fmtMoney(vk.reimbursementOutstanding), sub: 'approved, unpaid', icon: Wallet, tone: 'text-sky-400' },
+    { label: 'Reimbursed', value: unknown ? 'N/A' : fmtMoney(vk.reimbursedValue), sub: 'paid out', icon: CheckCircle2, tone: 'text-green-400' },
+    { label: 'Rejected', value: unknown ? 'N/A' : fmtMoney(vk.rejectedValue), sub: `${vk.byStatusCount.rejected} claims`, icon: X, tone: 'text-red-400' },
   ]
 
   // ── Charts ──
@@ -417,9 +404,42 @@ export default function DriverExpenses() {
   // ── Export (respects the active filter + sort) ──
   const EXPORT_COLS = ['driver_name', 'category', 'amount', 'expense_date', 'asset_no', 'status', 'description']
   const EXPORT_HEADERS = ['Driver', 'Category', 'Amount', 'Expense date', 'Asset', 'Status', 'Description']
-  // Paged, not capped: this table used to render filtered.slice(0, 500) with no
-  // way to reach row 501. The exports below still cover `filtered` in full.
-  const pager = usePagedRows(filtered)
+  // The register pages AND sorts across the whole filtered set; the exports below
+  // still cover `filtered` in full.
+  const columns = useMemo(() => [
+    {
+      id: 'driver_name', header: 'Driver', accessorFn: (r) => r.driver_name || '', size: 180,
+      cell: ({ row }) => (
+        <span className="inline-flex items-center gap-2 text-[var(--text-primary)] font-medium">
+          <User size={13} className="text-[var(--text-muted)]" aria-hidden="true" />{row.original.driver_name || 'N/A'}
+        </span>
+      ),
+    },
+    { id: 'category', header: 'Category', accessorFn: (r) => (r.category ? categoryLabel(r.category) : 'N/A'), size: 140 },
+    {
+      id: 'amount', header: 'Amount', accessorFn: (r) => (r.amount == null || r.amount === '' ? null : Number(r.amount)),
+      sortUndefined: 'last', size: 120, meta: { align: 'right' },
+      cell: ({ row }) => <span className="tabular-nums font-medium">{row.original.amount == null || row.original.amount === '' ? 'N/A' : fmtMoney(row.original.amount)}</span>,
+    },
+    { id: 'expense_date', header: 'Date', accessorFn: (r) => r.expense_date || '', size: 120, cell: ({ row }) => fmtDate(row.original.expense_date) },
+    { id: 'asset_no', header: 'Asset', accessorFn: (r) => r.asset_no || 'N/A', size: 110 },
+    {
+      id: 'status', header: 'Status', accessorFn: (r) => statusLabel(r.status), size: 120,
+      cell: ({ row }) => {
+        const st = STATUS_META[normStatus(row.original.status)] || STATUS_META.pending
+        return <span className={`badge text-[11px] px-2 py-0.5 rounded ${st.cls}`}>{st.label}</span>
+      },
+    },
+    {
+      id: 'actions', header: '', enableSorting: false, size: 110, meta: { export: false, align: 'right' },
+      cell: ({ row }) => (
+        <div className="flex items-center justify-end gap-1">
+          <button type="button" onClick={(e) => { e.stopPropagation(); openEdit(row.original) }} className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--brand-bright)]" aria-label={`Edit claim for ${row.original.driver_name || 'driver'}`} title="Edit"><Pencil size={14} /></button>
+          <button type="button" onClick={(e) => { e.stopPropagation(); setDeleting(row.original) }} className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-400" aria-label={`Delete claim for ${row.original.driver_name || 'driver'}`} title="Delete"><Trash2 size={14} /></button>
+        </div>
+      ),
+    },
+  ], [fmtMoney])
 
   const exportRows = filtered.map((r) => ({
     driver_name: r.driver_name || '', category: categoryLabel(r.category) || '', amount: r.amount ?? '',
@@ -449,13 +469,13 @@ export default function DriverExpenses() {
         actions={
           <div className="flex items-center gap-2">
             <button
-              onClick={async () => { try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'driver_expenses', 'Expenses', { currency: activeCurrency }) } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }}
+              onClick={async () => { try { await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, reportFileName('Driver Expenses', activeCountry), 'Expenses', { currency: activeCurrency }) } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }}
               className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}
             >
               <FileSpreadsheet size={14} /> Excel
             </button>
             <button
-              onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((c, i) => ({ key: c, header: EXPORT_HEADERS[i] })), 'Driver Expenses', 'driver_expenses', 'landscape', '', { currency: activeCurrency }) } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }}
+              onClick={async () => { try { await exportToPdf(exportRows, EXPORT_COLS.map((c, i) => ({ key: c, header: EXPORT_HEADERS[i] })), 'Driver Expenses', reportFileName('Driver Expenses', activeCountry), 'landscape', '', { currency: activeCurrency }) } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }}
               className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}
             >
               <FileText size={14} /> PDF
@@ -500,7 +520,7 @@ export default function DriverExpenses() {
                 <Icon size={16} className={tile.tone} />
               </div>
               <p className={`text-2xl font-bold mt-1 ${tile.tone}`}>{tile.value}</p>
-              {!loading && tile.sub && <p className="text-xs text-[var(--text-muted)] mt-1">{tile.sub}</p>}
+              {!unknown && tile.sub && <p className="text-xs text-[var(--text-muted)] mt-1">{tile.sub}</p>}
             </div>
           )
         })}
@@ -543,7 +563,7 @@ export default function DriverExpenses() {
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[200px]">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-            <input className="input pl-9 w-full" placeholder="Search driver, category, asset, notes..." value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input className="input pl-9 w-full" aria-label="Search expense claims" placeholder="Search driver, category, asset, notes..." value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
             <option value="all">All statuses</option>
@@ -573,61 +593,22 @@ export default function DriverExpenses() {
         </div>
       </div>
 
-      {/* Table */}
-      <div className="card overflow-hidden !p-0">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                <SortTh label="Driver" field="driver_name" sort={sort} onSort={onSort} />
-                <SortTh label="Category" field="category" sort={sort} onSort={onSort} />
-                <SortTh label="Amount" field="amount" sort={sort} onSort={onSort} />
-                <SortTh label="Date" field="expense_date" sort={sort} onSort={onSort} />
-                <th className="px-4 py-3 font-semibold whitespace-nowrap">Asset</th>
-                <SortTh label="Status" field="status" sort={sort} onSort={onSort} />
-                <th className="px-4 py-3 font-semibold whitespace-nowrap"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                [0, 1, 2, 3, 4].map((i) => (
-                  <tr key={i} className="border-b border-[var(--input-border)]/50"><td colSpan={7} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>
-                ))
-              ) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-[var(--text-muted)]">
-                    <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                    {analysis.kpis.total === 0 ? 'No expense claims yet. Add the first one.' : 'No claims match these filters.'}
-                  </td>
-                </tr>
-              ) : (
-                pager.pageRows.map((r) => {
-                  const st = STATUS_META[normStatus(r.status)] || STATUS_META.pending
-                  return (
-                    <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                      <td className="px-4 py-2.5 text-[var(--text-primary)] font-medium">
-                        <span className="inline-flex items-center gap-2"><User size={13} className="text-[var(--text-muted)]" />{r.driver_name || 'N/A'}</span>
-                      </td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.category ? categoryLabel(r.category) : 'N/A'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)] font-medium tabular-nums">{r.amount == null || r.amount === '' ? 'N/A' : fmtMoney(r.amount)}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtDate(r.expense_date)}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.asset_no || 'N/A'}</td>
-                      <td className="px-4 py-2.5"><span className={`badge text-[11px] px-2 py-0.5 rounded ${st.cls}`}>{st.label}</span></td>
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-center justify-end gap-1">
-                          <button onClick={() => openEdit(r)} className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" title="Edit"><Pencil size={14} /></button>
-                          <button onClick={() => setDeleting(r)} className="p-1.5 rounded hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400" title="Delete"><Trash2 size={14} /></button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-        <TablePagination {...pager} />
-      </div>
+      {/* Register */}
+      <EnterpriseTable
+        columns={columns}
+        data={filtered}
+        getRowId={(r) => String(r.id)}
+        loading={loading}
+        error={error && !missing ? error : null}
+        onRetry={load}
+        enableGlobalFilter={false}
+        enableExport={false}
+        viewKey="driver-expenses"
+        initialPageSize={25}
+        emptyMessage={analysis.kpis.total === 0 ? 'No expense claims yet. Add the first one.' : 'No claims match these filters.'}
+        emptyIcon={<Filter size={22} className="opacity-60" aria-hidden="true" />}
+        onRowClick={(r) => openEdit(r)}
+      />
 
       <ExpenseModal open={modalOpen} initial={editing} onClose={() => { setModalOpen(false); setEditing(null) }} onSaved={onSaved} />
       <DeleteDialog row={deleting} onCancel={() => setDeleting(null)} onConfirm={confirmDelete} />

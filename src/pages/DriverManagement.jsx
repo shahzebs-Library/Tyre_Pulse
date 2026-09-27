@@ -5,11 +5,11 @@ import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { toUserMessage } from '../lib/safeError'
 import PageHeader from '../components/ui/PageHeader'
-import EmptyState from '../components/EmptyState'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import {
   User, Users, TrendingUp, TrendingDown, Award, AlertTriangle,
   BarChart2, FileText, FileSpreadsheet, Search, Filter,
-  X, ChevronDown, ChevronUp, RefreshCw, Eye, Calendar,
+  X, ChevronDown, ChevronUp, RefreshCw, Eye, Calendar, Percent, Wallet, ShieldAlert,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useFilterState } from '../hooks/useFilterState'
@@ -19,6 +19,11 @@ import {
   CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend,
 } from 'chart.js'
 import { Bar } from 'react-chartjs-2'
+import { colorAt, withAlpha } from '../lib/reportColors'
+import {
+  DATE_PRESETS, applyDatePreset, filterDriverRecords, aggregateDrivers,
+  orderDrivers, driverKpis, performanceBand,
+} from '../lib/driverManagementAnalytics'
 
 // exportUtils pulls the PDF/Excel report engines that most sessions never
 // trigger, so it loads on first click instead of riding with the route chunk.
@@ -27,68 +32,39 @@ const loadExportUtils = () => import('../lib/exportUtils')
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
 // ── Constants ──────────────────────────────────────────────────────────────────
-const CHART_THEME = {
-  gridColor:'var(--text-muted)',
-  tickColor: '#6b7280',
-  tooltipBg: '#1f2937',
-}
-
-const DRIVER_PALETTE = [
-  '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
-  '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#84cc16',
-  '#06b6d4', '#a855f7', '#e11d48', '#78716c', '#0ea5e9',
-]
-
 // Marks a hand-typed date range in the URL. It cannot be the empty string:
 // useFilterState drops a param whose value is blank, which would silently put
 // the window back on the default preset.
 const CUSTOM_PRESET = 'custom'
 
-const DATE_PRESETS = [
-  { label: '3mo', days: 90 },
-  { label: '6mo', days: 180 },
-  { label: '1yr', days: 365 },
-  { label: 'All', days: null },
-]
-
-// ── Helpers ────────────────────────────────────────────────────────────────────
-function applyDatePreset(days) {
-  if (!days) return { from: '', to: '' }
-  const to = new Date()
-  const from = new Date()
-  from.setDate(from.getDate() - days)
-  return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) }
-}
-
+// ── Formatting ─────────────────────────────────────────────────────────────────
 function fmtCpk(v, currency) {
-  if (v == null || !isFinite(v) || v <= 0) return 'N/A'
+  if (v == null || !Number.isFinite(v) || v <= 0) return 'N/A'
   return `${currency} ${v.toFixed(4)}`
 }
-
 function fmtCurrency(v, currency) {
-  if (v == null || !isFinite(v)) return `${currency} 0`
+  if (v == null || !Number.isFinite(v)) return 'N/A'
   return `${currency} ${Math.round(v).toLocaleString()}`
 }
-
 function fmtKm(v) {
-  if (v == null || !isFinite(v) || v === 0) return 'N/A'
+  if (v == null || !Number.isFinite(v) || v === 0) return 'N/A'
   if (v >= 1000) return `${(v / 1000).toFixed(1)}k km`
   return `${Math.round(v).toLocaleString()} km`
 }
-
 function fmtPct(v) {
-  if (v == null || !isFinite(v)) return '0.0%'
+  if (v == null || !Number.isFinite(v)) return 'N/A'
   return `${v.toFixed(1)}%`
 }
 
-function performanceBadge(score) {
-  if (score <= 20) return { label: 'Excellent', cls: 'bg-green-500/20 text-green-400 border-green-500/30' }
-  if (score <= 40) return { label: 'Good',      cls: 'bg-blue-500/20 text-blue-400 border-blue-500/30' }
-  if (score <= 60) return { label: 'Average',   cls: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' }
-  if (score <= 80) return { label: 'Poor',      cls: 'bg-orange-500/20 text-orange-400 border-orange-500/30' }
-  return                  { label: 'Critical',  cls: 'bg-red-500/20 text-red-400 border-red-500/30' }
+// Semantic performance colours (meaning-bearing, deliberately not palettized).
+const BAND_CLS = {
+  excellent: 'bg-green-500/20 text-green-400 border-green-500/30',
+  good: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  average: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+  poor: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+  critical: 'bg-red-500/20 text-red-400 border-red-500/30',
+  unrated: 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)]',
 }
-
 function riskScoreColor(score) {
   if (score <= 20) return '#10b981'
   if (score <= 40) return '#3b82f6'
@@ -96,184 +72,62 @@ function riskScoreColor(score) {
   if (score <= 80) return '#f97316'
   return '#ef4444'
 }
-
 function cpkColor(cpk) {
-  if (cpk == null || !isFinite(cpk) || cpk <= 0) return 'text-[var(--text-muted)]'
+  if (cpk == null || !Number.isFinite(cpk) || cpk <= 0) return 'text-[var(--text-muted)]'
   if (cpk <= 1.0) return 'text-green-400'
   if (cpk <= 2.0) return 'text-yellow-400'
   return 'text-red-400'
 }
 
-function calcCpk(cost, kmFit, kmRem) {
-  if (cost == null || kmFit == null || kmRem == null) return null
-  const dist = kmRem - kmFit
-  if (dist <= 0) return null
-  return cost / dist
-}
+const SORT_OPTIONS = [
+  { value: 'riskScore', label: 'Risk score' },
+  { value: 'avgCpk', label: 'Avg CPK' },
+  { value: 'failureRate', label: 'Failure rate' },
+  { value: 'totalCost', label: 'Tyre cost' },
+  { value: 'totalTyres', label: 'Tyres' },
+  { value: 'avgTyreLife', label: 'Avg life' },
+  { value: 'name', label: 'Driver name' },
+]
 
-function isHighRisk(r) {
-  const rl = (r.risk_level ?? '').toLowerCase()
-  return rl === 'high' || rl === 'critical'
-}
-
-// ── Aggregate driver stats ────────────────────────────────────────────────────
-function aggregateDrivers(records) {
-  const map = new Map()
-
-  for (const r of records) {
-    const name = (r.driver_name ?? '').trim() || 'Unassigned'
-    if (!map.has(name)) {
-      map.set(name, {
-        name,
-        records: [],
-        cpkValues: [],
-        totalCost: 0,
-        kmValues: [],
-        highRiskCount: 0,
-      })
-    }
-    const d = map.get(name)
-    d.records.push(r)
-    d.totalCost += (r.cost_per_tyre ?? 0) * (r.qty || 1)
-    if (isHighRisk(r)) d.highRiskCount++
-    const cpk = calcCpk(r.cost_per_tyre, r.km_at_fitment, r.km_at_removal)
-    if (cpk !== null && cpk > 0) d.cpkValues.push(cpk)
-    const life = (r.km_at_removal != null && r.km_at_fitment != null)
-      ? r.km_at_removal - r.km_at_fitment
-      : null
-    if (life !== null && life > 0) d.kmValues.push(life)
-  }
-
-  const drivers = Array.from(map.values()).map(d => ({
-    name: d.name,
-    totalTyres: d.records.length,
-    totalCost: d.totalCost,
-    avgCpk: d.cpkValues.length > 0
-      ? d.cpkValues.reduce((s, v) => s + v, 0) / d.cpkValues.length
-      : null,
-    avgTyreLife: d.kmValues.length > 0
-      ? d.kmValues.reduce((s, v) => s + v, 0) / d.kmValues.length
-      : null,
-    failureRate: d.records.length > 0
-      ? (d.highRiskCount / d.records.length) * 100
-      : 0,
-    highRiskCount: d.highRiskCount,
-    records: d.records,
-  }))
-
-  // Rank by avgCpk (nulls last), then compute composite risk scores
-  const withCpk = drivers.filter(d => d.avgCpk !== null)
-  const noCpk   = drivers.filter(d => d.avgCpk === null)
-
-  withCpk.sort((a, b) => a.avgCpk - b.avgCpk)
-  const cpkRanked = withCpk.map((d, i) => ({ ...d, cpkRank: (i / Math.max(withCpk.length - 1, 1)) * 100 }))
-
-  const allForFailure = [...cpkRanked, ...noCpk.map(d => ({ ...d, cpkRank: 100 }))]
-  const sortedByFailure = [...allForFailure].sort((a, b) => a.failureRate - b.failureRate)
-  const failureRankMap = new Map(
-    sortedByFailure.map((d, i) => [d.name, (i / Math.max(sortedByFailure.length - 1, 1)) * 100])
-  )
-
-  const withScores = allForFailure.map(d => {
-    const failureRank = failureRankMap.get(d.name) ?? 100
-    const riskScore = Math.min(100, Math.round(d.cpkRank * 0.4 + failureRank * 0.6))
-    return { ...d, riskScore }
-  })
-
-  withScores.sort((a, b) => a.riskScore - b.riskScore)
-  return withScores.map((d, i) => ({ ...d, rank: i + 1 }))
-}
-
-// ── Chart config factories ─────────────────────────────────────────────────────
 function barOptions(horizontal = false) {
   return {
     responsive: true,
     maintainAspectRatio: false,
     indexAxis: horizontal ? 'y' : 'x',
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        backgroundColor: CHART_THEME.tooltipBg,
-        titleColor:'var(--panel-ink)',
-        bodyColor: '#d1d5db',
-        padding: 10,
-        cornerRadius: 8,
-      },
-    },
+    plugins: { legend: { display: false } },
     scales: {
-      x: {
-        grid: { color: CHART_THEME.gridColor },
-        ticks: { color: CHART_THEME.tickColor, font: { size: 10 } },
-      },
-      y: {
-        grid: { color: CHART_THEME.gridColor },
-        ticks: { color: CHART_THEME.tickColor, font: { size: 10 } },
-      },
+      x: { grid: { color: 'var(--panel-2)' }, ticks: { color: 'var(--text-muted)', font: { size: 10 } } },
+      y: { grid: { color: 'var(--panel-2)' }, ticks: { color: 'var(--text-muted)', font: { size: 10 } } },
     },
   }
 }
 
-// ── KPI Card ──────────────────────────────────────────────────────────────────
-function KpiCard({ icon: Icon, label, value, sub, color = '#3b82f6', loading }) {
+function KpiCard({ icon: Icon, label, value, sub, tone = 'text-[var(--text-primary)]', loading }) {
   return (
-    <motion.div
-      className="rounded-xl p-4 flex items-start gap-3 relative overflow-hidden"
-      style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-    >
-      <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
-        style={{ background: `${color}20`, border: `1px solid ${color}30` }}>
-        <Icon size={16} style={{ color }} />
+    <div className="card flex items-start gap-3">
+      <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 bg-[var(--input-bg)] border border-[var(--input-border)]">
+        <Icon size={16} className={tone} aria-hidden="true" />
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-xs text-[var(--text-muted)] mb-0.5">{label}</p>
         {loading
           ? <div className="h-6 w-24 bg-[var(--input-bg)] rounded animate-pulse" />
-          : <p className="text-lg font-bold text-[var(--text-primary)] truncate">{value}</p>
-        }
-        {sub && <p className="text-[11px] text-[var(--text-dim)] mt-0.5 truncate">{sub}</p>}
+          : <p className={`text-lg font-bold truncate tabular-nums ${tone}`}>{value}</p>}
+        {sub && !loading && <p className="text-[11px] text-[var(--text-muted)] mt-0.5 truncate" title={sub}>{sub}</p>}
       </div>
-      <div className="absolute bottom-0 left-0 right-0 h-0.5 opacity-30 rounded-b-xl"
-        style={{ background: `linear-gradient(90deg, transparent, ${color}, transparent)` }} />
-    </motion.div>
+    </div>
   )
 }
 
-// ── Sort header ───────────────────────────────────────────────────────────────
-function SortTh({ col, label, sortCol, sortDir, onSort, className = '' }) {
-  const active = sortCol === col
-  return (
-    <th
-      className={`px-3 py-2.5 text-left text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider cursor-pointer select-none hover:text-[var(--text-dim)] transition-colors ${className}`}
-      onClick={() => onSort(col)}
-    >
-      <span className="flex items-center gap-1">
-        {label}
-        {active
-          ? sortDir === 'asc'
-            ? <ChevronUp size={11} className="text-green-400" />
-            : <ChevronDown size={11} className="text-green-400" />
-          : <ChevronDown size={11} className="opacity-30" />
-        }
-      </span>
-    </th>
-  )
-}
-
-// ── Risk Score Bar ────────────────────────────────────────────────────────────
 function RiskBar({ score }) {
+  if (score == null) return <span className="text-[11px] text-[var(--text-muted)]">Not rated</span>
   const color = riskScoreColor(score)
   return (
-    <div className="flex items-center gap-2 min-w-[80px]">
-      <div className="flex-1 h-1.5 bg-[var(--input-border)] rounded-full overflow-hidden">
-        <div
-          className="h-full rounded-full transition-all duration-500"
-          style={{ width: `${score}%`, backgroundColor: color }}
-        />
+    <div className="flex items-center gap-2 min-w-[80px]" aria-label={`Risk score ${score} of 100`}>
+      <div className="flex-1 h-1.5 bg-[var(--input-border)] rounded-full overflow-hidden" aria-hidden="true">
+        <div className="h-full rounded-full" style={{ width: `${score}%`, backgroundColor: color }} />
       </div>
-      <span className="text-[11px] font-mono" style={{ color }}>{score}</span>
+      <span className="text-[11px] font-mono tabular-nums" style={{ color }}>{score}</span>
     </div>
   )
 }
@@ -283,16 +137,14 @@ export default function DriverManagement() {
   const navigate = useNavigate()
   const { activeCurrency, activeCountry } = useSettings()
 
-  // Data state
-  const [records, setRecords]   = useState([])
-  const [loading, setLoading]   = useState(true)
-  const [error, setError]       = useState(null)
+  const [records, setRecords] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [truncated, setTruncated] = useState(false)
+  const [exportError, setExportError] = useState('')
 
-  // Filters. Search, site, country, date window and sort live in the URL
-  // (useFilterState) so they SURVIVE opening a driver and pressing Back: a row
-  // opens `/driver-management/:name` as a route, so without this the leaderboard
-  // would remount unfiltered and re-sorted.
+  // Search, site, country, date window and default order live in the URL
+  // (useFilterState) so they SURVIVE opening a driver and pressing Back.
   const [filters, setFilter, , , setFilters] = useFilterState({
     search: '', site: 'all', country: 'all',
     preset: '1yr', from: '', to: '',
@@ -304,53 +156,41 @@ export default function DriverManagement() {
   const datePreset = filters.preset
   // A named preset owns the window, so a restored link shows "the last year"
   // rather than a year frozen to the day it was copied. CUSTOM_PRESET marks a
-  // hand-typed range, which uses the stored dates verbatim (a blank bound there
-  // means "no bound", exactly as the All preset does).
-  const presetDef = DATE_PRESETS.find(p => p.label === datePreset)
+  // hand-typed range, which uses the stored dates verbatim.
+  const presetDef = DATE_PRESETS.find((p) => p.label === datePreset)
   const presetWindow = useMemo(
     () => applyDatePreset(presetDef ? presetDef.days : 365),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [datePreset],
   )
   const dateFrom = presetDef ? presetWindow.from : filters.from
-  const dateTo   = presetDef ? presetWindow.to   : filters.to
-  // Opens on arrival when the restored URL already carries one of the collapsed
-  // filters - an applied filter the reader cannot see looks like a wrong result.
+  const dateTo = presetDef ? presetWindow.to : filters.to
   const [showFilters, setShowFilters] = useState(
     () => filters.site !== 'all' || filters.country !== 'all' || !presetDef,
   )
 
-  // Table state
-  const sortCol = filters.sort
+  const sortCol = SORT_OPTIONS.some((o) => o.value === filters.sort) ? filters.sort : 'riskScore'
   const sortDir = filters.dir === 'desc' ? 'desc' : 'asc'
-  // Puts the leaderboard back where it was scrolled to on return from a driver.
   const listRef = useScrollRestore('driver-management', !loading && records.length > 0)
-
-  // Guards against a slow earlier response overwriting a newer one after the
-  // active country changes (fetch-race cancellation).
   const reqIdRef = useRef(0)
 
-  // ── Data fetch ──────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
     const myReq = ++reqIdRef.current
     setLoading(true)
     setError(null)
     try {
-      // BOUNDED: tyre_records is a large table, so an unbounded read pulls the
-      // whole table into the browser. Cap at 20,000 with a stable order tiebreak
-      // (a paged read without an ORDER can drop/repeat rows at a page boundary)
-      // and surface a "capped view" note when the ceiling is hit.
+      // BOUNDED: tyre_records is a large table. Cap at 20,000 with a stable id
+      // order (a paged read without an ORDER can drop/repeat rows) and surface a
+      // "capped view" note when the ceiling is hit.
       const { data, error: err, truncated: tr } = await fetchAllPages((from, to) => {
         let q = supabase
           .from('tyre_records')
           .select(
             'id,asset_no,asset_number,serial_no,brand,site,country,driver_name,driver_id,' +
-            'cost_per_tyre,km_at_fitment,km_at_removal,risk_level,removal_reason,issue_date,category'
+            'cost_per_tyre,qty,km_at_fitment,km_at_removal,risk_level,removal_reason,issue_date,category'
           )
           .order('id')
-        if (activeCountry && activeCountry !== 'All') {
-          q = q.eq('country', activeCountry)
-        }
+        if (activeCountry && activeCountry !== 'All') q = q.eq('country', activeCountry)
         return q.range(from, to)
       }, { max: 20000 })
       if (myReq !== reqIdRef.current) return
@@ -366,276 +206,188 @@ export default function DriverManagement() {
 
   useEffect(() => { load() }, [load])
 
-  // ── Unique filter values ───────────────────────────────────────────────────
-  const uniqueSites = useMemo(() => {
-    const s = new Set(records.map(r => r.site).filter(Boolean))
-    return ['all', ...Array.from(s).sort()]
-  }, [records])
+  const uniqueSites = useMemo(() => [...new Set(records.map((r) => r.site).filter(Boolean))].sort(), [records])
+  const uniqueCountries = useMemo(() => [...new Set(records.map((r) => r.country).filter(Boolean))].sort(), [records])
 
-  const uniqueCountries = useMemo(() => {
-    const s = new Set(records.map(r => r.country).filter(Boolean))
-    return ['all', ...Array.from(s).sort()]
-  }, [records])
-
-  // ── Filtered records ───────────────────────────────────────────────────────
-  const filteredRecords = useMemo(() => {
-    return records.filter(r => {
-      if (siteFilter !== 'all' && r.site !== siteFilter) return false
-      if (countryFilter !== 'all' && r.country !== countryFilter) return false
-      if (dateFrom && r.issue_date && r.issue_date < dateFrom) return false
-      if (dateTo   && r.issue_date && r.issue_date > dateTo)   return false
-      return true
-    })
-  }, [records, siteFilter, countryFilter, dateFrom, dateTo])
-
-  // ── Aggregated driver stats ───────────────────────────────────────────────
+  const filteredRecords = useMemo(
+    () => filterDriverRecords(records, { site: siteFilter, country: countryFilter, from: dateFrom, to: dateTo }),
+    [records, siteFilter, countryFilter, dateFrom, dateTo],
+  )
   const allDrivers = useMemo(() => aggregateDrivers(filteredRecords), [filteredRecords])
+  const visibleDrivers = useMemo(
+    () => orderDrivers(allDrivers, { search: searchQuery, sort: sortCol, dir: sortDir }),
+    [allDrivers, searchQuery, sortCol, sortDir],
+  )
+  const kpis = useMemo(() => driverKpis(visibleDrivers, filteredRecords.length), [visibleDrivers, filteredRecords.length])
+  const unknown = loading || !!error
 
-  // ── Search-filtered drivers ───────────────────────────────────────────────
-  const visibleDrivers = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase()
-    let result = q
-      ? allDrivers.filter(d => d.name.toLowerCase().includes(q))
-      : allDrivers
-
-    result = [...result].sort((a, b) => {
-      let va = a[sortCol] ?? (sortDir === 'asc' ? Infinity : -Infinity)
-      let vb = b[sortCol] ?? (sortDir === 'asc' ? Infinity : -Infinity)
-      if (typeof va === 'string') { va = va.toLowerCase(); vb = (vb ?? '').toLowerCase() }
-      if (va < vb) return sortDir === 'asc' ? -1 : 1
-      if (va > vb) return sortDir === 'asc' ? 1 : -1
-      return 0
-    })
-    return result
-  }, [allDrivers, searchQuery, sortCol, sortDir])
-
-  // ── KPI summary ───────────────────────────────────────────────────────────
-  const kpis = useMemo(() => {
-    const totalDrivers = allDrivers.length
-    const driversWithCpk = allDrivers.filter(d => d.avgCpk !== null && d.avgCpk > 0)
-    const fleetAvgCpk = driversWithCpk.length > 0
-      ? driversWithCpk.reduce((s, d) => s + d.avgCpk, 0) / driversWithCpk.length
-      : null
-
-    let highestCost = null
-    let bestPerformer = null
-
-    if (driversWithCpk.length > 0) {
-      highestCost  = driversWithCpk.reduce((prev, cur) => cur.avgCpk > prev.avgCpk ? cur : prev)
-      bestPerformer = driversWithCpk.reduce((prev, cur) => cur.avgCpk < prev.avgCpk ? cur : prev)
-    }
-
-    return { totalDrivers, fleetAvgCpk, highestCost, bestPerformer }
-  }, [allDrivers])
-
-  // ── CPK bar chart data (top 10) ───────────────────────────────────────────
   const cpkChartData = useMemo(() => {
-    const top10 = [...allDrivers]
-      .filter(d => d.avgCpk !== null && d.avgCpk > 0)
-      .sort((a, b) => a.avgCpk - b.avgCpk)
-      .slice(0, 10)
-
+    const top10 = allDrivers.filter((d) => d.avgCpk != null && d.avgCpk > 0).sort((a, b) => a.avgCpk - b.avgCpk).slice(0, 10)
     return {
-      labels: top10.map(d => d.name.length > 14 ? d.name.slice(0, 14) + '...' : d.name),
+      labels: top10.map((d) => (d.name.length > 14 ? `${d.name.slice(0, 14)}...` : d.name)),
       datasets: [{
         label: `Avg CPK (${activeCurrency})`,
-        data: top10.map(d => parseFloat(d.avgCpk.toFixed(4))),
-        backgroundColor: top10.map((d, i) => DRIVER_PALETTE[i % DRIVER_PALETTE.length] + 'cc'),
-        borderColor:     top10.map((d, i) => DRIVER_PALETTE[i % DRIVER_PALETTE.length]),
+        data: top10.map((d) => Number(d.avgCpk.toFixed(4))),
+        backgroundColor: top10.map((_, i) => withAlpha(colorAt(i), 0.8)),
+        borderColor: top10.map((_, i) => colorAt(i)),
         borderWidth: 1,
         borderRadius: 4,
       }],
     }
   }, [allDrivers, activeCurrency])
 
-  // ── Failure rate horizontal bar chart ─────────────────────────────────────
   const failureChartData = useMemo(() => {
-    const top = [...allDrivers]
-      .filter(d => d.totalTyres >= 2)
-      .sort((a, b) => b.failureRate - a.failureRate)
-      .slice(0, 12)
-
+    const top = allDrivers.filter((d) => d.failureRate != null && d.ratedTyres >= 2)
+      .sort((a, b) => b.failureRate - a.failureRate).slice(0, 12)
+    // Semantic thresholds: red >= 30%, amber >= 15%, green below.
+    const tone = (v) => (v >= 30 ? '#ef4444' : v >= 15 ? '#f97316' : '#10b981')
     return {
-      labels: top.map(d => d.name.length > 16 ? d.name.slice(0, 16) + '...' : d.name),
+      labels: top.map((d) => (d.name.length > 16 ? `${d.name.slice(0, 16)}...` : d.name)),
       datasets: [{
         label: 'Failure Rate %',
-        data: top.map(d => parseFloat(d.failureRate.toFixed(1))),
-        backgroundColor: top.map(d =>
-          d.failureRate >= 30 ? '#ef444499' :
-          d.failureRate >= 15 ? '#f9731699' :
-          '#10b98199'
-        ),
-        borderColor: top.map(d =>
-          d.failureRate >= 30 ? '#ef4444' :
-          d.failureRate >= 15 ? '#f97316' :
-          '#10b981'
-        ),
+        data: top.map((d) => Number(d.failureRate.toFixed(1))),
+        backgroundColor: top.map((d) => withAlpha(tone(d.failureRate), 0.6)),
+        borderColor: top.map((d) => tone(d.failureRate)),
         borderWidth: 1,
         borderRadius: 4,
       }],
     }
   }, [allDrivers])
 
-  // ── Sort handler ──────────────────────────────────────────────────────────
-  function handleSort(col) {
-    setFilters({ sort: col, dir: sortCol === col && sortDir === 'asc' ? 'desc' : 'asc' })
-  }
-
-  // ── Date preset handler ────────────────────────────────────────────────────
   function handlePreset(preset) {
-    // The preset owns the window, so the explicit bounds are dropped.
     setFilters({ preset: preset.label, from: '', to: '' })
   }
-
-  // Typing a bound switches the window to a hand-typed range, materialising the
-  // other bound so it keeps whatever the preset was showing.
   function handleCustomRange(patch) {
     setFilters({ preset: CUSTOM_PRESET, from: dateFrom, to: dateTo, ...patch })
   }
 
-  // ── Export handlers ────────────────────────────────────────────────────────
+  const exportRows = () => visibleDrivers.map((d) => ({
+    rank: d.rank ?? 'N/A',
+    name: d.name,
+    totalTyres: d.totalTyres,
+    avgCpk: fmtCpk(d.avgCpk, activeCurrency),
+    totalCost: fmtCurrency(d.totalCost, activeCurrency),
+    failureRate: fmtPct(d.failureRate),
+    ratedTyres: d.ratedTyres,
+    avgTyreLife: fmtKm(d.avgTyreLife),
+    riskScore: d.riskScore ?? 'N/A',
+    performance: performanceBand(d.riskScore).label,
+  }))
+  const EXPORT_KEYS = ['rank', 'name', 'totalTyres', 'avgCpk', 'totalCost', 'failureRate', 'ratedTyres', 'avgTyreLife', 'riskScore', 'performance']
+  const EXPORT_HEADERS = ['Rank', 'Driver Name', 'Tyres', 'Avg CPK', 'Tyre Cost (priced)', 'Failure Rate', 'Rated Tyres', 'Avg Life', 'Risk Score', 'Performance']
+
   async function handleExportExcel() {
-    const { exportToExcel } = await loadExportUtils()
-    exportToExcel(
-      visibleDrivers.map(d => ({
-        rank: d.rank,
-        name: d.name,
-        totalTyres: d.totalTyres,
-        avgCpk: d.avgCpk != null ? d.avgCpk.toFixed(4) : 'N/A',
-        totalCost: Math.round(d.totalCost),
-        failureRate: d.failureRate.toFixed(1) + '%',
-        avgTyreLife: d.avgTyreLife != null ? Math.round(d.avgTyreLife) : 'N/A',
-        riskScore: d.riskScore,
-        performance: performanceBadge(d.riskScore).label,
-      })),
-      ['rank','name','totalTyres','avgCpk','totalCost','failureRate','avgTyreLife','riskScore','performance'],
-      ['Rank','Driver Name','Total Tyres','Avg CPK','Total Cost','Failure Rate','Avg Life (km)','Risk Score','Performance'],
-      'driver_intelligence_ranking',
-      'Driver Ranking',
-    )
+    setExportError('')
+    try {
+      const { exportToExcel, reportFileName } = await loadExportUtils()
+      await exportToExcel(exportRows(), EXPORT_KEYS, EXPORT_HEADERS, reportFileName('Driver Intelligence Ranking', activeCountry), 'Driver Ranking')
+    } catch (e) { setExportError(toUserMessage(e, 'Could not export. Try again.')) }
   }
-
   async function handleExportPdf() {
-    const { exportToPdf } = await loadExportUtils()
-    exportToPdf(
-      visibleDrivers.map(d => ({
-        rank: d.rank,
-        name: d.name,
-        totalTyres: d.totalTyres,
-        avgCpk: fmtCpk(d.avgCpk, activeCurrency),
-        totalCost: fmtCurrency(d.totalCost, activeCurrency),
-        failureRate: fmtPct(d.failureRate),
-        avgTyreLife: fmtKm(d.avgTyreLife),
-        riskScore: d.riskScore,
-        performance: performanceBadge(d.riskScore).label,
-      })),
-      [
-        { key: 'rank',        header: 'Rank' },
-        { key: 'name',        header: 'Driver Name' },
-        { key: 'totalTyres',  header: 'Tyres' },
-        { key: 'avgCpk',      header: 'Avg CPK' },
-        { key: 'totalCost',   header: 'Total Cost' },
-        { key: 'failureRate', header: 'Failure Rate' },
-        { key: 'avgTyreLife', header: 'Avg Life' },
-        { key: 'riskScore',   header: 'Risk Score' },
-        { key: 'performance', header: 'Performance' },
-      ],
-      'Driver Intelligence - Ranking Report',
-      'driver_intelligence_ranking',
-      'landscape',
-    )
+    setExportError('')
+    try {
+      const { exportToPdf, reportFileName } = await loadExportUtils()
+      await exportToPdf(
+        exportRows(),
+        EXPORT_KEYS.map((key, i) => ({ key, header: EXPORT_HEADERS[i] })),
+        'Driver Intelligence - Ranking Report',
+        reportFileName('Driver Intelligence Ranking', activeCountry),
+        'landscape',
+      )
+    } catch (e) { setExportError(toUserMessage(e, 'Could not export. Try again.')) }
   }
 
-  // ── Loading / error states ─────────────────────────────────────────────────
-  if (loading) {
-    return (
-      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4">
-        <div className="w-10 h-10 rounded-full border-2 border-green-600/20 border-t-green-500 animate-spin" />
-        <p className="text-[var(--text-muted)] text-sm">Loading driver intelligence...</p>
-      </div>
-    )
-  }
+  const openDriver = useCallback((name) => navigate(`/driver-management/${encodeURIComponent(name)}`), [navigate])
 
-  if (error) {
-    return (
-      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-3">
-        <AlertTriangle size={32} className="text-red-500" />
-        <p className="text-red-400 font-medium">Failed to load data</p>
-        <p className="text-[var(--text-dim)] text-sm">{error}</p>
-        <button
-          onClick={load}
-          className="mt-2 flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-green-400 transition-colors hover:bg-green-400/10"
-          style={{ border: '1px solid rgba(22,163,74,0.3)' }}
-        >
-          <RefreshCw size={14} /> Retry
+  const columns = useMemo(() => [
+    { id: 'rank', header: 'Rank', accessorFn: (d) => d.rank, sortUndefined: 'last', size: 70,
+      cell: ({ row }) => {
+        const n = row.original.rank
+        if (n == null) return <span className="text-[var(--text-muted)] text-xs">N/A</span>
+        const tone = n === 1 ? 'text-yellow-400' : n === 3 ? 'text-amber-600' : 'text-[var(--text-secondary)]'
+        return <span className={`text-sm font-bold ${tone}`}>#{n}</span>
+      } },
+    { id: 'name', header: 'Driver', accessorFn: (d) => d.name, size: 200,
+      cell: ({ row }) => (
+        <span className="inline-flex items-center gap-2">
+          <span aria-hidden="true" className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0 bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)]">
+            {row.original.name[0]?.toUpperCase() ?? 'D'}
+          </span>
+          <span className="text-[var(--text-primary)] font-medium">{row.original.name}</span>
+        </span>
+      ) },
+    { id: 'totalTyres', header: 'Tyres', accessorFn: (d) => d.totalTyres, size: 80, meta: { align: 'right' } },
+    { id: 'avgCpk', header: 'Avg CPK', accessorFn: (d) => d.avgCpk, sortUndefined: 'last', size: 130, meta: { align: 'right' },
+      cell: ({ row }) => <span className={`font-mono font-semibold ${cpkColor(row.original.avgCpk)}`}>{fmtCpk(row.original.avgCpk, activeCurrency)}</span> },
+    { id: 'totalCost', header: 'Tyre cost (priced)', accessorFn: (d) => d.totalCost, sortUndefined: 'last', size: 150, meta: { align: 'right' },
+      cell: ({ row }) => <span className="tabular-nums" title={`${row.original.pricedTyres} of ${row.original.totalTyres} tyres priced`}>{fmtCurrency(row.original.totalCost, activeCurrency)}</span> },
+    { id: 'failureRate', header: 'Failure rate', accessorFn: (d) => d.failureRate, sortUndefined: 'last', size: 120, meta: { align: 'right' },
+      cell: ({ row }) => {
+        const v = row.original.failureRate
+        if (v == null) return <span className="text-[var(--text-muted)]" title="No tyres with a recorded risk level">N/A</span>
+        const tone = v >= 30 ? 'text-red-400' : v >= 15 ? 'text-yellow-400' : 'text-green-400'
+        return <span className={`font-medium ${tone}`} title={`${row.original.highRiskCount} of ${row.original.ratedTyres} rated tyres high risk`}>{fmtPct(v)}</span>
+      } },
+    { id: 'avgTyreLife', header: 'Avg life', accessorFn: (d) => d.avgTyreLife, sortUndefined: 'last', size: 110, meta: { align: 'right' },
+      cell: ({ row }) => fmtKm(row.original.avgTyreLife) },
+    { id: 'riskScore', header: 'Risk score', accessorFn: (d) => d.riskScore, sortUndefined: 'last', size: 140,
+      cell: ({ row }) => <RiskBar score={row.original.riskScore} /> },
+    { id: 'performance', header: 'Performance', accessorFn: (d) => performanceBand(d.riskScore).label, size: 120,
+      cell: ({ row }) => { const b = performanceBand(row.original.riskScore); return <span className={`text-[11px] px-2 py-0.5 rounded-full border font-semibold ${BAND_CLS[b.key]}`}>{b.label}</span> } },
+    { id: 'actions', header: '', enableSorting: false, size: 120, meta: { export: false, align: 'right' },
+      cell: ({ row }) => (
+        <button type="button" onClick={(e) => { e.stopPropagation(); openDriver(row.original.name) }}
+          className="btn-secondary text-xs inline-flex items-center gap-1.5 min-h-[44px]"
+          aria-label={`Open history for ${row.original.name}`}>
+          <Eye size={12} aria-hidden="true" /> History
         </button>
-      </div>
-    )
-  }
+      ) },
+  ], [activeCurrency, openDriver])
+
+  const kpiCards = [
+    { icon: Users, label: 'Drivers identified', value: unknown ? 'N/A' : kpis.totalDrivers.toLocaleString(), sub: `from ${kpis.recordCount.toLocaleString()} tyre records`, tone: 'text-sky-400' },
+    { icon: BarChart2, label: 'Fleet average CPK', value: unknown ? 'N/A' : fmtCpk(kpis.fleetAvgCpk, activeCurrency), sub: `${kpis.cpkCoverage} drivers with measurable CPK`, tone: 'text-emerald-400' },
+    { icon: TrendingDown, label: 'Highest cost driver', value: unknown || !kpis.highestCost ? 'N/A' : fmtCpk(kpis.highestCost.avgCpk, activeCurrency), sub: kpis.highestCost?.name ?? 'No CPK data', tone: 'text-red-400' },
+    { icon: Award, label: 'Best performing driver', value: unknown || !kpis.bestPerformer ? 'N/A' : fmtCpk(kpis.bestPerformer.avgCpk, activeCurrency), sub: kpis.bestPerformer?.name ?? 'No CPK data', tone: 'text-amber-400' },
+    { icon: Percent, label: 'Fleet failure rate', value: unknown ? 'N/A' : fmtPct(kpis.fleetFailureRate), sub: `${kpis.ratedTyres.toLocaleString()} tyres with a risk level`, tone: 'text-orange-400' },
+    { icon: Wallet, label: 'Tyre cost (priced)', value: unknown ? 'N/A' : fmtCurrency(kpis.totalCost, activeCurrency), sub: 'priced tyres only', tone: 'text-[var(--brand-bright)]' },
+    { icon: ShieldAlert, label: 'High-risk drivers', value: unknown ? 'N/A' : kpis.highRiskDrivers, sub: 'risk score 60 or more', tone: 'text-red-400' },
+    { icon: User, label: 'Not rated', value: unknown ? 'N/A' : kpis.unratedDrivers, sub: 'no CPK and no rated tyre', tone: 'text-[var(--text-secondary)]' },
+  ]
+
+  const hasExtraFilters = siteFilter !== 'all' || countryFilter !== 'all'
 
   return (
     <div className="space-y-6">
-
-      {/* ── Page header ─────────────────────────────────────────────────── */}
       <PageHeader
         title="Driver Intelligence"
         subtitle="CPK ranking, failure analysis and tyre cost impact by driver"
         icon={Users}
-        actions={<>
-          <button
-            onClick={load}
-            className="p-2 rounded-lg text-[var(--text-muted)] hover:text-green-400 transition-colors hover:bg-green-400/10"
-            title="Refresh"
-          >
-            <RefreshCw size={14} />
+        onRefresh={load}
+        refreshing={loading}
+        actions={<div className="flex flex-wrap items-center gap-2">
+          <button type="button" onClick={handleExportExcel} disabled={unknown || !visibleDrivers.length} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]">
+            <FileSpreadsheet size={14} aria-hidden="true" /> Excel
           </button>
-          <button
-            onClick={handleExportExcel}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
-            style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.15)' }}
-          >
-            <FileSpreadsheet size={13} /> Excel
+          <button type="button" onClick={handleExportPdf} disabled={unknown || !visibleDrivers.length} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]">
+            <FileText size={14} aria-hidden="true" /> PDF
           </button>
-          <button
-            onClick={handleExportPdf}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
-            style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.15)' }}
-          >
-            <FileText size={13} /> PDF
-          </button>
-        </>}
+        </div>}
       />
 
-      {/* ── KPI Cards ────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard
-          icon={Users}
-          label="Total Drivers Identified"
-          value={kpis.totalDrivers.toLocaleString()}
-          sub={`from ${filteredRecords.length.toLocaleString()} tyre records`}
-          color="#3b82f6"
-        />
-        <KpiCard
-          icon={BarChart2}
-          label="Fleet Average CPK"
-          value={fmtCpk(kpis.fleetAvgCpk, activeCurrency)}
-          sub="across all drivers with CPK data"
-          color="#10b981"
-        />
-        <KpiCard
-          icon={TrendingDown}
-          label="Highest Cost Driver"
-          value={kpis.highestCost ? fmtCpk(kpis.highestCost.avgCpk, activeCurrency) : 'N/A'}
-          sub={kpis.highestCost?.name ?? 'No data'}
-          color="#ef4444"
-        />
-        <KpiCard
-          icon={Award}
-          label="Best Performing Driver"
-          value={kpis.bestPerformer ? fmtCpk(kpis.bestPerformer.avgCpk, activeCurrency) : 'N/A'}
-          sub={kpis.bestPerformer?.name ?? 'No data'}
-          color="#f59e0b"
-        />
+      {error && (
+        <div role="alert" className="card border border-red-800/50 flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
+            <div><p className="text-red-300 font-medium">Could not load driver data.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
+          </div>
+          <button type="button" onClick={load} className="btn-secondary text-sm inline-flex items-center gap-1.5 shrink-0 min-h-[44px]"><RefreshCw size={14} aria-hidden="true" /> Retry</button>
+        </div>
+      )}
+      {exportError && <p role="alert" className="text-sm text-red-300">{exportError}</p>}
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {kpiCards.map((k) => <KpiCard key={k.label} {...k} loading={loading} />)}
       </div>
 
       {truncated && (
@@ -643,65 +395,72 @@ export default function DriverManagement() {
           Capped view: analysis is based on the first 20,000 tyre records in this scope. Narrow the country or date range for the full set.
         </p>
       )}
+      {!unknown && kpis.ratedTyres === 0 && kpis.recordCount > 0 && (
+        <p className="text-xs text-[var(--text-muted)]">
+          No tyre in this window carries a risk level, so failure rates read N/A and the risk score ranks on CPK alone.
+        </p>
+      )}
 
-      {/* ── Filters bar ──────────────────────────────────────────────────── */}
-      <div className="rounded-xl p-4 space-y-3"
-        style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+      {/* Filters */}
+      <div className="card space-y-3">
         <div className="flex flex-wrap items-center gap-3">
-          {/* Search */}
           <div className="relative flex-1 min-w-[200px] max-w-xs">
-            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-dim)]" />
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
             <input
               type="text"
+              aria-label="Search drivers"
               placeholder="Search driver..."
               value={searchQuery}
-              onChange={e => setFilter('search', e.target.value)}
-              className="w-full pl-8 pr-3 py-2 rounded-lg text-sm text-[var(--text-primary)] placeholder-[var(--text-dim)] focus:outline-none"
-              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
+              onChange={(e) => setFilter('search', e.target.value)}
+              className="input w-full pl-8 pr-9"
             />
             {searchQuery && (
-              <button
-                onClick={() => setFilter('search', '')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-dim)] hover:text-[var(--text-muted)]"
-              >
+              <button type="button" onClick={() => setFilter('search', '')} aria-label="Clear search"
+                className="absolute right-0 top-1/2 -translate-y-1/2 min-w-[44px] min-h-[44px] inline-flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)]">
                 <X size={12} />
               </button>
             )}
           </div>
 
-          {/* Date presets */}
-          <div className="flex gap-1 rounded-lg p-0.5" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
-            {DATE_PRESETS.map(p => (
+          <div className="flex gap-1 rounded-lg p-0.5 bg-[var(--input-bg)] border border-[var(--input-border)]" role="group" aria-label="Date window">
+            {DATE_PRESETS.map((p) => (
               <button
+                type="button"
                 key={p.label}
                 onClick={() => handlePreset(p)}
-                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
-                  datePreset === p.label
-                    ? 'text-white'
-                    : 'text-[var(--text-dim)] hover:text-[var(--text-muted)]'
+                aria-pressed={datePreset === p.label}
+                className={`px-3 min-h-[40px] rounded-md text-xs font-medium transition-colors ${
+                  datePreset === p.label ? 'bg-[var(--brand)] text-white' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                 }`}
-                style={datePreset === p.label ? { background: '#15803d' } : {}}
               >
                 {p.label}
               </button>
             ))}
           </div>
 
-          {/* Toggle extra filters */}
-          <button
-            onClick={() => setShowFilters(v => !v)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
-              showFilters ? 'text-green-400' : 'text-[var(--text-muted)] hover:text-[var(--text-dim)]'
-            }`}
-            style={{
-              background: showFilters ? 'rgba(22,163,74,0.1)' : 'rgba(255,255,255,0.04)',
-              border: `1px solid ${showFilters ? 'rgba(22,163,74,0.3)' : 'rgba(255,255,255,0.07)'}`,
-            }}
-          >
-            <Filter size={12} /> Filters {showFilters ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+          <label className="inline-flex items-center gap-2 text-xs text-[var(--text-muted)]">
+            Rank by
+            <select className="input py-1" value={sortCol} onChange={(e) => setFilter('sort', e.target.value)} aria-label="Default ranking order">
+              {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </label>
+          <button type="button" onClick={() => setFilter('dir', sortDir === 'asc' ? 'desc' : 'asc')}
+            className="btn-secondary text-xs inline-flex items-center gap-1 min-h-[44px]"
+            aria-label={`Order ${sortDir === 'asc' ? 'ascending' : 'descending'}, press to reverse`}>
+            {sortDir === 'asc' ? <ChevronUp size={13} aria-hidden="true" /> : <ChevronDown size={13} aria-hidden="true" />}
+            {sortDir === 'asc' ? 'Ascending' : 'Descending'}
           </button>
 
-          <p className="text-xs text-[var(--text-dim)] ml-auto">
+          <button
+            type="button"
+            onClick={() => setShowFilters((v) => !v)}
+            aria-expanded={showFilters}
+            className={`btn-secondary text-xs inline-flex items-center gap-1.5 min-h-[44px] ${showFilters ? 'text-[var(--brand-bright)]' : ''}`}
+          >
+            <Filter size={12} aria-hidden="true" /> Filters{hasExtraFilters ? ' (active)' : ''} {showFilters ? <ChevronUp size={11} aria-hidden="true" /> : <ChevronDown size={11} aria-hidden="true" />}
+          </button>
+
+          <p className="text-xs text-[var(--text-muted)] ml-auto">
             {visibleDrivers.length} driver{visibleDrivers.length !== 1 ? 's' : ''}
           </p>
         </div>
@@ -716,62 +475,27 @@ export default function DriverManagement() {
               transition={{ duration: 0.2 }}
               style={{ overflow: 'hidden' }}
             >
-              {/* Date range */}
               <div className="flex items-center gap-2">
-                <Calendar size={12} className="text-[var(--text-dim)]" />
-                <input
-                  type="date"
-                  value={dateFrom}
-                  onChange={e => handleCustomRange({ from: e.target.value })}
-                  className="px-2 py-1.5 rounded-lg text-xs text-[var(--text-dim)] focus:outline-none"
-                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
-                />
-                <span className="text-[var(--text-dim)] text-xs">to</span>
-                <input
-                  type="date"
-                  value={dateTo}
-                  onChange={e => handleCustomRange({ to: e.target.value })}
-                  className="px-2 py-1.5 rounded-lg text-xs text-[var(--text-dim)] focus:outline-none"
-                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
-                />
+                <Calendar size={12} className="text-[var(--text-muted)]" aria-hidden="true" />
+                <input type="date" aria-label="From date" value={dateFrom} onChange={(e) => handleCustomRange({ from: e.target.value })} className="input py-1 text-xs" />
+                <span className="text-[var(--text-muted)] text-xs">to</span>
+                <input type="date" aria-label="To date" value={dateTo} onChange={(e) => handleCustomRange({ to: e.target.value })} className="input py-1 text-xs" />
               </div>
-
-              {/* Site filter */}
-              {uniqueSites.length > 1 && (
-                <select
-                  value={siteFilter}
-                  onChange={e => setFilter('site', e.target.value)}
-                  className="px-2 py-1.5 rounded-lg text-xs text-[var(--text-dim)] focus:outline-none"
-                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
-                >
+              {uniqueSites.length > 0 && (
+                <select value={siteFilter} onChange={(e) => setFilter('site', e.target.value)} className="input py-1 text-xs" aria-label="Site">
                   <option value="all">All Sites</option>
-                  {uniqueSites.filter(s => s !== 'all').map(s => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
+                  {uniqueSites.map((v) => <option key={v} value={v}>{v}</option>)}
                 </select>
               )}
-
-              {/* Country filter */}
-              {uniqueCountries.length > 2 && (
-                <select
-                  value={countryFilter}
-                  onChange={e => setFilter('country', e.target.value)}
-                  className="px-2 py-1.5 rounded-lg text-xs text-[var(--text-dim)] focus:outline-none"
-                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
-                >
+              {uniqueCountries.length > 1 && (
+                <select value={countryFilter} onChange={(e) => setFilter('country', e.target.value)} className="input py-1 text-xs" aria-label="Country">
                   <option value="all">All Countries</option>
-                  {uniqueCountries.filter(c => c !== 'all').map(c => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
+                  {uniqueCountries.map((v) => <option key={v} value={v}>{v}</option>)}
                 </select>
               )}
-
-              {(siteFilter !== 'all' || countryFilter !== 'all') && (
-                <button
-                  onClick={() => setFilters({ site: 'all', country: 'all' })}
-                  className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300 transition-colors"
-                >
-                  <X size={11} /> Clear filters
+              {hasExtraFilters && (
+                <button type="button" onClick={() => setFilters({ site: 'all', country: 'all' })} className="btn-secondary text-xs inline-flex items-center gap-1 min-h-[44px]">
+                  <X size={11} aria-hidden="true" /> Clear filters
                 </button>
               )}
             </motion.div>
@@ -779,222 +503,69 @@ export default function DriverManagement() {
         </AnimatePresence>
       </div>
 
-      {/* ── Charts row ───────────────────────────────────────────────────── */}
+      {/* Charts */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-
-        {/* CPK bar chart */}
-        <div className="rounded-xl p-5"
-          style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+        <div className="card">
           <div className="flex items-center gap-2 mb-4">
-            <TrendingUp size={14} className="text-blue-400" />
-            <h3 className="text-sm font-semibold text-[var(--text-primary)]">Driver Comparison: Avg CPK (Top 10)</h3>
+            <TrendingUp size={14} className="text-blue-400" aria-hidden="true" />
+            <h3 className="text-sm font-semibold text-[var(--text-primary)]">Driver comparison: avg CPK (lowest 10)</h3>
           </div>
-          {cpkChartData.labels.length > 0 ? (
-            <div style={{ height: 220 }}>
-              <Bar
-                data={cpkChartData}
-                options={{
-                  ...barOptions(false),
-                  plugins: {
-                    ...barOptions(false).plugins,
-                    tooltip: {
-                      ...barOptions(false).plugins.tooltip,
-                      callbacks: {
-                        label: ctx => `CPK: ${activeCurrency} ${Number(ctx.raw).toFixed(4)}`,
-                      },
-                    },
-                  },
-                  scales: {
-                    ...barOptions(false).scales,
-                    y: {
-                      ...barOptions(false).scales.y,
-                      ticks: {
-                        ...barOptions(false).scales.y.ticks,
-                        callback: v => `${activeCurrency} ${Number(v).toFixed(3)}`,
-                      },
-                    },
-                  },
-                }}
-              />
-            </div>
-          ) : (
-            <div className="h-[220px] flex items-center justify-center text-[var(--text-dim)] text-sm">
-              Insufficient CPK data
-            </div>
-          )}
+          <div style={{ height: 220 }} role="img" aria-label={`Average CPK for the ${cpkChartData.labels.length} lowest-CPK drivers`}>
+            {loading ? <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" />
+              : error ? <div className="h-full flex items-center justify-center text-[var(--text-muted)] text-sm">Not available until the data loads.</div>
+                : cpkChartData.labels.length > 0 ? (
+                  <Bar data={cpkChartData} options={{
+                    ...barOptions(false),
+                    plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => `CPK: ${activeCurrency} ${Number(ctx.raw).toFixed(4)}` } } },
+                    scales: { ...barOptions(false).scales, y: { ...barOptions(false).scales.y, ticks: { ...barOptions(false).scales.y.ticks, callback: (v) => `${activeCurrency} ${Number(v).toFixed(3)}` } } },
+                  }} />
+                ) : <div className="h-full flex items-center justify-center text-[var(--text-muted)] text-sm">No driver has a measurable CPK in this window.</div>}
+          </div>
         </div>
 
-        {/* Failure rate horizontal bar chart */}
-        <div className="rounded-xl p-5"
-          style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+        <div className="card">
           <div className="flex items-center gap-2 mb-4">
-            <AlertTriangle size={14} className="text-orange-400" />
-            <h3 className="text-sm font-semibold text-[var(--text-primary)]">Tyre Failure Rate by Driver</h3>
+            <AlertTriangle size={14} className="text-orange-400" aria-hidden="true" />
+            <h3 className="text-sm font-semibold text-[var(--text-primary)]">Tyre failure rate by driver (rated tyres)</h3>
           </div>
-          {failureChartData.labels.length > 0 ? (
-            <div style={{ height: 220 }}>
-              <Bar
-                data={failureChartData}
-                options={{
-                  ...barOptions(true),
-                  plugins: {
-                    ...barOptions(true).plugins,
-                    tooltip: {
-                      ...barOptions(true).plugins.tooltip,
-                      callbacks: {
-                        label: ctx => `Failure Rate: ${Number(ctx.raw).toFixed(1)}%`,
-                      },
-                    },
-                  },
-                  scales: {
-                    ...barOptions(true).scales,
-                    x: {
-                      ...barOptions(true).scales.x,
-                      ticks: {
-                        ...barOptions(true).scales.x.ticks,
-                        callback: v => `${v}%`,
-                      },
-                    },
-                  },
-                }}
-              />
-            </div>
-          ) : (
-            <div className="h-[220px] flex items-center justify-center text-[var(--text-dim)] text-sm">
-              No failure data available
-            </div>
-          )}
+          <div style={{ height: 220 }} role="img" aria-label={`Failure rate for ${failureChartData.labels.length} drivers with at least 2 rated tyres`}>
+            {loading ? <div className="w-full h-full bg-[var(--input-bg)] rounded animate-pulse" />
+              : error ? <div className="h-full flex items-center justify-center text-[var(--text-muted)] text-sm">Not available until the data loads.</div>
+                : failureChartData.labels.length > 0 ? (
+                  <Bar data={failureChartData} options={{
+                    ...barOptions(true),
+                    plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => `Failure Rate: ${Number(ctx.raw).toFixed(1)}%` } } },
+                    scales: { ...barOptions(true).scales, x: { ...barOptions(true).scales.x, ticks: { ...barOptions(true).scales.x.ticks, callback: (v) => `${v}%` } } },
+                  }} />
+                ) : <div className="h-full flex items-center justify-center text-[var(--text-muted)] text-sm text-center px-4">No driver has 2 or more tyres with a recorded risk level.</div>}
+          </div>
         </div>
       </div>
 
-      {/* ── Driver Ranking Table ─────────────────────────────────────────── */}
-      <div className="rounded-xl overflow-hidden"
-        style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
-
-        <div className="px-5 py-4 border-b border-[var(--input-border)] flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Users size={14} className="text-green-400" />
-            <h3 className="text-sm font-semibold text-[var(--text-primary)]">Driver Ranking</h3>
-            <span className="text-xs text-[var(--text-dim)] ml-1">
-              ({visibleDrivers.length} drivers)
-            </span>
-          </div>
-          <p className="text-[11px] text-[var(--text-dim)]">Sorted by Risk Score (ascending = best)</p>
+      {/* Ranking register. The wrapper anchors the scroll-restore hook. */}
+      <div ref={listRef} className="space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-[var(--text-primary)] inline-flex items-center gap-2">
+            <Users size={14} className="text-[var(--brand-bright)]" aria-hidden="true" /> Driver ranking
+          </h3>
+          <p className="text-[11px] text-[var(--text-muted)]">Risk score: lower is better. Click a header to re-sort.</p>
         </div>
-
-        {visibleDrivers.length === 0 ? (
-          <EmptyState
-            illustration="module/fleet"
-            icon={User}
-            title="No drivers found"
-            description="No drivers match the current filters. Try adjusting your search or date range."
-          />
-        ) : (
-          // The wrapper anchors the scroll-restore hook, so returning from a
-          // driver lands on the same row.
-          <div ref={listRef} className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead style={{ background: 'rgba(255,255,255,0.03)' }}>
-                <tr>
-                  <th className="px-4 py-3 text-left text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider w-12">Rank</th>
-                  <SortTh col="name"         label="Driver"        sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                  <SortTh col="totalTyres"   label="Tyres"         sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                  <SortTh col="avgCpk"       label="Avg CPK"       sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                  <SortTh col="totalCost"    label="Total Cost"    sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                  <SortTh col="failureRate"  label="Failure Rate"  sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                  <SortTh col="avgTyreLife"  label="Avg Life"      sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                  <SortTh col="riskScore"    label="Risk Score"    sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                  <th className="px-3 py-3 text-left text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Performance</th>
-                  <th className="px-3 py-3 text-left text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleDrivers.map((driver, idx) => {
-                  const badge = performanceBadge(driver.riskScore)
-                  const rankNum = driver.rank
-                  const rankColor =
-                    rankNum === 1 ? 'text-yellow-400' :
-                    rankNum === 2 ? 'text-[var(--text-dim)]'   :
-                    rankNum === 3 ? 'text-amber-600'  :
-                    'text-[var(--text-dim)]'
-
-                  return (
-                    <motion.tr
-                      key={driver.name}
-                      className="border-t border-[var(--input-border)] hover:bg-white/[0.02] transition-colors group"
-                      initial={{ opacity: 0, y: 4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: Math.min(idx * 0.02, 0.3) }}
-                    >
-                      <td className="px-4 py-3">
-                        <span className={`text-sm font-bold ${rankColor}`}>#{rankNum}</span>
-                      </td>
-                      <td className="px-3 py-3">
-                        <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-semibold flex-shrink-0"
-                            style={{ background: `${DRIVER_PALETTE[idx % DRIVER_PALETTE.length]}30`, border: `1px solid ${DRIVER_PALETTE[idx % DRIVER_PALETTE.length]}50` }}>
-                            {driver.name[0]?.toUpperCase() ?? 'D'}
-                          </div>
-                          <span className="text-[var(--text-secondary)] font-medium text-sm">{driver.name}</span>
-                        </div>
-                      </td>
-                      <td className="px-3 py-3 text-[var(--text-muted)] text-sm">{driver.totalTyres}</td>
-                      <td className={`px-3 py-3 font-mono text-sm font-semibold ${cpkColor(driver.avgCpk)}`}>
-                        {fmtCpk(driver.avgCpk, activeCurrency)}
-                      </td>
-                      <td className="px-3 py-3 text-[var(--text-dim)] text-sm">{fmtCurrency(driver.totalCost, activeCurrency)}</td>
-                      <td className="px-3 py-3">
-                        <span className={`text-sm font-medium ${
-                          driver.failureRate >= 30 ? 'text-red-400' :
-                          driver.failureRate >= 15 ? 'text-yellow-400' :
-                          'text-green-400'
-                        }`}>
-                          {fmtPct(driver.failureRate)}
-                        </span>
-                      </td>
-                      <td className="px-3 py-3 text-[var(--text-muted)] text-sm">{fmtKm(driver.avgTyreLife)}</td>
-                      <td className="px-3 py-3 min-w-[110px]">
-                        <RiskBar score={driver.riskScore} />
-                      </td>
-                      <td className="px-3 py-3">
-                        <span className={`text-[11px] px-2 py-0.5 rounded-full border font-semibold ${badge.cls}`}>
-                          {badge.label}
-                        </span>
-                      </td>
-                      <td className="px-3 py-3">
-                        <button
-                          onClick={() => navigate(`/driver-management/${encodeURIComponent(driver.name)}`)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
-                          style={{ background: 'rgba(22,163,74,0.08)', border: '1px solid rgba(22,163,74,0.2)' }}
-                        >
-                          <Eye size={12} /> History
-                        </button>
-                      </td>
-                    </motion.tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {/* Table footer summary */}
-        {visibleDrivers.length > 0 && (
-          <div className="px-5 py-3 border-t border-[var(--input-border)] flex flex-wrap gap-6 text-xs text-[var(--text-dim)]">
-            <span>Total Records: <span className="text-[var(--text-muted)] font-medium">{filteredRecords.length.toLocaleString()}</span></span>
-            <span>Total Fleet Cost: <span className="text-[var(--text-muted)] font-medium">
-              {fmtCurrency(visibleDrivers.reduce((s, d) => s + d.totalCost, 0), activeCurrency)}
-            </span></span>
-            <span>High Risk Drivers: <span className="text-red-400 font-medium">
-              {visibleDrivers.filter(d => d.riskScore >= 60).length}
-            </span></span>
-            <span>Excellent Performers: <span className="text-green-400 font-medium">
-              {visibleDrivers.filter(d => d.riskScore <= 20).length}
-            </span></span>
-          </div>
-        )}
+        <EnterpriseTable
+          columns={columns}
+          data={visibleDrivers}
+          getRowId={(d) => d.name}
+          loading={loading}
+          error={error || null}
+          onRetry={load}
+          enableGlobalFilter={false}
+          enableExport={false}
+          viewKey="driver-management"
+          initialPageSize={25}
+          emptyMessage={records.length === 0 ? 'No tyre records carry a driver yet.' : 'No drivers match the current filters. Try adjusting your search or date range.'}
+          emptyIcon={<User size={22} className="opacity-60" aria-hidden="true" />}
+          onRowClick={(d) => openDriver(d.name)}
+        />
       </div>
-
     </div>
   )
 }

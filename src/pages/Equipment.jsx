@@ -15,7 +15,7 @@ import {
   Wrench, Plus, Pencil, Trash2, Search, X, Save, Loader2,
   AlertTriangle, FileSpreadsheet, FileText, PackageCheck, CalendarClock,
   BarChart2, PieChart, Activity, Gauge, ShieldAlert, MapPin, Layers,
-  CheckCircle2, Clock, ClipboardCheck,
+  CheckCircle2, Clock, ClipboardCheck, RefreshCw,
 } from 'lucide-react'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement,
@@ -35,7 +35,8 @@ import {
 import { colorAt, withAlpha, ACCENTS } from '../lib/reportColors'
 import { toUserMessage } from '../lib/safeError'
 import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
-import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import { filterEquipment, distinctValues } from '../lib/equipmentAnalytics'
 import { isMissingRelation } from '../lib/api/_client'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
@@ -125,7 +126,7 @@ function EquipmentModal({ initial, onClose, onSaved }) {
             <Wrench size={18} className="text-[var(--brand-bright)]" />
             {editing ? 'Edit equipment' : 'Register equipment'}
           </h2>
-          <button type="button" onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
+          <button type="button" onClick={onClose} aria-label="Close" className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
         </div>
 
         <form onSubmit={submit} className="space-y-4">
@@ -136,36 +137,36 @@ function EquipmentModal({ initial, onClose, onSaved }) {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="label">Type</label>
-              <input className="input w-full" placeholder="e.g. Torque wrench, Balancer" value={form.equipment_type} maxLength={120} onChange={(e) => set('equipment_type', e.target.value)} />
+              <label className="label" htmlFor="eq-equipment_type">Type</label>
+              <input id="eq-equipment_type" className="input w-full" placeholder="e.g. Torque wrench, Balancer" value={form.equipment_type} maxLength={120} onChange={(e) => set('equipment_type', e.target.value)} />
             </div>
             <div>
-              <label className="label">Serial number</label>
-              <input className="input w-full" placeholder="Manufacturer serial" value={form.serial_no} maxLength={120} onChange={(e) => set('serial_no', e.target.value)} />
+              <label className="label" htmlFor="eq-serial_no">Serial number</label>
+              <input id="eq-serial_no" className="input w-full" placeholder="Manufacturer serial" value={form.serial_no} maxLength={120} onChange={(e) => set('serial_no', e.target.value)} />
             </div>
             <div>
-              <label className="label">Assigned site</label>
-              <input className="input w-full" placeholder="Workshop / depot" value={form.site} maxLength={200} onChange={(e) => set('site', e.target.value)} />
+              <label className="label" htmlFor="eq-site">Assigned site</label>
+              <input id="eq-site" className="input w-full" placeholder="Workshop / depot" value={form.site} maxLength={200} onChange={(e) => set('site', e.target.value)} />
             </div>
             <div>
-              <label className="label">Condition</label>
-              <input className="input w-full" placeholder="e.g. Good, Fair, Needs repair" value={form.condition} maxLength={120} onChange={(e) => set('condition', e.target.value)} />
+              <label className="label" htmlFor="eq-condition">Condition</label>
+              <input id="eq-condition" className="input w-full" placeholder="e.g. Good, Fair, Needs repair" value={form.condition} maxLength={120} onChange={(e) => set('condition', e.target.value)} />
             </div>
             <div>
-              <label className="label">Calibration due</label>
-              <input type="date" className="input w-full" value={form.calibration_due || ''} onChange={(e) => set('calibration_due', e.target.value)} />
+              <label className="label" htmlFor="eq-calibration_due">Calibration due</label>
+              <input id="eq-calibration_due" type="date" className="input w-full" value={form.calibration_due || ''} onChange={(e) => set('calibration_due', e.target.value)} />
             </div>
             <div>
-              <label className="label">Status</label>
-              <select className="input w-full" value={form.status} onChange={(e) => set('status', e.target.value)}>
+              <label className="label" htmlFor="eq-status">Status</label>
+              <select id="eq-status" className="input w-full" value={form.status} onChange={(e) => set('status', e.target.value)}>
                 {EQUIPMENT_STATUSES.map((s) => <option key={s} value={s}>{STATUS_META[s]?.label || s}</option>)}
               </select>
             </div>
           </div>
 
           <div>
-            <label className="label">Notes</label>
-            <textarea className="input w-full min-h-[90px] resize-y" placeholder="Maintenance history, accessories, location detail..." value={form.notes} maxLength={4000} onChange={(e) => set('notes', e.target.value)} />
+            <label className="label" htmlFor="eq-notes">Notes</label>
+            <textarea id="eq-notes" className="input w-full min-h-[90px] resize-y" placeholder="Maintenance history, accessories, location detail..." value={form.notes} maxLength={4000} onChange={(e) => set('notes', e.target.value)} />
           </div>
 
           {error && (
@@ -296,6 +297,8 @@ export default function Equipment() {
 
   const [statusFilter, setStatusFilter] = useState('all')
   const [typeFilter, setTypeFilter] = useState('')
+  const [siteFilter, setSiteFilter] = useState('')
+  const [calFilter, setCalFilter] = useState('all')
   const [search, setSearch] = useState('')
 
   const [modal, setModal] = useState(null)   // { item } | null
@@ -325,23 +328,17 @@ export default function Equipment() {
   const analytics = useMemo(() => equipmentAnalytics(rows || [], now), [rows, now])
   const attention = useMemo(() => equipmentAttention(rows || [], now), [rows, now])
 
-  const typeOptions = useMemo(
-    () => [...new Set((rows || []).map((r) => r.equipment_type).filter(Boolean))].sort(),
-    [rows],
-  )
+  const loading = rows === null
+  // A failed read is not "no equipment": figures read N/A until a retry works.
+  const unknown = loading || !!error
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return (rows || []).filter((r) => {
-      if (statusFilter !== 'all' && r.status !== statusFilter) return false
-      if (typeFilter && r.equipment_type !== typeFilter) return false
-      if (q) {
-        const hay = `${r.name || ''} ${r.serial_no || ''} ${r.equipment_type || ''} ${r.site || ''} ${r.condition || ''}`.toLowerCase()
-        if (!hay.includes(q)) return false
-      }
-      return true
-    })
-  }, [rows, statusFilter, typeFilter, search])
+  const typeOptions = useMemo(() => distinctValues(rows || [], 'equipment_type'), [rows])
+  const siteOptions = useMemo(() => distinctValues(rows || [], 'site'), [rows])
+
+  const filtered = useMemo(
+    () => filterEquipment(rows || [], { status: statusFilter, type: typeFilter, site: siteFilter, calibration: calFilter, search }, now),
+    [rows, statusFilter, typeFilter, siteFilter, calFilter, search, now],
+  )
 
   const onSaved = useCallback((row, editing) => {
     setModal(null)
@@ -353,6 +350,7 @@ export default function Equipment() {
     setUpdatedAt(new Date())
   }, [load])
 
+  // Errors propagate to DeleteConfirm, which shows them next to the button.
   const confirmDelete = useCallback(async () => {
     if (!toDelete) return
     await deleteEquipment(toDelete.id)
@@ -360,15 +358,47 @@ export default function Equipment() {
     setToDelete(null)
   }, [toDelete])
 
-  const clearFilters = () => { setStatusFilter('all'); setTypeFilter(''); setSearch('') }
-  const hasFilters = statusFilter !== 'all' || typeFilter || search
+  const clearFilters = () => { setStatusFilter('all'); setTypeFilter(''); setSiteFilter(''); setCalFilter('all'); setSearch('') }
+  const hasFilters = statusFilter !== 'all' || typeFilter || siteFilter || calFilter !== 'all' || search
 
   // Export (includes computed age on record + calibration status)
   const EXPORT_COLS = ['name', 'equipment_type', 'serial_no', 'site', 'condition', 'calibration_due', 'calibration_status', 'age_on_record', 'status']
   const EXPORT_HEADERS = ['Name', 'Type', 'Serial', 'Site', 'Condition', 'Calibration due', 'Calibration status', 'Age on record', 'Status']
-  // Paged, not capped: this table used to render filtered.slice(0, 500) with no
-  // way to reach row 501. The exports below still cover `filtered` in full.
-  const pager = usePagedRows(filtered)
+  // The register pages AND sorts across the whole filtered set; exports cover it in full.
+  const columns = useMemo(() => [
+    { id: 'name', header: 'Name', accessorFn: (r) => r.name || 'N/A', size: 180,
+      cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{row.original.name || 'N/A'}</span> },
+    { id: 'equipment_type', header: 'Type', accessorFn: (r) => r.equipment_type || 'N/A', size: 130 },
+    { id: 'serial_no', header: 'Serial', accessorFn: (r) => r.serial_no || 'N/A', size: 130,
+      cell: ({ row }) => <span className="font-mono text-xs">{row.original.serial_no || 'N/A'}</span> },
+    { id: 'site', header: 'Site', accessorFn: (r) => r.site || 'N/A', size: 110 },
+    { id: 'condition', header: 'Condition', accessorFn: (r) => r.condition || 'N/A', size: 120 },
+    { id: 'age', header: 'Age on record', accessorFn: (r) => ageOnRecordYears(r, now), sortUndefined: 'last', size: 120, meta: { align: 'right', exportValue: (r) => fmtYears(ageOnRecordYears(r, now)) },
+      cell: ({ row }) => fmtYears(ageOnRecordYears(row.original, now)) },
+    { id: 'calibration_due', header: 'Calibration due', accessorFn: (r) => r.calibration_due || '', size: 170,
+      cell: ({ row }) => {
+        const r = row.original
+        const cs = calibrationState(r, now)
+        const cm = CAL_META[cs]
+        return r.calibration_due ? (
+          <span className="inline-flex items-center gap-2">
+            <span className={cs === 'overdue' ? 'text-red-300 font-medium' : 'text-[var(--text-secondary)]'}>{fmtDate(r.calibration_due)}</span>
+            {cs !== 'none' && cs !== 'ok' && <span className={`badge text-[10px] px-1.5 py-0.5 rounded ${cm.cls}`}>{cm.label}</span>}
+          </span>
+        ) : <span className="text-[var(--text-muted)]">N/A</span>
+      } },
+    { id: 'status', header: 'Status', accessorFn: (r) => STATUS_META[r.status]?.label || r.status || 'N/A', size: 120,
+      cell: ({ row }) => { const st = STATUS_META[row.original.status] || STATUS_META.available; return <span className={`badge text-[11px] px-2 py-0.5 rounded ${st.cls}`}>{st.label}</span> } },
+    ...(canWrite ? [{
+      id: 'actions', header: '', enableSorting: false, size: 110, meta: { export: false, align: 'right' },
+      cell: ({ row }) => (
+        <div className="flex items-center justify-end gap-1">
+          <button type="button" onClick={(e) => { e.stopPropagation(); setModal({ item: row.original }) }} className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--brand-bright)]" aria-label={`Edit ${row.original.name || 'equipment'}`}><Pencil size={14} /></button>
+          <button type="button" onClick={(e) => { e.stopPropagation(); setToDelete(row.original) }} className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:text-red-400 hover:bg-[var(--input-bg)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-400" aria-label={`Delete ${row.original.name || 'equipment'}`}><Trash2 size={14} /></button>
+        </div>
+      ),
+    }] : []),
+  ], [now, canWrite])
 
   const exportRows = filtered.map((r) => ({
     name: r.name || '', equipment_type: r.equipment_type || '', serial_no: r.serial_no || '',
@@ -377,7 +407,7 @@ export default function Equipment() {
     age_on_record: fmtYears(ageOnRecordYears(r, now)),
     status: STATUS_META[r.status]?.label || r.status || '',
   }))
-  const exportFile = reportFileName('Equipment Registry')
+  const exportFile = reportFileName('Equipment Registry', activeCountry)
 
   const availPct = analytics.availability.availabilityPct
   const kpis = [
@@ -468,9 +498,12 @@ export default function Equipment() {
       )}
 
       {error && (
-        <div className="card border border-red-800/50 flex items-start gap-3">
-          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
-          <div><p className="text-red-300 font-medium">Could not load equipment.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
+        <div role="alert" className="card border border-red-800/50 flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
+            <div><p className="text-red-300 font-medium">Could not load equipment.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
+          </div>
+          <button type="button" onClick={load} className="btn-secondary text-sm inline-flex items-center gap-1.5 shrink-0 min-h-[44px]"><RefreshCw size={14} aria-hidden="true" /> Retry</button>
         </div>
       )}
 
@@ -482,16 +515,16 @@ export default function Equipment() {
             <div key={k.label} className="card" title={k.hint || ''}>
               <div className="flex items-center justify-between">
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
-                <Icon size={16} className={k.tone} />
+                <Icon size={16} className={k.tone} aria-hidden="true" />
               </div>
-              <p className={`text-2xl lg:text-3xl font-bold mt-1 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
+              <p className={`text-2xl lg:text-3xl font-bold mt-1 ${k.tone}`}>{unknown ? 'N/A' : k.value}</p>
             </div>
           )
         })}
       </div>
 
       {/* Needs attention */}
-      {rows !== null && !missing && (
+      {!unknown && !missing && (
         <NeedsAttention
           attention={attention}
           onOpen={canWrite ? (r) => setModal({ item: r }) : null}
@@ -499,13 +532,13 @@ export default function Equipment() {
       )}
 
       {/* Analytics */}
-      {rows !== null && !missing && (
+      {!unknown && !missing && (
         <div className="card space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
               <BarChart2 size={16} className="text-[var(--brand-bright)]" /> Fleet analytics
             </h2>
-            <button onClick={() => setShowAnalytics((v) => !v)} className="btn-secondary text-xs">
+            <button type="button" onClick={() => setShowAnalytics((v) => !v)} className="btn-secondary text-xs min-h-[44px]" aria-expanded={showAnalytics}>
               {showAnalytics ? 'Hide' : 'Show'}
             </button>
           </div>
@@ -562,7 +595,7 @@ export default function Equipment() {
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[200px]">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-            <input className="input pl-9 w-full" placeholder="Search name, serial, type, site..." value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input className="input pl-9 w-full" aria-label="Search equipment" placeholder="Search name, serial, type, site..." value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
             <option value="all">All statuses</option>
@@ -572,68 +605,35 @@ export default function Equipment() {
             <option value="">All types</option>
             {typeOptions.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
-          {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
+          <select className="input" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} aria-label="Site">
+            <option value="">All sites</option>
+            {siteOptions.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <select className="input" value={calFilter} onChange={(e) => setCalFilter(e.target.value)} aria-label="Calibration">
+            <option value="all">All calibration states</option>
+            {['overdue', 'due_soon', 'ok', 'none'].map((k) => <option key={k} value={k}>{k === 'none' ? 'Not tracked' : CAL_META[k].label}</option>)}
+          </select>
+          {hasFilters && <button type="button" onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]"><X size={14} aria-hidden="true" /> Clear</button>}
           <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {summary.total}</span>
         </div>
       </div>
 
-      {/* Table */}
-      <div className="card overflow-hidden !p-0">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                {['Name', 'Type', 'Serial', 'Site', 'Age on record', 'Calibration due', 'Status', ''].map((h) => (
-                  <th key={h} className="px-4 py-3 font-semibold whitespace-nowrap">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows === null ? (
-                [0, 1, 2, 3, 4].map((i) => <tr key={i} className="border-b border-[var(--input-border)]/50"><td colSpan={8} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>)
-              ) : filtered.length === 0 ? (
-                <tr><td colSpan={8} className="px-4 py-12 text-center text-[var(--text-muted)]">
-                  <Wrench size={22} className="mx-auto mb-2 opacity-60" />
-                  {rows.length === 0 ? 'No equipment registered yet.' : 'No equipment matches these filters.'}
-                </td></tr>
-              ) : (
-                pager.pageRows.map((r) => {
-                  const cs = calibrationState(r, now)
-                  const cm = CAL_META[cs]
-                  const st = STATUS_META[r.status] || STATUS_META.available
-                  return (
-                    <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40 group">
-                      <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.name || 'N/A'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.equipment_type || 'N/A'}</td>
-                      <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)]">{r.serial_no || 'N/A'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.site || 'N/A'}</td>
-                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtYears(ageOnRecordYears(r, now))}</td>
-                      <td className="px-4 py-2.5">
-                        {r.calibration_due ? (
-                          <span className="inline-flex items-center gap-2">
-                            <span className={cs === 'overdue' ? 'text-red-300 font-medium' : 'text-[var(--text-secondary)]'}>{fmtDate(r.calibration_due)}</span>
-                            {cs !== 'none' && cs !== 'ok' && <span className={`badge text-[10px] px-1.5 py-0.5 rounded ${cm.cls}`}>{cm.label}</span>}
-                          </span>
-                        ) : <span className="text-[var(--text-muted)]">N/A</span>}
-                      </td>
-                      <td className="px-4 py-2.5"><span className={`badge text-[11px] px-2 py-0.5 rounded ${st.cls}`}>{st.label}</span></td>
-                      <td className="px-4 py-2.5 text-right">
-                        {canWrite && (
-                          <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => setModal({ item: r })} className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg)]" aria-label="Edit"><Pencil size={14} /></button>
-                            <button onClick={() => setToDelete(r)} className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-red-400 hover:bg-[var(--input-bg)]" aria-label="Delete"><Trash2 size={14} /></button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-        <TablePagination {...pager} />
-      </div>
+      {/* Register */}
+      <EnterpriseTable
+        columns={columns}
+        data={filtered}
+        getRowId={(r) => String(r.id)}
+        loading={loading}
+        error={error || null}
+        onRetry={load}
+        enableGlobalFilter={false}
+        enableExport={false}
+        viewKey="equipment-registry"
+        initialPageSize={25}
+        emptyMessage={(rows || []).length === 0 ? 'No equipment registered yet.' : 'No equipment matches these filters.'}
+        emptyIcon={<Wrench size={22} className="opacity-60" aria-hidden="true" />}
+        onRowClick={canWrite ? (r) => setModal({ item: r }) : undefined}
+      />
 
       {modal && <EquipmentModal initial={modal.item} onClose={() => setModal(null)} onSaved={onSaved} />}
       {toDelete && <DeleteConfirm item={toDelete} onCancel={() => setToDelete(null)} onConfirm={confirmDelete} />}

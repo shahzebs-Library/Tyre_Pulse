@@ -21,8 +21,14 @@ import { useState, useCallback, useMemo, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Upload, FileSpreadsheet, Wand2, CheckCircle2, AlertTriangle, Loader2,
-  ArrowRight, Layers,
+  ArrowRight, Layers, FileText, RotateCcw,
 } from 'lucide-react'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
+import { currencyForCountry } from '../lib/governedCost'
+import {
+  num, resultSummary, reconcile, previewTotals, resultTotals, importReportRows, REPORT_COLUMNS,
+} from '../lib/erpIntakeAnalytics'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { formatCurrency } from '../lib/formatters'
@@ -33,8 +39,6 @@ import { rowsFromSheet, summarizeRows } from '../lib/partsExpense'
 import { insertPartsConsumption } from '../lib/api/partsConsumption'
 import { loadIntake, countExistingRows } from '../lib/api/erpIntake'
 import { checkImportFingerprint, fileSha256 } from '../lib/api/importHistory'
-
-const SAMPLE_LIMIT = 15
 
 /** Per-report presentation: label + destination-table label. */
 const REPORT_META = {
@@ -73,45 +77,41 @@ const SAMPLE_COLS = {
   ],
 }
 
-const num = (n) => Number(n || 0).toLocaleString('en-US')
-
-function resultCounts(row) {
-  const source = Number(row?.sourceRows ?? row?.rows?.length ?? 0) || 0
-  const inserted = Number(row?.inserted) || 0
-  const updated = Number(row?.updated) || 0
-  const failed = Number(row?.failed) || 0
-  const notAdded = Math.max(0, source - inserted - updated - failed)
-  const processed = Math.max(0, source - failed)
-  return { source, inserted, updated, failed, notAdded, processed }
-}
-
-function resultSummary(row) {
-  const c = resultCounts(row)
-  const parts = [`${num(c.processed)} row${c.processed === 1 ? '' : 's'} processed`]
-  parts.push(`${num(c.inserted)} new`)
-  if (row?.target === 'open_work_orders') parts.push('list replaced')
-  else {
-    if (c.updated) parts.push(`${num(c.updated)} refreshed`)
-    if (c.notAdded) parts.push(`${num(c.notAdded)} exact duplicate(s) dropped`)
-  }
-  if (c.failed) parts.push(`${num(c.failed)} failed`)
-  return parts.join(', ')
-}
-
 /** One KPI tile. */
-function KpiTile({ label, value, sub }) {
+function KpiTile({ label, value, sub, tone = 'text-[var(--text-primary)]' }) {
   return (
     <div className="card p-4">
       <p className="text-xs uppercase tracking-wide text-[var(--text-tertiary)]">{label}</p>
-      <p className="mt-1 text-xl font-semibold text-[var(--text-primary)]">{value}</p>
+      <p className={`mt-1 text-xl font-semibold tabular-nums ${tone}`}>{value}</p>
       {sub != null && <p className="mt-0.5 text-xs text-[var(--text-tertiary)]">{sub}</p>}
     </div>
   )
 }
 
+/** Full, paged + sortable preview of the mapped rows for one sheet. */
+function SamplePreview({ target, rows }) {
+  const columns = useMemo(() => (SAMPLE_COLS[target] || []).map((c) => ({
+    id: c.key,
+    header: c.header,
+    accessorFn: (r) => (r[c.key] == null || r[c.key] === '' ? 'N/A' : String(r[c.key])),
+    size: c.key === 'description' || c.key === 'complaint' ? 260 : 130,
+  })), [target])
+  return (
+    <EnterpriseTable
+      columns={columns}
+      data={rows}
+      getRowId={(_, i) => String(i)}
+      enableExport={false}
+      enableColumnFilters={false}
+      searchPlaceholder="Search the mapped rows..."
+      initialPageSize={25}
+      emptyMessage="No data rows mapped from this sheet."
+    />
+  )
+}
+
 export default function ErpIntake() {
   const { activeCountry, activeCurrency } = useSettings()
-  const currency = activeCurrency || 'SAR'
   // Which country this upload belongs to. Defaults to the active country when a specific
   // one is selected, else KSA. Every imported row is stamped with it so multi-country
   // data stays correctly scoped (org > country > site).
@@ -119,6 +119,9 @@ export default function ErpIntake() {
     activeCountry && activeCountry !== 'All' ? activeCountry : (COUNTRIES[0] || 'KSA'),
   )
   const country = countryChoice || null
+  // Money on this page belongs to the UPLOAD's country, not the page's active
+  // country, so an Egypt file previewed from a KSA session reads EGP, not SAR.
+  const currency = currencyForCountry(countryChoice) || activeCurrency || 'SAR'
 
   const [phase, setPhase] = useState('idle') // idle | parsing | preview | importing | done
   const [fileName, setFileName] = useState('')
@@ -138,27 +141,23 @@ export default function ErpIntake() {
 
   const busy = phase === 'parsing' || phase === 'importing'
 
-  const totalRows = useMemo(
-    () => detected.reduce((acc, d) => acc + (d.rows?.length || 0), 0),
-    [detected],
-  )
+  const totals = useMemo(() => previewTotals(detected), [detected])
+  const totalRows = totals.rows
+  const doneTotals = useMemo(() => resultTotals(results), [results])
+  const [exportError, setExportError] = useState('')
+  const reportRows = useMemo(() => importReportRows(results, countryChoice), [results, countryChoice])
+  const reportBase = reportFileName('ERP Intake Report', countryChoice, fileName.replace(/\.[^.]+$/, ''))
+  const exportReport = async (kind) => {
+    setExportError('')
+    try {
+      if (kind === 'excel') await exportToExcel(reportRows, REPORT_COLUMNS.map((c) => c.key), REPORT_COLUMNS.map((c) => c.header), reportBase, 'Import report')
+      else await exportToPdf(reportRows, REPORT_COLUMNS, 'ERP Intake Report', reportBase, 'landscape')
+    } catch (e) { setExportError(toUserMessage(e, 'Could not export. Try again.')) }
+  }
 
   // Whole-file reconciliation so nothing is ever silently lost: every row below each
   // header is either mapped, flagged as no-key (needs review), or dropped as footer/blank.
-  const recon = useMemo(() => {
-    return detected.reduce(
-      (acc, d) => {
-        const a = d.accounting || {}
-        acc.read += a.read || 0
-        acc.mapped += a.mapped || 0
-        acc.noKey += a.noKey || 0
-        acc.footer += a.footer || 0
-        acc.blank += a.blank || 0
-        return acc
-      },
-      { read: 0, mapped: 0, noKey: 0, footer: 0, blank: 0 },
-    )
-  }, [detected])
+  const recon = useMemo(() => reconcile(detected), [detected])
 
   const handleFile = useCallback(async (file) => {
     if (!file) return
@@ -352,7 +351,7 @@ export default function ErpIntake() {
           value={countryChoice}
           onChange={(e) => setCountryChoice(e.target.value)}
           disabled={busy}
-          className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm text-[var(--text-primary)] disabled:opacity-50"
+          className="input min-h-[44px] text-sm disabled:opacity-50"
         >
           {(COUNTRIES || []).map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
@@ -393,11 +392,23 @@ export default function ErpIntake() {
 
       {/* Error banner */}
       {error && (
-        <div className="card p-4 border border-[var(--border)] flex items-start gap-2">
-          <AlertTriangle className="h-5 w-5 mt-0.5 text-[var(--text-secondary)] shrink-0" />
-          <p className="text-sm text-[var(--text-secondary)]">{error}</p>
+        <div role="alert" className="card p-4 border border-red-800/50 flex items-start justify-between gap-3">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="h-5 w-5 mt-0.5 text-red-400 shrink-0" aria-hidden="true" />
+            <p className="text-sm text-[var(--text-secondary)]">{error}</p>
+          </div>
+          {phase === 'preview' ? (
+            <button type="button" className="btn-secondary text-sm inline-flex items-center gap-1.5 shrink-0 min-h-[44px]" onClick={runImport} disabled={busy}>
+              <RotateCcw className="h-4 w-4" aria-hidden="true" /> Retry import
+            </button>
+          ) : (
+            <button type="button" className="btn-secondary text-sm inline-flex items-center gap-1.5 shrink-0 min-h-[44px]" onClick={() => inputRef.current && inputRef.current.click()} disabled={busy}>
+              <RotateCcw className="h-4 w-4" aria-hidden="true" /> Choose another file
+            </button>
+          )}
         </div>
       )}
+      {exportError && <p role="alert" className="text-sm text-red-300">{exportError}</p>}
 
       {/* STEP 1: choose file (idle / parsing) */}
       {(phase === 'idle' || phase === 'parsing') && (
@@ -439,6 +450,7 @@ export default function ErpIntake() {
               ref={inputRef}
               type="file"
               accept=".xls,.xlsx,.csv"
+              aria-label="ERP export file"
               className="hidden"
               onChange={onInputChange}
             />
@@ -461,6 +473,14 @@ export default function ErpIntake() {
                 Choose a different file
               </button>
             )}
+          </div>
+
+          {/* File-level KPI strip */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <KpiTile label="Reports detected" value={num(totals.reports)} sub={`${num(recon.read)} rows read`} />
+            <KpiTile label="Rows to import" value={num(totals.rows)} sub={totals.tyreRows ? `+ ${num(totals.tyreRows)} tyre changes` : `${num(totals.dropped)} footer/blank dropped`} />
+            <KpiTile label="New keys" value={totals.fresh == null ? 'N/A' : num(totals.fresh)} sub={totals.fresh == null ? 'not every sheet could be checked' : 'not yet in the system'} tone="text-[var(--brand-bright)]" />
+            <KpiTile label="Same-key rows" value={totals.existing == null ? 'N/A' : num(totals.existing)} sub="refreshed if changed, else dropped" tone={totals.existing ? 'text-amber-400' : 'text-[var(--text-primary)]'} />
           </div>
 
           {detected.map((d, i) => {
@@ -489,7 +509,7 @@ export default function ErpIntake() {
                       <p>
                         <span className="font-semibold text-[var(--accent,#22c55e)]">{num(d.dup.fresh)}</span> new
                         {d.dup.existing > 0 && (
-                          <span className="text-[var(--text-tertiary)]"> · {num(d.dup.existing)} same-key row(s) to verify or refresh</span>
+                          <span className="text-[var(--text-tertiary)]"> | {num(d.dup.existing)} same-key row(s) to verify or refresh</span>
                         )}
                       </p>
                     )}
@@ -550,37 +570,7 @@ export default function ErpIntake() {
 
                   {/* NON-GRID: sample table */}
                   {d.type !== 'grid' && (SAMPLE_COLS[d.target] || []).length > 0 && (
-                    d.rows.length ? (
-                      <div className="overflow-x-auto -mx-4">
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="text-left text-[var(--text-tertiary)]">
-                              {SAMPLE_COLS[d.target].map((c) => (
-                                <th key={c.key} className="px-4 py-2 font-medium whitespace-nowrap">{c.header}</th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {d.rows.slice(0, SAMPLE_LIMIT).map((r, ri) => (
-                              <tr key={ri} className="border-t border-[var(--border)]">
-                                {SAMPLE_COLS[d.target].map((c) => (
-                                  <td key={c.key} className="px-4 py-2 text-[var(--text-secondary)] max-w-xs truncate">
-                                    {r[c.key] == null || r[c.key] === '' ? 'N/A' : String(r[c.key])}
-                                  </td>
-                                ))}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                        {d.rows.length > SAMPLE_LIMIT && (
-                          <p className="px-4 pt-2 text-xs text-[var(--text-tertiary)]">
-                            Showing first {SAMPLE_LIMIT} of {num(d.rows.length)} rows
-                          </p>
-                        )}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-[var(--text-tertiary)]">No data rows mapped from this sheet.</p>
-                    )
+                    <SamplePreview target={d.target} rows={d.rows} />
                   )}
 
                   {/* Per-sheet import status */}
@@ -702,6 +692,12 @@ export default function ErpIntake() {
           <div className="flex flex-col items-center text-center">
             <CheckCircle2 className="h-12 w-12 text-[var(--accent,#22c55e)]" />
             <p className="mt-3 text-lg font-semibold text-[var(--text-primary)]">Import complete</p>
+            <div className="mt-4 w-full grid grid-cols-2 lg:grid-cols-4 gap-3 text-left">
+              <KpiTile label="Processed" value={num(doneTotals.processed)} sub={`tagged ${countryChoice}`} />
+              <KpiTile label="New" value={num(doneTotals.inserted)} tone="text-[var(--brand-bright)]" sub={doneTotals.tyresInserted ? `+ ${num(doneTotals.tyresInserted)} tyre changes` : null} />
+              <KpiTile label="Refreshed" value={num(doneTotals.updated)} sub={`${num(doneTotals.notAdded)} exact duplicates dropped`} />
+              <KpiTile label="Failed" value={num(doneTotals.failed)} tone={doneTotals.failed ? 'text-red-400' : 'text-[var(--text-primary)]'} sub={doneTotals.failed ? 're-run to retry these' : 'none'} />
+            </div>
             <div className="mt-4 w-full max-w-lg space-y-2 text-left">
               {results.map((r, i) => (
                 <div
@@ -719,7 +715,13 @@ export default function ErpIntake() {
               <Link to="/expense-report" className="btn-primary inline-flex items-center gap-2">
                 <ArrowRight className="h-4 w-4" /> View expense report
               </Link>
-              <button type="button" className="btn-secondary" onClick={reset}>
+              <button type="button" className="btn-secondary inline-flex items-center gap-2 min-h-[44px]" onClick={() => exportReport('excel')} disabled={!reportRows.length}>
+                <FileSpreadsheet className="h-4 w-4" aria-hidden="true" /> Import report (Excel)
+              </button>
+              <button type="button" className="btn-secondary inline-flex items-center gap-2 min-h-[44px]" onClick={() => exportReport('pdf')} disabled={!reportRows.length}>
+                <FileText className="h-4 w-4" aria-hidden="true" /> Import report (PDF)
+              </button>
+              <button type="button" className="btn-secondary min-h-[44px]" onClick={reset}>
                 Import another file
               </button>
             </div>

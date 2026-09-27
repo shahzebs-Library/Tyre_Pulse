@@ -91,8 +91,14 @@ environmental). ~10 parallel agents throughout; each batch committed by pathspec
   RepairRequests / RotationSchedule / Procurement / CustomRolesManager / CustomerPortal drawers. Dead code removed
   (UserManagement.jsx, AiAnalytics.jsx, unused charts/*, DataTable, SummaryCard, adminRoles, displayTokens, etc).
   App shell a11y (Layout, TopBar, ProfileMenu, NotificationCenter) + honest states on meter/cpk/expense/insurance panels.
-- **OPEN:** `send-scheduled-reports` "Send now" still returns raw `schedErr.message` (~line 1093); get_cost_per_m3_trend
-  still uses coalesce(approved,m3) vs approved-only headline; vehicle360 photo storage path can collide across countries.
+- **CLOSED (part 8 tail, 4 agents):** send-scheduled-reports v21 (verify_jwt=false, byte-identical to repo) returns
+  generic errors (send-now + cron read), real error console-logged. Migration `20260927130000` APPLIED LIVE:
+  get_cost_per_m3_trend counts approved m3 only + SANY doc_type<>'detail' filter = headline parity (KSA window
+  1,426,690 -> 1,365,645 m3; whole gap was Jul-2026 null-approved loads; costs unchanged). vehicle360 photo path =
+  `<org>/<COUNTRY>/<ASSET>/photo.<ext>` (reads the stored image_path, legacy paths still open; 0 rows had photos).
+  Design ratchet rawOverlay 2 -> 0 (KnowledgeBase -> SideDrawer, DisplayDashboard click-outside listener).
+- **OPEN:** storage UPDATE policy on the vehicle-photo bucket has no org check (path now prevents cross-org overwrite
+  in practice; tightening the policy is a separate decision).
 
 ---
 

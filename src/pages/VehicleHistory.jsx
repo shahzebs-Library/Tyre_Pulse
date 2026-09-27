@@ -5,7 +5,7 @@ import { loadGridTyreByAsset } from '../lib/api/costSummary'
 import { loadGovernedCostSplit, COST_SPLIT_TTL_MS } from '../lib/api/governedCost'
 import { useSettings } from '../contexts/SettingsContext'
 import { computeAssetMetrics, bucketByMonth, countBy, sum } from '../lib/analyticsEngine'
-import { detectAnomalies, ANOMALY_TYPES } from '../lib/anomalyEngine'
+import { detectAnomalies } from '../lib/anomalyEngine'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement,
   Title, Tooltip, Legend,
@@ -17,7 +17,12 @@ import PageHeader from '../components/ui/PageHeader'
 import DateField from '../components/ui/DateField'
 import { useLanguage } from '../contexts/LanguageContext'
 import { toUserMessage } from '../lib/safeError'
-import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import { categorical, withAlpha, colorAt } from '../lib/reportColors'
+import {
+  windowRecords, groupByAsset, sitesOf, buildVehicleRows, scopeVehicleRows,
+  filterVehicleRows, summarizeVehicles, misuseBand, timelineRows,
+} from '../lib/vehicleHistoryAnalytics'
 import { listAssetOptions } from '../lib/api/assetHistory'
 import { canonAssetNo } from '../lib/assetHistory'
 // The unified per-asset timeline lives in its own seam because Asset Detail
@@ -33,19 +38,6 @@ const loadExportUtils = () => import('../lib/exportUtils')
 // panel needs are registered by AssetFullHistory itself, so it stays correct
 // wherever it is mounted rather than depending on its host.
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
-
-// ── Vehicle type icons ────────────────────────────────────────────────────────
-
-const VEHICLE_ICONS = {
-  'Pickup':        '🛻',
-  'Tri-mixer':     '🚛',
-  'Concrete pump': '🏗️',
-  'Canter':        '🚚',
-  'Wheel loader':  '🚜',
-  'Skid loader':   '🚜',
-}
-
-function vehicleIcon(type) { return VEHICLE_ICONS[type] ?? '🚗' }
 
 // ── Shared badge helpers ──────────────────────────────────────────────────────
 
@@ -72,147 +64,18 @@ const BAR_OPTS = {
   responsive: true, maintainAspectRatio: false,
   plugins: { legend: { display: false } },
   scales: {
-    x: { grid: { color: 'var(--panel-2)' }, ticks: { color: '#9ca3af', font: { size: 10 } } },
-    y: { grid: { color: 'var(--panel-2)' }, ticks: { color: '#9ca3af' } },
+    x: { grid: { color: 'var(--panel-2)' }, ticks: { color: 'var(--text-muted)', font: { size: 10 } } },
+    y: { grid: { color: 'var(--panel-2)' }, ticks: { color: 'var(--text-muted)' } },
   },
 }
 
 const DOUGHNUT_OPTS = {
   responsive: true, maintainAspectRatio: false,
   plugins: {
-    legend: { position: 'right', labels: { color: '#9ca3af', font: { size: 11 }, padding: 10 } },
+    legend: { position: 'right', labels: { color: 'var(--text-muted)', font: { size: 11 }, padding: 10 } },
   },
 }
 
-const CHART_COLORS = [
-  'rgba(59,130,246,0.7)', 'rgba(16,185,129,0.7)', 'rgba(245,158,11,0.7)',
-  'rgba(239,68,68,0.7)',  'rgba(139,92,246,0.7)', 'rgba(236,72,153,0.7)',
-  'rgba(20,184,166,0.7)', 'rgba(251,146,60,0.7)',
-]
-
-// ── Compute additional local red flags ────────────────────────────────────────
-
-function computeLocalRedFlags(assetRecords) {
-  const flags = []
-
-  const sorted = [...assetRecords]
-    .filter(r => r.issue_date)
-    .sort((a, b) => new Date(a.issue_date) - new Date(b.issue_date))
-
-  // LOW_KM_USAGE: tyre removed after < 500 km
-  sorted.forEach(r => {
-    const kmFit = r.km_at_fitment != null ? +r.km_at_fitment : null
-    const kmRem = r.km_at_removal  != null ? +r.km_at_removal  : null
-    if (kmFit !== null && kmRem !== null && !isNaN(kmFit) && !isNaN(kmRem) && kmRem > 0 && kmFit > 0) {
-      const km = kmRem - kmFit
-      if (km >= 0 && km < 500) {
-        flags.push({
-          type: 'LOW_KM_USAGE',
-          severity: 'high',
-          record_ids: [r.id],
-          records: [r],
-          message: `Suspiciously low mileage: tyre removed after only ${km} km, possible theft or misuse`,
-          detail: `Asset ${r.asset_no}, fitment: ${kmFit} km, removal: ${kmRem} km on ${r.issue_date}`,
-        })
-      }
-    }
-  })
-
-  // INCONSISTENT_KM: km at next fitment < km at previous removal
-  for (let i = 1; i < sorted.length; i++) {
-    const prev = sorted[i - 1]
-    const curr = sorted[i]
-    const prevRem  = prev.km_at_removal  != null ? +prev.km_at_removal  : null
-    const currFit  = curr.km_at_fitment  != null ? +curr.km_at_fitment  : null
-    if (prevRem !== null && currFit !== null && !isNaN(prevRem) && !isNaN(currFit) && prevRem > 0 && currFit > 0) {
-      if (currFit < prevRem) {
-        flags.push({
-          type: 'INCONSISTENT_KM',
-          severity: 'high',
-          record_ids: [prev.id, curr.id],
-          records: [prev, curr],
-          message: `Odometer inconsistency detected: km readings are not sequential, possible tampering`,
-          detail: `Previous removal: ${prevRem} km (${prev.issue_date}), next fitment: ${currFit} km (${curr.issue_date})`,
-        })
-      }
-    }
-  }
-
-  return flags
-}
-
-// ── Compute misuse risk score ─────────────────────────────────────────────────
-
-function computeMisuseScore(anomalies, highRiskCount, totalCount, spanMonths) {
-  let score = 0
-  const anomalyCount = anomalies.length
-  score += Math.min(40, anomalyCount * 20)
-  if (totalCount > 0 && highRiskCount / totalCount > 0.5) score += 20
-  const avgDays = totalCount > 1 ? (spanMonths * 30) / totalCount : 999
-  if (avgDays < 30) score += 20
-  const hasSerialReuse = anomalies.some(a => a.type === ANOMALY_TYPES.SERIAL_REUSE)
-  const hasDuplicate   = anomalies.some(a => a.type === ANOMALY_TYPES.DUPLICATE_ENTRY)
-  if (hasSerialReuse) score += 20
-  if (hasDuplicate)   score += 10
-  return Math.min(100, score)
-}
-
-// ── Fleet-policy red flags (computed locally using fleet master data) ─────────
-
-function computeFleetPolicyFlags(assetRecords, fleetRecord) {
-  const flags = []
-  if (!fleetRecord) return flags
-
-  // BUDGET_BREACH: monthly spend > monthly_tyre_budget
-  if (fleetRecord.monthly_tyre_budget) {
-    const budget = +fleetRecord.monthly_tyre_budget
-    // Group records by YYYY-MM
-    const byMonth = {}
-    assetRecords.forEach(r => {
-      if (!r.issue_date) return
-      const month = r.issue_date.slice(0, 7)
-      if (!byMonth[month]) byMonth[month] = []
-      byMonth[month].push(r)
-    })
-    Object.entries(byMonth).forEach(([month, recs]) => {
-      const spend = recs.reduce((s, r) => s + (+(r.cost_per_tyre || 0)) * (+(r.qty || 1)), 0)
-      if (spend > budget) {
-        flags.push({
-          type: 'BUDGET_BREACH',
-          severity: 'high',
-          record_ids: recs.map(r => r.id),
-          records: recs,
-          message: `Monthly budget exceeded in ${month}: spent ${spend.toLocaleString()} vs budget ${budget.toLocaleString()}`,
-          detail: `${recs.length} tyre record(s) in ${month}, total cost: ${spend.toLocaleString()}`,
-        })
-      }
-    })
-  }
-
-  // LOW_KM_VS_POLICY: km run < 40% of expected_km_per_tyre
-  if (fleetRecord.expected_km_per_tyre) {
-    const threshold = +fleetRecord.expected_km_per_tyre * 0.4
-    assetRecords.forEach(r => {
-      const kmFit = r.km_at_fitment != null ? +r.km_at_fitment : null
-      const kmRem = r.km_at_removal  != null ? +r.km_at_removal  : null
-      if (kmFit !== null && kmRem !== null && !isNaN(kmFit) && !isNaN(kmRem) && kmRem > kmFit) {
-        const km = kmRem - kmFit
-        if (km < threshold) {
-          flags.push({
-            type: 'LOW_KM_VS_POLICY',
-            severity: 'high',
-            record_ids: [r.id],
-            records: [r],
-            message: `Tyre removed after only ${km.toLocaleString()} km, below 40% of policy threshold (${Math.round(threshold).toLocaleString()} km)`,
-            detail: `Expected: ${fleetRecord.expected_km_per_tyre.toLocaleString()} km, actual: ${km.toLocaleString()} km on ${r.issue_date}`,
-          })
-        }
-      }
-    })
-  }
-
-  return flags
-}
 
 // ── Flag type metadata ────────────────────────────────────────────────────────
 
@@ -231,6 +94,150 @@ const FLAG_META = {
 
 function getFlagMeta(type) {
   return FLAG_META[type] || { labelKey: null, label: type, color: 'text-muted', bg: 'bg-[var(--input-bg)] border-[var(--input-border)]' }
+}
+
+// ── Table column definitions ──────────────────────────────────────────────────
+
+const NA = 'N/A'
+
+function Count({ value, tone }) {
+  if (!value) return <span className="text-dim text-xs">0</span>
+  return <span className={`text-xs px-2 py-0.5 rounded-full ${tone}`}>{value}</span>
+}
+
+function vehicleTableColumns(t, currency) {
+  return [
+    {
+      accessorKey: 'assetNo',
+      header: t('vehiclehistory.table.assetNo'),
+      cell: ({ getValue }) => <span className="font-mono text-xs text-blue-400 font-medium">{getValue()}</span>,
+    },
+    { accessorKey: 'count', header: t('vehiclehistory.table.replacements'), meta: { align: 'right' } },
+    {
+      accessorKey: 'totalCost',
+      header: `${t('vehiclehistory.table.totalCost')} (${currency})`,
+      meta: { align: 'right', exportValue: r => (r.totalCost == null ? '' : Math.round(r.totalCost)) },
+      cell: ({ getValue }) => {
+        const v = getValue()
+        return v == null ? NA : Number(v).toLocaleString('en-SA', { maximumFractionDigits: 0 })
+      },
+    },
+    {
+      accessorKey: 'highRiskCount',
+      header: t('vehiclehistory.table.highRisk'),
+      meta: { align: 'right' },
+      cell: ({ getValue }) => <Count value={getValue()} tone="bg-red-900/40 text-red-400" />,
+    },
+    {
+      id: 'anomalyCount',
+      accessorFn: r => r.anomalies.length,
+      header: t('vehiclehistory.table.anomalies'),
+      meta: { align: 'right' },
+      cell: ({ getValue }) => <Count value={getValue()} tone="bg-orange-900/40 text-orange-400" />,
+    },
+    {
+      accessorKey: 'avgDays',
+      header: t('vehiclehistory.table.avgDaysRepl'),
+      meta: { align: 'right', exportValue: r => (r.avgDays == null ? '' : r.avgDays) },
+      cell: ({ getValue }) => (getValue() == null ? NA : `${getValue()}d`),
+    },
+    {
+      accessorKey: 'lastSeen',
+      header: t('vehiclehistory.table.lastReplacement'),
+      cell: ({ getValue }) => getValue() || NA,
+    },
+    {
+      accessorKey: 'misuseScore',
+      header: t('vehiclehistory.table.misuseScore'),
+      meta: { align: 'center', exportValue: r => `${r.misuseScore} (${misuseBand(r.misuseScore)?.label || ''})` },
+      cell: ({ getValue }) => {
+        const v = getValue()
+        const band = misuseBand(v)
+        return (
+          <span className={`text-xs px-2 py-0.5 rounded-full border font-bold ${misuseBadgeClass(v)}`} title={band ? `${band.label} misuse risk` : undefined}>
+            {v}<span className="sr-only"> {band?.label} misuse risk</span>
+          </span>
+        )
+      },
+    },
+    {
+      id: 'redFlags',
+      accessorFn: r => r.allFlags.map(f => f.type).join(', '),
+      header: t('vehiclehistory.table.redFlags'),
+      enableSorting: false,
+      cell: ({ row }) => {
+        const flags = row.original.allFlags
+        if (!flags.length) return <span className="text-dim text-xs">None</span>
+        return (
+          <div className="flex flex-wrap gap-1">
+            {flags.slice(0, 3).map((f, i) => {
+              const meta = getFlagMeta(f.type)
+              return (
+                <span key={i} className={`text-[10px] px-1.5 py-0.5 rounded border ${meta.bg} ${meta.color}`}>
+                  {meta.labelKey ? t(`vehiclehistory.flagLabels.${meta.labelKey}`) : meta.label}
+                </span>
+              )
+            })}
+            {flags.length > 3 && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded border bg-[var(--input-bg)] text-muted border-[var(--input-border)]">
+                +{flags.length - 3}
+              </span>
+            )}
+          </div>
+        )
+      },
+    },
+  ]
+}
+
+function timelineColumns(t, currency) {
+  return [
+    {
+      accessorKey: 'issue_date',
+      header: t('vehiclehistory.timeline.columns.date'),
+      cell: ({ row }) => (
+        <span className="whitespace-nowrap">
+          {row.original.flagged && (
+            <><AlertTriangle size={10} className="inline text-red-400 mr-1" aria-hidden="true" /><span className="sr-only">Flagged record: </span></>
+          )}
+          {row.original.issue_date || NA}
+        </span>
+      ),
+    },
+    { accessorKey: 'brand', header: t('vehiclehistory.timeline.columns.brand'), cell: ({ getValue }) => getValue() || NA },
+    {
+      accessorKey: 'description',
+      header: t('vehiclehistory.timeline.columns.description'),
+      cell: ({ getValue }) => <span className="block max-w-[180px] truncate" title={getValue() || ''}>{getValue() || NA}</span>,
+    },
+    { accessorKey: 'category', header: t('vehiclehistory.timeline.columns.category'), cell: ({ getValue }) => getValue() || NA },
+    {
+      accessorKey: 'risk_level',
+      header: t('vehiclehistory.timeline.columns.risk'),
+      cell: ({ getValue }) => (
+        <span className={`px-1.5 py-0.5 rounded border text-[10px] ${riskBadgeClass(getValue())}`}>{getValue() || 'Not rated'}</span>
+      ),
+    },
+    {
+      accessorKey: 'cost',
+      header: `${t('vehiclehistory.timeline.columns.cost')} (${currency})`,
+      meta: { align: 'right' },
+      cell: ({ getValue }) => (getValue() == null ? NA : Number(getValue()).toLocaleString()),
+    },
+    {
+      accessorKey: 'km_run',
+      header: t('vehiclehistory.timeline.columns.km'),
+      meta: { align: 'right' },
+      cell: ({ getValue }) => (getValue() == null ? NA : `${Number(getValue()).toLocaleString()} km`),
+    },
+    { accessorKey: 'qty', header: t('vehiclehistory.timeline.columns.qty'), meta: { align: 'right' } },
+    { accessorKey: 'site', header: t('vehiclehistory.timeline.columns.site'), cell: ({ getValue }) => getValue() || NA },
+    {
+      accessorKey: 'remarks',
+      header: t('vehiclehistory.timeline.columns.remarks'),
+      cell: ({ getValue }) => <span className="block max-w-[200px] truncate" title={getValue() || ''}>{getValue() || NA}</span>,
+    },
+  ]
 }
 
 // ── Detail Panel Tabs ─────────────────────────────────────────────────────────
@@ -309,8 +316,7 @@ export default function VehicleHistory() {
         if (cancelled) return
         const rows = data || []
         setAllRecords(rows)
-        const uniqSites = [...new Set(rows.map(r => r.site).filter(Boolean))].sort()
-        setSites(uniqSites)
+        setSites(sitesOf(rows))
 
         // Load fleet master data
         const { data: fleetData } = await vehicleHistoryApi.getVehicleFleet()
@@ -348,118 +354,29 @@ export default function VehicleHistory() {
 
   // ── Date-range window (string-safe on 'YYYY-MM-DD' prefixes) ────────────────
   const rangeActive = Boolean(fromDate || toDate)
-  const windowedRecords = useMemo(() => {
-    if (!rangeActive) return allRecords
-    return allRecords.filter(r => {
-      const d = r.issue_date ? String(r.issue_date).slice(0, 10) : ''
-      if (!d) return false
-      if (fromDate && d < fromDate) return false
-      if (toDate && d > toDate) return false
-      return true
-    })
-  }, [allRecords, rangeActive, fromDate, toDate])
+  const windowedRecords = useMemo(() => windowRecords(allRecords, fromDate, toDate), [allRecords, fromDate, toDate])
 
   // Full-history records per asset, so red-flag evaluation is never windowed.
-  const fullRecordsByAsset = useMemo(() => {
-    const m = {}
-    allRecords.forEach(r => {
-      const k = r.asset_no
-      if (!m[k]) m[k] = []
-      m[k].push(r)
-    })
-    return m
-  }, [allRecords])
+  const fullRecordsByAsset = useMemo(() => groupByAsset(allRecords), [allRecords])
 
   // ── Compute asset metrics (windowed roll-ups: count, km, cost) ──────────────
   const assetMetrics = useMemo(() => computeAssetMetrics(windowedRecords, dc), [windowedRecords, dc])
 
-  // ── Build per-asset enriched rows ────────────────────────────────────────────
-  const vehicleRows = useMemo(() => {
-    return assetMetrics.map(asset => {
-      const assetAnomalies = allAnomalies.filter(a => {
-        if (a.type === ANOMALY_TYPES.SERIAL_REUSE) {
-          return a.assets && a.assets.includes(asset.assetNo)
-        }
-        return a.asset_no === asset.assetNo
-      })
+  // ── Build per-asset enriched rows (engine: src/lib/vehicleHistoryAnalytics) ─
+  const vehicleRows = useMemo(() => buildVehicleRows({
+    assetMetrics, anomalies: allAnomalies, fleetMap, gridByAsset, fullRecordsByAsset, rangeActive,
+  }), [assetMetrics, allAnomalies, fleetMap, gridByAsset, fullRecordsByAsset, rangeActive])
 
-      const fleetRecord   = fleetMap[asset.assetNo] || null
-      // Red flags evaluate the FULL history for this asset even when a date
-      // range windows the roll-up numbers.
-      const flagRecords   = fullRecordsByAsset[asset.assetNo] || asset.records
-      const localFlags    = computeLocalRedFlags(flagRecords)
-      const policyFlags   = computeFleetPolicyFlags(flagRecords, fleetRecord)
-      const allFlags      = [...assetAnomalies, ...localFlags, ...policyFlags]
-      const misuseScore   = computeMisuseScore(assetAnomalies, asset.highRiskCount, asset.count, asset.spanMonths)
-      const avgDays       = asset.count > 1 ? Math.round((asset.spanMonths * 30) / asset.count) : null
-
-      // Per-asset Total Cost = authoritative expense-grid tyre spend for this asset
-      // when the grid has it; otherwise keep the tyre_records-derived total.
-      // With a date range active the grid total (full history) would not match
-      // the window, so the windowed tyre_records total is used instead.
-      const gridCost      = rangeActive ? null : gridByAsset?.map?.get(String(asset.assetNo ?? '').trim().toUpperCase())
-      const totalCost     = gridCost != null ? gridCost : asset.totalCost
-
-      return {
-        ...asset,
-        totalCost,
-        anomalies: assetAnomalies,
-        localFlags,
-        policyFlags,
-        allFlags,
-        misuseScore,
-        avgDays,
-        fleetRecord,
-      }
-    })
-  }, [assetMetrics, allAnomalies, fleetMap, gridByAsset, fullRecordsByAsset, rangeActive])
-
-  // ── Filter + sort ────────────────────────────────────────────────────────────
-  // Two scopes, following the pattern in Inspections.jsx.
-  //
-  // `scopedRows` applies the POPULATION filters (search, site). The summary
-  // strip computes over this. It used to compute over `vehicleRows`, so the
-  // date range moved the tiles while the site select in the SAME filter card
-  // did not: picking one site left four fleet-wide figures above a table
-  // showing that site alone.
-  //
-  // The anomaly select is deliberately held out. Two of the four tiles ARE the
-  // anomaly dimension ("With anomalies", "High misuse risk"); counting the
-  // already-filtered set would drive each tile to match the table and it would
-  // stop stating how many vehicles the fleet actually has flagged.
-  const scopedRows = useMemo(() => {
-    let rows = vehicleRows
-    if (search)
-      rows = rows.filter(r => r.assetNo.toLowerCase().includes(search.toLowerCase()))
-    if (siteFilter)
-      rows = rows.filter(r => r.sites.includes(siteFilter))
-    return rows
-  }, [vehicleRows, search, siteFilter])
-
-  // True when the tiles cover fewer vehicles than the register holds.
+  // `scopedRows` applies the POPULATION filters (search, site); the summary
+  // strip computes over it. The anomaly select is held out on purpose: two of
+  // the tiles ARE the anomaly dimension, and filtering them by it would only
+  // echo the table back.
+  const scopedRows = useMemo(() => scopeVehicleRows(vehicleRows, { search, site: siteFilter }), [vehicleRows, search, siteFilter])
   const scopeActive = Boolean(search || siteFilter)
+  const filteredRows = useMemo(() => filterVehicleRows(scopedRows, { anomaly: anomalyFilter, sortBy }), [scopedRows, anomalyFilter, sortBy])
+  const summary = useMemo(() => summarizeVehicles(scopedRows, { costTotal: costTyreTotal, rangeActive, scopeActive }), [scopedRows, costTyreTotal, rangeActive, scopeActive])
 
-  const filteredRows = useMemo(() => {
-    let rows = scopedRows
-
-    if (anomalyFilter === 'has')
-      rows = rows.filter(r => r.allFlags.length > 0)
-    else if (anomalyFilter === 'clean')
-      rows = rows.filter(r => r.allFlags.length === 0)
-
-    const copy = [...rows]
-    if (sortBy === 'misuse')  copy.sort((a, b) => b.misuseScore - a.misuseScore)
-    if (sortBy === 'cost')    copy.sort((a, b) => b.totalCost   - a.totalCost)
-    if (sortBy === 'count')   copy.sort((a, b) => b.count       - a.count)
-    if (sortBy === 'date')    copy.sort((a, b) => (b.lastSeen || '').localeCompare(a.lastSeen || ''))
-
-    return copy
-  }, [scopedRows, anomalyFilter, sortBy])
-
-  // Paged, not capped. This table used to render filteredRows.slice(0, 200)
-  // against a fleet of well over a thousand assets, so most vehicles could
-  // never be opened from here.
-  const pager = usePagedRows(filteredRows)
+  const vehicleColumns = useMemo(() => vehicleTableColumns(t, activeCurrency), [t, activeCurrency])
 
   const selectedRow = selected ? vehicleRows.find(r => r.assetNo === selected) : null
 
@@ -524,7 +441,7 @@ export default function VehicleHistory() {
         <div className="card border border-red-500/30 flex items-center gap-3">
           <AlertTriangle size={18} className="text-red-400 shrink-0" />
           <p className="text-sm text-red-300 flex-1">{error}</p>
-          <button onClick={() => setReloadKey(k => k + 1)} className="btn-secondary text-xs px-3 py-1.5">Retry</button>
+          <button onClick={() => setReloadKey(k => k + 1)} className="btn-secondary text-xs px-3 py-1.5 min-h-[44px]">Retry</button>
         </div>
       )}
 
@@ -553,21 +470,18 @@ export default function VehicleHistory() {
       {/* Summary strip */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: t('vehiclehistory.summary.totalVehicles'),   value: scopedRows.length,                                                color: 'text-blue-400' },
-          { label: t('vehiclehistory.summary.withAnomalies'),   value: scopedRows.filter(r => r.allFlags.length > 0).length,            color: 'text-orange-400' },
-          { label: t('vehiclehistory.summary.highMisuseRisk'), value: scopedRows.filter(r => r.misuseScore >= 51).length,              color: 'text-red-400' },
+          { label: t('vehiclehistory.summary.totalVehicles'),  value: summary.vehicles.toLocaleString(),      color: 'text-blue-400' },
+          { label: t('vehiclehistory.summary.withAnomalies'),  value: summary.withAnomalies.toLocaleString(), color: 'text-orange-400' },
+          { label: t('vehiclehistory.summary.highMisuseRisk'), value: summary.highMisuse.toLocaleString(),    color: 'text-red-400' },
           {
             label: t('vehiclehistory.summary.totalFleetCost'),
-            // Authoritative fleet tyre spend from the expense grid; falls back to
-            // the sum of per-asset totals when the grid is unavailable, and to
-            // the windowed tyre-record totals whenever a date range is active
-            // (the grid total covers full history only). The same fallback
-            // applies once a search or site filter is on, because the grid
-            // total is fleet-wide and would not describe the narrowed set.
-            value: `${activeCurrency} ${Math.round(!rangeActive && !scopeActive && costTyreTotal != null ? costTyreTotal : scopedRows.reduce((s, r) => s + r.totalCost, 0)).toLocaleString()}`,
+            // Authoritative fleet tyre spend from the expense grid when the view
+            // is the whole unwindowed fleet; otherwise the sum of the rows shown.
+            value: summary.totalCost == null ? 'N/A' : `${activeCurrency} ${Math.round(summary.totalCost).toLocaleString()}`,
             color: 'text-green-400',
+            hint: summary.costBasis === 'grid' ? 'From the expense grid' : 'From tyre records in scope',
           },
-        ].map(({ label, value, color }, i) => (
+        ].map(({ label, value, color, hint }, i) => (
           <motion.div
             key={label}
             initial={{ opacity: 0, y: 8 }}
@@ -575,8 +489,9 @@ export default function VehicleHistory() {
             transition={{ delay: i * 0.07, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
             className="card text-center"
           >
-            <p className={`text-2xl font-bold ${color}`}>{value}</p>
+            <p className={`text-2xl font-bold tabular-nums ${color}`}>{value}</p>
             <p className="text-muted text-sm mt-1">{label}</p>
+            {hint && <p className="text-[11px] text-[var(--text-dim)] mt-0.5">{hint}</p>}
           </motion.div>
         ))}
       </div>
@@ -584,25 +499,26 @@ export default function VehicleHistory() {
       {/* Filters */}
       <div className="card">
         <div className="flex flex-wrap gap-3">
-          <div className="relative flex-1 min-w-48">
+          <div className="relative flex-1 min-w-0 basis-full sm:basis-48">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
             <input
               className="input pl-9"
+              aria-label={t('vehiclehistory.filters.searchPlaceholder')}
               placeholder={t('vehiclehistory.filters.searchPlaceholder')}
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
           </div>
-          <select className="input w-40" value={siteFilter} onChange={e => setSiteFilter(e.target.value)}>
+          <select aria-label="Site" className="input w-full sm:w-40" value={siteFilter} onChange={e => setSiteFilter(e.target.value)}>
             <option value="">{t('vehiclehistory.filters.allSites')}</option>
             {sites.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
-          <select className="input w-44" value={anomalyFilter} onChange={e => setAnomalyFilter(e.target.value)}>
+          <select aria-label="Anomaly filter" className="input w-full sm:w-44" value={anomalyFilter} onChange={e => setAnomalyFilter(e.target.value)}>
             <option value="all">{t('vehiclehistory.filters.allVehicles')}</option>
             <option value="has">{t('vehiclehistory.filters.hasAnomalies')}</option>
             <option value="clean">{t('vehiclehistory.filters.clean')}</option>
           </select>
-          <select className="input w-52" value={sortBy} onChange={e => setSortBy(e.target.value)}>
+          <select aria-label="Sort vehicles by" className="input w-full sm:w-52" value={sortBy} onChange={e => setSortBy(e.target.value)}>
             <option value="misuse">{t('vehiclehistory.filters.sortMisuse')}</option>
             <option value="cost">{t('vehiclehistory.filters.sortCost')}</option>
             <option value="count">{t('vehiclehistory.filters.sortCount')}</option>
@@ -613,9 +529,9 @@ export default function VehicleHistory() {
           {rangeActive && (
             <button
               onClick={() => { setFromDate(''); setToDate('') }}
-              className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] underline self-center"
+              className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] underline self-center min-h-[44px] px-2 focus-visible:outline focus-visible:outline-2"
             >
-              Clear
+              Clear dates
             </button>
           )}
         </div>
@@ -629,88 +545,20 @@ export default function VehicleHistory() {
       </div>
 
       {/* Vehicle fleet table */}
-      <div className="card p-0 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-muted border-b border-[var(--input-border)] text-xs">
-                <th className="px-4 py-3">{t('vehiclehistory.table.assetNo')}</th>
-                <th className="px-3 py-3 text-right">{t('vehiclehistory.table.replacements')}</th>
-                <th className="px-3 py-3 text-right">{t('vehiclehistory.table.totalCost')}</th>
-                <th className="px-3 py-3 text-right">{t('vehiclehistory.table.highRisk')}</th>
-                <th className="px-3 py-3 text-right">{t('vehiclehistory.table.anomalies')}</th>
-                <th className="px-3 py-3 text-right">{t('vehiclehistory.table.avgDaysRepl')}</th>
-                <th className="px-3 py-3">{t('vehiclehistory.table.lastReplacement')}</th>
-                <th className="px-3 py-3 text-center">{t('vehiclehistory.table.misuseScore')}</th>
-                <th className="px-3 py-3">{t('vehiclehistory.table.redFlags')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredRows.length === 0 && (
-                <tr>
-                  <td colSpan={9} className="px-4 py-10 text-center text-muted">
-                    {t('vehiclehistory.table.noMatch')}
-                  </td>
-                </tr>
-              )}
-              {pager.pageRows.map(row => (
-                <tr
-                  key={row.assetNo}
-                  onClick={() => setSelected(selected === row.assetNo ? null : row.assetNo)}
-                  className={`border-b border-[var(--input-border)] cursor-pointer transition-colors ${
-                    selected === row.assetNo ? 'bg-blue-900/20' : 'hover:bg-[var(--input-bg)]'
-                  }`}
-                >
-                  <td className="px-4 py-2 font-mono text-xs text-blue-400 font-medium">{row.assetNo}</td>
-                  <td className="px-3 py-2 text-secondary text-right">{row.count}</td>
-                  <td className="px-3 py-2 text-secondary text-right text-xs">
-                    {activeCurrency} {row.totalCost.toLocaleString('en-SA', { maximumFractionDigits: 0 })}
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    {row.highRiskCount > 0
-                      ? <span className="text-xs px-2 py-0.5 rounded-full bg-red-900/40 text-red-400">{row.highRiskCount}</span>
-                      : <span className="text-dim text-xs">0</span>
-                    }
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    {row.anomalies.length > 0
-                      ? <span className="text-xs px-2 py-0.5 rounded-full bg-orange-900/40 text-orange-400">{row.anomalies.length}</span>
-                      : <span className="text-dim text-xs">0</span>
-                    }
-                  </td>
-                  <td className="px-3 py-2 text-muted text-right text-xs">
-                    {row.avgDays !== null ? `${row.avgDays}d` : '-'}
-                  </td>
-                  <td className="px-3 py-2 text-muted text-xs">{row.lastSeen || '-'}</td>
-                  <td className="px-3 py-2 text-center">
-                    <span className={`text-xs px-2 py-0.5 rounded-full border font-bold ${misuseBadgeClass(row.misuseScore)}`}>
-                      {row.misuseScore}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2">
-                    <div className="flex flex-wrap gap-1">
-                      {row.allFlags.slice(0, 3).map((f, i) => {
-                        const meta = getFlagMeta(f.type)
-                        return (
-                          <span key={i} className={`text-[10px] px-1.5 py-0.5 rounded border ${meta.bg} ${meta.color}`}>
-                            {meta.labelKey ? t(`vehiclehistory.flagLabels.${meta.labelKey}`) : meta.label}
-                          </span>
-                        )
-                      })}
-                      {row.allFlags.length > 3 && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded border bg-[var(--input-bg)] text-muted border-[var(--input-border)]">
-                          +{row.allFlags.length - 3}
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <TablePagination {...pager} />
-      </div>
+      <EnterpriseTable
+        columns={vehicleColumns}
+        data={filteredRows}
+        getRowId={r => r.assetNo}
+        loading={loading}
+        error={allRecords.length === 0 ? error : null}
+        onRetry={() => setReloadKey(k => k + 1)}
+        emptyMessage={t('vehiclehistory.table.noMatch')}
+        searchPlaceholder="Search this table"
+        onRowClick={row => setSelected(selected === row.assetNo ? null : row.assetNo)}
+        viewKey="vehicle-history"
+        exportFileName={`Vehicle History ${new Date().toISOString().slice(0, 10)}`}
+        reportMeta={{ title: 'Vehicle History', currency: activeCurrency, dateRange: rangeActive ? `${fromDate || 'start'} to ${toDate || 'today'}` : undefined }}
+      />
 
       {/* Vehicle detail panel */}
       {selectedRow && (
@@ -797,7 +645,7 @@ function VehicleDetailPanel({ row, currency, defaultCost, onClose, relatedAction
     }))
     exportToPdf(
       pdfRows, cols,
-      `Vehicle Asset History · ${row.assetNo} (${row.count} records, Misuse Score: ${row.misuseScore})`,
+      `Vehicle Asset History: ${row.assetNo} (${row.count} records, Misuse Score: ${row.misuseScore})`,
       `VehicleHistory_${row.assetNo}_${new Date().toISOString().slice(0, 10)}`
     )
   }
@@ -858,7 +706,7 @@ function VehicleDetailPanel({ row, currency, defaultCost, onClose, relatedAction
           )}
           {fleetRecord.vehicle_type && (
             <span className="text-xs px-2 py-0.5 rounded bg-[var(--input-bg)] border border-[var(--input-border)] text-secondary">
-              <span className="text-muted mr-1">{t('vehiclehistory.detail.type')}</span>{vehicleIcon(fleetRecord.vehicle_type)} {fleetRecord.vehicle_type}
+              <span className="text-muted mr-1">{t('vehiclehistory.detail.type')}</span>{fleetRecord.vehicle_type}
             </span>
           )}
           {fleetRecord.operator_name && (
@@ -919,7 +767,7 @@ function VehicleDetailPanel({ row, currency, defaultCost, onClose, relatedAction
                         style={{ backgroundColor: { Low: '#16a34a', Medium: '#ca8a04', High: '#ea580c', Critical: '#dc2626' }[p.risk_level] ?? 'var(--text-dim)' }}
                       />
                       <span className="font-mono text-muted w-16">{p.position}</span>
-                      <span className="text-muted">{p.brand || '-'}</span>
+                      <span className="text-muted">{p.brand || 'N/A'}</span>
                     </div>
                   ))}
                 </div>
@@ -988,7 +836,7 @@ function VehicleDetailPanel({ row, currency, defaultCost, onClose, relatedAction
           records={timelineRecords}
           flaggedIds={flaggedIds}
           currency={currency}
-          defaultCost={defaultCost}
+          assetNo={row.assetNo}
         />
       )}
 
@@ -1039,73 +887,21 @@ function VehicleDetailPanel({ row, currency, defaultCost, onClose, relatedAction
 // Tab: Timeline
 // ─────────────────────────────────────────────────────────────────────────────
 
-function TimelineTab({ records, flaggedIds, currency, defaultCost }) {
+function TimelineTab({ records, flaggedIds, currency, assetNo }) {
   const { t } = useLanguage()
-  if (records.length === 0) {
-    return <p className="text-muted text-sm py-4 text-center">{t('vehiclehistory.timeline.noRecords')}</p>
-  }
-
+  const rows = useMemo(() => timelineRows(records, flaggedIds), [records, flaggedIds])
+  const columns = useMemo(() => timelineColumns(t, currency), [t, currency])
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-xs">
-        <thead>
-          <tr className="text-muted border-b border-[var(--input-border)] text-left">
-            <th className="pb-2 pr-3">{t('vehiclehistory.timeline.columns.date')}</th>
-            <th className="pb-2 pr-3">{t('vehiclehistory.timeline.columns.brand')}</th>
-            <th className="pb-2 pr-3">{t('vehiclehistory.timeline.columns.description')}</th>
-            <th className="pb-2 pr-3">{t('vehiclehistory.timeline.columns.category')}</th>
-            <th className="pb-2 pr-3">{t('vehiclehistory.timeline.columns.risk')}</th>
-            <th className="pb-2 pr-3 text-right">{t('vehiclehistory.timeline.columns.cost')}</th>
-            <th className="pb-2 pr-3">{t('vehiclehistory.timeline.columns.km')}</th>
-            <th className="pb-2 pr-3 text-right">{t('vehiclehistory.timeline.columns.qty')}</th>
-            <th className="pb-2 pr-3">{t('vehiclehistory.timeline.columns.site')}</th>
-            <th className="pb-2">{t('vehiclehistory.timeline.columns.remarks')}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {records.map(r => {
-            const isFlagged = flaggedIds.has(r.id)
-            const kmRun = (r.km_at_fitment != null && r.km_at_removal != null)
-              ? `${(+r.km_at_removal - +r.km_at_fitment).toLocaleString()} km`
-              : '-'
-            return (
-              <tr
-                key={r.id}
-                className={`border-b border-[var(--input-border)] hover:bg-[var(--input-bg)] ${
-                  isFlagged ? 'bg-red-950/10' : ''
-                }`}
-                style={isFlagged ? { borderLeft: '2px solid rgba(239,68,68,0.6)' } : {}}
-              >
-                <td className="py-1.5 pr-3 text-muted whitespace-nowrap">
-                  {isFlagged && <AlertTriangle size={10} className="inline text-red-400 mr-1" />}
-                  {r.issue_date || '-'}
-                </td>
-                <td className="py-1.5 pr-3 text-secondary">{r.brand || '-'}</td>
-                <td className="py-1.5 pr-3 text-muted max-w-[120px] truncate">{r.description || '-'}</td>
-                <td className="py-1.5 pr-3">
-                  {r.category
-                    ? <span className="px-1.5 py-0.5 rounded bg-blue-900/30 text-blue-400 text-[10px]">{r.category}</span>
-                    : <span className="text-dim">-</span>
-                  }
-                </td>
-                <td className="py-1.5 pr-3">
-                  <span className={`px-1.5 py-0.5 rounded border text-[10px] ${riskBadgeClass(r.risk_level)}`}>
-                    {r.risk_level || '?'}
-                  </span>
-                </td>
-                <td className="py-1.5 pr-3 text-secondary text-right whitespace-nowrap">
-                  {currency} {((r.cost_per_tyre || defaultCost) * (r.qty || 1)).toLocaleString()}
-                </td>
-                <td className="py-1.5 pr-3 text-muted whitespace-nowrap">{kmRun}</td>
-                <td className="py-1.5 pr-3 text-muted text-right">{r.qty || 1}</td>
-                <td className="py-1.5 pr-3 text-muted whitespace-nowrap">{r.site || '-'}</td>
-                <td className="py-1.5 text-muted max-w-[160px] truncate">{r.remarks_cleaned || r.remarks || '-'}</td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-    </div>
+    <EnterpriseTable
+      columns={columns}
+      data={rows}
+      getRowId={r => r.id}
+      emptyMessage={t('vehiclehistory.timeline.noRecords')}
+      searchPlaceholder="Search this timeline"
+      initialPageSize={25}
+      exportFileName={`Vehicle Timeline ${assetNo || ''} ${new Date().toISOString().slice(0, 10)}`.trim()}
+      reportMeta={{ title: `Tyre timeline ${assetNo || ''}`.trim(), currency }}
+    />
   )
 }
 
@@ -1120,7 +916,7 @@ function AnalysisTab({ monthlyBuckets, categoryBreakdown, brandBreakdown, totalC
     datasets: [{
       label: t('vehiclehistory.analysis.costSeries', { currency }),
       data: monthlyBuckets.map(b => Math.round(b.total)),
-      backgroundColor: 'rgba(59,130,246,0.6)',
+      backgroundColor: withAlpha(colorAt(0), 0.7),
       borderRadius: 4,
     }],
   }
@@ -1129,7 +925,7 @@ function AnalysisTab({ monthlyBuckets, categoryBreakdown, brandBreakdown, totalC
     labels: categoryBreakdown.slice(0, 8).map(c => c.key),
     datasets: [{
       data: categoryBreakdown.slice(0, 8).map(c => c.count),
-      backgroundColor: CHART_COLORS,
+      backgroundColor: categorical(Math.min(8, categoryBreakdown.length)),
     }],
   }
 
@@ -1138,7 +934,7 @@ function AnalysisTab({ monthlyBuckets, categoryBreakdown, brandBreakdown, totalC
     datasets: [{
       label: t('vehiclehistory.analysis.usageCount'),
       data: brandBreakdown.slice(0, 8).map(b => b.count),
-      backgroundColor: 'rgba(16,185,129,0.6)',
+      backgroundColor: withAlpha(colorAt(1), 0.7),
       borderRadius: 4,
     }],
   }
@@ -1302,7 +1098,7 @@ function RelatedTab({ assetNo, actions, rca, inspections }) {
                   a.status === 'Closed'
                     ? 'bg-green-900/30 text-green-400 border-green-700/40'
                     : 'bg-yellow-900/30 text-yellow-400 border-yellow-700/40'
-                }`}>{a.status || '-'}</span>
+                }`}>{a.status || 'N/A'}</span>
                 <span className="text-secondary flex-1">{a.title || t('vehiclehistory.related.noTitle')}</span>
                 {a.site && <span className="text-muted text-xs">{a.site}</span>}
                 {a.priority && (
@@ -1324,7 +1120,7 @@ function RelatedTab({ assetNo, actions, rca, inspections }) {
           <div className="space-y-2">
             {rca.map(r => (
               <div key={r.id} className="flex items-center gap-3 bg-[var(--input-bg)] rounded-lg px-4 py-2.5 text-sm flex-wrap">
-                <span className="font-mono text-xs text-blue-400">{r.tyre_serial || '-'}</span>
+                <span className="font-mono text-xs text-blue-400">{r.tyre_serial || 'N/A'}</span>
                 <span className="text-secondary flex-1">{r.root_cause || t('vehiclehistory.related.noRootCause')}</span>
                 {r.brand && <span className="text-muted text-xs">{r.brand}</span>}
                 {r.site  && <span className="text-muted text-xs">{r.site}</span>}
@@ -1345,10 +1141,10 @@ function RelatedTab({ assetNo, actions, rca, inspections }) {
                   r.status === 'Completed'
                     ? 'bg-green-900/30 text-green-400 border-green-700/40'
                     : 'bg-blue-900/30 text-blue-400 border-blue-700/40'
-                }`}>{r.status || '-'}</span>
+                }`}>{r.status || 'N/A'}</span>
                 <span className="text-secondary flex-1 font-mono text-xs">{r.id?.slice(0, 12)}...</span>
                 {r.site && <span className="text-muted text-xs">{r.site}</span>}
-                <span className="text-dim text-xs">{r.created_at?.slice(0, 10) || '-'}</span>
+                <span className="text-dim text-xs">{r.created_at?.slice(0, 10) || 'N/A'}</span>
               </div>
             ))}
           </div>
@@ -1772,7 +1568,7 @@ function AssetOpener({ country, onOpen }) {
                 <button
                   key={`${o.country}:${o.asset_no}`}
                   onClick={() => { onOpen(o.asset_no); setQuery('') }}
-                  className="text-xs px-2.5 py-1.5 rounded border border-[var(--input-border)] bg-[var(--input-bg)] hover:border-blue-600/50 text-left"
+                  className="text-xs px-2.5 py-1.5 min-h-[44px] rounded border border-[var(--input-border)] bg-[var(--input-bg)] hover:border-blue-600/50 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500"
                 >
                   <span className="font-mono text-blue-400">{o.asset_no}</span>
                   <span className="text-[var(--text-dim)] ml-2">

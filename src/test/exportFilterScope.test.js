@@ -98,13 +98,13 @@ const CASES = [
     what: 'PDF brand page scope',
     // Page 1 listed `filtered` while the Brand Performance page came from the
     // screen aggregate over a wider population, under one title.
-    required: 'const exportBrandPerf = computeBrandPerf(filtered)',
+    required: 'const exportBrandPerf = brandPerformance(filtered)',
     forbidden: 'body: brandPerf.map(b => [',
   },
   {
     file: 'pages/WarrantyTracker.jsx',
     what: 'Excel failure sheet scope',
-    required: 'const exportFailures = computeFailureCounts(filtered)',
+    required: 'const exportFailures = failureBreakdown(filtered)',
     forbidden: 'XLSX.utils.json_to_sheet(failureCounts.map(f => ({',
   },
   {
@@ -124,16 +124,16 @@ const CASES = [
     // on purpose (the budget is one annual company-wide figure), so an
     // unscoped search would match that deliberate line instead.
     within: ['const kpis = useMemo', '// Budget variance DELIBERATELY'],
-    required: 'const spend = filtered\n      .filter',
-    forbidden: 'const spend = orders\n      .filter',
+    required: 'procurementKpis(filtered,',
+    forbidden: 'procurementKpis(orders,',
   },
   {
     file: 'pages/VehicleHistory.jsx',
     what: 'summary strip population',
     // One filter card, two scopes: the date range moved the tiles, the site
     // select in the SAME card did not.
-    required: "value: scopedRows.length,",
-    forbidden: "value: vehicleRows.length,",
+    required: "summarizeVehicles(scopedRows,",
+    forbidden: "summarizeVehicles(vehicleRows,",
   },
 ]
 

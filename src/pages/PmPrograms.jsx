@@ -28,7 +28,7 @@ import {
 import { Bar, Doughnut } from 'react-chartjs-2'
 import {
   CalendarClock, Wrench, Calendar, AlertTriangle, CheckCircle2, Search, X,
-  Filter, Plus, Pencil, Trash2, FileSpreadsheet, FileText, Loader2, Save,
+  Plus, Pencil, Trash2, FileSpreadsheet, FileText, Loader2, Save,
   LayoutDashboard, ClipboardList, History, Gauge, Wallet, TrendingUp,
   ListChecks, ClipboardCheck, Timer, Layers, LayoutTemplate, BarChart3, PieChart, Trophy,
 } from 'lucide-react'
@@ -67,7 +67,12 @@ import { loadGovernedCostSplit } from '../lib/api/governedCost'
 import { generateWorkOrderNo, insertWorkOrder } from '../lib/api/workOrders'
 import { listParts } from '../lib/api/partsCatalog'
 import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
-import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import {
+  sumPartsCost, intervalSummary, filterPlans, filterHistory, dueSortValue, historySummary,
+  planExportRows as buildPlanExportRows, historyExportRows as buildHistoryExportRows,
+  PLAN_EXPORT_COLS, PLAN_EXPORT_HEADERS, HIST_EXPORT_COLS, HIST_EXPORT_HEADERS,
+} from '../lib/pmProgramsAnalytics'
 import { formatCurrencyCompact } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
 import { isMissingRelation } from '../lib/api/_client'
@@ -82,7 +87,6 @@ const TONE_CLS = {
   slate: 'bg-slate-500/15 text-slate-300 border-slate-500/30',
   sky: 'bg-sky-500/15 text-sky-300 border-sky-500/30',
 }
-const INTERVAL_TYPE_LABEL = { days: 'days', months: 'months', km: 'km', hours: 'h' }
 const COST_MODE_COLOR = { combined: '#6366f1', tyres: '#22c55e', maintenance: '#f59e0b' }
 const WO_PRIORITY = { low: 'Low', medium: 'Medium', high: 'High', critical: 'Critical' }
 const mapToWOPriority = (p) => WO_PRIORITY[String(p || '').toLowerCase()] || 'Medium'
@@ -111,41 +115,12 @@ function monthLabel(m) {
 }
 const todayISO = () => new Date().toISOString().slice(0, 10)
 
-// Sum a parts_used list to a parts cost: qty (default 1) times unit cost, rounded
-// to 2 decimals. Backward compatible with legacy rows that carry no qty.
-function sumPartsCost(parts) {
-  if (!Array.isArray(parts)) return 0
-  const total = parts.reduce((s, p) => {
-    const qty = Number(p?.qty)
-    const cost = Number(p?.cost)
-    const q = Number.isFinite(qty) && qty > 0 ? qty : 1
-    const c = Number.isFinite(cost) ? cost : 0
-    return s + q * c
-  }, 0)
-  return Math.round(total * 100) / 100
-}
-
 function Badge({ tone, children }) {
   return (
     <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${TONE_CLS[tone] || TONE_CLS.slate}`}>
       {children}
     </span>
   )
-}
-
-// Build the "both intervals" cell text for a plan.
-function intervalSummary(p) {
-  const parts = []
-  if (p.interval_value != null && p.interval_value !== '' && (p.interval_type === 'days' || p.interval_type === 'months')) {
-    parts.push({ key: 'time', text: `${p.interval_value} ${INTERVAL_TYPE_LABEL[p.interval_type] || p.interval_type}` })
-  } else if (p.interval_value != null && p.interval_value !== '') {
-    parts.push({ key: 'time', text: `${p.interval_value} ${INTERVAL_TYPE_LABEL[p.interval_type] || p.interval_type}` })
-  }
-  const mu = meterUnit(p.meter_source)
-  if (mu && p.meter_interval != null && p.meter_interval !== '') {
-    parts.push({ key: 'meter', text: `every ${fmtNum(p.meter_interval)} ${mu}` })
-  }
-  return parts
 }
 
 const EMPTY_FORM = {
@@ -302,43 +277,19 @@ export default function PmPrograms() {
     return m
   }, [plans])
 
-  const filteredPlans = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return enrichedPlans.filter((p) => {
-      if (statusFilter !== 'all' && p.status !== statusFilter) return false
-      if (categoryFilter !== 'all' && (p.asset_category || '') !== categoryFilter) return false
-      if (dueOnly && !(p._st.band === 'overdue' || p._st.band === 'due_soon')) return false
-      if (q) {
-        const hay = `${p.name || ''} ${p.asset_no || ''} ${ASSET_CATEGORY_LABELS[p.asset_category] || ''} ${p.site || ''} ${p.assigned_to || ''}`.toLowerCase()
-        if (!hay.includes(q)) return false
-      }
-      return true
-    })
-  }, [enrichedPlans, search, statusFilter, categoryFilter, dueOnly])
-
-  // Paged, not capped. This register used to render filteredPlans.slice(0, 500).
-  // The EXPORT below still walks filteredPlans in full.
-  const planPager = usePagedRows(filteredPlans)
+  const filteredPlans = useMemo(
+    () => filterPlans(enrichedPlans, { search, status: statusFilter, category: categoryFilter, dueOnly }),
+    [enrichedPlans, search, statusFilter, categoryFilter, dueOnly],
+  )
 
   const clearPlanFilters = () => { setSearch(''); setStatusFilter('all'); setCategoryFilter('all'); setDueOnly(false) }
   const hasPlanFilters = search || statusFilter !== 'all' || categoryFilter !== 'all' || dueOnly
 
-  const filteredHistory = useMemo(() => {
-    const list = history || []
-    const asset = histAsset.trim().toLowerCase()
-    return list.filter((r) => {
-      if (asset && !String(r.asset_no || '').toLowerCase().includes(asset)) return false
-      if (histProgram !== 'all' && String(r.pm_program_id) !== histProgram) return false
-      if (histOutcome !== 'all' && r.outcome !== histOutcome) return false
-      const d = r.service_date ? String(r.service_date).slice(0, 10) : ''
-      if (histFrom && (!d || d < histFrom)) return false
-      if (histTo && (!d || d > histTo)) return false
-      return true
-    })
-  }, [history, histAsset, histProgram, histOutcome, histFrom, histTo])
-
-  // Paged, not capped - the service ledger is meant to be browsed in full.
-  const histPager = usePagedRows(filteredHistory)
+  const filteredHistory = useMemo(
+    () => filterHistory(history || [], { asset: histAsset, program: histProgram, outcome: histOutcome, from: histFrom, to: histTo }),
+    [history, histAsset, histProgram, histOutcome, histFrom, histTo],
+  )
+  const histStats = useMemo(() => historySummary(filteredHistory), [filteredHistory])
 
   const clearHistFilters = () => { setHistAsset(''); setHistProgram('all'); setHistOutcome('all'); setHistFrom(''); setHistTo('') }
   const hasHistFilters = histAsset || histProgram !== 'all' || histOutcome !== 'all' || histFrom || histTo
@@ -368,10 +319,10 @@ export default function PmPrograms() {
       },
     },
     scales: {
-      x: { grid: { display: false }, ticks: { color: 'rgba(148,163,184,0.9)', font: { size: 10 } } },
+      x: { grid: { display: false }, ticks: { color: 'var(--text-muted)', font: { size: 10 } } },
       y: {
         grid: { color: 'rgba(148,163,184,0.12)' },
-        ticks: { color: 'rgba(148,163,184,0.9)', font: { size: 10 }, callback: (v) => formatCurrencyCompact(v, activeCurrency) },
+        ticks: { color: 'var(--text-muted)', font: { size: 10 }, callback: (v) => formatCurrencyCompact(v, activeCurrency) },
       },
     },
   }), [costMode, activeCurrency])
@@ -438,10 +389,10 @@ export default function PmPrograms() {
       tooltip: { callbacks: { label: (ctx) => formatCurrencyCompact(ctx.parsed.y, activeCurrency) } },
     },
     scales: {
-      x: { grid: { display: false }, ticks: { color: 'rgba(148,163,184,0.9)', font: { size: 10 } } },
+      x: { grid: { display: false }, ticks: { color: 'var(--text-muted)', font: { size: 10 } } },
       y: {
         grid: { color: 'rgba(148,163,184,0.12)' },
-        ticks: { color: 'rgba(148,163,184,0.9)', font: { size: 10 }, callback: (v) => formatCurrencyCompact(v, activeCurrency) },
+        ticks: { color: 'var(--text-muted)', font: { size: 10 }, callback: (v) => formatCurrencyCompact(v, activeCurrency) },
       },
     },
   }), [activeCurrency])
@@ -451,7 +402,7 @@ export default function PmPrograms() {
     maintainAspectRatio: false,
     cutout: '62%',
     plugins: {
-      legend: { position: 'bottom', labels: { color: 'rgba(148,163,184,0.9)', font: { size: 11 }, boxWidth: 10, padding: 12 } },
+      legend: { position: 'bottom', labels: { color: 'var(--text-muted)', font: { size: 11 }, boxWidth: 10, padding: 12 } },
       tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${ctx.parsed}` } },
     },
   }), [])
@@ -701,48 +652,137 @@ export default function PmPrograms() {
   }, [recordFor, recordForm, recordMeter.source, activeCountry])
 
   // ── Exports ───────────────────────────────────────────────────────────────
-  const PLAN_COLS = ['name', 'asset_no', 'asset_category', 'interval', 'meter_interval', 'next_due', 'next_due_meter', 'priority', 'assigned_to', 'status', 'due']
-  const PLAN_HEADERS = ['Plan', 'Asset', 'Category', 'Time interval', 'Meter interval', 'Next due', 'Next due meter', 'Priority', 'Assigned', 'Status', 'Due']
-  const planExportRows = filteredPlans.map((p) => ({
-    name: p.name || '',
-    asset_no: p.asset_no || '',
-    asset_category: ASSET_CATEGORY_LABELS[p.asset_category] || '',
-    interval: (p.interval_value != null && p.interval_value !== '') ? `${p.interval_value} ${INTERVAL_TYPE_LABEL[p.interval_type] || p.interval_type}` : '',
-    meter_interval: (meterUnit(p.meter_source) && p.meter_interval != null) ? `${p.meter_interval} ${meterUnit(p.meter_source)}` : '',
-    next_due: p.next_due || '',
-    next_due_meter: (p.next_due_meter != null && meterUnit(p.meter_source)) ? `${p.next_due_meter} ${meterUnit(p.meter_source)}` : '',
-    priority: PM_PRIORITY_META[p.priority]?.label || p.priority || '',
-    assigned_to: p.assigned_to || '',
-    status: PM_STATUS_META[p.status]?.label || p.status || '',
-    due: PM_DUE_META[p._st.band]?.label || p._st.band || '',
-  }))
+  const PLAN_COLS = PLAN_EXPORT_COLS
+  const PLAN_HEADERS = PLAN_EXPORT_HEADERS
+  const planExportRows = buildPlanExportRows(filteredPlans)
   const planFileName = () => reportFileName('Preventive Maintenance Plans', reportDateLabel())
   const exportPlansExcel = () => exportToExcel(planExportRows, PLAN_COLS, PLAN_HEADERS, planFileName(), 'Plans', { title: 'Preventive Maintenance Plans', currency: activeCurrency })
   const exportPlansPdf = () => exportToPdf(planExportRows, PLAN_COLS.map((k, i) => ({ key: k, header: PLAN_HEADERS[i] })), 'Preventive Maintenance Plans', planFileName(), 'landscape', '', { currency: activeCurrency })
 
-  const HIST_COLS = ['service_date', 'asset_no', 'plan', 'meter', 'performed_by', 'outcome', 'parts_cost', 'labour_cost', 'total_cost', 'next_due', 'work_order_no']
-  const HIST_HEADERS = ['Date', 'Asset', 'Plan', 'Meter reading', 'Performed by', 'Outcome', 'Parts', 'Labour', 'Total', 'Next due', 'WO no']
-  const histExportRows = filteredHistory.map((r) => {
-    const unit = meterUnit(r.meter_type)
-    return {
-      service_date: r.service_date ? String(r.service_date).slice(0, 10) : '',
-      asset_no: r.asset_no || '',
-      plan: planNameById.get(String(r.pm_program_id)) || '',
-      meter: (r.meter_reading != null && unit) ? `${r.meter_reading} ${unit}` : (r.meter_reading != null ? String(r.meter_reading) : ''),
-      performed_by: r.performed_by || '',
-      outcome: PM_OUTCOME_META[r.outcome]?.label || r.outcome || '',
-      parts_cost: r.parts_cost ?? '',
-      labour_cost: r.labour_cost ?? '',
-      total_cost: r.total_cost ?? '',
-      next_due: r.next_due || '',
-      work_order_no: r.work_order_no || '',
-    }
-  })
+  const HIST_COLS = HIST_EXPORT_COLS
+  const HIST_HEADERS = HIST_EXPORT_HEADERS
+  const histExportRows = buildHistoryExportRows(filteredHistory, planNameById)
   const histFileName = () => reportFileName('Preventive Maintenance Service History', reportDateLabel())
   const exportHistExcel = () => exportToExcel(histExportRows, HIST_COLS, HIST_HEADERS, histFileName(), 'History', { title: 'Preventive Maintenance Service History', currency: activeCurrency })
   const exportHistPdf = () => exportToPdf(histExportRows, HIST_COLS.map((k, i) => ({ key: k, header: HIST_HEADERS[i] })), 'Preventive Maintenance Service History', histFileName(), 'landscape', '', { currency: activeCurrency })
 
   const notLoaded = dashboard === null
+
+  // ── Register columns (EnterpriseTable) ──────────────────────────────────────
+  const planColumns = [
+    {
+      accessorKey: 'name', header: 'Plan',
+      cell: ({ getValue }) => <span className="font-medium text-[var(--text-primary)]">{getValue() || 'N/A'}</span>,
+    },
+    {
+      accessorKey: 'asset_no', header: 'Asset',
+      cell: ({ row }) => (
+        <span className="text-[var(--text-secondary)]">
+          {row.original.asset_no || 'N/A'}
+          {row.original.asset_category && <span className="block text-[11px] text-[var(--text-muted)]">{ASSET_CATEGORY_LABELS[row.original.asset_category] || row.original.asset_category}</span>}
+        </span>
+      ),
+    },
+    {
+      id: 'interval', header: 'Interval', enableSorting: false,
+      accessorFn: (p) => intervalSummary(p).map((it) => it.text).join(' / '),
+      cell: ({ row }) => {
+        const intervals = intervalSummary(row.original)
+        return intervals.length === 0 ? 'N/A' : intervals.map((it) => <span key={it.key} className="block text-[13px]">{it.text}</span>)
+      },
+    },
+    {
+      id: 'next_due', header: 'Next due',
+      accessorFn: (p) => dueSortValue(p._st),
+      meta: { exportValue: (p) => `${PM_DUE_META[p._st.band]?.label || ''} ${p.next_due || ''}`.trim() },
+      cell: ({ row }) => {
+        const p = row.original
+        const st = p._st
+        const unit = st.unit || meterUnit(p.meter_source)
+        return (
+          <>
+            <Badge tone={PM_DUE_META[st.band]?.tone}>{PM_DUE_META[st.band]?.label}</Badge>
+            {p.next_due && (
+              <span className="block text-[11px] text-[var(--text-muted)] mt-1">
+                {fmtDate(p.next_due)}{st.daysToDue != null && <> ({st.daysToDue < 0 ? `${Math.abs(st.daysToDue)}d ago` : `${st.daysToDue}d`})</>}
+              </span>
+            )}
+            {p.next_due_meter != null && unit && (
+              <span className="block text-[11px] text-[var(--text-muted)]">
+                {fmtNum(p.next_due_meter)} {unit}{st.meterRemaining != null && <> ({st.meterRemaining < 0 ? `${fmtNum(Math.abs(st.meterRemaining))} ${unit} over` : `${fmtNum(st.meterRemaining)} ${unit} left`})</>}
+              </span>
+            )}
+          </>
+        )
+      },
+    },
+    {
+      accessorKey: 'priority', header: 'Priority',
+      meta: { filterVariant: 'select', exportValue: (p) => PM_PRIORITY_META[p.priority]?.label || p.priority || '' },
+      cell: ({ getValue }) => <Badge tone={PM_PRIORITY_META[getValue()]?.tone}>{PM_PRIORITY_META[getValue()]?.label || getValue() || 'N/A'}</Badge>,
+    },
+    { accessorKey: 'assigned_to', header: 'Assigned', cell: ({ getValue }) => getValue() || 'N/A' },
+    {
+      accessorKey: 'status', header: 'Status',
+      meta: { exportValue: (p) => PM_STATUS_META[p.status]?.label || p.status || '' },
+      cell: ({ getValue }) => <Badge tone={PM_STATUS_META[getValue()]?.tone}>{PM_STATUS_META[getValue()]?.label || getValue() || 'N/A'}</Badge>,
+    },
+    {
+      id: 'actions', header: 'Actions', enableSorting: false, meta: { export: false },
+      cell: ({ row }) => {
+        const p = row.original
+        return (
+          <div className="flex items-center gap-1">
+            <button type="button" onClick={(e) => { e.stopPropagation(); openRecord(p) }} className="min-h-[44px] px-2.5 rounded-lg bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25 text-[11px] font-medium inline-flex items-center gap-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400"><Wrench size={13} aria-hidden="true" /> Service</button>
+            <button type="button" onClick={(e) => { e.stopPropagation(); openEdit(p) }} className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400" aria-label={`Edit ${p.name || 'plan'}`}><Pencil size={14} /></button>
+            <button type="button" onClick={(e) => { e.stopPropagation(); setConfirmDelete(p) }} className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-400" aria-label={`Delete ${p.name || 'plan'}`}><Trash2 size={14} /></button>
+          </div>
+        )
+      },
+    },
+  ]
+
+  const money = (v) => (v != null && Number.isFinite(Number(v)) ? formatCurrencyCompact(Number(v), activeCurrency) : 'N/A')
+  const histColumns = [
+    { accessorKey: 'service_date', header: 'Date', cell: ({ getValue }) => <span className="whitespace-nowrap">{fmtDate(getValue())}</span> },
+    { accessorKey: 'asset_no', header: 'Asset', cell: ({ getValue }) => getValue() || 'N/A' },
+    {
+      id: 'plan', header: 'Plan',
+      accessorFn: (r) => planNameById.get(String(r.pm_program_id)) || '',
+      cell: ({ getValue }) => <span className="text-[var(--text-primary)]">{getValue() || 'N/A'}</span>,
+    },
+    {
+      accessorKey: 'meter_reading', header: 'Meter', meta: { align: 'right' },
+      cell: ({ row }) => {
+        const r = row.original
+        const unit = meterUnit(r.meter_type)
+        return <span className="whitespace-nowrap">{r.meter_reading != null ? `${fmtNum(r.meter_reading)}${unit ? ` ${unit}` : ''}` : 'N/A'}</span>
+      },
+    },
+    { accessorKey: 'performed_by', header: 'Performed by', cell: ({ getValue }) => getValue() || 'N/A' },
+    {
+      accessorKey: 'outcome', header: 'Outcome',
+      meta: { exportValue: (r) => PM_OUTCOME_META[r.outcome]?.label || r.outcome || '' },
+      cell: ({ getValue }) => <Badge tone={PM_OUTCOME_META[getValue()]?.tone}>{PM_OUTCOME_META[getValue()]?.label || getValue() || 'N/A'}</Badge>,
+    },
+    { accessorKey: 'parts_cost', header: `Parts (${activeCurrency})`, meta: { align: 'right' }, cell: ({ getValue }) => money(getValue()) },
+    { accessorKey: 'labour_cost', header: `Labour (${activeCurrency})`, meta: { align: 'right' }, cell: ({ getValue }) => money(getValue()) },
+    { accessorKey: 'total_cost', header: `Total (${activeCurrency})`, meta: { align: 'right' }, cell: ({ getValue }) => <span className="font-medium text-[var(--text-primary)]">{money(getValue())}</span> },
+    {
+      accessorKey: 'next_due', header: 'Next due',
+      cell: ({ row }) => {
+        const r = row.original
+        const unit = meterUnit(r.meter_type)
+        return (
+          <span className="whitespace-nowrap">
+            {fmtDate(r.next_due)}
+            {r.next_due_meter != null && unit && <span className="block text-[11px] text-[var(--text-muted)]">{fmtNum(r.next_due_meter)} {unit}</span>}
+          </span>
+        )
+      },
+    },
+    { accessorKey: 'work_order_no', header: 'WO no', cell: ({ getValue }) => getValue() || 'N/A' },
+  ]
 
   const kpis = [
     { label: 'Total plans', value: summary.total, icon: ClipboardList, tone: 'text-[var(--text-primary)]' },
@@ -1086,7 +1126,7 @@ export default function PmPrograms() {
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative flex-1 min-w-[200px]">
                 <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-                <input className="input pl-9 w-full" placeholder="Search plan, asset, category, site, assignee" value={search} onChange={(e) => setSearch(e.target.value)} />
+                <input className="input pl-9 w-full" aria-label="Search plans" placeholder="Search plan, asset, category, site, assignee" value={search} onChange={(e) => setSearch(e.target.value)} />
               </div>
               <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
                 <option value="all">All statuses</option>
@@ -1098,7 +1138,8 @@ export default function PmPrograms() {
               </select>
               <button
                 onClick={() => setDueOnly((v) => !v)}
-                className={`text-sm inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border ${dueOnly ? 'bg-amber-500/15 text-amber-300 border-amber-500/40' : 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)] hover:text-[var(--text-secondary)]'}`}
+                aria-pressed={dueOnly}
+                className={`min-h-[44px] text-sm inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border ${dueOnly ? 'bg-amber-500/15 text-amber-300 border-amber-500/40' : 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)] hover:text-[var(--text-secondary)]'}`}
               >
                 <AlertTriangle size={14} /> Due only
               </button>
@@ -1112,68 +1153,18 @@ export default function PmPrograms() {
           </Card>
 
           {/* Table */}
-          <Card pad="none" clip>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                    {['Plan', 'Asset', 'Interval', 'Next due', 'Priority', 'Assigned', 'Status', ''].map((h, i) => <th key={i} className="px-4 py-3 font-semibold whitespace-nowrap">{h}</th>)}
-                  </tr>
-                </thead>
-                <tbody>
-                  {notLoaded ? (
-                    [0, 1, 2, 3, 4].map((i) => <tr key={i} className="border-b border-[var(--input-border)]/50"><td colSpan={8} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>)
-                  ) : filteredPlans.length === 0 ? (
-                    <tr><td colSpan={8} className="px-4 py-12 text-center text-[var(--text-muted)]"><Filter size={22} className="mx-auto mb-2 opacity-60" />{plans.length === 0 ? 'No maintenance plans yet. Create the first plan to get started.' : 'No plans match these filters.'}</td></tr>
-                  ) : (
-                    planPager.pageRows.map((p) => {
-                      const st = p._st
-                      const intervals = intervalSummary(p)
-                      const unit = st.unit || meterUnit(p.meter_source)
-                      return (
-                        <tr key={p.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40 align-top">
-                          <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{p.name || 'N/A'}</td>
-                          <td className="px-4 py-2.5 text-[var(--text-secondary)]">
-                            {p.asset_no || 'N/A'}
-                            {p.asset_category && <span className="block text-[11px] text-[var(--text-muted)]">{ASSET_CATEGORY_LABELS[p.asset_category] || p.asset_category}</span>}
-                          </td>
-                          <td className="px-4 py-2.5 text-[var(--text-secondary)]">
-                            {intervals.length === 0 ? 'N/A' : intervals.map((it) => (
-                              <span key={it.key} className="block text-[13px]">{it.text}</span>
-                            ))}
-                          </td>
-                          <td className="px-4 py-2.5">
-                            <Badge tone={PM_DUE_META[st.band]?.tone}>{PM_DUE_META[st.band]?.label}</Badge>
-                            {p.next_due && (
-                              <span className="block text-[11px] text-[var(--text-muted)] mt-1">
-                                {fmtDate(p.next_due)}{st.daysToDue != null && <> ({st.daysToDue < 0 ? `${Math.abs(st.daysToDue)}d ago` : `${st.daysToDue}d`})</>}
-                              </span>
-                            )}
-                            {p.next_due_meter != null && unit && (
-                              <span className="block text-[11px] text-[var(--text-muted)]">
-                                {fmtNum(p.next_due_meter)} {unit}{st.meterRemaining != null && <> ({st.meterRemaining < 0 ? `${fmtNum(Math.abs(st.meterRemaining))} ${unit} over` : `${fmtNum(st.meterRemaining)} ${unit} left`})</>}
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-4 py-2.5"><Badge tone={PM_PRIORITY_META[p.priority]?.tone}>{PM_PRIORITY_META[p.priority]?.label || p.priority}</Badge></td>
-                          <td className="px-4 py-2.5 text-[var(--text-secondary)]">{p.assigned_to || 'N/A'}</td>
-                          <td className="px-4 py-2.5"><Badge tone={PM_STATUS_META[p.status]?.tone}>{PM_STATUS_META[p.status]?.label || p.status}</Badge></td>
-                          <td className="px-4 py-2.5">
-                            <div className="flex items-center gap-1.5">
-                              <button onClick={() => openRecord(p)} className="px-2 py-1 rounded-lg bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25 text-[11px] font-medium inline-flex items-center gap-1" title="Record service"><Wrench size={13} /> Service</button>
-                              <button onClick={() => openEdit(p)} className="p-1.5 rounded-lg hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Edit"><Pencil size={14} /></button>
-                              <button onClick={() => setConfirmDelete(p)} className="p-1.5 rounded-lg hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400" aria-label="Delete"><Trash2 size={14} /></button>
-                            </div>
-                          </td>
-                        </tr>
-                      )
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-            <TablePagination {...planPager} />
-          </Card>
+          <EnterpriseTable
+            columns={planColumns}
+            data={filteredPlans}
+            getRowId={(p) => String(p.id)}
+            loading={notLoaded && !error}
+            error={notLoaded && error ? error : null}
+            onRetry={load}
+            enableGlobalFilter={false}
+            enableExport={false}
+            emptyMessage={plans.length === 0 ? 'No maintenance plans yet. Create the first plan to get started.' : 'No plans match these filters.'}
+            viewKey="pm-plans"
+          />
         </div>
       )}
 
@@ -1184,7 +1175,7 @@ export default function PmPrograms() {
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative flex-1 min-w-[180px]">
                 <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-                <input className="input pl-9 w-full" placeholder="Filter by asset number" value={histAsset} onChange={(e) => setHistAsset(e.target.value)} />
+                <input className="input pl-9 w-full" aria-label="Filter by asset number" placeholder="Filter by asset number" value={histAsset} onChange={(e) => setHistAsset(e.target.value)} />
               </div>
               <select className="input" value={histProgram} onChange={(e) => setHistProgram(e.target.value)} aria-label="Plan">
                 <option value="all">All plans</option>
@@ -1204,47 +1195,34 @@ export default function PmPrograms() {
             </div>
           </Card>
 
-          <Card pad="none" clip>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-[var(--input-border)] text-left text-xs uppercase tracking-wider text-[var(--text-muted)]">
-                    {['Date', 'Asset', 'Plan', 'Meter', 'Performed by', 'Outcome', 'Parts', 'Labour', 'Total', 'Next due', 'WO no'].map((h, i) => <th key={i} className="px-4 py-3 font-semibold whitespace-nowrap">{h}</th>)}
-                  </tr>
-                </thead>
-                <tbody>
-                  {history === null ? (
-                    [0, 1, 2, 3, 4].map((i) => <tr key={i} className="border-b border-[var(--input-border)]/50"><td colSpan={11} className="px-4 py-3"><div className="h-4 bg-[var(--input-bg)] rounded animate-pulse" /></td></tr>)
-                  ) : filteredHistory.length === 0 ? (
-                    <tr><td colSpan={11} className="px-4 py-12 text-center text-[var(--text-muted)]"><History size={22} className="mx-auto mb-2 opacity-60" />{(history || []).length === 0 ? 'No services recorded yet. Record a service from the Plans tab.' : 'No services match these filters.'}</td></tr>
-                  ) : (
-                    histPager.pageRows.map((r) => {
-                      const unit = meterUnit(r.meter_type)
-                      return (
-                        <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                          <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtDate(r.service_date)}</td>
-                          <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.asset_no || 'N/A'}</td>
-                          <td className="px-4 py-2.5 text-[var(--text-primary)]">{planNameById.get(String(r.pm_program_id)) || 'N/A'}</td>
-                          <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{r.meter_reading != null ? `${fmtNum(r.meter_reading)}${unit ? ` ${unit}` : ''}` : 'N/A'}</td>
-                          <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.performed_by || 'N/A'}</td>
-                          <td className="px-4 py-2.5"><Badge tone={PM_OUTCOME_META[r.outcome]?.tone}>{PM_OUTCOME_META[r.outcome]?.label || r.outcome}</Badge></td>
-                          <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{r.parts_cost != null ? formatCurrencyCompact(r.parts_cost, activeCurrency) : 'N/A'}</td>
-                          <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{r.labour_cost != null ? formatCurrencyCompact(r.labour_cost, activeCurrency) : 'N/A'}</td>
-                          <td className="px-4 py-2.5 text-[var(--text-primary)] font-medium whitespace-nowrap">{r.total_cost != null ? formatCurrencyCompact(r.total_cost, activeCurrency) : 'N/A'}</td>
-                          <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">
-                            {fmtDate(r.next_due)}
-                            {r.next_due_meter != null && unit && <span className="block text-[11px] text-[var(--text-muted)]">{fmtNum(r.next_due_meter)} {unit}</span>}
-                          </td>
-                          <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.work_order_no || 'N/A'}</td>
-                        </tr>
-                      )
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-            <TablePagination {...histPager} />
-          </Card>
+          {/* Service summary: follows the filters above */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {[
+              { label: 'Services', value: history === null ? 'N/A' : histStats.services.toLocaleString(), sub: `${histStats.assets} assets` },
+              { label: 'Total service cost', value: money(histStats.totalCost), sub: histStats.costedShare == null ? 'No services' : `${Math.round(histStats.costedShare * 100)}% of services costed` },
+              { label: 'Average per service', value: money(histStats.avgCost), sub: 'Costed services only' },
+              { label: 'Raised a work order', value: history === null ? 'N/A' : histStats.withWorkOrder.toLocaleString(), sub: histStats.services ? `${Math.round((histStats.withWorkOrder / histStats.services) * 100)}% of services` : 'No services' },
+            ].map((k) => (
+              <Card key={k.label}>
+                <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
+                <p className="text-xl font-bold tabular-nums text-[var(--text-primary)] mt-1">{k.value}</p>
+                <p className="text-[11px] text-[var(--text-dim)] mt-0.5">{k.sub}</p>
+              </Card>
+            ))}
+          </div>
+
+          <EnterpriseTable
+            columns={histColumns}
+            data={filteredHistory}
+            getRowId={(r) => String(r.id)}
+            loading={history === null && !error}
+            error={history === null && error ? error : null}
+            onRetry={load}
+            enableGlobalFilter={false}
+            enableExport={false}
+            emptyMessage={(history || []).length === 0 ? 'No services recorded yet. Record a service from the Plans tab.' : 'No services match these filters.'}
+            viewKey="pm-history"
+          />
         </div>
       )}
 

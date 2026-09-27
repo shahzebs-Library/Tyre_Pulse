@@ -27,6 +27,13 @@ import { useTenant } from '../contexts/TenantContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import PageHeader from '../components/ui/PageHeader'
 import { loadAutoTable } from '../lib/pdfEngine'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import { colorAt, withAlpha } from '../lib/reportColors'
+import {
+  PO_STATUSES, PO_PRIORITIES, calcItemTotal, calcSubtotal, filterOrdersBase, filterOrdersByStatus,
+  procurementKpis, budgetPosition, vendorMonthlySpend, statusCounts, cumulativeSpend, optionsOf,
+  orderExportRows, receiptProgress, daysBetween,
+} from '../lib/procurementAnalytics'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, PointElement, LineElement,
@@ -34,8 +41,8 @@ ChartJS.register(
 )
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-const STATUSES = ['Draft','Submitted','Approved','Ordered','Partial Delivery','Delivered','Cancelled','Closed']
-const PRIORITIES = ['Urgent','High','Normal','Low']
+const STATUSES = PO_STATUSES
+const PRIORITIES = PO_PRIORITIES
 
 // Static Tailwind classes so the JIT compiler does not purge dynamically
 // interpolated `text-${color}-400` KPI colours in production builds.
@@ -47,7 +54,6 @@ const KPI_TEXT_COLOR = {
   purple: 'text-purple-400',
 }
 const kpiText = (c) => KPI_TEXT_COLOR[c] || 'text-[var(--text-primary)]'
-const PAGE_SIZE = 20
 const BUDGET_KEY = 'tp_procurement_budget'
 
 const STATUS_CONFIG = {
@@ -80,27 +86,16 @@ const EMPTY_FORM = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const fmtDate = (d) => formatDate(d)
-function calcItemTotal(item) {
-  return (parseFloat(item.quantity) || 0) * (parseFloat(item.unit_price) || 0)
-}
-function calcSubtotal(items) {
-  return (items || []).reduce((s, it) => s + calcItemTotal(it), 0)
-}
-function daysBetween(a, b) {
-  if (!a || !b) return null
-  return Math.round((new Date(b) - new Date(a)) / 86400000)
-}
-
 const CHART_OPTS = {
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
-    legend: { labels: { color: '#9ca3af', boxWidth: 12, font: { size: 11 } } },
-    tooltip: { backgroundColor: 'var(--panel)', borderColor: 'var(--hairline)', borderWidth: 1, titleColor: '#f9fafb', bodyColor: '#d1d5db' },
+    legend: { labels: { color: 'var(--text-muted)', boxWidth: 12, font: { size: 11 } } },
+    tooltip: { backgroundColor: 'var(--panel)', borderColor: 'var(--hairline)', borderWidth: 1, titleColor: 'var(--text-primary)', bodyColor: 'var(--text-secondary)' },
   },
   scales: {
-    x: { ticks: { color: '#9ca3af', font: { size: 11 } }, grid: { color: 'var(--panel-2)' } },
-    y: { ticks: { color: '#9ca3af', font: { size: 11 } }, grid: { color: 'var(--panel-2)' } },
+    x: { ticks: { color: 'var(--text-muted)', font: { size: 11 } }, grid: { color: 'var(--panel-2)' } },
+    y: { ticks: { color: 'var(--text-muted)', font: { size: 11 } }, grid: { color: 'var(--panel-2)' } },
   },
 }
 
@@ -135,9 +130,6 @@ export default function Procurement() {
   const [siteFilter, setSite]       = useState('All')
   const [dateFrom, setDateFrom]     = useState('')
   const [dateTo, setDateTo]         = useState('')
-  const [sortField, setSortField]   = useState('order_date')
-  const [sortDir, setSortDir]       = useState('desc')
-  const [page, setPage]             = useState(1)
 
   // UI state
   const [showForm, setShowForm]     = useState(false)
@@ -214,142 +206,59 @@ export default function Procurement() {
   }, [viewPO?.id])
 
   // ── Derived values ─────────────────────────────────────────────────────────
-  const vendors = useMemo(() => ['All', ...Array.from(new Set(orders.map(o => o.vendor_name).filter(Boolean))).sort()], [orders])
-  const sites   = useMemo(() => ['All', ...Array.from(new Set(orders.map(o => o.site).filter(Boolean))).sort()], [orders])
+  const vendors = useMemo(() => optionsOf(orders, 'vendor_name'), [orders])
+  const sites   = useMemo(() => optionsOf(orders, 'site'), [orders])
 
-  // Every filter EXCEPT status. The status doughnut computes over this: the
-  // chart IS the status dimension and the filter bar carries a status select,
-  // so counting the already-filtered set would collapse it to a single slice
-  // and it would stop stating how many orders picking each status would show.
-  // Same rule as a tile that doubles as a filter toggle (see Inspections.jsx).
-  const statusChartBase = useMemo(() => {
-    let list = [...orders]
-    if (search.trim()) {
-      const q = search.toLowerCase()
-      list = list.filter(o =>
-        o.po_number?.toLowerCase().includes(q) ||
-        o.vendor_name?.toLowerCase().includes(q) ||
-        o.site?.toLowerCase().includes(q) ||
-        o.budget_code?.toLowerCase().includes(q) ||
-        o.requested_by?.toLowerCase().includes(q)
-      )
-    }
-    if (vendorFilter !== 'All') list = list.filter(o => o.vendor_name === vendorFilter)
-    if (siteFilter !== 'All')   list = list.filter(o => o.site === siteFilter)
-    if (dateFrom) list = list.filter(o => o.order_date >= dateFrom)
-    if (dateTo)   list = list.filter(o => o.order_date <= dateTo)
-    return list
-  }, [orders, search, vendorFilter, siteFilter, dateFrom, dateTo])
+  // Every filter EXCEPT status (engine: src/lib/procurementAnalytics). The
+  // status doughnut computes over this: the chart IS the status dimension, so
+  // counting the already-filtered set would collapse it to one slice.
+  const statusChartBase = useMemo(
+    () => filterOrdersBase(orders, { search, vendor: vendorFilter, site: siteFilter, from: dateFrom, to: dateTo }),
+    [orders, search, vendorFilter, siteFilter, dateFrom, dateTo],
+  )
+  const filtered = useMemo(() => filterOrdersByStatus(statusChartBase, statusFilter), [statusChartBase, statusFilter])
 
-  const filtered = useMemo(() => {
-    const list = statusFilter === 'All'
-      ? [...statusChartBase]
-      : statusChartBase.filter(o => o.status === statusFilter)
-    list.sort((a, b) => {
-      const av = a[sortField] ?? '', bv = b[sortField] ?? ''
-      return sortDir === 'asc' ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av))
-    })
-    return list
-  }, [statusChartBase, statusFilter, sortField, sortDir])
-
-  const paginated = useMemo(() => {
-    const s = (page - 1) * PAGE_SIZE
-    return filtered.slice(s, s + PAGE_SIZE)
-  }, [filtered, page])
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
-
-  // True when the register below is narrowed. Drives the caption on the tiles:
-  // a silently narrowed KPI is the same defect as an unfiltered one.
+  // True when the register below is narrowed. Drives the caption on the tiles.
   const scopeActive = Boolean(
     search.trim() || statusFilter !== 'All' || vendorFilter !== 'All' ||
     siteFilter !== 'All' || dateFrom || dateTo
   )
 
   // ── KPIs ───────────────────────────────────────────────────────────────────
-  // Computed over `filtered`, the same population the table renders. They used
-  // to read the whole `orders` array, so filtering to one vendor or one site
-  // left the spend and lead-time tiles quoting fleet-wide figures directly
-  // above a table showing a subset.
-  const kpis = useMemo(() => {
-    const now = new Date()
-    const yearStart = new Date(now.getFullYear(), 0, 1).toISOString().slice(0, 10)
-    const thisPeriod = filtered.filter(o => o.order_date >= yearStart)
-    const totalPOs   = thisPeriod.length
-
-    const spend = filtered
-      .filter(o => ['Delivered','Closed'].includes(o.status))
-      .reduce((s, o) => s + (parseFloat(o.total_amount) || 0), 0)
-
-    const pendingDelivery = filtered.filter(o => ['Ordered','Partial Delivery'].includes(o.status)).length
-
-    const pendingValue = filtered
-      .filter(o => ['Submitted','Approved','Ordered','Partial Delivery'].includes(o.status))
-      .reduce((s, o) => s + (parseFloat(o.total_amount) || 0), 0)
-
-    const delivered = filtered.filter(o => o.actual_delivery && o.order_date)
-    const avgLeadTime = delivered.length
-      ? Math.round(delivered.reduce((s, o) => s + (daysBetween(o.order_date, o.actual_delivery) || 0), 0) / delivered.length)
-      : null
-
-    return { totalPOs, spend, pendingDelivery, pendingValue, avgLeadTime }
-  }, [filtered])
+  // Computed over `filtered`, the same population the table renders.
+  const kpis = useMemo(() => procurementKpis(filtered, { now: new Date() }), [filtered])
 
   // Budget variance DELIBERATELY stays whole-register. `budget` is a single
-  // annual org-wide figure held in settings, so dividing one site's spend by
-  // the whole company's budget would read as "we are well under" when it only
-  // means the filter excluded most of the spend. The panel says which scope it
-  // covers instead of quietly narrowing.
-  const budgetScope = useMemo(() => {
-    const spend = orders
-      .filter(o => ['Delivered','Closed'].includes(o.status))
-      .reduce((s, o) => s + (parseFloat(o.total_amount) || 0), 0)
-    return { spend, variance: budget > 0 ? ((spend / budget) * 100) : null }
-  }, [orders, budget])
+  // annual org-wide figure, so dividing one site's spend by the whole company's
+  // budget would read as "well under" when the filter only excluded the spend.
+  const budgetScope = useMemo(() => budgetPosition(orders, budget), [orders, budget])
 
-  // ── Chart: monthly spend by vendor (top 5) ─────────────────────────────────
-  // Reads `filtered` so the chart analyses the same population as the table.
+  // ── Chart: monthly spend by vendor (top 5), same population as the table ──
   const vendorBarData = useMemo(() => {
-    const months = Array.from({ length: 6 }, (_, i) => {
-      const d = new Date(); d.setMonth(d.getMonth() - 5 + i)
-      return d.toISOString().slice(0, 7)
-    })
-    const vendorTotals = {}
-    filtered.forEach(o => {
-      if (!['Delivered','Closed'].includes(o.status)) return
-      vendorTotals[o.vendor_name] = (vendorTotals[o.vendor_name] || 0) + (parseFloat(o.total_amount) || 0)
-    })
-    const top5 = Object.entries(vendorTotals).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([k]) => k)
-    const colors = ['#3b82f6','#10b981','#f59e0b','#8b5cf6','#06b6d4']
+    const { months, series } = vendorMonthlySpend(filtered, { now: new Date() })
     return {
       labels: months.map(m => {
         const [y, mo] = m.split('-')
         return formatMonthYear(new Date(parseInt(y), parseInt(mo) - 1))
       }),
-      datasets: top5.map((vendor, idx) => ({
-        label: vendor,
-        data: months.map(month => {
-          return filtered
-            .filter(o => o.vendor_name === vendor && o.order_date?.startsWith(month) && ['Delivered','Closed'].includes(o.status))
-            .reduce((s, o) => s + (parseFloat(o.total_amount) || 0), 0)
-        }),
-        backgroundColor: colors[idx] + 'cc',
-        borderColor: colors[idx],
+      datasets: series.map((sv, idx) => ({
+        label: sv.vendor,
+        data: sv.data,
+        backgroundColor: withAlpha(colorAt(idx), 0.8),
+        borderColor: colorAt(idx),
         borderWidth: 1,
       })),
     }
   }, [filtered])
 
-  // ── Chart: POs by status (doughnut) ───────────────────────────────────────
-  // Reads `statusChartBase` (see above): holds out its own dimension.
+  // ── Chart: POs by status (doughnut), holds out its own dimension ──────────
   const statusDoughnutData = useMemo(() => {
     const colorMap = {
       Draft: '#6b7280', Submitted: '#3b82f6', Approved: '#10b981',
       Ordered: '#f59e0b', 'Partial Delivery': '#f97316',
       Delivered: '#14b8a6', Cancelled: '#ef4444', Closed: '#a855f7',
     }
-    const counts = {}
-    statusChartBase.forEach(o => { counts[o.status] = (counts[o.status] || 0) + 1 })
-    const entries = Object.entries(counts).filter(([, v]) => v > 0)
+    const entries = Object.entries(statusCounts(statusChartBase)).filter(([, v]) => v > 0)
     return {
       labels: entries.map(([k]) => k),
       datasets: [{
@@ -361,46 +270,27 @@ export default function Procurement() {
     }
   }, [statusChartBase])
 
-  // ── Chart: cumulative spend vs budget (line) ───────────────────────────────
-  // Whole-register on purpose: the budget line is one annual org-wide figure,
-  // so plotting a filtered spend against it would compare two different scopes.
+  // ── Chart: cumulative spend vs budget (whole register, like the budget) ───
   const cumulativeLineData = useMemo(() => {
-    const year = new Date().getFullYear().toString()
-    const months = Array.from({ length: 12 }, (_, i) =>
-      `${year}-${String(i + 1).padStart(2, '0')}`
-    )
-    let cumSpend = 0
-    const spendPoints = months.map(m => {
-      const mo = orders
-        .filter(o => o.order_date?.startsWith(m) && ['Delivered','Closed'].includes(o.status))
-        .reduce((s, o) => s + (parseFloat(o.total_amount) || 0), 0)
-      cumSpend += mo
-      return cumSpend
-    })
-    const budgetPerMonth = budget > 0 ? budget / 12 : 0
-    let cumBudget = 0
-    const budgetPoints = months.map(() => {
-      cumBudget += budgetPerMonth
-      return cumBudget
-    })
+    const series = cumulativeSpend(orders, budget, { now: new Date() })
     return {
-      labels: months.map(m => {
+      labels: series.months.map(m => {
         const [y, mo] = m.split('-')
         return formatMonth(new Date(parseInt(y), parseInt(mo) - 1))
       }),
       datasets: [
         {
           label: t('procurement.charts.actualSpendLabel'),
-          data: spendPoints,
+          data: series.spend,
           borderColor: '#10b981',
           backgroundColor: 'rgba(16,185,129,0.1)',
           tension: 0.4,
           fill: true,
           pointRadius: 3,
         },
-        ...(budget > 0 ? [{
+        ...(series.budget ? [{
           label: t('procurement.charts.budgetLabel'),
-          data: budgetPoints,
+          data: series.budget,
           borderColor: '#f59e0b',
           backgroundColor: 'transparent',
           borderDash: [5, 5],
@@ -410,18 +300,6 @@ export default function Procurement() {
       ],
     }
   }, [orders, budget, t])
-
-  // ── Sort helper ────────────────────────────────────────────────────────────
-  function handleSort(field) {
-    if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
-    else { setSortField(field); setSortDir('asc') }
-  }
-  function SortIcon({ field }) {
-    if (sortField !== field) return <ChevronDown size={13} className="text-[var(--text-dim)]" />
-    return sortDir === 'asc'
-      ? <ChevronUp size={13} className="text-blue-400" />
-      : <ChevronDown size={13} className="text-blue-400" />
-  }
 
   // ── Form helpers ───────────────────────────────────────────────────────────
   function openNew() {
@@ -567,7 +445,7 @@ export default function Procurement() {
     const autoTable = await loadAutoTable()
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
     const brand = await resolvePdfBrand(branding)
-    pdfHeader(doc, 'Purchase Order', `${po.po_number}  ·  ${po.status}  ·  Priority: ${po.priority}`, company, brand)
+    pdfHeader(doc, 'Purchase Order', `${po.po_number} | ${po.status} | Priority: ${po.priority}`, company, brand)
 
     autoTable(doc, {
       ...pdfTableTheme(brand.accent),
@@ -577,8 +455,8 @@ export default function Procurement() {
         ['PO Number',        po.po_number,                  'Vendor',        po.vendor_name],
         ['Order Date',       fmtDate(po.order_date),         'Expected Del.', fmtDate(po.expected_delivery)],
         ['Actual Delivery',  fmtDate(po.actual_delivery),    'Priority',      po.priority],
-        ['Requested By',     po.requested_by || '-',         'Approved By',   po.approved_by || '-'],
-        ['Site',             po.site || '-',                 'Budget Code',   po.budget_code || '-'],
+        ['Requested By',     po.requested_by || 'N/A',         'Approved By',   po.approved_by || 'N/A'],
+        ['Site',             po.site || 'N/A',                 'Budget Code',   po.budget_code || 'N/A'],
       ],
       columnStyles: { 0: { fontStyle: 'bold', cellWidth: 38 }, 2: { fontStyle: 'bold', cellWidth: 38 } },
       margin: { left: 14, right: 14 },
@@ -624,28 +502,65 @@ export default function Procurement() {
   // ── Excel export ───────────────────────────────────────────────────────────
   async function exportExcel() {
     const XLSX = await import('xlsx')
-    const rows = filtered.map(po => ({
-      'PO Number':       po.po_number,
-      'Vendor':          po.vendor_name,
-      'Order Date':      fmtDate(po.order_date),
-      'Exp. Delivery':   fmtDate(po.expected_delivery),
-      'Actual Delivery': fmtDate(po.actual_delivery),
-      'Status':          po.status,
-      'Priority':        po.priority,
-      'Items Count':     (po.items || []).length,
-      'Subtotal':        po.subtotal || 0,
-      'Tax':             po.tax_amount || 0,
-      'Total Amount':    po.total_amount || 0,
-      'Site':            po.site || '',
-      'Budget Code':     po.budget_code || '',
-      'Requested By':    po.requested_by || '',
-      'Approved By':     po.approved_by || '',
-    }))
+    const rows = orderExportRows(filtered)
     const ws = XLSX.utils.json_to_sheet(rows)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Purchase Orders')
     XLSX.writeFile(wb, `purchase-orders-${new Date().toISOString().slice(0, 10)}.xlsx`)
   }
+
+  // ── Register columns (EnterpriseTable) ────────────────────────────────────
+  const iconBtn = 'min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-3)] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500'
+  const poColumns = [
+    { accessorKey: 'po_number', header: t('procurement.table.columns.poNumber'), cell: ({ getValue }) => <span className="text-orange-400 font-mono text-xs font-semibold">{getValue() || 'N/A'}</span> },
+    { accessorKey: 'vendor_name', header: t('procurement.table.columns.vendor'), cell: ({ getValue }) => <span className="text-[var(--text-primary)] font-medium">{getValue() || 'N/A'}</span> },
+    { accessorKey: 'order_date', header: t('procurement.table.columns.orderDate'), cell: ({ getValue }) => <span className="whitespace-nowrap">{getValue() ? fmtDate(getValue()) : 'N/A'}</span> },
+    { accessorKey: 'expected_delivery', header: t('procurement.table.columns.expDelivery'), cell: ({ getValue }) => <span className="whitespace-nowrap">{getValue() ? fmtDate(getValue()) : 'N/A'}</span> },
+    { accessorKey: 'status', header: t('procurement.table.columns.status'), cell: ({ getValue }) => <StatusBadge status={getValue()} /> },
+    {
+      accessorKey: 'priority', header: t('procurement.table.columns.priority'),
+      cell: ({ getValue }) => {
+        const pc = PRIORITY_CONFIG[getValue()] || PRIORITY_CONFIG.Normal
+        return <span className={`flex items-center gap-1.5 ${pc.color} text-xs`}><span className={`w-2 h-2 rounded-full ${pc.dot}`} aria-hidden="true" />{getValue() || 'Normal'}</span>
+      },
+    },
+    {
+      id: 'items', header: t('procurement.table.columns.items'), accessorFn: (po) => (po.items || []).length, meta: { align: 'right' },
+      cell: ({ row }) => {
+        const r = receiptProgress(row.original.items)
+        return <span title={r.pct == null ? undefined : `${Math.round(r.pct)}% received`}>{(row.original.items || []).length}</span>
+      },
+    },
+    { accessorKey: 'total_amount', header: `${t('procurement.table.columns.total')} (${activeCurrency})`, meta: { align: 'right' }, cell: ({ getValue }) => <span className="text-green-400 font-medium whitespace-nowrap">{getValue() == null ? 'N/A' : fmtCur(getValue())}</span> },
+    { accessorKey: 'site', header: t('procurement.table.columns.site'), cell: ({ getValue }) => getValue() || 'N/A' },
+    {
+      id: 'actions', header: t('procurement.table.columns.actions'), enableSorting: false, meta: { export: false },
+      cell: ({ row }) => {
+        const po = row.original
+        return (
+          <div className="flex items-center gap-1">
+            <button type="button" onClick={(e) => { e.stopPropagation(); setViewPO(po) }} className={iconBtn} aria-label={`${t('procurement.table.viewTooltip')} ${po.po_number || ''}`.trim()}><Eye size={14} /></button>
+            <button type="button" onClick={(e) => { e.stopPropagation(); openEdit(po) }} className={iconBtn} aria-label={`${t('procurement.table.editTooltip')} ${po.po_number || ''}`.trim()}><Edit2 size={14} /></button>
+            <button type="button" onClick={(e) => { e.stopPropagation(); exportPDF(po) }} className={iconBtn} aria-label={`${t('procurement.table.pdfTooltip')} ${po.po_number || ''}`.trim()}><FileText size={14} /></button>
+          </div>
+        )
+      },
+    },
+  ]
+
+  const lineItemColumns = [
+    { accessorKey: 'brand', header: t('procurement.modal.columns.brand') },
+    { accessorKey: 'size', header: t('procurement.modal.columns.size') },
+    { accessorKey: 'quantity', header: t('procurement.modal.columns.qty'), meta: { align: 'right' } },
+    { accessorKey: 'unit_price', header: t('procurement.modal.columns.unitPrice'), meta: { align: 'right' }, cell: ({ getValue }) => fmtCur(getValue()) },
+    { id: 'line_total', header: t('procurement.modal.columns.lineTotal'), accessorFn: (it) => calcItemTotal(it), meta: { align: 'right' }, cell: ({ getValue }) => <span className="text-green-400 font-medium">{fmtCur(getValue())}</span> },
+    {
+      id: 'remove', header: '', enableSorting: false, meta: { export: false },
+      cell: ({ row }) => (
+        <button type="button" onClick={() => removeItem(row.index)} aria-label={`Remove line ${row.index + 1}`} className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center text-red-500 hover:text-red-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-500 rounded-lg"><X size={14} /></button>
+      ),
+    },
+  ]
 
   // ── Loading state ──────────────────────────────────────────────────────────
   if (loading) {
@@ -668,7 +583,7 @@ export default function Procurement() {
         icon={ShoppingCart}
         actions={
           <div className="flex items-center gap-2">
-            <button onClick={load} className="p-2 rounded-lg bg-[var(--surface-2)] border border-[var(--border-bright)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors" title={t('procurement.refresh')}>
+            <button onClick={load} aria-label={t('procurement.refresh')} className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center p-2 rounded-lg bg-[var(--surface-2)] border border-[var(--border-bright)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors" title={t('procurement.refresh')}>
               <RefreshCw size={16} />
             </button>
             <button onClick={exportExcel} className="flex items-center gap-2 px-4 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-sm rounded-lg transition-colors">
@@ -686,7 +601,8 @@ export default function Procurement() {
         <div className="bg-red-900/30 border border-red-700 rounded-xl p-4 flex items-center gap-3 text-red-300">
           <AlertTriangle size={18} />
           <span className="text-sm">{error}</span>
-          <button onClick={() => setError(null)} className="ml-auto"><X size={16} /></button>
+          <button type="button" onClick={load} className="ml-auto min-h-[44px] px-3 rounded-lg border border-red-700 text-sm hover:bg-red-900/40">Retry</button>
+          <button type="button" onClick={() => setError(null)} aria-label="Dismiss error" className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg hover:bg-red-900/40"><X size={16} /></button>
         </div>
       )}
 
@@ -731,7 +647,7 @@ export default function Procurement() {
           },
           {
             label: t('procurement.kpi.budgetUsed'),
-            value: budget > 0 ? `${budgetScope.variance?.toFixed(1)}%` : '-',
+            value: budgetScope.variance != null ? `${budgetScope.variance.toFixed(1)}%` : 'N/A',
             suffix: '',
             color: budgetScope.variance > 100 ? 'red' : budgetScope.variance > 80 ? 'yellow' : 'teal',
             icon: BarChart2,
@@ -743,7 +659,7 @@ export default function Procurement() {
           },
           {
             label: t('procurement.kpi.avgLeadTime'),
-            value: kpis.avgLeadTime !== null ? `${kpis.avgLeadTime}d` : '-',
+            value: kpis.avgLeadTime !== null ? `${kpis.avgLeadTime}d` : 'N/A',
             suffix: '',
             color: 'purple',
             icon: Clock,
@@ -773,7 +689,7 @@ export default function Procurement() {
           <h3 className="text-[var(--text-primary)] font-semibold mb-4">{t('procurement.charts.vendorSpendTitle')}</h3>
           <div className="h-56">
             {vendorBarData.datasets.length > 0
-              ? <Bar data={vendorBarData} options={{ ...CHART_OPTS, plugins: { ...CHART_OPTS.plugins, legend: { position: 'top', labels: { color: '#9ca3af', boxWidth: 12, font: { size: 10 } } } } }} />
+              ? <Bar data={vendorBarData} options={{ ...CHART_OPTS, plugins: { ...CHART_OPTS.plugins, legend: { position: 'top', labels: { color: 'var(--text-muted)', boxWidth: 12, font: { size: 10 } } } } }} />
               : <div className="h-full flex items-center justify-center text-[var(--text-dim)] text-sm">{t('procurement.charts.noDeliveredOrders')}</div>
             }
           </div>
@@ -784,7 +700,7 @@ export default function Procurement() {
           <h3 className="text-[var(--text-primary)] font-semibold mb-4">{t('procurement.charts.ordersByStatus')}</h3>
           <div className="h-56">
             {statusChartBase.length > 0
-              ? <Doughnut data={statusDoughnutData} options={{ ...CHART_OPTS, scales: undefined, plugins: { ...CHART_OPTS.plugins, legend: { position: 'right', labels: { color: '#9ca3af', boxWidth: 10, font: { size: 10 } } } } }} />
+              ? <Doughnut data={statusDoughnutData} options={{ ...CHART_OPTS, scales: undefined, plugins: { ...CHART_OPTS.plugins, legend: { position: 'right', labels: { color: 'var(--text-muted)', boxWidth: 10, font: { size: 10 } } } } }} />
               : <div className="h-full flex items-center justify-center text-[var(--text-dim)] text-sm">{t('procurement.charts.noOrders')}</div>
             }
           </div>
@@ -873,7 +789,7 @@ export default function Procurement() {
         <div className="lg:col-span-2 bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-5">
           <h3 className="text-[var(--text-primary)] font-semibold mb-4">{t('procurement.charts.cumulativeTitle', { year: new Date().getFullYear() })}</h3>
           <div className="h-52">
-            <Line data={cumulativeLineData} options={{ ...CHART_OPTS, plugins: { ...CHART_OPTS.plugins, legend: { position: 'top', labels: { color: '#9ca3af', boxWidth: 12, font: { size: 11 } } } } }} />
+            <Line data={cumulativeLineData} options={{ ...CHART_OPTS, plugins: { ...CHART_OPTS.plugins, legend: { position: 'top', labels: { color: 'var(--text-muted)', boxWidth: 12, font: { size: 11 } } } } }} />
           </div>
         </div>
       </div>
@@ -884,31 +800,32 @@ export default function Procurement() {
           <div className="relative flex-1 min-w-48">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
             <input
+              aria-label={t('procurement.filters.searchPlaceholder')}
               value={search}
-              onChange={e => { setSearch(e.target.value); setPage(1) }}
+              onChange={e => { setSearch(e.target.value)}}
               placeholder={t('procurement.filters.searchPlaceholder')}
-              className="w-full pl-9 pr-4 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm placeholder-gray-500 focus:outline-none focus:border-orange-500"
+              className="w-full pl-9 pr-4 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm placeholder-[var(--text-muted)] focus:outline-none focus:border-orange-500"
             />
           </div>
-          <select value={statusFilter} onChange={e => { setStatus(e.target.value); setPage(1) }}
+          <select aria-label="Status" value={statusFilter} onChange={e => { setStatus(e.target.value)}}
             className="px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500">
             <option value="All">{t('procurement.filters.allStatuses')}</option>
             {STATUSES.map(s => <option key={s}>{s}</option>)}
           </select>
-          <select value={vendorFilter} onChange={e => { setVendor(e.target.value); setPage(1) }}
+          <select aria-label="Vendor" value={vendorFilter} onChange={e => { setVendor(e.target.value)}}
             className="px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500">
             {vendors.map(v => <option key={v}>{v === 'All' ? t('procurement.filters.allVendors') : v}</option>)}
           </select>
-          <select value={siteFilter} onChange={e => { setSite(e.target.value); setPage(1) }}
+          <select aria-label="Site" value={siteFilter} onChange={e => { setSite(e.target.value)}}
             className="px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500">
             {sites.map(s => <option key={s}>{s === 'All' ? t('procurement.filters.allSites') : s}</option>)}
           </select>
-          <input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPage(1) }}
+          <input type="date" aria-label="Order date from" value={dateFrom} onChange={e => { setDateFrom(e.target.value)}}
             className="px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500" />
-          <input type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setPage(1) }}
+          <input type="date" aria-label="Order date to" value={dateTo} onChange={e => { setDateTo(e.target.value)}}
             className="px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500" />
           {(search || statusFilter !== 'All' || vendorFilter !== 'All' || siteFilter !== 'All' || dateFrom || dateTo) && (
-            <button onClick={() => { setSearch(''); setStatus('All'); setVendor('All'); setSite('All'); setDateFrom(''); setDateTo(''); setPage(1) }}
+            <button onClick={() => { setSearch(''); setStatus('All'); setVendor('All'); setSite('All'); setDateFrom(''); setDateTo('')}}
               className="px-3 py-2 bg-red-900/30 border border-red-700 rounded-lg text-red-400 text-sm hover:bg-red-900/50 transition-colors">
               {t('procurement.filters.clear')}
             </button>
@@ -918,92 +835,21 @@ export default function Procurement() {
       </div>
 
       {/* ── Table ──────────────────────────────────────────────────────────── */}
-      <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--border-dim)]">
-                {[
-                  { label: t('procurement.table.columns.poNumber'),     field: 'po_number'    },
-                  { label: t('procurement.table.columns.vendor'),       field: 'vendor_name'  },
-                  { label: t('procurement.table.columns.orderDate'),    field: 'order_date'   },
-                  { label: t('procurement.table.columns.expDelivery'),  field: 'expected_delivery' },
-                  { label: t('procurement.table.columns.status'),      field: 'status'       },
-                  { label: t('procurement.table.columns.priority'),    field: 'priority'     },
-                  { label: t('procurement.table.columns.items'),       field: null           },
-                  { label: t('procurement.table.columns.total'),       field: 'total_amount' },
-                  { label: t('procurement.table.columns.site'),        field: 'site'         },
-                  { label: t('procurement.table.columns.actions'),     field: null           },
-                ].map(({ label, field }) => (
-                  <th key={label}
-                    className={`px-4 py-3 text-left text-[var(--text-secondary)] font-medium text-xs uppercase tracking-wide ${field ? 'cursor-pointer hover:text-[var(--text-primary)]' : ''}`}
-                    onClick={() => field && handleSort(field)}
-                  >
-                    <div className="flex items-center gap-1">
-                      {label}
-                      {field && <SortIcon field={field} />}
-                    </div>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {paginated.length === 0 ? (
-                <tr>
-                  <td colSpan={10} className="text-center py-16 text-[var(--text-muted)]">
-                    <ShoppingCart size={40} className="mx-auto mb-3 opacity-30" />
-                    <p>{t('procurement.table.emptyTitle')}</p>
-                    <button onClick={openNew} className="mt-3 text-orange-400 hover:text-orange-300 text-sm">
-                      {t('procurement.table.createFirst')}
-                    </button>
-                  </td>
-                </tr>
-              ) : paginated.map(po => {
-                const pc = PRIORITY_CONFIG[po.priority] || PRIORITY_CONFIG.Normal
-                return (
-                  <tr key={po.id} className="border-b border-[var(--input-border)] hover:bg-[var(--input-bg)] transition-colors">
-                    <td className="px-4 py-3">
-                      <span className="text-orange-400 font-mono text-xs font-semibold">{po.po_number}</span>
-                    </td>
-                    <td className="px-4 py-3 text-[var(--text-primary)] font-medium">{po.vendor_name}</td>
-                    <td className="px-4 py-3 text-[var(--text-secondary)] whitespace-nowrap">{fmtDate(po.order_date)}</td>
-                    <td className="px-4 py-3 text-[var(--text-secondary)] whitespace-nowrap">{fmtDate(po.expected_delivery)}</td>
-                    <td className="px-4 py-3"><StatusBadge status={po.status} /></td>
-                    <td className="px-4 py-3">
-                      <span className={`flex items-center gap-1.5 ${pc.color} text-xs`}>
-                        <span className={`w-2 h-2 rounded-full ${pc.dot}`} />
-                        {po.priority}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-[var(--text-secondary)] text-center">{(po.items || []).length}</td>
-                    <td className="px-4 py-3 text-green-400 font-medium whitespace-nowrap">{fmtCur(po.total_amount)}</td>
-                    <td className="px-4 py-3 text-[var(--text-secondary)]">{po.site || '-'}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1">
-                        <button onClick={() => setViewPO(po)} className="p-1.5 rounded text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-3)] transition-colors" title={t('procurement.table.viewTooltip')}><Eye size={13} /></button>
-                        <button onClick={() => openEdit(po)} className="p-1.5 rounded text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-3)] transition-colors" title={t('procurement.table.editTooltip')}><Edit2 size={13} /></button>
-                        <button onClick={() => exportPDF(po)} className="p-1.5 rounded text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-3)] transition-colors" title={t('procurement.table.pdfTooltip')}><FileText size={13} /></button>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--border-dim)]">
-            <span className="text-[var(--text-secondary)] text-sm">{t('procurement.table.pageSummary', { page, total: totalPages, count: filtered.length })}</span>
-            <div className="flex gap-2">
-              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-                className="px-3 py-1.5 bg-[var(--surface-2)] border border-[var(--border-bright)] text-[var(--text-secondary)] text-sm rounded disabled:opacity-40">{t('procurement.table.prev')}</button>
-              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-                className="px-3 py-1.5 bg-[var(--surface-2)] border border-[var(--border-bright)] text-[var(--text-secondary)] text-sm rounded disabled:opacity-40">{t('procurement.table.next')}</button>
-            </div>
-          </div>
-        )}
-      </div>
+      <EnterpriseTable
+        columns={poColumns}
+        data={filtered}
+        getRowId={(po) => String(po.id)}
+        error={orders.length === 0 ? error : null}
+        onRetry={load}
+        enableGlobalFilter={false}
+        enableExport={false}
+        emptyMessage={orders.length === 0 ? t('procurement.table.emptyTitle') : 'No purchase orders match these filters.'}
+        onRowClick={(po) => setViewPO(po)}
+        viewKey="procurement-orders"
+        toolbarExtras={orders.length === 0 ? (
+          <button type="button" onClick={openNew} className="min-h-[44px] px-3 text-orange-400 hover:text-orange-300 text-sm">{t('procurement.table.createFirst')}</button>
+        ) : null}
+      />
 
       {/* ══════════════════════════════════════════════════════════════════════
           CREATE / EDIT MODAL
@@ -1104,32 +950,18 @@ export default function Procurement() {
                   {/* Existing items */}
                   {formData.items.length > 0 && (
                     <div className="mb-3 rounded-lg overflow-hidden border border-[var(--border-bright)]">
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="bg-[var(--surface-2)] text-[var(--text-secondary)]">
-                            <th className="px-3 py-2 text-left">{t('procurement.modal.columns.brand')}</th>
-                            <th className="px-3 py-2 text-left">{t('procurement.modal.columns.size')}</th>
-                            <th className="px-3 py-2 text-right">{t('procurement.modal.columns.qty')}</th>
-                            <th className="px-3 py-2 text-right">{t('procurement.modal.columns.unitPrice')}</th>
-                            <th className="px-3 py-2 text-right">{t('procurement.modal.columns.lineTotal')}</th>
-                            <th className="px-3 py-2 w-8"></th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {formData.items.map((it, idx) => (
-                            <tr key={idx} className="border-t border-[var(--input-border)]">
-                              <td className="px-3 py-2 text-[var(--text-primary)]">{it.brand}</td>
-                              <td className="px-3 py-2 text-[var(--text-secondary)]">{it.size}</td>
-                              <td className="px-3 py-2 text-[var(--text-secondary)] text-right">{it.quantity}</td>
-                              <td className="px-3 py-2 text-[var(--text-secondary)] text-right">{fmtCur(it.unit_price)}</td>
-                              <td className="px-3 py-2 text-green-400 text-right font-medium">{fmtCur(calcItemTotal(it))}</td>
-                              <td className="px-3 py-2">
-                                <button onClick={() => removeItem(idx)} className="text-red-500 hover:text-red-400"><X size={13} /></button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                      <EnterpriseTable
+                        columns={lineItemColumns}
+                        data={formData.items}
+                        getRowId={(_, idx) => String(idx)}
+                        enableGlobalFilter={false}
+                        enableColumnFilters={false}
+                        enableColumnVisibility={false}
+                        enableExport={false}
+                        enableSorting={false}
+                        pageSizeOptions={[25]}
+                        emptyMessage="No line items yet."
+                      />
                     </div>
                   )}
 

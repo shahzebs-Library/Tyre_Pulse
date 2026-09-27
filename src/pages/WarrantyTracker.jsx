@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Chart as ChartJS,
@@ -15,7 +15,6 @@ import {
   Building2, Hash, Percent, CreditCard, Activity, Info,
   ArrowUpRight, Layers, Zap, Target, List, PieChart, Lock,
 } from 'lucide-react'
-import { SkeletonTable } from '../components/ui/Skeleton'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import * as warranty from '../lib/api/warranty'
 import { useSettings } from '../contexts/SettingsContext'
@@ -28,22 +27,19 @@ import NotInUseNotice from '../components/ui/NotInUseNotice'
 import EmptyState from '../components/EmptyState'
 import { toUserMessage } from '../lib/safeError'
 import { loadAutoTable } from '../lib/pdfEngine'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import {
+  FAILURE_TYPES, CLAIM_STATUSES, CREDITED_STATUSES, scopeClaimsByCountry, filterClaimsBase,
+  filterClaimsByDimension, claimKpis, brandPerformance, failureBreakdown,
+  statusCounts as countStatuses, monthlyCredits as creditsByMonth, creditAnalysis as analyseCredits,
+  roiModel, generateClaimNo, optionsOf, lifePct,
+} from '../lib/warrantyTrackerAnalytics'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
   PointElement, ArcElement, Title, Tooltip, Legend,
 )
 
-const PAGE_SIZE = 20
-
-const FAILURE_TYPES = [
-  'Premature Wear', 'Sidewall Failure', 'Tread Separation',
-  'Bead Failure', 'Manufacturing Defect', 'Other',
-]
-
-const CLAIM_STATUSES = [
-  'Submitted', 'Under Review', 'Approved', 'Rejected', 'Credit Issued', 'Closed',
-]
 
 const STATUS_CFG = {
   'Submitted':     { text: 'text-blue-400',    bg: 'bg-blue-900/30',    border: 'border-blue-700'    },
@@ -96,56 +92,11 @@ const FAILURE_PALETTE = [
   '#f97316', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#6366f1',
 ]
 
-const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-
-// Pure aggregators over a claim list. Shared by the on-screen panels and by the
-// exports, so the same rule produces both and one document cannot carry two
-// different populations under a single title.
-function computeBrandPerf(list) {
-  const map = {}
-  list.forEach(c => {
-    const b = c.brand?.trim() || 'Unknown'
-    if (!map[b]) map[b] = { brand: b, total: 0, approved: 0, credits: 0, kmList: [] }
-    map[b].total++
-    if (['Approved', 'Credit Issued', 'Closed'].includes(c.claim_status)) map[b].approved++
-    if (['Credit Issued', 'Closed'].includes(c.claim_status) && c.credit_amount) map[b].credits += Number(c.credit_amount)
-    if (c.km_run > 0) map[b].kmList.push(c.km_run)
-  })
-  return Object.values(map).map(b => ({
-    ...b,
-    approvalRate: b.total > 0 ? (b.approved / b.total) * 100 : 0,
-    avgCredit: b.approved > 0 ? b.credits / b.approved : 0,
-    avgKm: b.kmList.length > 0 ? b.kmList.reduce((s, v) => s + v, 0) / b.kmList.length : 0,
-  })).sort((a, b) => b.total - a.total)
-}
-
-function computeFailureCounts(list) {
-  const map = {}
-  FAILURE_TYPES.forEach(f => { map[f] = { count: 0, kmList: [] } })
-  list.forEach(c => {
-    if (map[c.failure_type]) {
-      map[c.failure_type].count++
-      if (c.km_run > 0) map[c.failure_type].kmList.push(c.km_run)
-    }
-  })
-  return Object.entries(map).map(([type, { count, kmList }]) => ({
-    type,
-    count,
-    avgKm: kmList.length > 0 ? Math.round(kmList.reduce((s, v) => s + v, 0) / kmList.length) : 0,
-  })).sort((a, b) => b.count - a.count)
-}
 
 function fmtDate(iso) {
-  if (!iso) return '-'
+  if (!iso) return 'N/A'
   const d = new Date(iso)
   return isNaN(d) ? iso : formatDate(d)
-}
-
-function generateClaimNo(existingClaims) {
-  const year = new Date().getFullYear()
-  const thisYear = existingClaims.filter(c => c.claim_no?.startsWith(`WAR-${year}-`))
-  const seq = String(thisYear.length + 1).padStart(5, '0')
-  return `WAR-${year}-${seq}`
 }
 
 const EMPTY_FORM = {
@@ -214,7 +165,6 @@ export default function WarrantyTracker() {
   const [filterSite, setFilterSite]   = useState('All')
   const [dateFrom, setDateFrom]       = useState('')
   const [dateTo, setDateTo]           = useState('')
-  const [page, setPage]               = useState(1)
 
   const [showAdd, setShowAdd]     = useState(false)
   const [editClaim, setEditClaim] = useState(null)
@@ -229,6 +179,7 @@ export default function WarrantyTracker() {
   const [expandedRow, setExpandedRow]       = useState(null)
 
   const [claimsError, setClaimsError] = useState('')
+  const [claimsLoading, setClaimsLoading] = useState(true)
 
   // Approval-engine lock state for the claim currently open in the edit modal.
   // While that claim is mid-approval (pending/in_review/returned) or approved &
@@ -260,8 +211,10 @@ export default function WarrantyTracker() {
       const data = await warranty.listWarrantyClaims()
       setClaims(data ?? [])
     } catch (e) {
-      setClaimsError('Could not load warranty claims. Please retry.')
+      setClaimsError(toUserMessage(e, 'Could not load warranty claims. Please retry.'))
       setClaims([])
+    } finally {
+      setClaimsLoading(false)
     }
   }, [])
 
@@ -304,125 +257,42 @@ export default function WarrantyTracker() {
   // keeps per-country credit money in a single currency (activeCurrency) rather
   // than blending SAR + AED + EGP. Numbers for a single-country selection are
   // exactly the same rows as before - only the scope predicate changed.
-  const scopedClaims = useMemo(() => {
-    if (activeCountry === 'All') return claims
-    return claims.filter(c => c.country == null || c.country === activeCountry)
-  }, [claims, activeCountry])
+  const scopedClaims = useMemo(() => scopeClaimsByCountry(claims, activeCountry), [claims, activeCountry])
 
   const cur = activeCurrency
   const fmt = (v) => {
-    if (v == null || !isFinite(v)) return `${cur} 0`
+    if (v == null || !isFinite(v)) return 'N/A'
     if (Math.abs(v) >= 1_000_000) return `${cur} ${(v / 1_000_000).toFixed(2)}M`
     if (Math.abs(v) >= 1_000) return `${cur} ${(v / 1_000).toFixed(1)}K`
     return `${cur} ${Math.round(v).toLocaleString()}`
   }
+  const pct = (v) => (v == null || !isFinite(v) ? 'N/A' : `${Number(v).toFixed(1)}%`)
 
-  const brands = useMemo(() => ['All', ...new Set(scopedClaims.map(c => c.brand).filter(Boolean))], [scopedClaims])
-  const sites  = useMemo(() => ['All', ...new Set(scopedClaims.map(c => c.site).filter(Boolean))], [scopedClaims])
+  const brands = useMemo(() => optionsOf(scopedClaims, 'brand'), [scopedClaims])
+  const sites  = useMemo(() => optionsOf(scopedClaims, 'site'), [scopedClaims])
 
-  // Two scopes, following the pattern in Inspections.jsx.
-  //
-  // `filteredBase` applies the POPULATION filters (site, date range, search)
-  // and deliberately holds out the three DIMENSION selects. The KPI tiles and
-  // the analytics panels compute over it: the Brand Performance table IS the
-  // brand dimension, the status doughnut IS the status dimension and the
-  // Failure Analysis table IS the failure dimension, so counting the
-  // already-filtered set would drive each panel to match its own select and it
-  // would stop stating how many claims picking a value would show.
-  //
-  // The tiles used to compute over `scopedClaims` (country only), so a site or
-  // date filter left five whole-country figures above a narrowed table.
-  const filteredBase = useMemo(() => {
-    return scopedClaims.filter(c => {
-      if (filterSite !== 'All' && c.site !== filterSite) return false
-      if (dateFrom && c.created_at < dateFrom) return false
-      if (dateTo && c.created_at > dateTo + 'T23:59:59') return false
-      if (search) {
-        const s = search.toLowerCase()
-        return (
-          c.claim_no?.toLowerCase().includes(s) ||
-          c.serial_number?.toLowerCase().includes(s) ||
-          c.brand?.toLowerCase().includes(s) ||
-          c.asset_no?.toLowerCase().includes(s) ||
-          c.site?.toLowerCase().includes(s)
-        )
-      }
-      return true
-    })
-  }, [scopedClaims, filterSite, dateFrom, dateTo, search])
-
-  // True when the tiles cover fewer claims than the country holds.
+  // Two scopes (engine: src/lib/warrantyTrackerAnalytics). `filteredBase`
+  // applies the POPULATION filters (site, date range, search) and holds out the
+  // brand / status / failure selects, because the brand table, status doughnut
+  // and failure table ARE those dimensions; filtering them by themselves would
+  // only echo the select back. The KPI tiles compute over `filteredBase`.
+  const filteredBase = useMemo(
+    () => filterClaimsBase(scopedClaims, { site: filterSite, from: dateFrom, to: dateTo, search }),
+    [scopedClaims, filterSite, dateFrom, dateTo, search],
+  )
   const scopeActive = filteredBase.length !== scopedClaims.length
-  // True when a dimension select narrows the table below the tiles.
   const dimensionActive = filterBrand !== 'All' || filterStatus !== 'All' || filterFailure !== 'All'
-
-  const filtered = useMemo(() => {
-    return filteredBase.filter(c => {
-      if (filterBrand !== 'All' && c.brand !== filterBrand) return false
-      if (filterStatus !== 'All' && c.claim_status !== filterStatus) return false
-      if (filterFailure !== 'All' && c.failure_type !== filterFailure) return false
-      return true
-    }).sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-  }, [filteredBase, filterBrand, filterStatus, filterFailure])
-
-  const kpis = useMemo(() => {
-    const total = filteredBase.length
-    const open = filteredBase.filter(c => ['Submitted', 'Under Review', 'Approved'].includes(c.claim_status)).length
-    const credited = filteredBase.filter(c => ['Credit Issued', 'Closed'].includes(c.claim_status))
-    const totalCredits = credited.reduce((s, c) => s + (Number(c.credit_amount) || 0), 0)
-    const approvedCount = filteredBase.filter(c =>
-      ['Approved', 'Credit Issued', 'Closed'].includes(c.claim_status)
-    ).length
-    const approvalRate = total > 0 ? (approvedCount / total) * 100 : 0
-    const avgCredit = credited.length > 0 ? totalCredits / credited.length : 0
-    return { total, open, totalCredits, approvalRate, avgCredit }
-  }, [filteredBase])
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
-  const paginated  = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
-
-  const brandPerf = useMemo(() => computeBrandPerf(filteredBase), [filteredBase])
-
-  const statusCounts = useMemo(() => {
-    const map = {}
-    CLAIM_STATUSES.forEach(s => { map[s] = 0 })
-    filteredBase.forEach(c => { if (map[c.claim_status] != null) map[c.claim_status]++ })
-    return map
-  }, [filteredBase])
-
-  const failureCounts = useMemo(() => computeFailureCounts(filteredBase), [filteredBase])
-
-  const monthlyCredits = useMemo(() => {
-    const now = new Date()
-    const arr = Array(12).fill(0)
-    filteredBase.forEach(c => {
-      if (!['Credit Issued', 'Closed'].includes(c.claim_status)) return
-      if (!c.credit_date) return
-      const d = new Date(c.credit_date)
-      if (isNaN(d)) return
-      const diff = (now.getFullYear() - d.getFullYear()) * 12 + now.getMonth() - d.getMonth()
-      if (diff >= 0 && diff < 12) arr[11 - diff] += Number(c.credit_amount) || 0
-    })
-    const labels = []
-    for (let i = 11; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-      labels.push(MONTHS[d.getMonth()])
-    }
-    return { labels, data: arr }
-  }, [filteredBase])
-
-  const creditAnalysis = useMemo(() => {
-    const totalCredits = filteredBase
-      .filter(c => ['Credit Issued', 'Closed'].includes(c.claim_status))
-      .reduce((s, c) => s + (Number(c.credit_amount) || 0), 0)
-    const openApproved = filteredBase.filter(c => c.claim_status === 'Approved')
-    const avgCreditIssued = filteredBase.filter(c => ['Credit Issued', 'Closed'].includes(c.claim_status) && c.credit_amount)
-    const avg = avgCreditIssued.length > 0
-      ? avgCreditIssued.reduce((s, c) => s + Number(c.credit_amount), 0) / avgCreditIssued.length
-      : 0
-    const estimatedUnclaimed = openApproved.length * avg
-    return { totalCredits, estimatedUnclaimed, openApprovedCount: openApproved.length }
-  }, [filteredBase])
+  const filtered = useMemo(
+    () => filterClaimsByDimension(filteredBase, { brand: filterBrand, status: filterStatus, failure: filterFailure }),
+    [filteredBase, filterBrand, filterStatus, filterFailure],
+  )
+  const kpis = useMemo(() => claimKpis(filteredBase), [filteredBase])
+  const brandPerf = useMemo(() => brandPerformance(filteredBase), [filteredBase])
+  const statusCounts = useMemo(() => countStatuses(filteredBase), [filteredBase])
+  const failureCounts = useMemo(() => failureBreakdown(filteredBase), [filteredBase])
+  const monthlyCredits = useMemo(() => creditsByMonth(filteredBase, { now: new Date() }), [filteredBase])
+  const creditAnalysis = useMemo(() => analyseCredits(filteredBase), [filteredBase])
+  const expandedClaim = useMemo(() => filtered.find(c => c.id === expandedRow) || null, [filtered, expandedRow])
 
   const openForm = useCallback((claim = null) => {
     if (claim) {
@@ -521,7 +391,7 @@ export default function WarrantyTracker() {
       } else {
         await upsertClaim({
           ...base,
-          claim_no: generateClaimNo(claims),
+          claim_no: generateClaimNo(claims, new Date()),
           created_by: profile?.id ?? null,
         })
       }
@@ -560,14 +430,14 @@ export default function WarrantyTracker() {
 
     // ── EMPTY STATE ──
     if (filtered.length === 0) {
-      pdfHeader(doc, 'Warranty Claims Report', `0 claims · ${formatDate(new Date())}`, company, brand)
+      pdfHeader(doc, 'Warranty Claims Report', `0 claims | ${formatDate(new Date())}`, company, brand)
       pdfEmptyState(doc, 'No warranty claims for the selected filters')
       pdfFooter(doc, 1, 1, company, brand)
       doc.save(`warranty-claims-${new Date().toISOString().split('T')[0]}.pdf`)
       return
     }
 
-    pdfHeader(doc, 'Warranty Claims Report', `${filtered.length} claims · ${formatDate(new Date())}`, company, brand)
+    pdfHeader(doc, 'Warranty Claims Report', `${filtered.length} claims | ${formatDate(new Date())}`, company, brand)
     autoTable(doc, {
       ...pdfTableTheme(brand.accent),
       startY: 30,
@@ -575,10 +445,10 @@ export default function WarrantyTracker() {
       body: filtered.map(c => [
         c.claim_no, c.serial_number, c.brand, c.size, c.asset_no, c.site,
         c.failure_type, c.claim_status,
-        c.km_run?.toLocaleString() || '0',
-        c.expected_life_km?.toLocaleString() || '0',
-        c.expected_life_km > 0 ? `${((c.km_run / c.expected_life_km) * 100).toFixed(1)}%` : 'N/A',
-        c.credit_amount ? `${cur} ${Number(c.credit_amount).toLocaleString()}` : '-',
+        c.km_run != null ? Number(c.km_run).toLocaleString() : 'N/A',
+        c.expected_life_km != null ? Number(c.expected_life_km).toLocaleString() : 'N/A',
+        lifePct(c) == null ? 'N/A' : `${lifePct(c).toFixed(1)}%`,
+        c.credit_amount ? `${cur} ${Number(c.credit_amount).toLocaleString()}` : 'N/A',
         fmtDate(c.created_at),
       ]),
     })
@@ -586,18 +456,18 @@ export default function WarrantyTracker() {
     // built from the screen's `brandPerf`, which holds out the brand/status/
     // failure selects, so a filtered report carried a brand table covering
     // claims that were not in it, under a single title.
-    const exportBrandPerf = computeBrandPerf(filtered)
+    const exportBrandPerf = brandPerformance(filtered)
     if (exportBrandPerf.length > 0) {
       doc.addPage()
-      pdfHeader(doc, 'Warranty Claims Report', `Brand Warranty Performance, same ${filtered.length} claims · ${formatDate(new Date())}`, company, brand)
+      pdfHeader(doc, 'Warranty Claims Report', `Brand Warranty Performance, same ${filtered.length} claims | ${formatDate(new Date())}`, company, brand)
       autoTable(doc, {
         ...pdfTableTheme(brand.accent),
         startY: 30,
         head: [['Brand', 'Total Claims', 'Approval Rate', 'Avg Credit', 'Avg km at Failure']],
         body: exportBrandPerf.map(b => [
-          b.brand, b.total, `${b.approvalRate.toFixed(1)}%`,
-          b.avgCredit > 0 ? `${cur} ${Math.round(b.avgCredit).toLocaleString()}` : '-',
-          b.avgKm > 0 ? Math.round(b.avgKm).toLocaleString() : '-',
+          b.brand, b.total, pct(b.approvalRate),
+          b.avgCredit != null ? `${cur} ${Math.round(b.avgCredit).toLocaleString()}` : 'N/A',
+          b.avgKm != null ? Math.round(b.avgKm).toLocaleString() : 'N/A',
         ]),
       })
     }
@@ -622,7 +492,7 @@ export default function WarrantyTracker() {
       'km at Removal': c.km_at_removal,
       'km Run': c.km_run,
       'Expected Life km': c.expected_life_km,
-      '% of Life': c.expected_life_km > 0 ? +((c.km_run / c.expected_life_km) * 100).toFixed(1) : null,
+      '% of Life': lifePct(c) == null ? null : +lifePct(c).toFixed(1),
       'Failure Type': c.failure_type,
       Status: c.claim_status,
       'Credit Amount': c.credit_amount,
@@ -636,16 +506,16 @@ export default function WarrantyTracker() {
     // set the Warranty Claims sheet lists. The Brand Performance and Failure
     // Analysis sheets used to be built from the screen aggregates, which cover
     // a wider population than the claim list beside them.
-    const exportBrandPerf = computeBrandPerf(filtered)
-    const exportFailures = computeFailureCounts(filtered)
+    const exportBrandPerf = brandPerformance(filtered)
+    const exportFailures = failureBreakdown(filtered)
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Warranty Claims')
     if (exportBrandPerf.length > 0) {
       const bpRows = exportBrandPerf.map(b => ({
         Brand: b.brand,
         'Total Claims': b.total,
-        'Approval Rate %': +b.approvalRate.toFixed(1),
-        'Avg Credit': +b.avgCredit.toFixed(0),
-        'Avg km at Failure': +b.avgKm.toFixed(0),
+        'Approval Rate %': b.approvalRate == null ? null : +b.approvalRate.toFixed(1),
+        'Avg Credit': b.avgCredit == null ? null : +b.avgCredit.toFixed(0),
+        'Avg km at Failure': b.avgKm == null ? null : +b.avgKm.toFixed(0),
       }))
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(bpRows), 'Brand Performance')
     }
@@ -678,7 +548,7 @@ export default function WarrantyTracker() {
       ['Serial Number', claim.serial_number],
       ['Brand', claim.brand],
       ['Size', claim.size],
-      ['Supplier', claim.supplier || '-'],
+      ['Supplier', claim.supplier || 'N/A'],
       ['Asset / Vehicle', claim.asset_no],
       ['Site / Location', claim.site],
       ['Fitment Date', fmtDate(claim.fitment_date)],
@@ -695,7 +565,7 @@ export default function WarrantyTracker() {
       doc.setFont(undefined, 'bold')
       doc.text(`${k}:`, 14, y)
       doc.setFont(undefined, 'normal')
-      doc.text(String(v ?? '-'), 80, y)
+      doc.text(String(v ?? 'N/A'), 80, y)
       y += 8
     })
     doc.line(14, y + 2, 196, y + 2)
@@ -728,19 +598,10 @@ export default function WarrantyTracker() {
   // an annual purchase volume the user types in, and that volume is a
   // country-wide figure, so narrowing one side of the ratio would understate
   // the recovery rate. The panel says so on screen.
-  const roiCalc = useMemo(() => {
-    const annualCount = Number(roiAnnualCount) || 0
-    const avgCost = Number(roiAvgCost) || 0
-    const year = new Date().getFullYear()
-    const thisYearClaims = scopedClaims.filter(c => c.claim_no?.startsWith(`WAR-${year}-`))
-    const thisYearCredits = thisYearClaims
-      .filter(c => ['Credit Issued', 'Closed'].includes(c.claim_status))
-      .reduce((s, c) => s + (Number(c.credit_amount) || 0), 0)
-    const totalSpend = annualCount * avgCost
-    const recoveryRate = totalSpend > 0 ? (thisYearCredits / totalSpend) * 100 : 0
-    const eligibleUnclaimed = annualCount > 0 ? Math.round(annualCount * 0.3) * avgCost * 0.4 : 0
-    return { thisYearClaims: thisYearClaims.length, thisYearCredits, recoveryRate, eligibleUnclaimed }
-  }, [scopedClaims, roiAnnualCount, roiAvgCost])
+  const roiCalc = useMemo(
+    () => roiModel(scopedClaims, { annualCount: roiAnnualCount, avgCost: roiAvgCost, now: new Date() }),
+    [scopedClaims, roiAnnualCount, roiAvgCost],
+  )
 
   const brandChartData = useMemo(() => ({
     labels: brandPerf.slice(0, 10).map(b => b.brand),
@@ -753,7 +614,7 @@ export default function WarrantyTracker() {
       },
       {
         label: 'Approval Rate %',
-        data: brandPerf.slice(0, 10).map(b => +b.approvalRate.toFixed(1)),
+        data: brandPerf.slice(0, 10).map(b => (b.approvalRate == null ? null : +b.approvalRate.toFixed(1))),
         backgroundColor: '#10b981',
         borderRadius: 4,
       },
@@ -789,6 +650,69 @@ export default function WarrantyTracker() {
       borderRadius: 4,
     }],
   }), [monthlyCredits])
+
+  // ── Register columns (EnterpriseTable) ──────────────────────────────────────
+  const claimColumns = [
+    { accessorKey: 'claim_no', header: 'Claim No', cell: ({ getValue }) => <span className="font-mono text-blue-400 text-xs whitespace-nowrap">{getValue() || 'N/A'}</span> },
+    { accessorKey: 'serial_number', header: 'Serial', cell: ({ getValue }) => getValue() || 'N/A' },
+    { accessorKey: 'brand', header: 'Brand', cell: ({ getValue }) => <span className="font-medium text-[var(--text-secondary)]">{getValue() || 'N/A'}</span> },
+    { accessorKey: 'size', header: 'Size', cell: ({ getValue }) => getValue() || 'N/A' },
+    { accessorKey: 'asset_no', header: 'Asset', cell: ({ getValue }) => getValue() || 'N/A' },
+    { accessorKey: 'site', header: 'Site', cell: ({ getValue }) => getValue() || 'N/A' },
+    { accessorKey: 'failure_type', header: 'Failure Type', cell: ({ getValue }) => getValue() || 'N/A' },
+    { accessorKey: 'claim_status', header: 'Status', cell: ({ getValue }) => <StatusBadge status={getValue()} /> },
+    { accessorKey: 'km_run', header: 'km Run', meta: { align: 'right' }, cell: ({ getValue }) => (getValue() == null ? 'N/A' : Number(getValue()).toLocaleString()) },
+    { accessorKey: 'expected_life_km', header: 'Exp km', meta: { align: 'right' }, cell: ({ getValue }) => (getValue() == null ? 'N/A' : Number(getValue()).toLocaleString()) },
+    {
+      id: 'life_pct', header: '% Life', accessorFn: (c) => lifePct(c), meta: { align: 'right' },
+      cell: ({ getValue }) => {
+        const v = getValue()
+        if (v == null) return 'N/A'
+        const low = v < 50
+        return <span className={`font-semibold ${low ? 'text-red-400' : 'text-[var(--text-dim)]'}`}>{v.toFixed(1)}%{low && <span className="sr-only"> (below half of expected life)</span>}</span>
+      },
+    },
+    { accessorKey: 'credit_amount', header: `Credit (${cur})`, meta: { align: 'right' }, cell: ({ getValue }) => <span className="text-emerald-400">{getValue() ? fmt(Number(getValue())) : 'N/A'}</span> },
+    { accessorKey: 'created_at', header: 'Date', cell: ({ getValue }) => <span className="whitespace-nowrap">{fmtDate(getValue())}</span> },
+    {
+      id: 'actions', header: 'Actions', enableSorting: false, meta: { export: false },
+      cell: ({ row }) => {
+        const c = row.original
+        return (
+          <div className="flex gap-1">
+            <button type="button" aria-label={`Edit claim ${c.claim_no || ''}`.trim()} onClick={e => { e.stopPropagation(); openForm(c) }}
+              className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center text-[var(--text-muted)] hover:text-blue-400 hover:bg-[var(--input-bg)] rounded-lg transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500"><Edit2 size={14} /></button>
+            <button type="button" aria-label={`Export claim letter ${c.claim_no || ''}`.trim()} onClick={e => { e.stopPropagation(); exportClaimLetter(c) }}
+              className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center text-[var(--text-muted)] hover:text-emerald-400 hover:bg-[var(--input-bg)] rounded-lg transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-500"><FileText size={14} /></button>
+          </div>
+        )
+      },
+    },
+  ]
+
+  const brandColumns = [
+    { accessorKey: 'brand', header: 'Brand', cell: ({ getValue }) => <span className="font-medium text-[var(--text-secondary)]">{getValue()}</span> },
+    { accessorKey: 'total', header: 'Total Claims', meta: { align: 'right' } },
+    {
+      accessorKey: 'approvalRate', header: 'Approval Rate',
+      meta: { exportValue: (b) => (b.approvalRate == null ? '' : +b.approvalRate.toFixed(1)) },
+      cell: ({ getValue }) => {
+        const v = getValue()
+        if (v == null) return 'N/A'
+        const band = v >= 70 ? { cls: 'text-green-400', label: 'high' } : v >= 40 ? { cls: 'text-yellow-400', label: 'medium' } : { cls: 'text-red-400', label: 'low' }
+        return (
+          <div className="flex items-center gap-2">
+            <div className="w-24 h-1.5 bg-[var(--input-border)] rounded-full overflow-hidden" aria-hidden="true">
+              <div className="h-full bg-green-500 rounded-full" style={{ width: `${Math.min(100, v)}%` }} />
+            </div>
+            <span className={`text-xs font-semibold ${band.cls}`}>{v.toFixed(1)}%<span className="sr-only"> ({band.label})</span></span>
+          </div>
+        )
+      },
+    },
+    { accessorKey: 'avgCredit', header: `Avg Credit per Claim (${cur})`, meta: { align: 'right' }, cell: ({ getValue }) => <span className="text-emerald-400 font-semibold">{fmt(getValue())}</span> },
+    { accessorKey: 'avgKm', header: 'Avg km at Failure', meta: { align: 'right' }, cell: ({ getValue }) => (getValue() == null ? 'N/A' : `${Math.round(getValue()).toLocaleString()} km`) },
+  ]
 
   const tabs = ['Claims', 'Brand Analysis', 'Failure Analysis', 'Credit Recovery', 'ROI Calculator']
 
@@ -842,7 +766,7 @@ export default function WarrantyTracker() {
         <KpiCard icon={ShieldCheck} label="Total Claims" value={kpis.total} color="text-blue-400" />
         <KpiCard icon={Clock} label="Open Claims" value={kpis.open} color="text-yellow-400" warn={kpis.open > 10} />
         <KpiCard icon={DollarSign} label="Total Credits" value={fmt(kpis.totalCredits)} color="text-emerald-400" sub="received" />
-        <KpiCard icon={Percent} label="Approval Rate" value={`${kpis.approvalRate.toFixed(1)}%`} color="text-green-400" />
+        <KpiCard icon={Percent} label="Approval Rate" value={pct(kpis.approvalRate)} color="text-green-400" />
         <KpiCard icon={CreditCard} label="Avg Credit/Claim" value={fmt(kpis.avgCredit)} color="text-purple-400" />
       </div>
 
@@ -870,178 +794,100 @@ export default function WarrantyTracker() {
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
                 <input
                   type="text"
+                  aria-label="Search claims"
                   placeholder="Search claim, serial, brand, asset..."
                   value={search}
-                  onChange={e => { setSearch(e.target.value); setPage(1) }}
+                  onChange={e => { setSearch(e.target.value)}}
                   className="w-full pl-8 pr-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500"
                 />
               </div>
-              <select value={filterBrand} onChange={e => { setFilterBrand(e.target.value); setPage(1) }}
+              <select aria-label="Brand" value={filterBrand} onChange={e => { setFilterBrand(e.target.value)}}
                 className="px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-dim)] focus:outline-none focus:border-blue-500">
                 {brands.map(b => <option key={b}>{b}</option>)}
               </select>
-              <select value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setPage(1) }}
+              <select aria-label="Claim status" value={filterStatus} onChange={e => { setFilterStatus(e.target.value)}}
                 className="px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-dim)] focus:outline-none focus:border-blue-500">
                 {['All', ...CLAIM_STATUSES].map(s => <option key={s}>{s}</option>)}
               </select>
-              <select value={filterFailure} onChange={e => { setFilterFailure(e.target.value); setPage(1) }}
+              <select aria-label="Failure type" value={filterFailure} onChange={e => { setFilterFailure(e.target.value)}}
                 className="px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-dim)] focus:outline-none focus:border-blue-500">
                 {['All', ...FAILURE_TYPES].map(f => <option key={f}>{f}</option>)}
               </select>
-              <select value={filterSite} onChange={e => { setFilterSite(e.target.value); setPage(1) }}
+              <select aria-label="Site" value={filterSite} onChange={e => { setFilterSite(e.target.value)}}
                 className="px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-dim)] focus:outline-none focus:border-blue-500">
                 {sites.map(s => <option key={s}>{s}</option>)}
               </select>
-              <input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPage(1) }}
+              <input type="date" aria-label="Created from" value={dateFrom} onChange={e => { setDateFrom(e.target.value)}}
                 className="px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-dim)] focus:outline-none focus:border-blue-500" />
-              <input type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setPage(1) }}
+              <input type="date" aria-label="Created to" value={dateTo} onChange={e => { setDateTo(e.target.value)}}
                 className="px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-dim)] focus:outline-none focus:border-blue-500" />
             </div>
           </div>
 
-          <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
-            {loading ? (
-              <SkeletonTable rows={8} cols={6} />
-            ) : claimsError ? (
-              <div className="flex flex-col items-center justify-center py-16 gap-3">
-                <AlertTriangle size={40} className="text-red-500" />
-                <p className="text-red-400">{claimsError}</p>
-                <button onClick={() => loadClaims()} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm text-white">
-                  Retry
-                </button>
+          {(scopeActive || dimensionActive) && (
+            <p className="text-xs text-[var(--text-muted)]">
+              The tiles above cover the {filteredBase.length} claims matching the site, date and search filters. The brand, status and failure selects narrow the table only.
+            </p>
+          )}
+
+          <EnterpriseTable
+            columns={claimColumns}
+            data={filtered}
+            getRowId={(c) => String(c.id)}
+            loading={claimsLoading}
+            error={claimsError || null}
+            onRetry={() => { setClaimsLoading(true); loadClaims() }}
+            enableGlobalFilter={false}
+            enableExport={false}
+            emptyMessage={scopedClaims.length === 0 ? 'No warranty claims recorded yet. Use New Claim to add the first one.' : 'No claims match these filters.'}
+            onRowClick={(c) => setExpandedRow(expandedRow === c.id ? null : c.id)}
+            viewKey="warranty-claims"
+          />
+
+          {expandedClaim && (
+            <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4" role="region" aria-label={`Claim ${expandedClaim.claim_no} details`}>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-[var(--text-secondary)]">Claim {expandedClaim.claim_no}</h3>
+                <button type="button" onClick={() => setExpandedRow(null)} aria-label="Close claim details" className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:bg-[var(--input-bg)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500"><X size={16} /></button>
               </div>
-            ) : filtered.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 gap-3">
-                <ShieldCheck size={40} className="text-[var(--text-dim)]" />
-                <p className="text-[var(--text-muted)]">No warranty claims found.</p>
-                <button onClick={() => openForm()} className="btn-primary">
-                  Add First Claim
-                </button>
-              </div>
-            ) : (
-              <>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-[var(--input-border)] bg-[var(--input-bg)]">
-                        {['Claim No','Serial','Brand','Size','Asset','Site','Failure Type','Status','km Run','Exp km','% Life','Credit','Date',''].map(h => (
-                          <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-[var(--text-muted)] whitespace-nowrap">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {paginated.map(c => {
-                        const pctLife = c.expected_life_km > 0 ? (c.km_run / c.expected_life_km) * 100 : null
-                        const lowLife = pctLife !== null && pctLife < 50
-                        return (
-                          <Fragment key={c.id}>
-                            <tr
-                              className="border-b border-[var(--input-border)] hover:bg-[var(--input-bg)] cursor-pointer transition-colors"
-                              onClick={() => setExpandedRow(expandedRow === c.id ? null : c.id)}
-                            >
-                              <td className="px-3 py-2.5 font-mono text-blue-400 text-xs whitespace-nowrap">{c.claim_no}</td>
-                              <td className="px-3 py-2.5 text-[var(--text-dim)] text-xs whitespace-nowrap">{c.serial_number}</td>
-                              <td className="px-3 py-2.5 text-[var(--text-secondary)] font-medium text-xs whitespace-nowrap">{c.brand}</td>
-                              <td className="px-3 py-2.5 text-[var(--text-muted)] text-xs whitespace-nowrap">{c.size}</td>
-                              <td className="px-3 py-2.5 text-[var(--text-muted)] text-xs whitespace-nowrap">{c.asset_no}</td>
-                              <td className="px-3 py-2.5 text-[var(--text-muted)] text-xs whitespace-nowrap">{c.site}</td>
-                              <td className="px-3 py-2.5 text-[var(--text-dim)] text-xs whitespace-nowrap">{c.failure_type}</td>
-                              <td className="px-3 py-2.5 whitespace-nowrap"><StatusBadge status={c.claim_status} /></td>
-                              <td className="px-3 py-2.5 text-[var(--text-dim)] text-xs text-right whitespace-nowrap">{(c.km_run || 0).toLocaleString()}</td>
-                              <td className="px-3 py-2.5 text-[var(--text-muted)] text-xs text-right whitespace-nowrap">{(c.expected_life_km || 0).toLocaleString()}</td>
-                              <td className={`px-3 py-2.5 text-xs text-right font-semibold whitespace-nowrap ${lowLife ? 'text-red-400' : 'text-[var(--text-dim)]'}`}>
-                                {pctLife !== null ? `${pctLife.toFixed(1)}%` : '-'}
-                              </td>
-                              <td className="px-3 py-2.5 text-emerald-400 text-xs text-right whitespace-nowrap">
-                                {c.credit_amount ? fmt(c.credit_amount) : '-'}
-                              </td>
-                              <td className="px-3 py-2.5 text-[var(--text-muted)] text-xs whitespace-nowrap">{fmtDate(c.created_at)}</td>
-                              <td className="px-3 py-2.5 whitespace-nowrap">
-                                <div className="flex gap-1">
-                                  <button
-                                    onClick={e => { e.stopPropagation(); openForm(c) }}
-                                    className="p-1 text-[var(--text-muted)] hover:text-blue-400 hover:bg-[var(--input-bg)] rounded transition-colors"
-                                  ><Edit2 size={12} /></button>
-                                  <button
-                                    onClick={e => { e.stopPropagation(); exportClaimLetter(c) }}
-                                    className="p-1 text-[var(--text-muted)] hover:text-emerald-400 hover:bg-[var(--input-bg)] rounded transition-colors"
-                                    title="Export claim letter"
-                                  ><FileText size={12} /></button>
-                                </div>
-                              </td>
-                            </tr>
-                            {expandedRow === c.id && (
-                              <tr key={`${c.id}-exp`} className="bg-[var(--input-bg)]">
-                                <td colSpan={14} className="px-4 py-4">
-                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-                                    <div>
-                                      <p className="text-[var(--text-muted)] mb-1">Country</p>
-                                      <p className="text-[var(--text-secondary)]">{c.country || '-'}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-[var(--text-muted)] mb-1">Fitment Date</p>
-                                      <p className="text-[var(--text-secondary)]">{fmtDate(c.fitment_date)}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-[var(--text-muted)] mb-1">Removal Date</p>
-                                      <p className="text-[var(--text-secondary)]">{fmtDate(c.removal_date)}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-[var(--text-muted)] mb-1">Supplier</p>
-                                      <p className="text-[var(--text-secondary)]">{c.supplier || '-'}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-[var(--text-muted)] mb-1">Credit Date</p>
-                                      <p className="text-[var(--text-secondary)]">{fmtDate(c.credit_date)}</p>
-                                    </div>
-                                    <div className="col-span-2">
-                                      <p className="text-[var(--text-muted)] mb-1">Notes</p>
-                                      <p className="text-[var(--text-dim)]">{c.notes || '-'}</p>
-                                    </div>
-                                    <div className="flex items-end gap-2">
-                                      <button
-                                        onClick={() => exportClaimLetter(c)}
-                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-800/40 hover:bg-emerald-700/50 border border-emerald-700/50 rounded-lg text-emerald-400 transition-colors"
-                                      >
-                                        <FileText size={12} /> Claim Letter
-                                      </button>
-                                      <button
-                                        onClick={() => handleDelete(c.id)}
-                                        disabled={editClaim?.id === c.id && claimLocked}
-                                        title={editClaim?.id === c.id && claimLocked ? 'Locked, in approval' : undefined}
-                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-red-900/30 hover:bg-red-800/40 border border-red-800/50 rounded-lg text-red-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                                      >
-                                        {editClaim?.id === c.id && claimLocked ? <Lock size={12} /> : <XCircle size={12} />} Delete
-                                      </button>
-                                    </div>
-                                  </div>
-                                </td>
-                              </tr>
-                            )}
-                          </Fragment>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--input-border)]">
-                  <p className="text-[var(--text-muted)] text-xs">{filtered.length} claims · page {page} of {totalPages}</p>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setPage(p => Math.max(1, p - 1))}
-                      disabled={page === 1}
-                      className="p-1.5 rounded-lg bg-[var(--input-bg)] text-[var(--text-muted)] disabled:opacity-40 hover:bg-[var(--input-bg-hover)] transition-colors"
-                    ><ChevronLeft size={14} /></button>
-                    <button
-                      onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                      disabled={page === totalPages}
-                      className="p-1.5 rounded-lg bg-[var(--input-bg)] text-[var(--text-muted)] disabled:opacity-40 hover:bg-[var(--input-bg-hover)] transition-colors"
-                    ><ChevronRight size={14} /></button>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                {[
+                  ['Country', expandedClaim.country || 'N/A'],
+                  ['Fitment Date', fmtDate(expandedClaim.fitment_date)],
+                  ['Removal Date', fmtDate(expandedClaim.removal_date)],
+                  ['Supplier', expandedClaim.supplier || 'N/A'],
+                  ['Credit Date', fmtDate(expandedClaim.credit_date)],
+                ].map(([k, v]) => (
+                  <div key={k}>
+                    <p className="text-[var(--text-muted)] mb-1">{k}</p>
+                    <p className="text-[var(--text-secondary)]">{v}</p>
                   </div>
+                ))}
+                <div className="col-span-2">
+                  <p className="text-[var(--text-muted)] mb-1">Notes</p>
+                  <p className="text-[var(--text-dim)]">{expandedClaim.notes || 'N/A'}</p>
                 </div>
-              </>
-            )}
-          </div>
+                <div className="flex items-end gap-2 col-span-2 md:col-span-1 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => exportClaimLetter(expandedClaim)}
+                    className="min-h-[44px] flex items-center gap-1.5 px-3 bg-emerald-800/40 hover:bg-emerald-700/50 border border-emerald-700/50 rounded-lg text-emerald-400 transition-colors"
+                  >
+                    <FileText size={12} aria-hidden="true" /> Claim Letter
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(expandedClaim.id)}
+                    disabled={editClaim?.id === expandedClaim.id && claimLocked}
+                    title={editClaim?.id === expandedClaim.id && claimLocked ? 'Locked, in approval' : undefined}
+                    className="min-h-[44px] flex items-center gap-1.5 px-3 bg-red-900/30 hover:bg-red-800/40 border border-red-800/50 rounded-lg text-red-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {editClaim?.id === expandedClaim.id && claimLocked ? <Lock size={12} aria-hidden="true" /> : <XCircle size={12} aria-hidden="true" />} Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1059,47 +905,17 @@ export default function WarrantyTracker() {
               </div>
             )}
           </div>
-          <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[var(--input-border)] bg-[var(--input-bg)]">
-                  {['Brand','Total Claims','Approval Rate','Avg Credit per Claim','Avg km at Failure'].map(h => (
-                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-[var(--text-muted)]">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {brandPerf.map((b, i) => (
-                  <tr key={b.brand} className="border-b border-[var(--input-border)] hover:bg-[var(--input-bg)]">
-                    <td className="px-4 py-3 text-[var(--text-secondary)] font-medium">{b.brand}</td>
-                    <td className="px-4 py-3">
-                      <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-900/40 text-blue-400 font-bold text-xs">{b.total}</span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <div className="w-24 h-1.5 bg-[var(--input-border)] rounded-full overflow-hidden">
-                          <div className="h-full bg-green-500 rounded-full" style={{ width: `${b.approvalRate}%` }} />
-                        </div>
-                        <span className={`text-xs font-semibold ${b.approvalRate >= 70 ? 'text-green-400' : b.approvalRate >= 40 ? 'text-yellow-400' : 'text-red-400'}`}>
-                          {b.approvalRate.toFixed(1)}%
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-emerald-400 font-semibold text-sm">{b.avgCredit > 0 ? fmt(b.avgCredit) : '-'}</td>
-                    <td className="px-4 py-3 text-[var(--text-dim)] text-sm">{b.avgKm > 0 ? Math.round(b.avgKm).toLocaleString() + ' km' : '-'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {brandPerf.length === 0 && (
-              <EmptyState
-                icon={BarChart3}
-                title="No brand data yet"
-                description="Brand warranty performance will appear once claims are recorded."
-                compact
-              />
-            )}
-          </div>
+          <EnterpriseTable
+            columns={brandColumns}
+            data={brandPerf}
+            getRowId={(b) => b.brand}
+            loading={claimsLoading}
+            error={claimsError || null}
+            onRetry={() => { setClaimsLoading(true); loadClaims() }}
+            emptyMessage="Brand warranty performance will appear once claims are recorded."
+            exportFileName={`Warranty Brand Performance ${new Date().toISOString().slice(0, 10)}`}
+            reportMeta={{ title: 'Warranty brand performance', currency: cur, company }}
+          />
         </div>
       )}
 
@@ -1130,18 +946,18 @@ export default function WarrantyTracker() {
             </h3>
             <div className="space-y-3">
               {failureCounts.filter(f => f.count > 0).map((f, i) => {
-                const maxKm = Math.max(...failureCounts.map(x => x.avgKm), 1)
+                const maxKm = Math.max(...failureCounts.map(x => x.avgKm || 0), 1)
                 return (
                   <div key={f.type}>
                     <div className="flex justify-between text-xs mb-1">
                       <span className="text-[var(--text-dim)]">{f.type}</span>
-                      <span className="text-[var(--text-muted)]">{f.count} claims · {f.avgKm > 0 ? f.avgKm.toLocaleString() + ' km avg' : 'N/A'}</span>
+                      <span className="text-[var(--text-muted)]">{f.count} claims · {f.avgKm != null ? f.avgKm.toLocaleString() + ' km avg' : 'N/A'}</span>
                     </div>
                     <div className="h-2 bg-[var(--input-border)] rounded-full overflow-hidden">
                       <div
                         className="h-full rounded-full transition-all"
                         style={{
-                          width: `${maxKm > 0 ? (f.avgKm / maxKm) * 100 : 0}%`,
+                          width: `${f.avgKm != null ? (f.avgKm / maxKm) * 100 : 0}%`,
                           backgroundColor: FAILURE_PALETTE[i % FAILURE_PALETTE.length],
                         }}
                       />
@@ -1179,7 +995,7 @@ export default function WarrantyTracker() {
             <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
               <p className="text-[var(--text-muted)] text-xs mb-1">Total Credits Received</p>
               <p className="text-3xl font-bold text-emerald-400">{fmt(creditAnalysis.totalCredits)}</p>
-              <p className="text-[var(--text-muted)] text-xs mt-1">across {filteredBase.filter(c => ['Credit Issued','Closed'].includes(c.claim_status)).length} claims</p>
+              <p className="text-[var(--text-muted)] text-xs mt-1">across {filteredBase.filter(c => CREDITED_STATUSES.includes(c.claim_status)).length} claims</p>
             </div>
             <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
               <p className="text-[var(--text-muted)] text-xs mb-1">Est. Unclaimed (Approved)</p>
@@ -1188,7 +1004,7 @@ export default function WarrantyTracker() {
             </div>
             <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
               <p className="text-[var(--text-muted)] text-xs mb-1">Total Recovery Pipeline</p>
-              <p className="text-3xl font-bold text-blue-400">{fmt(creditAnalysis.totalCredits + creditAnalysis.estimatedUnclaimed)}</p>
+              <p className="text-3xl font-bold text-blue-400">{fmt(creditAnalysis.estimatedUnclaimed == null ? creditAnalysis.totalCredits : creditAnalysis.totalCredits + creditAnalysis.estimatedUnclaimed)}</p>
               <p className="text-[var(--text-muted)] text-xs mt-1">received + unclaimed potential</p>
             </div>
           </div>
@@ -1256,15 +1072,13 @@ export default function WarrantyTracker() {
               <div className="bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl p-4">
                 <p className="text-[var(--text-muted)] text-xs mb-1">Recovery Rate</p>
                 <p className="text-2xl font-bold text-green-400">
-                  {Number(roiAvgCost) > 0 && Number(roiAnnualCount) > 0
-                    ? `${roiCalc.recoveryRate.toFixed(1)}%`
-                    : '-'}
+                  {pct(roiCalc.recoveryRate)}
                 </p>
               </div>
               <div className="bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl p-4">
                 <p className="text-[var(--text-muted)] text-xs mb-1">Est. Unclaimed Potential</p>
                 <p className="text-2xl font-bold text-yellow-400">
-                  {Number(roiAvgCost) > 0 && Number(roiAnnualCount) > 0 ? fmt(roiCalc.eligibleUnclaimed) : '-'}
+                  {Number(roiAvgCost) > 0 ? fmt(roiCalc.eligibleUnclaimed) : 'N/A'}
                 </p>
               </div>
             </div>
@@ -1272,7 +1086,7 @@ export default function WarrantyTracker() {
               <div className="mt-4 p-4 bg-blue-900/20 border border-blue-700/40 rounded-xl text-sm text-blue-300">
                 <strong>Opportunity:</strong> If you filed claims on all eligible removals, you could recover an additional{' '}
                 <span className="font-bold text-blue-200">{fmt(roiCalc.eligibleUnclaimed)}</span> per year.
-                Based on 30% eligibility assumption at {`${cur} ${Number(roiAvgCost).toLocaleString()}`} per tyre × 40% credit rate.
+                Based on 30% eligibility assumption at {`${cur} ${Number(roiAvgCost).toLocaleString()}`} per tyre x 40% credit rate.
               </div>
             )}
           </div>

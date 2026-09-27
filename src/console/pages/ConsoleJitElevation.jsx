@@ -31,7 +31,7 @@ import {
 import { ALL_MODULES, MODULE_LABEL } from '../../lib/moduleCatalog'
 import { toUserMessage } from '../../lib/safeError'
 import { exportConsoleRows, sortRows, useTableSort } from '../../lib/consoleTable'
-import { PageHeader, useUrlTab, useRefreshStamp, usePaged, Pager, AttentionList } from './accessKit'
+import { PageHeader, useUrlTab, useRefreshStamp, usePaged, Pager, AttentionList } from './shared/pageKit'
 
 const TABS = ['now', 'history', 'insights']
 const SLOW_DECISION_MIN = 60

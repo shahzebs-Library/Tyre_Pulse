@@ -33,7 +33,7 @@ import {
 } from '../../lib/api/backups'
 import { sortRows, useTableSort } from '../../lib/consoleTable'
 import ExportButtons from './shared/ExportButtons'
-import { PageHeader, TabBar, useUrlTab, usePager, Pager, AttentionList } from './dataKit'
+import { PageHeader, TabBar, useUrlTab, usePager, Pager, AttentionList } from './shared/pageKit'
 import { toUserMessage } from '../../lib/safeError'
 
 const REFRESH_MS = 120_000
@@ -360,7 +360,7 @@ export default function ConsoleBackups() {
         </div>
       )}
 
-      {!loading && <AttentionList items={attention} />}
+      {!loading && <AttentionList quiet items={attention} />}
 
       <TabBar ariaLabel="Backups view" value={tab} onChange={setTab} tabs={[
         { key: 'backups', label: 'Stored backups', icon: Archive, count: snapshots.length },

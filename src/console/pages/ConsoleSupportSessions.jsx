@@ -33,9 +33,7 @@ import {
 import { exportConsoleRows, sortRows, useTableSort } from '../../lib/consoleTable'
 import { TrendChart, BarsChart } from '../components/ui/charts'
 import { dailySeries, topShare } from '../../lib/consoleCharts'
-import {
-  PageHeader, useUrlTab, useRefreshStamp, usePaged, Pager, Drawer, DetailList, AttentionList,
-} from './accessKit'
+import { PageHeader, useUrlTab, useRefreshStamp, usePaged, Pager, Drawer, DetailList, AttentionList } from './shared/pageKit'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import { supabase } from '../../lib/api/_client'
 import {

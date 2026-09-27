@@ -43,7 +43,7 @@ import { listDuplicateTargets } from '../../lib/api/duplicateControl'
 import { toUserMessage } from '../../lib/safeError'
 import { sortRows, searchRows, useTableSort } from '../../lib/consoleTable'
 import ExportButtons from './shared/ExportButtons'
-import { PageHeader, useUrlTab, usePaged, Pager, DetailGrid } from './dataTrust/kit'
+import { PageHeader, useUrlTab, usePaged, Pager, DetailGrid } from './shared/pageKit'
 import UploadCoveragePanel from './importHistory/UploadCoveragePanel'
 import DecisionsPanel from './importHistory/DecisionsPanel'
 import {

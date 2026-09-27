@@ -41,7 +41,7 @@ import {
   partExportRows, PART_EXPORT_COLS, PART_EXPORT_HEADERS, reorderExportRows,
   REORDER_EXPORT_COLS, REORDER_EXPORT_HEADERS, distinctValues, ABC_TABLE_ROWS,
 } from '../lib/partsCatalogAnalytics'
-import { nextSort } from '../lib/consoleTableSort'
+import { nextSort } from '../lib/consoleTable'
 import { colorAt, categorical, withAlpha } from '../lib/reportColors'
 import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'

@@ -42,7 +42,7 @@ import {
   sortDecisions, SORTS,
 } from '../../../lib/classificationDecisions'
 import ExportButtons from '../shared/ExportButtons'
-import { usePaged, Pager } from '../dataTrust/kit'
+import { usePaged, Pager } from '../shared/pageKit'
 import { toUserMessage } from '../../../lib/safeError'
 import {
   Panel, PanelHeader, Note, ProportionBar, Badge, Code, Btn, Segmented,

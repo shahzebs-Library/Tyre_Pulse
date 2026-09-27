@@ -27,12 +27,7 @@ import ExportButtons from './shared/ExportButtons'
 import { listReleases, recordRelease, addReleaseImpact } from '../../lib/api/lineageOps'
 import { toUserMessage } from '../../lib/safeError'
 import { BarsChart, TrendChart } from '../components/ui/charts'
-import PageHeader, { fmtRelative } from './ops/PageHeader'
-import TabBar from './ops/TabBar'
-import useUrlTab from './ops/useUrlTab'
-import usePaged from './ops/usePaged'
-import Pager from './ops/Pager'
-import SideDrawer from './ops/SideDrawer'
+import { PageHeader, fmtRelative, TabBar, useUrlTab, usePaged, Pager, SideDrawer } from './shared/pageKit'
 
 const TABS = ['releases', 'impacts', 'insights']
 const IMPACT_EXPORT_COLUMNS = [

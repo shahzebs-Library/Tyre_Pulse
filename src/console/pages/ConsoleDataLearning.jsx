@@ -41,7 +41,7 @@ import { toUserMessage } from '../../lib/safeError'
 import { COUNTRIES } from '../../contexts/SettingsContext'
 import { sortRows, searchRows, useTableSort } from '../../lib/consoleTable'
 import ExportButtons from './shared/ExportButtons'
-import { PageHeader, useUrlTab, usePaged, Pager, AttentionList } from './dataTrust/kit'
+import { PageHeader, useUrlTab, usePaged, Pager, AttentionList } from './shared/pageKit'
 
 const nf = new Intl.NumberFormat('en-US')
 const num = (v) => (v === null || v === undefined ? 'N/A' : nf.format(Number(v)))
@@ -335,7 +335,7 @@ export default function ConsoleDataLearning() {
         )
       )}
 
-      {!state.error && <AttentionList items={attention} />}
+      {!state.error && <AttentionList quiet items={attention} />}
 
       <Segmented ariaLabel="Data learning views" value={tab} onChange={setTab} options={[
         { key: 'suggestions', label: 'Suggestions', count: state.error ? undefined : suggestions.length },

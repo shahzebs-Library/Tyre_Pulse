@@ -47,13 +47,7 @@ import {
 import { sortRows, useTableSort } from '../../lib/consoleTable'
 import ExportButtons from './shared/ExportButtons'
 import { ShareChart, STATUS, useChartTheme } from '../components/ui/charts'
-import PageHeader from './ops/PageHeader'
-import TabBar from './ops/TabBar'
-import useUrlTab from './ops/useUrlTab'
-import usePaged from './ops/usePaged'
-import Pager from './ops/Pager'
-import SideDrawer, { Field } from './ops/SideDrawer'
-import Collapsible from './ops/Collapsible'
+import { PageHeader, TabBar, useUrlTab, usePaged, Pager, SideDrawer, Field, Collapsible } from './shared/pageKit'
 
 const TABS = ['modules', 'service', 'categories']
 const CATEGORY_EXPORT_COLUMNS = [

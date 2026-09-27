@@ -28,9 +28,7 @@ import {
 } from '../../lib/securityAudit'
 import { toUserMessage } from '../../lib/safeError'
 import { exportConsoleRows, sortRows, searchRows, useTableSort } from '../../lib/consoleTable'
-import {
-  PageHeader, useUrlTab, useRefreshStamp, usePaged, Pager, Drawer, AttentionList,
-} from './accessKit'
+import { PageHeader, useUrlTab, useRefreshStamp, usePaged, Pager, Drawer, AttentionList } from './shared/pageKit'
 import ExportButtons from './shared/ExportButtons'
 
 const TABS = ['findings', 'posture', 'activity']

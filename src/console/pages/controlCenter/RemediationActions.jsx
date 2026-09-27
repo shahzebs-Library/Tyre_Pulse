@@ -35,7 +35,7 @@ import {
   LoadingState, ErrorState,
 } from '../../components/ui'
 import { toUserMessage } from '../../../lib/safeError'
-import Collapsible from '../opsKit/Collapsible'
+import { Collapsible } from '../shared/pageKit'
 import { openConsoleRoute } from '../../lib/openRoute'
 import {
   listDuplicateTargets, previewDuplicates, resolveDuplicates,

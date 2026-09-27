@@ -34,7 +34,7 @@ import { toUserMessage } from '../../lib/safeError'
 import { sortRows, searchRows, useTableSort } from '../../lib/consoleTable'
 import { BarsChart } from '../components/ui/charts'
 import ExportButtons from './shared/ExportButtons'
-import { PageHeader, useUrlTab, usePaged, Pager, AttentionList } from './dataTrust/kit'
+import { PageHeader, useUrlTab, usePaged, Pager, AttentionList } from './shared/pageKit'
 
 function when(ts) {
   if (!ts) return 'N/A'
@@ -297,7 +297,7 @@ export default function ConsoleCorrectionCenter() {
         </div>
       )}
 
-      {!state.loading && !state.error && cases.length > 0 && <AttentionList items={attention} />}
+      {!state.loading && !state.error && cases.length > 0 && <AttentionList quiet items={attention} />}
 
       {state.error && <Panel><ErrorState message={state.error} onRetry={load} /></Panel>}
 

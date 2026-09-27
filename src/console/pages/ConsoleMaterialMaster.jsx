@@ -45,7 +45,7 @@ import {
 import { toUserMessage } from '../../lib/safeError'
 import { sortRows, useTableSort } from '../../lib/consoleTable'
 import ExportButtons from './shared/ExportButtons'
-import { PageHeader, TabBar, useUrlTab, usePager, Pager, AttentionList } from './dataKit'
+import { PageHeader, TabBar, useUrlTab, usePager, Pager, AttentionList } from './shared/pageKit'
 
 const COUNTRIES = ['KSA', 'UAE', 'Egypt']
 const CURRENCY = Object.freeze({ KSA: 'SAR', UAE: 'AED', Egypt: 'EGP' })
@@ -347,7 +347,7 @@ export default function ConsoleMaterialMaster() {
         </>
       )}
 
-      {tab === 'review' && <AttentionList items={attention} title="Where to start" />}
+      {tab === 'review' && <AttentionList quiet items={attention} title="Where to start" />}
 
       {tab === 'review' && (
       <>

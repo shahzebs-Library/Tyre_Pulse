@@ -24,7 +24,7 @@ import { toUserMessage } from '../../../lib/safeError'
 import { actionKind, diffFields, KIND_TONE, summarizeAudit } from '../../../lib/accessAuditView'
 import { dailySeries } from '../../../lib/consoleCharts'
 import { exportConsoleRows, sortRows, useTableSort } from '../../../lib/consoleTable'
-import { usePaged, Pager, Collapsible } from '../accessKit'
+import { usePaged, Pager, Collapsible } from '../shared/pageKit'
 import {
   Badge, Btn, EmptyState, ErrorState, LoadingState, Note, Panel, PanelHeader, SearchInput, Select,
   StatTile, Table, THead, Th, Tr, Td, Toolbar,

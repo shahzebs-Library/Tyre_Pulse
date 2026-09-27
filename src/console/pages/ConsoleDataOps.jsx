@@ -19,7 +19,7 @@ import {
 import { BarsChart } from '../components/ui/charts'
 import { searchRows, sortRows, useTableSort } from '../../lib/consoleTable'
 import ExportButtons from './shared/ExportButtons'
-import { PageHeader, TabBar, useUrlTab, usePager, Pager, AttentionList } from './dataKit'
+import { PageHeader, TabBar, useUrlTab, usePager, Pager, AttentionList } from './shared/pageKit'
 
 /**
  * Data Operations hub.
@@ -246,7 +246,7 @@ export default function ConsoleDataOps() {
         </>
       ) : tab === 'overview' ? (
         <div className="space-y-4">
-          <AttentionList items={attention} title="Critical issues with a fix" />
+          <AttentionList quiet items={attention} title="Critical issues with a fix" />
           <div className="grid gap-4 lg:grid-cols-3">
             <Panel className="lg:col-span-2" flush>
               <div className="p-4 pb-2">

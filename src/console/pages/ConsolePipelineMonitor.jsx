@@ -31,8 +31,7 @@ import { getPipelineRuns, getIntegrationEvents } from '../../lib/api/dataTrustOp
 import { pipelineSummary } from '../../lib/dataTrustOps'
 import { COUNTRIES } from '../../contexts/SettingsContext'
 import { toUserMessage } from '../../lib/safeError'
-import { PageHeader, useUrlTab, usePaged, Pager, AttentionList, ConsoleLink, TabPanel } from './platformOps/kit'
-import { whenText } from './platformOps/paging'
+import { PageHeader, useUrlTab, usePaged, Pager, AttentionList, ConsoleLink, TabPanel, whenText } from './shared/pageKit'
 
 const nf = new Intl.NumberFormat('en-US')
 const num = (v) => (v === null || v === undefined || v === '' ? 'N/A' : nf.format(Number(v)))
@@ -254,7 +253,7 @@ export default function ConsolePipelineMonitor() {
                 icon={Activity}
                 title="No runs to show"
                 reason={search || outcome !== 'all' ? 'No run matches the search and outcome filter.' : 'No import or report run has been recorded for this scope yet.'}
-                action={search || outcome !== 'all' ? <Btn onClick={() => { setSearch(''); setOutcome('all') }}>Clear filters</Btn> : <ConsoleLink to="/console/import-history">Open Import History</ConsoleLink>}
+                action={search || outcome !== 'all' ? <Btn onClick={() => { setSearch(''); setOutcome('all') }}>Clear filters</Btn> : <ConsoleLink plain to="/console/import-history">Open Import History</ConsoleLink>}
               />
             ) : (
               <>
@@ -411,7 +410,7 @@ export default function ConsolePipelineMonitor() {
                 : <p className="text-gray-400">None recorded.</p>}
             </div>
             {detail.kind === 'run' && (
-              <p>See the import itself in <ConsoleLink to="/console/import-history">Import History</ConsoleLink>.</p>
+              <p>See the import itself in <ConsoleLink plain to="/console/import-history">Import History</ConsoleLink>.</p>
             )}
           </div>
         )}

@@ -35,13 +35,7 @@ import {
 import { toUserMessage } from '../../lib/safeError'
 import { exportToExcel, reportFileName } from '../../lib/exportUtils'
 import { loadPdf } from '../../lib/pdfEngine'
-import PageHeader from './ops/PageHeader'
-import TabBar from './ops/TabBar'
-import useUrlTab from './ops/useUrlTab'
-import usePaged from './ops/usePaged'
-import Pager from './ops/Pager'
-import SideDrawer from './ops/SideDrawer'
-import AttentionList from './ops/AttentionList'
+import { PageHeader, TabBar, useUrlTab, usePaged, Pager, SideDrawer, AttentionList } from './shared/pageKit'
 
 const TABS = ['controls', 'readiness', 'attestations']
 const EXPIRY_WARN_DAYS = 30

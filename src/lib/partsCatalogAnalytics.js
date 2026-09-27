@@ -11,7 +11,7 @@
 import {
   partStockStatus, partLineValue, STOCK_STATUS_META, STOCK_STATUS_KEYS,
 } from './partsCatalog'
-import { sortRows } from './consoleTableSort'
+import { sortRows } from './consoleTable'
 
 export { sortRows }
 

@@ -13,9 +13,7 @@ import {
 } from '../components/ui'
 import { BarsChart, TrendChart } from '../components/ui/charts'
 import { topShare } from '../../lib/consoleCharts'
-import {
-  PageHeader, useUrlTab, useUrlParam, useRefreshStamp, usePaged, Pager, Drawer, AttentionList,
-} from './accessKit'
+import { PageHeader, useUrlTab, useUrlParam, useRefreshStamp, usePaged, Pager, Drawer, AttentionList } from './shared/pageKit'
 import { exportConsoleRows, sortRows, useTableSort } from '../../lib/consoleTable'
 import { orgStatus, summarizeOrgs } from '../../lib/consoleOrganisations'
 import { useConsoleAuth } from '../ConsoleAuthContext'

@@ -33,9 +33,7 @@ import {
 } from '../../lib/api/accountDeletion'
 import { toUserMessage } from '../../lib/safeError'
 import { exportConsoleRows, sortRows, useTableSort } from '../../lib/consoleTable'
-import {
-  PageHeader, useUrlTab, useRefreshStamp, usePaged, Pager, Drawer, DetailList, AttentionList,
-} from './accessKit'
+import { PageHeader, useUrlTab, useRefreshStamp, usePaged, Pager, Drawer, DetailList, AttentionList } from './shared/pageKit'
 
 const STATUS_META = {
   pending:    { label: 'Pending',    tone: 'warning' },

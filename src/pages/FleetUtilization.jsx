@@ -33,7 +33,7 @@ import { toUserMessage } from '../lib/safeError'
 import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { colorAt, withAlpha } from '../lib/reportColors'
 import { listAssetOptions } from '../lib/api/assetHistory'
-import { nextSort, sortRows } from '../lib/consoleTableSort'
+import { nextSort, sortRows } from '../lib/consoleTable'
 import {
   attachRegister, siteComparison, telematicsCoverage, captureTimeline, filterByRegister, NO_SITE, NO_TYPE,
   UTILIZATION_SORT_ACCESSORS, UTILIZATION_EXPORT_COLS, UTILIZATION_EXPORT_HEADERS, utilizationExportRows,

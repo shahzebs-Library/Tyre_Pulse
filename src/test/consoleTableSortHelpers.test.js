@@ -1,14 +1,14 @@
 import { describe, it, expect } from 'vitest'
-import { compareValues, sortRows, nextSort, isBlank } from '../lib/consoleTableSort'
+import { compareValues, sortRows, nextSort, isBlank } from '../lib/consoleTable'
 
-describe('consoleTableSort', () => {
+describe('consoleTable sort helpers', () => {
   it('treats null, undefined, empty and NaN as blank', () => {
     expect([null, undefined, '', NaN].every(isBlank)).toBe(true)
     expect(isBlank(0)).toBe(false)
   })
   it('compares numbers and numeric strings numerically', () => {
-    expect(compareValues(9, 100)).toBe(-1)
-    expect(compareValues('9', '100')).toBe(-1)
+    expect(compareValues(9, 100)).toBeLessThan(0)
+    expect(compareValues('9', '100')).toBeLessThan(0)
   })
   it('compares text case-insensitively with numeric awareness', () => {
     expect(compareValues('tm9', 'TM10')).toBeLessThan(0)
@@ -31,7 +31,7 @@ describe('consoleTableSort', () => {
     expect(sortRows(null, { key: 'v' })).toEqual([])
   })
   it('nextSort toggles on the same key and resets on a new key', () => {
-    expect(nextSort(null, 'a')).toEqual({ key: 'a', dir: 'desc' })
+    expect(nextSort(null, 'a', 'desc')).toEqual({ key: 'a', dir: 'desc' })
     expect(nextSort({ key: 'a', dir: 'desc' }, 'a')).toEqual({ key: 'a', dir: 'asc' })
     expect(nextSort({ key: 'a', dir: 'asc' }, 'b', 'asc')).toEqual({ key: 'b', dir: 'asc' })
   })

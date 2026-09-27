@@ -27,7 +27,7 @@ import {
 } from '../../../lib/api/uploadCoverage'
 import FeedFileHelp from './FeedFileHelp'
 import UploadFeedManager from './UploadFeedManager'
-import { Collapsible } from '../dataTrust/kit'
+import { Collapsible } from '../shared/pageKit'
 import { toUserMessage } from '../../../lib/safeError'
 import {
   Panel, Note, Badge, Btn, Segmented, Toolbar, LoadingState, EmptyState, ErrorState,

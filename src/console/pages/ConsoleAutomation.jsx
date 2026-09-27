@@ -33,13 +33,9 @@ import {
 import { sortRows, searchRows, useTableSort } from '../../lib/consoleTable'
 import ExportButtons from './shared/ExportButtons'
 import { ShareChart, BarsChart, STATUS, useChartTheme } from '../components/ui/charts'
-import PageHeader, { fmtDateTime, fmtRelative } from './ops/PageHeader'
-import TabBar from './ops/TabBar'
-import useUrlTab from './ops/useUrlTab'
-import usePaged from './ops/usePaged'
-import Pager from './ops/Pager'
-import SideDrawer, { Field } from './ops/SideDrawer'
-import AttentionList from './ops/AttentionList'
+import {
+  PageHeader, fmtDateTime, fmtRelative, TabBar, useUrlTab, usePaged, Pager, SideDrawer, Field, AttentionList,
+} from './shared/pageKit'
 
 const STATE_RANK = { failing: 0, overdue: 1, paused: 2, healthy: 3 }
 const SCHEDULE_EXPORT_COLUMNS = [

@@ -30,7 +30,7 @@ import { toUserMessage } from '../../lib/safeError'
 import { sortRows, searchRows, useTableSort } from '../../lib/consoleTable'
 import { ShareChart, BarsChart, TrendChart, STATUS, useChartTheme } from '../components/ui/charts'
 import ExportButtons from './shared/ExportButtons'
-import { PageHeader, useUrlTab, usePaged, Pager, AttentionList, DetailGrid } from './dataTrust/kit'
+import { PageHeader, useUrlTab, usePaged, Pager, AttentionList, DetailGrid } from './shared/pageKit'
 
 const nf = new Intl.NumberFormat('en-US')
 const num = (v) => (v === null || v === undefined ? 'N/A' : nf.format(Number(v)))

@@ -28,8 +28,7 @@ import { exportToExcel, reportFileName } from '../../lib/exportUtils'
 import { supabase } from '../../lib/supabase'
 import { COUNTRIES } from '../../contexts/SettingsContext'
 import ExportButtons from './shared/ExportButtons'
-import { PageHeader, useUrlTab, usePaged, Pager, AttentionList, ConsoleLink, TabPanel } from './platformOps/kit'
-import { whenText } from './platformOps/paging'
+import { PageHeader, useUrlTab, usePaged, Pager, AttentionList, ConsoleLink, TabPanel, whenText } from './shared/pageKit'
 
 const RANGES = [
   { key: '7', label: '7 days' },
@@ -242,7 +241,7 @@ export default function ConsoleAIUsage() {
               { key: 'breakdown', label: <><Layers size={13} aria-hidden="true" />Breakdown</>, count: featureRows.length },
               { key: 'failures', label: <><ListChecks size={13} aria-hidden="true" />Failures</>, count: failedRows.length },
             ]} />
-            <p className="text-[11px] text-gray-500">Models, prompts and budgets are managed in <ConsoleLink to="/console/ai-admin">AI Administration</ConsoleLink>.</p>
+            <p className="text-[11px] text-gray-500">Models, prompts and budgets are managed in <ConsoleLink plain to="/console/ai-admin">AI Administration</ConsoleLink>.</p>
           </nav>
 
           {tab === 'trend' && (

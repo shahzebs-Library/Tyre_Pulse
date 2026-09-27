@@ -26,7 +26,7 @@ import { getEffectiveAccess } from '../../../lib/api/adminAccess'
 import { toUserMessage } from '../../../lib/safeError'
 import UserDirectory, { displayName } from './UserDirectory'
 import { exportConsoleRows, searchRows, sortRows, useTableSort } from '../../../lib/consoleTable'
-import { usePaged, Pager } from '../accessKit'
+import { usePaged, Pager } from '../shared/pageKit'
 import {
   Badge, Btn, EmptyState, ErrorState, LoadingState, Note, Panel, PanelHeader, SearchInput, Segmented,
   StatTile, Table, THead, Th, Tr, Td, Toolbar,

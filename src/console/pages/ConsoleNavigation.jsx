@@ -15,7 +15,7 @@ import {
   LoadingState, EmptyState, ErrorState, Modal, Table, THead, Th, Tr, Td,
 } from '../components/ui'
 import ExportButtons from './shared/ExportButtons'
-import { PageHeader, useUrlTab, TabPanel } from './platformOps/kit'
+import { PageHeader, useUrlTab, TabPanel } from './shared/pageKit'
 import { navChanges } from './navigation/navDiff'
 
 /**

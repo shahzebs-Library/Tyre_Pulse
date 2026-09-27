@@ -24,7 +24,7 @@ import {
 import { sortRows, searchRows, useTableSort } from '../../lib/consoleTable'
 import { BarsChart } from '../components/ui/charts'
 import ExportButtons from './shared/ExportButtons'
-import { PageHeader, useUrlTab, usePaged, Pager, AttentionList } from './dataTrust/kit'
+import { PageHeader, useUrlTab, usePaged, Pager, AttentionList } from './shared/pageKit'
 import { listMetrics, getMetric } from '../../lib/api/metricRegistry'
 import { fmtList } from '../../lib/metricExplain'
 import { toUserMessage } from '../../lib/safeError'
@@ -205,7 +205,7 @@ export default function ConsoleMetricCatalogue() {
         </div>
       )}
 
-      {!state.loading && !state.error && state.rows.length > 0 && <AttentionList items={attention} />}
+      {!state.loading && !state.error && state.rows.length > 0 && <AttentionList quiet items={attention} />}
 
       <Segmented ariaLabel="Metric catalogue views" value={tab} onChange={setTab} options={[
         { key: 'registry', label: 'Registry', count: state.loading || state.error ? undefined : state.rows.length },

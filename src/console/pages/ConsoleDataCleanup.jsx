@@ -29,7 +29,7 @@ import {
 import { toUserMessage } from '../../lib/safeError'
 import { sortRows, useTableSort } from '../../lib/consoleTable'
 import ExportButtons from './shared/ExportButtons'
-import { PageHeader, TabBar, useUrlTab, usePager, Pager, AttentionList } from './dataKit'
+import { PageHeader, TabBar, useUrlTab, usePager, Pager, AttentionList } from './shared/pageKit'
 
 const fmtDate = (v) => {
   if (!v) return 'N/A'
@@ -230,7 +230,7 @@ export default function ConsoleDataCleanup() {
 
           )}
 
-          {tab === 'targets' && <AttentionList items={attention} title="Safe cleanups to consider" />}
+          {tab === 'targets' && <AttentionList quiet items={attention} title="Safe cleanups to consider" />}
 
           {tab === 'targets' && (
           <div className="grid gap-4 lg:grid-cols-2">

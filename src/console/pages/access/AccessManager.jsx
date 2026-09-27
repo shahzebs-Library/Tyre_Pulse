@@ -43,7 +43,7 @@ import { listGlobalPermissions, saveModulePermissions, saveAccessControlMatrix }
 import { listProfiles } from '../../../lib/api/users'
 import { listCustomRoles } from '../../../lib/api/customRoles'
 import MobileAccessPanel from './MobileAccessPanel'
-import { Collapsible } from '../accessKit'
+import { Collapsible } from '../shared/pageKit'
 import {
   listUserGrants, revokeUserAccessGrant,
   setUserAccessGrantScoped, mobileGrantKey, parseGrantScope,

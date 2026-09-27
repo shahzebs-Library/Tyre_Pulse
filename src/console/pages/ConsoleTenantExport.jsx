@@ -33,7 +33,7 @@ import { configNum } from '../../lib/api/systemConfig'
 import { exportSheetsToExcel } from '../../lib/exportUtils'
 import { searchRows, sortRows, useTableSort } from '../../lib/consoleTable'
 import ExportButtons from './shared/ExportButtons'
-import { PageHeader, TabBar, useUrlTab, usePager, Pager, AttentionList } from './dataKit'
+import { PageHeader, TabBar, useUrlTab, usePager, Pager, AttentionList } from './shared/pageKit'
 import { toUserMessage } from '../../lib/safeError'
 import RetentionPanel from './tenantExport/RetentionPanel'
 
@@ -307,7 +307,7 @@ export default function ConsoleTenantExport() {
           sub={jobs[0] ? (orgNameById[jobs[0].org_id] || 'Organisation') : 'Nothing exported yet'} />
       </div>
 
-      <AttentionList items={attention} />
+      <AttentionList quiet items={attention} />
 
       <TabBar ariaLabel="Tenant export view" value={tab} onChange={setTab} tabs={[
         { key: 'export', label: 'New export', icon: PackageOpen },

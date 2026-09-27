@@ -6,7 +6,7 @@
  * results for tables, sorting and exports. No I/O; the clock is injected.
  */
 import { hasClaim, isClosed, isDelayed, claimNet, overdueDays } from './claimsAnalytics'
-import { sortRows } from './consoleTableSort'
+import { sortRows } from './consoleTable'
 
 export { sortRows }
 

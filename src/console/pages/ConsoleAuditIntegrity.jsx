@@ -36,13 +36,7 @@ import { toUserMessage } from '../../lib/safeError'
 import { exportToExcel, reportFileName } from '../../lib/exportUtils'
 import { sortRows, searchRows, useTableSort } from '../../lib/consoleTable'
 import ExportButtons from './shared/ExportButtons'
-import PageHeader from './ops/PageHeader'
-import TabBar from './ops/TabBar'
-import useUrlTab from './ops/useUrlTab'
-import usePaged from './ops/usePaged'
-import Pager from './ops/Pager'
-import SideDrawer, { Field } from './ops/SideDrawer'
-import AttentionList from './ops/AttentionList'
+import { PageHeader, TabBar, useUrlTab, usePaged, Pager, SideDrawer, Field, AttentionList } from './shared/pageKit'
 
 const TAB_KEYS = [...AUDIT_SOURCES.map((s) => s.value), 'export']
 // Seals are written nightly for the previous UTC day, so the newest sealed

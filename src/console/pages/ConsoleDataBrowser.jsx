@@ -41,7 +41,7 @@ import {
 import { toUserMessage } from '../../lib/safeError'
 import { searchRows, sortRows, useTableSort } from '../../lib/consoleTable'
 import ExportButtons from './shared/ExportButtons'
-import { PageHeader, TabBar, useUrlTab, usePager, Pager } from './dataKit'
+import { PageHeader, TabBar, useUrlTab, usePager, Pager } from './shared/pageKit'
 
 const LIMIT_OPTIONS = [50, 100, 500]
 const EMPTY_FILTER = { column: '', op: 'eq', value: '' }

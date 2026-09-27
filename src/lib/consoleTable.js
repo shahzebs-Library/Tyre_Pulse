@@ -19,7 +19,7 @@ import { useCallback, useState } from 'react'
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}([T ][\d:.]+)?(Z|[+-]\d{2}:?\d{2})?$/
 
-function isBlank(v) {
+export function isBlank(v) {
   return v === null || v === undefined || (typeof v === 'string' && v.trim() === '')
     || (typeof v === 'number' && Number.isNaN(v))
 }

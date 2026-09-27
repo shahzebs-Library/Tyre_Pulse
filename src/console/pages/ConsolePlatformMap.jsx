@@ -25,7 +25,7 @@ import { CONSOLE_NAV } from '../components/ConsoleLayout'
 import { NAV_CATALOG } from '../../components/Layout'
 import { MOBILE_MODULES } from '../../lib/mobileModules'
 import ExportButtons from './shared/ExportButtons'
-import { PageHeader, useUrlTab, AttentionList, Collapsible, TabPanel } from './platformOps/kit'
+import { PageHeader, useUrlTab, AttentionList, Collapsible, TabPanel } from './shared/pageKit'
 
 const WHO_META = {
   you: { label: 'Needs your decision', icon: User, tone: 'accent' },

@@ -29,7 +29,7 @@ import {
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import { ENFORCEMENT_STATUS, CONFIG_DEFAULTS } from '../../lib/api/systemConfig'
 import FxRatesPanel from './config/FxRatesPanel'
-import { PageHeader, useUrlTab, usePaged, Pager, AttentionList, ConsoleLink, TabPanel } from './platformOps/kit'
+import { PageHeader, useUrlTab, usePaged, Pager, AttentionList, ConsoleLink, TabPanel } from './shared/pageKit'
 import { sortRows, useTableSort } from '../../lib/consoleTable'
 
 const CONFIG_GROUPS = [
@@ -401,7 +401,7 @@ export default function ConsoleSystemConfig() {
                           <Td nowrap><Code>{r.key}</Code></Td>
                           <Td><span className="text-gray-400 break-all" title={v.length > 80 ? `${v.length} characters` : undefined}>{v.length > 80 ? `${v.slice(0, 80)}... (${v.length} characters)` : v || '(blank)'}</span></Td>
                           <Td>{r.enf.known ? <Badge tone={r.enf.active ? 'good' : 'quiet'} title={r.enf.where || undefined}>{r.enf.active ? 'Active and enforced' : 'Saved only'}</Badge> : <span className="text-gray-500">Not tracked</span>}</Td>
-                          <Td>{owner ? <ConsoleLink to={owner[0]}>{owner[1]}</ConsoleLink> : <span className="text-gray-500">Platform</span>}</Td>
+                          <Td>{owner ? <ConsoleLink plain to={owner[0]}>{owner[1]}</ConsoleLink> : <span className="text-gray-500">Platform</span>}</Td>
                         </Tr>
                       )
                     })}

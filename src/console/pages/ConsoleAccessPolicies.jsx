@@ -34,7 +34,7 @@ import {
   validateAllowlistEntry, enableLockoutRisk, isCovered, rangeSize, ssoOrgStatus, ssoEnableBlocker,
 } from '../../lib/accessPolicies'
 import { toUserMessage } from '../../lib/safeError'
-import { PageHeader, useRefreshStamp, Collapsible, AttentionList } from './accessKit'
+import { PageHeader, useRefreshStamp, Collapsible, AttentionList } from './shared/pageKit'
 
 const inputCls = 'w-full px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 placeholder-gray-500 focus:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500'
 

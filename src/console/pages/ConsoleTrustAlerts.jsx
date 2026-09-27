@@ -29,9 +29,8 @@ import { alertTone } from '../../lib/lineageOps'
 import { COUNTRIES } from '../../contexts/SettingsContext'
 import { toUserMessage } from '../../lib/safeError'
 import {
-  PageHeader, useUrlTab, usePaged, Pager, AttentionList, ConsoleLink, TabPanel,
-} from './platformOps/kit'
-import { whenText, ageText } from './platformOps/paging'
+  PageHeader, useUrlTab, usePaged, Pager, AttentionList, ConsoleLink, TabPanel, whenText, ageText,
+} from './shared/pageKit'
 
 const nf = new Intl.NumberFormat('en-US')
 const DAY = 86400000
@@ -247,9 +246,9 @@ export default function ConsoleTrustAlerts() {
           { key: 'trends', label: <><TrendingUp size={13} aria-hidden="true" />Trends</> },
         ]} />
         <p className="text-[11px] text-gray-500">
-          Fix the cause in <ConsoleLink to="/console/data-quality">Data Quality</ConsoleLink>,{' '}
-          <ConsoleLink to="/console/reconciliation">Reconciliation</ConsoleLink> or{' '}
-          <ConsoleLink to="/console/correction-center">Correction Center</ConsoleLink>.
+          Fix the cause in <ConsoleLink plain to="/console/data-quality">Data Quality</ConsoleLink>,{' '}
+          <ConsoleLink plain to="/console/reconciliation">Reconciliation</ConsoleLink> or{' '}
+          <ConsoleLink plain to="/console/correction-center">Correction Center</ConsoleLink>.
         </p>
       </nav>
 
@@ -415,7 +414,7 @@ export default function ConsoleTrustAlerts() {
               {detail.updated_at && (<><dt className="text-gray-500">Last change</dt><dd className="col-span-2">{whenText(detail.updated_at)}</dd></>)}
             </dl>
             {SOURCE_PAGE[detail.source] && (
-              <p>Investigate the cause in <ConsoleLink to={SOURCE_PAGE[detail.source]}>{sourceLabel(detail.source)}</ConsoleLink>.</p>
+              <p>Investigate the cause in <ConsoleLink plain to={SOURCE_PAGE[detail.source]}>{sourceLabel(detail.source)}</ConsoleLink>.</p>
             )}
           </div>
         )}

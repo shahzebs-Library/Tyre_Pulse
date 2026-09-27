@@ -41,7 +41,7 @@ import { toUserMessage } from '../../lib/safeError'
 import { COUNTRIES } from '../../contexts/SettingsContext'
 import { searchRows, sortRows, useTableSort } from '../../lib/consoleTable'
 import ExportButtons from './shared/ExportButtons'
-import { PageHeader, TabBar, useUrlTab, usePager, Pager } from './dataKit'
+import { PageHeader, TabBar, useUrlTab, usePager, Pager } from './shared/pageKit'
 
 const STEP_KEYS = ['mapping', 'preview']
 const WIZARD = [

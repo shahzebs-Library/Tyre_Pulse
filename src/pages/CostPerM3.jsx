@@ -36,7 +36,7 @@ import {
   regionExportHeaders, monthExportRows, MONTH_EXPORT_COLS, monthExportHeaders, studioCatalogFor,
   sortRows, TOO_LITTLE,
 } from '../lib/costPerM3Analytics'
-import { nextSort } from '../lib/consoleTableSort'
+import { nextSort } from '../lib/consoleTable'
 import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import PresentationStudio from '../components/present/PresentationStudio'
 import StudioBoundary from '../components/present/StudioBoundary'

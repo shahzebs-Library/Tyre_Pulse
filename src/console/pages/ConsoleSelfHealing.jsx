@@ -31,12 +31,9 @@ import {
   Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, Modal,
 } from '../components/ui'
 import ExportButtons from './shared/ExportButtons'
-import OpsPageHeader from './opsKit/OpsPageHeader'
-import Pager, { usePaged, PAGE_SIZE } from './opsKit/Pager'
-import Drawer from './opsKit/Drawer'
-import Collapsible from './opsKit/Collapsible'
-import AttentionList from './opsKit/AttentionList'
-import useUrlTab from './opsKit/useUrlTab'
+import {
+  PageHeader as OpsPageHeader, Pager, usePaged, PAGE_SIZE, Drawer, Collapsible, AttentionList, useUrlTab,
+} from './shared/pageKit'
 import { sortRows, searchRows, useTableSort } from '../../lib/consoleTable'
 import { BarsChart, STATUS, useChartTheme } from '../components/ui/charts'
 

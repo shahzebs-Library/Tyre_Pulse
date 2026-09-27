@@ -39,9 +39,7 @@ import {
 import { toUserMessage } from '../../lib/safeError'
 import KnownConsoleDevices from './sessions/KnownConsoleDevices'
 import { exportConsoleRows, sortRows, searchRows, useTableSort } from '../../lib/consoleTable'
-import {
-  PageHeader, useUrlTab, useRefreshStamp, usePaged, Pager, Drawer, DetailList, AttentionList,
-} from './accessKit'
+import { PageHeader, useUrlTab, useRefreshStamp, usePaged, Pager, Drawer, DetailList, AttentionList } from './shared/pageKit'
 import ExportButtons from './shared/ExportButtons'
 
 const TABS = ['users', 'activity', 'devices', 'insights']

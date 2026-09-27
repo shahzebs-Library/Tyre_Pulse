@@ -16,7 +16,7 @@ import {
   Note, Badge, Code, Btn, LoadingState, ErrorState,
   Modal, StatTile,
 } from '../components/ui'
-import { PageHeader, useUrlTab, AttentionList, Collapsible } from './platformOps/kit'
+import { PageHeader, useUrlTab, AttentionList, Collapsible } from './shared/pageKit'
 import { auditPalette, isLightBackground, contrastRatio } from './appearance/paletteCheck'
 
 ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, Tooltip)

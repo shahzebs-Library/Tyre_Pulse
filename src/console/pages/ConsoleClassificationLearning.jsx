@@ -26,7 +26,7 @@ import {
 import { TrendChart, BarsChart } from '../components/ui/charts'
 import { sortRows, useTableSort } from '../../lib/consoleTable'
 import ExportButtons from './shared/ExportButtons'
-import { PageHeader, useUrlTab, usePaged, Pager, AttentionList } from './dataTrust/kit'
+import { PageHeader, useUrlTab, usePaged, Pager, AttentionList } from './shared/pageKit'
 import {
   loadLearningOverview, previewLearnedRule, decideRule, applyLearnedRule,
 } from '../../lib/api/classificationLearning'
@@ -248,7 +248,7 @@ export default function ConsoleClassificationLearning() {
           />
       </div>
 
-      <AttentionList items={attention} />
+      <AttentionList quiet items={attention} />
 
       <Segmented ariaLabel="Classifier views" value={tab} onChange={setTab} options={[
         { key: 'overview', label: 'Learning trend' },

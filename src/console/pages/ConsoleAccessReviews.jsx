@@ -29,7 +29,7 @@ import { exportToExcel, exportToPdf, reportFileName } from '../../lib/exportUtil
 import { sortRows, useTableSort } from '../../lib/consoleTable'
 import {
   PageHeader, useUrlTab, useUrlParam, useRefreshStamp, usePaged, Pager, Drawer, DetailList, AttentionList,
-} from './accessKit'
+} from './shared/pageKit'
 
 const PAGE = 25
 const VIEW_TABS = ['decisions', 'overview']

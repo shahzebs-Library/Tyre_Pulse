@@ -38,7 +38,7 @@ import {
   todayIso, filterClaimRows, claimFilterOptions, claimTableRows, CLAIM_SORT_ACCESSORS, sortRows,
   delayedInsurerRows, claimExportRows, CLAIM_EXPORT_KEYS, CLAIM_EXPORT_HEADERS, monthLabel, liabilityText,
 } from '../lib/claimsSummaryAnalytics'
-import { nextSort } from '../lib/consoleTableSort'
+import { nextSort } from '../lib/consoleTable'
 import { colorAt, categorical, withAlpha } from '../lib/reportColors'
 import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import EmailPdfButton from '../components/EmailPdfButton'

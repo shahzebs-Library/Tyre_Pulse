@@ -15,12 +15,7 @@ import {
 } from '../../lib/api/auditTrail'
 import { toUserMessage } from '../../lib/safeError'
 import ExportButtons from './shared/ExportButtons'
-import PageHeader from './ops/PageHeader'
-import TabBar from './ops/TabBar'
-import useUrlTab from './ops/useUrlTab'
-import usePaged from './ops/usePaged'
-import Pager from './ops/Pager'
-import SideDrawer, { Field } from './ops/SideDrawer'
+import { PageHeader, TabBar, useUrlTab, usePaged, Pager, SideDrawer, Field } from './shared/pageKit'
 
 // Read-only unified audit viewer (Module 6). Reads three independently-owned
 // audit tables (data changes, access control, console actions) through the

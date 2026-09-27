@@ -14,7 +14,7 @@
 import {
   fmtMoney, costPerM3Reliable, MIN_M3_FOR_RATE,
 } from './costPerM3'
-import { sortRows } from './consoleTableSort'
+import { sortRows } from './consoleTable'
 
 export { sortRows }
 

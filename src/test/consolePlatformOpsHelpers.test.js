@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { pageSlice, clampPage, ageText, whenText } from '../console/pages/platformOps/paging'
+import { pageSlice, clampPage, ageText, whenText } from '../console/pages/shared/pageKit'
 import { latestRisk, gateImpact, behindLatest } from '../console/pages/mobileApp/releaseGuard'
 import { gateRisk } from '../lib/mobileOps'
 

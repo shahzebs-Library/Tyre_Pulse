@@ -34,11 +34,7 @@ import {
 } from '../../lib/platformIncidents'
 import { toUserMessage } from '../../lib/safeError'
 import { exportToExcel, exportToPdf, reportFileName } from '../../lib/exportUtils'
-import OpsPageHeader from './opsKit/OpsPageHeader'
-import Pager, { usePaged, PAGE_SIZE } from './opsKit/Pager'
-import Drawer from './opsKit/Drawer'
-import AttentionList from './opsKit/AttentionList'
-import useUrlTab from './opsKit/useUrlTab'
+import { PageHeader as OpsPageHeader, Pager, usePaged, PAGE_SIZE, Drawer, AttentionList, useUrlTab } from './shared/pageKit'
 import { sortRows, useTableSort } from '../../lib/consoleTable'
 
 const WINDOW_DAYS = 90

@@ -28,12 +28,7 @@ import {
 import { sortRows, searchRows, useTableSort } from '../../lib/consoleTable'
 import { TrendChart, STATUS, SERIES, useChartTheme } from '../components/ui/charts'
 import ExportButtons from './shared/ExportButtons'
-import PageHeader, { fmtDateTime } from './ops/PageHeader'
-import TabBar from './ops/TabBar'
-import useUrlTab from './ops/useUrlTab'
-import usePaged from './ops/usePaged'
-import Pager from './ops/Pager'
-import SideDrawer, { Field } from './ops/SideDrawer'
+import { PageHeader, fmtDateTime, TabBar, useUrlTab, usePaged, Pager, SideDrawer, Field } from './shared/pageKit'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

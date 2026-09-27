@@ -33,8 +33,7 @@ import { toUserMessage } from '../../lib/safeError'
 import { sortRows, useTableSort } from '../../lib/consoleTable'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import ExportButtons from './shared/ExportButtons'
-import { PageHeader, useUrlTab, AttentionList, ConsoleLink, TabPanel } from './platformOps/kit'
-import { whenText, ageText } from './platformOps/paging'
+import { PageHeader, useUrlTab, AttentionList, ConsoleLink, TabPanel, whenText, ageText } from './shared/pageKit'
 import { getDeviceVersions } from './mobileApp/deviceVersions'
 import { latestRisk, gateImpact, behindLatest } from './mobileApp/releaseGuard'
 
@@ -322,7 +321,7 @@ export default function ConsoleMobileApp() {
                   ? nf.format((devices.byVersion || []).filter((r) => r.app_version && compareVersions(r.app_version, latestDraft) === 0).reduce((a, r) => a + (Number(r.devices) || 0), 0))
                   : 'N/A'}. Testers see new builds first on the Play testing tracks.
               </p>
-              <p className="text-xs text-gray-500">Push reach and device sign-outs are managed in <ConsoleLink to="/console/sessions">Sessions & Devices</ConsoleLink>.</p>
+              <p className="text-xs text-gray-500">Push reach and device sign-outs are managed in <ConsoleLink plain to="/console/sessions">Sessions & Devices</ConsoleLink>.</p>
             </div>
           </Panel>
         </TabPanel>

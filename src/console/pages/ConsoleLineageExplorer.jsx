@@ -35,7 +35,7 @@ import EChart from '../../components/charts/EChart'
 import { toUserMessage } from '../../lib/safeError'
 import { sortRows, searchRows, useTableSort } from '../../lib/consoleTable'
 import ExportButtons from './shared/ExportButtons'
-import { PageHeader, usePaged, Pager } from './dataTrust/kit'
+import { PageHeader, usePaged, Pager } from './shared/pageKit'
 
 const nf = new Intl.NumberFormat('en-US')
 

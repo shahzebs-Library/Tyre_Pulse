@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { sortRows } from '../lib/consoleTableSort'
+import { sortRows } from '../lib/consoleTable'
 import {
   UTILIZATION_SORT_ACCESSORS, UTILIZATION_EXPORT_COLS, UTILIZATION_EXPORT_HEADERS, utilizationExportRows,
   coverageGapExportRows, readingCoverage, NO_SITE, NO_TYPE, attachRegister,

@@ -26,7 +26,7 @@ import {
   Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, Modal,
 } from '../components/ui'
 import { TrendChart, ShareChart, BarsChart } from '../components/ui/charts'
-import { PageHeader, useUrlTab, useRefreshStamp, Pager, Drawer, DetailList, AttentionList } from './accessKit'
+import { PageHeader, useUrlTab, useRefreshStamp, Pager, Drawer, DetailList, AttentionList } from './shared/pageKit'
 import { dailySeries, topShare } from '../../lib/consoleCharts'
 import { supabase } from '../../lib/supabase'
 import { fetchAllPages } from '../../lib/fetchAll'

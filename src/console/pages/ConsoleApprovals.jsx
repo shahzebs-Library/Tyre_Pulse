@@ -37,12 +37,7 @@ import {
 } from '../../lib/dualControl'
 import { dailySeries } from '../../lib/consoleCharts'
 import { toUserMessage } from '../../lib/safeError'
-import PageHeader from './ops/PageHeader'
-import TabBar from './ops/TabBar'
-import useUrlTab from './ops/useUrlTab'
-import usePaged from './ops/usePaged'
-import Pager from './ops/Pager'
-import SideDrawer, { Field as DField } from './ops/SideDrawer'
+import { PageHeader, TabBar, useUrlTab, usePaged, Pager, SideDrawer, Field as DField } from './shared/pageKit'
 
 const TABS = ['queue', 'insights']
 const isOpen = (r) => r.status === 'pending' || r.status === 'approved'

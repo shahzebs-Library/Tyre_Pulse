@@ -24,7 +24,7 @@ import {
 } from 'chart.js'
 import { Bar } from 'react-chartjs-2'
 import { loadAutoTable } from '../lib/pdfEngine'
-import { sortRows, nextSort } from '../lib/consoleTableSort'
+import { sortRows, nextSort } from '../lib/consoleTable'
 import {
   deriveStatus, buildVelocityMap, enrichStock, filterStock, summarizeStock, timelineByDate,
   timelineSummary, coverBand, stockExportRows, STOCK_EXPORT_COLS, STOCK_EXPORT_HEADERS, STATUSES,

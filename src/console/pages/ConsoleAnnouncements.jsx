@@ -23,8 +23,7 @@ import {
 import { searchRows, sortRows, useTableSort } from '../../lib/consoleTable'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import ExportButtons from './shared/ExportButtons'
-import { PageHeader, useUrlTab, usePaged, Pager, AttentionList, TabPanel } from './platformOps/kit'
-import { whenText, ageText } from './platformOps/paging'
+import { PageHeader, useUrlTab, usePaged, Pager, AttentionList, TabPanel, whenText, ageText } from './shared/pageKit'
 
 const ROLES = ['Admin', 'Manager', 'Director', 'Inspector', 'Tyre Man', 'Reporter', 'Driver']
 const TYPES = ['info', 'warning', 'success', 'critical']

@@ -38,7 +38,7 @@ import { exportToExcel, reportFileName } from '../../lib/exportUtils'
 import { toUserMessage } from '../../lib/safeError'
 import { searchRows, sortRows, useTableSort } from '../../lib/consoleTable'
 import ExportButtons from './shared/ExportButtons'
-import { PageHeader, TabBar, useUrlTab, usePager, Pager, Section, AttentionList } from './dataKit'
+import { PageHeader, TabBar, useUrlTab, usePager, Pager, Section, AttentionList } from './shared/pageKit'
 
 const COUNTRIES = ['KSA', 'UAE', 'Egypt']
 const CONFIRM_WORD = 'REMOVE'
@@ -413,7 +413,7 @@ export default function ConsoleDuplicateControl() {
               </div>
 
               {openBatches.length > 0 && (
-                <AttentionList title="Undo window" items={[{
+                <AttentionList quiet title="Undo window" items={[{
                   key: 'undo', tone: 'info',
                   title: `${fmtNum(openBatches.length)} removal(s) can still be undone`,
                   detail: `${fmtNum(removedTotal)} rows are held in the archive and can be put back.`,

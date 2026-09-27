@@ -34,12 +34,9 @@ import {
   Panel, PanelHeader, Note, StatTile, Badge, Btn, Select, Toolbar, SearchInput, Segmented,
   Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, Modal,
 } from '../components/ui'
-import OpsPageHeader from './opsKit/OpsPageHeader'
-import Pager, { usePaged, PAGE_SIZE } from './opsKit/Pager'
-import Drawer from './opsKit/Drawer'
-import AttentionList from './opsKit/AttentionList'
-import ConsoleLink from './opsKit/ConsoleLink'
-import useUrlTab from './opsKit/useUrlTab'
+import {
+  PageHeader as OpsPageHeader, Pager, usePaged, PAGE_SIZE, Drawer, AttentionList, ConsoleLink, useUrlTab,
+} from './shared/pageKit'
 import { TrendChart, BarsChart, ScoreRing, STATUS, useChartTheme } from '../components/ui/charts'
 import { sortRows, searchRows, useTableSort } from '../../lib/consoleTable'
 import ExportButtons from './shared/ExportButtons'

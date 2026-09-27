@@ -25,7 +25,7 @@ import {
 } from '../components/ui'
 import { sortRows, searchRows, useTableSort } from '../../lib/consoleTable'
 import ExportButtons from './shared/ExportButtons'
-import { PageHeader, useUrlTab, usePaged, Pager, AttentionList, TabPanel } from './platformOps/kit'
+import { PageHeader, useUrlTab, usePaged, Pager, AttentionList, TabPanel } from './shared/pageKit'
 
 const CUSTOM_TYPE = '__custom__'
 

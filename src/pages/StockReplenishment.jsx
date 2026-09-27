@@ -28,7 +28,7 @@ import StatTile from '../components/ui/StatTile'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import { loadAutoTable } from '../lib/pdfEngine'
-import { sortRows, nextSort } from '../lib/consoleTableSort'
+import { sortRows, nextSort } from '../lib/consoleTable'
 import { colorAt, withAlpha } from '../lib/reportColors'
 import { resolveCurrency } from '../lib/rootCauseEngineAnalytics'
 import {

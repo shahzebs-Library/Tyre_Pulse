@@ -17,6 +17,9 @@ import path from 'node:path'
 import { tyreCompleteness } from '../lib/tyreCompleteness'
 
 const SRC = fs.readFileSync(path.join(process.cwd(), 'src/pages/Inspections.jsx'), 'utf8').replace(/\r\n/g, '\n')
+// The checklist form moved into its own component. The page still computes the
+// gate and passes the SAME value down; the button lives in the component.
+const TAB = fs.readFileSync(path.join(process.cwd(), 'src/components/inspections/ChecklistTab.jsx'), 'utf8').replace(/\r\n/g, '\n')
 
 describe('checklist tyre gate composition', () => {
   it('keeps the pressure floor as an OR term, so the engine can only add', () => {
@@ -28,7 +31,10 @@ describe('checklist tyre gate composition', () => {
   })
 
   it('disables Save and blocks the save handler on the same single value', () => {
-    expect(SRC).toContain('disabled={clSaving || !clAsset.trim() || clPositions.length === 0 || clTyresIncomplete}')
+    expect(TAB).toContain('disabled={clSaving || !clAsset.trim() || clPositions.length === 0 || clTyresIncomplete}')
+    // The component is handed the page's own gate value, not a recomputation.
+    expect(SRC).toContain('clTyresIncomplete={clTyresIncomplete}')
+    expect(TAB).not.toMatch(/const clTyresIncomplete\s*=/)
     expect(SRC).toContain('if (clTyresIncomplete) {')
   })
 

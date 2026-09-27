@@ -3,85 +3,74 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { useFilterState } from '../hooks/useFilterState'
 import useInspectionRegister from '../hooks/useInspectionRegister'
 import { useScrollRestore } from '../hooks/useScrollRestore'
-import { useVirtualizer } from '@tanstack/react-virtual'
 import { supabase } from '../lib/supabase'
-import { fetchAllPages } from '../lib/fetchAll'
 import * as inspectionsApi from '../lib/api/inspections'
 import * as correctiveActions from '../lib/api/correctiveActions'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
-import { exportToExcel, exportSheetsToExcel, exportToPdf, exportInspectionDetailPdf, resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme, reportFileName } from '../lib/exportUtils'
+import { exportSheetsToExcel, exportToPdf, exportInspectionDetailPdf } from '../lib/exportUtils'
 import { useTenant } from '../contexts/TenantContext'
-import { Download, FileText, Camera, ClipboardList, Eye, GraduationCap, CheckSquare, X, Share2, WifiOff, PenLine, Image as ImageIcon, Gauge, Clock, Send, ExternalLink, Trash2, AlertTriangle, ChevronDown } from 'lucide-react'
+import {
+  Download, FileText, ClipboardList, Eye, GraduationCap, CheckSquare, X, Share2, ExternalLink,
+  Trash2, AlertTriangle, ChevronDown, Plus, RefreshCw, PenLine,
+} from 'lucide-react'
 import SignaturePad from '../components/SignaturePad'
 import StatusBadge from '../components/ui/StatusBadge'
 import CustomFieldsPanel from '../components/CustomFieldsPanel'
-import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import ApprovalReview from '../components/workflow/ApprovalReview'
-import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import DateField from '../components/ui/DateField'
 import MultiSelectFilter from '../components/ui/MultiSelectFilter'
-
-/**
- * A multi-value filter has to survive in the URL, and the URL holds strings.
- *
- * The encoding is a comma-joined list, with the existing 'all' sentinel kept for
- * "no filter" so a link somebody already saved still resolves. `toList` is the
- * ONLY place that decoding happens, and it hands the filter engine a real array -
- * passing the raw string through would be read as ONE value named
- * "TR-MIXER,PUMPS" and silently match nothing.
- *
- * A value containing a comma cannot round-trip. None of the fields this is used
- * for can hold one: site and region are register names (V246 collapses
- * whitespace and upper-cases them) and vehicle_type is normalised by V245.
- */
-function toList(v) {
-  if (Array.isArray(v)) return v.filter(Boolean)
-  if (v == null || v === '' || v === 'all') return []
-  return String(v).split(',').map((s) => s.trim()).filter(Boolean)
-}
-
-/** Back to the URL form. An empty selection is 'all', never an empty string. */
-function fromList(arr) {
-  const list = (Array.isArray(arr) ? arr : []).filter(Boolean)
-  return list.length ? list.join(',') : 'all'
-}
-import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
-import VehicleTyreDiagram from '../components/VehicleTyreDiagram'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+// The shared dialog shell: focus trap, Escape, scroll lock, sized from the viewport.
+import SharedModal from '../components/ui/Modal'
 import { legacyPositionCode } from '../lib/tyrePositions'
-import { LAYOUT_KEYS, LAYOUT_SLOTS, layoutSlotsFor, resolveLayoutKey, isTyrelessEquipment } from '../lib/vehicleTyreLayout'
-import { useWakeLock, vibrate, shareOrCopy } from '../hooks/useWakeLock'
+import { LAYOUT_SLOTS, layoutSlotsFor, resolveLayoutKey, isTyrelessEquipment } from '../lib/vehicleTyreLayout'
+import { useWakeLock, vibrate } from '../hooks/useWakeLock'
 import { enqueueInspection, syncPendingInspections, getPendingCount } from '../lib/offlineQueue'
 import { formatDate } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
 import * as userSignatureApi from '../lib/api/userSignature'
 import { normaliseSignature } from '../lib/savedSignature'
 import { canSignInspection } from '../lib/inspectionApproval'
-// The role set that already reaches the app's Approvals surface (mirrored from
-// Layout.jsx nav + the /approvals route). Reused so inspection sign-off does not
-// introduce a second, drifting idea of who may approve.
-import { loadAutoTable } from '../lib/pdfEngine'
 import { resolveStorageUrl } from '../lib/storageRefs'
 import { getTyreRunningLife } from '../lib/api/tyreRunningLife'
-import { shapeRunningLife, lifeDisplay, measureFor } from '../lib/tyreRunningLife'
-import { activeSelections, buildAssetFlagMap, damagedPositions, inspectionOverview, siteSummary, defectsForAction, isSevereCondition, OVERVIEW_FOCUS, focusMatches, focusSummary, scopeInspections , vehicleTypesIn } from '../lib/inspectionTyreFlags'
-import { displayPositionCode, inspectionTypeHint } from '../lib/tyreBay'
-import { positionLabelMap, riskForCondition, affectedTyresSummary, affectedTyreRowsForExport } from '../lib/inspectionView'
+import { shapeRunningLife } from '../lib/tyreRunningLife'
+import { buildAssetFlagMap, inspectionOverview, focusMatches, focusSummary, scopeInspections, vehicleTypesIn } from '../lib/inspectionTyreFlags'
+import { positionLabelMap, affectedTyresSummary, affectedTyreRowsForExport } from '../lib/inspectionView'
 import { tyreCompleteness, pendingCodes } from '../lib/tyreCompleteness'
 import { listSites, siteRegionMap, regionForSite, regionsIn } from '../lib/api/sites'
-import { trackingLink, trackTyreChanges, trackingBySite } from '../lib/tyreChangeTracking'
-import { loadTyreChangeTracking } from '../lib/api/tyreChangeTracking'
-// The shared dialog shell. Imported under an alias because this file still
-// carries an older local `Modal` used by four other dialogs; converting those is
-// separate work, and a new dialog must not hand-roll its own overlay.
-import SharedModal from '../components/ui/Modal'
-import { raiseActionsForInspection } from '../lib/api/correctiveActions'
-import { getCompanyLogo, getDiagramBg } from '../lib/api/brandLogo'
+import { trackingLink } from '../lib/tyreChangeTracking'
+import { getDiagramBg } from '../lib/api/brandLogo'
 import InspectionViewerDrawer from '../components/inspection/InspectionViewerDrawer'
 import InspectionDiagram from '../components/inspection/InspectionDiagram'
-import { checklistPdfModel } from '../lib/inspectionChecklistPdf'
+import { buildApprovalEmailHtml } from '../lib/inspectionApprovalEmail'
+import { brandingForPdf, buildChecklistReportPdf, checklistReportFileName } from '../lib/inspectionChecklistReport'
+import {
+  toList, fromList, deriveRegisterRows, tabCounts, rowsForTab, registerKpis,
+  dbInspectionType, inferVehicleTypeFromAsset, actionPriority,
+} from '../lib/inspectionsAnalytics'
+import OverviewSlide from '../components/inspections/OverviewSlide'
+import InspectionSummaryModal from '../components/inspections/InspectionSummaryModal'
+import ChecklistTab from '../components/inspections/ChecklistTab'
+import InspectionFormModal from '../components/inspections/InspectionFormModal'
+import RaiseActionModal from '../components/inspections/RaiseActionModal'
+import { buildRegisterColumns } from '../components/inspections/inspectionRegisterColumns'
+
+/**
+ * INSPECTIONS REGISTER - inspections, site observations, training records and
+ * the daily tyre checklist.
+ *
+ * This page used to be one 4,179-line file. It now keeps only what has to live
+ * together - the register's scoping (filteredBase -> scoped -> filtered), the
+ * writes, and the approval sign-off - and renders everything else from
+ * src/components/inspections/. The pure rules live in lib/inspectionsAnalytics,
+ * which is tested on its own.
+ *
+ * A multi-value filter survives in the URL as a comma-joined list; `toList` is
+ * the ONLY place it is decoded (see lib/inspectionsAnalytics).
+ */
 
 /**
  * How long a running-life payload may be reused.
@@ -93,542 +82,9 @@ import { checklistPdfModel } from '../lib/inspectionChecklistPdf'
  */
 const RUNNING_LIFE_TTL_MS = 120000
 
-// Report logo: tenant branding wins; otherwise fall back to the org-wide
-// company logo set in Console -> Report Colors (system_config.company_logo).
-async function brandingForPdf(branding) {
-  if (branding?.logo_url) return branding
-  try {
-    const logo = await getCompanyLogo()
-    return logo ? { ...(branding || {}), logo_url: logo } : branding
-  } catch { return branding }
-}
-
-const STATUS_CONFIG = {
-  Scheduled:    { color: 'text-blue-400',   bg: 'bg-blue-900/30',   border: 'border-blue-700/50' },
-  'In Progress':{ color: 'text-yellow-400', bg: 'bg-yellow-900/30', border: 'border-yellow-700/50' },
-  Done:         { color: 'text-green-400',  bg: 'bg-green-900/30',  border: 'border-green-700/50' },
-  Overdue:      { color: 'text-red-400',    bg: 'bg-red-900/30',    border: 'border-red-700/50' },
-  Cancelled:    { color: 'text-[var(--text-secondary)]',   bg: 'bg-[var(--surface-2)]',      border: 'border-[var(--border-bright)]' },
-}
-
-const SEV_CONFIG = {
-  Low:      { color: 'text-green-400',  bg: 'bg-green-900/20',  border: 'border-green-700/40' },
-  Medium:   { color: 'text-yellow-400', bg: 'bg-yellow-900/20', border: 'border-yellow-700/40' },
-  High:     { color: 'text-orange-400', bg: 'bg-orange-900/20', border: 'border-orange-700/40' },
-  Critical: { color: 'text-red-400',    bg: 'bg-red-900/20',    border: 'border-red-700/40' },
-}
-
-// --- Tyre-change flag UI (additive) -----------------------------------------
-// Muted slide-style overview card: big numbers, subtle borders, app tokens.
-/**
- * A tile is a drill-down when it carries a focus key, and plain text when it does not.
- *
- * A count you cannot act on is just a number - clicking one filters the register to the
- * inspections behind it. The predicate lives in inspectionTyreFlags (focusMatches) and is
- * the SAME one inspectionOverview counts with, so the tile and the table cannot drift.
- *
- * A tile with a zero or N/A value is NOT clickable: offering a drill-down that lands on an
- * empty table teaches nothing, and an unreadable value is not a measurement to filter on.
- */
-function OverviewSlide({ title, items, footer = null, activeFocus = 'all', onFocus = null, caption = null }) {
-  return (
-    <div className="card flex-1 min-w-[260px]">
-      <p className={`text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] ${caption ? 'mb-1' : 'mb-3'}`}>{title}</p>
-      {/* What the numbers cover. Rendered ABOVE them on purpose: a reader has to know
-          a figure is scoped before reading it, not after. */}
-      {caption && <p className="text-[11px] leading-snug text-[var(--text-dim)] mb-3">{caption}</p>}
-      <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-        {items.map(([label, value, accent, focusKey]) => {
-          const tone = accent && Number(value) > 0 ? '#b91c1c' : 'var(--text-primary)'
-          const body = (
-            <>
-              <div className="text-2xl font-bold tabular-nums" style={{ color: tone }}>
-                {value == null ? 'N/A' : value}
-              </div>
-              <div className="text-xs text-[var(--text-secondary)]">{label}</div>
-            </>
-          )
-          const canFocus = !!(focusKey && onFocus && value != null && Number(value) > 0)
-          if (!canFocus) return <div key={label}>{body}</div>
-          const on = activeFocus === focusKey
-          return (
-            <button
-              key={label}
-              type="button"
-              onClick={() => onFocus(on ? 'all' : focusKey)}
-              aria-pressed={on}
-              title={on ? 'Show all inspections again' : `Show only the inspections behind ${label}`}
-              className={`text-left rounded-lg -mx-1.5 -my-1 px-1.5 py-1 transition-all ${on ? 'ring-2' : 'hover:bg-[var(--surface-2)]'}`}
-              style={on ? { boxShadow: `0 0 0 2px ${tone}`, background: 'var(--surface-2)' } : undefined}
-            >
-              {body}
-            </button>
-          )
-        })}
-      </div>
-      {footer && <div className="mt-3 pt-3 border-t border-[var(--border-subtle)]">{footer}</div>}
-    </div>
-  )
-}
-
-// Shareable per-site summary: the inspections done AND the tyre-change flags
-// they raised, tracked through to replacement. Date range + site filter, PDF and
-// Excel export. Every number comes from a pure helper (siteSummary /
-// trackingBySite) - no parallel maths on this screen.
-//
-// The tyre-change half loads on OPEN, not with the page: it is a second read
-// (fitment history for the flagged assets) and the register must stay fast for
-// the people who never share a summary.
-function InspectionSummaryModal({
-  rows, flagMap, defaultFrom, defaultTo, country, company, branding, onClose,
-  // The register's OWN filters, so the summary opens showing what the reader was
-  // already looking at. Before this the modal was handed every row and only the
-  // dates, so narrowing the register to a region and a vehicle type and pressing
-  // Share produced a summary of the whole country with nothing saying so.
-  defaultRegion = [], defaultSite = [], defaultVehicleType = [], defaultInspector = [],
-  regionOf = null, regionOptions = [],
-}) {
-  const [from, setFrom] = useState(defaultFrom || '')
-  const [to, setTo] = useState(defaultTo || '')
-  const [site, setSite] = useState(defaultSite)
-  const [region, setRegion] = useState(defaultRegion)
-  const [vehicleType, setVehicleType] = useState(defaultVehicleType)
-  const [inspector, setInspector] = useState(defaultInspector)
-  const [busy, setBusy] = useState(false)
-  const [track, setTrack] = useState({ loading: true, ok: true, reason: '', rows: [] })
-
-  useEffect(() => {
-    let alive = true
-    ;(async () => {
-      const payload = await loadTyreChangeTracking({ country })
-      if (!alive) return
-      if (!payload.ok) {
-        setTrack({ loading: false, ok: false, reason: payload.reason || '', rows: [] })
-        return
-      }
-      const built = trackTyreChanges({
-        dueRows: payload.dueRows,
-        inspections: payload.inspections,
-        actions: payload.actions,
-        tyreRecords: payload.tyreRecords,
-      })
-      setTrack({ loading: false, ok: true, reason: '', rows: built.rows })
-    })()
-    return () => { alive = false }
-  }, [country])
-
-  const sites = useMemo(
-    () => [...new Set((rows || []).map((r) => r.site).filter(Boolean))].sort(),
-    [rows],
-  )
-  const inspectors = useMemo(
-    () => [...new Set((rows || []).map((r) => r.inspector).filter(Boolean))].sort(),
-    [rows],
-  )
-  const vehicleTypes = useMemo(() => vehicleTypesIn(rows || []), [rows])
-
-  // ONE filter object, handed to the same predicate the register uses. Keeping
-  // it in a single place is what stops the table, the totals and the PDF from
-  // each scoping differently.
-  const activeFilters = useMemo(
-    () => ({ from, to, site, region, vehicleType, inspector }),
-    [from, to, site, region, vehicleType, inspector],
-  )
-  const summary = useMemo(
-    () => siteSummary(rows, flagMap, activeFilters, { regionOf }),
-    [rows, flagMap, activeFilters, regionOf],
-  )
-  // Which inspections the summary is built from, so the modal can state the
-  // count rather than leaving the reader to trust the table.
-  const covered = useMemo(
-    () => scopeInspections(rows || [], activeFilters, { regionOf }),
-    [rows, activeFilters, regionOf],
-  )
-  const anyFilter = [site, region, vehicleType, inspector].some((s) => (s || []).length > 0) || !!from || !!to
-  // Flags are a live state ("is this tyre still due"), not an event inside the
-  // date range, so only the site filter applies to them - and the note under
-  // the table says so rather than letting a reader assume the dates bound both.
-  const tracking = useMemo(() => {
-    // Site is a LIST now. A flag is a live state, not an event in the window, so
-    // only the site selection narrows it - and the note under the table says so
-    // rather than letting a reader assume the dates bound both.
-    const picked = new Set((site || []).map(String))
-    const rows_ = picked.size
-      ? track.rows.filter((r) => picked.has(String(r.site || 'No site')))
-      : track.rows
-    return trackingBySite(rows_)
-  }, [track.rows, site])
-
-  /** Human description of everything currently narrowing this summary. */
-  const rangeLabel = useMemo(() => {
-    const bits = [`${from || 'Start'} to ${to || 'Today'}`]
-    for (const [label, values] of activeSelections(activeFilters)) {
-      bits.push(`${label}: ${values.join(', ')}`)
-    }
-    if (country && country !== 'All') bits.push(country)
-    return bits.join(' | ')
-  }, [from, to, activeFilters, country])
-  /**
-   * The same description, shortened for a file name. The PDF carries rangeLabel
-   * in its header, but an exported SHEET carried only the dates - so a summary
-   * narrowed to one region and one vehicle type was named exactly like a
-   * whole-fleet one, and was indistinguishable from it months later.
-   */
-  const scopeSuffix = useMemo(
-    () => activeSelections(activeFilters).map(([l, v]) => `${l} ${v.join(' ')}`).join(' '),
-    [activeFilters],
-  )
-  const COLS = ['site', 'inspections', 'vehicles', 'good', 'wear', 'damage', 'tyresDue']
-  const HEADS = ['Site', 'Inspections', 'Vehicles', 'Good', 'Wear', 'Damage', 'Tyres due']
-  const TCOLS = ['site', 'flagged', 'system', 'user', 'onVehicle', 'replaced', 'removed', 'unknown']
-  const THEADS = ['Site', 'Flagged', 'By system', 'By user', 'Still fitted', 'Replaced', 'Removed only', 'Could not tell']
-  const hasTracking = track.ok && tracking.rows.length > 0
-
-  async function exportPdf() {
-    setBusy(true)
-    try {
-      const { default: jsPDF } = await import('jspdf')
-      const autoTable = await loadAutoTable()
-      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-      const brand = await resolvePdfBrand(await brandingForPdf(branding))
-      pdfHeader(doc, 'Inspection and Tyre Change Summary', rangeLabel, company, brand)
-      autoTable(doc, {
-        ...pdfTableTheme(brand.accent),
-        startY: 30,
-        margin: { left: 14, right: 14 },
-        head: [HEADS],
-        body: [
-          ...summary.rows.map((r) => COLS.map((k) => String(r[k]))),
-          COLS.map((k) => String(summary.totals[k])),
-        ],
-        didParseCell(data) {
-          if (data.section === 'body' && data.row.index === summary.rows.length) {
-            data.cell.styles.fontStyle = 'bold'
-          }
-        },
-      })
-      // The tyre-change half of the report. When it could not be read the PDF
-      // SAYS so - a missing table would read as "no tyre was flagged".
-      const afterY = (doc.lastAutoTable?.finalY || 30) + 8
-      if (hasTracking) {
-        autoTable(doc, {
-          ...pdfTableTheme(brand.accent),
-          startY: afterY,
-          margin: { left: 14, right: 14 },
-          head: [THEADS],
-          body: [
-            ...tracking.rows.map((r) => TCOLS.map((k) => String(r[k]))),
-            TCOLS.map((k) => String(tracking.totals[k])),
-          ],
-          didParseCell(data) {
-            if (data.section === 'body' && data.row.index === tracking.rows.length) {
-              data.cell.styles.fontStyle = 'bold'
-            }
-          },
-        })
-      } else {
-        // Plain text under the first table rather than the shared empty-state
-        // panel, which draws at its own fixed position and would land on top of
-        // the inspection table.
-        doc.setFontSize(9)
-        doc.text(
-          track.ok
-            ? 'Tyre change flags: none. No tyre is past its expected life, close to it, or recorded as damaged.'
-            : 'Tyre change flags could not be read when this report was built, so no tyre change is shown here.',
-          14, afterY,
-        )
-      }
-      pdfFooter(doc, 1, 1, company, brand)
-      doc.save(`TyrePulse Inspection and Tyre Change Summary ${from || 'all'} to ${to || 'today'}.pdf`)
-    } finally { setBusy(false) }
-  }
-
-  async function exportExcel() {
-    setBusy(true)
-    try {
-      await exportToExcel(
-        [...summary.rows, summary.totals], COLS, HEADS,
-        reportFileName('TyrePulse Inspection Summary', `${from || 'all'} to ${to || 'today'}`, scopeSuffix),
-      )
-      if (hasTracking) {
-        // site is a LIST. An empty array is TRUTHY in JavaScript, so the old
-        // `site || 'all sites'` never fell back - it rendered an empty string
-        // and produced a file named "... Flags " with nothing saying what it
-        // covered. Test the length, never the array.
-        await exportToExcel(
-          [...tracking.rows, tracking.totals], TCOLS, THEADS,
-          reportFileName('TyrePulse Tyre Change Flags', (site || []).length ? site.join(' ') : 'all sites'),
-          'Tyre change flags',
-        )
-      }
-    } finally { setBusy(false) }
-  }
-
-  return (
-    <SharedModal open onClose={onClose} title="Inspection and tyre change summary" size="xl">
-        <div className="flex flex-wrap items-end gap-3 mb-3">
-          <label className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>From
-            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)}
-              className="mt-1 block rounded-md border border-[var(--border-subtle)] bg-transparent px-2 py-1.5 text-xs" style={{ color: 'var(--text-primary)' }} />
-          </label>
-          <label className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>To
-            <input type="date" value={to} onChange={(e) => setTo(e.target.value)}
-              className="mt-1 block rounded-md border border-[var(--border-subtle)] bg-transparent px-2 py-1.5 text-xs" style={{ color: 'var(--text-primary)' }} />
-          </label>
-          {/* The SAME filters as the register, multi-select, and pre-filled from
-              whatever the reader had narrowed to before pressing Share. */}
-          {regionOptions.length > 0 && (
-            <label className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>Region
-              <MultiSelectFilter className="mt-1 w-44" label="Region" allLabel="All regions"
-                options={regionOptions} value={region} onChange={setRegion} />
-            </label>
-          )}
-          <label className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>Site
-            <MultiSelectFilter className="mt-1 w-48" label="Site" allLabel="All sites"
-              options={sites} value={site} onChange={setSite} />
-          </label>
-          {vehicleTypes.length > 1 && (
-            <label className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>Vehicle type
-              <MultiSelectFilter className="mt-1 w-48" label="Vehicle type" allLabel="All vehicle types"
-                options={vehicleTypes} value={vehicleType} onChange={setVehicleType} />
-            </label>
-          )}
-          {inspectors.length > 0 && (
-            <label className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>Inspector
-              <MultiSelectFilter className="mt-1 w-48" label="Inspector" allLabel="All inspectors"
-                options={inspectors} value={inspector} onChange={setInspector} />
-            </label>
-          )}
-          <div className="flex gap-2 ml-auto">
-            <button type="button" disabled={busy || !summary.rows.length} onClick={exportExcel}
-              className="px-3 py-1.5 rounded-md border border-[var(--border-subtle)] text-xs disabled:opacity-40" style={{ color: 'var(--text-primary)' }}>
-              Excel
-            </button>
-            <button type="button" disabled={busy || !summary.rows.length} onClick={exportPdf}
-              className="px-3 py-1.5 rounded-md text-xs font-medium disabled:opacity-40" style={{ background: 'var(--brand)', color: '#fff' }}>
-              {busy ? 'Working...' : 'Download PDF'}
-            </button>
-          </div>
-        </div>
-        {!summary.rows.length ? (
-          <p className="text-xs py-6 text-center" style={{ color: 'var(--text-secondary)' }}>No inspections in this range.</p>
-        ) : (
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="text-left border-b border-[var(--border-subtle)]" style={{ color: 'var(--text-secondary)' }}>
-                {HEADS.map((h, i) => <th key={h} className={`py-1.5 pr-2 ${i > 0 ? 'text-right' : ''}`}>{h}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {summary.rows.map((r) => (
-                <tr key={r.site} className="border-b border-[var(--border-subtle)]" style={{ color: 'var(--text-primary)' }}>
-                  {COLS.map((k, i) => (
-                    <td key={k} className={`py-1.5 pr-2 tabular-nums ${i > 0 ? 'text-right' : ''}`}
-                      style={k === 'tyresDue' && r.tyresDue > 0 ? { color: '#b91c1c', fontWeight: 600 } : k === 'damage' && r.damage > 0 ? { color: '#b45309', fontWeight: 600 } : undefined}>
-                      {r[k]}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-              <tr style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
-                {COLS.map((k, i) => <td key={k} className={`py-1.5 pr-2 tabular-nums ${i > 0 ? 'text-right' : ''}`}>{summary.totals[k]}</td>)}
-              </tr>
-            </tbody>
-          </table>
-        )}
-        <p className="text-[11px] mt-3" style={{ color: 'var(--text-dim)' }}>
-          Tyres due counts flagged tyres (past life or due soon) on the vehicles inspected in this range.
-        </p>
-
-        {/* Tyre change flags, per site, tracked to replacement. */}
-        <div className="mt-5 pt-4 border-t border-[var(--border-subtle)]">
-          <h4 className="text-sm font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>
-            Tyre change flags by site
-          </h4>
-          <p className="text-[11px] mb-2" style={{ color: 'var(--text-secondary)' }}>
-            Every flagged tyre and what happened to it. Raised by the system means past its expected
-            life or due soon; raised by a user means damage or a puncture recorded on an inspection.
-          </p>
-          {track.loading ? (
-            <p className="text-xs py-4" style={{ color: 'var(--text-secondary)' }}>Loading tyre change flags...</p>
-          ) : !track.ok ? (
-            /* "We could not look" is never printed as a row of zeros. */
-            <p className="text-xs py-4" style={{ color: 'var(--text-secondary)' }}>
-              Tyre change flags could not be read, so they are not in this summary.
-              {track.reason ? ` ${track.reason}` : ''}
-            </p>
-          ) : !tracking.rows.length ? (
-            <p className="text-xs py-4" style={{ color: 'var(--text-secondary)' }}>
-              No tyre is currently flagged for change{site ? ` at ${site}` : ''}.
-            </p>
-          ) : (
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-left border-b border-[var(--border-subtle)]" style={{ color: 'var(--text-secondary)' }}>
-                  {THEADS.map((h, i) => <th key={h} className={`py-1.5 pr-2 ${i > 0 ? 'text-right' : ''}`}>{h}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {tracking.rows.map((r) => (
-                  <tr key={r.site} className="border-b border-[var(--border-subtle)]" style={{ color: 'var(--text-primary)' }}>
-                    {TCOLS.map((k, i) => (
-                      <td key={k} className={`py-1.5 pr-2 tabular-nums ${i > 0 ? 'text-right' : ''}`}
-                        style={k === 'onVehicle' && r.onVehicle > 0 ? { color: '#b91c1c', fontWeight: 600 } : undefined}>
-                        {r[k]}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-                <tr style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
-                  {TCOLS.map((k, i) => <td key={k} className={`py-1.5 pr-2 tabular-nums ${i > 0 ? 'text-right' : ''}`}>{tracking.totals[k]}</td>)}
-                </tr>
-              </tbody>
-            </table>
-          )}
-          <p className="text-[11px] mt-3" style={{ color: 'var(--text-dim)' }}>
-            Replaced is worked out from the tyre consumption you upload: a different tyre fitted on the
-            same vehicle at the same wheel after the flag. "Removed only" means the tyre came off and
-            nothing has been fitted back. "Could not tell" means the position or the fitment record is
-            missing, which is not the same as saying the tyre is still fitted. These figures follow the
-            site filter but not the dates, because a flag is a state today rather than an event in the
-            date range.
-          </p>
-        </div>
-    </SharedModal>
-  )
-}
-
-// Immediate flag banner: shown when the vehicle carries tyres at/near end of
-// life (judged by the ONE running-life calc via buildAssetFlagMap) or when
-// the inspection itself found damaged/punctured positions.
-/**
- * Flags the tyres that need changing on the just-inspected vehicle, AND lets the
- * finding become tracked work.
- *
- * Before this, a recorded defect ended at the report - 13 live inspections found
- * damage across 12 assets while the whole system held 3 corrective actions. The
- * button lives HERE, on the one component both the saved checklist and the
- * record detail render, so the flag and the action can never be shown on
- * different surfaces or driven by different rules.
- *
- * `inspection` is optional: an unsaved form has no id to attach an action to, so
- * the button simply does not appear.
- */
-function TyreDueBanner({ entry, damaged = [], inspection = null }) {
-  const due = entry ? [...(entry.overdue || []), ...(entry.dueSoon || [])] : []
-  const [raising, setRaising] = useState(false)
-  const [raised, setRaised] = useState(null)   // { created, skipped, failed } | { error }
-
-  const canRaise = Boolean(inspection?.id) && !String(inspection.id).startsWith('offline-')
-  const defects = canRaise
-    ? defectsForAction(inspection, inspection.asset_no ? { [inspection.asset_no]: entry } : {})
-    : []
-
-  const raise = async () => {
-    setRaising(true); setRaised(null)
-    try {
-      setRaised(await raiseActionsForInspection(inspection, defects))
-    } catch (e) {
-      setRaised({ error: toUserMessage(e) })
-    } finally {
-      setRaising(false)
-    }
-  }
-
-  // The fault list covers everything an inspector can record, and wear is most
-  // of it. Calling a worn tyre "damage" would misreport what was found, so the
-  // two are counted apart and the line says which.
-  const severe = damaged.filter((d) => isSevereCondition(d.condition))
-  const wornOnly = damaged.filter((d) => !isSevereCondition(d.condition))
-  const faultLine = severe.length > 0 && wornOnly.length > 0
-    ? 'Damage and worn tyres found on this vehicle'
-    : (severe.length > 0 ? 'Damage found on this vehicle' : 'Worn tyres found on this vehicle')
-
-  if (due.length === 0 && damaged.length === 0) return null
-  return (
-    <div className="rounded-xl border px-4 py-3 mb-4"
-      style={{ borderColor: 'rgba(220,38,38,0.35)', background: 'rgba(220,38,38,0.07)' }}>
-      <div className="flex items-center gap-2 mb-1">
-        <AlertTriangle size={15} style={{ color: '#dc2626', flexShrink: 0 }} />
-        <span className="text-sm font-semibold" style={{ color: '#ef4444' }}>
-          {due.length > 0
-            ? `${due.length} tyre${due.length === 1 ? '' : 's'} on this vehicle ${due.length === 1 ? 'is' : 'are'} at or near end of life - due for change`
-            : faultLine}
-        </span>
-      </div>
-      {due.length > 0 && (
-        <ul className="text-xs space-y-0.5 text-[var(--text-secondary)]">
-          {due.slice(0, 8).map((r, i) => (
-            <li key={`${r.serial || 'tyre'}-${r.position || i}`} className="font-mono">
-              {(r.serial || 'N/A')} at {(r.position || 'N/A')}: remaining {lifeDisplay(r.remainingKm, r.remainingHours)}
-            </li>
-          ))}
-          {due.length > 8 && <li>and {due.length - 8} more</li>}
-        </ul>
-      )}
-      {damaged.length > 0 && (
-        <p className="text-xs mt-1 text-[var(--text-secondary)]">
-          {/* Named the way the tyre records name it, so this line and the
-              diagram above it do not call one wheel two things. */}
-          {damaged
-            .map((d) => `${displayPositionCode(inspectionTypeHint(inspection), d.position) || 'N/A'} (${d.condition})`)
-            .join(', ')}
-        </p>
-      )}
-
-      {canRaise && defects.length > 0 && (
-        <div className="mt-3 flex items-center gap-3 flex-wrap">
-          <button
-            type="button" onClick={raise} disabled={raising}
-            className="btn-secondary text-xs flex items-center gap-2 disabled:opacity-60"
-          >
-            <ClipboardList size={13} />
-            {raising ? 'Raising...' : `Raise corrective action (${defects.length})`}
-          </button>
-          {raised?.error && (
-            <span className="text-xs" style={{ color: '#ef4444' }}>{raised.error}</span>
-          )}
-          {raised && !raised.error && (
-            <span className="text-xs text-[var(--text-secondary)]">
-              {raised.created.length > 0 && `${raised.created.length} action${raised.created.length === 1 ? '' : 's'} raised. `}
-              {raised.skipped > 0 && `${raised.skipped} already open. `}
-              {raised.failed.length > 0 && `${raised.failed.length} could not be raised. `}
-              {raised.created.length === 0 && raised.skipped > 0 && raised.failed.length === 0
-                && 'Nothing new to raise.'}
-            </span>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-// ---------------------------------------------------------------------------
-
-// Every wheel layout the diagram can draw, so this picker can never drift from
-// the diagram (it used to omit Line pump / Truck 6x4 / Tanker / Trailer).
-const VEHICLE_TYPES = LAYOUT_KEYS
-const RISK_LEVELS   = ['good', 'warning', 'critical', 'none']
-
-const INSPECTION_TYPES   = ['Routine', 'Pressure', 'Visual', 'Full', 'Pre-Trip']
-const OBSERVATION_TYPES  = ['Site Observation']
-const TRAINING_TYPES     = ['Safety Training', 'Training Session']
-const ALL_TYPES = [...INSPECTION_TYPES, ...OBSERVATION_TYPES, ...TRAINING_TYPES]
-
-const STATUSES = ['Scheduled', 'In Progress', 'Done', 'Overdue', 'Cancelled']
-const SEVERITIES = ['Low', 'Medium', 'High', 'Critical']
-
 // Wheel positions come from lib/vehicleTyreLayout - THE shared resolver the
-// diagram itself uses. This page carried its own copy of the keyword chain and
-// its own position map, which is how a spider / line / stationary pump ended up
-// asking an inspector for the concrete pump's 14 wheels.
+// diagram itself uses.
 const DEFAULT_POSITIONS = LAYOUT_SLOTS.Pickup
-
-// Infer vehicle type from asset number prefix (TM→Tri-mixer, MP→Concrete pump, etc.)
-function inferVehicleTypeFromAsset(assetNo) {
-  const prefix = ((assetNo || '').match(/^[A-Za-z]+/) || [''])[0].toUpperCase().substring(0, 2)
-  const map = { TM: 'Tri-mixer', MP: 'Concrete pump', WL: 'Wheel loader', SL: 'Skid loader', PL: 'Pickup', BH: 'Bus' }
-  return map[prefix] || null
-}
 
 const EMPTY_FORM = {
   title: '', inspection_type: 'Routine', site: '', asset_no: '', tyre_serial: '',
@@ -637,153 +93,17 @@ const EMPTY_FORM = {
   vehicle_type: '', tyre_conditions: {},
 }
 
-function isObservationType(t) { return OBSERVATION_TYPES.includes(t) }
-function isTrainingType(t)     { return TRAINING_TYPES.includes(t) }
-
-// The DB `inspections.inspection_type` CHECK only allows tyre-inspection types
-// (Routine/Pressure/Visual/Full/Pre-Trip). Observation & training records are a
-// UI overlay that share the same table, so their display type is persisted in
-// the unconstrained `custom_data.record_type` while the constrained column is
-// written with a CHECK-valid value. `dbInspectionType` maps a display type to a
-// storable value; `resolveRecordType` restores the display type on read.
-function dbInspectionType(displayType) {
-  return INSPECTION_TYPES.includes(displayType) ? displayType : 'Routine'
-}
-function resolveRecordType(row) {
-  const rt = row?.custom_data?.record_type
-  return (isObservationType(rt) || isTrainingType(rt) || INSPECTION_TYPES.includes(rt))
-    ? rt
-    : row?.inspection_type
-}
-
-const CHECKLIST_LABELS = {
-  en: {
-    title: 'Daily Inspection Checklist',
-    asset: 'Asset Number',
-    position: 'Position',
-    pressure: 'Pressure (PSI)',
-    condition: 'Condition',
-    tread: 'Tread (mm)',
-    notes: 'Notes',
-    good: 'Good',
-    wear: 'Wear',
-    damage: 'Damage',
-    puncture: 'Puncture',
-    save: 'Save Checklist',
-    export: 'Export PDF',
-    inspector: 'Inspector',
-    site: 'Site',
-    no_asset: 'Enter asset number to load vehicle',
-  },
-  ar: {
-    title: 'قائمة الفحص اليومي',
-    asset: 'رقم الأصل',
-    position: 'الموضع',
-    pressure: 'الضغط (PSI)',
-    condition: 'الحالة',
-    tread: 'عمق المداس (مم)',
-    notes: 'ملاحظات',
-    good: 'جيد',
-    wear: 'تآكل',
-    damage: 'تلف',
-    puncture: 'ثقب',
-    save: 'حفظ القائمة',
-    export: 'تصدير PDF',
-    inspector: 'المفتش',
-    site: 'الموقع',
-    no_asset: 'أدخل رقم الأصل لتحميل المركبة',
-  },
-}
-
-// Column widths for the virtual inspection table grid
-const INSP_COL_WIDTHS = [110, 200, 110, 110, 100, 90, 100, 120, 240]
-
-// ── Approval email HTML builder ────────────────────────────────────────────────
-function buildApprovalEmailHtml({ assetNo, inspector, date, site, odometer, hourMeter, notes, approvalLink, signature }) {
-  const sigBlock = signature
-    ? `<img src="${signature}" alt="Inspector Signature" style="max-width:220px;border:1px solid #e5e7eb;border-radius:8px;margin-top:8px;" />`
-    : '<p style="color:#9ca3af;font-style:italic;">No digital signature captured</p>'
-
-  const rows = [
-    ['Asset / Vehicle', assetNo || '-'],
-    ['Inspection Date', date || '-'],
-    ['Site', site || '-'],
-    ['Inspector', inspector || '-'],
-    odometer ? ['Odometer (km)', odometer] : null,
-    hourMeter ? ['Hour Meter (hrs)', hourMeter] : null,
-  ].filter(Boolean)
-
-  const tableRows = rows.map(([k, v]) => `
-    <tr>
-      <td style="padding:8px 12px;color:#6b7280;font-size:13px;border-bottom:1px solid #f3f4f6;">${k}</td>
-      <td style="padding:8px 12px;color:#111827;font-size:13px;font-weight:600;border-bottom:1px solid #f3f4f6;">${v}</td>
-    </tr>`).join('')
-
-  return `<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-  <div style="max-width:560px;margin:40px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
-    <!-- Header -->
-    <div style="background:linear-gradient(135deg,#15803d 0%,#166534 100%);padding:28px 32px;">
-      <div style="display:flex;align-items:center;gap:12px;">
-        <div style="width:40px;height:40px;background:rgba(255,255,255,0.15);border-radius:10px;display:flex;align-items:center;justify-content:center;">
-          <span style="color:#fff;font-size:20px;">🔍</span>
-        </div>
-        <div>
-          <h1 style="margin:0;color:#fff;font-size:18px;font-weight:700;">Tyre Pulse</h1>
-          <p style="margin:0;color:#bbf7d0;font-size:13px;">Inspection Approval Request</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- Body -->
-    <div style="padding:32px;">
-      <p style="margin:0 0 8px;color:#374151;font-size:15px;font-weight:600;">Your approval is required</p>
-      <p style="margin:0 0 24px;color:#6b7280;font-size:14px;line-height:1.6;">
-        An inspection checklist has been submitted and requires your review and digital signature before it can be finalised.
+/** One KPI tile of the register strip. N/A is printed for an unmeasurable value, never 0. */
+function RegisterKpi({ label, value, sub, tone }) {
+  return (
+    <div className="card py-3 px-4 min-w-0">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)] truncate">{label}</p>
+      <p className="text-xl font-bold tabular-nums mt-0.5" style={{ color: tone || 'var(--text-primary)' }}>
+        {value == null ? 'N/A' : value}
       </p>
-
-      <!-- Details table -->
-      <div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;margin-bottom:24px;">
-        <div style="background:#f9fafb;padding:10px 12px;border-bottom:1px solid #e5e7eb;">
-          <span style="font-size:12px;font-weight:600;color:#374151;text-transform:uppercase;letter-spacing:0.05em;">Inspection Details</span>
-        </div>
-        <table style="width:100%;border-collapse:collapse;">${tableRows}</table>
-      </div>
-
-      ${notes ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px 16px;margin-bottom:24px;">
-        <p style="margin:0 0 4px;font-size:12px;font-weight:600;color:#166534;">Inspector Notes</p>
-        <p style="margin:0;font-size:13px;color:#374151;">${notes}</p>
-      </div>` : ''}
-
-      <!-- Inspector Signature -->
-      <div style="margin-bottom:24px;">
-        <p style="margin:0 0 8px;font-size:12px;font-weight:600;color:#374151;text-transform:uppercase;letter-spacing:0.05em;">Inspector Signature</p>
-        <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:12px;">
-          ${sigBlock}
-        </div>
-      </div>
-
-      <!-- CTA -->
-      <a href="${approvalLink}"
-        style="display:block;text-align:center;background:#15803d;color:#fff;text-decoration:none;padding:14px 24px;border-radius:10px;font-size:15px;font-weight:700;margin-bottom:16px;">
-        Review &amp; Sign Inspection →
-      </a>
-
-      <p style="margin:0;text-align:center;color:#9ca3af;font-size:12px;">
-        This link requires you to be logged in to Tyre Pulse.<br>
-        If the button doesn't work, copy this URL: <span style="color:#15803d;word-break:break-all;">${approvalLink}</span>
-      </p>
+      {sub && <p className="text-[11px] text-[var(--text-dim)] truncate">{sub}</p>}
     </div>
-
-    <!-- Footer -->
-    <div style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:16px 32px;text-align:center;">
-      <p style="margin:0;color:#9ca3af;font-size:12px;">Tyre Pulse Fleet Intelligence · This is an automated message</p>
-    </div>
-  </div>
-</body>
-</html>`
+  )
 }
 
 export default function Inspections() {
@@ -824,15 +144,7 @@ export default function Inspections() {
     createdBy: profile?.role === 'Tyre Man' && profile?.id ? profile.id : undefined,
     enabled: !authLoading,
   })
-  const rows = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0]
-    return inspectionRows.map(r => ({
-      ...r,
-      inspection_type: resolveRecordType(r),
-      status: r.status !== 'Done' && r.status !== 'Cancelled' && r.scheduled_date < today
-        ? 'Overdue' : r.status,
-    }))
-  }, [inspectionRows])
+  const rows = useMemo(() => deriveRegisterRows(inspectionRows), [inspectionRows])
   // Multi-select bulk delete (Admin only)
   const [selectedIds, setSelectedIds]     = useState(() => new Set())
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
@@ -1029,6 +341,8 @@ export default function Inspections() {
   const [viewId, setViewId] = useState(null)
   const [pdfBusyId, setPdfBusyId] = useState(null)
   const [pdfError, setPdfError] = useState('')
+  // An export failure is reported on its own line, not through the approval modal's message slot.
+  const [exportError, setExportError] = useState('')
 
   /**
    * Export one inspection's report.
@@ -1100,9 +414,6 @@ export default function Inspections() {
     }, 80)
     return () => { cancelled = true; clearTimeout(t) }
   }, [pdfRow, branding, company])
-
-  // Virtual scroll ref for the inspections table
-  const tableParentRef = useRef(null)
 
   // PWA - Screen Wake Lock during inspection
   const { acquire: acquireWakeLock, release: releaseWakeLock } = useWakeLock()
@@ -1222,12 +533,7 @@ export default function Inspections() {
     [rows],
   )
 
-  const tabFiltered = useMemo(() => {
-    if (activeTab === 'inspections') return rows.filter(r => INSPECTION_TYPES.includes(r.inspection_type))
-    if (activeTab === 'observations') return rows.filter(r => isObservationType(r.inspection_type))
-    if (activeTab === 'training')     return rows.filter(r => isTrainingType(r.inspection_type))
-    return rows
-  }, [rows, activeTab])
+  const tabFiltered = useMemo(() => rowsForTab(rows, activeTab), [rows, activeTab])
 
   /**
    * THE ROWS EVERY FILTER EXCEPT THE STATUS PILLS AND THE TILE DRILL-DOWN LEAVES.
@@ -1317,15 +623,9 @@ export default function Inspections() {
     [filtered, filterFocus, flagMap]
   )
 
-  const counts = useMemo(() => {
-    const c = { all: rows.length, inspections: 0, observations: 0, training: 0 }
-    rows.forEach(r => {
-      if (INSPECTION_TYPES.includes(r.inspection_type)) c.inspections++
-      else if (isObservationType(r.inspection_type)) c.observations++
-      else if (isTrainingType(r.inspection_type)) c.training++
-    })
-    return c
-  }, [rows])
+  const counts = useMemo(() => tabCounts(rows), [rows])
+  // Status / completion headline over the SAME rows the tiles count.
+  const kpis = useMemo(() => registerKpis(scoped), [scoped])
 
   /**
    * Status pill counts, over every OTHER filter (including the tile drill-down) but
@@ -1343,46 +643,35 @@ export default function Inspections() {
   }, [filteredBase, filterFocus, flagMap])
 
   /**
-   * THE REGISTER IS READ ONE PAGE AT A TIME.
+   * THE REGISTER IS READ ONE PAGE AT A TIME, by EnterpriseTable.
    *
-   * It used to render the whole filtered set as one list - 435 inspections today,
-   * and growing with every sheet the field records - which is what "all of them
-   * load at once, make it less" is about. `usePagedRows` is the app's one pager,
-   * so this behaves like every other register rather than inventing a second idea
-   * of what a page is.
-   *
-   * IT PAGES `filtered`, WHICH IS THE FULL FILTERED SET, AND NOTHING ELSE READS
-   * `pager.pageRows`. The tiles, the status pill counts, the "N of M shown"
-   * caption and both exports all still count `scoped`/`filtered`, so a headline
-   * never quietly becomes a per-page number.
+   * The table is handed `filtered` - the FULL filtered set - and pages and
+   * sorts it itself. Nothing above the table (tiles, pill counts, the "N of M
+   * shown" caption) or either export reads a page, so a headline never quietly
+   * becomes a per-page number. The table is re-keyed on the filter signature
+   * so a narrowed result always opens on its first page.
    */
-  const pager = usePagedRows(filtered)
-
-  // Virtualizer for the inspections table - now over the CURRENT PAGE only.
-  const rowVirtualizer = useVirtualizer({
-    count: pager.pageRows.length,
-    getScrollElement: () => tableParentRef.current,
-    estimateSize: () => 52,
-    overscan: 10,
-  })
-
-  /**
-   * Every page starts at its own first row. Carrying the previous page's scroll
-   * offset would drop the reader into the middle of a page whose top they have
-   * never seen. The first render is skipped deliberately so this cannot fight
-   * useScrollRestore, which is putting the reader back where they left off.
-   */
-  const lastPageRef = useRef(pager.page)
-  useEffect(() => {
-    if (lastPageRef.current === pager.page) return
-    lastPageRef.current = pager.page
-    if (tableParentRef.current) tableParentRef.current.scrollTop = 0
-  }, [pager.page])
+  const registerKey = [activeTab, filterStatus, filterSite, filterRegion, filterInspector,
+    filterVehicleType, filterFrom, filterTo, search, filterFocus].join('|')
 
   // Puts the register back where it was scrolled to when the user returns from
-  // the tyre-change tracking page. The list scrolls inside its own fixed-height
-  // box, so that element is restored rather than the shell around it.
-  useScrollRestore('inspections', !loading && filtered.length > 0, tableParentRef)
+  // the tyre-change tracking page. The table now scrolls with the page, so the
+  // shell's own scrolling ancestor is what is saved and restored.
+  const registerRef = useScrollRestore('inspections', !loading && filtered.length > 0)
+
+  const registerColumns = useMemo(() => buildRegisterColumns({
+    t,
+    flagMap,
+    pdfBusyId,
+    onView: (r) => setViewId(r.id),
+    onMarkDone: (r) => markDone(r.id),
+    onRaiseAction: (r) => setRaisingAction(r),
+    onEdit: (r) => setForm({ ...r, tyre_conditions: r.tyre_conditions ?? {} }),
+    onExportPdf: (r) => exportRowPdf(r),
+    onDelete: (r) => setDeleteId(r.id),
+  // markDone is a stable function declaration over `load`; the rest are listed.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [t, flagMap, pdfBusyId, exportRowPdf])
 
   function handlePhotoChange(e) {
     const file = e.target.files?.[0]
@@ -1487,8 +776,18 @@ export default function Inspections() {
       return next
     })
   }
+  // Every row the FILTERS left, not just the page on screen - the delete button
+  // then states the real count, so a bulk delete can never be larger than it reads.
   const pageIds = filtered.map(r => r.id)
   const allPageSelected = pageIds.length > 0 && pageIds.every(id => selectedIds.has(id))
+  const rowSelection = useMemo(
+    () => Object.fromEntries([...selectedIds].map((id) => [String(id), true])),
+    [selectedIds],
+  )
+  const onRowSelectionChange = useCallback((next) => {
+    const byKey = new Map(filtered.map((r) => [String(r.id), r.id]))
+    setSelectedIds(new Set(Object.keys(next).filter((k) => next[k]).map((k) => byKey.get(k) ?? k)))
+  }, [filtered])
   function toggleSelectPage() {
     setSelectedIds(prev => {
       const next = new Set(prev)
@@ -1532,7 +831,7 @@ export default function Inspections() {
         description: row.findings || row.notes || '',
         site: row.site,
         asset_no: row.asset_no || null,
-        priority: row.severity === 'Critical' ? 'Critical' : row.severity === 'High' ? 'High' : 'Medium',
+        priority: actionPriority(row.severity),
         status: 'Open',
         // NOTE: corrective_actions has no `source` column — sending it 400s the insert.
         created_by: profile?.id ?? null,
@@ -1684,400 +983,82 @@ export default function Inspections() {
 
   async function exportChecklistPdf(preview = false) {
     if (!clSaved) return
-    const { default: jsPDF } = await import('jspdf')
-    const autoTable = await loadAutoTable()
-    const report = checklistPdfModel(clSaved)
-    const tyreData = report.rows
-
-    const doc    = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-    const pw     = doc.internal.pageSize.width
-    const ph     = doc.internal.pageSize.height
-    const mx     = 14
-
-    // ── Branded header ─────────────────────────────────────────────────────────
-    const brand = await resolvePdfBrand(await brandingForPdf(branding))
-    pdfHeader(doc, 'Daily Tyre Inspection Report', `Asset: ${clAsset || clSaved.asset_no || 'N/A'}`, company, brand)
-
-    // ── Empty state: checklist has no tyre positions ──
-    if (!tyreData.length) {
-      pdfEmptyState(doc, 'No tyre positions recorded for this checklist')
-      pdfFooter(doc, 1, 1, company, brand)
-      doc.save(`TyrePulse_Checklist_${clAsset || clSaved.asset_no || 'report'}.pdf`)
-      return
-    }
-
-    // ── Asset info grid ─────────────────────────────────────────────────────────
-    let y = 28
-    const infoItems = [
-      ['Asset No',       clAsset || clSaved.asset_no || 'N/A'],
-      ['Vehicle Type',   clFleetInfo?.vehicle_type || clSaved.vehicle_type || 'N/A'],
-      ['Site',           clSite || clSaved.site || 'N/A'],
-      ['Inspector',      clInspector || clSaved.inspector || 'N/A'],
-      ['Date',           report.inspectionDate || 'N/A'],
-      ['Tyre Count',     String(tyreData.length)],
-      ['Odometer (km)',  clOdometer || clSaved.odometer_km || 'N/A'],
-      ['Hour Meter',     clHourMeter || clSaved.hour_meter || 'N/A'],
-    ]
-    const colW = (pw - mx * 2) / 3
-    infoItems.forEach(([label, value], i) => {
-      const col = i % 3
-      const row = Math.floor(i / 3)
-      const ix  = mx + col * colW
-      const iy  = y + row * 12
-      doc.setFontSize(7)
-      doc.setTextColor(107, 114, 128)
-      doc.setFont('helvetica', 'normal')
-      doc.text(label, ix, iy)
-      doc.setFontSize(9)
-      doc.setTextColor(31, 41, 55)
-      doc.setFont('helvetica', 'bold')
-      doc.text(String(value), ix, iy + 5)
-    })
-    const infoRows = Math.ceil(infoItems.length / 3)
-    y += infoRows * 12 + 6
-
-    // ── Inspection summary strip - computed from data already loaded, honest
-    // N/A when nothing recorded. Muted corporate tones (small dots + dark text,
-    // no large colored fills).
-    const MUTED = { Good: [22, 101, 52], Wear: [146, 64, 14], Damage: [153, 27, 27], 'No data': [100, 116, 139] }
-    const condCounts = { Good: 0, Wear: 0, Damage: 0, 'No data': 0 }
-    const recPressures = []
-    const recTreads = []
-    let lowTread = null
-    tyreData.forEach((r) => {
-      // Banded through riskForCondition, not by exact word: the field app
-      // writes Worn / Flat / Damaged, and an exact-match bucket filed every one
-      // of them as "No data" on a report someone signs.
-      const band = riskForCondition(r.condition)
-      const c = band === 'good' ? 'Good' : band === 'warning' ? 'Wear' : band === 'critical' ? 'Damage' : 'No data'
-      condCounts[c] += 1
-      const p = Number(r.pressure)
-      if (Number.isFinite(p) && p > 0) recPressures.push(p)
-      const td = Number(r.treadDepth)
-      if (Number.isFinite(td) && td > 0) {
-        recTreads.push(td)
-        if (!lowTread || td < lowTread.value) lowTread = { pos: r.position || 'N/A', value: td }
-      }
-    })
-    const avgOf = (a) => (a.length ? a.reduce((s, v) => s + v, 0) / a.length : null)
-    const medianOf = (a) => {
-      if (!a.length) return null
-      const s = [...a].sort((x, y2) => x - y2)
-      const m = Math.floor(s.length / 2)
-      return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2
-    }
-    const avgPsi = avgOf(recPressures)
-    const avgTread = avgOf(recTreads)
-    const medianPsi = medianOf(recPressures)
-    const one = (v) => Math.round(v * 10) / 10
-    {
-      const stripW = pw - mx * 2
-      const stripH = 15
-      doc.setFillColor(248, 250, 252)
-      doc.setDrawColor(226, 232, 240)
-      doc.setLineWidth(0.3)
-      doc.roundedRect(mx, y, stripW, stripH, 1.5, 1.5, 'FD')
-      doc.setFillColor(...brand.accent)
-      doc.roundedRect(mx, y, 1.4, stripH, 0.7, 0.7, 'F')
-      doc.setFontSize(6.3)
-      doc.setFont('helvetica', 'bold')
-      doc.setTextColor(100, 116, 139)
-      doc.text('INSPECTION SUMMARY', mx + 5, y + 4.4, { charSpace: 0.4 })
-      // Line 1 - counts with small muted dots
-      let cx = mx + 5
-      const l1y = y + 8.6
-      doc.setFontSize(8)
-      doc.setFont('helvetica', 'bold')
-      doc.setTextColor(8, 12, 28)
-      doc.text(`Positions checked: ${tyreData.length}`, cx, l1y)
-      cx += doc.getTextWidth(`Positions checked: ${tyreData.length}`) + 7
-      doc.setFont('helvetica', 'normal')
-      ;['Good', 'Wear', 'Damage', 'No data'].forEach((label) => {
-        const txt = `${label} ${condCounts[label]}`
-        doc.setFillColor(...MUTED[label])
-        doc.circle(cx + 1.2, l1y - 1.1, 1.1, 'F')
-        doc.setTextColor(8, 12, 28)
-        doc.text(txt, cx + 3.4, l1y)
-        cx += doc.getTextWidth(txt) + 10
-      })
-      // Line 2 - recorded-only averages
-      doc.setFontSize(7.5)
-      doc.setFont('helvetica', 'normal')
-      doc.setTextColor(51, 65, 85)
-      doc.text([
-        `Avg pressure: ${avgPsi != null ? `${one(avgPsi)} PSI` : 'N/A'}`,
-        ...(report.includeTread ? [
-          `Avg tread: ${avgTread != null ? `${one(avgTread)} mm` : 'N/A'}`,
-          `Lowest tread: ${lowTread ? `${lowTread.pos} (${one(lowTread.value)} mm)` : 'N/A'}`,
-        ] : []),
-      ].join('   |   '), mx + 5, y + 13)
-      y += stripH + 5
-    }
-
-    // Capture the shared inspection viewer's diagram from the saved record,
-    // including mapped position IDs and both web/mobile pressure fields.
-    const svgEl = checklistPdfDiagramRef.current?.querySelector('svg[data-tyre-map]')
-    const diagramBg = (await getDiagramBg().catch(() => '')) || '#000000'
-    if (svgEl) {
-      try {
-        const svgStr  = new XMLSerializer().serializeToString(svgEl)
-        const svgBlob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' })
-        const url     = URL.createObjectURL(svgBlob)
-        await new Promise((resolve) => {
-          const img    = new Image()
-          img.onload   = () => {
-            const scale   = 2
-            const canvas  = document.createElement('canvas')
-            const svgW    = svgEl.viewBox?.baseVal?.width  || svgEl.clientWidth  || 400
-            const svgH    = svgEl.viewBox?.baseVal?.height || svgEl.clientHeight || 300
-            canvas.width  = svgW * scale
-            canvas.height = svgH * scale
-            const ctx = canvas.getContext('2d')
-            ctx.scale(scale, scale)
-            ctx.fillStyle = diagramBg
-            ctx.fillRect(0, 0, svgW, svgH)
-            ctx.drawImage(img, 0, 0, svgW, svgH)
-            URL.revokeObjectURL(url)
-            const imgData = canvas.toDataURL('image/png')
-            const diagW   = pw - mx * 2
-            const diagH   = diagW * svgH / svgW
-            doc.addImage(imgData, 'PNG', mx, y, diagW, diagH)
-            y += diagH + 6
-            resolve()
-          }
-          img.onerror = () => { URL.revokeObjectURL(url); resolve() }
-          img.src = url
-        })
-      } catch (_) { /* fall through to table if SVG capture fails */ }
-    }
-
-    // Colour legend - muted corporate tones, small dots + plain dark text
-    const legendY = y
-    const legendItems = [
-      { color: MUTED.Good,      label: 'Good'    },
-      { color: MUTED.Wear,      label: 'Wear'    },
-      { color: MUTED.Damage,    label: 'Damage'  },
-      { color: MUTED['No data'], label: 'No data' },
-    ]
-    let lx = mx
-    legendItems.forEach(({ color, label }) => {
-      doc.setFillColor(...color)
-      doc.circle(lx + 2, legendY, 1.4, 'F')
-      doc.setTextColor(51, 65, 85)
-      doc.setFontSize(7)
-      doc.setFont('helvetica', 'normal')
-      doc.text(label, lx + 5, legendY + 1)
-      lx += 26
-    })
-
-    y = legendY + 8
-
-    // ── Tyre data table ─────────────────────────────────────────────────────────
-    // Condition cell: plain white cell, small muted status dot + dark text
-    // (no colored cell fills). When 4+ pressures are recorded, each row's
-    // pressure is compared to the MEDIAN of recorded values and flagged
-    // 'Check' at >15% off - the column is honestly labelled "vs median".
-    const flagOn = recPressures.length >= 4 && medianPsi > 0
-    const devLabel = (v) => {
-      const n = Number(v)
-      if (!Number.isFinite(n) || n <= 0) return 'N/A'
-      const dev = (n - medianPsi) / medianPsi
-      if (Math.abs(dev) > 0.15) return `Check ${dev > 0 ? '+' : '-'}${Math.round(Math.abs(dev) * 100)}%`
-      return 'OK'
-    }
-    const tblHead = ['Position', 'Pressure (PSI)', 'Condition']
-    if (report.includeTread) tblHead.push('Tread Depth (mm)')
-    if (flagOn) tblHead.push('Pressure vs median')
-    const theme = pdfTableTheme(brand.accent)
-    autoTable(doc, {
-      ...theme,
-      styles: { ...theme.styles, fontSize: 7, textColor: [8, 12, 28] },
-      startY: y,
-      head: [tblHead],
-      body: tyreData.map(row => {
-        const cells = [
-          row.position || 'N/A',
-          row.pressure ? `${row.pressure} PSI` : 'N/A',
-          row.condition || 'N/A',
-        ]
-        if (report.includeTread) cells.push(row.treadDepth != null ? `${row.treadDepth} mm` : 'N/A')
-        if (flagOn) cells.push(devLabel(row.pressure))
-        return cells
-      }),
-      margin:      { left: mx, right: mx },
-      didParseCell(data) {
-        if (data.section !== 'body') return
-        if (data.column.index === 2) {
-          // room for the muted status dot; text stays plain dark ink
-          data.cell.styles.cellPadding = { left: 6, right: 2.6, top: 2.6, bottom: 2.6 }
-          data.cell.styles.textColor = [8, 12, 28]
-        }
-        if (flagOn && data.column.index === tblHead.length - 1 && /^Check/.test(String(data.cell.raw))) {
-          data.cell.styles.fontStyle = 'bold'
-          data.cell.styles.textColor = MUTED.Damage
-        }
-      },
-      didDrawCell(data) {
-        theme.didDrawCell?.(data)
-        if (data.section !== 'body' || data.column.index !== 2) return
-        const band = riskForCondition(data.cell.raw)
-        const dot = MUTED[band === 'good' ? 'Good' : band === 'warning' ? 'Wear' : band === 'critical' ? 'Damage' : 'No data']
-        doc.setFillColor(...dot)
-        doc.circle(data.cell.x + 3.2, data.cell.y + data.cell.height / 2, 1.1, 'F')
-      },
-    })
-
-    // ── Notes ───────────────────────────────────────────────────────────────────
-    let finalY = doc.lastAutoTable?.finalY ?? (y + 40)
-    finalY += 8
-
-    // ── Expected tyre life (lifecycle - km AND hours), best-effort ─────────────
+    setClError(null)
     try {
-      const assetNo = clAsset || clSaved.asset_no
-      if (assetNo) {
-        // Same per-asset read as the row export (V526): the server sends this
-        // asset's tyres, not the whole country's for us to discard.
-        const payload = await getTyreRunningLife({ country: activeCountry, asset: assetNo })
-        const lifeRows = shapeRunningLife(payload).rows.slice(0, 16)
-        if (lifeRows.length) {
-          if (finalY + 30 > ph - 20) { doc.addPage(); finalY = 20 }
-          doc.setTextColor(8, 12, 28)
-          doc.setFontSize(10)
-          doc.setFont('helvetica', 'bold')
-          doc.text('Expected Tyre Life', mx, finalY)
-          finalY += 3
-          const n = (v) => (v == null ? 'N/A' : Math.round(v).toLocaleString('en-US'))
-          const both = (km, hrs) => (km == null && hrs == null ? 'N/A'
-            : [km != null ? `${n(km)} km` : null, hrs != null ? `${n(hrs)} hrs` : null].filter(Boolean).join(' / '))
-          autoTable(doc, {
-            ...pdfTableTheme(brand.accent),
-            startY: finalY,
-            margin: { left: mx, right: mx },
-            head: [['Position', 'Serial', 'Brand', 'Km run', 'Hours run', 'Current km', 'Expected life', 'Remaining', 'Remaining days', 'Life used']],
-            body: lifeRows.map((lr) => [
-              lr.position || 'N/A',
-              lr.serial || 'N/A',
-              lr.brand || 'N/A',
-              n(lr.kmRun),
-              n(lr.hoursRun),
-              n(lr.currentKm),
-              both(lr.expectedLifeKm, lr.expectedLifeHours),
-              both(lr.remainingKm, lr.remainingHours),
-              n(lr.remainingDays),
-              (measureFor(lr).used != null ? `${measureFor(lr).used}%` : 'N/A'),
-            ]),
-          })
-          finalY = (doc.lastAutoTable?.finalY ?? finalY) + 8
-        }
+      const doc = await buildChecklistReportPdf({
+        saved: clSaved,
+        asset: clAsset,
+        fleetInfo: clFleetInfo,
+        site: clSite,
+        inspector: clInspector,
+        odometer: clOdometer,
+        hourMeter: clHourMeter,
+        notes: clNotes,
+        photos: clPhotos,
+        signature: clSignature,
+        approverEmail: clApproverEmail,
+        country: activeCountry,
+        // The shared inspection viewer's diagram from the saved record.
+        svgEl: checklistPdfDiagramRef.current?.querySelector('svg[data-tyre-map]') || null,
+        branding,
+        company,
+      })
+      if (preview) {
+        const url = URL.createObjectURL(doc.output('blob'))
+        if (pdfBlobUrl) URL.revokeObjectURL(pdfBlobUrl)
+        setPdfBlobUrl(url)
+        setShowPdfPreview(true)
+      } else {
+        doc.save(checklistReportFileName(clAsset || clSaved.asset_no))
       }
-    } catch { /* best-effort - the checklist report never blocks on lifecycle data */ }
-
-    if (clNotes) {
-      doc.setTextColor(8, 12, 28)
-      doc.setFontSize(10)
-      doc.setFont('helvetica', 'bold')
-      doc.text('Notes', mx, finalY)
-      finalY += 5
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(8)
-      const lines = doc.splitTextToSize(clNotes, pw - mx * 2)
-      doc.text(lines, mx, finalY)
-      finalY += lines.length * 4.5 + 6
+    } catch (err) {
+      setClError(toUserMessage(err, 'Could not create the checklist report. Try again.'))
     }
+  }
 
-    // ── Photos (if any) ─────────────────────────────────────────────────────────
-    const photos = clPhotos.length > 0 ? clPhotos : (clSaved.photo_data ? [clSaved.photo_data] : [])
-    if (photos.length > 0) {
-      if (finalY + 60 > ph - 20) { doc.addPage(); finalY = 20 }
-      doc.setTextColor(8, 12, 28)
-      doc.setFontSize(10)
-      doc.setFont('helvetica', 'bold')
-      doc.text('Photos', mx, finalY)
-      finalY += 5
-      const photoW = 40
-      const photoH = 30
-      const photoCols = Math.floor((pw - mx * 2) / (photoW + 4))
-      for (let pi = 0; pi < Math.min(photos.length, 6); pi++) {
-        const col = pi % photoCols
-        const row = Math.floor(pi / photoCols)
-        const px = mx + col * (photoW + 4)
-        const py = finalY + row * (photoH + 4)
-        try {
-          doc.addImage(photos[pi], 'JPEG', px, py, photoW, photoH)
-          doc.setDrawColor(209, 213, 219)
-          doc.setLineWidth(0.3)
-          doc.rect(px, py, photoW, photoH)
-        } catch { /* skip bad image */ }
-      }
-      const photoRows = Math.ceil(Math.min(photos.length, 6) / photoCols)
-      finalY += photoRows * (photoH + 4) + 6
-    }
+  function resetChecklist() {
+    setClSaved(null); setClOffline(false); setClAsset(''); setClPositions([])
+    setClFleetInfo(null); setClNotes(''); setClOdometer(''); setClHourMeter('')
+    setClPhotos([]); setClSignature(null); setClApprovalStatus('done')
+    setClApproverEmail(''); setShowApprovalForm(false); setClError(null)
+    if (pdfBlobUrl) { URL.revokeObjectURL(pdfBlobUrl); setPdfBlobUrl(null) }
+    setShowPdfPreview(false)
+  }
 
-    // ── Signature section ───────────────────────────────────────────────────────
-    const sigH = 24
-    const sigW = 70
-    if (finalY + sigH + 20 > ph - 15) { doc.addPage(); finalY = 20 }
-    finalY += 4
-    doc.setTextColor(8, 12, 28)
-    doc.setFontSize(10)
-    doc.setFont('helvetica', 'bold')
-    doc.text('Signatures', mx, finalY)
-    finalY += 5
-
-    const sig = clSignature || clSaved.inspector_signature
-    if (sig) {
-      // Inspector signature image
-      doc.setDrawColor(209, 213, 219)
-      doc.setLineWidth(0.3)
-      doc.rect(mx, finalY, sigW, sigH)
-      try { doc.addImage(sig, 'PNG', mx, finalY, sigW, sigH) } catch { /* skip */ }
-      doc.setFontSize(7)
-      doc.setTextColor(107, 114, 128)
-      doc.setFont('helvetica', 'normal')
-      doc.text(`Inspector: ${clInspector || clSaved.inspector || ''}`, mx, finalY + sigH + 4)
-      doc.text(report.inspectionDate ? formatDate(report.inspectionDate) : 'Not recorded', mx + sigW - 1, finalY + sigH + 4, { align: 'right' })
-    } else {
-      // Blank line fallback
-      doc.setDrawColor(156, 163, 175)
-      doc.setLineWidth(0.5)
-      doc.line(mx, finalY + sigH, mx + sigW, finalY + sigH)
-      doc.setFontSize(7.5)
-      doc.setTextColor(107, 114, 128)
-      doc.setFont('helvetica', 'normal')
-      doc.text('Inspector Signature', mx, finalY + sigH + 4)
-    }
-
-    // Approver signature box (blank pending)
-    const approverX = mx + sigW + 15
-    doc.setDrawColor(209, 213, 219)
-    doc.setLineWidth(0.3)
-    doc.rect(approverX, finalY, sigW, sigH)
-    doc.setFontSize(8)
-    doc.setTextColor(156, 163, 175)
-    doc.text('Approver Signature', approverX + 2, finalY + 10)
-    doc.setFontSize(7)
-    doc.text(clApproverEmail ? `Sent to: ${clApproverEmail}` : 'Pending', approverX + 2, finalY + 16)
-    doc.setFont('helvetica', 'normal')
-    doc.text('Approved by / التوقيع', approverX, finalY + sigH + 4)
-
-    finalY += sigH + 10
-
-    // ── Branded footer on every page ────────────────────────────────────────────
-    const totalPages = doc.internal.getNumberOfPages()
-    for (let i = 1; i <= totalPages; i++) {
-      doc.setPage(i)
-      pdfFooter(doc, i, totalPages, company, brand)
-    }
-
-    if (preview) {
-      const blob = doc.output('blob')
-      const url = URL.createObjectURL(blob)
-      if (pdfBlobUrl) URL.revokeObjectURL(pdfBlobUrl)
-      setPdfBlobUrl(url)
-      setShowPdfPreview(true)
-    } else {
-      doc.save(`TyrePulse_Checklist_${clAsset || clSaved.asset_no || 'report'}.pdf`)
-    }
+  async function sendChecklistForApproval() {
+    if (!clSaved?.id) return
+    setClSendingEmail(true)
+    // Update DB status
+    try {
+      await inspectionsApi.patchInspection(clSaved.id, {
+        approval_status: 'pending_approval',
+        approver_email: clApproverEmail,
+        status: 'In Progress',
+      })
+    } catch { /* mirror prior fire-and-forget: proceed to send email regardless */ }
+    const approvalLink = `${window.location.origin}/inspections?approve=${clSaved.id}`
+    // Send email via Edge Function
+    await supabase.functions.invoke('send-email', {
+      body: {
+        to: clApproverEmail,
+        subject: `Inspection Approval Required: Asset ${clSaved.asset_no || clAsset}`,
+        body: buildApprovalEmailHtml({
+          assetNo: clSaved.asset_no || clAsset,
+          inspector: clInspector || profile?.full_name || '',
+          date: clDate,
+          site: clSite,
+          odometer: clOdometer,
+          hourMeter: clHourMeter,
+          notes: clNotes,
+          approvalLink,
+          signature: clSignature,
+        }),
+      },
+    })
+    setClSendingEmail(false)
+    setClEmailSent(true)
+    setClApprovalStatus('pending_approval')
+    setShowApprovalForm(false)
   }
 
   if (loading || authLoading) return <div className="flex items-center justify-center h-64 text-[var(--text-secondary)]">{t('common.loading')}</div>
@@ -2093,13 +1074,6 @@ export default function Inspections() {
   const defaultType = activeTab === 'observations' ? 'Site Observation'
     : activeTab === 'training' ? 'Safety Training'
     : 'Routine'
-
-  // Shared grid style for virtual inspection rows
-  const inspGridStyle = {
-    display: 'grid',
-    gridTemplateColumns: (isAdmin ? '44px ' : '') + INSP_COL_WIDTHS.map(w => `${w}px`).join(' '),
-    alignItems: 'center',
-  }
 
   /**
    * The register's Excel button used to export only the inspection header
@@ -2133,12 +1107,18 @@ export default function Inspections() {
         title: 'Inspections & Tyre Findings',
         meta: { 'Affected tyres found': tyreRows.length },
       })
-    } catch (e) { setApproveMsg({ type: 'error', text: toUserMessage(e, 'Could not export. Try again.') }) }
+    } catch (e) { setExportError(toUserMessage(e, 'Could not export. Try again.')) }
   }
 
   return (
     <div className="space-y-6">
       {pdfError && <p role="alert" className="card text-red-500">{pdfError}</p>}
+      {exportError && (
+        <div role="alert" className="card flex items-center justify-between gap-3 text-sm text-red-500">
+          <span>{exportError}</span>
+          <button type="button" onClick={() => setExportError('')} aria-label="Dismiss export error" className="min-h-[36px] min-w-[36px] inline-flex items-center justify-center"><X size={14} /></button>
+        </div>
+      )}
       <PageHeader
         title={isTyreMan ? t('inspections.titleTyreMan') : t('inspections.title')}
         subtitle={isTyreMan ? t('inspections.subtitleTyreMan') : t('inspections.subtitle')}
@@ -2146,8 +1126,11 @@ export default function Inspections() {
         actions={isTyreMan ? null : (
           <div className="flex gap-2 flex-wrap">
             <button
+              type="button"
               onClick={exportInspectionsExcel}
-              className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+              disabled={filtered.length === 0}
+              title={filtered.length === 0 ? 'Nothing to export under these filters' : undefined}
+              className="btn-secondary flex items-center gap-1.5 text-sm px-3 min-h-[40px] disabled:opacity-50"
             >
               <Download size={14}/> {t('inspections.actions.excel')}
             </button>
@@ -2167,606 +1150,90 @@ export default function Inspections() {
                 'Inspections & Observations',
                 'TyrePulse_Inspections',
                 'landscape'
-              ) } catch (e) { setApproveMsg({ type: 'error', text: toUserMessage(e, 'Could not export. Try again.') }) } }}
-              className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+              ) } catch (e) { setExportError(toUserMessage(e, 'Could not export. Try again.')) } }}
+              type="button"
+              disabled={filtered.length === 0}
+              className="btn-secondary flex items-center gap-1.5 text-sm px-3 min-h-[40px] disabled:opacity-50"
             >
               <FileText size={14}/> {t('inspections.actions.pdf')}
             </button>
             <button
-              className="btn-primary text-sm"
+              type="button"
+              className="btn-primary text-sm min-h-[40px] inline-flex items-center gap-1.5"
               onClick={() => setForm({ ...EMPTY_FORM, inspection_type: defaultType })}
             >
-              {t('inspections.actions.addRecord')}
+              <Plus size={14} aria-hidden /> {t('inspections.actions.addRecord')}
             </button>
           </div>
         )}
       />
 
       {/* Tabs - hidden for TyreMan (locked to checklist) */}
-      {!isTyreMan && <div className="flex gap-1 p-1 bg-[var(--surface-2)] rounded-lg w-fit flex-wrap">
+      {!isTyreMan && <div role="tablist" aria-label="Register views" className="flex gap-1 p-1 bg-[var(--surface-2)] rounded-lg w-fit max-w-full overflow-x-auto flex-wrap">
         {tabConfig.map(({ key, label, icon: Icon, count }) => (
           <button
             key={key}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === key}
             onClick={() => setActiveTab(key)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+            className={`flex items-center gap-2 px-4 min-h-[40px] py-2 rounded-md text-sm font-medium transition-all ${
               activeTab === key
                 ? 'bg-[var(--surface-3)] text-[var(--text-primary)] shadow'
                 : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`}
           >
-            {Icon && <Icon className="w-4 h-4" />}
+            {Icon && <Icon className="w-4 h-4" aria-hidden />}
             {label}
-            <span className={`px-1.5 py-0.5 rounded-full text-xs ${activeTab === key ? 'bg-green-500/20 text-green-400' : 'bg-[var(--surface-3)] text-[var(--text-muted)]'}`}>
-              {count}
-            </span>
+            {count != null && (
+              <span className={`px-1.5 py-0.5 rounded-full text-xs tabular-nums ${activeTab === key ? 'bg-green-500/20 text-green-600' : 'bg-[var(--surface-3)] text-[var(--text-muted)]'}`}>
+                {loadError ? 'N/A' : count}
+              </span>
+            )}
           </button>
         ))}
       </div>}
 
       {/* Checklist tab content */}
       {activeTab === 'checklist' && (
-        <div className="space-y-4">
-          {clSaved ? (
-            <div
-              className="card"
-              dir={lang === 'ar' ? 'rtl' : undefined}
-              style={{ background: clOffline ? '#fffbeb' : undefined, borderColor: clOffline ? '#fde68a' : undefined }}
-            >
-              <div className="flex items-center gap-3 mb-4">
-                {clOffline
-                  ? <WifiOff size={20} style={{ color: '#d97706' }} />
-                  : <CheckSquare size={20} className="text-green-400" />
-                }
-                <h3 className="text-lg font-semibold" style={{ color: clOffline ? '#92400e' : undefined }}>
-                  {clOffline ? t('inspections.saved.savedOfflineTitle') : t('inspections.saved.savedTitle')}
-                </h3>
-              </div>
-              {clOffline && (
-                <p className="text-sm mb-3 rounded-lg px-3 py-2" style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }}>
-                  {t('inspections.saved.offlineNote')}
-                </p>
-              )}
-              <p className="text-[var(--text-secondary)] text-sm mb-4">
-                {t('inspections.saved.for')} <span className="text-[var(--text-primary)] font-mono">{clSaved.asset_no}</span> {t('inspections.saved.on')} {clSaved.scheduled_date}{clOffline ? ` ${t('inspections.saved.queuedSuffix')}` : ` ${t('inspections.saved.doneSuffix')}`}
-              </p>
-              {/* Summary badges */}
-              <div className="flex flex-wrap gap-2 mb-2">
-                {clPositions.filter(p => p.condition === 'Good').length > 0 && (
-                  <span className="text-xs px-2 py-1 rounded-full bg-green-900/30 text-green-400 border border-green-700/40">
-                    {t('inspections.saved.badgeGood', { count: clPositions.filter(p => p.condition === 'Good').length })}
-                  </span>
-                )}
-                {clPositions.filter(p => p.condition === 'Wear').length > 0 && (
-                  <span className="text-xs px-2 py-1 rounded-full bg-yellow-900/30 text-yellow-400 border border-yellow-700/40">
-                    {t('inspections.saved.badgeWear', { count: clPositions.filter(p => p.condition === 'Wear').length })}
-                  </span>
-                )}
-                {clPositions.filter(p => p.condition === 'Damage' || p.condition === 'Puncture').length > 0 && (
-                  <span className="text-xs px-2 py-1 rounded-full bg-red-900/30 text-red-400 border border-red-700/40">
-                    {t('inspections.saved.badgeCritical', { count: clPositions.filter(p => p.condition === 'Damage' || p.condition === 'Puncture').length })}
-                  </span>
-                )}
-                {clSignature && (
-                  <span className="text-xs px-2 py-1 rounded-full bg-blue-900/30 text-blue-400 border border-blue-700/40">
-                    {t('inspections.saved.badgeSigned')}
-                  </span>
-                )}
-                {clPhotos.length > 0 && (
-                  <span className="text-xs px-2 py-1 rounded-full bg-purple-900/30 text-purple-400 border border-purple-700/40">
-                    {t('inspections.saved.badgePhotos', { count: clPhotos.length })}
-                  </span>
-                )}
-              </div>
-
-              {/* Immediate tyre-change flag for the just-inspected vehicle */}
-              <TyreDueBanner
-                entry={flagMap?.[clSaved.asset_no || clAsset]}
-                damaged={damagedPositions({ tyre_conditions: clPositions })}
-                inspection={{ ...clSaved, asset_no: clSaved.asset_no || clAsset, tyre_conditions: clPositions }}
-              />
-
-              <div className="flex gap-3 flex-wrap">
-                {!clOffline && (
-                  <button onClick={() => exportChecklistPdf(false)} className="btn-secondary flex items-center gap-2 text-sm">
-                    <FileText size={14} /> {CHECKLIST_LABELS[lang].export}
-                  </button>
-                )}
-                {!clOffline && (
-                  <button onClick={() => exportChecklistPdf(true)} className="btn-secondary flex items-center gap-2 text-sm">
-                    <ExternalLink size={14} /> {t('inspections.saved.previewPdf')}
-                  </button>
-                )}
-                {!clOffline && navigator.share && (
-                  <button
-                    onClick={async () => {
-                      await shareOrCopy({
-                        title: `TyrePulse Inspection: ${clSaved.asset_no}`,
-                        text: `Daily tyre inspection for ${clSaved.asset_no} on ${clSaved.scheduled_date} completed. ${clPositions.filter(p => p.condition === 'Puncture' || p.condition === 'Damage').length} critical tyre(s) flagged.`,
-                      })
-                    }}
-                    className="btn-secondary flex items-center gap-2 text-sm"
-                  >
-                    <Share2 size={14} /> {t('inspections.saved.share')}
-                  </button>
-                )}
-                {!clOffline && (
-                  <button
-                    onClick={() => setShowApprovalForm(v => !v)}
-                    className="btn-secondary flex items-center gap-2 text-sm"
-                    style={{ borderColor: '#6366f1', color: '#818cf8' }}
-                  >
-                    <Send size={14} /> {t('inspections.saved.sendForApproval')}
-                  </button>
-                )}
-                <button onClick={() => {
-                  setClSaved(null); setClOffline(false); setClAsset(''); setClPositions([])
-                  setClFleetInfo(null); setClNotes(''); setClOdometer(''); setClHourMeter('')
-                  setClPhotos([]); setClSignature(null); setClApprovalStatus('done')
-                  setClApproverEmail(''); setShowApprovalForm(false)
-                  if (pdfBlobUrl) { URL.revokeObjectURL(pdfBlobUrl); setPdfBlobUrl(null) }
-                  setShowPdfPreview(false)
-                }}
-                  className="btn-primary text-sm">
-                  {t('inspections.saved.newChecklist')}
-                </button>
-              </div>
-
-              {/* Approval workflow panel */}
-              {showApprovalForm && !clOffline && (
-                <div className="mt-3 p-4 rounded-xl" style={{ background: 'var(--panel-3)', border: '1px solid #4338ca' }}>
-                  <h4 className="text-sm font-semibold text-indigo-300 mb-3 flex items-center gap-2">
-                    <Send size={14} /> {t('inspections.approval.title')}
-                  </h4>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="label text-indigo-300">{t('inspections.approval.approverEmail')}</label>
-                      <input
-                        type="email"
-                        className="input"
-                        placeholder={t('inspections.approval.emailPlaceholder')}
-                        value={clApproverEmail}
-                        onChange={e => setClApproverEmail(e.target.value)}
-                        style={{ background: '#312e81', borderColor: '#4338ca', color: '#e0e7ff' }}
-                      />
-                    </div>
-                    <p className="text-xs text-indigo-300/70">
-                      {t('inspections.approval.hint')}
-                    </p>
-                    <button
-                      disabled={!clApproverEmail.trim() || clSendingEmail}
-                      onClick={async () => {
-                        if (!clSaved?.id) return
-                        setClSendingEmail(true)
-                        // Update DB status
-                        try {
-                          await inspectionsApi.patchInspection(clSaved.id, {
-                            approval_status: 'pending_approval',
-                            approver_email: clApproverEmail,
-                            status: 'In Progress',
-                          })
-                        } catch { /* mirror prior fire-and-forget: proceed to send email regardless */ }
-                        // Build approval link
-                        const approvalLink = `${window.location.origin}/inspections?approve=${clSaved.id}`
-                        // Send email via Edge Function
-                        await supabase.functions.invoke('send-email', {
-                          body: {
-                            to: clApproverEmail,
-                            subject: `Inspection Approval Required: Asset ${clSaved.asset_no || clAsset}`,
-                            body: buildApprovalEmailHtml({
-                              assetNo: clSaved.asset_no || clAsset,
-                              inspector: clInspector || profile?.full_name || '',
-                              date: clDate,
-                              site: clSite,
-                              odometer: clOdometer,
-                              hourMeter: clHourMeter,
-                              notes: clNotes,
-                              approvalLink,
-                              signature: clSignature,
-                            }),
-                          },
-                        })
-                        setClSendingEmail(false)
-                        setClEmailSent(true)
-                        setClApprovalStatus('pending_approval')
-                        setShowApprovalForm(false)
-                      }}
-                      className="btn-primary text-sm w-full disabled:opacity-50"
-                      style={{ background: '#4338ca' }}
-                    >
-                      {clSendingEmail
-                        ? <><span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1" /> {t('inspections.approval.sending')}</>
-                        : <><Send size={13} className="inline mr-1" /> {t('inspections.approval.send')}</>
-                      }
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {clApprovalStatus === 'pending_approval' && !showApprovalForm && (
-                <div className="mt-3 px-3 py-2 rounded-xl flex items-center gap-2 text-sm"
-                  style={{ background: 'var(--panel-3)', border: '1px solid #4338ca', color: '#4f46e5' }}>
-                  <Send size={14} />
-                  <span>
-                    {clEmailSent ? t('inspections.approval.sentTo') : t('inspections.approval.awaiting')}{' '}
-                    <strong>{clApproverEmail}</strong>
-                  </span>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div
-              className={`card space-y-4${lang === 'ar' ? ' text-right' : ''}`}
-              dir={lang === 'ar' ? 'rtl' : undefined}
-            >
-              {/* Offline queue banner */}
-              {pendingCount > 0 && (
-                <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm"
-                  style={{ background: '#fef3c7', border: '1px solid #fde68a', color: '#92400e' }}>
-                  <WifiOff size={14} />
-                  <span>
-                    {t('inspections.form.offlineQueued', { count: pendingCount })}
-                  </span>
-                </div>
-              )}
-
-              {/* Card header with language toggle */}
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-[var(--text-primary)]">{CHECKLIST_LABELS[lang].title}</h3>
-                <div className="flex gap-1 p-0.5 bg-[var(--surface-2)] rounded-lg">
-                  {['en', 'ar'].map(l => (
-                    <button
-                      key={l}
-                      onClick={() => setLang(l)}
-                      className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${
-                        lang === l
-                          ? 'bg-green-600 text-white shadow'
-                          : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                      }`}
-                    >
-                      {l === 'en' ? 'EN' : 'AR'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="label">{CHECKLIST_LABELS[lang].asset}</label>
-                  {masterAssets.length > 0 ? (
-                    <select
-                      className="input"
-                      value={clAsset}
-                      onChange={e => {
-                        setClAsset(e.target.value)
-                        if (e.target.value) loadFleetInfo(e.target.value)
-                      }}
-                    >
-                      <option value="">{t('inspections.form.selectAsset')}</option>
-                      {masterAssets.map(a => (
-                        <option key={a.asset_no} value={a.asset_no}>
-                          {a.asset_no}{a.vehicle_type ? ` - ${a.vehicle_type}` : ''}{a.site ? ` (${a.site})` : ''}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <div className="flex gap-2">
-                      <input className="input flex-1" placeholder={t('inspections.form.assetPlaceholder')} value={clAsset}
-                        onChange={e => setClAsset(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && loadFleetInfo(clAsset)} />
-                      <button onClick={() => loadFleetInfo(clAsset)} disabled={clLookingUp || !clAsset.trim()}
-                        className="btn-secondary px-3 text-sm disabled:opacity-50">
-                        {clLookingUp ? '...' : t('inspections.form.load')}
-                      </button>
-                    </div>
-                  )}
-                  {(clFleetInfo || (clAsset && inferVehicleTypeFromAsset(clAsset))) && (() => {
-                    const vt = clFleetInfo?.vehicle_type || inferVehicleTypeFromAsset(clAsset)
-                    // A machine with no wheels says so, instead of quietly
-                    // showing "0 tyres" and an empty checklist.
-                    if (isTyrelessEquipment(vt)) {
-                      return (
-                        <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
-                          {vt} carries no tyres, so there is no wheel checklist to fill.
-                        </p>
-                      )
-                    }
-                    return (
-                      <p className="text-xs text-green-400 mt-1">
-                        {vt} · {layoutSlotsFor(vt).length} {t('inspections.form.tyres')}
-                      </p>
-                    )
-                  })()}
-                </div>
-                <div>
-                  <label className="label">{CHECKLIST_LABELS[lang].site}</label>
-                  {masterSites.length > 0 ? (
-                    <select className="input" value={clSite} onChange={e => setClSite(e.target.value)}>
-                      <option value="">{t('inspections.form.selectSite')}</option>
-                      {masterSites.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                  ) : (
-                    <input className="input" placeholder={t('inspections.form.sitePlaceholder')} value={clSite}
-                      onChange={e => setClSite(e.target.value)} list="cl-sites" />
-                  )}
-                  <datalist id="cl-sites">{sites.map(s => <option key={s} value={s} />)}</datalist>
-                </div>
-                <div>
-                  <label className="label">{CHECKLIST_LABELS[lang].inspector}</label>
-                  <input className="input" placeholder={t('inspections.form.inspectorPlaceholder')} value={clInspector}
-                    onChange={e => setClInspector(e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">{t('inspections.form.date')}</label>
-                  <input type="date" className="input" value={clDate} onChange={e => setClDate(e.target.value)} />
-                </div>
-              </div>
-
-              {clPositions.length > 0 && (() => {
-                const filledCount = clPositions.filter(p => p.pressure).length
-                const unfilledPositions = clPositions.filter(p => !p.pressure)
-                const allFilled = unfilledPositions.length === 0
-                const posIdx = clPositions.findIndex(p => p.position === clSelectedPos)
-                const selPos = posIdx >= 0 ? clPositions[posIdx] : null
-                return (
-                  <div className="space-y-3">
-                    {/* SVG diagram - single source of truth, tap to fill */}
-                    <div
-                      ref={diagramRef}
-                      className="rounded-2xl flex flex-col items-center py-4 px-2"
-                      style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}
-                    >
-                      <p className="text-xs font-medium mb-3" style={{ color: '#6b7280' }}>{t('inspections.form.tapTyre')}</p>
-                      <VehicleTyreDiagram
-                        vehicleType={clFleetInfo?.vehicle_type || inferVehicleTypeFromAsset(clAsset) || 'Pickup'}
-                        positions={clPositions.map(p => ({
-                          position: p.position,
-                          risk_level: p.condition === 'Good' ? 'good'
-                            : p.condition === 'Wear' ? 'warning'
-                            : (p.condition === 'Damage' || p.condition === 'Puncture') ? 'critical'
-                            : 'none',
-                        }))}
-                        onPositionClick={({ position }) => setClSelectedPos(position)}
-                      />
-                    </div>
-
-                    {/* Position chips - tap any to jump, shows fill status */}
-                    <div className="flex flex-wrap gap-1.5">
-                      {clPositions.map(p => {
-                        const has = !!p.pressure
-                        const isActive = p.position === clSelectedPos
-                        const isPuncture = p.condition === 'Puncture'
-                        const isDmg = p.condition === 'Damage' || isPuncture
-                        const isWear = p.condition === 'Wear'
-                        const bg = isActive ? '#16a34a'
-                          : has && isWear ? '#fefce8'
-                          : has && isDmg  ? '#fef2f2'
-                          : has ? '#f0fdf4'
-                          : '#f9fafb'
-                        const fg = isActive ? '#ffffff'
-                          : has && isWear ? '#854d0e'
-                          : has && isDmg  ? '#991b1b'
-                          : has ? '#166534'
-                          : '#9ca3af'
-                        const bd = isActive ? '#16a34a'
-                          : has && isWear ? '#fde047'
-                          : has && isDmg  ? '#fca5a5'
-                          : has ? '#86efac'
-                          : '#e5e7eb'
-                        return (
-                          <button
-                            key={p.position}
-                            onClick={() => setClSelectedPos(p.position)}
-                            className="px-2.5 py-1.5 rounded-lg text-xs font-mono font-bold transition-all active:scale-95"
-                            style={{ background: bg, color: fg, border: `1.5px solid ${bd}` }}
-                          >
-                            {p.label || p.position}{has ? ' ✓' : ''}
-                            {isPuncture && !isActive && <span className="ml-0.5 text-[9px]">🔴</span>}
-                          </button>
-                        )
-                      })}
-                    </div>
-                    <p className="text-xs px-0.5" style={{ color: allFilled ? '#16a34a' : '#9ca3af' }}>
-                      {allFilled
-                        ? t('inspections.form.allFilled', { count: clPositions.length })
-                        : t('inspections.form.fillProgress', { filled: filledCount, total: clPositions.length, remaining: unfilledPositions.length })}
-                    </p>
-
-                    {/* Bottom sheet for selected position */}
-                    {clSelectedPos && selPos && (
-                      <PositionSheet
-                        pos={selPos}
-                        posIdx={posIdx}
-                        total={clPositions.length}
-                        isLast={posIdx === clPositions.length - 1}
-                        unfilledCount={unfilledPositions.length}
-                        allFilled={allFilled}
-                        lang={lang}
-                        onUpdate={(field, val) =>
-                          setClPositions(ps => ps.map(p => p.position === clSelectedPos ? { ...p, [field]: val } : p))
-                        }
-                        onNext={() => {
-                          const isOnLast = posIdx === clPositions.length - 1
-                          if (isOnLast) {
-                            // Re-check unfilled at call time (state may have just changed)
-                            const stillUnfilled = clPositions.find((p, i) => i !== posIdx && !p.pressure)
-                            if (stillUnfilled) { setClSelectedPos(stillUnfilled.position); return }
-                            // All filled - close sheet
-                            setClSelectedPos(null)
-                            return
-                          }
-                          setClSelectedPos(clPositions[posIdx + 1].position)
-                        }}
-                        onPrev={() => { if (posIdx > 0) setClSelectedPos(clPositions[posIdx - 1].position) }}
-                        onClose={() => setClSelectedPos(null)}
-                      />
-                    )}
-                  </div>
-                )
-              })()}
-
-              {clPositions.length === 0 && clAsset.trim() && (
-                <p className="text-[var(--text-muted)] text-sm text-center py-4">
-                  {CHECKLIST_LABELS[lang].no_asset}
-                </p>
-              )}
-
-              {/* Odometer + Hour Meter */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="label flex items-center gap-1.5"><Gauge size={12} className="text-[var(--text-secondary)]" /> {t('inspections.form.odometer')}</label>
-                  <input type="number" className="input" placeholder={t('inspections.form.odometerPlaceholder')} min="0"
-                    value={clOdometer} onChange={e => setClOdometer(e.target.value)} />
-                </div>
-                <div>
-                  <label className="label flex items-center gap-1.5"><Clock size={12} className="text-[var(--text-secondary)]" /> {t('inspections.form.hourMeter')}</label>
-                  <input type="number" className="input" placeholder={t('inspections.form.hourMeterPlaceholder')} min="0"
-                    value={clHourMeter} onChange={e => setClHourMeter(e.target.value)} />
-                </div>
-              </div>
-
-              {/* Photo capture */}
-              <div>
-                <label className="label flex items-center gap-1.5"><Camera size={12} className="text-[var(--text-secondary)]" /> {t('inspections.form.photos')}</label>
-                <div className="flex gap-2 flex-wrap mb-2">
-                  {clPhotos.map((src, i) => (
-                    <div key={i} className="relative">
-                      <img src={src} alt={`photo-${i}`}
-                        style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--hairline)' }} />
-                      <button
-                        onClick={() => setClPhotos(ps => ps.filter((_, j) => j !== i))}
-                        style={{
-                          position: 'absolute', top: -6, right: -6, width: 18, height: 18,
-                          borderRadius: '50%', background: '#ef4444', border: 'none',
-                          color:'var(--panel-ink)', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        }}
-                      >×</button>
-                    </div>
-                  ))}
-                  {clPhotos.length < 6 && (
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => cameraInputRef.current?.click()}
-                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold"
-                        style={{ background: '#0c4a6e', border: '1.5px solid #0369a1', color: '#7dd3fc' }}
-                      >
-                        <Camera size={13} /> {t('inspections.form.camera')}
-                      </button>
-                      <button
-                        onClick={() => galleryInputRef.current?.click()}
-                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold"
-                        style={{ background: 'var(--panel-3)', border: '1.5px solid #4338ca', color: '#4f46e5' }}
-                      >
-                        <ImageIcon size={13} /> {t('inspections.form.gallery')}
-                      </button>
-                    </div>
-                  )}
-                </div>
-                <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden"
-                  onChange={e => {
-                    const file = e.target.files?.[0]
-                    if (!file) return
-                    const reader = new FileReader()
-                    reader.onload = ev => {
-                      // Compress via canvas
-                      const img = new Image()
-                      img.onload = () => {
-                        const MAX = 800
-                        const scale = Math.min(1, MAX / Math.max(img.width, img.height))
-                        const canvas = document.createElement('canvas')
-                        canvas.width = img.width * scale
-                        canvas.height = img.height * scale
-                        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
-                        setClPhotos(ps => [...ps, canvas.toDataURL('image/jpeg', 0.75)])
-                      }
-                      img.src = ev.target.result
-                    }
-                    reader.readAsDataURL(file)
-                    e.target.value = ''
-                  }}
-                />
-                <input ref={galleryInputRef} type="file" accept="image/*" multiple className="hidden"
-                  onChange={e => {
-                    Array.from(e.target.files || []).slice(0, 6 - clPhotos.length).forEach(file => {
-                      const reader = new FileReader()
-                      reader.onload = ev => {
-                        const img = new Image()
-                        img.onload = () => {
-                          const MAX = 800
-                          const scale = Math.min(1, MAX / Math.max(img.width, img.height))
-                          const canvas = document.createElement('canvas')
-                          canvas.width = img.width * scale
-                          canvas.height = img.height * scale
-                          canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
-                          setClPhotos(ps => [...ps, canvas.toDataURL('image/jpeg', 0.75)])
-                        }
-                        img.src = ev.target.result
-                      }
-                      reader.readAsDataURL(file)
-                    })
-                    e.target.value = ''
-                  }}
-                />
-              </div>
-
-              {/* Inspector Signature */}
-              <div>
-                <label className="label flex items-center gap-1.5"><PenLine size={12} className="text-[var(--text-secondary)]" /> {t('inspections.form.inspectorSignature')}</label>
-                {clSignature ? (
-                  <div className="flex items-center gap-3">
-                    <img src={clSignature} alt="signature"
-                      style={{ height: 56, maxWidth: 180, background: '#fff', borderRadius: 8, border: '1px solid var(--hairline)', padding: 4 }} />
-                    <div>
-                      <p className="text-xs text-green-400 font-semibold">{t('inspections.form.signedAs', { name: clInspector })}</p>
-                      <button onClick={() => setClSignature(null)}
-                        className="text-xs text-[var(--text-muted)] hover:text-red-400 transition-colors mt-0.5">
-                        {t('inspections.form.clearSignature')}
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setShowSignaturePad(true)}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold w-full"
-                    style={{ background: '#1a2e1a', border: '1.5px dashed #16a34a', color: '#4ade80' }}
-                  >
-                    <PenLine size={15} /> {t('inspections.form.tapToSign')}
-                  </button>
-                )}
-              </div>
-
-              <div>
-                <label className="label">{CHECKLIST_LABELS[lang].notes}</label>
-                <textarea className="input h-20 resize-none" placeholder={t('inspections.form.notesPlaceholder')}
-                  value={clNotes} onChange={e => setClNotes(e.target.value)} />
-              </div>
-
-              {clError && (
-                <div className="p-3 rounded-lg bg-red-900/30 border border-red-700 text-red-300 text-sm">
-                  {clError}
-                </div>
-              )}
-              {clPositions.length > 0 && clTyresIncomplete && (
-                <div className="p-3 rounded-xl flex items-start gap-2 text-sm"
-                  style={{ background: '#fefce8', border: '1px solid #fde047', color: '#854d0e' }}>
-                  <span>⚠️</span>
-                  <span>
-                    {t('inspections.form.psiWarning', { count: clMissingPressure.length })}
-                    {clPendingNames.length > 0 && (
-                      <> {t('inspections.form.tyresPending')}: {clPendingNames.join(', ')}</>
-                    )}
-                  </span>
-                </div>
-              )}
-              <button
-                onClick={saveChecklist}
-                disabled={clSaving || !clAsset.trim() || clPositions.length === 0 || clTyresIncomplete}
-                className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {clSaving ? t('common.saving') : CHECKLIST_LABELS[lang].save}
-              </button>
-            </div>
-          )}
-        </div>
+        <ChecklistTab
+          lang={lang} setLang={setLang}
+          clSaved={clSaved} clOffline={clOffline}
+          clAsset={clAsset} setClAsset={setClAsset}
+          clSite={clSite} setClSite={setClSite}
+          clDate={clDate} setClDate={setClDate}
+          clInspector={clInspector} setClInspector={setClInspector}
+          clFleetInfo={clFleetInfo}
+          clPositions={clPositions} setClPositions={setClPositions}
+          clNotes={clNotes} setClNotes={setClNotes}
+          clOdometer={clOdometer} setClOdometer={setClOdometer}
+          clHourMeter={clHourMeter} setClHourMeter={setClHourMeter}
+          clPhotos={clPhotos} setClPhotos={setClPhotos}
+          clSignature={clSignature} setClSignature={setClSignature}
+          clError={clError} clSaving={clSaving} clLookingUp={clLookingUp}
+          clSelectedPos={clSelectedPos} setClSelectedPos={setClSelectedPos}
+          clApproverEmail={clApproverEmail} setClApproverEmail={setClApproverEmail}
+          clApprovalStatus={clApprovalStatus} clEmailSent={clEmailSent} clSendingEmail={clSendingEmail}
+          showApprovalForm={showApprovalForm} setShowApprovalForm={setShowApprovalForm}
+          /* The ONE gate value: the Save button and saveChecklist read the same
+             clTyresIncomplete, computed above from the pressure floor OR the
+             completeness engine. */
+          clTyresIncomplete={clTyresIncomplete}
+          clMissingPressure={clMissingPressure}
+          clPendingNames={clPendingNames}
+          pendingCount={pendingCount}
+          masterAssets={masterAssets} masterSites={masterSites} sites={sites}
+          flagMap={flagMap}
+          diagramRef={diagramRef}
+          cameraInputRef={cameraInputRef} galleryInputRef={galleryInputRef}
+          loadFleetInfo={loadFleetInfo}
+          saveChecklist={saveChecklist}
+          exportChecklistPdf={exportChecklistPdf}
+          onNewChecklist={resetChecklist}
+          onSendForApproval={sendChecklistForApproval}
+          onOpenSignaturePad={() => setShowSignaturePad(true)}
+          onPhotoError={(e) => setClError(toUserMessage(e, 'Could not read that photo. Try another one.'))}
+        />
       )}
 
       {/* Signature Pad Modal */}
@@ -2812,8 +1279,8 @@ export default function Inspections() {
                   </div>
                 )}
               </div>
-              <button onClick={() => { setShowApproveModal(false); clearApproveParam() }}
-                style={{ background: 'none', border: 'none', color: 'var(--panel-ink-3)', cursor: 'pointer' }}>
+              <button type="button" aria-label="Close approval" onClick={() => { setShowApproveModal(false); clearApproveParam() }}
+                style={{ background: 'none', border: 'none', color: 'var(--panel-ink-3)', cursor: 'pointer', minWidth: 44, minHeight: 44 }}>
                 <X size={20} />
               </button>
             </div>
@@ -2914,7 +1381,7 @@ export default function Inspections() {
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                   }}
                 >
-                  <span>✍</span> {t('inspections.approve.tapToSign')}
+                  <PenLine size={15} aria-hidden /> {t('inspections.approve.tapToSign')}
                 </button>
               )}
               {/* Read-only, because the server derives the approver from the session.
@@ -3097,6 +1564,8 @@ export default function Inspections() {
                 <Download size={13} /> {t('inspections.pdfPreview.download')}
               </a>
               <button
+                type="button"
+                aria-label="Close PDF preview"
                 onClick={() => setShowPdfPreview(false)}
                 style={{ background: 'var(--hairline)', border: 'none', borderRadius: 8, color:'var(--panel-ink)', cursor: 'pointer', padding: '6px 10px' }}
               >
@@ -3119,7 +1588,7 @@ export default function Inspections() {
           EVERY figure here is computed over `scoped` - the same rows the table below is
           showing, minus the tile drill-down. The caption states that in words, because a
           scoped number sitting next to an unscoped one is unreadable either way round. */}
-      {activeTab === 'all' && (() => {
+      {(() => {
         // "We could not look" is not "there is nothing". While the read has failed the
         // tiles refuse to state a count at all rather than print a confident 0.
         const unreadable = !!loadError
@@ -3130,6 +1599,19 @@ export default function Inspections() {
             ? `Covers the ${scoped.length} ${scoped.length === 1 ? 'inspection' : 'inspections'} matching your filters, of ${tabFiltered.length} in total.`
             : null
         return (
+        <>
+        {/* Register KPI strip: status and completion over the SAME rows the tiles
+            and the table count. N/A while the read has failed, never 0. */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3" aria-label="Register summary">
+          <RegisterKpi label="Records" value={num(kpis.total)} sub={scopeActive ? 'Matching your filters' : 'In this view'} />
+          <RegisterKpi label="Open" value={num(kpis.open)} sub="Scheduled, in progress or overdue" />
+          <RegisterKpi label="Overdue" value={num(kpis.Overdue)} tone={!unreadable && kpis.Overdue > 0 ? '#b91c1c' : undefined}
+            sub={unreadable || kpis.overdueRate == null ? 'Rate N/A' : `${kpis.overdueRate}% of records`} />
+          <RegisterKpi label="Completed" value={num(kpis.Done)}
+            sub={unreadable || kpis.completionRate == null ? 'Rate N/A' : `${kpis.completionRate}% completion`} />
+          <RegisterKpi label="High or critical" value={num(kpis.highSeverity)} tone={!unreadable && kpis.highSeverity > 0 ? '#b45309' : undefined} sub="By recorded severity" />
+          <RegisterKpi label="Actions raised" value={num(kpis.withAction)} sub="Linked corrective actions" />
+        </div>
         <div className="flex flex-wrap gap-4">
           <OverviewSlide
             title="Inspections"
@@ -3159,10 +1641,10 @@ export default function Inspections() {
               <button
                 type="button"
                 onClick={() => setFlagReload((n) => n + 1)}
-                className="mt-2 px-3 py-1.5 rounded-md border border-[var(--border-subtle)] text-xs"
+                className="mt-2 px-3 min-h-[40px] py-1.5 rounded-md inline-flex items-center gap-1.5 border border-[var(--border-subtle)] text-xs"
                 style={{ color: 'var(--text-primary)' }}
               >
-                Retry
+                <RefreshCw size={12} aria-hidden /> Retry
               </button>
             </div>
           ) : unreadable ? (
@@ -3242,12 +1724,13 @@ export default function Inspections() {
           <button
             type="button"
             onClick={() => setSummaryOpen(true)}
-            className="self-start px-3 py-2 rounded-lg border border-[var(--border-subtle)] text-xs font-medium flex items-center gap-1.5"
+            className="self-start min-h-[44px] px-3 py-2 rounded-lg border border-[var(--border-subtle)] text-xs font-medium flex items-center gap-1.5"
             style={{ color: 'var(--text-primary)', background: 'var(--surface-2)' }}
           >
-            <Share2 size={13} /> Share summary
+            <Share2 size={13} aria-hidden /> Share summary
           </button>
         </div>
+        </>
         )
       })()}
       {summaryOpen && (
@@ -3284,7 +1767,7 @@ export default function Inspections() {
         onDownload={(row) => exportRowPdf(row)}
         downloading={Boolean(pdfBusyId)}
       />
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Filter by status">
         {[['all', t('inspections.filters.status.all'), 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-bright)]'],
           ['Overdue', t('inspections.filters.status.overdue'), 'bg-red-900/30 text-red-400 border-red-700/50'],
           ['Scheduled', t('inspections.filters.status.scheduled'), 'bg-blue-900/30 text-blue-400 border-blue-700/50'],
@@ -3293,8 +1776,10 @@ export default function Inspections() {
         ].map(([val, label, cls]) => (
           <button
             key={val}
+            type="button"
+            aria-pressed={filterStatus === val}
             onClick={() => setFilter('status', val)}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${cls} ${filterStatus === val ? 'ring-2 ring-white/20' : 'opacity-70 hover:opacity-100'}`}
+            className={`px-3 min-h-[36px] py-1.5 rounded-full text-xs font-medium border transition-all ${cls} ${filterStatus === val ? 'ring-2 ring-white/20' : 'opacity-70 hover:opacity-100'}`}
           >
             {label} ({statusCounts[val] ?? 0})
           </button>
@@ -3307,7 +1792,7 @@ export default function Inspections() {
       {(() => {
         const advanced = [
           filterSite !== 'all', filterRegion !== 'all', filterInspector !== 'all',
-          !!filterFrom, !!filterTo,
+          filterVehicleType !== 'all', !!filterFrom, !!filterTo,
         ].filter(Boolean).length
         // The tile drill-down counts as active too, so Clear reaches it. A filter the
         // user cannot see and cannot clear is the worst kind - it just looks like
@@ -3321,9 +1806,11 @@ export default function Inspections() {
               <input aria-label="Search inspections" className="input flex-1 min-w-48" placeholder={t('inspections.filters.searchPlaceholder')}
                 value={search} onChange={e => setFilter('search', e.target.value)} />
               <button
+                type="button"
                 onClick={() => setShowFilters(v => !v)}
                 aria-expanded={showFilters}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5 ${
+                aria-controls="insp-advanced-filters"
+                className={`px-3 min-h-[40px] py-1.5 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5 ${
                   showFilters || advanced > 0
                     ? 'bg-[var(--input-bg)] text-[var(--text-primary)] border-[var(--input-border)]'
                     : 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)] hover:text-[var(--text-primary)]'
@@ -3331,19 +1818,20 @@ export default function Inspections() {
                 title="Show or hide the advanced filters"
               >
                 Filters{advanced > 0 ? ` (${advanced})` : ''}
-                <ChevronDown size={13} className={`transition-transform ${showFilters ? 'rotate-180' : ''}`} />
+                <ChevronDown size={13} aria-hidden className={`transition-transform ${showFilters ? 'rotate-180' : ''}`} />
               </button>
               {anyActive && (
                 <button
                   onClick={() => {
                     setFilters({
                       search: '', site: 'all', region: 'all',
-                      inspector: 'all', from: '', to: '', focus: 'all',
+                      inspector: 'all', vehicleType: 'all', from: '', to: '', focus: 'all',
                     })
                   }}
-                  className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] px-2 flex items-center gap-1"
+                  type="button"
+                  className="text-xs min-h-[40px] text-[var(--text-muted)] hover:text-[var(--text-primary)] px-2 flex items-center gap-1"
                 >
-                  <X size={12} /> Clear
+                  <X size={12} aria-hidden /> Clear
                 </button>
               )}
               <span className="text-xs text-[var(--text-muted)] ml-auto self-center whitespace-nowrap">
@@ -3383,7 +1871,7 @@ export default function Inspections() {
             )}
 
             {showFilters && (
-              <div className="flex flex-wrap gap-2 rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)]/40 p-3">
+              <div id="insp-advanced-filters" className="flex flex-wrap gap-2 rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)]/40 p-3">
                 {/* Region renders only when the site register actually places
                     these sites in one. An empty dropdown is a control that can
                     only ever return nothing. */}
@@ -3434,473 +1922,68 @@ export default function Inspections() {
 
       {/* Bulk selection bar (Admin only) */}
       {isAdmin && selectedIds.size > 0 && (
-        <div className="flex items-center justify-between gap-3 bg-blue-950/30 border border-blue-800/50 rounded-xl px-4 py-2.5">
-          <span className="text-sm text-blue-200">{selectedIds.size} selected</span>
+        <div role="status" className="flex flex-wrap items-center justify-between gap-3 border rounded-xl px-4 py-2.5" style={{ borderColor: 'rgba(37,99,235,0.4)', background: 'rgba(37,99,235,0.08)' }}>
+          <span className="text-sm text-[var(--text-primary)]">{selectedIds.size} selected</span>
           <div className="flex items-center gap-2">
-            <button onClick={() => setSelectedIds(new Set())} className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] px-2 py-1">Clear</button>
-            <button onClick={() => { setBulkError(''); setBulkDeleteOpen(true) }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-medium transition-colors">
+            {!allPageSelected && (
+              <button type="button" onClick={toggleSelectPage} className="text-xs min-h-[36px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] px-2 py-1 underline">
+                Select all {filtered.length} filtered
+              </button>
+            )}
+            <button type="button" onClick={() => setSelectedIds(new Set())} className="text-xs min-h-[36px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] px-2 py-1">Clear</button>
+            <button type="button" onClick={() => { setBulkError(''); setBulkDeleteOpen(true) }}
+              className="flex items-center gap-1.5 px-3 min-h-[36px] py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-medium transition-colors">
               <Trash2 size={14} /> Delete {selectedIds.size}
             </button>
           </div>
         </div>
       )}
 
-      {/* Virtualised Table */}
-      <div className="card overflow-x-auto p-0">
-        {/* Sticky header */}
-        <div
-          className="text-left text-[var(--text-secondary)] border-b border-[var(--border-dim)] bg-[var(--surface-1)]"
-          style={{ minWidth: `${INSP_COL_WIDTHS.reduce((a, b) => a + b, 0)}px` }}
-        >
-          <div style={inspGridStyle} className="px-0">
-            {isAdmin && (
-              <div className="pb-2 pt-3 px-3 flex items-center">
-                {/* Selects every row the FILTERS left, not just the page on
-                    screen - the delete button then states the real count, so a
-                    bulk delete can never be larger than it reads. */}
-                <input type="checkbox" checked={allPageSelected} onChange={toggleSelectPage}
-                  aria-label={`Select all ${filtered.length} filtered inspections`}
-                  title={`Select all ${filtered.length} records these filters leave`}
-                  className="w-4 h-4 rounded border-[var(--border-bright)] bg-[var(--surface-2)] accent-blue-600 cursor-pointer" />
-              </div>
-            )}
-            <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">{t('inspections.table.type')}</div>
-            <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">{t('inspections.table.title')}</div>
-            <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">{t('inspections.table.site')}</div>
-            <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">{t('inspections.table.asset')}</div>
-            <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">{t('inspections.table.date')}</div>
-            <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">{t('inspections.table.severity')}</div>
-            <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">{t('inspections.table.status')}</div>
-            <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">{t('inspections.table.inspector')}</div>
-            <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">{t('inspections.table.actions')}</div>
-          </div>
-        </div>
-
-        {/* Virtual scroll container */}
-        <div
-          ref={tableParentRef}
-          className="overflow-y-auto"
-          style={{
-            height: filtered.length === 0 ? 'auto' : '600px',
-            minWidth: `${INSP_COL_WIDTHS.reduce((a, b) => a + b, 0)}px`,
-          }}
-        >
-          {filtered.length === 0 ? (
-            <div className="py-12 text-center text-[var(--text-muted)] text-sm">{t('inspections.states.noRecords')}</div>
-          ) : (
-            <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: 'relative' }}>
-              {rowVirtualizer.getVirtualItems().map(virtualRow => {
-                const r = pager.pageRows[virtualRow.index]
-                if (!r) return null
-                const cfg    = STATUS_CONFIG[r.status] || STATUS_CONFIG.Scheduled
-                const sevCfg = SEV_CONFIG[r.severity]  || SEV_CONFIG.Medium
-                const isObs  = isObservationType(r.inspection_type)
-                const isTrn  = isTrainingType(r.inspection_type)
-
-                return (
-                  <div
-                    key={virtualRow.key}
-                    style={{
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      width: '100%',
-                      transform: `translateY(${virtualRow.start}px)`,
-                      height: `${virtualRow.size}px`,
-                      ...inspGridStyle,
-                    }}
-                    className={`border-b border-[var(--border-dim)] hover:bg-[var(--surface-2)] transition-colors cursor-pointer ${selectedIds.has(r.id) ? 'bg-blue-950/20' : ''}`}
-                    role="button"
-                    tabIndex={0}
-                    title={t('inspections.row.titleOpenRecord')}
-                    // Open the record in place. The row is the natural target -
-                    // reading what was recorded should not cost a page load or
-                    // a downloaded file. Clicks on the checkbox and the action
-                    // buttons stop propagation, so those still do their own job.
-                    onClick={() => setViewId(r.id)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setViewId(r.id) }
-                    }}
-                  >
-                    {isAdmin && (
-                      <div className="px-3" onClick={(e) => e.stopPropagation()}>
-                        <input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => toggleSelect(r.id)}
-                          aria-label={`Select inspection ${r.title || r.asset_no || r.id}`}
-                          className="w-4 h-4 rounded border-[var(--border-bright)] bg-[var(--surface-2)] accent-blue-600 cursor-pointer" />
-                      </div>
-                    )}
-                    {/* Type */}
-                    <div className="px-3 overflow-hidden">
-                      <span className={`text-xs px-2 py-0.5 rounded-full border whitespace-nowrap ${
-                        isObs ? 'bg-purple-900/20 text-purple-400 border-purple-700/40'
-                        : isTrn ? 'bg-blue-900/20 text-blue-400 border-blue-700/40'
-                        : 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-bright)]'
-                      }`}>
-                        {r.inspection_type}
-                      </span>
-                    </div>
-
-                    {/* Title */}
-                    <div className="px-3 text-[var(--text-primary)] font-medium text-sm truncate" title={r.title}>
-                      {r.title}
-                      {r.photo_data && <Camera className="inline w-3 h-3 ml-1 text-[var(--text-muted)]" title={t('inspections.row.titleHasPhoto')} />}
-                      {r.linked_action_id && <ClipboardList className="inline w-3 h-3 ml-1 text-yellow-400" title={t('inspections.row.titleActionRaised')} />}
-                    </div>
-
-                    {/* Site */}
-                    <div className="px-3 text-[var(--text-secondary)] text-sm truncate">{r.site}</div>
-
-                    {/* Asset */}
-                    <div className="px-3 font-mono text-xs text-[var(--text-secondary)] overflow-hidden">
-                      <span className="truncate block">{r.asset_no || '-'}</span>
-                      {r.asset_no && flagMap?.[r.asset_no]?.count > 0 && (
-                        /* The flag now GOES somewhere: the same gesture as
-                           clicking an inspection to open that inspection, but
-                           straight to this vehicle's flagged tyres. The row
-                           click opens the inspection, so this must not bubble. */
-                        <Link
-                          to={trackingLink({ asset: r.asset_no })}
-                          onClick={(e) => e.stopPropagation()}
-                          className="inline-block mt-0.5 px-1.5 py-px rounded-full text-[10px] font-sans font-medium whitespace-nowrap underline"
-                          style={{ background: 'rgba(220,38,38,0.12)', color: '#dc2626', border: '1px solid rgba(220,38,38,0.3)' }}
-                          title={`See which tyres are due on ${r.asset_no} and whether they have been replaced`}
-                        >
-                          Tyres due ({flagMap[r.asset_no].count})
-                        </Link>
-                      )}
-                    </div>
-
-                    {/* Date */}
-                    <div className="px-3 text-[var(--text-secondary)] text-xs tabular-nums">{r.scheduled_date}</div>
-
-                    {/* Severity */}
-                    <div className="px-3">
-                      {r.severity && (
-                        <span className={`text-xs px-2 py-0.5 rounded-full border ${sevCfg.bg} ${sevCfg.color} ${sevCfg.border}`}>
-                          {r.severity}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Status */}
-                    <div className="px-3">
-                      <span className={`text-xs px-2 py-0.5 rounded-full border ${cfg.bg} ${cfg.color} ${cfg.border}`}>
-                        {r.status}
-                      </span>
-                    </div>
-
-                    {/* Inspector */}
-                    <div className="px-3 text-[var(--text-secondary)] text-xs truncate">{r.inspector || r.attendees || '-'}</div>
-
-                    {/* Actions */}
-                    <div className="px-3" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center gap-1 flex-wrap">
-                        <button onClick={() => setViewId(r.id)}
-                          className="text-xs px-2 py-1 rounded bg-[var(--surface-2)] text-[var(--text-secondary)] hover:bg-[var(--surface-3)] border border-[var(--border-bright)] transition-colors"
-                          title={t('inspections.row.titleOpenRecord')}>
-                          <Eye size={11} className="inline" />
-                        </button>
-                        {r.status !== 'Done' && r.status !== 'Cancelled' && (
-                          <button onClick={() => markDone(r.id)}
-                            className="text-xs px-2 py-1 rounded bg-green-900/30 text-green-400 hover:bg-green-900/50 border border-green-700/50 transition-colors whitespace-nowrap">
-                            {t('inspections.row.done')}
-                          </button>
-                        )}
-                        {isObs && r.status === 'Done' && !r.linked_action_id && (
-                          <button onClick={() => setRaisingAction(r)}
-                            className="text-xs px-2 py-1 rounded bg-yellow-900/20 text-yellow-400 hover:bg-yellow-900/40 border border-yellow-700/40 transition-colors whitespace-nowrap">
-                            {t('inspections.row.raiseAction')}
-                          </button>
-                        )}
-                        {r.linked_action_id && (
-                          <span className="text-xs px-2 py-1 rounded bg-[var(--surface-2)] text-[var(--text-muted)] border border-[var(--border-bright)] whitespace-nowrap">
-                            {t('inspections.row.actionRaised')}
-                          </span>
-                        )}
-                        <button onClick={() => setForm({ ...r, tyre_conditions: r.tyre_conditions ?? {} })}
-                          className="text-xs px-2 py-1 rounded bg-[var(--surface-2)] text-[var(--text-secondary)] hover:bg-[var(--surface-3)] border border-[var(--border-bright)] transition-colors">
-                          {t('inspections.row.edit')}
-                        </button>
-                        <button onClick={() => exportRowPdf(r)} disabled={pdfBusyId === r.id}
-                          className="text-xs px-2 py-1 rounded bg-[var(--surface-2)] text-[var(--text-secondary)] hover:bg-[var(--surface-3)] border border-[var(--border-bright)] transition-colors disabled:opacity-50"
-                          title={t('inspections.row.titleExportPdf')}>
-                          <FileText size={11} className="inline" />
-                        </button>
-                        <button onClick={() => setDeleteId(r.id)}
-                          className="text-xs px-2 py-1 rounded bg-red-900/20 text-red-400 hover:bg-red-900/40 border border-red-800/50 transition-colors">
-                          {t('inspections.row.del')}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-        {/* Page controls. `pager.total` is the FILTERED total, so the bar states
-            how many rows the filters left as well as which of them are on screen. */}
-        <TablePagination {...pager} />
+      {/* The register. EnterpriseTable pages and sorts the FULL filtered set;
+          the row opens the record in place. */}
+      <div ref={registerRef}>
+        <EnterpriseTable
+          key={registerKey}
+          columns={registerColumns}
+          data={filtered}
+          getRowId={(r) => String(r.id)}
+          error={loadError ? toUserMessage(loadError, 'Could not load the inspections.') : null}
+          onRetry={load}
+          enableGlobalFilter={false}
+          enableColumnFilters={false}
+          enableExport={false}
+          enableRowSelection={isAdmin}
+          rowSelection={isAdmin ? rowSelection : undefined}
+          onRowSelectionChange={isAdmin ? onRowSelectionChange : undefined}
+          onRowClick={(r) => setViewId(r.id)}
+          pageSizeOptions={[25, 50, 100]}
+          initialPageSize={50}
+          stickyFirstColumn
+          emptyMessage={scopeActive || (filterFocus && filterFocus !== 'all')
+            ? 'No records match these filters. Clear the filters to see every record.'
+            : t('inspections.states.noRecords')}
+        />
       </div>
       </>}
 
       {/* Add / Edit Modal */}
       {form !== null && (
-        <Modal onClose={() => setForm(null)}>
-          <h3 className="text-lg font-bold text-[var(--text-primary)] mb-5">
-            {form.id ? t('inspections.modal.editRecord') : t('inspections.modal.addRecord')}
-          </h3>
-
-          {/* Immediate tyre-change flag for this vehicle (open detail) */}
-          {form.asset_no && (
-            <TyreDueBanner entry={flagMap?.[form.asset_no]} damaged={damagedPositions(form)} inspection={form} />
-          )}
-
-          {/* Universal Approval & Workflow Engine — inspection approval + lock.
-              Only for persisted records (needs a stable entity id). While the
-              record is mid-approval or approved, edits/saves are disabled. */}
-          {form.id && (
-            <div className="mb-5">
-              <EntityApprovalPanel
-                entityType="inspection"
-                entityId={form.id}
-                entityLabel={form.asset_no || form.title || form.id}
-                context={{
-                  pressure: form.tyre_conditions?.[selectedTyre]?.pressure ?? null,
-                  tread: form.tread_depth ?? null,
-                  odometer: form.odometer_km ?? null,
-                  severity: form.severity ?? null,
-                  site: form.site ?? null,
-                  asset_no: form.asset_no ?? null,
-                  inspection_type: form.inspection_type ?? null,
-                }}
-                onStateChange={({ isActive, isLocked }) => {
-                  const locked = !!(isActive || isLocked)
-                  setWfLocked((prev) => (prev === locked ? prev : locked))
-                }}
-                title={t('inspections.approval.title') || 'Inspection Approval'}
-              />
-              {wfLocked && (
-                <div className="mt-2 flex items-center gap-1.5 text-xs text-amber-400">
-                  <AlertTriangle size={12} /> Locked, in approval
-                </div>
-              )}
-            </div>
-          )}
-
-          <fieldset disabled={wfLocked} className="space-y-4 disabled:opacity-60">
-            <div>
-              <label className="label">{t('inspections.modal.titleField')}</label>
-              <input className="input" value={form.title}
-                onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-                placeholder={t('inspections.modal.titlePlaceholder')} />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="label">{t('inspections.modal.type')}</label>
-                <select className="input" value={form.inspection_type}
-                  onChange={e => setForm(f => ({ ...f, inspection_type: e.target.value }))}>
-                  <optgroup label={t('inspections.modal.groupInspections')}>
-                    {INSPECTION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                  </optgroup>
-                  <optgroup label={t('inspections.modal.groupObservations')}>
-                    {OBSERVATION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                  </optgroup>
-                  <optgroup label={t('inspections.modal.groupTraining')}>
-                    {TRAINING_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                  </optgroup>
-                </select>
-              </div>
-              <div>
-                <label className="label">{t('inspections.modal.status')}</label>
-                <select className="input" value={form.status}
-                  onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
-                  {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="label">{t('inspections.modal.siteField')}</label>
-                <input className="input" value={form.site}
-                  onChange={e => setForm(f => ({ ...f, site: e.target.value }))}
-                  placeholder={t('inspections.form.sitePlaceholder')} list="insp-sites" />
-                <datalist id="insp-sites">{sites.map(s => <option key={s} value={s} />)}</datalist>
-              </div>
-              <div>
-                <label className="label">{t('inspections.modal.dateField')}</label>
-                <input type="date" className="input" value={form.scheduled_date}
-                  onChange={e => setForm(f => ({ ...f, scheduled_date: e.target.value }))} />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="label">{t('inspections.modal.assetNo')}</label>
-                <input className="input" value={form.asset_no}
-                  onChange={e => setForm(f => ({ ...f, asset_no: e.target.value }))}
-                  placeholder={t('inspections.form.assetPlaceholder')} />
-              </div>
-              {!isTrainingType(form.inspection_type) && (
-                <div>
-                  <label className="label">{t('inspections.modal.severity')}</label>
-                  <select className="input" value={form.severity || 'Medium'}
-                    onChange={e => setForm(f => ({ ...f, severity: e.target.value }))}>
-                    {SEVERITIES.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </div>
-              )}
-              {isTrainingType(form.inspection_type) && (
-                <div>
-                  <label className="label">{t('inspections.modal.tyreSerial')}</label>
-                  <input className="input" value={form.tyre_serial}
-                    onChange={e => setForm(f => ({ ...f, tyre_serial: e.target.value }))}
-                    placeholder={t('inspections.modal.serialPlaceholder')} />
-                </div>
-              )}
-            </div>
-
-            {/* Tyre diagram - inspections only */}
-            {!isObservationType(form.inspection_type) && !isTrainingType(form.inspection_type) && (
-              <div>
-                <label className="label">{t('inspections.modal.vehicleType')}</label>
-                <select className="input mb-3" value={form.vehicle_type || ''}
-                  onChange={e => { setForm(f => ({ ...f, vehicle_type: e.target.value, tyre_conditions: {} })); setSelectedTyre(null) }}>
-                  <option value="">{t('inspections.modal.selectVehicleType')}</option>
-                  {VEHICLE_TYPES.map(v => <option key={v} value={v}>{v}</option>)}
-                </select>
-
-                {form.vehicle_type && (
-                  <div className="bg-[var(--surface-2)] rounded-xl p-4 border border-[var(--border-bright)]">
-                    <p className="text-xs text-[var(--text-secondary)] mb-3">{t('inspections.modal.clickTyre')}</p>
-                    <VehicleTyreDiagram
-                      vehicleType={form.vehicle_type}
-                      tyreData={form.tyre_conditions || {}}
-                      onTyreClick={(id) => setSelectedTyre(id === selectedTyre ? null : id)}
-                      width={180}
-                    />
-
-                    {selectedTyre && (
-                      <div className="mt-4 p-3 bg-[var(--surface-1)] rounded-lg border border-[var(--border-bright)]">
-                        <p className="text-xs font-semibold text-[var(--text-primary)] mb-2">{t('inspections.modal.tyreLabel', { id: selectedTyre })}</p>
-                        <div className="flex gap-2 flex-wrap mb-2">
-                          {RISK_LEVELS.map(r => (
-                            <button
-                              key={r}
-                              type="button"
-                              onClick={() => setForm(f => ({
-                                ...f,
-                                tyre_conditions: {
-                                  ...f.tyre_conditions,
-                                  [selectedTyre]: { ...(f.tyre_conditions?.[selectedTyre] ?? {}), risk: r },
-                                },
-                              }))}
-                              className={`text-xs px-2.5 py-1 rounded border capitalize transition-all ${
-                                (form.tyre_conditions?.[selectedTyre]?.risk ?? 'none') === r
-                                  ? r === 'good'     ? 'bg-green-600 border-green-500 text-white'
-                                  : r === 'warning'  ? 'bg-yellow-600 border-yellow-500 text-white'
-                                  : r === 'critical' ? 'bg-red-600 border-red-500 text-white'
-                                  :                    'bg-gray-600 border-gray-500 text-[var(--text-primary)]'
-                                  : 'bg-[var(--surface-2)] border-[var(--border-bright)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                              }`}
-                            >
-                              {r === 'none' ? t('inspections.modal.noData') : r}
-                            </button>
-                          ))}
-                        </div>
-                        <input
-                          type="number"
-                          className="input text-xs py-1"
-                          placeholder={t('inspections.modal.pressurePlaceholder')}
-                          value={form.tyre_conditions?.[selectedTyre]?.pressure ?? ''}
-                          onChange={e => setForm(f => ({
-                            ...f,
-                            tyre_conditions: {
-                              ...f.tyre_conditions,
-                              [selectedTyre]: { ...(f.tyre_conditions?.[selectedTyre] ?? {}), pressure: e.target.value },
-                            },
-                          }))}
-                        />
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {isTrainingType(form.inspection_type) ? (
-              <div>
-                <label className="label">{t('inspections.modal.attendees')}</label>
-                <input className="input" value={form.attendees || ''}
-                  onChange={e => setForm(f => ({ ...f, attendees: e.target.value }))}
-                  placeholder={t('inspections.modal.attendeesPlaceholder')} />
-              </div>
-            ) : (
-              <div>
-                <label className="label">{t('inspections.modal.inspectorObserver')}</label>
-                <input className="input" value={form.inspector}
-                  onChange={e => setForm(f => ({ ...f, inspector: e.target.value }))}
-                  placeholder={t('inspections.modal.namePlaceholder')} />
-              </div>
-            )}
-
-            <div>
-              <label className="label">{isTrainingType(form.inspection_type) ? t('inspections.modal.trainingContent') : t('inspections.modal.findings')}</label>
-              <textarea className="input h-20 resize-none" value={form.findings}
-                onChange={e => setForm(f => ({ ...f, findings: e.target.value }))}
-                placeholder={isTrainingType(form.inspection_type) ? t('inspections.modal.topicsPlaceholder') : t('inspections.modal.findingsPlaceholder')} />
-            </div>
-            <div>
-              <label className="label">{t('inspections.modal.notes')}</label>
-              <textarea className="input h-16 resize-none" value={form.notes}
-                onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-                placeholder={t('inspections.modal.notesPlaceholder')} />
-            </div>
-
-            {/* Photo upload */}
-            <div>
-              <label className="label">{t('inspections.modal.photo')}</label>
-              <div className="flex items-center gap-3">
-                <button type="button"
-                  onClick={() => fileRef.current?.click()}
-                  className="btn-secondary text-sm flex items-center gap-2 px-3 py-2">
-                  <Camera size={14} /> {form.photo_data ? t('inspections.modal.changePhoto') : t('inspections.modal.uploadPhoto')}
-                </button>
-                {form.photo_data && (
-                  <button type="button" onClick={() => setForm(f => ({ ...f, photo_data: null }))}
-                    className="text-xs text-red-400 hover:text-red-300">{t('inspections.modal.remove')}</button>
-                )}
-                <input ref={fileRef} type="file" accept="image/*" className="hidden"
-                  onChange={handlePhotoChange} />
-              </div>
-              {form.photo_data && (
-                <img src={form.photo_data} alt="Attached" className="mt-2 rounded-lg max-h-48 border border-[var(--border-bright)] object-cover" />
-              )}
-            </div>
-
-            {form.status === 'Done' && (
-              <div>
-                <label className="label">{t('inspections.modal.completedDate')}</label>
-                <input type="date" className="input" value={form.completed_date || ''}
-                  onChange={e => setForm(f => ({ ...f, completed_date: e.target.value }))} />
-              </div>
-            )}
-          </fieldset>
-          {saveError && (
-            <div className="mt-4 p-3 rounded-lg bg-red-900/30 border border-red-700 text-red-300 text-sm">
-              {saveError}
-            </div>
-          )}
-          <div className="flex gap-3 mt-4">
-            <button onClick={() => { setForm(null); setSaveError(null) }} className="btn-secondary flex-1">{t('common.cancel')}</button>
-            <button onClick={save}
-              disabled={wfLocked || saving || !form.title?.trim() || !form.site?.trim() || !form.scheduled_date}
-              title={wfLocked ? 'Locked, in approval' : undefined}
-              className="btn-primary flex-1 disabled:opacity-50">
-              {saving ? t('common.saving') : form.id ? t('inspections.modal.saveChanges') : t('common.add')}
-            </button>
-          </div>
-        </Modal>
+        <InspectionFormModal
+          form={form}
+          setForm={setForm}
+          sites={sites}
+          flagMap={flagMap}
+          selectedTyre={selectedTyre}
+          setSelectedTyre={setSelectedTyre}
+          wfLocked={wfLocked}
+          setWfLocked={setWfLocked}
+          saving={saving}
+          saveError={saveError}
+          onSave={save}
+          onClose={() => { setForm(null); setSaveError(null) }}
+          fileRef={fileRef}
+          onPhotoChange={handlePhotoChange}
+        />
       )}
 
       {/* Raise Corrective Action modal */}
@@ -3914,37 +1997,48 @@ export default function Inspections() {
 
       {/* Delete confirm */}
       {deleteId && (
-        <Modal onClose={() => setDeleteId(null)}>
-          <p className="text-[var(--text-primary)] font-semibold mb-2">{t('inspections.deleteModal.title')}</p>
-          <p className="text-[var(--text-secondary)] text-sm mb-5">{t('inspections.deleteModal.warning')}</p>
-          <div className="flex gap-3">
-            <button onClick={() => setDeleteId(null)} className="btn-secondary flex-1">{t('common.cancel')}</button>
-            <button onClick={confirmDelete} className="flex-1 px-4 py-2 rounded-lg bg-red-600 text-white font-medium hover:bg-red-700">{t('common.delete')}</button>
-          </div>
-        </Modal>
+        <SharedModal
+          open
+          size="sm"
+          onClose={() => setDeleteId(null)}
+          title={t('inspections.deleteModal.title')}
+          footer={(
+            <div className="flex gap-3 w-full">
+              <button type="button" onClick={() => setDeleteId(null)} className="btn-secondary flex-1 min-h-[44px]">{t('common.cancel')}</button>
+              <button type="button" onClick={confirmDelete} className="flex-1 min-h-[44px] px-4 py-2 rounded-lg bg-red-600 text-white font-medium hover:bg-red-700">{t('common.delete')}</button>
+            </div>
+          )}
+        >
+          <p className="text-[var(--text-secondary)] text-sm">{t('inspections.deleteModal.warning')}</p>
+        </SharedModal>
       )}
 
       {/* Bulk delete confirm (Admin only) */}
       {bulkDeleteOpen && (
-        <Modal onClose={() => { if (!bulkBusy) { setBulkDeleteOpen(false); setBulkError('') } }}>
-          <div className="flex gap-3 mb-4">
-            <AlertTriangle size={20} className="text-red-400 shrink-0 mt-0.5" />
-            <div>
-              <p className="text-[var(--text-primary)] font-semibold">Delete {selectedIds.size} record{selectedIds.size !== 1 ? 's' : ''}?</p>
-              <p className="text-[var(--text-secondary)] text-sm mt-1">This permanently removes the selected inspection records. This cannot be undone.</p>
+        <SharedModal
+          open
+          size="sm"
+          onClose={() => { if (!bulkBusy) { setBulkDeleteOpen(false); setBulkError('') } }}
+          closeOnBackdrop={!bulkBusy}
+          title={`Delete ${selectedIds.size} record${selectedIds.size !== 1 ? 's' : ''}?`}
+          footer={(
+            <div className="flex gap-3 w-full">
+              <button type="button" onClick={() => { setBulkDeleteOpen(false); setBulkError('') }} disabled={bulkBusy} className="btn-secondary flex-1 min-h-[44px]">Cancel</button>
+              <button type="button" onClick={confirmBulkDelete} disabled={bulkBusy}
+                className="flex-1 min-h-[44px] flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-red-600 text-white font-medium hover:bg-red-700 disabled:opacity-50">
+                <Trash2 size={14} aria-hidden /> {bulkBusy ? 'Deleting...' : `Delete ${selectedIds.size}`}
+              </button>
             </div>
+          )}
+        >
+          <div className="flex gap-3">
+            <AlertTriangle size={20} className="text-red-500 shrink-0 mt-0.5" aria-hidden />
+            <p className="text-[var(--text-secondary)] text-sm">This permanently removes the selected inspection records. This cannot be undone.</p>
           </div>
           {bulkError && (
-            <p className="text-sm text-red-300 bg-red-900/30 border border-red-700 rounded-lg p-2.5 mb-4">{bulkError}</p>
+            <p role="alert" className="text-sm mt-4 rounded-lg p-2.5 border" style={{ background: 'rgba(220,38,38,0.08)', borderColor: 'rgba(220,38,38,0.4)', color: '#dc2626' }}>{bulkError}</p>
           )}
-          <div className="flex gap-3">
-            <button onClick={() => { setBulkDeleteOpen(false); setBulkError('') }} disabled={bulkBusy} className="btn-secondary flex-1">Cancel</button>
-            <button onClick={confirmBulkDelete} disabled={bulkBusy}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-red-600 text-white font-medium hover:bg-red-700 disabled:opacity-50">
-              <Trash2 size={14} /> {bulkBusy ? 'Deleting...' : `Delete ${selectedIds.size}`}
-            </button>
-          </div>
-        </Modal>
+        </SharedModal>
       )}
 
       {/* Offscreen live diagram for row PDF export (captured as SVG) */}
@@ -3979,201 +2073,6 @@ export default function Inspections() {
           />
         </div>
       )}
-    </div>
-  )
-}
-
-function PositionSheet({ pos, posIdx, total, isLast, unfilledCount, allFilled, lang, onUpdate, onNext, onPrev, onClose }) {
-  const { t } = useLanguage()
-  const L = CHECKLIST_LABELS[lang]
-  const isPuncture = pos.condition === 'Puncture'
-  const showPunctureAlert = isPuncture
-
-  function handleConditionSelect(cond) {
-    onUpdate('condition', cond)
-    if (cond === 'Puncture' || cond === 'Damage') {
-      vibrate([100, 50, 100, 50, 200]) // double buzz for critical
-    } else {
-      vibrate(40) // light tap for good/wear
-    }
-  }
-
-  const nextLabel = isLast
-    ? allFilled ? t('inspections.position.allDone') : t('inspections.position.fillMore', { count: unfilledCount })
-    : t('inspections.position.next')
-  const nextBg = isLast && allFilled ? '#166534' : '#16a34a'
-
-  return (
-    <div className="fixed inset-0 z-50" style={{ touchAction: 'none' }}>
-      <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={onClose} />
-      <div
-        className="absolute bottom-0 left-0 right-0 rounded-t-3xl"
-        style={{
-          background: '#ffffff',
-          boxShadow: '0 -8px 40px rgba(0,0,0,0.18)',
-          paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))',
-        }}
-      >
-        {/* drag handle */}
-        <div className="flex justify-center pt-3 pb-1">
-          <div className="w-10 h-1.5 rounded-full" style={{ background: '#e5e7eb' }} />
-        </div>
-
-        <div className="px-5 pt-2">
-          {/* header */}
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <span
-                className="text-base font-mono font-bold px-3 py-1.5 rounded-xl"
-                style={{
-                  background: isPuncture ? '#fef2f2' : '#f0fdf4',
-                  color: isPuncture ? '#991b1b' : '#166534',
-                  border: `1.5px solid ${isPuncture ? '#fca5a5' : '#86efac'}`,
-                }}
-              >
-                {pos.label || pos.position}
-              </span>
-              <span className="text-sm font-medium" style={{ color: '#9ca3af' }}>
-                {posIdx + 1} / {total}
-                {unfilledCount > 0 && <span className="ml-2 text-xs" style={{ color: '#d97706' }}>{t('inspections.position.unfilled', { count: unfilledCount })}</span>}
-              </span>
-            </div>
-            <button
-              onClick={onClose}
-              className="w-8 h-8 flex items-center justify-center rounded-full"
-              style={{ background: '#f3f4f6', color: '#6b7280' }}
-            >
-              <X size={15} />
-            </button>
-          </div>
-
-          {/* puncture alert banner */}
-          {showPunctureAlert && (
-            <div className="mb-3 px-3 py-2.5 rounded-xl flex items-center gap-2 text-sm font-semibold"
-              style={{ background: '#fef2f2', border: '1.5px solid #fca5a5', color: '#991b1b' }}>
-              {t('inspections.position.punctureAlert')}
-            </div>
-          )}
-
-          {/* condition */}
-          <p className="text-[11px] font-bold uppercase tracking-widest mb-2.5" style={{ color: '#9ca3af' }}>
-            {L.condition}
-          </p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
-            {[
-              { cond: 'Good',     emoji: '✅', activeBg: '#f0fdf4', activeBorder: '#22c55e', activeText: '#166534', label: L.good     },
-              { cond: 'Wear',     emoji: '⚠️', activeBg: '#fefce8', activeBorder: '#eab308', activeText: '#854d0e', label: L.wear     },
-              { cond: 'Damage',   emoji: '❌', activeBg: '#fef2f2', activeBorder: '#ef4444', activeText: '#991b1b', label: L.damage   },
-              { cond: 'Puncture', emoji: '🔴', activeBg: '#fff1f2', activeBorder: '#dc2626', activeText: '#7f1d1d', label: L.puncture },
-            ].map(({ cond, emoji, activeBg, activeBorder, activeText, label }) => {
-              const on = pos.condition === cond
-              return (
-                <button
-                  key={cond}
-                  onClick={() => handleConditionSelect(cond)}
-                  className="py-3 rounded-2xl flex flex-col items-center gap-1.5 transition-all active:scale-95"
-                  style={{
-                    background:   on ? activeBg : '#f9fafb',
-                    border:       `2px solid ${on ? activeBorder : '#e5e7eb'}`,
-                    color:        on ? activeText : '#9ca3af',
-                  }}
-                >
-                  <span className="text-xl leading-none">{emoji}</span>
-                  <span className="text-[10px] font-bold">{label}</span>
-                </button>
-              )
-            })}
-          </div>
-
-          {/* psi */}
-          <div className="mb-5">
-            <label className="text-[11px] font-bold uppercase tracking-widest mb-2 block" style={{ color: '#9ca3af' }}>
-              {L.pressure}
-            </label>
-            <input
-              type="number"
-              inputMode="numeric"
-              placeholder="PSI"
-              value={pos.pressure}
-              onChange={e => onUpdate('pressure', e.target.value)}
-              className="w-full px-3 py-3 rounded-xl text-sm font-semibold"
-              style={{ background: '#f9fafb', border: '1.5px solid #e5e7eb', color: '#111827', outline: 'none' }}
-              onFocus={e => { e.target.style.borderColor = '#22c55e'; e.target.style.boxShadow = '0 0 0 3px rgba(34,197,94,0.12)' }}
-              onBlur={e  => { e.target.style.borderColor = '#e5e7eb'; e.target.style.boxShadow = 'none' }}
-            />
-          </div>
-          {/* tread disabled - re-enable when data collection is ready
-          <div className="mb-5">
-            <label className="text-[11px] font-bold uppercase tracking-widest mb-2 block" style={{ color: '#9ca3af' }}>
-              {L.tread}
-            </label>
-            <input type="number" inputMode="decimal" placeholder="mm" value={pos.treadDepth}
-              onChange={e => onUpdate('treadDepth', e.target.value)}
-              className="w-full px-3 py-3 rounded-xl text-sm font-semibold"
-              style={{ background: '#f9fafb', border: '1.5px solid #e5e7eb', color: '#111827', outline: 'none' }}
-              onFocus={e => { e.target.style.borderColor = '#22c55e'; e.target.style.boxShadow = '0 0 0 3px rgba(34,197,94,0.12)' }}
-              onBlur={e  => { e.target.style.borderColor = '#e5e7eb'; e.target.style.boxShadow = 'none' }}
-            />
-          </div> */}
-
-          {/* navigation */}
-          <div className="flex gap-2.5">
-            {posIdx > 0 && (
-              <button
-                onClick={onPrev}
-                className="flex-1 py-3 rounded-2xl text-sm font-bold"
-                style={{ background: '#f3f4f6', color: '#374151', border: '1.5px solid #e5e7eb' }}
-              >
-                {t('inspections.position.prev')}
-              </button>
-            )}
-            <button
-              onClick={onNext}
-              className="flex-[2] py-3 rounded-2xl text-sm font-bold text-[var(--text-primary)]"
-              style={{ background: nextBg }}
-            >
-              {nextLabel}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function RaiseActionModal({ row, onConfirm, onClose }) {
-  const { t } = useLanguage()
-  const [title, setTitle] = useState(`Action: ${row.title}`)
-  return (
-    <Modal onClose={onClose}>
-      <h3 className="text-lg font-bold text-[var(--text-primary)] mb-4">{t('inspections.raiseModal.title')}</h3>
-      <p className="text-[var(--text-secondary)] text-sm mb-4">
-        {t('inspections.raiseModal.desc')}
-      </p>
-      <div className="mb-4">
-        <label className="label">{t('inspections.raiseModal.actionTitle')}</label>
-        <input className="input" value={title} onChange={e => setTitle(e.target.value)} />
-      </div>
-      <div className="bg-[var(--surface-2)] rounded-lg p-3 text-xs text-[var(--text-secondary)] mb-4 space-y-1">
-        <p><span className="text-[var(--text-muted)]">{t('inspections.raiseModal.site')}</span> {row.site}</p>
-        <p><span className="text-[var(--text-muted)]">{t('inspections.raiseModal.asset')}</span> {row.asset_no || '-'}</p>
-        <p><span className="text-[var(--text-muted)]">{t('inspections.raiseModal.priority')}</span> {row.severity === 'Critical' ? 'Critical' : row.severity === 'High' ? 'High' : 'Medium'}</p>
-        {row.findings && <p><span className="text-[var(--text-muted)]">{t('inspections.raiseModal.findings')}</span> {row.findings.slice(0, 100)}{row.findings.length > 100 ? '...' : ''}</p>}
-      </div>
-      <div className="flex gap-3">
-        <button onClick={onClose} className="btn-secondary flex-1">{t('common.cancel')}</button>
-        <button onClick={() => onConfirm(title)} className="btn-primary flex-1">{t('inspections.raiseModal.raiseAction')}</button>
-      </div>
-    </Modal>
-  )
-}
-
-function Modal({ children, onClose }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
-      <div className="bg-[var(--surface-1)] border border-[var(--border-bright)] rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6 shadow-2xl">
-        {children}
-      </div>
     </div>
   )
 }

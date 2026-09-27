@@ -209,13 +209,16 @@ describe('the long tyre registers are actually paged', () => {
       file: 'pages/Inspections.jsx',
       what: 'the inspection register',
       // 435 inspections today and growing with every sheet the field records.
+      // CONTRACT MOVED, deliberately: the register is now an EnterpriseTable,
+      // which pages (and sorts) the FULL filtered set itself. It must be handed
+      // `filtered`, never a page, and it must page rather than render all rows.
       requires: [
-        'const pager = usePagedRows(filtered)',
-        'const r = pager.pageRows[virtualRow.index]',
-        '<TablePagination {...pager} />',
+        '<EnterpriseTable',
+        'data={filtered}',
+        'initialPageSize={50}',
       ],
-      // The virtualizer must draw the PAGE, not the whole filtered set.
-      forbids: 'const r = filtered[virtualRow.index]',
+      // A whole-set render of the register would be the regression.
+      forbids: 'filtered.map((r) => (\n                  <div',
     },
     {
       file: 'pages/SerialTracker.jsx',

@@ -86,8 +86,8 @@ const PAGES_DIR = resolve(process.cwd(), 'src/pages')
  * all six of its tables when it was deepened (one step of the 190 -> 189 drop).
  */
 const BASELINE = {
-  rawTable: 189,
-  rawOverlay: 103,
+  rawTable: 2,
+  rawOverlay: 9,
 }
 
 function readAllPages() {

@@ -55,6 +55,41 @@ batching stops them being started at all.
 
 ---
 
+# ⚑ SESSION 2026-09-26/27 (part 8) — ~150 PAGES/COMPONENTS DEEPENED, CONSOLE KIT CONSOLIDATED, 13 MIGRATIONS APPLIED LIVE.
+Design ratchet rawTable 189 -> 2, rawOverlay 103 -> 9. Full suite 959 files / 12,071 tests green (only checklistIcons,
+environmental). ~10 parallel agents throughout; each batch committed by pathspec, one push.
+- **CANONICAL, do not duplicate:** console kit = `src/console/pages/shared/pageKit.jsx` (useUrlTab, useUrlParam, usePaged,
+  Pager, Drawer, AttentionList ready/quiet/unknown, PageHeader, TabBar, Collapsible, ConsoleLink, time helpers) +
+  `shared/ExportButtons.jsx`; six duplicate kits DELETED. Sorting = `src/lib/consoleTable.js` (sortRows/searchRows/
+  compareValues/isBlank/useTableSort); `consoleTableSort.js` + `useTableSort.js` DELETED.
+- **Page recipe (every deepened page):** pure engine `src/lib/<name>Analytics.js` (injectable now) + test; EnterpriseTable;
+  shared Modal (no dismissal mid-save/delete); KPI strip; filters; exports via reportFileName; honest N/A; failed read =
+  error+Retry, NEVER an empty list or 0; per-currency money, never SAR+AED+EGP summed.
+- **EnterpriseTable** now clamps pageIndex when data shrinks (in render, no blank frame) and resets to page 1 on its own
+  search/column filters or a `resetPageKey` prop; sorting still keeps the page.
+- **Services:** `toServiceError(err, fallback)` + `fetchAllOrThrow(pageFn, opts)` in `_client.js`; no raw `throw error` in
+  src/lib/api; id tiebreak on every paged read (workOrders/accidents/engineeringKpi/dashboard/inspections/tyreRecords/
+  assetUtilization/stock). `profiles` is 725 rows: rowCapGuard now polices it + domain_events/notifications/access_audit/
+  inspection_audit_log/workflow_notifications/odometer_logs/cpk_asset_meter.
+- **Real bugs fixed:** Workshop Live dropped all open KSA jobs (legacy `Closed` 57,228 rows not excluded); Expense Trends
+  missed ALL Egypt (40,680 lines, EGP 81.7M - read text txn_date, now event_date); login audit rows refused since 2026-07-12
+  (audit_log_v2.org_id default); PerformanceBenchmark fabricated 95% compliance / 0 CPK; Pressure page read a NULL column;
+  Reports country filter offered values that never match; Requisitions summed unit costs; GatePass UTC day boundaries.
+- **Migrations APPLIED LIVE:** 20260926100000 audit_log org default, 101000 site option covering idx, 110000 upload coverage
+  perf (1.2-1.9 s -> 0.3 s), 120000 `log_client_error` RPC (11th anon DEFINER fn - intentional allowlist addition),
+  130000 console mobile device versions; 20260927090000 expense trend event_date, 091000 daily job cards narrow
+  (477 ms/13 s cold -> 6 ms), 092000 driver list access once (2.0 s -> 17 ms), 093000 cost CPK force_custom_plan,
+  100000 cost CPK single scan (1.7 -> 1.25 s, 74/74 byte-identical), 110000/110100 cost per m3 covering idx + station
+  hash join (KSA 1.6-4.5 s -> 0.34-0.68 s), 110200 maintenance snapshot index-only (1.4-8.8 s -> 0.33-0.44 s).
+- **Mobile (code only, NO build):** i18nKeyCoverage test, 99 icon buttons labelled, PhotoCapture translated, sanitised
+  server errors. Still unbuilt.
+- **OPEN:** edge fns send-email / generate-embedding / send-scheduled-reports changed in repo, deploy+diff in progress;
+  `_cost_dim` has no unique tiebreak (tie order plan-dependent); get_cost_per_m3_trend still uses coalesce(approved,m3)
+  vs approved-only headline; 9 remaining overlays are deliberate side drawers pinned by dialogFit or kiosk/dead pages;
+  UserManagement.jsx + AiAnalytics.jsx dead; vehicle360 photo storage path can collide across countries.
+
+---
+
 # ⚑ SESSION 2026-09-26 (part 7) — 6 MORE PAGES DEEPENED. No migration. Design ratchet rawTable 191 -> 189.
 - TenantHealth (`tenantHealthAnalytics.js`, formatUSD(null) now N/A), AccidentCases (case register; accidentCaseAnalytics
   extended PRESENTATION-ONLY, SQL mirror 17 untouched), EventStream (`eventStreamAnalytics.js`; charts over newest-500

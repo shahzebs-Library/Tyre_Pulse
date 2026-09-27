@@ -13,7 +13,7 @@
  * function (org not migrated), an empty result or any error becomes an empty
  * array so the page renders an honest empty state instead of throwing.
  */
-import { supabase } from './_client'
+import { supabase, toServiceError } from './_client'
 
 /**
  * Fetch per-size, per-brand price + CPK rows for the value comparison.
@@ -31,7 +31,7 @@ export async function getBrandSizeCpk({ country, from, to, strict = false } = {}
       p_to: to || null,
     })
     if (error) {
-      if (strict) throw error
+      if (strict) throw toServiceError(error)
       return []
     }
     if (!Array.isArray(data)) {
@@ -40,7 +40,7 @@ export async function getBrandSizeCpk({ country, from, to, strict = false } = {}
     }
     return data
   } catch (error) {
-    if (strict) throw error
+    if (strict) throw toServiceError(error)
     return []
   }
 }

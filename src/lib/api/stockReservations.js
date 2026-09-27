@@ -1,4 +1,4 @@
-import { supabase, unwrap, isMissingRelation } from './_client'
+import { supabase, unwrap, isMissingRelation, toServiceError } from './_client'
 
 const text = (v, max = 200) => String(v ?? '').trim().slice(0, max)
 
@@ -34,7 +34,7 @@ export async function reserveWorkOrderStock({ workOrderId, lines, idempotencyKey
     return { ok: true, data }
   } catch (error) {
     if (isMissingRelation(error)) return { ok: false, reason: 'not_provisioned' }
-    throw error
+    throw toServiceError(error)
   }
 }
 
@@ -49,6 +49,6 @@ export async function releaseWorkOrderStock({ workOrderId, reason } = {}) {
     return { ok: true, data }
   } catch (error) {
     if (isMissingRelation(error)) return { ok: false, reason: 'not_provisioned' }
-    throw error
+    throw toServiceError(error)
   }
 }

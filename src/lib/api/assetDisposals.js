@@ -13,7 +13,8 @@
  * table/RPC is not provisioned, so an org that has not run the migration sees
  * an empty state rather than a thrown page.
  */
-import { supabase, isMissingRelation } from './_client'
+import { supabase, isMissingRelation, toServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 
 /**
  * Columns written back by the editor. Deliberately excludes organisation_id
@@ -236,13 +237,13 @@ export async function saveReplacementBenchmark(row) {
   const { data, error } = row?.id
     ? await supabase.from('asset_replacement_costs').update(payload).eq('id', row.id).select('id').single()
     : await supabase.from('asset_replacement_costs').insert([payload]).select('id').single()
-  if (error) throw error
+  if (error) throw toServiceError(error)
   return data
 }
 
 export async function deleteReplacementBenchmark(id) {
   const { error } = await supabase.from('asset_replacement_costs').delete().eq('id', id)
-  if (error) throw error
+  if (error) throw toServiceError(error)
   return true
 }
 
@@ -254,7 +255,7 @@ export async function upsertDisposal(row) {
     .upsert([payload], { onConflict: 'organisation_id,country,asset_no' })
     .select('id')
     .single()
-  if (error) throw error
+  if (error) throw toServiceError(error)
   return data
 }
 
@@ -268,13 +269,13 @@ export async function updateDisposal(id, patch) {
     .eq('id', id)
     .select('id')
     .single()
-  if (error) throw error
+  if (error) throw toServiceError(error)
   return data
 }
 
 export async function deleteDisposal(id) {
   const { error } = await supabase.from('asset_disposals').delete().eq('id', id)
-  if (error) throw error
+  if (error) throw toServiceError(error)
   return true
 }
 
@@ -314,7 +315,7 @@ export async function setDisposalDecision(id, { status, decision_note, disposal_
     .eq('id', id)
     .select('id')
     .single()
-  if (error) throw error
+  if (error) throw toServiceError(error)
   return data
 }
 
@@ -352,13 +353,13 @@ export async function importDisposalRows(rows, onProgress) {
           .select('id')
         if (error) {
           failed += batch.length
-          if (errors.length < 5) errors.push(error.message || String(error))
+          if (errors.length < 5) errors.push(toUserMessage(error))
         } else {
           written += (data || []).length
         }
       } catch (e) {
         failed += batch.length
-        if (errors.length < 5) errors.push(e?.message || String(e))
+        if (errors.length < 5) errors.push(toUserMessage(e))
       }
       done += batch.length
       if (onProgress) onProgress({ done, total: clean.length, written, failed })

@@ -6,7 +6,7 @@
  * the boundary. `listContracts` degrades gracefully when the table is absent
  * so the page can prompt for the migration instead of erroring.
  */
-import { supabase, unwrap, applyCountry } from './_client'
+import { supabase, unwrap, applyCountry, toServiceError } from './_client'
 
 const COLS =
   'id,organisation_id,country,title,vendor,contract_type,start_date,end_date,' +
@@ -22,9 +22,9 @@ export const CONTRACT_TYPES = ['supply', 'service', 'maintenance', 'lease', 'ret
  */
 export function isMissingContractsTable(error) {
   if (!error) return false
-  const code = String(error.code || '')
+  const code = String(error.code || error.cause?.code || '')
   if (code === '42P01' || code === 'PGRST205') return true
-  const msg = String(error.message || '').toLowerCase()
+  const msg = String(error?.cause?.message ?? error?.message ?? '').toLowerCase()
   return (
     /relation .* does not exist/.test(msg) ||
     (msg.includes('does not exist') && msg.includes('relation')) ||
@@ -44,7 +44,7 @@ export async function listContracts({ status, country, limit = 500 } = {}) {
   const { data, error } = await q.order('created_at', { ascending: false }).limit(limit)
   if (error) {
     if (isMissingContractsTable(error)) return { rows: [], missing: true }
-    throw error
+    throw toServiceError(error)
   }
   return { rows: data || [], missing: false }
 }

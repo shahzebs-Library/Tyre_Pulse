@@ -8,7 +8,7 @@
  * `.eq('country', X)` (NOT null-safe) to preserve the page's prior behaviour
  * exactly. Explicit column list on the corpus (no SELECT *). Additive only.
  */
-import { supabase, fetchAllPages } from './_client'
+import { supabase, fetchAllPages, toServiceError, isNotProvisioned } from './_client'
 import { escapeLike } from '../searchFilter'
 
 /** Shared return / write-off marks (serial + mark_type). */
@@ -66,7 +66,7 @@ export async function scrapTyreBySerial(serial, { reason = null, country = null 
     p_reason: reason ? String(reason).trim() : null,
     p_country: country || null,
   })
-  if (error) throw error
+  if (error) throw toServiceError(error)
   return { updated: Number(data?.updated ?? 0) }
 }
 
@@ -86,7 +86,7 @@ export async function unscrapTyreBySerial(serial) {
   const s = String(serial || '').trim()
   if (!s) throw new Error('Serial number is required.')
   const { data, error } = await supabase.rpc('unscrap_tyre_by_serial', { p_serial: s })
-  if (error) throw error
+  if (error) throw toServiceError(error)
   return { ok: true, restoredExactly: data?.restored_exactly === true }
 }
 
@@ -102,7 +102,7 @@ export async function updateScrapReason(serial, reason) {
     p_serial: s,
     p_reason: reason ? String(reason).trim() : null,
   })
-  if (error) throw error
+  if (error) throw toServiceError(error)
   return { ok: true }
 }
 
@@ -112,7 +112,7 @@ export async function getScrapMark(serial) {
   if (!s) return null
   const { data, error } = await supabase.from('tyre_status_marks')
     .select('serial,reason,created_at').eq('serial', s).eq('mark_type', 'scrap').maybeSingle()
-  if (error && error.code !== 'PGRST116') throw error
+  if (error && error.code !== 'PGRST116') throw toServiceError(error)
   return data || null
 }
 
@@ -138,12 +138,12 @@ export async function listScrappedTyres({ search, country, limit } = {}) {
     p_limit: limit || 500,
   })
   if (error) {
-    const m = String(error.message || error.code || '').toLowerCase()
+    const m = String(error?.cause?.message || error?.message || error?.code || error?.cause?.code || '').toLowerCase()
     // pre-V383 backend: degrade to an empty register rather than an error page
-    if (m.includes('does not exist') || m.includes('could not find') || m.includes('schema cache')) {
+    if (isNotProvisioned(error) || m.includes('does not exist') || m.includes('could not find') || m.includes('schema cache')) {
       return { ok: false, rows: [], total: 0, marked_total: 0, unattributed_total: 0 }
     }
-    throw error
+    throw toServiceError(error)
   }
   if (!data || data.ok !== true) return { ok: false, rows: [], total: 0, marked_total: 0, unattributed_total: 0 }
   return { ...data, rows: Array.isArray(data.rows) ? data.rows : [] }
@@ -154,7 +154,7 @@ export async function listScrapMarks() {
   const { data, error } = await supabase.from('tyre_status_marks')
     .select('serial,reason,created_at').eq('mark_type', 'scrap')
     .order('created_at', { ascending: false })
-  if (error) throw error
+  if (error) throw toServiceError(error)
   return data || []
 }
 
@@ -178,7 +178,7 @@ export async function findTyreBySerial(serial) {
     .ilike('serial_no', escapeLike(s))
     .order('issue_date', { ascending: false, nullsFirst: false })
     .limit(1)
-  if (error) throw error
+  if (error) throw toServiceError(error)
   return (data && data[0]) || null
 }
 

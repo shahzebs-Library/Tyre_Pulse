@@ -13,12 +13,12 @@
  * a read error contributes 0 rather than throwing, so one absent table never
  * sinks the whole split.
  */
-import { supabase, applyCountry, fetchAllPages, fetchAllRpcPages } from './_client'
+import { supabase, applyCountry, fetchAllPages, fetchAllRpcPages, toServiceError } from './_client'
 
 /** True when a Supabase error means the table/relation is not deployed yet. */
 function isMissingRelation(err) {
   const code = err?.code || err?.cause?.code
-  const m = String(err?.message || err?.cause?.message || '').toLowerCase()
+  const m = String((err?.cause?.message ?? err?.message) || '').toLowerCase()
   return (
     code === '42P01' || code === 'PGRST205' || code === 'PGRST202' ||
     m.includes('does not exist') ||
@@ -189,13 +189,13 @@ export async function loadCostSplit({ country, now, from, to, site } = {}) {
       if (siteEq) q = q.eq('site', siteEq)
       return q
     })
-    if (error) throw error
+    if (error) throw toServiceError(error)
     for (const r of data || []) {
       const qty = r?.qty == null || r.qty === '' ? 1 : num(r.qty)
       add(tyreByMonth, monthKeyOf(r?.issue_date), num(r?.cost_per_tyre) * (qty || 1))
     }
   } catch (err) {
-    if (!isMissingRelation(err)) throw err
+    if (!isMissingRelation(err)) throw toServiceError(err)
   }
 
   // MAINTENANCE spend part 1: pm_service_records total_cost by service_date.
@@ -207,12 +207,12 @@ export async function loadCostSplit({ country, now, from, to, site } = {}) {
       if (siteEq) q = q.eq('site', siteEq)
       return q
     })
-    if (error) throw error
+    if (error) throw toServiceError(error)
     for (const r of data || []) {
       add(maintByMonth, monthKeyOf(r?.service_date), num(r?.total_cost))
     }
   } catch (err) {
-    if (!isMissingRelation(err)) throw err
+    if (!isMissingRelation(err)) throw toServiceError(err)
   }
 
   // MAINTENANCE spend part 2: work_orders non-tyre cost (labour + parts +
@@ -226,14 +226,14 @@ export async function loadCostSplit({ country, now, from, to, site } = {}) {
       if (siteEq) q = q.eq('site', siteEq)
       return q
     })
-    if (error) throw error
+    if (error) throw toServiceError(error)
     for (const r of data || []) {
       const maintenance = num(r?.labour_cost) + num(r?.parts_cost) +
         num(r?.lubricant_cost) + num(r?.outside_repair_cost)
       add(maintByMonth, monthKeyOf(r?.completed_at || r?.created_at), maintenance)
     }
   } catch (err) {
-    if (!isMissingRelation(err)) throw err
+    if (!isMissingRelation(err)) throw toServiceError(err)
   }
 
   const byMonth = keys.map((k) => ({ month: k, tyre: tyreByMonth[k], maintenance: maintByMonth[k] }))

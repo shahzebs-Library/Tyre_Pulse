@@ -14,12 +14,12 @@
  * Missing-relation / pre-migration states degrade to empty results (honest empty
  * states, never a raw error).
  */
-import { supabase, applyCountry, fetchAllPages } from './_client'
+import { supabase, applyCountry, fetchAllPages, toServiceError } from './_client'
 
 /** True when the failure is "table/column does not exist yet" (pre-migration). */
 function isMissingRelation(err) {
   const code = err?.code || err?.cause?.code
-  const msg = String(err?.message || err?.cause?.message || '').toLowerCase()
+  const msg = String((err?.cause?.message ?? err?.message) || '').toLowerCase()
   return (
     code === '42P01' || code === '42703' || code === 'PGRST205' || code === 'PGRST204' ||
     msg.includes('does not exist') ||
@@ -42,7 +42,7 @@ export async function getModelPricing({ country } = {}) {
     let q = supabase.from('ai_models').select('key,model_id,input_price,output_price,active')
     q = applyCountry(q, country)
     const { data, error } = await q
-    if (error) throw error
+    if (error) throw toServiceError(error)
     const map = {}
     for (const m of data || []) {
       const price = { input: num(m.input_price), output: num(m.output_price) }
@@ -52,7 +52,7 @@ export async function getModelPricing({ country } = {}) {
     return map
   } catch (err) {
     if (isMissingRelation(err)) return {}
-    throw err
+    throw toServiceError(err)
   }
 }
 
@@ -88,12 +88,12 @@ export async function readTokenLogs({ days = 30, country, limit = 50000 } = {}) 
 
   const first = await read(USAGE_COLS)
   if (!first.error) return { rows: first.data || [], truncated: !!first.truncated }
-  if (!isMissingRelation(first.error)) throw first.error
+  if (!isMissingRelation(first.error)) throw toServiceError(first.error)
   // Retry without the V236 columns so a pre-migration DB still shows usage.
   const second = await read('id,model,feature,prompt_tokens,completion_tokens,cost_usd,site,country,created_at')
   if (second.error) {
     if (isMissingRelation(second.error)) return { rows: [], truncated: false }
-    throw second.error
+    throw toServiceError(second.error)
   }
   return {
     rows: (second.data || []).map((r) => ({ ...r, status: 'success' })),
@@ -201,11 +201,11 @@ export async function listJobRuns({ days = 30, limit = 500 } = {}) {
       .gte('sent_at', since)
       .order('sent_at', { ascending: false })
       .limit(limit)
-    if (error) throw error
+    if (error) throw toServiceError(error)
     return data || []
   } catch (err) {
     if (isMissingRelation(err)) return []
-    throw err
+    throw toServiceError(err)
   }
 }
 

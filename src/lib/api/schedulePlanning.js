@@ -9,7 +9,8 @@
  * The planner surface is `src/pages/InspectionPlanner.jsx`. Do not add a second
  * scheduling screen; extend that one.
  */
-import { supabase, unwrap, fetchAllPages, isMissingRelation } from './_client'
+import { supabase, unwrap, fetchAllPages, isMissingRelation, toServiceError, ServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 
 /** Uploading more than this in one go is a sign the sheet is wrong, not big. */
 export const PLAN_INSERT_CHUNK = 200
@@ -43,7 +44,7 @@ export async function loadAdherence({ country, from, to } = {}) {
     return Array.isArray(rows) ? rows : []
   } catch (err) {
     if (isMissingRelation(err)) return []
-    throw err
+    throw toServiceError(err)
   }
 }
 
@@ -57,7 +58,7 @@ export async function loadPlanCoverage({ country, horizonDays = 30 } = {}) {
     return Array.isArray(rows) ? rows : []
   } catch (err) {
     if (isMissingRelation(err)) return []
-    throw err
+    throw toServiceError(err)
   }
 }
 
@@ -79,7 +80,7 @@ export async function loadUnplannedAssets({ country, horizonDays = 30, site, lim
     return { rows: list, total, truncated: total > list.length }
   } catch (err) {
     if (isMissingRelation(err)) return { rows: [], total: 0, truncated: false }
-    throw err
+    throw toServiceError(err)
   }
 }
 
@@ -92,7 +93,7 @@ export async function loadPlanPeople({ country } = {}) {
     .from('profiles').select(PEOPLE_COLS)
     .eq('approved', true).eq('locked', false)
     .order('full_name').order('id').range(fromRow, toRow), { max: 5000 })
-  if (result.error) throw result.error
+  if (result.error) throw toServiceError(result.error)
   const scope = scopeCountry(country)
   const rows = (result.data || []).filter(person => {
     if (!scope) return true
@@ -113,7 +114,7 @@ export async function loadPlanFleet({ country } = {}) {
     if (scope) query = query.eq('country', scope)
     return query
   }, { max: 20000 })
-  if (result.error) throw result.error
+  if (result.error) throw toServiceError(result.error)
   const rows = (result.data || []).filter(row => String(row.status || 'Active') === 'Active')
   return { rows, truncated: Boolean(result.truncated) }
 }
@@ -178,8 +179,8 @@ export async function createPlanBatch(rows, { country, profileId, planRef, onPro
     const payload = chunk.map(row => toPlanPayload(row, { country, profileId, planRef }))
     const result = await supabase.from('inspection_schedules').insert(payload).select('id')
     if (result.error) {
-      const err = new Error(result.error.message)
-      err.cause = result.error
+      // Sanitised message; the raw Postgres text stays on `.cause` only.
+      const err = new ServiceError(toUserMessage(result.error), result.error.code, result.error)
       err.inserted = inserted
       err.planRef = planRef
       throw err
@@ -220,7 +221,7 @@ export async function undoPlanBatch(planRef, { keepFulfilled = true, country } =
   for (let index = 0; index < ids.length; index += PLAN_INSERT_CHUNK) {
     const slice = ids.slice(index, index + PLAN_INSERT_CHUNK)
     const result = await supabase.from('inspection_schedules').delete().in('id', slice).select('id')
-    if (result.error) throw result.error
+    if (result.error) throw toServiceError(result.error)
     removed += (result.data || []).length
   }
   return { removed, kept: fulfilled.length, reason: fulfilled.length ? 'Plans that were already worked on were kept.' : '' }
@@ -235,7 +236,7 @@ export async function assignPlan(id, { assignedTo, inspectorName, team } = {}) {
     team: team || null,
   }
   const result = await supabase.from('inspection_schedules').update(patch).eq('id', id).select('id')
-  if (result.error) throw result.error
+  if (result.error) throw toServiceError(result.error)
   if (!Array.isArray(result.data) || result.data.length !== 1) {
     throw new Error('The change could not be confirmed. Refresh and check your access before trying again.')
   }
@@ -248,7 +249,7 @@ export async function reschedulePlan(id, scheduledDate) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(scheduledDate || ''))) throw new Error('Choose a valid date.')
   const result = await supabase.from('inspection_schedules')
     .update({ scheduled_date: scheduledDate, status: 'Scheduled' }).eq('id', id).select('id')
-  if (result.error) throw result.error
+  if (result.error) throw toServiceError(result.error)
   if (!Array.isArray(result.data) || result.data.length !== 1) {
     throw new Error('The change could not be confirmed. Refresh and check your access before trying again.')
   }

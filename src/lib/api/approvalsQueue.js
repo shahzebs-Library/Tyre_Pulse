@@ -22,12 +22,12 @@
  * a missing-relation guard so an un-provisioned table degrades to an honest
  * empty result instead of throwing. No fabricated rows — every item is real.
  */
-import { supabase, unwrap, applyCountry } from './_client'
+import { supabase, unwrap, applyCountry, toServiceError } from './_client'
 
 /** True when the failure is "table/relation does not exist yet" (pre-migration). */
 function isMissingRelation(err) {
   const code = err?.code || err?.cause?.code
-  const msg = String(err?.message || err?.cause?.message || '').toLowerCase()
+  const msg = String((err?.cause?.message ?? err?.message) || '').toLowerCase()
   return (
     code === '42P01' || code === 'PGRST205' ||
     msg.includes('does not exist') ||
@@ -39,7 +39,7 @@ function isMissingRelation(err) {
 /** True when the failure is "function not found" (RPC not provisioned). */
 function isMissingFunction(err) {
   const code = err?.code || err?.cause?.code
-  const msg = String(err?.message || err?.cause?.message || '').toLowerCase()
+  const msg = String((err?.cause?.message ?? err?.message) || '').toLowerCase()
   return code === '42883' || code === 'PGRST202' || msg.includes('could not find the function')
 }
 
@@ -68,7 +68,7 @@ export async function listAccidentClosures({ country } = {}) {
     return unwrap(await q) || []
   } catch (err) {
     if (isMissingRelation(err)) return []
-    throw err
+    throw toServiceError(err)
   }
 }
 
@@ -142,7 +142,7 @@ export async function listChecklistApprovals({ country } = {}) {
     return attachTemplateRules(rows)
   } catch (err) {
     if (isMissingRelation(err)) return []
-    throw err
+    throw toServiceError(err)
   }
 }
 
@@ -264,7 +264,7 @@ export async function listInspectionApprovals({ country } = {}) {
     return unwrap(await q) || []
   } catch (err) {
     if (isMissingRelation(err)) return []
-    throw err
+    throw toServiceError(err)
   }
 }
 
@@ -310,7 +310,7 @@ export async function countDataIntakePending({ country } = {}) {
   const countOf = async (build) => {
     try {
       const { count, error } = await build()
-      if (error) throw error
+      if (error) throw toServiceError(error)
       return count || 0
     } catch (err) {
       if (isMissingRelation(err) || isMissingFunction(err)) return 0
@@ -384,7 +384,7 @@ export async function listChecklistSignoffGaps({ country } = {}) {
     return rows.map((r) => ({ ...r, template_name: r.template_name || nameById.get(r.template_id) || null }))
   } catch (err) {
     if (isMissingRelation(err)) return []
-    throw err
+    throw toServiceError(err)
   }
 }
 

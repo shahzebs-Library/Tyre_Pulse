@@ -25,7 +25,7 @@
  * That would be a silent lie about the workspace, so 42703 is checked FIRST and
  * reported as a schema mismatch naming the column list to reconcile.
  */
-import { supabase, isMissingRelation, applyCountry, fetchAllPages } from './_client'
+import { supabase, isMissingRelation, applyCountry, fetchAllPages, toServiceError } from './_client'
 
 /**
  * The repair_requests columns this module reads.
@@ -174,13 +174,13 @@ export async function listRepairRequests({
     if (error) {
       const d = degrade(error)
       if (d) return d
-      throw error
+      throw toServiceError(error)
     }
     return { ok: true, reason: null, detail: null, rows: data || [], truncated: !!truncated }
   } catch (e) {
     const d = degrade(e)
     if (d) return d
-    throw e
+    throw toServiceError(e)
   }
 }
 
@@ -192,13 +192,13 @@ export async function getRepairRequest(id) {
     if (error) {
       const d = degrade(error)
       if (d) return { ok: false, reason: d.reason, detail: d.detail, row: null }
-      throw error
+      throw toServiceError(error)
     }
     return { ok: true, reason: null, detail: null, row: data || null }
   } catch (e) {
     const d = degrade(e)
     if (d) return { ok: false, reason: d.reason, detail: d.detail, row: null }
-    throw e
+    throw toServiceError(e)
   }
 }
 
@@ -214,7 +214,7 @@ export async function createRepairRequest(values = {}) {
   patch.status = 'submitted'
   const { data, error } = await supabase
     .from('repair_requests').insert(patch).select(COLS).single()
-  if (error) throw error
+  if (error) throw toServiceError(error)
   return data
 }
 
@@ -222,7 +222,7 @@ export async function createRepairRequest(values = {}) {
 export async function updateRepairRequest(id, patch = {}) {
   const { data, error } = await supabase
     .from('repair_requests').update(sanitize(patch)).eq('id', id).select(COLS).single()
-  if (error) throw error
+  if (error) throw toServiceError(error)
   return data
 }
 
@@ -239,7 +239,7 @@ export async function setRepairRequestStatus(id, status, { reason } = {}) {
   if (reason !== undefined) patch.rejected_reason = text(reason)
   const { data, error } = await supabase
     .from('repair_requests').update(patch).eq('id', id).select(COLS).single()
-  if (error) throw error
+  if (error) throw toServiceError(error)
   return data
 }
 
@@ -268,7 +268,7 @@ export async function convertToJobCard(id, { workOrderNo } = {}) {
           row: null,
         }
       }
-      throw error
+      throw toServiceError(error)
     }
     return { ok: true, reason: null, detail: null, row: data || null }
   } catch (e) {
@@ -281,7 +281,7 @@ export async function convertToJobCard(id, { workOrderNo } = {}) {
         row: null,
       }
     }
-    throw e
+    throw toServiceError(e)
   }
 }
 
@@ -301,12 +301,12 @@ export async function nextRfrNo({ country, site } = {}) {
     })
     if (error) {
       if (degrade(error)) return null
-      throw error
+      throw toServiceError(error)
     }
     return typeof data === 'string' ? data : (data && data.rfr_no) || null
   } catch (e) {
     if (degrade(e)) return null
-    throw e
+    throw toServiceError(e)
   }
 }
 
@@ -346,13 +346,13 @@ export async function listRfrJobCards({
     if (error) {
       const d = degrade(error)
       if (d) return d
-      throw error
+      throw toServiceError(error)
     }
     return { ok: true, reason: null, detail: null, rows: data || [], truncated: !!truncated }
   } catch (e) {
     const d = degrade(e)
     if (d) return d
-    throw e
+    throw toServiceError(e)
   }
 }
 
@@ -369,12 +369,12 @@ export async function countRfrCoverage({ country } = {}) {
       const { count, error } = await build()
       if (error) {
         if (degrade(error)) return null
-        throw error
+        throw toServiceError(error)
       }
       return typeof count === 'number' ? count : null
     } catch (e) {
       if (degrade(e)) return null
-      throw e
+      throw toServiceError(e)
     }
   }
 

@@ -8,7 +8,7 @@
  * (a personal queue, not a register) and each carries an exact server count so
  * the page can say "showing N of M" instead of implying completeness.
  */
-import { supabase, applyCountry, ServiceError } from './_client'
+import { supabase, applyCountry, ServiceError, toServiceError } from './_client'
 import { toUserMessage } from '../safeError'
 import { listInspectionApprovals, listChecklistApprovals } from './approvalsQueue'
 import { isClosedWorkOrder } from '../myQueueAnalytics'
@@ -33,7 +33,7 @@ async function myWorkOrders(profileId, country, signal) {
     .eq('user_id', profileId).eq('active', true).order('id').limit(QUEUE_LIST_LIMIT)
     .abortSignal(signal)
   const [o, a] = await Promise.all([owned, assigned])
-  if (o.error) throw o.error
+  if (o.error) throw toServiceError(o.error)
   let rows = o.data || []
   let total = o.count ?? rows.length
   if (!a.error) {
@@ -44,7 +44,7 @@ async function myWorkOrders(profileId, country, signal) {
         supabase.from('work_orders').select(WO_COLS).in('id', ids.slice(0, QUEUE_LIST_LIMIT)).order('id').limit(QUEUE_LIST_LIMIT),
         country,
       ).abortSignal(signal)
-      if (extra.error) throw extra.error
+      if (extra.error) throw toServiceError(extra.error)
       const open = (extra.data || []).filter(r => !isClosedWorkOrder(r.status))
       rows = rows.concat(open)
       total += open.length

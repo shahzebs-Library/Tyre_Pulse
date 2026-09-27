@@ -9,7 +9,7 @@
  * the migration) degrades listing to an empty array so the page can render its
  * "apply the migration" empty state instead of erroring.
  */
-import { supabase, unwrap, applyCountry } from './_client'
+import { supabase, unwrap, applyCountry, toServiceError } from './_client'
 import { toFiniteNumber } from '../actionCenter'
 
 export const COLS =
@@ -37,7 +37,7 @@ const STATUSES = new Set(['open', 'acknowledged', 'in_progress', 'blocked', 'esc
 /** True when the failure is "table does not exist yet" (pre-migration). */
 function isMissingRelation(err) {
   const code = err?.code || err?.cause?.code
-  const msg = String(err?.message || err?.cause?.message || '').toLowerCase()
+  const msg = String((err?.cause?.message ?? err?.message) || '').toLowerCase()
   return (
     code === '42P01' || code === 'PGRST205' ||
     msg.includes('does not exist') ||
@@ -49,7 +49,7 @@ function isMissingRelation(err) {
 
 function isMissingAdvancedSchema(err) {
   const code = err?.code || err?.cause?.code
-  const msg = String(err?.message || err?.cause?.message || '').toLowerCase()
+  const msg = String((err?.cause?.message ?? err?.message) || '').toLowerCase()
   return code === '42703' || code === 'PGRST204' || msg.includes('column') || msg.includes('schema cache')
 }
 
@@ -93,7 +93,7 @@ export async function listActionItems({ country, limit = 500 } = {}) {
       q = applyCountry(q, country)
       return unwrap(await q.order('created_at', { ascending: false }).limit(limit)) || []
     }
-    throw err
+    throw toServiceError(err)
   }
 }
 const asTimestamp = (v) => {
@@ -106,7 +106,7 @@ export async function getActionItem(id) {
   try {
     return unwrap(await supabase.from('action_items').select(COLS).eq('id', id).maybeSingle())
   } catch (err) {
-    if (!isMissingAdvancedSchema(err)) throw err
+    if (!isMissingAdvancedSchema(err)) throw toServiceError(err)
     return unwrap(await supabase.from('action_items').select(LEGACY_COLS).eq('id', id).maybeSingle())
   }
 }
@@ -143,7 +143,7 @@ export async function createActionItem(values = {}) {
   try {
     return unwrap(await supabase.from('action_items').insert(payload).select(COLS).single())
   } catch (err) {
-    if (!isMissingAdvancedSchema(err)) throw err
+    if (!isMissingAdvancedSchema(err)) throw toServiceError(err)
     const legacy = Object.fromEntries(Object.entries(payload).filter(([key]) => LEGACY_COLS.split(',').includes(key)))
     return unwrap(await supabase.from('action_items').insert(legacy).select(LEGACY_COLS).single())
   }
@@ -182,7 +182,7 @@ export async function updateActionItem(id, patch = {}) {
   try {
     return unwrap(await supabase.from('action_items').update(clean).eq('id', id).select(COLS).single())
   } catch (err) {
-    if (!isMissingAdvancedSchema(err)) throw err
+    if (!isMissingAdvancedSchema(err)) throw toServiceError(err)
     const legacy = Object.fromEntries(Object.entries(clean).filter(([key]) => LEGACY_COLS.split(',').includes(key)))
     return unwrap(await supabase.from('action_items').update(legacy).eq('id', id).select(LEGACY_COLS).single())
   }
@@ -201,7 +201,7 @@ export async function ensureActionItem(values = {}) {
   try {
     return { item: await createActionItem({ ...values, source }), created: true }
   } catch (error) {
-    if (error?.code !== '23505' && error?.cause?.code !== '23505') throw error
+    if (error?.code !== '23505' && error?.cause?.code !== '23505') throw toServiceError(error)
     const item = unwrap(await supabase.from('action_items').select(COLS).eq('source', source).maybeSingle())
     return { item, created: false }
   }
@@ -224,7 +224,7 @@ export async function transitionActionItem(id, status, { reason = null, resoluti
   if ((result.error.code === 'PGRST202' || msg.includes('function')) && ['acknowledged', 'in_progress', 'resolved'].includes(next)) {
     return updateActionItem(id, { status: next, resolution })
   }
-  throw result.error
+  throw toServiceError(result.error)
 }
 
 export async function listActionItemHistory(actionItemId) {
@@ -234,7 +234,7 @@ export async function listActionItemHistory(actionItemId) {
       .eq('action_item_id', actionItemId).order('created_at', { ascending: false }).limit(200)) || []
   } catch (err) {
     if (isMissingRelation(err)) return []
-    throw err
+    throw toServiceError(err)
   }
 }
 

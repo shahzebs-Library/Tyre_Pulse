@@ -15,7 +15,7 @@
  *
  * @module api/uploadCoverage
  */
-import { supabase } from './_client'
+import { supabase, toServiceError, isNotProvisioned } from './_client'
 
 const EMPTY_DETAIL = { ok: false, countries: [], files: [] }
 
@@ -37,10 +37,10 @@ export async function getUploadCoverageDetail({ days = 30, country } = {}) {
     p_country: country && country !== 'All' ? country : null,
   })
   if (error) {
-    const m = String(error.message || error.code || '').toLowerCase()
+    const m = String(error?.cause?.message || error?.message || error?.code || error?.cause?.code || '').toLowerCase()
     // pre-V394 backend: show "not available yet", never an error page
-    if (m.includes('does not exist') || m.includes('could not find') || m.includes('schema cache')) return EMPTY_DETAIL
-    throw error
+    if (isNotProvisioned(error) || m.includes('does not exist') || m.includes('could not find') || m.includes('schema cache')) return EMPTY_DETAIL
+    throw toServiceError(error)
   }
   if (!data || data.ok !== true) return EMPTY_DETAIL
   return {
@@ -122,9 +122,9 @@ export async function listUploadFeeds() {
   const { data, error } = await supabase
     .from('upload_feeds').select(FEED_COLS).order('sort_order').order('src')
   if (error) {
-    const m = String(error.message || error.code || '').toLowerCase()
-    if (m.includes('does not exist') || m.includes('schema cache') || m.includes('could not find')) return []
-    throw error
+    const m = String(error?.cause?.message || error?.message || error?.code || error?.cause?.code || '').toLowerCase()
+    if (isNotProvisioned(error) || m.includes('does not exist') || m.includes('schema cache') || m.includes('could not find')) return []
+    throw toServiceError(error)
   }
   return data || []
 }
@@ -137,9 +137,9 @@ export async function listUploadFeeds() {
 export async function listUploadFeedCandidates() {
   const { data, error } = await supabase.rpc('list_upload_feed_candidates')
   if (error) {
-    const m = String(error.message || error.code || '').toLowerCase()
-    if (m.includes('does not exist') || m.includes('could not find') || m.includes('schema cache')) return []
-    throw error
+    const m = String(error?.cause?.message || error?.message || error?.code || error?.cause?.code || '').toLowerCase()
+    if (isNotProvisioned(error) || m.includes('does not exist') || m.includes('could not find') || m.includes('schema cache')) return []
+    throw toServiceError(error)
   }
   return Array.isArray(data?.tables) ? data.tables : []
 }
@@ -161,7 +161,7 @@ export async function saveUploadFeed(feed) {
     ? supabase.from('upload_feeds').update(row).eq('id', feed.id)
     : supabase.from('upload_feeds').insert(row)
   const { error } = await q
-  if (error) throw error
+  if (error) throw toServiceError(error)
   return true
 }
 
@@ -172,7 +172,7 @@ export async function saveUploadFeed(feed) {
  */
 export async function setUploadFeedActive(id, active) {
   const { error } = await supabase.from('upload_feeds').update({ active: !!active }).eq('id', id)
-  if (error) throw error
+  if (error) throw toServiceError(error)
   return true
 }
 

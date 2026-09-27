@@ -10,11 +10,11 @@
  *
  * @module api/jobCards
  */
-import { supabase } from './_client'
+import { supabase, toServiceError, isNotProvisioned } from './_client'
 
 const missing = (error) => {
-  const m = String(error?.message || error?.code || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('could not find')
+  const m = String(error?.cause?.message || error?.message || error?.code || error?.cause?.code || '').toLowerCase()
+  return isNotProvisioned(error) || m.includes('does not exist') || m.includes('could not find')
     || m.includes('schema cache') || m === 'pgrst202'
 }
 
@@ -30,7 +30,7 @@ export async function getDailyJobCards({ country, on } = {}) {
   })
   if (error) {
     if (missing(error)) return { ok: false }
-    throw error
+    throw toServiceError(error)
   }
   return data && data.ok ? data : { ok: false }
 }

@@ -10,7 +10,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const rpc = vi.fn()
-vi.mock('../lib/api/_client', () => ({ supabase: { rpc: (...a) => rpc(...a) } }))
+vi.mock('../lib/api/_client', async (orig) => ({ ...(await orig()), ...((() => ({ supabase: { rpc: (...a) => rpc(...a) } }))()) }))
 
 const { getDailyJobCards } = await import('../lib/api/jobCards')
 

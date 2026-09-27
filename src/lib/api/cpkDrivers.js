@@ -17,7 +17,7 @@
  * or any RPC error degrades to a shaped empty payload so the page renders an honest
  * empty state - it never throws to the UI.
  */
-import { supabase } from './_client'
+import { supabase, toServiceError } from './_client'
 
 function emptyResult() {
   return { ok: false, windows: null, segments: [] }
@@ -45,7 +45,7 @@ export async function getCpkDrivers({ country, from, to, prevFrom, prevTo, stric
       p_prev_to: prevTo || null,
     })
     if (error) {
-      if (strict) throw error
+      if (strict) throw toServiceError(error)
       return emptyResult()
     }
     if (!data || data.ok === false) {
@@ -58,7 +58,7 @@ export async function getCpkDrivers({ country, from, to, prevFrom, prevTo, stric
       segments: Array.isArray(data.segments) ? data.segments : [],
     }
   } catch (error) {
-    if (strict) throw error
+    if (strict) throw toServiceError(error)
     return emptyResult()
   }
 }

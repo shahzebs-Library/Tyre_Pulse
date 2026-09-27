@@ -12,7 +12,7 @@
  *
  * @module api/currencyRates
  */
-import { supabase } from './_client'
+import { supabase, toServiceError, isNotProvisioned } from './_client'
 
 /** The three policies, and what each one actually means for a reader. */
 export const FX_POLICIES = Object.freeze([
@@ -37,8 +37,8 @@ export const FX_POLICIES = Object.freeze([
 ])
 
 const missing = (error) => {
-  const m = String(error?.message || error?.code || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('could not find')
+  const m = String(error?.cause?.message || error?.message || error?.code || error?.cause?.code || '').toLowerCase()
+  return isNotProvisioned(error) || m.includes('does not exist') || m.includes('could not find')
     || m.includes('schema cache') || m === 'pgrst202' || m === '42p01'
 }
 
@@ -53,7 +53,7 @@ export async function listCurrencyRates({ limit = 200 } = {}) {
     .from('currency_rates').select(COLS)
     .order('rate_date', { ascending: false })
     .limit(limit)
-  if (error) { if (missing(error)) return []; throw error }
+  if (error) { if (missing(error)) return []; throw toServiceError(error) }
   return Array.isArray(data) ? data : []
 }
 
@@ -77,7 +77,7 @@ export async function addCurrencyRate({ base, quote, rate, rateDate, source = 'm
     source,
     approved: false,
   }).select(COLS).single()
-  if (error) throw error
+  if (error) throw toServiceError(error)
   return data
 }
 
@@ -89,13 +89,13 @@ export async function setRateApproval(id, approved) {
       approved_at: approved ? new Date().toISOString() : null,
     })
     .eq('id', id)
-  if (error) throw error
+  if (error) throw toServiceError(error)
   return true
 }
 
 export async function deleteCurrencyRate(id) {
   const { error } = await supabase.from('currency_rates').delete().eq('id', id)
-  if (error) throw error
+  if (error) throw toServiceError(error)
   return true
 }
 
@@ -109,6 +109,6 @@ export async function getFxCoverage({ target = 'SAR', from, to } = {}) {
   const { data, error } = await supabase.rpc('fx_coverage', {
     p_to: target, p_from: from || null, p_to_date: to || null,
   })
-  if (error) { if (missing(error)) return { ok: false, reason: 'not_provisioned' }; throw error }
+  if (error) { if (missing(error)) return { ok: false, reason: 'not_provisioned' }; throw toServiceError(error) }
   return data && data.ok ? data : { ok: false }
 }

@@ -9,7 +9,7 @@
  * Every read degrades to an empty-but-shaped value on a missing relation / RPC
  * error so a not-yet-migrated org shows an honest empty state, never a throw.
  */
-import { supabase, fetchAllPages, isMissingRelation, isNotProvisioned, ServiceError } from './_client'
+import { supabase, fetchAllPages, isMissingRelation, isNotProvisioned, ServiceError, toServiceError } from './_client'
 import { toUserMessage } from '../safeError'
 
 /**
@@ -36,13 +36,13 @@ async function chunkedInsert(table, rows, onProgress) {
         const { data, error } = await supabase.from(table).insert(batch).select('id')
         if (error) {
           failed += batch.length
-          if (errors.length < 5) errors.push(error.message || String(error))
+          if (errors.length < 5) errors.push(toUserMessage(error))
         } else {
           inserted += (data || []).length
         }
       } catch (e) {
         failed += batch.length
-        if (errors.length < 5) errors.push(e?.message || String(e))
+        if (errors.length < 5) errors.push(toUserMessage(e))
       }
       done += batch.length
       if (onProgress) onProgress({ done, total: rows.length, inserted, failed })
@@ -144,7 +144,7 @@ export async function listScoCosts({ country, from, to, limit = 500 } = {}) {
 /** Insert one SCO cost row (organisation/currency/created_by defaulted server-side). */
 export async function createScoCost(row) {
   const { data, error } = await supabase.from('sco_costs').insert([sanitizeSco(row)]).select(SCO_COLS).single()
-  if (error) throw error
+  if (error) throw toServiceError(error)
   return data
 }
 
@@ -183,13 +183,13 @@ export async function importScoCosts(rows = [], onProgress) {
 
 export async function updateScoCost(id, patch) {
   const { data, error } = await supabase.from('sco_costs').update(sanitizeSco(patch, true)).eq('id', id).select(SCO_COLS).single()
-  if (error) throw error
+  if (error) throw toServiceError(error)
   return data
 }
 
 export async function deleteScoCost(id) {
   const { error } = await supabase.from('sco_costs').delete().eq('id', id)
-  if (error) throw error
+  if (error) throw toServiceError(error)
 }
 
 // ---- SANY workshop invoices ------------------------------------------------
@@ -211,7 +211,7 @@ export async function listSanyInvoices({ country, from, to, limit = 500 } = {}) 
 
 export async function createSanyInvoice(row) {
   const { data, error } = await supabase.from('sany_invoices').insert([sanitizeSany(row)]).select(SANY_COLS).single()
-  if (error) throw error
+  if (error) throw toServiceError(error)
   return data
 }
 
@@ -226,13 +226,13 @@ export async function importSanyInvoices(rows = [], onProgress) {
 
 export async function updateSanyInvoice(id, patch) {
   const { data, error } = await supabase.from('sany_invoices').update(sanitizeSany(patch, true)).eq('id', id).select(SANY_COLS).single()
-  if (error) throw error
+  if (error) throw toServiceError(error)
   return data
 }
 
 export async function deleteSanyInvoice(id) {
   const { error } = await supabase.from('sany_invoices').delete().eq('id', id)
-  if (error) throw error
+  if (error) throw toServiceError(error)
 }
 
 const SANY_LINE_COLS = 'id, invoice_id, line_no, machinery, model, charge_standard, contract_year, activation_date, service_period, units, usage_detail, amount_usd, created_at'
@@ -257,7 +257,7 @@ export async function listSanyInvoiceLines(invoiceId) {
     .order('id')
   if (error) {
     if (isMissingRelation(error)) return []
-    throw error
+    throw toServiceError(error)
   }
   return Array.isArray(data) ? data : []
 }
@@ -362,13 +362,13 @@ export async function setProductionStation({ country, station, site, note }) {
       { onConflict: 'organisation_id,country,station' },
     )
     .select()
-  if (error) throw error
+  if (error) throw toServiceError(error)
   return data
 }
 
 export async function removeProductionStation(id) {
   const { error } = await supabase.from('production_station_map').delete().eq('id', id)
-  if (error) throw error
+  if (error) throw toServiceError(error)
 }
 
 export async function listProductionStationMap({ country } = {}) {
@@ -421,12 +421,12 @@ export async function proposeStationSites({ country } = {}) {
     })
     if (error) {
       if (isMissingRelation(error)) return { ok: false, reason: 'unavailable', stations: [] }
-      throw error
+      throw toServiceError(error)
     }
     return data ?? { ok: false, reason: 'unavailable', stations: [] }
   } catch (e) {
     if (isMissingRelation(e)) return { ok: false, reason: 'unavailable', stations: [] }
-    throw e
+    throw toServiceError(e)
   }
 }
 
@@ -445,7 +445,7 @@ export async function applyStationProposals({ country, stations = [], dryRun = t
     p_stations: stations,
     p_dry_run: dryRun,
   })
-  if (error) throw error
+  if (error) throw toServiceError(error)
   return data ?? { ok: false, reason: 'unavailable' }
 }
 
@@ -463,12 +463,12 @@ export async function listSiteKeywords({ country, limit = 1000 } = {}) {
     const { data, error } = await q.limit(limit)
     if (error) {
       if (isMissingRelation(error)) return []
-      throw error
+      throw toServiceError(error)
     }
     return Array.isArray(data) ? data : []
   } catch (e) {
     if (isMissingRelation(e)) return []
-    throw e
+    throw toServiceError(e)
   }
 }
 
@@ -483,18 +483,18 @@ export async function upsertSiteKeyword(row = {}) {
   if (row.id) {
     const { data, error } = await supabase.from('site_match_keywords')
       .update(payload).eq('id', row.id).select(KEYWORD_COLS).single()
-    if (error) throw error
+    if (error) throw toServiceError(error)
     return data
   }
   const { data, error } = await supabase.from('site_match_keywords')
     .insert([payload]).select(KEYWORD_COLS).single()
-  if (error) throw error
+  if (error) throw toServiceError(error)
   return data
 }
 
 export async function deleteSiteKeyword(id) {
   const { error } = await supabase.from('site_match_keywords').delete().eq('id', id)
-  if (error) throw error
+  if (error) throw toServiceError(error)
 }
 
 function sanitizeKeyword(r = {}) {
@@ -637,7 +637,7 @@ export async function getProductionRejections({ country, from, to, reason } = {}
 export async function createProduction(row) {
   const { data, error } = await supabase.from('production_logs').insert([sanitizeProd(row)])
     .select(PROD_COLS).single()
-  if (error) throw error
+  if (error) throw toServiceError(error)
   return data
 }
 
@@ -653,13 +653,13 @@ export async function importProduction(rows = [], onProgress) {
 export async function updateProduction(id, patch) {
   const { data, error } = await supabase.from('production_logs').update(sanitizeProd(patch, true)).eq('id', id)
     .select('id, country, site, asset_no, period_date, m3, approved_m3, source, notes, created_at').single()
-  if (error) throw error
+  if (error) throw toServiceError(error)
   return data
 }
 
 export async function deleteProduction(id) {
   const { error } = await supabase.from('production_logs').delete().eq('id', id)
-  if (error) throw error
+  if (error) throw toServiceError(error)
 }
 
 // ---- Sites (region map) ----------------------------------------------------
@@ -681,19 +681,19 @@ export async function listSites({ country, limit = 2000 } = {}) {
 
 export async function createSite(row) {
   const { data, error } = await supabase.from('sites').insert([sanitizeSite(row)]).select(SITE_COLS).single()
-  if (error) throw error
+  if (error) throw toServiceError(error)
   return data
 }
 
 export async function updateSite(id, patch) {
   const { data, error } = await supabase.from('sites').update(sanitizeSite(patch, true)).eq('id', id).select(SITE_COLS).single()
-  if (error) throw error
+  if (error) throw toServiceError(error)
   return data
 }
 
 export async function deleteSite(id) {
   const { error } = await supabase.from('sites').delete().eq('id', id)
-  if (error) throw error
+  if (error) throw toServiceError(error)
 }
 
 /**
@@ -718,8 +718,8 @@ export async function importSites(rows = []) {
       try {
         const patch = { region: r.region, city: r.city, site_code: r.site_code, site_type: r.site_type, active: r.active, notes: r.notes }
         const { error } = await supabase.from('sites').update(patch).eq('id', id)
-        if (error) { failed += 1; if (errors.length < 5) errors.push(error.message) } else updated += 1
-      } catch (e) { failed += 1; if (errors.length < 5) errors.push(e?.message || String(e)) }
+        if (error) { failed += 1; if (errors.length < 5) errors.push(toUserMessage(error)) } else updated += 1
+      } catch (e) { failed += 1; if (errors.length < 5) errors.push(toUserMessage(e)) }
     } else {
       toInsert.push(r)
     }

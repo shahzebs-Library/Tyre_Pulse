@@ -28,12 +28,12 @@ function builder(result) {
   }
   return b
 }
-vi.mock('../lib/api/_client', () => ({
+vi.mock('../lib/api/_client', async (orig) => ({ ...(await orig()), ...((() => ({
   supabase: {
     rpc: (...a) => rpc(...a),
     from: (...a) => table(...a),
   },
-}))
+}))()) }))
 
 const api = await import('../lib/api/uploadCoverage')
 

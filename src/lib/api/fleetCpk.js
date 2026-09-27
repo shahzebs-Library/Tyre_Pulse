@@ -19,7 +19,7 @@
  * migrated), an empty result, or any RPC error degrades to an empty-but-shaped
  * object so the page shows an honest empty state - it never throws to the UI.
  */
-import { supabase } from './_client'
+import { supabase, toServiceError } from './_client'
 
 /** The empty, correctly-shaped result used for every degrade path. */
 function emptyResult() {
@@ -168,7 +168,7 @@ export async function getFleetCpk({ country, from, to, strict = false } = {}) {
       p_to: to || null,
     })
     if (error) {
-      if (strict) throw error
+      if (strict) throw toServiceError(error)
       return emptyResult()
     }
     if (!data) {
@@ -181,7 +181,7 @@ export async function getFleetCpk({ country, from, to, strict = false } = {}) {
       fleet: Array.isArray(data.fleet) ? data.fleet : [],
     }
   } catch (error) {
-    if (strict) throw error
+    if (strict) throw toServiceError(error)
     return emptyResult()
   }
 }

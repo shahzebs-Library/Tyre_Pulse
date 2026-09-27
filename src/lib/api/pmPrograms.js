@@ -7,7 +7,7 @@
  *
  * Read failures propagate so unavailable data is not presented as an empty list.
  */
-import { supabase, unwrap, applyCountry, isMissingRelation, fetchAllPages, ServiceError } from './_client'
+import { supabase, unwrap, applyCountry, isMissingRelation, fetchAllPages, ServiceError, toServiceError } from './_client'
 import { toUserMessage } from '../safeError'
 
 export const COLS =
@@ -262,7 +262,7 @@ export async function loadPmDashboard({ country } = {}) {
         if (r && r.asset_no != null && r.current_km != null && Number.isFinite(Number(r.current_km))) kmByAsset[r.asset_no] = Number(r.current_km)
       }
     }
-  } catch (error) { throw error }
+  } catch (error) { throw toServiceError(error) }
 
   // Engine hours: keep the FIRST (latest) reading seen per asset (desc by date).
   try {
@@ -277,7 +277,7 @@ export async function loadPmDashboard({ country } = {}) {
         }
       }
     }
-  } catch (error) { throw error }
+  } catch (error) { throw toServiceError(error) }
 
   // An asset number can exist in more than one country. Do not assign an
   // arbitrary meter to a plan when the selected scope is ambiguous.

@@ -6,7 +6,7 @@
  * `listExpenses` degrades gracefully when the table is absent so the page can
  * prompt for the migration instead of erroring.
  */
-import { supabase, unwrap, applyCountry } from './_client'
+import { supabase, unwrap, applyCountry, toServiceError } from './_client'
 
 export const COLS =
   'id,organisation_id,country,driver_name,category,amount,expense_date,asset_no,' +
@@ -24,9 +24,9 @@ export const EXPENSE_CATEGORIES = [
  */
 export function isMissingExpensesTable(error) {
   if (!error) return false
-  const code = String(error.code || '')
+  const code = String(error.code || error.cause?.code || '')
   if (code === '42P01' || code === 'PGRST205') return true
-  const msg = String(error.message || '').toLowerCase()
+  const msg = String(error?.cause?.message ?? error?.message ?? '').toLowerCase()
   return (
     /relation .* does not exist/.test(msg) ||
     (msg.includes('does not exist') && msg.includes('relation')) ||
@@ -50,7 +50,7 @@ export async function listExpenses({ country, status, limit = 500 } = {}) {
     .limit(limit)
   if (error) {
     if (isMissingExpensesTable(error)) return []
-    throw error
+    throw toServiceError(error)
   }
   return data || []
 }

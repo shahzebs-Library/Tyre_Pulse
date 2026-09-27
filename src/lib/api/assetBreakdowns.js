@@ -11,7 +11,7 @@
  * provisioned, so an org that has not run the migration sees an empty state
  * rather than a thrown page.
  */
-import { supabase, isMissingRelation, applyCountry, fetchAllPages, ServiceError } from './_client'
+import { supabase, isMissingRelation, applyCountry, fetchAllPages, ServiceError, toServiceError } from './_client'
 import { toUserMessage } from '../safeError'
 
 const COLS = 'id,country,asset_no,site,reported_on,details,breakdown_days,expected_return,'
@@ -69,12 +69,12 @@ export async function listAssetBreakdowns({ country, max = 20000 } = {}) {
     const { data, error, truncated } = await fetchAllPages(build, { max })
     if (error) {
       if (isMissingRelation(error)) return { ok: false, reason: 'unavailable', rows: [], truncated: false }
-      throw error
+      throw toServiceError(error)
     }
     return { ok: true, rows: data || [], truncated: !!truncated }
   } catch (e) {
     if (isMissingRelation(e)) return { ok: false, reason: 'unavailable', rows: [], truncated: false }
-    throw e
+    throw toServiceError(e)
   }
 }
 

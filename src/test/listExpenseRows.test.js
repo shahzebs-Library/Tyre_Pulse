@@ -16,7 +16,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const fetchAllPages = vi.fn()
 vi.mock('../lib/fetchAll', () => ({ fetchAllPages: (...a) => fetchAllPages(...a) }))
-vi.mock('../lib/api/_client', () => ({
+vi.mock('../lib/api/_client', async (orig) => ({ ...(await orig()), ...((() => ({
   supabase: {
     from: () => {
       const q = {
@@ -25,7 +25,7 @@ vi.mock('../lib/api/_client', () => ({
       return q
     },
   },
-}))
+}))()) }))
 
 const { listExpenseRows } = await import('../lib/api/partsConsumption')
 

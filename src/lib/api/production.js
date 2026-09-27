@@ -12,7 +12,8 @@
  * Before the migration is applied every read degrades to [] / 0 so the page can
  * surface an "apply MIGRATIONS_V276_PRODUCTION_LOGS.sql" hint instead of throwing.
  */
-import { supabase, unwrap, applyCountry, fetchAllPages } from './_client'
+import { supabase, unwrap, applyCountry, fetchAllPages, toServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 
 export const COLS =
   'id,organisation_id,country,site,asset_no,period_date,m3,source,notes,' +
@@ -21,7 +22,7 @@ export const COLS =
 /** True when a Supabase error means the table/relation is not deployed yet. */
 function isMissingRelation(err) {
   const code = err?.code || err?.cause?.code
-  const m = String(err?.message || err?.cause?.message || '').toLowerCase()
+  const m = String((err?.cause?.message ?? err?.message) || '').toLowerCase()
   return (
     code === '42P01' || code === 'PGRST205' || code === 'PGRST202' ||
     m.includes('does not exist') ||
@@ -75,11 +76,11 @@ export async function listProduction({ country, site, from, to, limit = 20000 } 
   }
   try {
     const { data, error } = await fetchAllPages(pageFn, { pageSize: 1000, max: limit })
-    if (error) throw error
+    if (error) throw toServiceError(error)
     return data || []
   } catch (err) {
     if (isMissingRelation(err)) return []
-    throw err
+    throw toServiceError(err)
   }
 }
 
@@ -145,7 +146,7 @@ export async function createProductionBulk(rows = [], { chunk = 250, onProgress 
       // server rejected the batch and does not say which member caused it.
       const first = i + 1
       const last = i + slice.length
-      failures.push(`Rows ${first} to ${last}: ${error.message || 'save failed'}`)
+      failures.push(`Rows ${first} to ${last}: ${toUserMessage(error, 'save failed')}`)
     } else {
       saved += slice.length
     }

@@ -17,7 +17,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const state = { rows: [], error: null, count: 0, countError: null, rpc: null, rpcError: null }
 
-vi.mock('../lib/api/_client', () => {
+vi.mock('../lib/api/_client', async (orig) => ({ ...(await orig()), ...((() => {
   // A thenable builder, like PostgREST's: every method returns the builder, and
   // awaiting it resolves. A head count resolves { count }, a row read { data }.
   const builder = () => {
@@ -43,7 +43,7 @@ vi.mock('../lib/api/_client', () => {
       rpc: () => Promise.resolve({ data: state.rpc, error: state.rpcError }),
     },
   }
-})
+})()) }))
 
 const {
   listFreetextCandidates, getFreetextSummary, extractFreetextCandidates,
@@ -71,7 +71,8 @@ describe('listFreetextCandidates', () => {
     state.error = { message: 'permission denied' }
     const res = await listFreetextCandidates()
     expect(res.rows).toEqual([])
-    expect(res.error).toBe('permission denied')
+    // The raw database text is never handed to the page; it is sanitised.
+    expect(res.error).toBe('You do not have permission to do that.')
   })
 
   it('flags truncation so a capped list is never read as the whole list', async () => {

@@ -1,8 +1,8 @@
-import { supabase, unwrap } from './_client'
+import { supabase, unwrap, toServiceError } from './_client'
 
 function missing(err) {
   const code = err?.code || err?.cause?.code
-  const message = String(err?.message || err?.cause?.message || '').toLowerCase()
+  const message = String((err?.cause?.message ?? err?.message) || '').toLowerCase()
   return ['42P01', 'PGRST205'].includes(code) || message.includes('does not exist') || message.includes('schema cache')
 }
 
@@ -14,7 +14,7 @@ export async function listShiftHandovers({ site, limit = 20 } = {}) {
     return unwrap(await query.order('created_at', { ascending: false }).limit(limit)) || []
   } catch (err) {
     if (missing(err)) return []
-    throw err
+    throw toServiceError(err)
   }
 }
 
@@ -34,7 +34,7 @@ export async function submitShiftHandover({ country, site, shiftId, toUserId, su
   if (handover?.id && actionItemIds.length) {
     const links = actionItemIds.map((actionItemId) => ({ handover_id: handover.id, action_item_id: actionItemId }))
     const { error } = await supabase.from('shift_handover_items').insert(links)
-    if (error) throw error
+    if (error) throw toServiceError(error)
   }
   return handover
 }

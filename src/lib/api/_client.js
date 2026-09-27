@@ -24,6 +24,18 @@ export class ServiceError extends Error {
 }
 
 /**
+ * Convert any caught/returned error into a sanitised ServiceError, keeping the
+ * untouched original on `.cause` and its code on `.code`. An error that is
+ * already a ServiceError passes through unchanged, so a `catch` that re-throws
+ * never double-wraps. Use this instead of `throw error` on a raw Supabase
+ * error: the raw text names tables, columns and policies.
+ */
+export function toServiceError(err, fallback) {
+  if (err instanceof ServiceError) return err
+  return new ServiceError(toUserMessage(err, fallback), err?.code ?? err?.cause?.code, err)
+}
+
+/**
  * Unwrap a Supabase `{ data, error }` result: throw a ServiceError on failure,
  * otherwise return the data. Keeps call sites free of repetitive error checks.
  *

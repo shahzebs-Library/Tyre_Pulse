@@ -22,7 +22,7 @@
  * Production m3 is NOT handled here - it loads into the live production_logs
  * table via src/lib/api/production.js (createProduction), reused by the page.
  */
-import { supabase, unwrap, applyCountry, fetchAllPages, ServiceError } from './_client'
+import { supabase, unwrap, applyCountry, fetchAllPages, ServiceError, toServiceError } from './_client'
 import { DATASETS } from '../erpImport'
 import { toUserMessage } from '../safeError'
 
@@ -77,7 +77,7 @@ function backoffMs(attempt) {
 /** A transient transport failure worth retrying (never a permission/validation error). */
 function isTransient(err) {
   const code = String(err?.code || err?.cause?.code || '')
-  const m = String(err?.message || err?.cause?.message || '').toLowerCase()
+  const m = String((err?.cause?.message ?? err?.message) || '').toLowerCase()
   if (['08000', '08003', '08006', '57014', '53300', 'PGRST001'].includes(code)) return true
   return (
     m.includes('failed to fetch') || m.includes('network') || m.includes('load failed') ||
@@ -97,7 +97,7 @@ function tableFor(dataset) {
 /** True when a Supabase error means the table/relation is not deployed yet. */
 function isMissingRelation(err) {
   const code = err?.code || err?.cause?.code
-  const m = String(err?.message || err?.cause?.message || '').toLowerCase()
+  const m = String((err?.cause?.message ?? err?.message) || '').toLowerCase()
   return (
     code === '42P01' || code === 'PGRST205' || code === 'PGRST202' ||
     m.includes('does not exist') ||
@@ -123,7 +123,7 @@ export async function listImportBatches(dataset, { country } = {}) {
   }
   try {
     const { data, error } = await fetchAllPages(pageFn, { pageSize: 1000, max: 100000 })
-    if (error) throw error
+    if (error) throw toServiceError(error)
     const byBatch = new Map()
     for (const r of data || []) {
       const id = r?.batch_id
@@ -135,7 +135,7 @@ export async function listImportBatches(dataset, { country } = {}) {
     return [...byBatch.values()].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
   } catch (err) {
     if (isMissingRelation(err)) return []
-    throw err
+    throw toServiceError(err)
   }
 }
 
@@ -155,11 +155,11 @@ export async function listImportRows(dataset, { batch_id, country, limit = 20000
   }
   try {
     const { data, error } = await fetchAllPages(pageFn, { pageSize: 1000, max: limit })
-    if (error) throw error
+    if (error) throw toServiceError(error)
     return data || []
   } catch (err) {
     if (isMissingRelation(err)) return []
-    throw err
+    throw toServiceError(err)
   }
 }
 
@@ -232,7 +232,7 @@ export async function saveImportRows(dataset, rows, batch_id, { country, onProgr
     // Report after every chunk, success or deferral. A long upload with a
     // static spinner is indistinguishable from a hung one.
     if (!err) saved += chunk.length
-    else if (!isTransient(err)) { err.saved = saved; err.batch_id = batch_id; throw err }
+    else if (!isTransient(err)) { const se = toServiceError(err); se.saved = saved; se.batch_id = batch_id; throw se }
     else deferred.push(chunk)
     onProgress?.(Math.min(i + chunk.length, payload.length), payload.length)
   }
@@ -340,7 +340,7 @@ export async function promotionStatus(dataset, batch_id) {
   if (!batch_id || !PROMOTE_RPC[dataset]) return fallback
   try {
     const { data, error } = await supabase.rpc('erp_batch_promotion_status', { p_dataset: dataset, p_batch: batch_id })
-    if (error) throw error
+    if (error) throw toServiceError(error)
     return { ...fallback, ...(data || {}) }
   } catch {
     return fallback

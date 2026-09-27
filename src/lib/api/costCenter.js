@@ -1,4 +1,4 @@
-import { supabase, applyCountry, fetchAllPages, ServiceError } from './_client'
+import { supabase, applyCountry, fetchAllPages, ServiceError, toServiceError } from './_client'
 import { toUserMessage } from '../safeError'
 
 const TYRE_ROW_CEILING = 50000
@@ -39,7 +39,7 @@ async function sumMeterDeltas(table, valueCol, { country, site, from, to }) {
     if (from) q = q.gte('reading_date', from)
     if (to) q = q.lte('reading_date', to)
     const { data, error } = await q.limit(100000)
-    if (error) throw error
+    if (error) throw toServiceError(error)
     const byAsset = new Map()
     for (const r of data || []) {
       const v = Number(r?.[valueCol])

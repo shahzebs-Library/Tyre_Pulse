@@ -1,4 +1,4 @@
-import { supabase, unwrap } from './_client'
+import { supabase, unwrap, toServiceError } from './_client'
 
 function workspacePage(value, driverId) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Driver workspace returned an invalid response.')
@@ -57,6 +57,6 @@ export async function uploadFineEvidence(fine, file, kind, requestId) {
   if (!valid) throw new Error('The file content does not match its type.')
   const path = `${fine.organisation_id}/${fine.driver_id}/${fine.id}/${requestId}.${extension}`
   const { error } = await supabase.storage.from('driver-fine-evidence').upload(path, file, { contentType: file.type, upsert: false })
-  if (error && !['409', 'Duplicate'].includes(String(error.statusCode || error.code))) throw error
+  if (error && !['409', 'Duplicate'].includes(String(error.statusCode || error.code))) throw toServiceError(error)
   return driverWorkspaceCommand('attach_evidence', { driver_id: fine.driver_id, fine_id: fine.id, object_path: path, file_name: file.name.slice(0, 160), kind }, requestId)
 }

@@ -26,7 +26,7 @@
  *
  * @module api/materialIssue
  */
-import { supabase, fetchAllPages, isMissingRelation, ServiceError } from './_client'
+import { supabase, fetchAllPages, isMissingRelation, isNotProvisioned, ServiceError, toServiceError } from './_client'
 import { toUserMessage } from '../safeError'
 import { groupLinesIntoSlips } from '../materialIssue'
 
@@ -180,25 +180,22 @@ export async function countUnslippedLines({ country, from, to, site } = {}) {
  *
  * @param {string} issueNumber
  * @param {string} country
- * @returns {Promise<Array<object>>} [] when unreadable
+ * @returns {Promise<Array<object>>} throws a sanitised ServiceError when the
+ *   read fails - an unreadable slip must not render as a slip with no lines.
  */
 export async function getSlipLines(issueNumber, country) {
   const num = String(issueNumber || '').trim()
   if (!num) return []
-  try {
-    let q = supabase
-      .from('parts_consumption')
-      .select(LINE_COLS)
-      .eq('issue_number', num)
-      .order('id', { ascending: true })
-      .limit(SLIP_LINE_LIMIT)
-    if (country && country !== 'All') q = q.eq('country', country)
-    const { data, error } = await q
-    if (error) return []
-    return Array.isArray(data) ? data : []
-  } catch {
-    return []
-  }
+  let q = supabase
+    .from('parts_consumption')
+    .select(LINE_COLS)
+    .eq('issue_number', num)
+    .order('id', { ascending: true })
+    .limit(SLIP_LINE_LIMIT)
+  if (country && country !== 'All') q = q.eq('country', country)
+  const { data, error } = await q
+  if (error) throw toServiceError(error, 'Could not read the lines of this slip.')
+  return Array.isArray(data) ? data : []
 }
 
 /* ------------------------------------------------------------------ *
@@ -245,10 +242,17 @@ export async function listMaterialIssues(opts = {}) {
     if (from) q = q.gte('issued_at', from)
     if (to) q = q.lte('issued_at', to)
     const { data, error } = await q
-    if (error) return { rows: [], missing: isMissingRelation(error) }
+    if (error) {
+      // Only a genuinely undeployed table is "missing". A permission or network
+      // failure used to be reported as missing too, which told the reader the
+      // feature was not installed when it simply could not be read.
+      if (isNotProvisioned(error)) return { rows: [], missing: true }
+      throw toServiceError(error, 'Could not load the slips raised in this app.')
+    }
     return { rows: Array.isArray(data) ? data : [], missing: false }
-  } catch {
-    return { rows: [], missing: true }
+  } catch (err) {
+    if (isNotProvisioned(err)) return { rows: [], missing: true }
+    throw toServiceError(err, 'Could not load the slips raised in this app.')
   }
 }
 
@@ -266,10 +270,14 @@ export async function listMaterialIssueLines(issueId) {
       .eq('issue_id', issueId)
       .order('line_no', { ascending: true })
       .limit(SLIP_LINE_LIMIT)
-    if (error) return []
+    if (error) {
+      if (isNotProvisioned(error)) return []
+      throw toServiceError(error, 'Could not read the lines of this slip.')
+    }
     return Array.isArray(data) ? data : []
-  } catch {
-    return []
+  } catch (err) {
+    if (isNotProvisioned(err)) return []
+    throw toServiceError(err, 'Could not read the lines of this slip.')
   }
 }
 
@@ -453,9 +461,10 @@ export async function listIssuableJobCards({ country, search } = {}) {
     const s = sanitizeSearch(search)
     if (s) q = q.or(`work_order_no.ilike.%${s}%,asset_no.ilike.%${s}%`)
     const { data, error } = await q
-    if (error) return []
+    if (error) throw toServiceError(error, 'Could not load job cards.')
     return Array.isArray(data) ? data : []
-  } catch {
-    return []
+  } catch (err) {
+    // A failed read must not render as "No job card matches that".
+    throw toServiceError(err, 'Could not load job cards.')
   }
 }

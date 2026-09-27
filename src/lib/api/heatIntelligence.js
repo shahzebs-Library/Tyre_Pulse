@@ -10,7 +10,7 @@
  * listing to an empty array so the page can render its "apply the migration"
  * empty state instead of erroring.
  */
-import { supabase, unwrap, applyCountry, fetchAllPages } from './_client'
+import { supabase, unwrap, applyCountry, fetchAllPages, toServiceError } from './_client'
 import { toFiniteNumber } from '../heatIntelligence'
 
 export const COLS =
@@ -24,7 +24,7 @@ const STATUSES = new Set(['normal', 'elevated', 'high', 'critical'])
 /** True when the failure is "table does not exist yet" (pre-migration). */
 function isMissingRelation(err) {
   const code = err?.code || err?.cause?.code
-  const msg = String(err?.message || err?.cause?.message || '').toLowerCase()
+  const msg = String((err?.cause?.message ?? err?.message) || '').toLowerCase()
   return (
     code === '42P01' || code === 'PGRST205' ||
     msg.includes('does not exist') ||
@@ -74,7 +74,7 @@ export async function listTemperatureReadings({ country, limit = 500 } = {}) {
     ) || []
   } catch (err) {
     if (isMissingRelation(err)) return []
-    throw err
+    throw toServiceError(err)
   }
 }
 
@@ -115,12 +115,12 @@ export async function listTyresForHeatRisk({ country } = {}) {
     })
     if (error) {
       if (isMissingRelation(error)) return []
-      throw error
+      throw toServiceError(error)
     }
     return data || []
   } catch (err) {
     if (isMissingRelation(err)) return []
-    throw err
+    throw toServiceError(err)
   }
 }
 

@@ -22,6 +22,7 @@
 // errors so a permission or missing-relation failure degrades to [] rather than
 // throwing (this viewer is read-only and best-effort across three tables).
 import { supabase as sb } from '../supabase'
+import { toServiceError } from './_client'
 
 /** The three unified audit sources, in display order. */
 export const AUDIT_SOURCES = [
@@ -209,7 +210,7 @@ export async function listDataAudit({ action, table, user, since, limit = 200 } 
   const { data, error } = await q
   if (error) {
     if (isAuditSourceMissing(error)) return []
-    throw error
+    throw toServiceError(error)
   }
   return (Array.isArray(data) ? data : []).map((row) => normalizeRow('audit_log_v2', row))
 }
@@ -235,7 +236,7 @@ export async function listAccessAudit({ action, target, since, limit = 200 } = {
   const { data, error } = await q
   if (error) {
     if (isAuditSourceMissing(error)) return []
-    throw error
+    throw toServiceError(error)
   }
   return (Array.isArray(data) ? data : []).map((row) => normalizeRow('access_audit', row))
 }
@@ -259,7 +260,7 @@ export async function listConsoleAudit({ action, since, limit = 200 } = {}) {
   const { data, error } = await q
   if (error) {
     if (isAuditSourceMissing(error)) return []
-    throw error
+    throw toServiceError(error)
   }
   return (Array.isArray(data) ? data : []).map((row) => normalizeRow('console_sessions', row))
 }

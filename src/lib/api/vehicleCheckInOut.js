@@ -6,7 +6,7 @@
  * validation/clamps at the boundary, and graceful degradation when the table is
  * absent so the page can prompt for the migration instead of erroring.
  */
-import { supabase, unwrap, applyCountry, isMissingRelation } from './_client'
+import { supabase, unwrap, applyCountry, isMissingRelation, toServiceError } from './_client'
 
 export const COLS =
   'id,organisation_id,country,asset_no,driver_name,direction,odometer_km,' +
@@ -33,7 +33,7 @@ export async function listCheckInOut({ direction, status, country, limit = 500 }
     // its migration is applied. It also means the page can NEVER see this error,
     // so the "apply the migration" banner there is driven by probeRelation().
     if (isMissingRelation(error)) return []
-    throw error
+    throw toServiceError(error)
   }
   return data || []
 }

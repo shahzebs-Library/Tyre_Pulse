@@ -7,6 +7,7 @@
  * ever exposed to anon; the org is embedded in the token row so nothing leaks.
  */
 import { supabase } from '../supabase'
+import { toServiceError, isNotProvisioned } from './_client'
 
 // The report "pages" a share can rotate through (choose any). This is the SINGLE
 // catalog of public TV / kiosk report views: the admin panel renders it as the
@@ -40,8 +41,8 @@ export const DEFAULT_PAGES = REPORT_PAGES.map((p) => p.key)
 
 /** Missing-relation guard so the UI degrades gracefully before the migration. */
 function isBackendMissing(err) {
-  const m = String(err?.message || err?.code || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('could not find') || m.includes('schema cache') || m === '42p01' || m === 'pgrst202'
+  const m = String(err?.cause?.message || err?.message || err?.code || err?.cause?.code || '').toLowerCase()
+  return isNotProvisioned(err) || m.includes('does not exist') || m.includes('could not find') || m.includes('schema cache') || m === '42p01' || m === 'pgrst202'
 }
 
 const COLS = 'id, name, token, pages, layout, rotate_seconds, refresh_seconds, active, expires_at, created_at, last_viewed_at, view_count'
@@ -50,7 +51,7 @@ const COLS = 'id, name, token, pages, layout, rotate_seconds, refresh_seconds, a
 export async function listReportShares() {
   const { data, error } = await supabase
     .from('report_shares').select(COLS).eq('active', true).order('created_at', { ascending: false })
-  if (error) { if (isBackendMissing(error)) return []; throw error }
+  if (error) { if (isBackendMissing(error)) return []; throw toServiceError(error) }
   return data ?? []
 }
 
@@ -67,14 +68,14 @@ export async function createReportShare(o = {}) {
     p_password: o.password || null,
     p_expires: o.expires || null,
   })
-  if (error) throw error
+  if (error) throw toServiceError(error)
   return data
 }
 
 /** Revoke (deactivate) a share by id. */
 export async function revokeReportShare(id) {
   const { error } = await supabase.rpc('revoke_report_share', { p_id: id })
-  if (error) throw error
+  if (error) throw toServiceError(error)
 }
 
 /**
@@ -97,7 +98,7 @@ export async function updateReportShare(id, patch = {}) {
   if ('layout' in patch) row.layout = patch.layout ?? null
   if (Object.keys(row).length === 0) return
   const { error } = await supabase.from('report_shares').update(row).eq('id', id)
-  if (error) throw error
+  if (error) throw toServiceError(error)
 }
 
 /**
@@ -119,7 +120,7 @@ export async function getReportSnapshot(token, password = null, opts = {}) {
     p_from: opts.from || null,
     p_to: opts.to || null,
   })
-  if (error) { if (isBackendMissing(error)) return { ok: false, reason: 'unavailable' }; throw error }
+  if (error) { if (isBackendMissing(error)) return { ok: false, reason: 'unavailable' }; throw toServiceError(error) }
   return data || { ok: false, reason: 'invalid' }
 }
 
@@ -146,7 +147,7 @@ export async function getReportTyreMaintenance(token, password = null, opts = {}
     p_from: opts.from || null,
     p_to: opts.to || null,
   })
-  if (error) { if (isBackendMissing(error)) return { ok: false, reason: 'unavailable' }; throw error }
+  if (error) { if (isBackendMissing(error)) return { ok: false, reason: 'unavailable' }; throw toServiceError(error) }
   return data || { ok: false, reason: 'invalid' }
 }
 
@@ -178,7 +179,7 @@ export async function getWorkshopSnapshot(token, password = null) {
     p_token: token,
     p_password: password,
   })
-  if (error) { if (isBackendMissing(error)) return { ok: false, reason: 'unavailable' }; throw error }
+  if (error) { if (isBackendMissing(error)) return { ok: false, reason: 'unavailable' }; throw toServiceError(error) }
   return data || { ok: false, reason: 'invalid' }
 }
 
@@ -197,7 +198,7 @@ export async function createWorkshopShare(o = {}) {
     p_password: o.password || null,
     p_expires: o.expires || null,
   })
-  if (error) throw error
+  if (error) throw toServiceError(error)
   return data
 }
 

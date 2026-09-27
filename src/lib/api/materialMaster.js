@@ -15,7 +15,7 @@
  *
  * Pure logic lives in src/lib/materialMaster.js; this file only talks to the database.
  */
-import { supabase, ServiceError, isNotProvisioned } from './_client'
+import { supabase, ServiceError, isNotProvisioned, toServiceError } from './_client'
 import { toUserMessage } from '../safeError'
 
 const COLS = 'id, country, item_code, item_name, category, subcategory, brand, uom, '
@@ -64,7 +64,7 @@ export async function listMaterials(opts = {}) {
     // Anything else (permission, network, bad filter) must reach the page as an
     // error, never as an empty master that looks like nothing to review.
     if (isMaterialMasterMissing(error)) return []
-    throw error
+    throw toServiceError(error)
   }
   return Array.isArray(data) ? data : []
 }

@@ -3,7 +3,7 @@
  * (per active tyre: km/hours run vs current meters + projected remaining km).
  * Degrades to { ok: false } so the section renders an honest error state.
  */
-import { supabase, applyCountry, ServiceError } from './_client'
+import { supabase, applyCountry, ServiceError, isNotProvisioned, toServiceError } from './_client'
 import { toUserMessage } from '../safeError'
 
 /**
@@ -147,12 +147,16 @@ const TARGET_COLS = 'id, country, size, vehicle_type, target_km, target_hours, n
  * UAE. Omit `country` (or pass 'All') to get every rule.
  */
 export async function listTyreLifeTargets(country) {
-  try {
-    const q = applyCountry(supabase.from('tyre_life_targets').select(TARGET_COLS), country)
-    const { data, error } = await q.order('size').order('vehicle_type')
-    if (error) return []
-    return Array.isArray(data) ? data : []
-  } catch { return [] }
+  // [] ONLY when the table is not deployed. Any other failure throws: an empty
+  // list here reads as "no targets set - every tyre uses the fleet average",
+  // which is a false statement about the fleet when the read simply failed.
+  const q = applyCountry(supabase.from('tyre_life_targets').select(TARGET_COLS), country)
+  const { data, error } = await q.order('size').order('vehicle_type').order('id')
+  if (error) {
+    if (isNotProvisioned(error)) return []
+    throw toServiceError(error, 'Could not load the tyre life targets.')
+  }
+  return Array.isArray(data) ? data : []
 }
 
 /**

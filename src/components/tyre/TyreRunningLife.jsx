@@ -772,7 +772,17 @@ function LifeTargetsModal({ rows, country, onClose }) {
   // Scoped to the country on screen. Listing every country's rules made UAE
   // look like it had 12 targets when only one applies there.
   const scoped = Boolean(country && country !== 'All')
-  async function loadTargets() { setTargets(await listTyreLifeTargets(country)) }
+  const [loadError, setLoadError] = useState('')
+  async function loadTargets() {
+    try {
+      setTargets(await listTyreLifeTargets(country))
+      setLoadError('')
+    } catch (err) {
+      // An unreadable list must not read as "No targets set".
+      setTargets([])
+      setLoadError(toUserMessage(err, 'Could not load the tyre life targets.'))
+    }
+  }
   useEffect(() => { loadTargets() }, [country]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // A country-less rule DOES apply to the selected country, so it is shown in
@@ -891,6 +901,11 @@ function LifeTargetsModal({ rows, country, onClose }) {
           </p>
           {targets == null ? (
             <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Loading...</p>
+          ) : loadError ? (
+            <p role="alert" className="text-xs text-red-400">
+              {loadError}{' '}
+              <button type="button" className="underline" onClick={() => { setTargets(null); loadTargets() }}>Retry</button>
+            </p>
           ) : !targets.length ? (
             <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
               {scoped

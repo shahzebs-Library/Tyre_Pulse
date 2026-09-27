@@ -9,7 +9,7 @@
  * vocabulary varies across imported datasets, so filtering there keeps the rule
  * in one auditable place rather than encoding a brittle status list in SQL.
  */
-import { supabase, unwrap, applyCountry, fetchAllPages } from './_client'
+import { supabase, unwrap, applyCountry, fetchAllPages, toServiceError } from './_client'
 import { returnConditionToStatus } from '../tyrePool'
 
 // Explicit least-privilege column list (no SELECT *). Includes the fields the
@@ -54,7 +54,7 @@ const POOL_REASONS = [
 /** True when the failure is "table does not exist yet" (pre-migration). */
 export function isMissingRelation(err) {
   const code = err?.code || err?.cause?.code
-  const msg = String(err?.message || err?.cause?.message || '').toLowerCase()
+  const msg = String((err?.cause?.message ?? err?.message) || '').toLowerCase()
   return (
     code === '42P01' || code === 'PGRST205' ||
     msg.includes('does not exist') ||
@@ -91,7 +91,7 @@ export async function listPoolEntries({ country, status, limit = 1000 } = {}) {
     return unwrap(await q) || []
   } catch (err) {
     if (isMissingRelation(err)) return []
-    throw err
+    throw toServiceError(err)
   }
 }
 
@@ -120,7 +120,7 @@ export async function addToPool(values = {}) {
     }
   } catch (err) {
     if (/already in the pool/.test(err?.message || '')) throw err
-    if (!isMissingRelation(err)) throw err
+    if (!isMissingRelation(err)) throw toServiceError(err)
     // Missing relation surfaces on the insert below with the same guard.
   }
 
@@ -137,10 +137,10 @@ export async function addToPool(values = {}) {
   try {
     return unwrap(await supabase.from('tyre_pool').insert(payload).select(POOL_COLS).single())
   } catch (err) {
-    if (/duplicate|unique/i.test(err?.message || '')) {
+    if (err?.code === '23505' || /duplicate|unique/i.test(err?.cause?.message ?? err?.message ?? '')) {
       throw new Error(`Tyre ${tyre_serial} is already in the pool.`)
     }
-    throw err
+    throw toServiceError(err)
   }
 }
 
@@ -238,7 +238,7 @@ export async function countActiveVehicles({ country } = {}) {
     let q = supabase.from('vehicle_fleet').select('id', { count: 'exact', head: true }).eq('is_active', true)
     q = applyCountry(q, country)
     const { count, error } = await q
-    if (error) throw error
+    if (error) throw toServiceError(error)
     return count || 0
   } catch {
     return 0

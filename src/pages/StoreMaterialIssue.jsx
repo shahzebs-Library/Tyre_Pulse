@@ -191,6 +191,7 @@ export default function StoreMaterialIssue() {
   const [expanded, setExpanded] = useState(null)
   const [expandedLines, setExpandedLines] = useState([])
   const [expandLoading, setExpandLoading] = useState(false)
+  const [expandError, setExpandError] = useState('')
 
   // --- Load the historical register -----------------------------------------
   const load = useCallback(async () => {
@@ -242,15 +243,22 @@ export default function StoreMaterialIssue() {
   const singleCurrency = singleCurrencyOf(summary, activeCountry)
 
   const toggleExpand = async (slip) => {
+    setExpandError('')
     if (expanded === slip.key) { setExpanded(null); setExpandedLines([]); return }
     setExpanded(slip.key)
     // The lines are already in memory from the register read; only fall back to
     // a query if a slip somehow arrived without them.
     if (slip.lines?.length) { setExpandedLines(slip.lines); return }
     setExpandLoading(true)
-    const rows = await getSlipLines(slip.issueNumber, slip.country)
-    setExpandedLines(rows)
-    setExpandLoading(false)
+    try {
+      setExpandedLines(await getSlipLines(slip.issueNumber, slip.country))
+    } catch (err) {
+      // An unreadable slip must not read as "No item lines are recorded".
+      setExpandedLines([])
+      setExpandError(toUserMessage(err, 'Could not read the lines of this slip.'))
+    } finally {
+      setExpandLoading(false)
+    }
   }
 
   // --- Exports --------------------------------------------------------------
@@ -435,6 +443,7 @@ export default function StoreMaterialIssue() {
           expanded={expanded}
           expandedLines={expandedLines}
           expandLoading={expandLoading}
+          expandError={expandError}
           toggleExpand={toggleExpand}
           onExcel={() => doExcel(filtered, 'Material Issue Register')}
           onPdf={() => doPdf(filtered, 'Material Issue Register')}
@@ -527,7 +536,7 @@ function DocBadge({ slip }) {
  * ------------------------------------------------------------------ */
 function RegisterTab({
   loading, slips, filtered, summary, singleCurrency,
-  expanded, expandedLines, expandLoading, toggleExpand,
+  expanded, expandedLines, expandLoading, expandError, toggleExpand,
   onExcel, onPdf, onLinesExcel,
 }) {
   const booked = headlineValue(summary, singleCurrency)
@@ -630,6 +639,7 @@ function RegisterTab({
           slip={openSlip}
           lines={expandedLines}
           linesLoading={expandLoading}
+          linesError={expandError}
           onClose={() => toggleExpand(openSlip)}
           onLinesExcel={onLinesExcel}
         />
@@ -638,7 +648,7 @@ function RegisterTab({
   )
 }
 
-function SlipLines({ slip, lines, linesLoading, onClose, onLinesExcel }) {
+function SlipLines({ slip, lines, linesLoading, linesError, onClose, onLinesExcel }) {
   const rows = useMemo(() => slipLineRows(lines, slip.currency), [lines, slip.currency])
   const columns = useMemo(() => [
     { id: 'code', header: 'Item code', accessorFn: (l) => txt(l.item_code), cell: ({ row }) => <span className="font-mono">{txt(row.original.item_code)}</span> },
@@ -673,6 +683,9 @@ function SlipLines({ slip, lines, linesLoading, onClose, onLinesExcel }) {
           </>
         }
       />
+      {linesError && (
+        <p role="alert" className="text-[11px] text-red-400 mb-2">{linesError}</p>
+      )}
       {slip.returnSignAnomaly && (
         <p className="text-[11px] text-amber-300 mb-2">
           This is a return, and it is booked as a charge. Nothing has been changed
@@ -687,7 +700,7 @@ function SlipLines({ slip, lines, linesLoading, onClose, onLinesExcel }) {
         enableColumnFilters={false}
         enableExport={false}
         searchPlaceholder="Search items on this slip..."
-        emptyMessage="No item lines are recorded on this slip."
+        emptyMessage={linesError ? 'The item lines could not be read.' : 'No item lines are recorded on this slip.'}
       />
     </Card>
   )
@@ -818,6 +831,8 @@ function RaiseTab({ canWrite, activeCountry, profileName, onSaved }) {
   const [saveError, setSaveError] = useState('')
   const [saved, setSaved] = useState(null)
   const [recent, setRecent] = useState([])
+  const [recentError, setRecentError] = useState('')
+  const [jobsError, setJobsError] = useState('')
 
   const [header, setHeader] = useState({
     doc_type: 'MIS',
@@ -848,8 +863,12 @@ function RaiseTab({ canWrite, activeCountry, profileName, onSaved }) {
       if (!alive) return
       setProvisioned(ok)
       if (ok) {
-        const res = await listMaterialIssues({ country: activeCountry, limit: 50 })
-        if (alive) setRecent(res.rows)
+        try {
+          const res = await listMaterialIssues({ country: activeCountry, limit: 50 })
+          if (alive) { setRecent(res.rows); setRecentError('') }
+        } catch (err) {
+          if (alive) { setRecent([]); setRecentError(toUserMessage(err, 'Could not load the slips raised in this app.')) }
+        }
       }
       setChecking(false)
     })()
@@ -860,8 +879,14 @@ function RaiseTab({ canWrite, activeCountry, profileName, onSaved }) {
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current)
     searchTimer.current = setTimeout(async () => {
-      const rows = await listIssuableJobCards({ country: header.country || activeCountry, search: jobSearch })
-      setJobs(rows)
+      try {
+        setJobs(await listIssuableJobCards({ country: header.country || activeCountry, search: jobSearch }))
+        setJobsError('')
+      } catch (err) {
+        // A failed lookup must not read as "No job card matches that".
+        setJobs([])
+        setJobsError(toUserMessage(err, 'Could not load job cards.'))
+      }
     }, 300)
     return () => { if (searchTimer.current) clearTimeout(searchTimer.current) }
   }, [jobSearch, header.country, activeCountry])
@@ -928,9 +953,15 @@ function RaiseTab({ canWrite, activeCountry, profileName, onSaved }) {
       setSaved(res.issue_number || 'Saved')
       setLines([{ ...EMPTY_LINE }])
       setHeader((h) => ({ ...h, work_order_no: '', asset_no: '', notes: '' }))
-      const rows = await listMaterialIssues({ country: activeCountry, limit: 50 })
-      setRecent(rows.rows)
       if (onSaved) onSaved()
+      try {
+        const rows = await listMaterialIssues({ country: activeCountry, limit: 50 })
+        setRecent(rows.rows)
+        setRecentError('')
+      } catch (err) {
+        // The slip IS saved; only the refresh of the list below failed.
+        setRecentError(toUserMessage(err, 'Could not load the slips raised in this app.'))
+      }
     } catch (err) {
       setSaveError(toUserMessage(err, 'Could not save that slip.'))
     } finally {
@@ -1077,7 +1108,10 @@ function RaiseTab({ canWrite, activeCountry, profileName, onSaved }) {
                 ))}
               </div>
             )}
-            {!header.work_order_no && jobSearch && jobs.length === 0 && (
+            {jobsError && (
+              <p role="alert" className="text-[11px] text-red-400 mt-1">{jobsError}</p>
+            )}
+            {!header.work_order_no && jobSearch && !jobsError && jobs.length === 0 && (
               <p className="text-[11px] text-[var(--text-muted)] mt-1">
                 No job card matches that in the loaded set.
               </p>
@@ -1246,6 +1280,9 @@ function RaiseTab({ canWrite, activeCountry, profileName, onSaved }) {
           title="Slips raised in this app"
           description={`${nOr(recent.length)} shown`}
         />
+        {recentError && (
+          <p role="alert" className="text-[11px] text-red-400 mb-2">{recentError}</p>
+        )}
         <RecentSlips recent={recent} />
       </Card>
     </div>

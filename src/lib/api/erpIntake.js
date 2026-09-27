@@ -20,7 +20,7 @@
  *
  * @module api/erpIntake
  */
-import { supabase } from './_client'
+import { supabase, toServiceError } from './_client'
 
 const CHUNK = 200
 // Chunks in flight at once. This path is latency-bound - a 50,000 row load was
@@ -35,7 +35,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 /** Fatal (won't-fix-itself) vs transient. Transient chunk failures are deferred and
  * retried in a final sweep so a network blip never aborts a big load. */
 function isFatalInsertError(error) {
-  const m = String(error?.message || '').toLowerCase()
+  const m = String(error?.cause?.message ?? error?.message ?? '').toLowerCase()
   const code = String(error?.code || '').toLowerCase()
   return (
     m.includes('permission') || m.includes('policy') || m.includes('violates') ||
@@ -55,7 +55,7 @@ async function insertChunked(table, rows, onProgress) {
       const res = await supabase.from(table).insert(chunk)
       if (!res.error) return { ok: true }
       lastErr = res.error
-      if (isFatalInsertError(res.error)) throw res.error
+      if (isFatalInsertError(res.error)) throw toServiceError(res.error)
       // Only wait if another attempt follows. Sleeping after the LAST one adds
       // 8 seconds of dead time per exhausted chunk before the deferred sweep
       // that was going to run anyway.
@@ -118,7 +118,7 @@ async function existingKeys(table, column, country) {
     // repeated at a page boundary. A dropped existing key is not recognised as
     // a duplicate, gets re-inserted, and aborts the whole batch on 23505.
     const { data, error } = await q.order('id', { ascending: true }).range(from, from + size - 1)
-    if (error) throw error
+    if (error) throw toServiceError(error)
     if (!data || data.length === 0) break
     for (const r of data) { const v = r[column]; if (v != null) keys.add(String(v).trim().toLowerCase()) }
     if (data.length < size) break
@@ -160,7 +160,7 @@ async function existingTyreKeys(country) {
     // page boundary (PostgREST does not guarantee order across .range() pages
     // without an ORDER BY). A missed key otherwise re-inserts and aborts the batch.
     const { data, error } = await q.order('id', { ascending: true }).range(from, from + size - 1)
-    if (error) throw error
+    if (error) throw toServiceError(error)
     if (!data || data.length === 0) break
     for (const r of data) keys.add(tyreLifecycleKey(r))
     if (data.length < size) break
@@ -187,7 +187,7 @@ async function fetchRowsByIn(table, column, values, { country } = {}) {
     let q = supabase.from(table).select('*').in(column, chunk)
     if (country) q = q.eq('country', country)
     const { data, error } = await q
-    if (error) throw error
+    if (error) throw toServiceError(error)
     if (data) out.push(...data)
   }
   return out
@@ -378,7 +378,7 @@ export async function replaceOpenWorkOrders(rows = [], { onProgress, country } =
   let del = supabase.from('open_work_orders').delete()
   del = country ? del.eq('country', country) : del.not('id', 'is', null)
   const { error } = await del
-  if (error) throw error
+  if (error) throw toServiceError(error)
   const res = rows.length ? await insertChunked('open_work_orders', rows, onProgress) : { inserted: 0, failed: 0 }
   return { inserted: res.inserted, failed: res.failed || 0, skipped: 0, updated: 0, unchanged: 0 }
 }

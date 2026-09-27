@@ -149,7 +149,8 @@ describe('importDisposalRows', () => {
     const res = await importDisposalRows([{ country: 'KSA', asset_no: 'TM192' }])
     expect(res.written).toBe(0)
     expect(res.failed).toBe(1)
-    expect(res.errors[0]).toContain('permission denied')
+    // Sanitised: raw database text is never shown in an import summary.
+    expect(res.errors[0]).toBe('You do not have permission to do that.')
   })
 })
 

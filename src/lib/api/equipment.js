@@ -9,7 +9,7 @@
  * (org has not run the migration) degrades listing to an empty array so the
  * page can render its "apply the migration" empty state instead of erroring.
  */
-import { supabase, unwrap, applyCountry, fetchAllPages } from './_client'
+import { supabase, unwrap, applyCountry, fetchAllPages, toServiceError } from './_client'
 import { EQUIPMENT_STATUSES } from '../equipment'
 
 export const COLS =
@@ -19,7 +19,7 @@ export const COLS =
 /** True when the failure is "table does not exist yet" (pre-migration). */
 function isMissingRelation(err) {
   const code = err?.code || err?.cause?.code
-  const msg = String(err?.message || err?.cause?.message || '').toLowerCase()
+  const msg = String((err?.cause?.message ?? err?.message) || '').toLowerCase()
   return (
     code === '42P01' || code === 'PGRST205' ||
     msg.includes('does not exist') ||
@@ -49,7 +49,7 @@ export async function listEquipment({ country, status, limit = 500 } = {}) {
     return unwrap(await q.order('created_at', { ascending: false }).limit(limit)) || []
   } catch (err) {
     if (isMissingRelation(err)) return []
-    throw err
+    throw toServiceError(err)
   }
 }
 
@@ -68,11 +68,11 @@ export async function listAllEquipment({ country, max = 20000 } = {}) {
         .range(from, to),
       { max },
     )
-    if (error) throw error
+    if (error) throw toServiceError(error)
     return data || []
   } catch (err) {
     if (isMissingRelation(err)) return []
-    throw err
+    throw toServiceError(err)
   }
 }
 

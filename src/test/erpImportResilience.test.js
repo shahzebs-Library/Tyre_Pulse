@@ -25,9 +25,9 @@ const h = vi.hoisted(() => {
   }
 })
 
-vi.mock('../lib/api/_client', () => ({
+vi.mock('../lib/api/_client', async (orig) => ({ ...(await orig()), ...((() => ({
   supabase: h.supabase, unwrap: h.unwrap, applyCountry: h.applyCountry, fetchAllPages: h.fetchAllPages,
-}))
+}))()) }))
 
 const { saveImportRows } = await import('../lib/api/erpImport')
 
@@ -61,6 +61,6 @@ describe('saveImportRows — mobile-data resilience', () => {
 
   it('aborts immediately on a non-transient (permission) error', async () => {
     h.state.queue = ['fatal']
-    await expect(saveImportRows('asset', rows(300), 'b3', {})).rejects.toThrow(/permission denied/i)
+    await expect(saveImportRows('asset', rows(300), 'b3', {})).rejects.toMatchObject({ name: 'ServiceError', code: '42501', message: 'You do not have permission to do that.' })
   })
 })

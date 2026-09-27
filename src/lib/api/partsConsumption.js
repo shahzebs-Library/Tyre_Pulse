@@ -9,7 +9,7 @@
  *
  * @module api/partsConsumption
  */
-import { supabase, isMissingRelation } from './_client'
+import { supabase, isMissingRelation, toServiceError, isNotProvisioned } from './_client'
 import { PARTS_FIELDS } from '../partsExpense'
 
 const INSERT_CHUNK = 200
@@ -28,7 +28,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 /** A fatal (won't-fix-itself) error: permission / RLS / validation. Everything else
  * (network drop, timeout, 5xx, proxy reset) is transient and worth deferring + retrying. */
 function isFatalInsertError(error) {
-  const msg = String(error?.message || '').toLowerCase()
+  const msg = String(error?.cause?.message ?? error?.message ?? '').toLowerCase()
   const code = String(error?.code || '').toLowerCase()
   return (
     msg.includes('permission') || msg.includes('violates') || msg.includes('policy') ||
@@ -41,7 +41,7 @@ function isFatalInsertError(error) {
 export async function countPartsConsumption({ country } = {}) {
   if (!country || country === 'All') throw new Error('Select one country to read and import expense data.')
   const { data, error } = await supabase.rpc('expense_import_count', { p_country: country })
-  if (error) throw error
+  if (error) throw toServiceError(error)
   if (!Number.isSafeInteger(data) || data < 0) throw new Error('The server did not return the stored expense count.')
   return data
 }
@@ -62,7 +62,7 @@ export async function importExpenseBatch(rows, { country, requestId, replace = f
   })
   async function call(name, params) {
     const { data, error } = await supabase.rpc(name, params)
-    if (error) throw error
+    if (error) throw toServiceError(error)
     if (data?.ok !== true) throw new Error('The server did not confirm the expense import. Retry with the same file.')
     return data
   }
@@ -208,7 +208,7 @@ export async function listExpenseRows({ country, from, to, max = 100000 } = {}) 
   // the wrong key, so `rows` was always undefined and the export wrote an empty
   // workbook over a table holding 208,375 lines, with no error to show for it.
   const { data, truncated, error } = await fetchAllPages(build, { max })
-  if (error) throw error
+  if (error) throw toServiceError(error)
   return { rows: data || [], truncated: Boolean(truncated) }
 }
 
@@ -237,7 +237,7 @@ export async function callScopedMulti(rpc, countries, params = {}) {
   const { data, error } = await supabase.rpc(rpc, { p_countries: list, ...params })
   if (error) {
     if (isMissingRelation(error)) return { ok: false, blocks: [], refused: [] }
-    throw error
+    throw toServiceError(error)
   }
   if (!data || data.ok !== true) return { ok: false, blocks: [], refused: [] }
   return {
@@ -275,11 +275,11 @@ export async function getPartsExpenseSnapshot({ site, country, from, to } = {}) 
     p_site: site || null, p_country: country || null, p_from: from || null, p_to: to || null,
   })
   if (error) {
-    const m = String(error.message || error.code || '').toLowerCase()
-    if (m.includes('does not exist') || m.includes('could not find') || m.includes('schema cache') || m === 'pgrst202') {
+    const m = String(error?.cause?.message || error?.message || error?.code || error?.cause?.code || '').toLowerCase()
+    if (isNotProvisioned(error) || m.includes('does not exist') || m.includes('could not find') || m.includes('schema cache') || m === 'pgrst202') {
       return { ok: false }
     }
-    throw error
+    throw toServiceError(error)
   }
   return data && data.ok ? data : { ok: false }
 }
@@ -298,12 +298,12 @@ export async function getCostCpkOverview({ country, site, from, to } = {}) {
     p_country: country || null, p_site: site || null, p_from: from || null, p_to: to || null,
   })
   if (error) {
-    const m = String(error.message || error.code || '').toLowerCase()
-    if (m.includes('does not exist') || m.includes('could not find')
+    const m = String(error?.cause?.message || error?.message || error?.code || error?.cause?.code || '').toLowerCase()
+    if (isNotProvisioned(error) || m.includes('does not exist') || m.includes('could not find')
       || m.includes('schema cache') || m === 'pgrst202') {
       return { ok: false }
     }
-    throw error
+    throw toServiceError(error)
   }
   return data && data.ok ? data : { ok: false }
 }
@@ -319,11 +319,11 @@ export async function getExpenseByCountry({ from, to } = {}) {
     p_from: from || null, p_to: to || null,
   })
   if (error) {
-    const m = String(error.message || error.code || '').toLowerCase()
-    if (m.includes('does not exist') || m.includes('could not find') || m.includes('schema cache') || m === 'pgrst202') {
+    const m = String(error?.cause?.message || error?.message || error?.code || error?.cause?.code || '').toLowerCase()
+    if (isNotProvisioned(error) || m.includes('does not exist') || m.includes('could not find') || m.includes('schema cache') || m === 'pgrst202') {
       return []
     }
-    throw error
+    throw toServiceError(error)
   }
   return Array.isArray(data) ? data.map((r) => ({
     country: r.country,

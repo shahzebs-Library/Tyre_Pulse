@@ -17,15 +17,15 @@
  *
  * @module api/broadcast
  */
-import { supabase, fetchAllPages, isNotProvisioned, ServiceError } from './_client'
+import { supabase, fetchAllPages, isNotProvisioned, ServiceError, toServiceError } from './_client'
 import { toUserMessage } from '../safeError'
 
 const COLS = 'id,title,body,title_ar,body_ar,target_roles,target_countries,target_sites,'
   + 'send_push,status,recipient_count,push_count,sent_at,created_at'
 
 function missing(error) {
-  const m = String(error?.message || error?.code || '').toLowerCase()
-  return m.includes('does not exist') || m.includes('could not find')
+  const m = String(error?.cause?.message || error?.message || error?.code || error?.cause?.code || '').toLowerCase()
+  return isNotProvisioned(error) || m.includes('does not exist') || m.includes('could not find')
     || m.includes('schema cache')
 }
 
@@ -46,7 +46,7 @@ export async function previewAudience({ roles = [], countries = [], sites = [] }
   })
   if (error) {
     if (missing(error)) return { ok: false, total: 0, with_app: 0, by_role: [] }
-    throw error
+    throw toServiceError(error)
   }
   return {
     ok: data?.ok === true,
@@ -83,7 +83,7 @@ export async function sendBroadcast({
     p_sites: sites,
     p_send_push: sendPush !== false,
   })
-  if (error) throw error
+  if (error) throw toServiceError(error)
   return {
     ok: data?.ok === true,
     id: data?.id,

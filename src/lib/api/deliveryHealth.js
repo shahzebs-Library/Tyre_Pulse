@@ -11,7 +11,7 @@
  * Pure summarizers (emailStats / pushStats) are exported for unit testing; the
  * fetchers stay thin and degrade to [] / 0 before a relation exists.
  */
-import { supabase } from './_client'
+import { supabase, toServiceError } from './_client'
 import { fetchAllPages } from '../fetchAll'
 
 /**
@@ -25,7 +25,7 @@ export const DELIVERY_LOG_MAX = 50000
 /** True when a Supabase error means the table / relation is not deployed yet. */
 function isMissingRelation(err) {
   const code = err?.code || err?.cause?.code
-  const msg = String(err?.message || err?.cause?.message || '').toLowerCase()
+  const msg = String((err?.cause?.message ?? err?.message) || '').toLowerCase()
   return (
     code === '42P01' || code === '42703' || code === 'PGRST205' || code === 'PGRST204' ||
     msg.includes('does not exist') ||
@@ -59,7 +59,7 @@ export async function listEmailLog({ days = 30, from, to, max = DELIVERY_LOG_MAX
   }, { max })
   if (error) {
     if (isMissingRelation(error)) return { rows: [], truncated: false }
-    throw error
+    throw toServiceError(error)
   }
   return { rows: data || [], truncated: !!truncated }
 }
@@ -85,7 +85,7 @@ export async function listPushLog({ days = 30, from, to, max = DELIVERY_LOG_MAX 
   }, { max })
   if (error) {
     if (isMissingRelation(error)) return { rows: [], truncated: false }
-    throw error
+    throw toServiceError(error)
   }
   return { rows: data || [], truncated: !!truncated }
 }
@@ -97,11 +97,11 @@ export async function pushReach() {
       .from('profiles')
       .select('id', { count: 'exact', head: true })
       .not('push_token', 'is', null)
-    if (error) throw error
+    if (error) throw toServiceError(error)
     return count || 0
   } catch (err) {
     if (isMissingRelation(err)) return 0
-    throw err
+    throw toServiceError(err)
   }
 }
 

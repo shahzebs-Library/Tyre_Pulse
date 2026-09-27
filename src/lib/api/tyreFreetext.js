@@ -32,7 +32,8 @@
  * Reads NEVER throw - they return an empty result so a section can degrade to an
  * honest empty state. The extractor DOES throw, so a real failure is visible.
  */
-import { supabase } from './_client'
+import { supabase, toServiceError } from './_client'
+import { toUserMessage } from '../safeError'
 
 /** Row shape returned by {@link listFreetextCandidates}. */
 export const CANDIDATE_COLS =
@@ -80,7 +81,7 @@ export async function listFreetextCandidates({
     if (newOnly) q = q.eq('serial_is_new', true)
 
     const { data, error } = await q
-    if (error) return { rows: [], truncated: false, error: error.message }
+    if (error) return { rows: [], truncated: false, error: toUserMessage(error) }
     const all = Array.isArray(data) ? data : []
     return { rows: all.slice(0, max), truncated: all.length > max, error: null }
   } catch {
@@ -133,7 +134,7 @@ export async function extractFreetextCandidates(dryRun = true) {
   const { data, error } = await supabase.rpc('extract_tyre_freetext_candidates', {
     p_dry_run: dryRun,
   })
-  if (error) throw error
+  if (error) throw toServiceError(error)
   return data || {}
 }
 
@@ -160,7 +161,7 @@ export async function decideCandidate(id, status, note) {
       reviewed_at: new Date().toISOString(),
     })
     .eq('id', id)
-  if (error) throw error
+  if (error) throw toServiceError(error)
 }
 
 /**

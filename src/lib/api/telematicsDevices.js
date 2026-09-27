@@ -10,7 +10,7 @@
  * (org has not run the migration) degrades listing to an empty array so the
  * page can render its "apply the migration" empty state instead of erroring.
  */
-import { supabase, unwrap, applyCountry } from './_client'
+import { supabase, unwrap, applyCountry, toServiceError } from './_client'
 import { DEVICE_STATUSES } from '../telematicsDevices'
 
 export const COLS =
@@ -20,7 +20,7 @@ export const COLS =
 /** True when the failure is "table does not exist yet" (pre-migration). */
 function isMissingRelation(err) {
   const code = err?.code || err?.cause?.code
-  const msg = String(err?.message || err?.cause?.message || '').toLowerCase()
+  const msg = String((err?.cause?.message ?? err?.message) || '').toLowerCase()
   return (
     code === '42P01' || code === 'PGRST205' ||
     msg.includes('does not exist') ||
@@ -42,7 +42,7 @@ export async function listDevices({ country, status, limit = 500 } = {}) {
     return unwrap(await q.order('created_at', { ascending: false }).limit(limit)) || []
   } catch (err) {
     if (isMissingRelation(err)) return []
-    throw err
+    throw toServiceError(err)
   }
 }
 
@@ -62,7 +62,7 @@ export async function listDevicesWithMeta({ country, status, limit = 500 } = {})
     return { rows, missing: false }
   } catch (err) {
     if (isMissingRelation(err)) return { rows: [], missing: true }
-    throw err
+    throw toServiceError(err)
   }
 }
 
@@ -141,7 +141,7 @@ export async function countFleetAssets({ country } = {}) {
       .eq('is_active', true)
     q = applyCountry(q, country)
     const { count, error } = await q
-    if (error) throw error
+    if (error) throw toServiceError(error)
     return typeof count === 'number' ? count : null
   } catch {
     return null
